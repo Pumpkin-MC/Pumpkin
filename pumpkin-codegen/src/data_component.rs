@@ -4,6 +4,7 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use std::fs;
 
+/// Generates the `TokenStream` for the `DataComponent` enum and its ID/name conversion methods.
 pub fn build() -> TokenStream {
     let data_component: BTreeMap<String, u8> =
         serde_json::from_str(&fs::read_to_string("../assets/data_component.json").unwrap())

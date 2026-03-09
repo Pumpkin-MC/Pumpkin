@@ -5,6 +5,7 @@ use quote::{format_ident, quote};
 
 use crate::version::MinecraftVersion;
 
+/// Generates the `TokenStream` for the `MetaDataType` struct with per-version ID fields and constants.
 pub fn build() -> TokenStream {
     let assets = [
         (MinecraftVersion::V_1_21, "1_21_meta_data_type.json"),

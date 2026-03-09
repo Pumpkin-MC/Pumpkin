@@ -3,10 +3,12 @@ use quote::quote;
 use serde_json::Value;
 use std::fs;
 
+/// Reads `placed_feature.json` and emits the complete `build_placed_features()` function `TokenStream`.
 pub fn build() -> TokenStream {
-    let json_content =
-        fs::read_to_string("../assets/placed_feature.json").expect("Failed to read placed_feature.json");
-    let json: Value = serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
+    let json_content = fs::read_to_string("../assets/placed_feature.json")
+        .expect("Failed to read placed_feature.json");
+    let json: Value =
+        serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
 
     let entries: Vec<TokenStream> = json
         .as_object()
@@ -51,10 +53,20 @@ pub fn build() -> TokenStream {
     }
 }
 
+/// Converts a single placed-feature JSON value into a `PlacedFeature` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object for the entry, expected to contain `"feature"` and `"placement"` fields.
 fn value_to_placed_feature(v: &Value) -> TokenStream {
     let feature = value_to_feature(&v["feature"]);
-    let placement_arr = v["placement"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
-    let placement: Vec<TokenStream> = placement_arr.iter().map(value_to_placement_modifier).collect();
+    let placement_arr = v["placement"]
+        .as_array()
+        .map(|a| a.as_slice())
+        .unwrap_or(&[]);
+    let placement: Vec<TokenStream> = placement_arr
+        .iter()
+        .map(value_to_placement_modifier)
+        .collect();
     quote! {
         PlacedFeature {
             feature: #feature,
@@ -63,6 +75,13 @@ fn value_to_placed_feature(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a JSON `"feature"` value into a `Feature` token stream.
+///
+/// # Arguments
+/// - `v` – Either a string (named reference) or object (inline configured feature).
+///
+/// # Returns
+/// `Feature::Named(…)` for string values or `Feature::Inlined(…)` for object values.
 fn value_to_feature(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
@@ -77,6 +96,13 @@ fn value_to_feature(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a single placement-modifier JSON object into its corresponding `PlacementModifier` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with a `"type"` discriminant and modifier-specific fields.
+///
+/// # Returns
+/// A `PlacementModifier` variant token stream, or `compile_error!` for unknown types.
 fn value_to_placement_modifier(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -84,7 +110,8 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
         "minecraft:in_square" => quote! { PlacementModifier::InSquare(SquarePlacementModifier) },
         "minecraft:fixed_placement" => quote! { PlacementModifier::FixedPlacement },
         "minecraft:heightmap" => {
-            let heightmap = value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
+            let heightmap =
+                value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
             quote! {
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: #heightmap,
@@ -179,7 +206,9 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
         "minecraft:environment_scan" => {
             let dir = value_to_block_direction(v["direction_of_search"].as_str().unwrap_or("down"));
             let target = value_to_block_predicate(&v["target_condition"]);
-            let allowed = if v["allowed_search_condition"].is_null() || v["allowed_search_condition"].is_object() {
+            let allowed = if v["allowed_search_condition"].is_null()
+                || v["allowed_search_condition"].is_object()
+            {
                 if v["allowed_search_condition"].is_object() {
                     let p = value_to_block_predicate(&v["allowed_search_condition"]);
                     quote! { Some(#p) }
@@ -216,6 +245,13 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a block-predicate JSON object into its corresponding `BlockPredicate` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with a `"type"` discriminant and predicate-specific fields.
+///
+/// # Returns
+/// A `BlockPredicate` variant token stream, or `compile_error!` for unknown types.
 pub fn value_to_block_predicate(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -335,6 +371,13 @@ pub fn value_to_block_predicate(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a height-provider JSON object into its corresponding `HeightProvider` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with a `"type"` discriminant and provider-specific fields.
+///
+/// # Returns
+/// A `HeightProvider` variant token stream, or `compile_error!` for unknown types.
 pub fn value_to_height_provider(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -395,6 +438,13 @@ pub fn value_to_height_provider(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a Y-offset JSON object into its corresponding `YOffset` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with one of the keys `"absolute"`, `"above_bottom"`, or `"below_top"`.
+///
+/// # Returns
+/// A `YOffset` variant token stream; defaults to `YOffset::Absolute(0)` when unrecognized.
 pub fn value_to_y_offset(v: &Value) -> TokenStream {
     if let Some(abs) = v.get("absolute") {
         let val = abs.as_i64().unwrap_or(0) as i16;
@@ -410,6 +460,13 @@ pub fn value_to_y_offset(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts an integer-provider JSON value into its corresponding `IntProvider` token stream.
+///
+/// # Arguments
+/// - `v` – Either a bare JSON number (constant) or an object with a `"type"` discriminant.
+///
+/// # Returns
+/// An `IntProvider` variant token stream; defaults to `IntProvider::Constant(0)` when unrecognized.
 pub fn value_to_int_provider(v: &Value) -> TokenStream {
     match v {
         Value::Number(n) => {
@@ -450,11 +507,13 @@ pub fn value_to_int_provider(v: &Value) -> TokenStream {
                     let entries: Vec<TokenStream> = v["distribution"]
                         .as_array()
                         .map(|arr| {
-                            arr.iter().map(|e| {
-                                let data = value_to_int_provider(&e["data"]);
-                                let weight = e["weight"].as_i64().unwrap_or(1) as i32;
-                                quote! { WeightedEntry { data: #data, weight: #weight } }
-                            }).collect()
+                            arr.iter()
+                                .map(|e| {
+                                    let data = value_to_int_provider(&e["data"]);
+                                    let weight = e["weight"].as_i64().unwrap_or(1) as i32;
+                                    quote! { WeightedEntry { data: #data, weight: #weight } }
+                                })
+                                .collect()
                         })
                         .unwrap_or_default();
                     quote! { IntProvider::Object(NormalIntProvider::WeightedList(WeightedListIntProvider { distribution: vec![#(#entries),*] })) }
@@ -469,6 +528,13 @@ pub fn value_to_int_provider(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a SCREAMING_SNAKE_CASE heightmap name into its `HeightMap` token stream.
+///
+/// # Arguments
+/// - `s` – Heightmap name string (e.g. `"MOTION_BLOCKING"`).
+///
+/// # Returns
+/// A `HeightMap` variant token stream; defaults to `HeightMap::MotionBlocking` when unrecognized.
 pub fn value_to_height_map(s: &str) -> TokenStream {
     match s {
         "WORLD_SURFACE_WG" => quote! { HeightMap::WorldSurfaceWg },
@@ -481,6 +547,13 @@ pub fn value_to_height_map(s: &str) -> TokenStream {
     }
 }
 
+/// Converts a lowercase direction string into its `BlockDirection` token stream.
+///
+/// # Arguments
+/// - `s` – Direction name (e.g. `"down"`, `"up"`, `"north"`, etc.).
+///
+/// # Returns
+/// A `BlockDirection` variant token stream; defaults to `BlockDirection::Down` when unrecognized.
 pub fn value_to_block_direction(s: &str) -> TokenStream {
     match s.to_lowercase().as_str() {
         "down" => quote! { BlockDirection::Down },
@@ -493,6 +566,13 @@ pub fn value_to_block_direction(s: &str) -> TokenStream {
     }
 }
 
+/// Converts an optional offset JSON value into an `OffsetBlocksBlockPredicate` token stream.
+///
+/// # Arguments
+/// - `v` – Either `null`/empty object (no offset) or a 3-element integer array `[x, y, z]`.
+///
+/// # Returns
+/// An `OffsetBlocksBlockPredicate` with `offset: None` or `offset: Some(Vector3::new(x, y, z))`.
 fn value_to_offset_predicate(v: &Value) -> TokenStream {
     if v.is_null() || v.is_object() && v.as_object().map_or(true, |o| o.is_empty()) {
         quote! { OffsetBlocksBlockPredicate { offset: None } }
@@ -506,6 +586,13 @@ fn value_to_offset_predicate(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a blocks/fluids JSON value into a `MatchingBlocksWrapper` token stream.
+///
+/// # Arguments
+/// - `v` – Either a single string (one block/fluid name) or an array of strings.
+///
+/// # Returns
+/// `MatchingBlocksWrapper::Single(…)` or `MatchingBlocksWrapper::Multiple(…)`.
 fn value_to_matching_blocks_wrapper(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
@@ -522,10 +609,23 @@ fn value_to_matching_blocks_wrapper(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a block-state JSON object into a `BlockStateCodec` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with a `"Name"` field and optional `"Properties"` map.
+///
+/// # Returns
+/// A `BlockStateCodec` token stream referencing the corresponding `Block` constant and optional property map.
 pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
     let name = v["Name"].as_str().unwrap_or("minecraft:air");
     let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
-    let block_ident = quote::format_ident!("{}", name_stripped.to_uppercase().replace(':', "_").replace('-', "_"));
+    let block_ident = quote::format_ident!(
+        "{}",
+        name_stripped
+            .to_uppercase()
+            .replace(':', "_")
+            .replace('-', "_")
+    );
     if let Some(props) = v["Properties"].as_object() {
         let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
         let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();
@@ -549,6 +649,13 @@ pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a nullable JSON integer into an `Option<i32>` token stream.
+///
+/// # Arguments
+/// - `v` – A JSON number or `null`.
+///
+/// # Returns
+/// `Some(n)` if `v` is a valid integer, or `None` otherwise.
 fn value_to_option_i32(v: &Value) -> TokenStream {
     if v.is_null() {
         quote! { None }

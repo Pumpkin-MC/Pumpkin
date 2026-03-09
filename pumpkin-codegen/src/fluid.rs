@@ -8,29 +8,39 @@ use std::{
 };
 use syn::{Ident, LitInt, LitStr};
 
+/// Converts a fluid name (e.g. `water`) into its SCREAMING_SNAKE_CASE constant identifier.
 fn const_fluid_name_from_fluid_name(fluid: &str) -> String {
     fluid.to_shouty_snake_case()
 }
 
+/// Derives the PascalCase property-group struct name from a fluid derived name.
 fn property_group_name_from_derived_name(name: &str) -> String {
     format!("{name}_fluid_properties").to_upper_camel_case()
 }
 
+/// Maps a fluid property's original snake_case name to the generated enum type name.
 struct PropertyVariantMapping {
+    /// Original property name as it appears in the JSON (e.g. `"level"`).
     original_name: String,
+    /// PascalCase name of the generated enum for this property (e.g. `"Level"`).
     property_enum: String,
 }
 
+/// Aggregated data for a group of fluids that share the same set of block properties.
 struct PropertyCollectionData {
+    /// The list of property-to-enum mappings shared by all fluids in this group.
     variant_mappings: Vec<PropertyVariantMapping>,
+    /// Names of the fluids that belong to this property group.
     fluid_names: Vec<String>,
 }
 
 impl PropertyCollectionData {
+    /// Appends a fluid name to this property group.
     pub fn add_fluid_name(&mut self, fluid_name: String) {
         self.fluid_names.push(fluid_name);
     }
 
+    /// Creates a new `PropertyCollectionData` from a set of variant mappings with no fluids yet.
     pub const fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
         Self {
             variant_mappings,
@@ -38,18 +48,23 @@ impl PropertyCollectionData {
         }
     }
 
+    /// Derives a representative name for this property group from the first fluid's name.
     pub fn derive_name(&self) -> String {
         format!("{}_like", self.fluid_names[0])
     }
 }
 
+/// A fluid block property descriptor holding the property name and its allowed values.
 #[derive(Deserialize, Clone, Debug)]
 pub struct PropertyStruct {
+    /// Name of the generated enum (PascalCase, e.g. `"Level"`).
     pub name: String,
+    /// Allowed string values for this property (e.g. `["0", "1", …, "8"]`).
     pub values: Vec<String>,
 }
 
 impl ToTokens for PropertyStruct {
+    /// Emits an enum definition with `EnumVariants` impl for this property.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = Ident::new(&self.name, Span::call_site());
 
@@ -132,11 +147,14 @@ impl ToTokens for PropertyStruct {
     }
 }
 
+/// A fully resolved property group struct ready to emit as a `FluidProperties` impl.
 struct FluidPropertyStruct {
+    /// The underlying property collection data for this fluid group.
     data: PropertyCollectionData,
 }
 
 impl ToTokens for FluidPropertyStruct {
+    /// Emits a struct definition and its `FluidProperties` impl for this property group.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let struct_name = property_group_name_from_derived_name(&self.data.derive_name());
         let name = Ident::new(&struct_name, Span::call_site());
@@ -280,23 +298,35 @@ impl ToTokens for FluidPropertyStruct {
     }
 }
 
+/// Raw deserialization shape for a single fluid state entry from `fluids.json`.
 #[derive(Deserialize, Clone)]
 struct FluidState {
+    /// Fraction of a full block that this fluid fills (0.0–1.0).
     height: f32,
+    /// Numeric fluid level (0 = source, 1–7 = flowing).
     level: i16,
+    /// Whether this state represents an empty (air) fluid slot.
     is_empty: bool,
+    /// Blast resistance of the fluid in this state.
     blast_resistance: f32,
+    /// Block state ID used to identify this fluid state in the world.
     block_state_id: u16,
+    /// Whether the fluid is still (not flowing).
     is_still: bool,
     // We'll derive is_source and falling from existing fields instead of requiring them in JSON
 }
 
+/// A lightweight reference to a fluid state, pairing its fluid-relative index with a
+/// deduplicated partial-state index.
 #[derive(Clone, Debug)]
 struct FluidStateRef {
+    /// Index of this state within its fluid's state array.
     pub id: u16,
+    /// Index into the global `FLUID_STATES` deduplication table.
     pub state_idx: u16,
 }
 impl ToTokens for FluidStateRef {
+    /// Emits a `FluidStateRef { id, state_idx }` struct literal.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let state_idx = LitInt::new(&self.state_idx.to_string(), Span::call_site());
@@ -309,35 +339,51 @@ impl ToTokens for FluidStateRef {
     }
 }
 
+/// A single block-state property for a fluid, as listed in `fluids.json`.
 #[derive(Deserialize, Clone)]
 struct Property {
+    /// Name of the property (e.g. `"level"`).
     name: String,
+    /// List of valid string values for this property.
     values: Vec<String>,
 }
 
+/// Raw deserialization shape for a single fluid entry from `fluids.json`.
 #[derive(Deserialize, Clone)]
 pub struct Fluid {
+    /// Registry name of the fluid (e.g. `"water"`).
     pub name: String,
+    /// Numeric ID identifying this fluid type.
     pub id: u16,
+    /// Block-state properties this fluid exposes (e.g. `level`, `falling`).
     properties: Vec<Property>,
+    /// Index within `states` of the default fluid state.
     default_state_index: u16,
+    /// All possible states for this fluid, one per property combination.
     states: Vec<FluidState>,
+    /// Ticks between each flow-spread step (lower = faster).
     #[serde(default = "default_flow_speed")]
     flow_speed: u32,
+    /// Maximum number of blocks this fluid can flow horizontally from a source.
     #[serde(default = "default_flow_distance")]
     flow_distance: u32,
+    /// Whether two adjacent source blocks can create a new source block.
     #[serde(default)]
     can_convert_to_source: bool,
 }
 
+/// Default flow speed (ticks between spread steps) matching vanilla water.
 const fn default_flow_speed() -> u32 {
     5 // Default to water's speed
 }
 
+/// Default horizontal flow distance in blocks, matching vanilla water.
 const fn default_flow_distance() -> u32 {
     4 // Default to water's distance
 }
 
+/// Generates the `TokenStream` for the `Fluid` struct, `FluidState`, `FluidProperties` trait,
+/// per-fluid property enums, and all lookup functions.
 pub fn build() -> TokenStream {
     let fluids: Vec<Fluid> =
         match serde_json::from_str(&fs::read_to_string("../assets/fluids.json").unwrap()) {

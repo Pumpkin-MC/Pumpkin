@@ -6,12 +6,16 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs;
 
+/// Supplementary data for a jukebox song entry from the synced registries asset.
 #[derive(Deserialize)]
 struct JukeboxSongData {
+    /// Duration of the song in seconds.
     length_in_seconds: f32,
+    /// Redstone comparator output signal strength (0–15) while this disc is playing.
     comparator_output: u8,
 }
 
+/// Generates the `TokenStream` for the `JukeboxSong` enum and its length, comparator, and name methods.
 pub fn build() -> TokenStream {
     let songs: BTreeMap<String, u32> = serde_json::from_str(
         &fs::read_to_string("../assets/jukebox_song.json").expect("Missing jukebox_song.json"),

@@ -16,8 +16,10 @@ use crate::{
     loot::LootTableStruct,
 };
 
-// Takes an array of tuples containing indices paired with values,Add commentMore actions
-// Outputs an array with the values in the appropriate index, gaps filled with None
+/// Converts a sparse index-value list into a dense array, filling gaps with `None` tokens.
+///
+/// # Arguments
+/// – `array` – pairs of `(index, value)` where `index` is the position in the output array.
 fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStream> {
     let max_index = array.iter().map(|(index, _)| index).max().unwrap();
     let mut raw_id_from_state_id_ordered = vec![quote! { None }; (max_index + 1) as usize];
@@ -29,6 +31,10 @@ fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStre
     raw_id_from_state_id_ordered
 }
 
+/// Converts a sparse `(block_ident, state_index, state_id)` list into a dense `TokenStream` array.
+///
+/// # Arguments
+/// – `array` – triples of `(block_ident, state_index, state_id)` mapping each state ID to the block constant and local index.
 fn fill_state_array(array: Vec<(Ident, usize, u16)>) -> Vec<TokenStream> {
     let max_index = array.iter().map(|(_, _, index)| index).max().unwrap();
     let mut ret = vec![quote! { Missed State }; (max_index + 1) as usize];
@@ -41,34 +47,60 @@ fn fill_state_array(array: Vec<(Ident, usize, u16)>) -> Vec<TokenStream> {
     ret
 }
 
+/// Converts a block registry name into the SCREAMING_SNAKE_CASE constant identifier.
+///
+/// # Arguments
+/// – `block` – the lowercase registry name (e.g., `"stone_slab"`).
 fn const_block_name_from_block_name(block: &str) -> String {
     block.to_shouty_snake_case()
 }
 
+/// Derives the UpperCamelCase struct name for a block-property group from a derived base name.
+///
+/// # Arguments
+/// – `name` – a base name such as `"oak_slab_like"` which is converted to e.g., `"OakSlabLikeProperties"`.
 fn property_group_name_from_derived_name(name: &str) -> String {
     format!("{name}_properties").to_upper_camel_case()
 }
 
+/// Discriminates between the two runtime representations of a block property.
 enum PropertyType {
+    /// The property is a simple boolean (`true`/`false`).
     Bool,
+    /// The property is an enum with a generated Rust type identified by `name`.
     Enum { name: String },
 }
 
+/// Maps a single block-property field to its Rust type representation.
 struct PropertyVariantMapping {
+    /// The serialized property name as it appears in JSON (e.g., `"facing"`).
     original_name: String,
+    /// The Rust type used to represent this property in the generated code.
     property_type: PropertyType,
 }
 
+/// Accumulated data for a group of blocks that share the same set of block properties.
 struct PropertyCollectionData {
+    /// The ordered list of property-to-type mappings that form the generated struct fields.
     variant_mappings: Vec<PropertyVariantMapping>,
+    /// All blocks (by name and numeric ID) that belong to this property group.
     blocks: Vec<(String, u16)>,
 }
 
 impl PropertyCollectionData {
+    /// Registers an additional block that shares this property group.
+    ///
+    /// # Arguments
+    /// – `block_name` – the registry name of the block.
+    /// – `block_id` – the numeric block ID.
     pub fn add_block(&mut self, block_name: String, block_id: u16) {
         self.blocks.push((block_name, block_id));
     }
 
+    /// Creates a new `PropertyCollectionData` from an ordered list of property mappings with no blocks yet registered.
+    ///
+    /// # Arguments
+    /// – `variant_mappings` – the property-to-type mappings for this group.
     pub const fn from_mappings(variant_mappings: Vec<PropertyVariantMapping>) -> Self {
         Self {
             variant_mappings,
@@ -76,14 +108,18 @@ impl PropertyCollectionData {
         }
     }
 
+    /// Derives the base name for this property group from the first registered block.
     pub fn derive_name(&self) -> String {
         format!("{}_like", self.blocks[0].0)
     }
 }
 
+/// Deserialized representation of a single block property enum, used to emit the Rust enum definition.
 #[derive(Deserialize, Clone, Debug)]
 pub struct PropertyStruct {
+    /// The UpperCamelCase name used for the generated Rust enum (e.g., `"Facing"`).
     pub name: String,
+    /// The ordered list of variant value strings (e.g., `["north", "south", ...]`).
     pub values: Vec<String>,
 }
 
@@ -159,7 +195,9 @@ impl ToTokens for PropertyStruct {
     }
 }
 
+/// Code-generation wrapper that emits the full `BlockProperties` impl for one property group.
 struct BlockPropertyStruct {
+    /// The property group data used to generate the struct and its trait implementation.
     data: PropertyCollectionData,
 }
 
@@ -345,9 +383,12 @@ impl ToTokens for BlockPropertyStruct {
     }
 }
 
+/// Deserialized flammability data for a block.
 #[derive(Deserialize)]
 pub struct FlammableStruct {
+    /// Chance (0–300) that fire spreads to neighbouring blocks.
     pub spread_chance: u8,
+    /// Chance (0–300) that the block itself burns away.
     pub burn_chance: u8,
 }
 
@@ -365,9 +406,12 @@ impl ToTokens for FlammableStruct {
     }
 }
 
+/// Axis-aligned bounding box used to describe block collision and outline shapes.
 #[derive(Deserialize, Clone, Copy)]
 pub struct BoundingBox {
+    /// The minimum corner of the bounding box.
     pub min: Vector3<f64>,
+    /// The maximum corner of the bounding box.
     pub max: Vector3<f64>,
 }
 
@@ -390,28 +434,46 @@ impl ToTokens for BoundingBox {
     }
 }
 
+/// Deserialized representation of a single block state as stored in `blocks.json`.
 #[derive(Deserialize, Clone)]
 pub struct BlockState {
+    /// Globally unique numeric ID for this block state.
     pub id: u16,
+    /// Bitfield encoding boolean state properties (air, random ticks, etc.).
     pub state_flags: u16,
+    /// Bitfield encoding which sides of the block are solid.
     pub side_flags: u8,
-    pub instrument: String, // TODO: make this an enum
+    /// Name of the note-block instrument for this state. TODO: make this an enum
+    pub instrument: String,
+    /// Light level emitted by this state (0–15).
     pub luminance: u8,
+    /// How pistons interact with this block state.
     pub piston_behavior: PistonBehavior,
+    /// Mining hardness of this block state.
     pub hardness: f32,
+    /// Indices into the global shapes array for collision shape segments.
     pub collision_shapes: Vec<u16>,
+    /// Indices into the global shapes array for outline (selection) shape segments.
     pub outline_shapes: Vec<u16>,
+    /// Opacity value for light propagation, if non-full.
     pub opacity: Option<u8>,
+    /// Associated block-entity type ID, if any.
     pub block_entity_type: Option<u16>,
 }
 
+/// Describes how a piston interacts with a block.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PistonBehavior {
+    /// The block can be pushed and pulled normally.
     Normal,
+    /// The block is destroyed when pushed.
     Destroy,
+    /// The block prevents piston movement.
     Block,
+    /// The piston ignores the block entirely.
     Ignore,
+    /// The block can only be pushed, not pulled.
     PushOnly,
 }
 
@@ -428,17 +490,22 @@ impl PistonBehavior {
 }
 
 impl BlockState {
+    /// Bit flag indicating this state is an air block.
     const IS_AIR: u16 = 1 << 0;
+    /// Bit flag indicating this state receives random tick events.
     const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
+    /// Returns `true` if this state receives random tick events.
     const fn has_random_ticks(&self) -> bool {
         self.state_flags & Self::HAS_RANDOM_TICKS != 0
     }
 
+    /// Returns `true` if this state is an air variant.
     pub const fn is_air(&self) -> bool {
         self.state_flags & Self::IS_AIR != 0
     }
 
+    /// Emits the `BlockState { … }` struct literal token stream for code generation.
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
@@ -489,22 +556,38 @@ impl BlockState {
     }
 }
 
+/// Deserialized representation of a Minecraft block as stored in `blocks.json`.
 #[derive(Deserialize)]
 pub struct Block {
+    /// Numeric block ID used in the protocol.
     pub id: u16,
+    /// Registry name without the `minecraft:` namespace prefix.
     pub name: String,
+    /// Translation key for the block's display name.
     pub translation_key: String,
+    /// Mining hardness; affects how long the block takes to break.
     pub hardness: f32,
+    /// Blast resistance against explosions.
     pub blast_resistance: f32,
+    /// Numeric ID of the corresponding item, if any.
     pub item_id: u16,
+    /// Flammability data, present only if the block can catch fire.
     pub flammable: Option<FlammableStruct>,
+    /// Loot table used when the block is broken, if any.
     pub loot_table: Option<LootTableStruct>,
+    /// Friction applied to entities walking on this block.
     pub slipperiness: f32,
+    /// Horizontal velocity multiplier for entities inside this block.
     pub velocity_multiplier: f32,
+    /// Jump velocity multiplier applied when jumping from this block.
     pub jump_velocity_multiplier: f32,
+    /// Hash keys referencing the properties defined for this block.
     pub properties: Vec<i32>,
+    /// State ID of the default (canonical) block state.
     pub default_state_id: u16,
+    /// All possible states for this block in state-ID order.
     pub states: Vec<BlockState>,
+    /// Experience points dropped when the block is mined, if any.
     pub experience: Option<Experience>,
 }
 
@@ -569,28 +652,46 @@ impl ToTokens for Block {
     }
 }
 
+/// The underlying data type of a generated block property as classified in `properties.json`.
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum GeneratedPropertyType {
+    /// A simple `true`/`false` boolean property.
     #[serde(rename = "boolean")]
     Boolean,
+    /// An integer property with an inclusive range.
     #[serde(rename = "int")]
-    Int { min: u8, max: u8 },
+    Int {
+        /// Minimum value (inclusive).
+        min: u8,
+        /// Maximum value (inclusive).
+        max: u8,
+    },
+    /// A named-variant enum property.
     #[serde(rename = "enum")]
-    Enum { values: Vec<String> },
+    Enum {
+        /// The ordered list of variant strings.
+        values: Vec<String>,
+    },
 }
 
+/// A single block property entry as deserialized from `properties.json`.
 #[derive(Deserialize, Clone)]
 pub struct GeneratedProperty {
+    /// A stable integer hash used to identify this property across blocks.
     hash_key: i32,
+    /// The name used for the generated Rust enum type.
     enum_name: String,
+    /// The property name as it appears in block state JSON.
     serialized_name: String,
+    /// The kind and possible values of this property.
     #[serde(rename = "type")]
     #[serde(flatten)]
     property_type: GeneratedPropertyType,
 }
 
 impl GeneratedProperty {
+    /// Converts this deserialized property into the intermediate `Property` used during code generation.
     fn to_property(&self) -> Property {
         let enum_name = match &self.property_type {
             GeneratedPropertyType::Boolean => "boolean".to_string(),
@@ -620,20 +721,29 @@ impl GeneratedProperty {
     }
 }
 
+/// Intermediate representation of a block property used while building the property group map.
 #[derive(Clone)]
 struct Property {
+    /// The Rust enum type name for this property.
     enum_name: String,
+    /// The JSON key name for this property.
     serialized_name: String,
+    /// All possible string values this property can take.
     values: Vec<String>,
 }
 
+/// Top-level container for all block assets loaded from `blocks.json`.
 #[derive(Deserialize)]
 pub struct BlockAssets {
+    /// All blocks with their states and properties.
     pub blocks: Vec<Block>,
+    /// All unique bounding boxes referenced by block states.
     pub shapes: Vec<BoundingBox>,
+    /// Registry names of all block entity types.
     pub block_entity_types: Vec<String>,
 }
 
+/// Reads all block assets and generates the complete block registry `TokenStream`.
 pub fn build() -> TokenStream {
     let be_blocks_data = fs::read("../assets/bedrock_block_states.nbt").unwrap();
     let mut be_blocks_cursor = Cursor::new(be_blocks_data);
@@ -1169,6 +1279,10 @@ pub fn build() -> TokenStream {
     }
 }
 
+/// Parses the Bedrock Edition block palette NBT file into a map of block names to their state variants.
+///
+/// # Arguments
+/// – `reader` – a readable byte source positioned at the start of the NBT data.
 #[expect(clippy::type_complexity)]
 fn get_be_data_from_nbt<R: Read>(
     reader: &mut R,
@@ -1259,6 +1373,10 @@ fn get_be_data_from_nbt<R: Read>(
     block_data
 }
 
+/// Reads a variable-length encoded 32-bit integer from the reader.
+///
+/// # Arguments
+/// – `reader` – the byte source to read from.
 fn read_varint<W: Read>(reader: &mut W) -> u32 {
     let mut val = 0;
     for i in 0..5u32 {
@@ -1272,6 +1390,10 @@ fn read_varint<W: Read>(reader: &mut W) -> u32 {
     panic!()
 }
 
+/// Reads a single byte from the reader, returning `0` on failure.
+///
+/// # Arguments
+/// – `reader` – the byte source to read from.
 fn read_byte<W: Read>(reader: &mut W) -> u8 {
     let byte = &mut [0];
     reader.read_exact(byte).unwrap_or_default();

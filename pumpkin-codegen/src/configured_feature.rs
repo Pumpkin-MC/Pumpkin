@@ -5,9 +5,10 @@ use std::fs;
 
 use crate::placed_feature::{
     value_to_block_direction, value_to_block_predicate, value_to_block_state_codec,
-    value_to_height_provider, value_to_int_provider, value_to_y_offset,
+    value_to_height_provider, value_to_int_provider,
 };
 
+/// Reads `configured_features.json` and emits a `build_configured_features()` function `TokenStream`.
 pub fn build() -> TokenStream {
     let json_content = fs::read_to_string("../assets/configured_features.json")
         .expect("Failed to read configured_features.json");
@@ -141,6 +142,10 @@ pub fn build() -> TokenStream {
     }
 }
 
+/// Converts a single configured-feature JSON value into its `ConfiguredFeature` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object for the feature, expected to contain `"type"` and `"config"` fields.
 pub fn value_to_configured_feature(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     let config = &v["config"];
@@ -199,14 +204,20 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:ore" | "minecraft:scattered_ore" => {
             let size = config["size"].as_i64().unwrap_or(0) as i32;
-            let discard = config["discard_chance_on_air_exposure"].as_f64().unwrap_or(0.0) as f32;
+            let discard = config["discard_chance_on_air_exposure"]
+                .as_f64()
+                .unwrap_or(0.0) as f32;
             let targets: Vec<TokenStream> = config["targets"]
                 .as_array()
-                .map(|arr| arr.iter().map(|t| {
-                    let rule = value_to_rule_test(&t["target"]);
-                    let state = value_to_block_state_codec(&t["state"]);
-                    quote! { OreTarget { target: #rule, state: #state } }
-                }).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .map(|t| {
+                            let rule = value_to_rule_test(&t["target"]);
+                            let state = value_to_block_state_codec(&t["state"]);
+                            quote! { OreTarget { target: #rule, state: #state } }
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
             if type_str == "minecraft:scattered_ore" {
                 quote! {
@@ -243,11 +254,15 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:block_column" => {
             let layers: Vec<TokenStream> = config["layers"]
                 .as_array()
-                .map(|arr| arr.iter().map(|l| {
-                    let h = value_to_int_provider(&l["height"]);
-                    let p = value_to_block_state_provider(&l["provider"]);
-                    quote! { Layer { height: #h, provider: #p } }
-                }).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .map(|l| {
+                            let h = value_to_int_provider(&l["height"]);
+                            let p = value_to_block_state_provider(&l["provider"]);
+                            quote! { Layer { height: #h, provider: #p } }
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
             let dir = value_to_block_direction(config["direction"].as_str().unwrap_or("up"));
             let allowed = value_to_block_predicate(&config["allowed_placement"]);
@@ -291,11 +306,15 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:random_selector" => {
             let entries: Vec<TokenStream> = config["features"]
                 .as_array()
-                .map(|arr| arr.iter().map(|e| {
-                    let feat = value_to_placed_feature_wrapper(&e["feature"]);
-                    let chance = e["chance"].as_f64().unwrap_or(0.1) as f32;
-                    quote! { RandomFeatureEntry { feature: #feat, chance: #chance } }
-                }).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .map(|e| {
+                            let feat = value_to_placed_feature_wrapper(&e["feature"]);
+                            let chance = e["chance"].as_f64().unwrap_or(0.1) as f32;
+                            quote! { RandomFeatureEntry { feature: #feat, chance: #chance } }
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
             let default = value_to_placed_feature_wrapper(&config["default"]);
             quote! {
@@ -308,7 +327,11 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:simple_random_selector" => {
             let features: Vec<TokenStream> = config["features"]
                 .as_array()
-                .map(|arr| arr.iter().map(|f| value_to_inline_placed_feature(f)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .map(|f| value_to_inline_placed_feature(f))
+                        .collect()
+                })
                 .unwrap_or_default();
             quote! {
                 ConfiguredFeature::SimpleRandomSelector(SimpleRandomFeature {
@@ -330,7 +353,8 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             let inv = config["crystal_invulnerable"].as_bool().unwrap_or(false);
             let spikes: Vec<TokenStream> = config["spikes"]
                 .as_array()
-                .map(|arr| arr.iter().map(|s| {
+                .map(|arr| {
+                    arr.iter().map(|s| {
                     let cx = s["centerX"].as_i64().unwrap_or(0) as i32;
                     let cz = s["centerZ"].as_i64().unwrap_or(0) as i32;
                     let r = s["radius"].as_i64().unwrap_or(0) as i32;
@@ -339,7 +363,8 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                     quote! {
                         Spike { center_x: #cx, center_z: #cz, radius: #r, height: #h, guarded: #g }
                     }
-                }).collect())
+                    }).collect()
+                })
                 .unwrap_or_default();
             quote! {
                 ConfiguredFeature::EndSpike(EndSpikeFeature {
@@ -354,7 +379,9 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:pointed_dripstone" => {
             let taller = config["chance_of_taller_dripstone"].as_f64().unwrap_or(0.2) as f32;
-            let dir_spread = config["chance_of_directional_spread"].as_f64().unwrap_or(0.7) as f32;
+            let dir_spread = config["chance_of_directional_spread"]
+                .as_f64()
+                .unwrap_or(0.7) as f32;
             let r2 = config["chance_of_spread_radius2"].as_f64().unwrap_or(0.5) as f32;
             let r3 = config["chance_of_spread_radius3"].as_f64().unwrap_or(0.5) as f32;
             quote! {
@@ -369,11 +396,14 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:geode" => {
             let blocks = &config["blocks"];
             let filling_provider = value_to_block_state_provider(&blocks["filling_provider"]);
-            let inner_layer_provider = value_to_block_state_provider(&blocks["inner_layer_provider"]);
+            let inner_layer_provider =
+                value_to_block_state_provider(&blocks["inner_layer_provider"]);
             let alternate_inner_layer_provider =
                 value_to_block_state_provider(&blocks["alternate_inner_layer_provider"]);
-            let middle_layer_provider = value_to_block_state_provider(&blocks["middle_layer_provider"]);
-            let outer_layer_provider = value_to_block_state_provider(&blocks["outer_layer_provider"]);
+            let middle_layer_provider =
+                value_to_block_state_provider(&blocks["middle_layer_provider"]);
+            let outer_layer_provider =
+                value_to_block_state_provider(&blocks["outer_layer_provider"]);
             let inner_placements: Vec<TokenStream> = blocks["inner_placements"]
                 .as_array()
                 .map(|arr| arr.iter().map(|s| value_to_block_state_codec(s)).collect())
@@ -392,12 +422,15 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             let base_crack_size = crack["base_crack_size"].as_f64().unwrap_or(2.0);
             let crack_point_offset = crack["crack_point_offset"].as_i64().unwrap_or(2) as i32;
 
-            let use_potential_placements_chance =
-                config["use_potential_placements_chance"].as_f64().unwrap_or(0.35);
-            let use_alternate_layer0_chance =
-                config["use_alternate_layer0_chance"].as_f64().unwrap_or(0.0);
-            let placements_require_layer0_alternate =
-                config["placements_require_layer0_alternate"].as_bool().unwrap_or(true);
+            let use_potential_placements_chance = config["use_potential_placements_chance"]
+                .as_f64()
+                .unwrap_or(0.35);
+            let use_alternate_layer0_chance = config["use_alternate_layer0_chance"]
+                .as_f64()
+                .unwrap_or(0.0);
+            let placements_require_layer0_alternate = config["placements_require_layer0_alternate"]
+                .as_bool()
+                .unwrap_or(true);
             let outer_wall_distance = value_to_int_provider(&config["outer_wall_distance"]);
             let distribution_points = value_to_int_provider(&config["distribution_points"]);
             let point_offset = value_to_int_provider(&config["point_offset"]);
@@ -436,12 +469,18 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                     invalid_blocks_threshold: #invalid_blocks_threshold,
                 }))
             }
-        },
-        "minecraft:monster_room" => quote! { ConfiguredFeature::MonsterRoom(crate::generation::feature::features::monster_room::DungeonFeature {}) },
+        }
+        "minecraft:monster_room" => {
+            quote! { ConfiguredFeature::MonsterRoom(crate::generation::feature::features::monster_room::DungeonFeature {}) }
+        }
         "minecraft:underwater_magma" => {
             let floor_range = config["floor_search_range"].as_i64().unwrap_or(0) as i32;
-            let placement_radius = config["placement_radius_around_floor"].as_i64().unwrap_or(0) as i32;
-            let placement_prob = config["placement_probability_per_valid_position"].as_f64().unwrap_or(0.0) as f32;
+            let placement_radius = config["placement_radius_around_floor"]
+                .as_i64()
+                .unwrap_or(0) as i32;
+            let placement_prob = config["placement_probability_per_valid_position"]
+                .as_f64()
+                .unwrap_or(0.0) as f32;
             quote! {
                 ConfiguredFeature::UnderwaterMagma(
                     crate::generation::feature::features::underwater_magma::UnderwaterMagmaFeature {
@@ -451,48 +490,126 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                     }
                 )
             }
-        },
+        }
 
         // All TODO/empty features
-        "minecraft:fossil" => quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) },
-        "minecraft:lake" => quote! { ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {}) },
-        "minecraft:disk" => quote! { ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}) },
-        "minecraft:huge_brown_mushroom" => quote! { ConfiguredFeature::HugeBrownMushroom(crate::generation::feature::features::huge_brown_mushroom::HugeBrownMushroomFeature {}) },
-        "minecraft:huge_red_mushroom" => quote! { ConfiguredFeature::HugeRedMushroom(crate::generation::feature::features::huge_red_mushroom::HugeRedMushroomFeature {}) },
-        "minecraft:ice_spike" => quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) },
-        "minecraft:glowstone_blob" => quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) },
-        "minecraft:freeze_top_layer" => quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) },
-        "minecraft:vines" => quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) },
-        "minecraft:vegetation_patch" => quote! { ConfiguredFeature::VegetationPatch(crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {}) },
-        "minecraft:waterlogged_vegetation_patch" => quote! { ConfiguredFeature::WaterloggedVegetationPatch(crate::generation::feature::features::waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature {}) },
-        "minecraft:root_system" => quote! { ConfiguredFeature::RootSystem(crate::generation::feature::features::root_system::RootSystemFeature {}) },
-        "minecraft:multiface_growth" => quote! { ConfiguredFeature::MultifaceGrowth(crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {}) },
-        "minecraft:blue_ice" => quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) },
-        "minecraft:iceberg" => quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature {}) },
-        "minecraft:forest_rock" => quote! { ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {}) },
-        "minecraft:end_platform" => quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) },
-        "minecraft:end_island" => quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) },
-        "minecraft:end_gateway" => quote! { ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {}) },
-        "minecraft:kelp" => quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) },
-        "minecraft:coral_tree" => quote! { ConfiguredFeature::CoralTree(crate::generation::feature::features::coral::coral_tree::CoralTreeFeature) },
-        "minecraft:coral_mushroom" => quote! { ConfiguredFeature::CoralMushroom(crate::generation::feature::features::coral::coral_mushroom::CoralMushroomFeature) },
-        "minecraft:coral_claw" => quote! { ConfiguredFeature::CoralClaw(crate::generation::feature::features::coral::coral_claw::CoralClawFeature) },
-        "minecraft:huge_fungus" => quote! { ConfiguredFeature::HugeFungus(crate::generation::feature::features::huge_fungus::HugeFungusFeature {}) },
-        "minecraft:weeping_vines" => quote! { ConfiguredFeature::WeepingVines(crate::generation::feature::features::weeping_vines::WeepingVinesFeature {}) },
-        "minecraft:twisting_vines" => quote! { ConfiguredFeature::TwistingVines(crate::generation::feature::features::twisting_vines::TwistingVinesFeature {}) },
-        "minecraft:basalt_columns" => quote! { ConfiguredFeature::BasaltColumns(crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {}) },
-        "minecraft:delta_feature" => quote! { ConfiguredFeature::DeltaFeature(crate::generation::feature::features::delta_feature::DeltaFeatureFeature {}) },
-        "minecraft:fill_layer" => quote! { ConfiguredFeature::FillLayer(crate::generation::feature::features::fill_layer::FillLayerFeature {}) },
-        "minecraft:bonus_chest" => quote! { ConfiguredFeature::BonusChest(crate::generation::feature::features::bonus_chest::BonusChestFeature {}) },
-        "minecraft:basalt_pillar" => quote! { ConfiguredFeature::BasaltPillar(crate::generation::feature::features::basalt_pillar::BasaltPillarFeature {}) },
-        "minecraft:dripstone_cluster" => quote! { ConfiguredFeature::DripstoneCluster(crate::generation::feature::features::drip_stone::cluster::DripstoneClusterFeature {}) },
-        "minecraft:large_dripstone" => quote! { ConfiguredFeature::LargeDripstone(crate::generation::feature::features::drip_stone::large::LargeDripstoneFeature {}) },
-        "minecraft:sculk_patch" => quote! { ConfiguredFeature::SculkPatch(crate::generation::feature::features::sculk_patch::SculkPatchFeature {}) },
-        "minecraft:block_pile" => quote! { ConfiguredFeature::BlockPile(crate::generation::feature::features::block_pile::BlockPileFeature {}) },
-        "minecraft:chorus_plant" => quote! { ConfiguredFeature::ChorusPlant(crate::generation::feature::features::chorus_plant::ChorusPlantFeature {}) },
-        "minecraft:replace_single_block" => quote! { ConfiguredFeature::ReplaceSingleBlock(crate::generation::feature::features::replace_single_block::ReplaceSingleBlockFeature {}) },
-        "minecraft:void_start_platform" => quote! { ConfiguredFeature::VoidStartPlatform(crate::generation::feature::features::void_start_platform::VoidStartPlatformFeature {}) },
-        "minecraft:desert_well" => quote! { ConfiguredFeature::DesertWell(crate::generation::feature::features::desert_well::DesertWellFeature) },
+        "minecraft:fossil" => {
+            quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
+        }
+        "minecraft:lake" => {
+            quote! { ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {}) }
+        }
+        "minecraft:disk" => {
+            quote! { ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}) }
+        }
+        "minecraft:huge_brown_mushroom" => {
+            quote! { ConfiguredFeature::HugeBrownMushroom(crate::generation::feature::features::huge_brown_mushroom::HugeBrownMushroomFeature {}) }
+        }
+        "minecraft:huge_red_mushroom" => {
+            quote! { ConfiguredFeature::HugeRedMushroom(crate::generation::feature::features::huge_red_mushroom::HugeRedMushroomFeature {}) }
+        }
+        "minecraft:ice_spike" => {
+            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
+        }
+        "minecraft:glowstone_blob" => {
+            quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) }
+        }
+        "minecraft:freeze_top_layer" => {
+            quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) }
+        }
+        "minecraft:vines" => {
+            quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) }
+        }
+        "minecraft:vegetation_patch" => {
+            quote! { ConfiguredFeature::VegetationPatch(crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {}) }
+        }
+        "minecraft:waterlogged_vegetation_patch" => {
+            quote! { ConfiguredFeature::WaterloggedVegetationPatch(crate::generation::feature::features::waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature {}) }
+        }
+        "minecraft:root_system" => {
+            quote! { ConfiguredFeature::RootSystem(crate::generation::feature::features::root_system::RootSystemFeature {}) }
+        }
+        "minecraft:multiface_growth" => {
+            quote! { ConfiguredFeature::MultifaceGrowth(crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {}) }
+        }
+        "minecraft:blue_ice" => {
+            quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) }
+        }
+        "minecraft:iceberg" => {
+            quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature {}) }
+        }
+        "minecraft:forest_rock" => {
+            quote! { ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {}) }
+        }
+        "minecraft:end_platform" => {
+            quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
+        }
+        "minecraft:end_island" => {
+            quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
+        }
+        "minecraft:end_gateway" => {
+            quote! { ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {}) }
+        }
+        "minecraft:kelp" => {
+            quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
+        }
+        "minecraft:coral_tree" => {
+            quote! { ConfiguredFeature::CoralTree(crate::generation::feature::features::coral::coral_tree::CoralTreeFeature) }
+        }
+        "minecraft:coral_mushroom" => {
+            quote! { ConfiguredFeature::CoralMushroom(crate::generation::feature::features::coral::coral_mushroom::CoralMushroomFeature) }
+        }
+        "minecraft:coral_claw" => {
+            quote! { ConfiguredFeature::CoralClaw(crate::generation::feature::features::coral::coral_claw::CoralClawFeature) }
+        }
+        "minecraft:huge_fungus" => {
+            quote! { ConfiguredFeature::HugeFungus(crate::generation::feature::features::huge_fungus::HugeFungusFeature {}) }
+        }
+        "minecraft:weeping_vines" => {
+            quote! { ConfiguredFeature::WeepingVines(crate::generation::feature::features::weeping_vines::WeepingVinesFeature {}) }
+        }
+        "minecraft:twisting_vines" => {
+            quote! { ConfiguredFeature::TwistingVines(crate::generation::feature::features::twisting_vines::TwistingVinesFeature {}) }
+        }
+        "minecraft:basalt_columns" => {
+            quote! { ConfiguredFeature::BasaltColumns(crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {}) }
+        }
+        "minecraft:delta_feature" => {
+            quote! { ConfiguredFeature::DeltaFeature(crate::generation::feature::features::delta_feature::DeltaFeatureFeature {}) }
+        }
+        "minecraft:fill_layer" => {
+            quote! { ConfiguredFeature::FillLayer(crate::generation::feature::features::fill_layer::FillLayerFeature {}) }
+        }
+        "minecraft:bonus_chest" => {
+            quote! { ConfiguredFeature::BonusChest(crate::generation::feature::features::bonus_chest::BonusChestFeature {}) }
+        }
+        "minecraft:basalt_pillar" => {
+            quote! { ConfiguredFeature::BasaltPillar(crate::generation::feature::features::basalt_pillar::BasaltPillarFeature {}) }
+        }
+        "minecraft:dripstone_cluster" => {
+            quote! { ConfiguredFeature::DripstoneCluster(crate::generation::feature::features::drip_stone::cluster::DripstoneClusterFeature {}) }
+        }
+        "minecraft:large_dripstone" => {
+            quote! { ConfiguredFeature::LargeDripstone(crate::generation::feature::features::drip_stone::large::LargeDripstoneFeature {}) }
+        }
+        "minecraft:sculk_patch" => {
+            quote! { ConfiguredFeature::SculkPatch(crate::generation::feature::features::sculk_patch::SculkPatchFeature {}) }
+        }
+        "minecraft:block_pile" => {
+            quote! { ConfiguredFeature::BlockPile(crate::generation::feature::features::block_pile::BlockPileFeature {}) }
+        }
+        "minecraft:chorus_plant" => {
+            quote! { ConfiguredFeature::ChorusPlant(crate::generation::feature::features::chorus_plant::ChorusPlantFeature {}) }
+        }
+        "minecraft:replace_single_block" => {
+            quote! { ConfiguredFeature::ReplaceSingleBlock(crate::generation::feature::features::replace_single_block::ReplaceSingleBlockFeature {}) }
+        }
+        "minecraft:void_start_platform" => {
+            quote! { ConfiguredFeature::VoidStartPlatform(crate::generation::feature::features::void_start_platform::VoidStartPlatformFeature {}) }
+        }
+        "minecraft:desert_well" => {
+            quote! { ConfiguredFeature::DesertWell(crate::generation::feature::features::desert_well::DesertWellFeature) }
+        }
         other => {
             let msg = format!("unknown configured feature type: {other}");
             quote! { compile_error!(#msg) }
@@ -500,6 +617,13 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a block-state-provider JSON object into its `BlockStateProvider` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON value for the provider, expected to contain a `"type"` field.
+///
+/// # Returns
+/// A `TokenStream` for the appropriate `BlockStateProvider` variant; defaults to `BlockStateProvider::Simple` with air if the type is unrecognised.
 fn value_to_block_state_provider(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -510,11 +634,15 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
         "minecraft:weighted_state_provider" => {
             let entries: Vec<TokenStream> = v["entries"]
                 .as_array()
-                .map(|arr| arr.iter().map(|e| {
-                    let data = value_to_block_state_codec(&e["data"]);
-                    let weight = e["weight"].as_i64().unwrap_or(1) as i32;
-                    quote! { Weighted { data: #data, weight: #weight } }
-                }).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .map(|e| {
+                            let data = value_to_block_state_codec(&e["data"]);
+                            let weight = e["weight"].as_i64().unwrap_or(1) as i32;
+                            quote! { Weighted { data: #data, weight: #weight } }
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
             quote! {
                 BlockStateProvider::Weighted(WeightedBlockStateProvider {
@@ -551,7 +679,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             let v0 = v["variety"][0].as_u64().unwrap_or(2) as u32;
             let v1 = v["variety"][1].as_u64().unwrap_or(4) as u32;
             let slow_noise = value_to_dpnp(&v["slow_noise"]);
-            let slow_scale = v["slow_scale"].as_f64().unwrap_or(1.0) as f64;
+            let slow_scale = v["slow_scale"].as_f64().unwrap_or(1.0);
             quote! {
                 BlockStateProvider::DualNoise(DualNoiseBlockStateProvider {
                     base: #base_noise_provider,
@@ -608,6 +736,10 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a noise-provider JSON object into a `NoiseBlockStateProviderBase` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object containing `"seed"`, `"noise"`, and `"scale"` fields.
 fn value_to_noise_base(v: &Value) -> TokenStream {
     let seed = v["seed"].as_i64().unwrap_or(0);
     let noise = value_to_dpnp(&v["noise"]);
@@ -617,6 +749,10 @@ fn value_to_noise_base(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a double-perlin-noise parameters JSON object into a `DoublePerlinNoiseParametersCodec` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object containing `"firstOctave"` and `"amplitudes"` fields.
 fn value_to_dpnp(v: &Value) -> TokenStream {
     let first_octave = v["firstOctave"].as_i64().unwrap_or(-7) as i32;
     let amplitudes: Vec<f64> = v["amplitudes"]
@@ -631,6 +767,13 @@ fn value_to_dpnp(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a rule-test JSON object into its `RuleTest` enum variant token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object for the rule test, expected to contain a `"predicate_type"` field.
+///
+/// # Returns
+/// A `TokenStream` for the appropriate `RuleTest` variant; emits a `compile_error!` for unrecognised types.
 fn value_to_rule_test(v: &Value) -> TokenStream {
     let type_str = v["predicate_type"].as_str().unwrap_or("");
     match type_str {
@@ -664,6 +807,13 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a block-list JSON value (string or array) into a `BlockWrapper` token stream.
+///
+/// # Arguments
+/// – `v` – a JSON string (single block) or array of strings (multiple blocks).
+///
+/// # Returns
+/// `BlockWrapper::Single` for a string value or `BlockWrapper::Multi` for an array; defaults to `BlockWrapper::Single("")` for other types.
 fn value_to_block_wrapper(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => quote! { BlockWrapper::Single(#s.to_string()) },
@@ -678,6 +828,10 @@ fn value_to_block_wrapper(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a tree-feature config JSON object into a `TreeFeature` token stream.
+///
+/// # Arguments
+/// – `config` – the `"config"` sub-object of a `minecraft:tree` configured feature JSON entry.
 fn value_to_tree_feature(config: &Value) -> TokenStream {
     let dirt = value_to_block_state_provider(&config["dirt_provider"]);
     let trunk = value_to_block_state_provider(&config["trunk_provider"]);
@@ -706,6 +860,10 @@ fn value_to_tree_feature(config: &Value) -> TokenStream {
     }
 }
 
+/// Converts a trunk-placer JSON object into a `TrunkPlacer` token stream.
+///
+/// # Arguments
+/// – `v` – the `"trunk_placer"` sub-object from a tree config, containing `"type"`, `"base_height"`, `"height_rand_a"`, and `"height_rand_b"` fields.
 fn value_to_trunk_placer(v: &Value) -> TokenStream {
     let base = v["base_height"].as_u64().unwrap_or(5) as u8;
     let rand_a = v["height_rand_a"].as_u64().unwrap_or(0) as u8;
@@ -748,6 +906,10 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a foliage-placer JSON object into a `FoliagePlacer` token stream.
+///
+/// # Arguments
+/// – `v` – the `"foliage_placer"` sub-object from a tree config, containing `"type"`, `"radius"`, and `"offset"` fields.
 fn value_to_foliage_placer(v: &Value) -> TokenStream {
     let radius = value_to_int_provider(&v["radius"]);
     let offset = value_to_int_provider(&v["offset"]);
@@ -823,6 +985,10 @@ fn value_to_foliage_placer(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a feature-size JSON object into a `FeatureSize` token stream.
+///
+/// # Arguments
+/// – `v` – the `"minimum_size"` sub-object from a tree config, containing a `"type"` field and size parameters.
 fn value_to_feature_size(v: &Value) -> TokenStream {
     let min_clipped = if v["min_clipped_height"].is_number() {
         let val = v["min_clipped_height"].as_u64().unwrap_or(0) as u8;
@@ -875,6 +1041,13 @@ fn value_to_feature_size(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a tree-decorator JSON object into its `TreeDecorator` enum variant token stream.
+///
+/// # Arguments
+/// – `v` – a JSON object for one decorator entry, expected to contain a `"type"` field.
+///
+/// # Returns
+/// A `TokenStream` for the appropriate `TreeDecorator` variant; emits a `compile_error!` for unrecognised types.
 fn value_to_tree_decorator(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -893,7 +1066,11 @@ fn value_to_tree_decorator(v: &Value) -> TokenStream {
             let bp = value_to_block_state_provider(&v["block_provider"]);
             let dirs: Vec<TokenStream> = v["directions"]
                 .as_array()
-                .map(|arr| arr.iter().filter_map(|d| d.as_str().map(value_to_block_direction)).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|d| d.as_str().map(value_to_block_direction))
+                        .collect()
+                })
                 .unwrap_or_default();
             quote! {
                 TreeDecorator::AttachedToLogs(AttachedToLogsTreeDecorator {
@@ -933,9 +1110,16 @@ fn value_to_tree_decorator(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts an inline placed-feature JSON object into a `PlacedFeature` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object containing `"feature"` and `"placement"` fields.
 fn value_to_inline_placed_feature(v: &Value) -> TokenStream {
     let feature = value_to_feature_ref(&v["feature"]);
-    let placement_arr = v["placement"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+    let placement_arr = v["placement"]
+        .as_array()
+        .map(|a| a.as_slice())
+        .unwrap_or(&[]);
     let placement: Vec<TokenStream> = placement_arr
         .iter()
         .map(|p| value_to_placement_modifier_cf(p))
@@ -948,6 +1132,13 @@ fn value_to_inline_placed_feature(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a placed-feature reference JSON value into a `PlacedFeatureWrapper` token stream.
+///
+/// # Arguments
+/// – `v` – a JSON string (named reference) or object (inline placed feature).
+///
+/// # Returns
+/// `PlacedFeatureWrapper::Named` for a string value or `PlacedFeatureWrapper::Direct` for an inline object; defaults to `PlacedFeatureWrapper::Named("")` for other types.
 fn value_to_placed_feature_wrapper(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
@@ -963,6 +1154,13 @@ fn value_to_placed_feature_wrapper(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a feature reference JSON value into a `Feature` enum token stream.
+///
+/// # Arguments
+/// – `v` – a JSON string (named reference) or object (inline configured feature).
+///
+/// # Returns
+/// `Feature::Named` for a string value or `Feature::Inlined` for an object; defaults to `Feature::Named("")` for other types.
 fn value_to_feature_ref(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
@@ -978,6 +1176,13 @@ fn value_to_feature_ref(v: &Value) -> TokenStream {
 }
 
 // Placement modifier in context of configured_features (same as placed_feature but re-imported)
+/// Converts a placement-modifier JSON object into its `PlacementModifier` token stream within the configured-feature context.
+///
+/// # Arguments
+/// – `v` – a JSON object for one modifier entry, expected to contain a `"type"` field.
+///
+/// # Returns
+/// A `TokenStream` for the appropriate `PlacementModifier` variant; defaults to `PlacementModifier::Biome` for unrecognised types.
 fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -985,7 +1190,9 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
         "minecraft:in_square" => quote! { PlacementModifier::InSquare(SquarePlacementModifier) },
         "minecraft:fixed_placement" => quote! { PlacementModifier::FixedPlacement },
         "minecraft:heightmap" => {
-            let hm = crate::placed_feature::value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
+            let hm = crate::placed_feature::value_to_height_map(
+                v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"),
+            );
             quote! { PlacementModifier::Heightmap(HeightmapPlacementModifier { heightmap: #hm }) }
         }
         "minecraft:height_range" => {
@@ -1009,9 +1216,21 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
             quote! { PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier { predicate: #pred }) }
         }
         "minecraft:surface_relative_threshold_filter" => {
-            let hm = crate::placed_feature::value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
-            let mn = if v["min_inclusive"].is_number() { let x = v["min_inclusive"].as_i64().unwrap() as i32; quote!{Some(#x)} } else { quote!{None} };
-            let mx = if v["max_inclusive"].is_number() { let x = v["max_inclusive"].as_i64().unwrap() as i32; quote!{Some(#x)} } else { quote!{None} };
+            let hm = crate::placed_feature::value_to_height_map(
+                v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"),
+            );
+            let mn = if v["min_inclusive"].is_number() {
+                let x = v["min_inclusive"].as_i64().unwrap() as i32;
+                quote! {Some(#x)}
+            } else {
+                quote! {None}
+            };
+            let mx = if v["max_inclusive"].is_number() {
+                let x = v["max_inclusive"].as_i64().unwrap() as i32;
+                quote! {Some(#x)}
+            } else {
+                quote! {None}
+            };
             quote! { PlacementModifier::SurfaceRelativeThresholdFilter(SurfaceThresholdFilterPlacementModifier { heightmap: #hm, min_inclusive: #mn, max_inclusive: #mx }) }
         }
         "minecraft:surface_water_depth_filter" => {
@@ -1041,7 +1260,9 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
             let asc = if v["allowed_search_condition"].is_object() {
                 let p = value_to_block_predicate(&v["allowed_search_condition"]);
                 quote! { Some(#p) }
-            } else { quote! { None } };
+            } else {
+                quote! { None }
+            };
             let steps = v["max_steps"].as_i64().unwrap_or(1) as i32;
             quote! { PlacementModifier::EnvironmentScan(EnvironmentScanPlacementModifier { direction_of_search: #dir, target_condition: #tc, allowed_search_condition: #asc, max_steps: #steps }) }
         }

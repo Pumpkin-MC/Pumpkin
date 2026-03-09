@@ -7,34 +7,55 @@ use pumpkin_util::text::TextContent::Translate;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
+/// Raw deserialization shape for a single enchantment entry from `enchantments.json`.
 #[derive(Deserialize)]
 pub struct Enchantment {
+    /// Numeric registry ID for this enchantment.
     pub id: u8,
+    /// Anvil repair cost multiplier added when applying this enchantment.
     pub anvil_cost: u32,
+    /// Tag path (prefixed with `#`) of items that support this enchantment.
     pub supported_items: String,
+    /// Display name component for this enchantment (typically a translation key).
     pub description: TextComponent,
+    /// Optional exclusive-set tag; enchantments in the same set are mutually incompatible.
     pub exclusive_set: Option<String>,
+    /// Maximum level this enchantment can reach.
     pub max_level: i32,
+    /// Equipment slots this enchantment's attribute modifiers apply to.
     pub slots: Vec<AttributeModifierSlot>, // TODO: add more
 }
 
+/// Equipment slot category that an enchantment's attribute modifier applies to.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum AttributeModifierSlot {
+    /// Applies in any equipment slot.
     Any,
+    /// Applies only when held in the main hand.
     MainHand,
+    /// Applies only when held in the off hand.
     OffHand,
+    /// Applies when held in either hand.
     Hand,
+    /// Applies when worn on the feet.
     Feet,
+    /// Applies when worn on the legs.
     Legs,
+    /// Applies when worn on the chest.
     Chest,
+    /// Applies when worn on the head.
     Head,
+    /// Applies when wearing any piece of armor.
     Armor,
+    /// Applies when worn as a body armor piece (e.g. on horses or wolves).
     Body,
+    /// Applies when placed in a saddle slot.
     Saddle,
 }
 
 impl AttributeModifierSlot {
+    /// Converts this slot variant into a `TokenStream` for use in generated code.
     pub fn to_tokens(&self) -> TokenStream {
         match self {
             Self::Any => quote! { AttributeModifierSlot::Any },
@@ -52,6 +73,8 @@ impl AttributeModifierSlot {
     }
 }
 
+/// Generates the `TokenStream` for the `Enchantment` struct, `AttributeModifierSlot` enum,
+/// and `from_name`/`from_id` lookup methods.
 pub fn build() -> TokenStream {
     let enchantments: BTreeMap<String, Enchantment> =
         serde_json::from_str(&fs::read_to_string("../assets/enchantments.json").unwrap())
