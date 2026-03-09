@@ -8,7 +8,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     BlockDirection, HeightMap,
     math::{block_box::BlockBox, position::BlockPos},
-    random::{RandomGenerator, RandomImpl},
+    random::{RandomDeriverImpl, RandomGenerator, RandomImpl},
 };
 
 use crate::{
@@ -102,51 +102,9 @@ impl DesertPyramidPiece {
         true
     }
 
-    #[expect(clippy::too_many_arguments)]
-    fn gen_box(
-        &self,
-        chunk: &mut ProtoChunk,
-        bb: &BlockBox,
-        x0: i32,
-        y0: i32,
-        z0: i32,
-        x1: i32,
-        y1: i32,
-        z1: i32,
-        edge: &BlockState,
-        fill: &BlockState,
-        skip_air: bool,
-    ) {
-        self.piece
-            .fill_with_outline(chunk, bb, skip_air, x0, y0, z0, x1, y1, z1, edge, fill);
-    }
-
-    fn pb(
-        &self,
-        chunk: &mut ProtoChunk,
-        bb: &BlockBox,
-        state: &BlockState,
-        x: i32,
-        y: i32,
-        z: i32,
-    ) {
-        self.piece.add_block(chunk, state, x, y, z, bb);
-    }
-
-    fn fill_down(
-        &self,
-        chunk: &mut ProtoChunk,
-        bb: &BlockBox,
-        state: &BlockState,
-        x: i32,
-        y: i32,
-        z: i32,
-    ) {
-        self.piece.fill_downwards(chunk, state, x, y, z, bb);
-    }
-
     fn place_sand(&self, chunk: &mut ProtoChunk, bb: &BlockBox, x: i32, y: i32, z: i32) {
-        self.pb(chunk, bb, Block::SAND.default_state, x, y, z);
+        self.piece
+            .add_block(chunk, Block::SAND.default_state, x, y, z, bb);
     }
 
     #[expect(clippy::too_many_arguments)]
@@ -170,6 +128,24 @@ impl DesertPyramidPiece {
         }
     }
 
+    fn place_collapsed_roof_piece(
+        &self,
+        chunk: &mut ProtoChunk,
+        bb: &BlockBox,
+        random: &mut RandomGenerator,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) {
+        let state = if random.next_f32() < 0.33 {
+            Block::SANDSTONE.default_state
+        } else {
+            Block::SAND.default_state
+        };
+
+        self.piece.add_block(chunk, state, x, y, z, bb);
+    }
+
     #[expect(clippy::too_many_arguments)]
     fn place_collapsed_roof(
         &self,
@@ -184,12 +160,7 @@ impl DesertPyramidPiece {
     ) {
         for x in x0..=x1 {
             for z in z0..=z1 {
-                let state = if random.next_f32() < 0.33 {
-                    Block::SANDSTONE.default_state
-                } else {
-                    Block::SAND.default_state
-                };
-                self.pb(chunk, bb, state, x, y0, z);
+                self.place_collapsed_roof_piece(chunk, bb, random, x, y0, z);
             }
         }
         // TODO: Pick a random collapsed roof position for sus sand placement in
@@ -214,7 +185,8 @@ impl DesertPyramidPiece {
             return;
         }
 
-        self.pb(chunk, bb, Block::CHEST.default_state, x, y, z);
+        self.piece
+            .add_block(chunk, Block::CHEST.default_state, x, y, z, bb);
 
         let mut nbt = NbtCompound::new();
         nbt.put_int("x", world_pos.x);
@@ -238,40 +210,40 @@ impl DesertPyramidPiece {
         random: &mut RandomGenerator,
     ) {
         let west_stairs = Self::sandstone_stairs(HorizontalFacing::West);
-        self.pb(chunk, bb, west_stairs, 13, -1, 17);
-        self.pb(chunk, bb, west_stairs, 14, -2, 17);
-        self.pb(chunk, bb, west_stairs, 15, -3, 17);
+        self.piece.add_block(chunk, west_stairs, 13, -1, 17, bb);
+        self.piece.add_block(chunk, west_stairs, 14, -2, 17, bb);
+        self.piece.add_block(chunk, west_stairs, 15, -3, 17, bb);
 
         let sand = Block::SAND.default_state;
         let sandstone = Block::SANDSTONE.default_state;
         let (x, y, z) = (16, -4, 13);
         let variant = random.next_bool();
 
-        self.pb(chunk, bb, sand, x - 4, y + 4, z + 4);
-        self.pb(chunk, bb, sand, x - 3, y + 4, z + 4);
-        self.pb(chunk, bb, sand, x - 2, y + 4, z + 4);
-        self.pb(chunk, bb, sand, x - 1, y + 4, z + 4);
-        self.pb(chunk, bb, sand, x, y + 4, z + 4);
-        self.pb(chunk, bb, sand, x - 2, y + 3, z + 4);
-        self.pb(
+        self.piece.add_block(chunk, sand, x - 4, y + 4, z + 4, bb);
+        self.piece.add_block(chunk, sand, x - 3, y + 4, z + 4, bb);
+        self.piece.add_block(chunk, sand, x - 2, y + 4, z + 4, bb);
+        self.piece.add_block(chunk, sand, x - 1, y + 4, z + 4, bb);
+        self.piece.add_block(chunk, sand, x, y + 4, z + 4, bb);
+        self.piece.add_block(chunk, sand, x - 2, y + 3, z + 4, bb);
+        self.piece.add_block(
             chunk,
-            bb,
             if variant { sand } else { sandstone },
             x - 1,
             y + 3,
             z + 4,
-        );
-        self.pb(
-            chunk,
             bb,
+        );
+        self.piece.add_block(
+            chunk,
             if variant { sandstone } else { sand },
             x,
             y + 3,
             z + 4,
+            bb,
         );
-        self.pb(chunk, bb, sand, x - 1, y + 2, z + 4);
-        self.pb(chunk, bb, sandstone, x, y + 2, z + 4);
-        self.pb(chunk, bb, sand, x, y + 1, z + 4);
+        self.piece.add_block(chunk, sand, x - 1, y + 2, z + 4, bb);
+        self.piece.add_block(chunk, sandstone, x, y + 2, z + 4, bb);
+        self.piece.add_block(chunk, sand, x, y + 1, z + 4, bb);
     }
 
     fn add_cellar_room(&self, chunk: &mut ProtoChunk, bb: &BlockBox, random: &mut RandomGenerator) {
@@ -280,9 +252,10 @@ impl DesertPyramidPiece {
         let chiseled = Block::CHISELED_SANDSTONE.default_state;
         let orange = Block::ORANGE_TERRACOTTA.default_state;
         let blue = Block::BLUE_TERRACOTTA.default_state;
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             y + 1,
             z - 3,
@@ -291,11 +264,11 @@ impl DesertPyramidPiece {
             z + 2,
             cut,
             cut,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x + 3,
             y + 1,
             z - 3,
@@ -304,11 +277,11 @@ impl DesertPyramidPiece {
             z + 2,
             cut,
             cut,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             y + 1,
             z - 3,
@@ -317,11 +290,11 @@ impl DesertPyramidPiece {
             z - 2,
             cut,
             cut,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             y + 1,
             z + 3,
@@ -330,11 +303,11 @@ impl DesertPyramidPiece {
             z + 3,
             cut,
             cut,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             y + 2,
             z - 3,
@@ -343,11 +316,11 @@ impl DesertPyramidPiece {
             z + 2,
             chiseled,
             chiseled,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x + 3,
             y + 2,
             z - 3,
@@ -356,11 +329,11 @@ impl DesertPyramidPiece {
             z + 2,
             chiseled,
             chiseled,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             y + 2,
             z - 3,
@@ -369,11 +342,11 @@ impl DesertPyramidPiece {
             z - 2,
             chiseled,
             chiseled,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             y + 2,
             z + 3,
@@ -382,11 +355,11 @@ impl DesertPyramidPiece {
             z + 3,
             chiseled,
             chiseled,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             -1,
             z - 3,
@@ -395,11 +368,11 @@ impl DesertPyramidPiece {
             z + 2,
             cut,
             cut,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x + 3,
             -1,
             z - 3,
@@ -408,11 +381,11 @@ impl DesertPyramidPiece {
             z + 2,
             cut,
             cut,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             -1,
             z - 3,
@@ -421,11 +394,11 @@ impl DesertPyramidPiece {
             z - 2,
             cut,
             cut,
-            true,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            true,
             x - 3,
             -1,
             z + 3,
@@ -434,42 +407,41 @@ impl DesertPyramidPiece {
             z + 3,
             cut,
             cut,
-            true,
         );
 
         self.place_sand_box(chunk, bb, x - 2, y + 1, z - 2, x + 2, y + 3, z + 2);
         self.place_collapsed_roof(chunk, bb, random, x - 2, y + 4, z - 2, x + 2, z + 2);
-        self.pb(chunk, bb, blue, x, y, z);
-        self.pb(chunk, bb, orange, x + 1, y, z - 1);
-        self.pb(chunk, bb, orange, x + 1, y, z + 1);
-        self.pb(chunk, bb, orange, x - 1, y, z - 1);
-        self.pb(chunk, bb, orange, x - 1, y, z + 1);
-        self.pb(chunk, bb, orange, x + 2, y, z);
-        self.pb(chunk, bb, orange, x - 2, y, z);
-        self.pb(chunk, bb, orange, x, y, z + 2);
-        self.pb(chunk, bb, orange, x, y, z - 2);
+        self.piece.add_block(chunk, blue, x, y, z, bb);
+        self.piece.add_block(chunk, orange, x + 1, y, z - 1, bb);
+        self.piece.add_block(chunk, orange, x + 1, y, z + 1, bb);
+        self.piece.add_block(chunk, orange, x - 1, y, z - 1, bb);
+        self.piece.add_block(chunk, orange, x - 1, y, z + 1, bb);
+        self.piece.add_block(chunk, orange, x + 2, y, z, bb);
+        self.piece.add_block(chunk, orange, x - 2, y, z, bb);
+        self.piece.add_block(chunk, orange, x, y, z + 2, bb);
+        self.piece.add_block(chunk, orange, x, y, z - 2, bb);
 
-        self.pb(chunk, bb, orange, x + 3, y, z);
+        self.piece.add_block(chunk, orange, x + 3, y, z, bb);
         self.place_sand(chunk, bb, x + 3, y + 1, z);
         self.place_sand(chunk, bb, x + 3, y + 2, z);
-        self.pb(chunk, bb, cut, x + 4, y + 1, z);
-        self.pb(chunk, bb, chiseled, x + 4, y + 2, z);
+        self.piece.add_block(chunk, cut, x + 4, y + 1, z, bb);
+        self.piece.add_block(chunk, chiseled, x + 4, y + 2, z, bb);
 
-        self.pb(chunk, bb, orange, x - 3, y, z);
+        self.piece.add_block(chunk, orange, x - 3, y, z, bb);
         self.place_sand(chunk, bb, x - 3, y + 1, z);
         self.place_sand(chunk, bb, x - 3, y + 2, z);
-        self.pb(chunk, bb, cut, x - 4, y + 1, z);
-        self.pb(chunk, bb, chiseled, x - 4, y + 2, z);
+        self.piece.add_block(chunk, cut, x - 4, y + 1, z, bb);
+        self.piece.add_block(chunk, chiseled, x - 4, y + 2, z, bb);
 
-        self.pb(chunk, bb, orange, x, y, z + 3);
+        self.piece.add_block(chunk, orange, x, y, z + 3, bb);
         self.place_sand(chunk, bb, x, y + 1, z + 3);
         self.place_sand(chunk, bb, x, y + 2, z + 3);
 
-        self.pb(chunk, bb, orange, x, y, z - 3);
+        self.piece.add_block(chunk, orange, x, y, z - 3, bb);
         self.place_sand(chunk, bb, x, y + 1, z - 3);
         self.place_sand(chunk, bb, x, y + 2, z - 3);
-        self.pb(chunk, bb, cut, x, y + 1, z - 4);
-        self.pb(chunk, bb, chiseled, x, -2, z - 4);
+        self.piece.add_block(chunk, cut, x, y + 1, z - 4, bb);
+        self.piece.add_block(chunk, chiseled, x, -2, z - 4, bb);
     }
 }
 
@@ -491,12 +463,19 @@ impl StructurePieceBase for DesertPyramidPiece {
         &mut self,
         chunk: &mut ProtoChunk,
         random: &mut RandomGenerator,
-        _seed: i64,
+        seed: i64,
         chunk_box: &BlockBox,
     ) {
+        use pumpkin_util::random::xoroshiro128::Xoroshiro;
+
         if !self.adjust_height(chunk, random) {
             return;
         }
+
+        let origin = self.piece.bounding_box.min;
+        let mut level_random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));
+        let splitter = level_random.next_splitter();
+        let mut level_random = splitter.split_pos(origin.x, origin.y, origin.z);
 
         let bb = chunk_box;
         let ss = Block::SANDSTONE.default_state;
@@ -512,12 +491,14 @@ impl StructurePieceBase for DesertPyramidPiece {
         let east_stairs = Self::sandstone_stairs(HorizontalFacing::East);
         let west_stairs = Self::sandstone_stairs(HorizontalFacing::West);
 
-        self.gen_box(chunk, bb, 0, -4, 0, WIDTH - 1, 0, DEPTH - 1, ss, ss, false);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 0, -4, 0, WIDTH - 1, 0, DEPTH - 1, ss, ss);
 
         for pos in 1..=9 {
-            self.gen_box(
+            self.piece.fill_with_outline(
                 chunk,
                 bb,
+                false,
                 pos,
                 pos,
                 pos,
@@ -526,11 +507,11 @@ impl StructurePieceBase for DesertPyramidPiece {
                 DEPTH - 1 - pos,
                 ss,
                 ss,
-                false,
             );
-            self.gen_box(
+            self.piece.fill_with_outline(
                 chunk,
                 bb,
+                false,
                 pos + 1,
                 pos,
                 pos + 1,
@@ -539,62 +520,87 @@ impl StructurePieceBase for DesertPyramidPiece {
                 DEPTH - 2 - pos,
                 air,
                 air,
-                false,
             );
         }
 
         for x in 0..WIDTH {
             for z in 0..DEPTH {
-                self.fill_down(chunk, bb, ss, x, -5, z);
+                self.piece.fill_downwards(chunk, ss, x, -5, z, bb);
             }
         }
 
-        self.gen_box(chunk, bb, 0, 0, 0, 4, 9, 4, ss, air, false);
-        self.gen_box(chunk, bb, 1, 10, 1, 3, 10, 3, ss, ss, false);
-        self.pb(chunk, bb, north_stairs, 2, 10, 0);
-        self.pb(chunk, bb, south_stairs, 2, 10, 4);
-        self.pb(chunk, bb, east_stairs, 0, 10, 2);
-        self.pb(chunk, bb, west_stairs, 4, 10, 2);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 0, 0, 0, 4, 9, 4, ss, air);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 1, 10, 1, 3, 10, 3, ss, ss);
+        self.piece.add_block(chunk, north_stairs, 2, 10, 0, bb);
+        self.piece.add_block(chunk, south_stairs, 2, 10, 4, bb);
+        self.piece.add_block(chunk, east_stairs, 0, 10, 2, bb);
+        self.piece.add_block(chunk, west_stairs, 4, 10, 2, bb);
 
-        self.gen_box(chunk, bb, WIDTH - 5, 0, 0, WIDTH - 1, 9, 4, ss, air, false);
-        self.gen_box(chunk, bb, WIDTH - 4, 10, 1, WIDTH - 2, 10, 3, ss, ss, false);
-        self.pb(chunk, bb, north_stairs, WIDTH - 3, 10, 0);
-        self.pb(chunk, bb, south_stairs, WIDTH - 3, 10, 4);
-        self.pb(chunk, bb, east_stairs, WIDTH - 5, 10, 2);
-        self.pb(chunk, bb, west_stairs, WIDTH - 1, 10, 2);
+        self.piece
+            .fill_with_outline(chunk, bb, false, WIDTH - 5, 0, 0, WIDTH - 1, 9, 4, ss, air);
+        self.piece
+            .fill_with_outline(chunk, bb, false, WIDTH - 4, 10, 1, WIDTH - 2, 10, 3, ss, ss);
+        self.piece
+            .add_block(chunk, north_stairs, WIDTH - 3, 10, 0, bb);
+        self.piece
+            .add_block(chunk, south_stairs, WIDTH - 3, 10, 4, bb);
+        self.piece
+            .add_block(chunk, east_stairs, WIDTH - 5, 10, 2, bb);
+        self.piece
+            .add_block(chunk, west_stairs, WIDTH - 1, 10, 2, bb);
 
-        self.gen_box(chunk, bb, 8, 0, 0, 12, 4, 4, ss, air, false);
-        self.gen_box(chunk, bb, 9, 1, 0, 11, 3, 4, air, air, false);
-        self.pb(chunk, bb, cut, 9, 1, 1);
-        self.pb(chunk, bb, cut, 9, 2, 1);
-        self.pb(chunk, bb, cut, 9, 3, 1);
-        self.pb(chunk, bb, cut, 10, 3, 1);
-        self.pb(chunk, bb, cut, 11, 3, 1);
-        self.pb(chunk, bb, cut, 11, 2, 1);
-        self.pb(chunk, bb, cut, 11, 1, 1);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 8, 0, 0, 12, 4, 4, ss, air);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 9, 1, 0, 11, 3, 4, air, air);
+        self.piece.add_block(chunk, cut, 9, 1, 1, bb);
+        self.piece.add_block(chunk, cut, 9, 2, 1, bb);
+        self.piece.add_block(chunk, cut, 9, 3, 1, bb);
+        self.piece.add_block(chunk, cut, 10, 3, 1, bb);
+        self.piece.add_block(chunk, cut, 11, 3, 1, bb);
+        self.piece.add_block(chunk, cut, 11, 2, 1, bb);
+        self.piece.add_block(chunk, cut, 11, 1, 1, bb);
 
-        self.gen_box(chunk, bb, 4, 1, 1, 8, 3, 3, ss, air, false);
-        self.gen_box(chunk, bb, 4, 1, 2, 8, 2, 2, air, air, false);
-        self.gen_box(chunk, bb, 12, 1, 1, 16, 3, 3, ss, air, false);
-        self.gen_box(chunk, bb, 12, 1, 2, 16, 2, 2, air, air, false);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 4, 1, 1, 8, 3, 3, ss, air);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 4, 1, 2, 8, 2, 2, air, air);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 12, 1, 1, 16, 3, 3, ss, air);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 12, 1, 2, 16, 2, 2, air, air);
 
-        self.gen_box(chunk, bb, 5, 4, 5, WIDTH - 6, 4, DEPTH - 6, ss, ss, false);
-        self.gen_box(chunk, bb, 9, 4, 9, 11, 4, 11, air, air, false);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 5, 4, 5, WIDTH - 6, 4, DEPTH - 6, ss, ss);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 9, 4, 9, 11, 4, 11, air, air);
 
-        self.gen_box(chunk, bb, 8, 1, 8, 8, 3, 8, cut, cut, false);
-        self.gen_box(chunk, bb, 12, 1, 8, 12, 3, 8, cut, cut, false);
-        self.gen_box(chunk, bb, 8, 1, 12, 8, 3, 12, cut, cut, false);
-        self.gen_box(chunk, bb, 12, 1, 12, 12, 3, 12, cut, cut, false);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 8, 1, 8, 8, 3, 8, cut, cut);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 12, 1, 8, 12, 3, 8, cut, cut);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 8, 1, 12, 8, 3, 12, cut, cut);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 12, 1, 12, 12, 3, 12, cut, cut);
 
-        self.gen_box(chunk, bb, 1, 1, 5, 4, 4, 11, ss, ss, false);
-        self.gen_box(chunk, bb, WIDTH - 5, 1, 5, WIDTH - 2, 4, 11, ss, ss, false);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 1, 1, 5, 4, 4, 11, ss, ss);
+        self.piece
+            .fill_with_outline(chunk, bb, false, WIDTH - 5, 1, 5, WIDTH - 2, 4, 11, ss, ss);
 
-        self.gen_box(chunk, bb, 6, 7, 9, 6, 7, 11, ss, ss, false);
-        self.gen_box(chunk, bb, WIDTH - 7, 7, 9, WIDTH - 7, 7, 11, ss, ss, false);
-        self.gen_box(chunk, bb, 5, 5, 9, 5, 7, 11, cut, cut, false);
-        self.gen_box(
+        self.piece
+            .fill_with_outline(chunk, bb, false, 6, 7, 9, 6, 7, 11, ss, ss);
+        self.piece
+            .fill_with_outline(chunk, bb, false, WIDTH - 7, 7, 9, WIDTH - 7, 7, 11, ss, ss);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 5, 5, 9, 5, 7, 11, cut, cut);
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            false,
             WIDTH - 6,
             5,
             9,
@@ -603,38 +609,48 @@ impl StructurePieceBase for DesertPyramidPiece {
             11,
             cut,
             cut,
-            false,
         );
 
-        self.pb(chunk, bb, air, 5, 5, 10);
-        self.pb(chunk, bb, air, 5, 6, 10);
-        self.pb(chunk, bb, air, 6, 6, 10);
-        self.pb(chunk, bb, air, WIDTH - 6, 5, 10);
-        self.pb(chunk, bb, air, WIDTH - 6, 6, 10);
-        self.pb(chunk, bb, air, WIDTH - 7, 6, 10);
+        self.piece.add_block(chunk, air, 5, 5, 10, bb);
+        self.piece.add_block(chunk, air, 5, 6, 10, bb);
+        self.piece.add_block(chunk, air, 6, 6, 10, bb);
+        self.piece.add_block(chunk, air, WIDTH - 6, 5, 10, bb);
+        self.piece.add_block(chunk, air, WIDTH - 6, 6, 10, bb);
+        self.piece.add_block(chunk, air, WIDTH - 7, 6, 10, bb);
 
-        self.gen_box(chunk, bb, 2, 4, 4, 2, 6, 4, air, air, false);
-        self.gen_box(chunk, bb, WIDTH - 3, 4, 4, WIDTH - 3, 6, 4, air, air, false);
-        self.pb(chunk, bb, north_stairs, 2, 4, 5);
-        self.pb(chunk, bb, north_stairs, 2, 3, 4);
-        self.pb(chunk, bb, north_stairs, WIDTH - 3, 4, 5);
-        self.pb(chunk, bb, north_stairs, WIDTH - 3, 3, 4);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 2, 4, 4, 2, 6, 4, air, air);
+        self.piece
+            .fill_with_outline(chunk, bb, false, WIDTH - 3, 4, 4, WIDTH - 3, 6, 4, air, air);
+        self.piece.add_block(chunk, north_stairs, 2, 4, 5, bb);
+        self.piece.add_block(chunk, north_stairs, 2, 3, 4, bb);
+        self.piece
+            .add_block(chunk, north_stairs, WIDTH - 3, 4, 5, bb);
+        self.piece
+            .add_block(chunk, north_stairs, WIDTH - 3, 3, 4, bb);
 
-        self.gen_box(chunk, bb, 1, 1, 3, 2, 2, 3, ss, ss, false);
-        self.gen_box(chunk, bb, WIDTH - 3, 1, 3, WIDTH - 2, 2, 3, ss, ss, false);
-        self.pb(chunk, bb, ss, 1, 1, 2);
-        self.pb(chunk, bb, ss, WIDTH - 2, 1, 2);
-        self.pb(chunk, bb, slab, 1, 2, 2);
-        self.pb(chunk, bb, slab, WIDTH - 2, 2, 2);
-        self.pb(chunk, bb, west_stairs, 2, 1, 2);
-        self.pb(chunk, bb, east_stairs, WIDTH - 3, 1, 2);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 1, 1, 3, 2, 2, 3, ss, ss);
+        self.piece
+            .fill_with_outline(chunk, bb, false, WIDTH - 3, 1, 3, WIDTH - 2, 2, 3, ss, ss);
+        self.piece.add_block(chunk, ss, 1, 1, 2, bb);
+        self.piece.add_block(chunk, ss, WIDTH - 2, 1, 2, bb);
+        self.piece.add_block(chunk, slab, 1, 2, 2, bb);
+        self.piece.add_block(chunk, slab, WIDTH - 2, 2, 2, bb);
+        self.piece.add_block(chunk, west_stairs, 2, 1, 2, bb);
+        self.piece
+            .add_block(chunk, east_stairs, WIDTH - 3, 1, 2, bb);
 
-        self.gen_box(chunk, bb, 4, 3, 5, 4, 3, 17, ss, ss, false);
-        self.gen_box(chunk, bb, WIDTH - 5, 3, 5, WIDTH - 5, 3, 17, ss, ss, false);
-        self.gen_box(chunk, bb, 3, 1, 5, 4, 2, 16, air, air, false);
-        self.gen_box(
+        self.piece
+            .fill_with_outline(chunk, bb, false, 4, 3, 5, 4, 3, 17, ss, ss);
+        self.piece
+            .fill_with_outline(chunk, bb, false, WIDTH - 5, 3, 5, WIDTH - 5, 3, 17, ss, ss);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 3, 1, 5, 4, 2, 16, air, air);
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            false,
             WIDTH - 6,
             1,
             5,
@@ -643,101 +659,107 @@ impl StructurePieceBase for DesertPyramidPiece {
             16,
             air,
             air,
-            false,
         );
 
         for z in (5..=17).step_by(2) {
-            self.pb(chunk, bb, cut, 4, 1, z);
-            self.pb(chunk, bb, chiseled, 4, 2, z);
-            self.pb(chunk, bb, cut, WIDTH - 5, 1, z);
-            self.pb(chunk, bb, chiseled, WIDTH - 5, 2, z);
+            self.piece.add_block(chunk, cut, 4, 1, z, bb);
+            self.piece.add_block(chunk, chiseled, 4, 2, z, bb);
+            self.piece.add_block(chunk, cut, WIDTH - 5, 1, z, bb);
+            self.piece.add_block(chunk, chiseled, WIDTH - 5, 2, z, bb);
         }
 
-        self.pb(chunk, bb, orange, 10, 0, 7);
-        self.pb(chunk, bb, orange, 10, 0, 8);
-        self.pb(chunk, bb, orange, 9, 0, 9);
-        self.pb(chunk, bb, orange, 11, 0, 9);
-        self.pb(chunk, bb, orange, 8, 0, 10);
-        self.pb(chunk, bb, orange, 12, 0, 10);
-        self.pb(chunk, bb, orange, 7, 0, 10);
-        self.pb(chunk, bb, orange, 13, 0, 10);
-        self.pb(chunk, bb, orange, 9, 0, 11);
-        self.pb(chunk, bb, orange, 11, 0, 11);
-        self.pb(chunk, bb, orange, 10, 0, 12);
-        self.pb(chunk, bb, orange, 10, 0, 13);
-        self.pb(chunk, bb, blue, 10, 0, 10);
+        self.piece.add_block(chunk, orange, 10, 0, 7, bb);
+        self.piece.add_block(chunk, orange, 10, 0, 8, bb);
+        self.piece.add_block(chunk, orange, 9, 0, 9, bb);
+        self.piece.add_block(chunk, orange, 11, 0, 9, bb);
+        self.piece.add_block(chunk, orange, 8, 0, 10, bb);
+        self.piece.add_block(chunk, orange, 12, 0, 10, bb);
+        self.piece.add_block(chunk, orange, 7, 0, 10, bb);
+        self.piece.add_block(chunk, orange, 13, 0, 10, bb);
+        self.piece.add_block(chunk, orange, 9, 0, 11, bb);
+        self.piece.add_block(chunk, orange, 11, 0, 11, bb);
+        self.piece.add_block(chunk, orange, 10, 0, 12, bb);
+        self.piece.add_block(chunk, orange, 10, 0, 13, bb);
+        self.piece.add_block(chunk, blue, 10, 0, 10, bb);
 
         for x in [0, WIDTH - 1] {
-            self.pb(chunk, bb, cut, x, 2, 1);
-            self.pb(chunk, bb, orange, x, 2, 2);
-            self.pb(chunk, bb, cut, x, 2, 3);
-            self.pb(chunk, bb, cut, x, 3, 1);
-            self.pb(chunk, bb, orange, x, 3, 2);
-            self.pb(chunk, bb, cut, x, 3, 3);
-            self.pb(chunk, bb, orange, x, 4, 1);
-            self.pb(chunk, bb, chiseled, x, 4, 2);
-            self.pb(chunk, bb, orange, x, 4, 3);
-            self.pb(chunk, bb, cut, x, 5, 1);
-            self.pb(chunk, bb, orange, x, 5, 2);
-            self.pb(chunk, bb, cut, x, 5, 3);
-            self.pb(chunk, bb, orange, x, 6, 1);
-            self.pb(chunk, bb, chiseled, x, 6, 2);
-            self.pb(chunk, bb, orange, x, 6, 3);
-            self.pb(chunk, bb, orange, x, 7, 1);
-            self.pb(chunk, bb, orange, x, 7, 2);
-            self.pb(chunk, bb, orange, x, 7, 3);
-            self.pb(chunk, bb, cut, x, 8, 1);
-            self.pb(chunk, bb, cut, x, 8, 2);
-            self.pb(chunk, bb, cut, x, 8, 3);
+            self.piece.add_block(chunk, cut, x, 2, 1, bb);
+            self.piece.add_block(chunk, orange, x, 2, 2, bb);
+            self.piece.add_block(chunk, cut, x, 2, 3, bb);
+            self.piece.add_block(chunk, cut, x, 3, 1, bb);
+            self.piece.add_block(chunk, orange, x, 3, 2, bb);
+            self.piece.add_block(chunk, cut, x, 3, 3, bb);
+            self.piece.add_block(chunk, orange, x, 4, 1, bb);
+            self.piece.add_block(chunk, chiseled, x, 4, 2, bb);
+            self.piece.add_block(chunk, orange, x, 4, 3, bb);
+            self.piece.add_block(chunk, cut, x, 5, 1, bb);
+            self.piece.add_block(chunk, orange, x, 5, 2, bb);
+            self.piece.add_block(chunk, cut, x, 5, 3, bb);
+            self.piece.add_block(chunk, orange, x, 6, 1, bb);
+            self.piece.add_block(chunk, chiseled, x, 6, 2, bb);
+            self.piece.add_block(chunk, orange, x, 6, 3, bb);
+            self.piece.add_block(chunk, orange, x, 7, 1, bb);
+            self.piece.add_block(chunk, orange, x, 7, 2, bb);
+            self.piece.add_block(chunk, orange, x, 7, 3, bb);
+            self.piece.add_block(chunk, cut, x, 8, 1, bb);
+            self.piece.add_block(chunk, cut, x, 8, 2, bb);
+            self.piece.add_block(chunk, cut, x, 8, 3, bb);
         }
 
         for x in [2, WIDTH - 3] {
-            self.pb(chunk, bb, cut, x - 1, 2, 0);
-            self.pb(chunk, bb, orange, x, 2, 0);
-            self.pb(chunk, bb, cut, x + 1, 2, 0);
-            self.pb(chunk, bb, cut, x - 1, 3, 0);
-            self.pb(chunk, bb, orange, x, 3, 0);
-            self.pb(chunk, bb, cut, x + 1, 3, 0);
-            self.pb(chunk, bb, orange, x - 1, 4, 0);
-            self.pb(chunk, bb, chiseled, x, 4, 0);
-            self.pb(chunk, bb, orange, x + 1, 4, 0);
-            self.pb(chunk, bb, cut, x - 1, 5, 0);
-            self.pb(chunk, bb, orange, x, 5, 0);
-            self.pb(chunk, bb, cut, x + 1, 5, 0);
-            self.pb(chunk, bb, orange, x - 1, 6, 0);
-            self.pb(chunk, bb, chiseled, x, 6, 0);
-            self.pb(chunk, bb, orange, x + 1, 6, 0);
-            self.pb(chunk, bb, orange, x - 1, 7, 0);
-            self.pb(chunk, bb, orange, x, 7, 0);
-            self.pb(chunk, bb, orange, x + 1, 7, 0);
-            self.pb(chunk, bb, cut, x - 1, 8, 0);
-            self.pb(chunk, bb, cut, x, 8, 0);
-            self.pb(chunk, bb, cut, x + 1, 8, 0);
+            self.piece.add_block(chunk, cut, x - 1, 2, 0, bb);
+            self.piece.add_block(chunk, orange, x, 2, 0, bb);
+            self.piece.add_block(chunk, cut, x + 1, 2, 0, bb);
+            self.piece.add_block(chunk, cut, x - 1, 3, 0, bb);
+            self.piece.add_block(chunk, orange, x, 3, 0, bb);
+            self.piece.add_block(chunk, cut, x + 1, 3, 0, bb);
+            self.piece.add_block(chunk, orange, x - 1, 4, 0, bb);
+            self.piece.add_block(chunk, chiseled, x, 4, 0, bb);
+            self.piece.add_block(chunk, orange, x + 1, 4, 0, bb);
+            self.piece.add_block(chunk, cut, x - 1, 5, 0, bb);
+            self.piece.add_block(chunk, orange, x, 5, 0, bb);
+            self.piece.add_block(chunk, cut, x + 1, 5, 0, bb);
+            self.piece.add_block(chunk, orange, x - 1, 6, 0, bb);
+            self.piece.add_block(chunk, chiseled, x, 6, 0, bb);
+            self.piece.add_block(chunk, orange, x + 1, 6, 0, bb);
+            self.piece.add_block(chunk, orange, x - 1, 7, 0, bb);
+            self.piece.add_block(chunk, orange, x, 7, 0, bb);
+            self.piece.add_block(chunk, orange, x + 1, 7, 0, bb);
+            self.piece.add_block(chunk, cut, x - 1, 8, 0, bb);
+            self.piece.add_block(chunk, cut, x, 8, 0, bb);
+            self.piece.add_block(chunk, cut, x + 1, 8, 0, bb);
         }
 
-        self.gen_box(chunk, bb, 8, 4, 0, 12, 6, 0, cut, cut, false);
-        self.pb(chunk, bb, air, 8, 6, 0);
-        self.pb(chunk, bb, air, 12, 6, 0);
-        self.pb(chunk, bb, orange, 9, 5, 0);
-        self.pb(chunk, bb, chiseled, 10, 5, 0);
-        self.pb(chunk, bb, orange, 11, 5, 0);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 8, 4, 0, 12, 6, 0, cut, cut);
+        self.piece.add_block(chunk, air, 8, 6, 0, bb);
+        self.piece.add_block(chunk, air, 12, 6, 0, bb);
+        self.piece.add_block(chunk, orange, 9, 5, 0, bb);
+        self.piece.add_block(chunk, chiseled, 10, 5, 0, bb);
+        self.piece.add_block(chunk, orange, 11, 5, 0, bb);
 
-        self.gen_box(chunk, bb, 8, -14, 8, 12, -11, 12, cut, cut, false);
-        self.gen_box(chunk, bb, 8, -10, 8, 12, -10, 12, chiseled, chiseled, false);
-        self.gen_box(chunk, bb, 8, -9, 8, 12, -9, 12, cut, cut, false);
-        self.gen_box(chunk, bb, 8, -8, 8, 12, -1, 12, ss, ss, false);
-        self.gen_box(chunk, bb, 9, -11, 9, 11, -1, 11, air, air, false);
-        self.pb(
+        self.piece
+            .fill_with_outline(chunk, bb, false, 8, -14, 8, 12, -11, 12, cut, cut);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 8, -10, 8, 12, -10, 12, chiseled, chiseled);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 8, -9, 8, 12, -9, 12, cut, cut);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 8, -8, 8, 12, -1, 12, ss, ss);
+        self.piece
+            .fill_with_outline(chunk, bb, false, 9, -11, 9, 11, -1, 11, air, air);
+        self.piece.add_block(
             chunk,
-            bb,
             Block::STONE_PRESSURE_PLATE.default_state,
             10,
             -11,
             10,
+            bb,
         );
-        self.gen_box(
+        self.piece.fill_with_outline(
             chunk,
             bb,
+            false,
             9,
             -13,
             9,
@@ -746,31 +768,29 @@ impl StructurePieceBase for DesertPyramidPiece {
             11,
             Block::TNT.default_state,
             air,
-            false,
         );
 
-        self.pb(chunk, bb, air, 8, -11, 10);
-        self.pb(chunk, bb, air, 8, -10, 10);
-        self.pb(chunk, bb, chiseled, 7, -10, 10);
-        self.pb(chunk, bb, cut, 7, -11, 10);
-        self.pb(chunk, bb, air, 12, -11, 10);
-        self.pb(chunk, bb, air, 12, -10, 10);
-        self.pb(chunk, bb, chiseled, 13, -10, 10);
-        self.pb(chunk, bb, cut, 13, -11, 10);
-        self.pb(chunk, bb, air, 10, -11, 8);
-        self.pb(chunk, bb, air, 10, -10, 8);
-        self.pb(chunk, bb, chiseled, 10, -10, 7);
-        self.pb(chunk, bb, cut, 10, -11, 7);
-        self.pb(chunk, bb, air, 10, -11, 12);
-        self.pb(chunk, bb, air, 10, -10, 12);
-        self.pb(chunk, bb, chiseled, 10, -10, 13);
-        self.pb(chunk, bb, cut, 10, -11, 13);
+        self.piece.add_block(chunk, air, 8, -11, 10, bb);
+        self.piece.add_block(chunk, air, 8, -10, 10, bb);
+        self.piece.add_block(chunk, chiseled, 7, -10, 10, bb);
+        self.piece.add_block(chunk, cut, 7, -11, 10, bb);
+        self.piece.add_block(chunk, air, 12, -11, 10, bb);
+        self.piece.add_block(chunk, air, 12, -10, 10, bb);
+        self.piece.add_block(chunk, chiseled, 13, -10, 10, bb);
+        self.piece.add_block(chunk, cut, 13, -11, 10, bb);
+        self.piece.add_block(chunk, air, 10, -11, 8, bb);
+        self.piece.add_block(chunk, air, 10, -10, 8, bb);
+        self.piece.add_block(chunk, chiseled, 10, -10, 7, bb);
+        self.piece.add_block(chunk, cut, 10, -11, 7, bb);
+        self.piece.add_block(chunk, air, 10, -11, 12, bb);
+        self.piece.add_block(chunk, air, 10, -10, 12, bb);
+        self.piece.add_block(chunk, chiseled, 10, -10, 13, bb);
+        self.piece.add_block(chunk, cut, 10, -11, 13, bb);
 
-        self.try_place_chest(chunk, bb, 0, 10, -11, 12);
-        self.try_place_chest(chunk, bb, 1, 8, -11, 10);
-        self.try_place_chest(chunk, bb, 2, 10, -11, 8);
-        self.try_place_chest(chunk, bb, 3, 12, -11, 10);
+        for (index, x, z) in [(0, 10, 12), (1, 8, 10), (2, 10, 8), (3, 12, 10)] {
+            self.try_place_chest(chunk, bb, index, x, -11, z);
+        }
 
-        self.add_cellar(chunk, bb, random);
+        self.add_cellar(chunk, bb, &mut level_random);
     }
 }

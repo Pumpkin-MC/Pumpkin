@@ -289,7 +289,15 @@ impl StructurePiece {
         }
     }
 
-    /// Fills downwards from a relative point until the bottom of the world.
+    fn is_replaceable_by_structures(state: &BlockState, block: &Block) -> bool {
+        state.is_air()
+            || state.is_liquid()
+            || block == &Block::GLOW_LICHEN
+            || block == &Block::SEAGRASS
+            || block == &Block::TALL_SEAGRASS
+    }
+
+    /// Fills downwards while the column stays structure-replaceable.
     pub fn fill_downwards(
         &self,
         chunk: &mut ProtoChunk,
@@ -299,17 +307,26 @@ impl StructurePiece {
         z: i32,
         box_limit: &BlockBox,
     ) {
-        // We transform the starting point to world space to get the real Y
         let world_pos = self.offset_pos(x, y, z);
-        let start_y = world_pos.y;
-        let end_y = chunk.bottom_y() as i32;
+        if !box_limit.contains_pos(&world_pos) {
+            return;
+        }
 
-        for current_y in (end_y..=start_y).rev() {
-            // We bypass add_block here because add_block transforms X/Z again.
-            // We use the already-transformed world X/Z but iterate Y manually.
-            if box_limit.contains(world_pos.x, current_y, world_pos.z) {
-                chunk.set_block_state(world_pos.x, current_y, world_pos.z, state);
+        let min_fill_y = chunk.bottom_y() as i32 + 1;
+        let mut current_y = world_pos.y;
+
+        while current_y > min_fill_y {
+            let block_pos = Vector3::new(world_pos.x, current_y, world_pos.z);
+            let current_state = chunk.get_block_state(&block_pos);
+            if !Self::is_replaceable_by_structures(
+                current_state.to_state(),
+                current_state.to_block(),
+            ) {
+                break;
             }
+
+            chunk.set_block_state(world_pos.x, current_y, world_pos.z, state);
+            current_y -= 1;
         }
     }
 
