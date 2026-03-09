@@ -662,58 +662,24 @@ impl Player {
         let world = self.world();
         let server = world.server.upgrade().unwrap();
         let victim_entity = victim.get_entity();
-        let attacker_entity = &self.living_entity.entity;
         let config = &server.advanced_config.pvp;
 
-        let inventory = self.inventory();
-        let item_stack = inventory.held_item();
+        let (mut damage, damage_multiplier) = self.calculate_attack_damage(&server, &*victim).await;
 
-        let base_damage = self
-            .living_entity
-            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
-        let base_attack_speed = 4.0;
+        // Get combat enchantments from held weapon
+        let enchants = combat::get_combat_enchantments(self).await;
 
-        let mut damage_multiplier = 1.0;
-        let mut add_damage = 0.0;
-        let mut add_speed = 0.0;
-
-        // Get the attack damage from the held item
-        // TODO: this should be cached in memory, we shouldn't just use default here either
-        if let Some(modifiers) = item_stack
-            .lock()
-            .await
-            .get_data_component::<AttributeModifiersImpl>()
-        {
-            for item_mod in modifiers.attribute_modifiers.iter() {
-                if item_mod.operation == Operation::AddValue {
-                    if item_mod.id == "minecraft:base_attack_damage" {
-                        add_damage = item_mod.amount;
-                    } else if item_mod.id == "minecraft:base_attack_speed" {
-                        add_speed = item_mod.amount;
-                    }
-                }
-            }
-        }
-
-        let attack_speed = base_attack_speed + add_speed;
-
-        let attack_cooldown_progress = self.get_attack_cooldown_progress(
-            f64::from(server.basic_config.tps),
-            0.5,
-            attack_speed,
+        // Calculate enchantment bonus damage (Sharpness/Smite/Bane of Arthropods)
+        let enchant_damage = combat::get_enchantment_damage(
+            enchants.sharpness,
+            enchants.smite,
+            enchants.bane_of_arthropods,
+            &*victim,
         );
-        self.last_attacked_ticks.store(0, Ordering::Relaxed);
+        damage += enchant_damage * f64::from(damage_multiplier);
 
-        // Only reduce attack damage if in cooldown
-        // TODO: Enchantments are reduced in the same way, just without the square.
-        if attack_cooldown_progress < 1.0 {
-            damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
-        }
-
-        // Modify the added damage based on the multiplier.
-        let mut damage = base_damage + add_damage * damage_multiplier;
         let pos = victim_entity.pos.load();
-        let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
+        let attack_type = AttackType::new(self, damage_multiplier).await;
 
         if matches!(attack_type, AttackType::Critical) {
             damage *= 1.5;
@@ -740,37 +706,86 @@ impl Player {
             return;
         }
 
+        // Reset attack cooldown only after confirmed hit
+        self.last_attacked_ticks.store(0, Ordering::Relaxed);
+
         player_attack_sound(&pos, &world, attack_type).await;
 
-        self.living_entity.last_attacking_id.store(
-            victim_entity.entity_id,
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        self.living_entity
+            .last_attacking_id
+            .store(victim_entity.entity_id, Ordering::Relaxed);
         self.living_entity.last_attack_time.store(
-            self.living_entity
-                .entity
-                .age
-                .load(std::sync::atomic::Ordering::Relaxed),
-            std::sync::atomic::Ordering::Relaxed,
+            self.living_entity.entity.age.load(Ordering::Relaxed),
+            Ordering::Relaxed,
         );
 
-        if victim.get_living_entity().is_some() {
-            let mut knockback_strength = 1.0;
-            match attack_type {
-                AttackType::Knockback => knockback_strength += 1.0,
-                AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+        let ctx = combat::PostDamageContext {
+            attacker: self,
+            victim: &*victim,
+            damage,
+            enchant_damage,
+            attack_type,
+            enchants: &enchants,
+            config_knockback: config.knockback,
+        };
+        combat::handle_post_damage_effects(&ctx, &world, &pos).await;
+
+        self.damage_held_item(1).await;
+    }
+
+    /// Calculate attack damage including item modifiers and cooldown scaling.
+    ///
+    /// Returns `(total_damage, cooldown_progress)` where `cooldown_progress` is in `[0.0, 1.0]`.
+    async fn calculate_attack_damage(
+        &self,
+        server: &crate::server::Server,
+        victim: &dyn EntityBase,
+    ) -> (f64, f32) {
+        let _ = victim; // used for future armor reduction
+
+        let base_damage = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
+        let base_attack_speed = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_SPEED);
+
+        let mut add_damage = 0.0;
+        let mut add_speed = 0.0;
+
+        if let Some(modifiers) = self
+            .inventory()
+            .held_item()
+            .lock()
+            .await
+            .get_data_component::<AttributeModifiersImpl>()
+        {
+            for item_mod in modifiers.attribute_modifiers.iter() {
+                if item_mod.operation == Operation::AddValue {
+                    if item_mod.id == "minecraft:base_attack_damage" {
+                        add_damage = item_mod.amount;
+                    } else if item_mod.id == "minecraft:base_attack_speed" {
+                        add_speed = item_mod.amount;
+                    }
                 }
-                _ => {}
-            }
-            if config.knockback {
-                combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
             }
         }
 
-        self.damage_held_item(1).await;
+        let attack_speed = base_attack_speed + add_speed;
+        let cooldown = self.get_attack_cooldown_progress(
+            f64::from(server.basic_config.tps),
+            0.5,
+            attack_speed,
+        );
 
-        if config.swing {}
+        let damage_multiplier = if cooldown < 1.0 {
+            cooldown.powi(2).mul_add(0.8, 0.2)
+        } else {
+            1.0
+        };
+
+        let damage = base_damage + add_damage * damage_multiplier;
+        (damage, cooldown as f32)
     }
 
     pub async fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {
