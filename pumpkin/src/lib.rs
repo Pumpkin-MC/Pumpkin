@@ -1,6 +1,7 @@
 // Not warn event sending macros
 #![allow(unused_labels)]
 
+use crate::crash::CrashReport;
 use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClient;
@@ -12,13 +13,15 @@ use plugin::server::server_command::ServerCommandEvent;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_macros::send_cancellable;
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::{Color, NamedColor};
 use rustyline::Editor;
 use rustyline::history::FileHistory;
 use rustyline::{Config, error::ReadlineError};
 use std::collections::HashMap;
 use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
+use std::process::exit;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
@@ -35,6 +38,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 pub mod block;
 pub mod command;
+pub mod crash;
 pub mod data;
 pub mod entity;
 pub mod error;
@@ -164,10 +168,22 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
 pub static STOP_INTERRUPT: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
+pub static SERVER_IS_STOPPING: AtomicBool = AtomicBool::new(false);
+pub static CRASH_REPORT: OnceLock<CrashReport> = OnceLock::new();
+pub static SERVER_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 
 pub fn stop_server() {
     SHOULD_STOP.store(true, Ordering::Relaxed);
     STOP_INTERRUPT.cancel();
+}
+
+pub fn stop_or_exit_server() {
+    if SERVER_IS_STOPPING.load(Ordering::Acquire) {
+        // Server is already stopping, so we forcefully exit.
+        exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
+    } else {
+        stop_server();
+    }
 }
 
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
@@ -338,6 +354,22 @@ impl PumpkinServer {
             {
                 break;
             }
+        }
+
+        SERVER_IS_STOPPING.store(true, Ordering::Release);
+
+        if let Some(crash_report) = CRASH_REPORT.get() {
+            crash_report.print_to_console();
+            crash_report.save_and_log();
+
+            info!(
+                "{}",
+                TextComponent::text("Gracefully shutting down...")
+                    .color(Color::Named(NamedColor::Green))
+                    .to_pretty_console()
+            );
+
+            SERVER_EXIT_CODE.store(1, Ordering::Release);
         }
 
         info!("Stopped accepting incoming connections");
@@ -570,7 +602,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 }
                 Err(ReadlineError::Interrupted) => {
                     info!("CTRL-C");
-                    stop_server();
+                    stop_or_exit_server();
                     break;
                 }
                 Err(ReadlineError::Eof) => {
