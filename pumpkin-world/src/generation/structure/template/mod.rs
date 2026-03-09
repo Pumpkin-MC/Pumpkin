@@ -111,7 +111,7 @@ pub fn place_template(
                 }
             }
 
-            chunk.add_pending_block_entity(block_entity_nbt);
+            chunk.add_block_entity(block_entity_nbt);
         }
     }
 }

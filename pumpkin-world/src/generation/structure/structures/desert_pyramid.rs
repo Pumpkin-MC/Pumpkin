@@ -194,7 +194,7 @@ impl DesertPyramidPiece {
         nbt.put_int("z", world_pos.z);
         nbt.put_string("id", "minecraft:chest".to_string());
         // TODO: attach desert_pyramid loot table once structure container loot exists.
-        chunk.add_pending_block_entity(nbt);
+        chunk.add_block_entity(nbt);
         self.has_placed_chest[index] = true;
     }
 
