@@ -111,6 +111,9 @@ pub fn receive_velocity_plugin_response(
 ) -> Result<(GameProfile, SocketAddr), VelocityError> {
     debug!("Received velocity response");
     if let Some(data) = response.data {
+        if data.len() < 32 {
+            return Err(VelocityError::FailedVerifyIntegrity);
+        }
         let (signature, mut data_without_signature) = data.split_at(32);
 
         if !check_integrity((signature, data_without_signature), &config.secret) {

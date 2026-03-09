@@ -134,23 +134,24 @@ impl<T: PacketRead, const N: usize> PacketRead for [T; N] {
 impl PacketRead for String {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let vec = Vec::read(reader)?;
-        Ok(unsafe { Self::from_utf8_unchecked(vec) })
+        Self::from_utf8(vec).map_err(|e| Error::other(format!("Invalid UTF-8: {e}")))
     }
 }
 
 impl PacketRead for Vec<u8> {
-    #[expect(clippy::read_zero_byte_vec)]
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        #[expect(clippy::uninit_vec)]
-        {
-            let len = VarUInt::read(reader)?.0 as _;
-            let mut buf = Self::with_capacity(len);
-            unsafe {
-                buf.set_len(len);
-            };
-            reader.read_exact(&mut buf)?;
-            Ok(buf)
+        // Cap at 1 MB to prevent OOM from a malicious length prefix.
+        const MAX_VEC_LENGTH: u32 = 1024 * 1024;
+        let len = VarUInt::read(reader)?.0;
+        if len > MAX_VEC_LENGTH {
+            return Err(Error::other(format!(
+                "Vec<u8> length {len} exceeds maximum ({MAX_VEC_LENGTH})"
+            )));
         }
+        let len = len as usize;
+        let mut buf = vec![0u8; len];
+        reader.read_exact(&mut buf)?;
+        Ok(buf)
     }
 }
 
