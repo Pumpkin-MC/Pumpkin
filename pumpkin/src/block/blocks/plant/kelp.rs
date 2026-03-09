@@ -115,7 +115,7 @@ impl PlantBlockBase for KelpBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(&self, block_accessor, block_pos).await {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
             return Block::WATER.default_state.id;
         }
         block_state
