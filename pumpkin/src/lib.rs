@@ -191,7 +191,6 @@ impl PumpkinServer {
     pub fn log_info(&self, message: &str) {
         tracing::info!(target: "plugin", "{}", message);
     }
-    #[expect(clippy::if_then_some_else_none)]
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,

@@ -28,6 +28,7 @@ mod help;
 mod kick;
 mod kill;
 mod list;
+mod locate;
 mod me;
 mod msg;
 mod op;
@@ -134,6 +135,7 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(locate::init_command_tree(), "minecraft:command.locate");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -411,6 +413,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.enchant",
             "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.locate",
+            "Locates the closest structure or biome",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
