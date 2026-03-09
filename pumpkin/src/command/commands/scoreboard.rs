@@ -128,9 +128,10 @@ impl CommandExecutor for ObjectivesRemoveExecutor {
             let mut scoreboard = world.scoreboard.lock().await;
 
             if !scoreboard.has_objective(name) {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Unknown scoreboard objective '{name}'"
-                ))));
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    translation::ARGUMENT_ID_UNKNOWN,
+                    [TextComponent::text(name.to_string())],
+                )));
             }
 
             scoreboard.remove_objective(&world, name).await;
@@ -173,9 +174,10 @@ impl CommandExecutor for PlayersSetExecutor {
             let mut scoreboard = world.scoreboard.lock().await;
 
             if !scoreboard.has_objective(objective) {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Unknown scoreboard objective '{objective}'"
-                ))));
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    translation::ARGUMENT_ID_UNKNOWN,
+                    [TextComponent::text(objective.to_string())],
+                )));
             }
 
             scoreboard
@@ -224,9 +226,10 @@ impl CommandExecutor for PlayersAddExecutor {
             let mut scoreboard = world.scoreboard.lock().await;
 
             if !scoreboard.has_objective(objective) {
-                return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                    "Unknown scoreboard objective '{objective}'"
-                ))));
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    translation::ARGUMENT_ID_UNKNOWN,
+                    [TextComponent::text(objective.to_string())],
+                )));
             }
 
             let current = scoreboard.get_score(targets, objective).unwrap_or(0);

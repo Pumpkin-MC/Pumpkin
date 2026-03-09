@@ -91,9 +91,10 @@ impl CommandExecutor for ReplaceEntityExecutor {
             };
 
             let item = pumpkin_data::item::Item::from_registry_key(item_name).ok_or(
-                CommandError::CommandFailed(TextComponent::text(format!(
-                    "Unknown item: {item_name}"
-                ))),
+                CommandError::CommandFailed(TextComponent::translate(
+                    translation::ARGUMENT_ITEM_ID_INVALID,
+                    [TextComponent::text(item_name.to_string())],
+                )),
             )?;
 
             let count: u8 = args
