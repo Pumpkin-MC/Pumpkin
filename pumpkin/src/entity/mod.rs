@@ -435,6 +435,8 @@ pub struct Entity {
     pub vehicle: Mutex<Option<Arc<dyn EntityBase>>>,
     /// Cooldown before entity can mount again after dismounting
     pub riding_cooldown: AtomicI32,
+    /// Scoreboard tags on this entity (max 1024)
+    pub tags: Mutex<Vec<String>>,
     /// The age of the entity in ticks. Negative values indicate a baby.
     pub age: AtomicI32,
 
@@ -539,6 +541,7 @@ impl Entity {
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
             riding_cooldown: AtomicI32::new(0),
+            tags: Mutex::new(Vec::new()),
             age: AtomicI32::new(0),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
@@ -2503,6 +2506,13 @@ impl NBTStorage for Entity {
             if self.has_visual_fire.load(Relaxed) {
                 nbt.put_bool("HasVisualFire", true);
             }
+            let tags = self.tags.lock().await;
+            if !tags.is_empty() {
+                nbt.put(
+                    "Tags",
+                    NbtTag::List(tags.iter().map(|t| NbtTag::String(t.clone())).collect()),
+                );
+            }
 
             // todo more...
         })
@@ -2537,6 +2547,15 @@ impl NBTStorage for Entity {
                 .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
             self.has_visual_fire
                 .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
+            if let Some(tag_list) = nbt.get_list("Tags") {
+                let mut tags = self.tags.lock().await;
+                tags.clear();
+                for tag in tag_list {
+                    if let Some(s) = tag.extract_string() {
+                        tags.push(s.to_string());
+                    }
+                }
+            }
             // todo more...
         })
     }

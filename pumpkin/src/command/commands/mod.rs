@@ -38,16 +38,21 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod random;
+mod ride;
 mod rotate;
+mod save;
 mod say;
 mod seed;
 mod setblock;
 mod setidletimeout;
 mod setworldspawn;
 mod spawnpoint;
+mod spectate;
 mod stop;
 mod stopsound;
 mod summon;
+mod tag;
 mod teleport;
 mod tellraw;
 mod tick;
@@ -60,6 +65,7 @@ mod whitelist;
 mod worldborder;
 
 #[must_use]
+#[expect(clippy::too_many_lines)]
 pub async fn default_dispatcher(
     registry: &RwLock<PermissionRegistry>,
     basic_config: &BasicConfiguration,
@@ -74,6 +80,7 @@ pub async fn default_dispatcher(
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
+    dispatcher.register(random::init_command_tree(), "minecraft:command.random");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
@@ -134,6 +141,12 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(tag::init_command_tree(), "minecraft:command.tag");
+    dispatcher.register(ride::init_command_tree(), "minecraft:command.ride");
+    dispatcher.register(
+        spectate::init_command_tree(),
+        "minecraft:command.spectate",
+    );
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -156,6 +169,18 @@ pub async fn default_dispatcher(
     );
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
+    dispatcher.register(
+        save::init_command_tree_save_all(),
+        "minecraft:command.save-all",
+    );
+    dispatcher.register(
+        save::init_command_tree_save_off(),
+        "minecraft:command.save-off",
+    );
+    dispatcher.register(
+        save::init_command_tree_save_on(),
+        "minecraft:command.save-on",
+    );
 
     dispatcher
 }
@@ -210,6 +235,13 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.msg",
             "Sends a private message to another player",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.random",
+            "Draw a random value or control random sequences",
             PermissionDefault::Allow,
         ))
         .unwrap();
@@ -428,6 +460,27 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.tag",
+            "Controls entity tags",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.ride",
+            "Mounts or dismounts entities",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spectate",
+            "Makes a player in Spectator mode spectate an entity",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
 }
 
 #[expect(clippy::too_many_lines)]
@@ -546,6 +599,27 @@ fn register_level_4_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.stop",
             "Stops the server",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-all",
+            "Saves the server to disk",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-off",
+            "Disables automatic saving",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-on",
+            "Enables automatic saving",
             PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();
