@@ -29,7 +29,7 @@ impl ToTokens for LootTableStruct {
             quote! { None }
         };
         let pools = if let Some(pools) = &self.pools {
-            let pool_tokens: Vec<_> = pools.iter().map(quote::ToTokens::to_token_stream).collect();
+            let pool_tokens: Vec<_> = pools.iter().map(ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#pool_tokens),*]) }
         } else {
             quote! { None }
@@ -66,18 +66,18 @@ impl ToTokens for LootPoolStruct {
         let entries_tokens: Vec<_> = self
             .entries
             .iter()
-            .map(quote::ToTokens::to_token_stream)
+            .map(ToTokens::to_token_stream)
             .collect();
         let rolls = &self.rolls;
         let bonus_rolls = &self.bonus_rolls;
         let conditions_tokens = if let Some(conds) = &self.conditions {
-            let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
+            let cond_tokens: Vec<_> = conds.iter().map(ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
         } else {
             quote! { None }
         };
         let functions_tokens = if let Some(fns) = &self.functions {
-            let cond_tokens: Vec<_> = fns.iter().map(quote::ToTokens::to_token_stream).collect();
+            let cond_tokens: Vec<_> = fns.iter().map(ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
         } else {
             quote! { None }
@@ -125,7 +125,7 @@ pub struct AlternativeEntryStruct {
 impl ToTokens for AlternativeEntryStruct {
     /// Emits an `AlternativeEntry { … }` struct literal token stream for code generation.
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let children = self.children.iter().map(quote::ToTokens::to_token_stream);
+        let children = self.children.iter().map(ToTokens::to_token_stream);
 
         tokens.extend(quote! {
             AlternativeEntry {
@@ -322,7 +322,7 @@ impl ToTokens for LootFunctionStruct {
         let functions_tokens = &self.content.to_token_stream();
 
         let conditions_tokens = if let Some(conds) = &self.conditions {
-            let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
+            let cond_tokens: Vec<_> = conds.iter().map(ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
         } else {
             quote! { None }
@@ -582,13 +582,13 @@ impl ToTokens for LootPoolEntryStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let content = &self.content;
         let conditions_tokens = if let Some(conds) = &self.conditions {
-            let cond_tokens: Vec<_> = conds.iter().map(quote::ToTokens::to_token_stream).collect();
+            let cond_tokens: Vec<_> = conds.iter().map(ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
         } else {
             quote! { None }
         };
         let functions_tokens = if let Some(fns) = &self.functions {
-            let cond_tokens: Vec<_> = fns.iter().map(quote::ToTokens::to_token_stream).collect();
+            let cond_tokens: Vec<_> = fns.iter().map(ToTokens::to_token_stream).collect();
             quote! { Some(&[#(#cond_tokens),*]) }
         } else {
             quote! { None }

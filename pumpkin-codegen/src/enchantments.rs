@@ -34,7 +34,7 @@ pub enum AttributeModifierSlot {
     Any,
     /// Applies only when held in the main hand.
     MainHand,
-    /// Applies only when held in the off hand.
+    /// Applies only when held in the offhand.
     OffHand,
     /// Applies when held in either hand.
     Hand,

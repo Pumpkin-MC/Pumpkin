@@ -20,7 +20,7 @@ fn parse_hex_color(s: &str) -> Option<i32> {
 /// Raw deserialization shape for a single dimension entry from `dimension.json`.
 #[derive(Deserialize)]
 pub struct Dimension {
-    /// Whether this dimension has a sky light source (i.e. is not a cave or the Nether).
+    /// Whether this dimension has a skylight source (i.e. is not a cave or the Nether).
     pub has_skylight: bool,
     /// Whether this dimension has a bedrock ceiling (e.g. the Nether).
     pub has_ceiling: bool,
@@ -32,7 +32,7 @@ pub struct Dimension {
     pub min_y: i32,
     /// Total height (in blocks) of the buildable/chunk range.
     pub height: i32,
-    /// Maximum Y level usable by mob AI and portals (may be less than `min_y + height`).
+    /// Maximum Y level usable by mob AI and portals (can be less than `min_y + height`).
     pub logical_height: i32,
     /// Tag key for blocks that act as infinite burn sources (e.g. `"minecraft:infiniburn_overworld"`).
     pub infiniburn: String,
@@ -72,7 +72,7 @@ pub fn build() -> TokenStream {
     let dimensions: BTreeMap<String, Dimension> = serde_json::from_str(
         &fs::read_to_string("../assets/dimension.json").expect("Missing dimension.json"),
     )
-    .expect("Failed to parse dimension.json");
+        .expect("Failed to parse dimension.json");
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
@@ -93,19 +93,19 @@ pub fn build() -> TokenStream {
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/sky_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
         let fog_color = dim
             .attributes
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/fog_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
         let cloud_color = dim
             .attributes
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/cloud_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
 
         let fixed_time = if let Some(t) = dim.fixed_time {
             quote! { Some(#t) }

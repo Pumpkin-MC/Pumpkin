@@ -5,7 +5,7 @@ use std::{
 };
 
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::{ToTokens, TokenStreamExt, quote};
+use quote::{quote, ToTokens, TokenStreamExt};
 use serde::Deserialize;
 use syn::Ident;
 
@@ -85,7 +85,7 @@ impl<'de> Deserialize<'de> for HashableF64 {
 #[derive(Deserialize, Hash)]
 #[serde(tag = "_type", content = "value")]
 enum SplineRepr {
-    /// A standard multi-point spline evaluated against a location density function.
+    /// A standard multipoint spline evaluated against a location density function.
     #[serde(rename(deserialize = "standard"))]
     Standard {
         /// The density function that drives the spline location axis.
@@ -107,7 +107,7 @@ enum SplineRepr {
 }
 
 impl SplineRepr {
-    /// Emits the `SplineRepr` token stream, registering any sub-components into `stack`.
+    /// Emits the `SplineRepr` token stream, registering any subcomponents into `stack`.
     ///
     /// # Arguments
     /// – `stack` – accumulator of all unique density-function component token streams.
@@ -549,7 +549,7 @@ enum DensityFunctionRepr {
     // This is a placeholder for leaving space for world structures
     Beardifier,
     /// Blending alpha factor, initialized from a world seed at runtime.
-    // These functions is initialized by a seed at runtime
+    // These functions are initialized by a seed at runtime
     BlendAlpha,
     /// Blending offset factor, initialized from a world seed at runtime.
     BlendOffset,
@@ -723,7 +723,7 @@ impl DensityFunctionRepr {
         }
     }
 
-    /// Emits the `BaseNoiseFunctionComponent` token stream for this node, registering sub-components into `stack`.
+    /// Emits the `BaseNoiseFunctionComponent` token stream for this node, registering subcomponents into `stack`.
     ///
     /// # Arguments
     /// – `stack` – accumulator of all unique density-function component token streams.
@@ -1392,7 +1392,7 @@ pub fn build() -> TokenStream {
         pub enum BaseNoiseFunctionComponent {
             // This is a placeholder for leaving space for world structures
             Beardifier,
-            // These functions is initialized by a seed at runtime
+            // These functions are initialized by a seed at runtime
             BlendAlpha,
             BlendOffset,
             BlendDensity {

@@ -11,7 +11,7 @@ use crate::item::Item;
 use crate::{biome::Biome, version::MinecraftVersion};
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 
 /// Builder that generates an enum with `from_string` and `identifier_string` methods.
 pub struct EnumCreator {

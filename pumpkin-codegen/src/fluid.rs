@@ -1,6 +1,6 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -423,7 +423,7 @@ pub fn build() -> TokenStream {
     let mut optimized_fluids: Vec<(String, FluidStateRef)> = Vec::new();
 
     for fluid in fluids {
-        let id_name = LitStr::new(&fluid.name, proc_macro2::Span::call_site());
+        let id_name = LitStr::new(&fluid.name, Span::call_site());
         let const_ident = format_ident!("{}", fluid.name.to_shouty_snake_case());
         let state_id_start = fluid
             .states
@@ -438,17 +438,17 @@ pub fn build() -> TokenStream {
             .max()
             .unwrap();
 
-        let id_lit = LitInt::new(&fluid.id.to_string(), proc_macro2::Span::call_site());
+        let id_lit = LitInt::new(&fluid.id.to_string(), Span::call_site());
         let mut properties = TokenStream::new();
         if fluid.properties.is_empty() {
             properties.extend(quote!(None));
         } else {
             let internal_properties = fluid.properties.iter().map(|property| {
-                let key = LitStr::new(&property.name, proc_macro2::Span::call_site());
+                let key = LitStr::new(&property.name, Span::call_site());
                 let values = property
                     .values
                     .iter()
-                    .map(|value| LitStr::new(value, proc_macro2::Span::call_site()));
+                    .map(|value| LitStr::new(value, Span::call_site()));
 
                 quote! {
                     (#key, &[
@@ -566,12 +566,10 @@ pub fn build() -> TokenStream {
                 .entry(renamed_property.clone())
                 .or_insert_with(|| property.values.clone());
 
-            assert!(
-                expected_values == &property.values,
+            assert_eq!(
+                expected_values, &property.values,
                 "Enum overlap for '{}' ({:?} vs {:?})",
-                property.name,
-                &property.values,
-                expected_values
+                property.name, &property.values, expected_values
             );
 
             property_mapping.push(PropertyVariantMapping {
@@ -657,12 +655,8 @@ pub fn build() -> TokenStream {
         });
     }
 
-    let fluid_props = fluid_properties
-        .iter()
-        .map(quote::ToTokens::to_token_stream);
-    let properties = property_enums
-        .values()
-        .map(quote::ToTokens::to_token_stream);
+    let fluid_props = fluid_properties.iter().map(ToTokens::to_token_stream);
+    let properties = property_enums.values().map(ToTokens::to_token_stream);
 
     quote! {
         use std::hash::{Hash, Hasher};

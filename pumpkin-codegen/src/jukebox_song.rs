@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs;
 
-/// Supplementary data for a jukebox song entry from the synced registries asset.
+/// Supplementary data for a jukebox song entry from the synced registries' asset.
 #[derive(Deserialize)]
 struct JukeboxSongData {
     /// Duration of the song in seconds.

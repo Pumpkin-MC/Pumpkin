@@ -1,7 +1,7 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -12,7 +12,7 @@ use std::{
 use syn::{Ident, LitInt, LitStr};
 
 use crate::{
-    bitsets::{Bitset, gen_u16_bitset},
+    bitsets::{gen_u16_bitset, Bitset},
     loot::LootTableStruct,
 };
 
@@ -20,7 +20,7 @@ use crate::{
 ///
 /// # Arguments
 /// – `array` – pairs of `(index, value)` where `index` is the position in the output array.
-fn fill_array<T: Clone + quote::ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStream> {
+fn fill_array<T: Clone + ToTokens>(array: Vec<(u16, T)>) -> Vec<TokenStream> {
     let max_index = array.iter().map(|(index, _)| index).max().unwrap();
     let mut raw_id_from_state_id_ordered = vec![quote! { None }; (max_index + 1) as usize];
 
@@ -505,7 +505,7 @@ impl BlockState {
         self.state_flags & Self::IS_AIR != 0
     }
 
-    /// Emits the `BlockState { … }` struct literal token stream for code generation.
+    /// Emits the `BlockState { … }` strut literal token stream for code generation.
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
@@ -652,7 +652,7 @@ impl ToTokens for Block {
     }
 }
 
-/// The underlying data type of a generated block property as classified in `properties.json`.
+/// The underlying data type of generated block property as classified in `properties.json`.
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum GeneratedPropertyType {
@@ -757,11 +757,10 @@ pub fn build() -> TokenStream {
         serde_json::from_str(&fs::read_to_string("../assets/properties.json").unwrap())
             .expect("Failed to parse properties.json");
 
-    let generated_prop_map: std::collections::BTreeMap<i32, &GeneratedProperty> =
-        generated_properties
-            .iter()
-            .map(|p| (p.hash_key, p))
-            .collect();
+    let generated_prop_map: BTreeMap<i32, &GeneratedProperty> = generated_properties
+        .iter()
+        .map(|p| (p.hash_key, p))
+        .collect();
 
     let mut random_tick_states = Vec::new();
     let mut air_states = Vec::new();
@@ -778,7 +777,7 @@ pub fn build() -> TokenStream {
     let mut property_enums: BTreeMap<String, PropertyStruct> = BTreeMap::new();
     let mut block_properties: Vec<BlockPropertyStruct> = Vec::new();
     let mut property_collection_map: BTreeMap<Vec<i32>, PropertyCollectionData> = BTreeMap::new();
-    let mut existing_item_ids: std::collections::HashSet<u16> = std::collections::HashSet::new();
+    let mut existing_item_ids: HashSet<u16> = HashSet::new();
 
     for block in blocks_assets.blocks {
         let mut property_collection = HashSet::new();
@@ -960,19 +959,12 @@ pub fn build() -> TokenStream {
         });
     }
 
-    let shapes = blocks_assets
-        .shapes
-        .iter()
-        .map(quote::ToTokens::to_token_stream);
+    let shapes = blocks_assets.shapes.iter().map(ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
 
-    let block_props = block_properties
-        .iter()
-        .map(quote::ToTokens::to_token_stream);
-    let properties = property_enums
-        .values()
-        .map(quote::ToTokens::to_token_stream);
+    let block_props = block_properties.iter().map(ToTokens::to_token_stream);
+    let properties = property_enums.values().map(ToTokens::to_token_stream);
 
     let block_entity_types = blocks_assets
         .block_entity_types

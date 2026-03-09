@@ -58,17 +58,17 @@ struct Spawner {
     /// Namespaced entity type ID (e.g. `"minecraft:zombie"`).
     r#type: String,
     /// Minimum number of entities in a spawn group.
-    minCount: i32,
+    min_count: i32,
     /// Maximum number of entities in a spawn group.
-    maxCount: i32,
+    max_count: i32,
 }
 
 impl Spawner {
     /// Converts this spawner entry into a `TokenStream` for use in generated code.
     pub fn to_tokens(&self) -> TokenStream {
         let r#type = &self.r#type;
-        let min_count = &self.minCount;
-        let max_count = &self.maxCount;
+        let min_count = &self.min_count;
+        let max_count = &self.max_count;
         quote! {
             Spawner {
                 r#type: #r#type,
