@@ -54,7 +54,7 @@ impl CommandExecutor for ObjectivesAddExecutor {
             if scoreboard.has_objective(name) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     translation::COMMANDS_SCOREBOARD_OBJECTIVES_ADD_DUPLICATE,
-                    [TextComponent::text(name.to_string())],
+                    [],
                 )));
             }
 
