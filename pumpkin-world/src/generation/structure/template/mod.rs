@@ -96,10 +96,10 @@ pub fn place_template(
             let block_entity_id = block_entity_id.unwrap_or(&palette_entry.name);
             let mut block_entity_nbt = NbtCompound::new();
 
+            block_entity_nbt.put_string("id", block_entity_id.to_string());
             block_entity_nbt.put_int("x", wx);
             block_entity_nbt.put_int("y", wy);
             block_entity_nbt.put_int("z", wz);
-            block_entity_nbt.put_string("id", block_entity_id.to_string());
 
             if let Some(template_nbt) = &block.nbt {
                 for (key, value) in &template_nbt.child_tags {

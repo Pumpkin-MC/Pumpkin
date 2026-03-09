@@ -1,11 +1,18 @@
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, OakFenceLikeProperties},
+    entity::EntityType,
 };
-use pumpkin_util::{BlockDirection, math::block_box::BlockBox, random::RandomGenerator};
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::{
+    BlockDirection,
+    math::{block_box::BlockBox, position::BlockPos},
+    random::RandomGenerator,
+};
 
 use crate::{
     ProtoChunk,
+    block::entities::mob_spawner::MobSpawnerBlockEntity,
     generation::structure::{
         piece::StructurePieceType,
         structures::{
@@ -140,7 +147,11 @@ impl StructurePieceBase for BridgePlatformPiece {
                     spawner_pos.z,
                     Block::SPAWNER.default_state,
                 );
-                // TODO: set spawner entity type to Blaze via block entity data
+                let spawner_block_entity =
+                    MobSpawnerBlockEntity::new(BlockPos(spawner_pos), Some(&EntityType::BLAZE));
+                let mut entity_nbt = NbtCompound::new();
+                spawner_block_entity.write_nbt(&mut entity_nbt);
+                chunk.add_block_entity(entity_nbt);
             }
         }
 

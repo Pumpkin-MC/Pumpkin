@@ -62,7 +62,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{
     CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_flag,
     entity_data_key,
 };
-use pumpkin_protocol::bedrock::client::start_game::CStartGame;
+use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
@@ -1385,10 +1385,6 @@ impl World {
             override_force_experimental_gameplay_has_value: false,
             chat_restriction_level: 0,
             disable_player_interactions: false,
-            server_id: String::new(),
-            world_id: String::new(),
-            scenario_id: String::new(),
-            owner_id: String::new(),
         };
         drop(level_info);
         drop(weather);
@@ -1430,6 +1426,13 @@ impl World {
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
                 server_auth_sounds: false,
+                server_join_information: None,
+                telemetry: ServerTelemetryData {
+                    server_id: String::new(),
+                    scenario_id: String::new(),
+                    world_id: String::new(),
+                    owner_id: String::new(),
+                },
             })
             .await;
         chunker::update_position(&player).await;
