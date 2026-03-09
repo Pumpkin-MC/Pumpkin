@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::message::MsgArgConsumer;
@@ -27,18 +30,35 @@ impl CommandExecutor for TeamMsgExecutor {
                 return Err(CommandError::InvalidConsumption(Some(ARG_MESSAGE.into())));
             };
 
-            // TODO: Send only to team members when team system is built
-            // For now, just echo back to sender
-            let sender_name = match sender {
-                CommandSender::Player(p) => p.gameprofile.name.clone(),
-                _ => "Server".to_string(),
+            let CommandSender::Player(player) = sender else {
+                return Err(CommandError::InvalidRequirement);
             };
 
-            sender
-                .send_message(TextComponent::text(format!(
-                    "[Team] <{sender_name}> {message}"
-                )))
-                .await;
+            let sender_name = player.gameprofile.name.clone();
+            let world = player.living_entity.entity.world.load_full();
+
+            // Get team info and member list, then drop the lock
+            let (team_name, members): (String, HashSet<String>) = {
+                let teams = world.teams.lock().await;
+                let Some(name) = teams.get_member_team(&sender_name) else {
+                    return Err(CommandError::CommandFailed(TextComponent::translate(
+                        translation::COMMANDS_TEAMMSG_FAILED_NOTEAM,
+                        [],
+                    )));
+                };
+                let team = teams.get_team(name).unwrap();
+                (name.to_string(), team.members.clone())
+            };
+
+            let msg = TextComponent::text(format!("[{team_name}] <{sender_name}> {message}"));
+
+            let players = world.players.load();
+            for p in players.iter() {
+                if members.contains(&p.gameprofile.name) {
+                    p.send_system_message(&msg).await;
+                }
+            }
+
             Ok(1)
         })
     }
