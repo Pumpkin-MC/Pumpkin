@@ -21,6 +21,7 @@ mod effect;
 mod enchant;
 mod experience;
 mod fill;
+mod function;
 mod gamemode;
 mod gamerule;
 mod give;
@@ -38,8 +39,10 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod return_cmd;
 mod rotate;
 mod say;
+mod schedule;
 mod seed;
 mod setblock;
 mod setidletimeout;
@@ -134,6 +137,9 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(function::init_command_tree(), "minecraft:command.function");
+    dispatcher.register(return_cmd::init_command_tree(), "minecraft:command.return");
+    dispatcher.register(schedule::init_command_tree(), "minecraft:command.schedule");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -404,6 +410,27 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.data",
             "Query and modify data of entities and blocks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.function",
+            "Runs a function",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.return",
+            "Returns a value from a function",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.schedule",
+            "Delays the execution of a function",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
