@@ -168,6 +168,39 @@ pub static STOP_INTERRUPT: LazyLock<CancellationToken> = LazyLock::new(Cancellat
 pub fn stop_server() {
     SHOULD_STOP.store(true, Ordering::Relaxed);
     STOP_INTERRUPT.cancel();
+    close_stdin();
+}
+
+/// Close stdin to unblock any blocking `readline`/`read_line` call during shutdown.
+fn close_stdin() {
+    use std::sync::Once;
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        #[cfg(unix)]
+        {
+            use std::os::unix::io::FromRawFd;
+            // SAFETY: fd 0 is stdin on all POSIX systems. Closing it causes readline() to
+            // return EOF, allowing the console thread to exit and properly drop the Editor
+            // (which restores terminal state). We're shutting down so stdin is no longer needed.
+            drop(unsafe { std::fs::File::from_raw_fd(0) });
+        }
+        #[cfg(windows)]
+        {
+            unsafe extern "system" {
+                fn GetStdHandle(nStdHandle: u32) -> isize;
+                fn CloseHandle(hObject: isize) -> i32;
+            }
+            const STD_INPUT_HANDLE: u32 = 0xFFFF_FFF6;
+            // SAFETY: Closing the stdin handle to unblock the console thread's readline() call.
+            // We're shutting down so stdin is no longer needed.
+            unsafe {
+                let handle = GetStdHandle(STD_INPUT_HANDLE);
+                if handle != 0 && handle != -1_isize {
+                    CloseHandle(handle);
+                }
+            }
+        }
+    });
 }
 
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
@@ -372,10 +405,16 @@ impl PumpkinServer {
 
         info!("Completed save!");
 
-        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
-            && let Some(rl) = wrapper.take_readline()
-        {
-            let _ = rl;
+        // Wait for the console thread to return the Editor after stdin is closed.
+        // The Editor must be dropped to restore terminal state from raw mode.
+        if let Some((wrapper, _, _)) = LOGGER_IMPL.wait() {
+            for _ in 0..20 {
+                if let Some(rl) = wrapper.take_readline() {
+                    drop(rl);
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
         }
     }
 
@@ -570,13 +609,17 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                     }
                 }
                 Err(ReadlineError::Interrupted) => {
-                    info!("CTRL-C");
-                    stop_server();
+                    if !SHOULD_STOP.load(Ordering::Relaxed) {
+                        info!("CTRL-C");
+                        stop_server();
+                    }
                     break;
                 }
                 Err(ReadlineError::Eof) => {
-                    info!("CTRL-D");
-                    stop_server();
+                    if !SHOULD_STOP.load(Ordering::Relaxed) {
+                        info!("CTRL-D");
+                        stop_server();
+                    }
                     break;
                 }
                 Err(err) => {
