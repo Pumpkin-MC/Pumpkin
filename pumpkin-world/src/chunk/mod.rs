@@ -408,7 +408,7 @@ impl ChunkSections {
     }
 
     pub fn set_relative_biome(
-        &mut self,
+        &self,
         relative_x: usize,
         relative_y: usize,
         relative_z: usize,

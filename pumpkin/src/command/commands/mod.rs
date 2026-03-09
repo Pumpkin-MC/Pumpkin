@@ -7,24 +7,30 @@ use tokio::sync::RwLock;
 
 use super::dispatcher::CommandDispatcher;
 
+mod attribute;
 mod ban;
 mod banip;
 mod banlist;
 mod bossbar;
 mod clear;
+mod clone;
 mod damage;
 mod data;
+mod debug;
 pub mod defaultgamemode;
 mod deop;
 mod difficulty;
 mod effect;
 mod enchant;
+mod execute;
 mod experience;
 mod fill;
+mod fillbiome;
 mod gamemode;
 mod gamerule;
 mod give;
 mod help;
+mod item;
 mod kick;
 mod kill;
 mod list;
@@ -34,25 +40,31 @@ mod op;
 mod pardon;
 mod pardonip;
 mod particle;
+mod perf;
 mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
 mod random;
+mod reload;
 mod ride;
 mod rotate;
 mod save;
 mod say;
+mod scoreboard;
 mod seed;
 mod setblock;
 mod setidletimeout;
 mod setworldspawn;
 mod spawnpoint;
 mod spectate;
+mod spreadplayers;
 mod stop;
 mod stopsound;
 mod summon;
 mod tag;
+mod team;
+mod teammsg;
 mod teleport;
 mod tellraw;
 mod tick;
@@ -60,6 +72,7 @@ mod time;
 mod title;
 mod tps;
 mod transfer;
+mod trigger;
 mod weather;
 mod whitelist;
 mod worldborder;
@@ -81,6 +94,8 @@ pub async fn default_dispatcher(
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
     dispatcher.register(random::init_command_tree(), "minecraft:command.random");
+    dispatcher.register(trigger::init_command_tree(), "minecraft:command.trigger");
+    dispatcher.register(teammsg::init_command_tree(), "minecraft:command.teammsg");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
@@ -144,9 +159,31 @@ pub async fn default_dispatcher(
     dispatcher.register(tag::init_command_tree(), "minecraft:command.tag");
     dispatcher.register(ride::init_command_tree(), "minecraft:command.ride");
     dispatcher.register(
+        attribute::init_command_tree(),
+        "minecraft:command.attribute",
+    );
+    dispatcher.register(
         spectate::init_command_tree(),
         "minecraft:command.spectate",
     );
+    dispatcher.register(clone::init_command_tree(), "minecraft:command.clone");
+    dispatcher.register(
+        fillbiome::init_command_tree(),
+        "minecraft:command.fillbiome",
+    );
+    dispatcher.register(
+        spreadplayers::init_command_tree(),
+        "minecraft:command.spreadplayers",
+    );
+    dispatcher.register(
+        scoreboard::init_command_tree(),
+        "minecraft:command.scoreboard",
+    );
+    dispatcher.register(team::init_command_tree(), "minecraft:command.team");
+    dispatcher.register(item::init_command_tree(), "minecraft:command.item");
+    dispatcher.register(execute::init_command_tree(), "minecraft:command.execute");
+    dispatcher.register(perf::init_command_tree(), "minecraft:command.perf");
+    dispatcher.register(debug::init_command_tree(), "minecraft:command.debug");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -167,6 +204,7 @@ pub async fn default_dispatcher(
         setidletimeout::init_command_tree(),
         "minecraft:command.setidletimeout",
     );
+    dispatcher.register(reload::init_command_tree(), "minecraft:command.reload");
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
     dispatcher.register(
@@ -242,6 +280,20 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.random",
             "Draw a random value or control random sequences",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.trigger",
+            "Sets a trigger to be activated",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.teammsg",
+            "Sends a message to all players on the sender's team",
             PermissionDefault::Allow,
         ))
         .unwrap();
@@ -481,6 +533,76 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.attribute",
+            "Queries, adds, removes, or sets an entity attribute",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.clone",
+            "Copies blocks from one region to another",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.fillbiome",
+            "Fills a region with a specific biome",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spreadplayers",
+            "Teleports entities to random surface locations in an area",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.scoreboard",
+            "Manages scoreboard objectives and players",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.team",
+            "Controls teams",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.item",
+            "Manipulates items in inventories",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.execute",
+            "Executes a command",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.perf",
+            "Captures info and metrics about the server",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.debug",
+            "Starts or stops a debug profiling session",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
 }
 
 #[expect(clippy::too_many_lines)]
@@ -588,6 +710,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.setidletimeout",
             "Sets the time before idle players are kicked",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.reload",
+            "Reloads loot tables, advancements, and functions from disk",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();
