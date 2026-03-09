@@ -144,21 +144,34 @@ impl CommandExecutor for SpreadExecutor {
             if targets.is_empty() {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     translation::COMMANDS_SPREADPLAYERS_FAILED_ENTITIES,
-                    [],
+                    [
+                        TextComponent::text("0".to_string()),
+                        TextComponent::text(format!("{:.1}", center.x)),
+                        TextComponent::text(format!("{:.1}", center.y)),
+                        TextComponent::text(format!("{spread_distance:.1}")),
+                    ],
                 )));
             }
 
             if spread_distance < 0.0 {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     translation::COMMANDS_SPREADPLAYERS_FAILED_INVALID_HEIGHT,
-                    [],
+                    [
+                        TextComponent::text(format!("{spread_distance:.1}")),
+                        TextComponent::text("0".to_string()),
+                    ],
                 )));
             }
 
             if max_range < spread_distance + 1.0 {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     translation::COMMANDS_SPREADPLAYERS_FAILED_ENTITIES,
-                    [],
+                    [
+                        TextComponent::text(targets.len().to_string()),
+                        TextComponent::text(format!("{:.1}", center.x)),
+                        TextComponent::text(format!("{:.1}", center.y)),
+                        TextComponent::text(format!("{spread_distance:.1}")),
+                    ],
                 )));
             }
 
@@ -195,7 +208,12 @@ impl CommandExecutor for SpreadExecutor {
             if spread_count == 0 {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     translation::COMMANDS_SPREADPLAYERS_FAILED_ENTITIES,
-                    [],
+                    [
+                        TextComponent::text(targets.len().to_string()),
+                        TextComponent::text(format!("{:.1}", center.x)),
+                        TextComponent::text(format!("{:.1}", center.y)),
+                        TextComponent::text(format!("{spread_distance:.1}")),
+                    ],
                 )));
             }
 

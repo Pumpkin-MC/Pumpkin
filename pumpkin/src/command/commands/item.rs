@@ -23,35 +23,23 @@ const ARG_COUNT: &str = "count";
 /// Returns the slot index. `weapon.mainhand` returns `None` to indicate
 /// that the player's currently selected hotbar slot should be used.
 fn parse_slot(slot_str: &str) -> Result<Option<usize>, CommandError> {
+    let no_such_slot = || {
+        CommandError::CommandFailed(TextComponent::translate(
+            translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
+            [TextComponent::text(slot_str.to_string())],
+        ))
+    };
     // Parse slot identifiers like "container.0", "hotbar.0", "armor.head", etc.
     if let Some(rest) = slot_str.strip_prefix("container.") {
-        rest.parse::<usize>().map(Some).map_err(|_| {
-            CommandError::CommandFailed(TextComponent::translate(
-                translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
-                [],
-            ))
-        })
+        rest.parse::<usize>().map(Some).map_err(|_| no_such_slot())
     } else if let Some(rest) = slot_str.strip_prefix("hotbar.") {
-        let idx: usize = rest.parse().map_err(|_| {
-            CommandError::CommandFailed(TextComponent::translate(
-                translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
-                [],
-            ))
-        })?;
+        let idx: usize = rest.parse().map_err(|_| no_such_slot())?;
         if idx > 8 {
-            return Err(CommandError::CommandFailed(TextComponent::translate(
-                translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
-                [],
-            )));
+            return Err(no_such_slot());
         }
         Ok(Some(idx))
     } else if let Some(rest) = slot_str.strip_prefix("inventory.") {
-        let idx: usize = rest.parse().map_err(|_| {
-            CommandError::CommandFailed(TextComponent::translate(
-                translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
-                [],
-            ))
-        })?;
+        let idx: usize = rest.parse().map_err(|_| no_such_slot())?;
         Ok(Some(idx + 9)) // inventory slots start at 9
     } else {
         match slot_str {
@@ -63,7 +51,7 @@ fn parse_slot(slot_str: &str) -> Result<Option<usize>, CommandError> {
             "weapon.mainhand" => Ok(None), // Resolved to selected slot at runtime
             _ => Err(CommandError::CommandFailed(TextComponent::translate(
                 translation::COMMANDS_ITEM_TARGET_NO_SUCH_SLOT,
-                [],
+                [TextComponent::text(slot_str.to_string())],
             ))),
         }
     }
@@ -122,7 +110,10 @@ impl CommandExecutor for ReplaceEntityExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_ITEM_ENTITY_SET_SUCCESS_SINGLE,
-                        [TextComponent::text(slot_str.to_string())],
+                        [
+                            TextComponent::text(targets[0].gameprofile.name.clone()),
+                            TextComponent::text(item_name.to_string()),
+                        ],
                     ))
                     .await;
             } else {
@@ -130,8 +121,8 @@ impl CommandExecutor for ReplaceEntityExecutor {
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_ITEM_ENTITY_SET_SUCCESS_MULTIPLE,
                         [
-                            TextComponent::text(slot_str.to_string()),
                             TextComponent::text(changed.to_string()),
+                            TextComponent::text(item_name.to_string()),
                         ],
                     ))
                     .await;
