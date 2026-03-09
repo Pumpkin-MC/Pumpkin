@@ -14,8 +14,10 @@ mod bossbar;
 mod clear;
 mod damage;
 mod data;
+mod datapack;
 pub mod defaultgamemode;
 mod deop;
+mod dialog;
 mod difficulty;
 mod effect;
 mod enchant;
@@ -134,6 +136,8 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(datapack::init_command_tree(), "minecraft:command.datapack");
+    dispatcher.register(dialog::init_command_tree(), "minecraft:command.dialog");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -404,6 +408,20 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.data",
             "Query and modify data of entities and blocks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.datapack",
+            "Controls loaded data packs",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.dialog",
+            "Shows or clears dialogs for players",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
