@@ -1,4 +1,3 @@
-use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::{
@@ -16,7 +15,7 @@ struct Executor;
 impl CommandExecutor for Executor {
     fn execute<'a>(
         &'a self,
-        sender: &'a CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
@@ -24,14 +23,9 @@ impl CommandExecutor for Executor {
             let name = SimpleArgConsumer::find_arg(args, ARG_NAME)?;
 
             // TODO: Implement function execution when mcfunction parser is available
-            sender
-                .send_message(TextComponent::translate(
-                    translation::COMMANDS_FUNCTION_SCHEDULED_NO_FUNCTIONS,
-                    [],
-                ))
-                .await;
-
-            Err(CommandError::InvalidConsumption(Some(name.to_string())))
+            Err(CommandError::CommandFailed(TextComponent::text(format!(
+                "Unknown function: {name}"
+            ))))
         })
     }
 }

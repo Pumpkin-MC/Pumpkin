@@ -35,7 +35,9 @@ impl CommandExecutor for FunctionExecutor {
                         [],
                     ))
                     .await;
-                return Err(CommandError::InvalidConsumption(Some(function.to_string())));
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    "Can't schedule for current tick",
+                )));
             }
 
             // TODO: Implement schedule when function scheduler is available
@@ -74,7 +76,9 @@ impl CommandExecutor for ClearExecutor {
                 ))
                 .await;
 
-            Err(CommandError::InvalidConsumption(Some(function.to_string())))
+            Err(CommandError::CommandFailed(TextComponent::text(format!(
+                "No scheduled function found for {function}"
+            ))))
         })
     }
 }

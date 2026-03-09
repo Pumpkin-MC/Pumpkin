@@ -2,7 +2,7 @@ use pumpkin_util::text::TextComponent;
 
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
-    args::{ConsumedArgs, FindArg, simple::SimpleArgConsumer},
+    args::{ConsumedArgs, FindArg, message::MsgArgConsumer, simple::SimpleArgConsumer},
     tree::{
         CommandTree,
         builder::{argument, literal},
@@ -12,13 +12,14 @@ use crate::command::{
 const NAMES: [&str; 1] = ["return"];
 const DESCRIPTION: &str = "Returns a value from a function.";
 const ARG_VALUE: &str = "value";
+const ARG_COMMAND: &str = "command";
 
 struct ValueExecutor;
 
 impl CommandExecutor for ValueExecutor {
     fn execute<'a>(
         &'a self,
-        sender: &'a CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a crate::server::Server,
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
@@ -28,13 +29,9 @@ impl CommandExecutor for ValueExecutor {
             // TODO: Implement return when function execution context is available
             let parsed: i32 = value.parse().map_err(|_| {
                 CommandError::CommandFailed(TextComponent::text(format!(
-                    "Invalid return value: {value}"
+                    "Expected integer, got: {value}"
                 )))
             })?;
-
-            sender
-                .send_message(TextComponent::text(format!("Returned {parsed}")))
-                .await;
 
             Ok(parsed)
         })
@@ -46,23 +43,44 @@ struct FailExecutor;
 impl CommandExecutor for FailExecutor {
     fn execute<'a>(
         &'a self,
-        sender: &'a CommandSender,
+        _sender: &'a CommandSender,
         _server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
             // TODO: Implement return fail when function execution context is available
-            sender
-                .send_message(TextComponent::text("Returned fail"))
-                .await;
+            // In vanilla, /return fail causes the enclosing function to fail
+            Err(CommandError::CommandFailed(TextComponent::text(
+                "/return fail can only be used within a function",
+            )))
+        })
+    }
+}
 
-            Ok(0)
+struct RunExecutor;
+
+impl CommandExecutor for RunExecutor {
+    fn execute<'a>(
+        &'a self,
+        _sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let _command = MsgArgConsumer::find_arg(args, ARG_COMMAND)?;
+
+            // TODO: Implement return run when function execution context is available
+            Err(CommandError::CommandFailed(TextComponent::text(
+                "/return run can only be used within a function",
+            )))
         })
     }
 }
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_VALUE, SimpleArgConsumer).execute(ValueExecutor))
+        // Literals must come before argument to avoid parse ambiguity
         .then(literal("fail").execute(FailExecutor))
+        .then(literal("run").then(argument(ARG_COMMAND, MsgArgConsumer).execute(RunExecutor)))
+        .then(argument(ARG_VALUE, SimpleArgConsumer).execute(ValueExecutor))
 }
