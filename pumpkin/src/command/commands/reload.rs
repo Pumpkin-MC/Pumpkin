@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::ConsumedArgs;
@@ -20,7 +21,10 @@ impl CommandExecutor for ReloadExecutor {
         Box::pin(async move {
             // TODO: Actually reload datapacks when datapack system is implemented
             sender
-                .send_message(TextComponent::translate("commands.reload.success", []))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_RELOAD_SUCCESS,
+                    [],
+                ))
                 .await;
             Ok(1)
         })

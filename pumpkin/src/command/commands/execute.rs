@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::entities::EntitiesArgumentConsumer;
@@ -81,7 +82,7 @@ impl CommandExecutor for AsExecutor {
 
             if success == 0 {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "commands.execute.conditional.fail",
+                    translation::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
                     [],
                 )));
             }
@@ -117,12 +118,12 @@ impl CommandExecutor for IfBlockExecutor {
 
             if !condition_met {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "commands.execute.conditional.fail",
+                    translation::COMMANDS_EXECUTE_CONDITIONAL_FAIL,
                     [],
                 )));
             }
 
-            // If there's a run command, execute it
+            // If there's a run command, execute it; otherwise report pass
             if let Some(Arg::Msg(command)) = args.get(ARG_COMMAND) {
                 let cmd = if command.starts_with('/') {
                     command.clone()
@@ -131,14 +132,14 @@ impl CommandExecutor for IfBlockExecutor {
                 };
                 let dispatcher = server.command_dispatcher.read().await;
                 dispatcher.dispatch(sender, server, &cmd).await?;
+            } else {
+                sender
+                    .send_message(TextComponent::translate(
+                        translation::COMMANDS_EXECUTE_CONDITIONAL_PASS,
+                        [],
+                    ))
+                    .await;
             }
-
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.execute.conditional.pass",
-                    [],
-                ))
-                .await;
             Ok(1)
         })
     }
