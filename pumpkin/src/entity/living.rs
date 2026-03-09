@@ -195,6 +195,14 @@ impl LivingEntity {
     }
 
     pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
+        let mut entity_equipment = self.entity_equipment.lock().await;
+        for (slot, stack) in equipment {
+            entity_equipment.put(slot, stack.clone()).await;
+        }
+        drop(entity_equipment);
+
+        self.recalculate_equipment_modifiers().await;
+
         let equipment: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
             .map(|(slot, stack)| {

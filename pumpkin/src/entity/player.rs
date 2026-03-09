@@ -2984,6 +2984,8 @@ impl NBTStorage for Player {
                     force,
                 }));
             }
+
+            self.living_entity.recalculate_equipment_modifiers().await;
         })
     }
 }
