@@ -202,6 +202,23 @@ impl NbtCompound {
     pub fn get_long_array(&self, name: &str) -> Option<&[i64]> {
         self.get(name).and_then(|tag| tag.extract_long_array())
     }
+
+    /// Normalizes the compound by sorting `child_tags` by key name in lexicographical order
+    /// and recursively normalizing any nested compound or list structures.
+    #[must_use]
+    pub fn normalize(mut self) -> Self {
+        // Sort child_tags by key name
+        self.child_tags.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Recursively normalize nested structures
+        for (_, tag) in &mut self.child_tags {
+            let placeholder = NbtTag::End;
+            let normalized_tag = std::mem::replace(tag, placeholder).normalize();
+            let _placeholder = std::mem::replace(tag, normalized_tag);
+        }
+
+        self
+    }
 }
 
 impl From<Nbt> for NbtCompound {
