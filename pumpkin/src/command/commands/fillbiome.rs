@@ -25,7 +25,7 @@ const ARG_REPLACE: &str = "replace_biome";
 fn parse_biome(name: &str) -> Result<&'static Biome, CommandError> {
     let name = name.strip_prefix("minecraft:").unwrap_or(name);
     Biome::from_name(name).ok_or(CommandError::CommandFailed(TextComponent::translate(
-        "argument.resource.invalid_type",
+        translation::ARGUMENT_RESOURCE_INVALID_TYPE,
         [
             TextComponent::text(format!("minecraft:{name}")),
             TextComponent::text("worldgen/biome".to_string()),

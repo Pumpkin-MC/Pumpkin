@@ -162,7 +162,7 @@ impl CommandExecutor for CloneExecutor {
                 || !world.is_in_build_limit(destination)
             {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    translation::ARGUMENT_POS_OUTOFBOUNDS,
                     [],
                 )));
             }
