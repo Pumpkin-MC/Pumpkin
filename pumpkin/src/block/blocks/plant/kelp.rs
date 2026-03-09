@@ -5,8 +5,9 @@ use crate::block::{
 };
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 pub struct KelpBlock;
 
 impl BlockMetadata for KelpBlock {
@@ -107,5 +108,16 @@ impl PlantBlockBase for KelpBlock {
             return true;
         }
         false
+    }
+    async fn get_state_for_neighbor_update(
+        &self,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        block_state: BlockStateId,
+    ) -> BlockStateId {
+        if !<Self as PlantBlockBase>::can_place_at(&self, block_accessor, block_pos).await {
+            return Block::WATER.default_state.id;
+        }
+        block_state
     }
 }
