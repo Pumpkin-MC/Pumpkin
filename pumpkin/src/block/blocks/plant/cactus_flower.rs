@@ -5,7 +5,8 @@ use pumpkin_world::world::BlockFlags;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnScheduledTickArgs,
+    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs,
 };
 
 #[pumpkin_macros::pumpkin_block("minecraft:cactus_flower")]
@@ -32,10 +33,7 @@ impl BlockBehaviour for CactusFlowerBlock {
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             // Instead of immediately becoming AIR (which skips drops), schedule a tick
-            // Only schedule if the neighbor update is NOT from UP (similar to ChorusFlowerBlock)
-            if args.direction != BlockDirection::Up
-                && !self.can_place_at_internal(args.world, args.position).await
-            {
+            if !self.can_place_at_internal(args.world, args.position).await {
                 // Schedule a tick for the next game tick
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
@@ -52,12 +50,25 @@ impl BlockBehaviour for CactusFlowerBlock {
                 .await
         })
     }
+
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            // Validate placement on valid blocks
+            if !self.can_place_at_internal(args.world, args.position).await {
+                return Block::AIR.default_state.id;
+            }
+            args.block.default_state.id
+        })
+    }
 }
 
 impl CactusFlowerBlock {
     async fn can_place_at_internal(&self, world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        let block_below_state = world.get_block_state(&block_pos.down()).await;
         let block_below = world.get_block(&block_pos.down()).await;
-        // Cactus flower can be placed on cactus
+        // Vanilla: cactus flower can be placed on cactus, farmland, or any sturdy block
         block_below == &Block::CACTUS
+            || block_below == &Block::FARMLAND
+            || block_below_state.is_side_solid(BlockDirection::Up)
     }
 }
