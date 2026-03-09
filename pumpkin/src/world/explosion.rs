@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use pumpkin_data::{attributes::Attributes, Block, BlockState, damage::DamageType, entity::EntityType};
+use pumpkin_data::{
+    Block, BlockState, attributes::Attributes, damage::DamageType, entity::EntityType,
+};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use rustc_hash::FxHashMap;
 
@@ -142,9 +144,9 @@ impl Explosion {
             };
             let direction = (dir_pos - self.pos).normalize();
 
-            let knockback_resistance = entity_base
-                .get_living_entity()
-                .map_or(0.0, |living| living.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE));
+            let knockback_resistance = entity_base.get_living_entity().map_or(0.0, |living| {
+                living.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE)
+            });
 
             let knockback_multiplier = (1.0 - distance) * exposure * (1.0 - knockback_resistance);
             let knockback = direction * knockback_multiplier;

@@ -61,7 +61,9 @@ pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f6
         strength * 0.5 * (1.0 - resistance)
     });
 
-    victim.get_entity().apply_knockback(adjusted_strength, sin, cos);
+    victim
+        .get_entity()
+        .apply_knockback(adjusted_strength, sin, cos);
 
     let velocity = attacker.velocity.load();
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));
