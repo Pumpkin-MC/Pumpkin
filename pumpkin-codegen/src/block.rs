@@ -1,7 +1,7 @@
 use heck::{ToShoutySnakeCase, ToUpperCamelCase};
 use proc_macro2::{Span, TokenStream};
 use pumpkin_util::math::{experience::Experience, vector3::Vector3};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -12,7 +12,7 @@ use std::{
 use syn::{Ident, LitInt, LitStr};
 
 use crate::{
-    bitsets::{gen_u16_bitset, Bitset},
+    bitsets::{Bitset, gen_u16_bitset},
     loot::LootTableStruct,
 };
 
@@ -505,7 +505,7 @@ impl BlockState {
         self.state_flags & Self::IS_AIR != 0
     }
 
-    /// Emits the `BlockState { … }` strut literal token stream for code generation.
+    /// Emits the `BlockState { … }` struct literal token stream for code generation.
     fn to_tokens(&self) -> TokenStream {
         let mut tokens = TokenStream::new();
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
