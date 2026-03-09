@@ -55,11 +55,11 @@ impl CommandExecutor for MountExecutor {
                 return Ok(0);
             }
 
-            // Check for circular loop: vehicle can't be a passenger of target (directly or indirectly)
+            // Check for circular loop: vehicle can't already be (transitively) riding target
             {
-                let mut current = Some(target.clone());
+                let mut current = Some(vehicle.clone());
                 while let Some(ref entity) = current {
-                    if entity.get_entity().entity_id == vehicle_entity.entity_id {
+                    if entity.get_entity().entity_id == target_entity.entity_id {
                         sender
                             .send_message(TextComponent::translate(
                                 translation::COMMANDS_RIDE_MOUNT_FAILURE_LOOP,

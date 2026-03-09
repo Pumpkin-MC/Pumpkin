@@ -179,8 +179,6 @@ pub async fn default_dispatcher(
     dispatcher.register(team::init_command_tree(), "minecraft:command.team");
     dispatcher.register(item::init_command_tree(), "minecraft:command.item");
     dispatcher.register(execute::init_command_tree(), "minecraft:command.execute");
-    dispatcher.register(perf::init_command_tree(), "minecraft:command.perf");
-    dispatcher.register(debug::init_command_tree(), "minecraft:command.debug");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -202,8 +200,10 @@ pub async fn default_dispatcher(
         "minecraft:command.setidletimeout",
     );
     dispatcher.register(reload::init_command_tree(), "minecraft:command.reload");
+    dispatcher.register(debug::init_command_tree(), "minecraft:command.debug");
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
+    dispatcher.register(perf::init_command_tree(), "minecraft:command.perf");
     dispatcher.register(
         save::init_command_tree_save_all(),
         "minecraft:command.save-all",
@@ -586,20 +586,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.perf",
-            "Captures info and metrics about the server",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.debug",
-            "Starts or stops a debug profiling session",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
 }
 
 #[expect(clippy::too_many_lines)]
@@ -717,6 +703,13 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.debug",
+            "Starts or stops a debug profiling session",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
 }
 
 fn register_level_4_permissions(registry: &mut PermissionRegistry) {
@@ -746,6 +739,13 @@ fn register_level_4_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.save-on",
             "Enables automatic saving",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.perf",
+            "Captures info and metrics about the server",
             PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();

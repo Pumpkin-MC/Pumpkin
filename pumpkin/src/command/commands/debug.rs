@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::ConsumedArgs;
@@ -20,7 +21,10 @@ impl CommandExecutor for StartExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             sender
-                .send_message(TextComponent::translate("commands.debug.started", []))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_DEBUG_STARTED,
+                    [],
+                ))
                 .await;
             Ok(1)
         })
@@ -38,7 +42,10 @@ impl CommandExecutor for StopExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             sender
-                .send_message(TextComponent::translate("commands.debug.stopped", []))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_DEBUG_STOPPED,
+                    [],
+                ))
                 .await;
             Ok(1)
         })

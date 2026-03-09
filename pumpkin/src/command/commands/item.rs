@@ -20,10 +20,12 @@ const ARG_SLOT: &str = "slot";
 const ARG_ITEM: &str = "item";
 const ARG_COUNT: &str = "count";
 
-fn parse_slot(slot_str: &str) -> Result<usize, CommandError> {
+/// Returns the slot index. `weapon.mainhand` returns `None` to indicate
+/// that the player's currently selected hotbar slot should be used.
+fn parse_slot(slot_str: &str) -> Result<Option<usize>, CommandError> {
     // Parse slot identifiers like "container.0", "hotbar.0", "armor.head", etc.
     if let Some(rest) = slot_str.strip_prefix("container.") {
-        rest.parse::<usize>().map_err(|_| {
+        rest.parse::<usize>().map(Some).map_err(|_| {
             CommandError::CommandFailed(TextComponent::translate(
                 translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
                 [],
@@ -42,7 +44,7 @@ fn parse_slot(slot_str: &str) -> Result<usize, CommandError> {
                 [],
             )));
         }
-        Ok(idx)
+        Ok(Some(idx))
     } else if let Some(rest) = slot_str.strip_prefix("inventory.") {
         let idx: usize = rest.parse().map_err(|_| {
             CommandError::CommandFailed(TextComponent::translate(
@@ -50,15 +52,15 @@ fn parse_slot(slot_str: &str) -> Result<usize, CommandError> {
                 [],
             ))
         })?;
-        Ok(idx + 9) // inventory slots start at 9
+        Ok(Some(idx + 9)) // inventory slots start at 9
     } else {
         match slot_str {
-            "armor.head" => Ok(36),
-            "armor.chest" => Ok(37),
-            "armor.legs" => Ok(38),
-            "armor.feet" => Ok(39),
-            "weapon.offhand" => Ok(40),
-            "weapon.mainhand" => Ok(0), // Resolves to selected slot at runtime
+            "armor.head" => Ok(Some(36)),
+            "armor.chest" => Ok(Some(37)),
+            "armor.legs" => Ok(Some(38)),
+            "armor.feet" => Ok(Some(39)),
+            "weapon.offhand" => Ok(Some(40)),
+            "weapon.mainhand" => Ok(None), // Resolved to selected slot at runtime
             _ => Err(CommandError::CommandFailed(TextComponent::translate(
                 translation::COMMANDS_ITEM_TARGET_NO_SUCH_SLOT,
                 [],
@@ -82,7 +84,7 @@ impl CommandExecutor for ReplaceEntityExecutor {
             let Some(Arg::Simple(slot_str)) = args.get(ARG_SLOT) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_SLOT.into())));
             };
-            let slot = parse_slot(slot_str)?;
+            let slot_opt = parse_slot(slot_str)?;
 
             let Some(Arg::Simple(item_name)) = args.get(ARG_ITEM) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_ITEM.into())));
@@ -109,6 +111,8 @@ impl CommandExecutor for ReplaceEntityExecutor {
             let mut changed = 0i32;
 
             for target in targets {
+                let slot =
+                    slot_opt.unwrap_or_else(|| target.inventory().get_selected_slot() as usize);
                 target.inventory().set_stack(slot, stack.clone()).await;
                 changed += 1;
             }
@@ -117,7 +121,7 @@ impl CommandExecutor for ReplaceEntityExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_ITEM_ENTITY_SET_SUCCESS_SINGLE,
-                        [TextComponent::text(slot.to_string())],
+                        [TextComponent::text(slot_str.to_string())],
                     ))
                     .await;
             } else {
@@ -125,7 +129,7 @@ impl CommandExecutor for ReplaceEntityExecutor {
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_ITEM_ENTITY_SET_SUCCESS_MULTIPLE,
                         [
-                            TextComponent::text(slot.to_string()),
+                            TextComponent::text(slot_str.to_string()),
                             TextComponent::text(changed.to_string()),
                         ],
                     ))

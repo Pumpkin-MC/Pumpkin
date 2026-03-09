@@ -55,7 +55,10 @@ impl CommandExecutor for RemoveExecutor {
             };
             // TODO: Implement team removal when team system is built
             sender
-                .send_message(TextComponent::text("Removed team"))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_TEAM_REMOVE_SUCCESS,
+                    [],
+                ))
                 .await;
             Ok(1)
         })

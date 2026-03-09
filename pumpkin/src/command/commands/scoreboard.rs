@@ -239,6 +239,7 @@ impl CommandExecutor for PlayersAddExecutor {
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_SCOREBOARD_PLAYERS_ADD_SUCCESS_SINGLE,
                     [
+                        TextComponent::text(amount.to_string()),
                         TextComponent::text(objective.to_string()),
                         TextComponent::text(targets.to_string()),
                         TextComponent::text(new_score.to_string()),
@@ -277,12 +278,24 @@ impl CommandExecutor for PlayersResetExecutor {
 
             scoreboard.reset_scores(targets, objective);
 
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.scoreboard.players.reset.all.single",
-                    [TextComponent::text(targets.to_string())],
-                ))
-                .await;
+            if let Some(obj) = objective {
+                sender
+                    .send_message(TextComponent::translate(
+                        translation::COMMANDS_SCOREBOARD_PLAYERS_RESET_SPECIFIC_SINGLE,
+                        [
+                            TextComponent::text(obj.to_string()),
+                            TextComponent::text(targets.to_string()),
+                        ],
+                    ))
+                    .await;
+            } else {
+                sender
+                    .send_message(TextComponent::translate(
+                        translation::COMMANDS_SCOREBOARD_PLAYERS_RESET_ALL_SINGLE,
+                        [TextComponent::text(targets.to_string())],
+                    ))
+                    .await;
+            }
             Ok(1)
         })
     }

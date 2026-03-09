@@ -160,21 +160,12 @@ impl CommandExecutor for FillBiomeExecutor {
 
             let changed = fill_biome_region(&world, min, max, biome, replace_biome).await;
 
-            if changed == 0 {
-                sender
-                    .send_message(TextComponent::translate(
-                        translation::COMMANDS_FILLBIOME_SUCCESS,
-                        [],
-                    ))
-                    .await;
-            } else {
-                sender
-                    .send_message(TextComponent::translate(
-                        translation::COMMANDS_FILLBIOME_SUCCESS_COUNT,
-                        [TextComponent::text(changed.to_string())],
-                    ))
-                    .await;
-            }
+            sender
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_FILLBIOME_SUCCESS,
+                    [TextComponent::text(changed.to_string())],
+                ))
+                .await;
 
             Ok(changed)
         })

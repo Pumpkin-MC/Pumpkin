@@ -1,3 +1,4 @@
+use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::args::ConsumedArgs;
@@ -19,17 +20,13 @@ impl CommandExecutor for StartExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let mspt = server.get_mspt();
-            let tps = if mspt > 0.0 {
-                (1000.0 / mspt).min(20.0)
-            } else {
-                20.0
-            };
+            let _mspt = server.get_mspt();
 
             sender
-                .send_message(TextComponent::text(format!(
-                    "Started 10-second performance profiling. TPS: {tps:.1}, MSPT: {mspt:.2}ms"
-                )))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_PERF_STARTED,
+                    [],
+                ))
                 .await;
             Ok(1)
         })
@@ -46,17 +43,13 @@ impl CommandExecutor for StopExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let mspt = server.get_mspt();
-            let tps = if mspt > 0.0 {
-                (1000.0 / mspt).min(20.0)
-            } else {
-                20.0
-            };
+            let _mspt = server.get_mspt();
 
             sender
-                .send_message(TextComponent::text(format!(
-                    "Stopped performance profiling. TPS: {tps:.1}, MSPT: {mspt:.2}ms"
-                )))
+                .send_message(TextComponent::translate(
+                    translation::COMMANDS_PERF_STOPPED,
+                    [],
+                ))
                 .await;
             Ok(1)
         })

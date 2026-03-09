@@ -149,14 +149,16 @@ impl CommandExecutor for SpreadExecutor {
             }
 
             if spread_distance < 0.0 {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Spread distance must be non-negative",
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    translation::COMMANDS_SPREADPLAYERS_FAILED_INVALID_HEIGHT,
+                    [],
                 )));
             }
 
             if max_range < spread_distance + 1.0 {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Max range must be greater than spread distance",
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    translation::COMMANDS_SPREADPLAYERS_FAILED_ENTITIES,
+                    [],
                 )));
             }
 
