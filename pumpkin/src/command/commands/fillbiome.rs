@@ -123,7 +123,7 @@ impl CommandExecutor for FillBiomeExecutor {
 
             if !world.is_in_build_limit(from) || !world.is_in_build_limit(to) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    translation::ARGUMENT_POS_OUTOFBOUNDS,
                     [],
                 )));
             }
@@ -163,7 +163,14 @@ impl CommandExecutor for FillBiomeExecutor {
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_FILLBIOME_SUCCESS,
-                    [TextComponent::text(changed.to_string())],
+                    [
+                        TextComponent::text(min.x.to_string()),
+                        TextComponent::text(min.y.to_string()),
+                        TextComponent::text(min.z.to_string()),
+                        TextComponent::text(max.x.to_string()),
+                        TextComponent::text(max.y.to_string()),
+                        TextComponent::text(max.z.to_string()),
+                    ],
                 ))
                 .await;
 

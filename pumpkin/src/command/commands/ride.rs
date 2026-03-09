@@ -45,14 +45,23 @@ impl CommandExecutor for MountExecutor {
             }
 
             // Already riding something
-            if target_entity.vehicle.lock().await.is_some() {
-                sender
-                    .send_message(TextComponent::translate(
-                        translation::COMMANDS_RIDE_ALREADY_RIDING,
-                        [],
-                    ))
-                    .await;
-                return Ok(0);
+            let target_name = target_entity.entity_type.resource_name.to_string();
+            let vehicle_name = vehicle_entity.entity_type.resource_name.to_string();
+            {
+                let current_vehicle = target_entity.vehicle.lock().await;
+                if current_vehicle.is_some() {
+                    drop(current_vehicle);
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::COMMANDS_RIDE_ALREADY_RIDING,
+                            [
+                                TextComponent::text(target_name),
+                                TextComponent::text(vehicle_name),
+                            ],
+                        ))
+                        .await;
+                    return Ok(0);
+                }
             }
 
             // Check for circular loop: vehicle can't already be (transitively) riding target
@@ -93,7 +102,10 @@ impl CommandExecutor for MountExecutor {
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_RIDE_MOUNT_SUCCESS,
-                    [],
+                    [
+                        TextComponent::text(target_name),
+                        TextComponent::text(vehicle_name),
+                    ],
                 ))
                 .await;
             Ok(1)
@@ -114,9 +126,11 @@ impl CommandExecutor for DismountExecutor {
             let target: Arc<dyn EntityBase> = EntityArgumentConsumer::find_arg(args, "target")?;
 
             let target_entity = target.get_entity();
+            let target_name = target_entity.entity_type.resource_name.to_string();
             let vehicle = target_entity.vehicle.lock().await.clone();
 
             if let Some(vehicle) = vehicle {
+                let vehicle_name = vehicle.get_entity().entity_type.resource_name.to_string();
                 vehicle
                     .get_entity()
                     .remove_passenger(target_entity.entity_id)
@@ -124,7 +138,10 @@ impl CommandExecutor for DismountExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_RIDE_DISMOUNT_SUCCESS,
-                        [],
+                        [
+                            TextComponent::text(target_name),
+                            TextComponent::text(vehicle_name),
+                        ],
                     ))
                     .await;
                 Ok(1)
@@ -132,7 +149,7 @@ impl CommandExecutor for DismountExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_RIDE_NOT_RIDING,
-                        [],
+                        [TextComponent::text(target_name)],
                     ))
                     .await;
                 Ok(0)

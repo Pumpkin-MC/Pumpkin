@@ -41,10 +41,15 @@ impl CommandExecutor for StopExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
+            // TODO: track actual profiling duration and tick count
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_DEBUG_STOPPED,
-                    [],
+                    [
+                        TextComponent::text("0".to_string()),
+                        TextComponent::text("0".to_string()),
+                        TextComponent::text("0".to_string()),
+                    ],
                 ))
                 .await;
             Ok(1)

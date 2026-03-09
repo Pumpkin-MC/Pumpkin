@@ -56,7 +56,7 @@ impl CommandExecutor for SpectateExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_SPECTATE_NOT_SPECTATOR,
-                        [],
+                        [TextComponent::text(player.gameprofile.name.clone())],
                     ))
                     .await;
                 return Ok(0);
@@ -79,10 +79,11 @@ impl CommandExecutor for SpectateExecutor {
                 .enqueue_packet(&CSetCamera::new(VarInt(target_entity.entity_id)))
                 .await;
 
+            let target_name = target_entity.entity_type.resource_name;
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_SPECTATE_SUCCESS_STARTED,
-                    [],
+                    [TextComponent::text(target_name.to_string())],
                 ))
                 .await;
             Ok(1)
@@ -106,7 +107,7 @@ impl CommandExecutor for StopSpectateExecutor {
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_SPECTATE_NOT_SPECTATOR,
-                        [],
+                        [TextComponent::text(player.gameprofile.name.clone())],
                     ))
                     .await;
                 return Ok(0);
