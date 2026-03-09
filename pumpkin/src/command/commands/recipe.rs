@@ -1,9 +1,9 @@
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
-use crate::command::args::entities::EntitiesArgumentConsumer;
+use crate::command::args::players::PlayersArgumentConsumer;
 use crate::command::args::simple::SimpleArgConsumer;
-use crate::command::args::{Arg, ConsumedArgs, FindArg};
+use crate::command::args::{ConsumedArgs, FindArg};
 use crate::command::dispatcher::CommandError;
 use crate::command::tree::CommandTree;
 use crate::command::tree::builder::{argument, literal};
@@ -26,12 +26,8 @@ impl CommandExecutor for GiveExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
-            let Some(Arg::Simple(recipe)) = args.get(ARG_RECIPE) else {
-                return Err(CommandError::InvalidConsumption(Some(ARG_RECIPE.into())));
-            };
-
-            // TODO: Use `recipe == "*"` to give/take all recipes when protocol support is added
+            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+            let recipe = SimpleArgConsumer::find_arg(args, ARG_RECIPE)?;
 
             if targets.is_empty() {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
@@ -41,15 +37,17 @@ impl CommandExecutor for GiveExecutor {
             }
 
             // TODO: Send CRecipeBookAdd packets to unlock recipes for players
-            // Currently, the recipe book protocol packets are not yet implemented.
+            // Handle recipe == "*" to give all recipes
 
-            let count = targets.len() as i32;
+            let count = targets.len();
             if count == 1 {
-                let name = targets[0].get_name();
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_RECIPE_GIVE_SUCCESS_SINGLE,
-                        [TextComponent::text(recipe.to_string()), name],
+                        [
+                            TextComponent::text(recipe.to_string()),
+                            TextComponent::text(targets[0].gameprofile.name.clone()),
+                        ],
                     ))
                     .await;
             } else {
@@ -63,7 +61,7 @@ impl CommandExecutor for GiveExecutor {
                     ))
                     .await;
             }
-            Ok(count)
+            Ok(count as i32)
         })
     }
 }
@@ -78,12 +76,8 @@ impl CommandExecutor for TakeExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let targets = EntitiesArgumentConsumer::find_arg(args, ARG_TARGETS)?;
-            let Some(Arg::Simple(recipe)) = args.get(ARG_RECIPE) else {
-                return Err(CommandError::InvalidConsumption(Some(ARG_RECIPE.into())));
-            };
-
-            // TODO: Use `recipe == "*"` to give/take all recipes when protocol support is added
+            let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
+            let recipe = SimpleArgConsumer::find_arg(args, ARG_RECIPE)?;
 
             if targets.is_empty() {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
@@ -93,14 +87,17 @@ impl CommandExecutor for TakeExecutor {
             }
 
             // TODO: Send CRecipeBookRemove packets to lock recipes for players
+            // Handle recipe == "*" to take all recipes
 
-            let count = targets.len() as i32;
+            let count = targets.len();
             if count == 1 {
-                let name = targets[0].get_name();
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_RECIPE_TAKE_SUCCESS_SINGLE,
-                        [TextComponent::text(recipe.to_string()), name],
+                        [
+                            TextComponent::text(recipe.to_string()),
+                            TextComponent::text(targets[0].gameprofile.name.clone()),
+                        ],
                     ))
                     .await;
             } else {
@@ -114,7 +111,7 @@ impl CommandExecutor for TakeExecutor {
                     ))
                     .await;
             }
-            Ok(count)
+            Ok(count as i32)
         })
     }
 }
@@ -123,13 +120,13 @@ pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
         .then(
             literal("give").then(
-                argument(ARG_TARGETS, EntitiesArgumentConsumer)
+                argument(ARG_TARGETS, PlayersArgumentConsumer)
                     .then(argument(ARG_RECIPE, SimpleArgConsumer).execute(GiveExecutor)),
             ),
         )
         .then(
             literal("take").then(
-                argument(ARG_TARGETS, EntitiesArgumentConsumer)
+                argument(ARG_TARGETS, PlayersArgumentConsumer)
                     .then(argument(ARG_RECIPE, SimpleArgConsumer).execute(TakeExecutor)),
             ),
         )
