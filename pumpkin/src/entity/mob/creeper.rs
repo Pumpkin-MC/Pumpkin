@@ -66,7 +66,7 @@ impl CreeperEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(&mob_arc)));
             goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(0.8)));
 

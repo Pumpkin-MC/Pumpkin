@@ -314,6 +314,15 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
 
+            // Clear target Arc if the targeted entity was removed, preventing
+            // stale Arc references from keeping dead entities alive in memory
+            {
+                let mut target = mob_entity.target.lock().await;
+                if target.as_ref().is_some_and(|t| t.get_entity().is_removed()) {
+                    *target = None;
+                }
+            }
+
             if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
                 mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
             }

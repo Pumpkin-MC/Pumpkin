@@ -557,6 +557,20 @@ impl PluginManager {
         // Remove from plugin states
         self.plugin_states.write().await.remove(name);
 
+        // If no plugins remain active, clear all event handlers to prevent
+        // leaked Box<dyn DynEventHandler> references from accumulating.
+        // TODO: associate handlers with plugin names for selective removal
+        let active_count = self
+            .plugins
+            .read()
+            .await
+            .iter()
+            .filter(|p| p.is_active)
+            .count();
+        if active_count == 0 {
+            self.handlers.write().await.clear();
+        }
+
         Ok(())
     }
 

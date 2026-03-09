@@ -2739,6 +2739,25 @@ impl World {
     }
 
     pub async fn remove_entity(&self, entity: &Entity) {
+        // Break vehicle/passenger Arc cycles before removing from world
+        // This prevents circular references from keeping entities alive indefinitely
+        {
+            let mut passengers = entity.passengers.lock().await;
+            for passenger in passengers.drain(..) {
+                *passenger.get_entity().vehicle.lock().await = None;
+            }
+        }
+        {
+            let mut vehicle = entity.vehicle.lock().await;
+            if let Some(v) = vehicle.take() {
+                v.get_entity()
+                    .passengers
+                    .lock()
+                    .await
+                    .retain(|p| p.get_entity().entity_id != entity.entity_id);
+            }
+        }
+
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|e| e.get_entity().entity_uuid != entity.entity_uuid);

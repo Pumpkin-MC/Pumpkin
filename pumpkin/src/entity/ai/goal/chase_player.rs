@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use super::{Controls, Goal, GoalFuture};
 use crate::entity::EntityBase;
@@ -7,14 +7,14 @@ use crate::entity::mob::enderman::{EndermanEntity, PLAYER_EYE_HEIGHT};
 use crate::entity::player::Player;
 
 pub struct ChasePlayerGoal {
-    enderman: Arc<EndermanEntity>,
+    enderman: Weak<EndermanEntity>,
     target: Option<Arc<Player>>,
 }
 
 impl ChasePlayerGoal {
-    pub const fn new(enderman: Arc<EndermanEntity>) -> Self {
+    pub fn new(enderman: &Arc<EndermanEntity>) -> Self {
         Self {
-            enderman,
+            enderman: Arc::downgrade(enderman),
             target: None,
         }
     }
@@ -23,6 +23,10 @@ impl ChasePlayerGoal {
 impl Goal for ChasePlayerGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
+            let Some(enderman) = self.enderman.upgrade() else {
+                return false;
+            };
+
             let mob_entity = mob.get_mob_entity();
             let target = mob_entity.target.lock().await.clone();
 
@@ -44,7 +48,7 @@ impl Goal for ChasePlayerGoal {
                 return false;
             }
 
-            if !self.enderman.is_player_staring(player).await {
+            if !enderman.is_player_staring(player).await {
                 self.target = None;
                 return false;
             }
@@ -65,6 +69,10 @@ impl Goal for ChasePlayerGoal {
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
+            let Some(enderman) = self.enderman.upgrade() else {
+                return false;
+            };
+
             let Some(player) = &self.target else {
                 return false;
             };
@@ -77,7 +85,7 @@ impl Goal for ChasePlayerGoal {
                 return false;
             }
 
-            self.enderman.is_player_staring(player).await
+            enderman.is_player_staring(player).await
         })
     }
 

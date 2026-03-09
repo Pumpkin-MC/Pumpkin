@@ -227,6 +227,16 @@ pub trait ScreenHandler: Send + Sync {
                 offer_or_drop_stack(player, cursor_stack_lock.clone()).await;
                 *cursor_stack_lock = ItemStack::EMPTY.clone();
             }
+
+            // Drop the lock before clearing listeners to avoid holding it unnecessarily
+            drop(cursor_stack_lock);
+
+            // Clear listeners and sync handler to prevent Arc reference leaks.
+            // Listeners hold Arc<Player> references that accumulate each time a
+            // container is opened, causing the Player to never be deallocated.
+            let behaviour = self.get_behaviour_mut();
+            behaviour.listeners.clear();
+            behaviour.sync_handler = None;
         })
     }
 
