@@ -767,9 +767,7 @@ impl World {
                 }
             }
         }
-        if self.level.autosave_ticks > 0
-            && !self.level.saving_disabled.load(Relaxed)
-        {
+        if self.level.autosave_ticks > 0 && !self.level.saving_disabled.load(Relaxed) {
             let autosave = self.level.autosave_ticks as i64;
             if autosave > 0 && level_time.world_age % autosave == 0 {
                 self.level.should_save.store(true, Relaxed);

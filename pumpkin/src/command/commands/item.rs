@@ -23,18 +23,19 @@ const ARG_COUNT: &str = "count";
 fn parse_slot(slot_str: &str) -> Result<usize, CommandError> {
     // Parse slot identifiers like "container.0", "hotbar.0", "armor.head", etc.
     if let Some(rest) = slot_str.strip_prefix("container.") {
-        rest.parse::<usize>()
-            .map_err(|_| CommandError::CommandFailed(TextComponent::translate(
+        rest.parse::<usize>().map_err(|_| {
+            CommandError::CommandFailed(TextComponent::translate(
                 translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
                 [],
-            )))
+            ))
+        })
     } else if let Some(rest) = slot_str.strip_prefix("hotbar.") {
-        let idx: usize = rest
-            .parse()
-            .map_err(|_| CommandError::CommandFailed(TextComponent::translate(
+        let idx: usize = rest.parse().map_err(|_| {
+            CommandError::CommandFailed(TextComponent::translate(
                 translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
                 [],
-            )))?;
+            ))
+        })?;
         if idx > 8 {
             return Err(CommandError::CommandFailed(TextComponent::translate(
                 translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
@@ -43,12 +44,12 @@ fn parse_slot(slot_str: &str) -> Result<usize, CommandError> {
         }
         Ok(idx)
     } else if let Some(rest) = slot_str.strip_prefix("inventory.") {
-        let idx: usize = rest
-            .parse()
-            .map_err(|_| CommandError::CommandFailed(TextComponent::translate(
+        let idx: usize = rest.parse().map_err(|_| {
+            CommandError::CommandFailed(TextComponent::translate(
                 translation::COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT,
                 [],
-            )))?;
+            ))
+        })?;
         Ok(idx + 9) // inventory slots start at 9
     } else {
         match slot_str {

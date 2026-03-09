@@ -58,8 +58,7 @@ impl CommandExecutor for ObjectivesAddExecutor {
                 )));
             }
 
-            let objective =
-                ScoreboardObjective::new(name, display_name, RenderType::Integer, None);
+            let objective = ScoreboardObjective::new(name, display_name, RenderType::Integer, None);
             scoreboard.add_objective(&world, objective).await;
 
             sender
@@ -179,7 +178,9 @@ impl CommandExecutor for PlayersSetExecutor {
                 ))));
             }
 
-            scoreboard.set_score(&world, targets, objective, score).await;
+            scoreboard
+                .set_score(&world, targets, objective, score)
+                .await;
 
             sender
                 .send_message(TextComponent::translate(
@@ -304,35 +305,26 @@ pub fn init_command_tree() -> CommandTree {
                     ),
                 )
                 .then(literal("list").execute(ObjectivesListExecutor))
-                .then(
-                    literal("remove").then(
-                        argument(ARG_OBJECTIVE, SimpleArgConsumer)
-                            .execute(ObjectivesRemoveExecutor),
-                    ),
-                ),
+                .then(literal("remove").then(
+                    argument(ARG_OBJECTIVE, SimpleArgConsumer).execute(ObjectivesRemoveExecutor),
+                )),
         )
         .then(
             literal("players")
-                .then(
-                    literal("set").then(
-                        argument(ARG_TARGETS, SimpleArgConsumer).then(
-                            argument(ARG_OBJECTIVE, SimpleArgConsumer).then(
-                                argument(ARG_SCORE, SimpleArgConsumer)
-                                    .execute(PlayersSetExecutor),
-                            ),
+                .then(literal("set").then(
+                    argument(ARG_TARGETS, SimpleArgConsumer).then(
+                        argument(ARG_OBJECTIVE, SimpleArgConsumer).then(
+                            argument(ARG_SCORE, SimpleArgConsumer).execute(PlayersSetExecutor),
                         ),
                     ),
-                )
-                .then(
-                    literal("add").then(
-                        argument(ARG_TARGETS, SimpleArgConsumer).then(
-                            argument(ARG_OBJECTIVE, SimpleArgConsumer).then(
-                                argument(ARG_SCORE, SimpleArgConsumer)
-                                    .execute(PlayersAddExecutor),
-                            ),
+                ))
+                .then(literal("add").then(
+                    argument(ARG_TARGETS, SimpleArgConsumer).then(
+                        argument(ARG_OBJECTIVE, SimpleArgConsumer).then(
+                            argument(ARG_SCORE, SimpleArgConsumer).execute(PlayersAddExecutor),
                         ),
                     ),
-                )
+                ))
                 .then(
                     literal("reset").then(
                         argument(ARG_TARGETS, SimpleArgConsumer)

@@ -20,10 +20,7 @@ impl CommandExecutor for ReloadExecutor {
         Box::pin(async move {
             // TODO: Actually reload datapacks when datapack system is implemented
             sender
-                .send_message(TextComponent::translate(
-                    "commands.reload.success",
-                    [],
-                ))
+                .send_message(TextComponent::translate("commands.reload.success", []))
                 .await;
             Ok(1)
         })

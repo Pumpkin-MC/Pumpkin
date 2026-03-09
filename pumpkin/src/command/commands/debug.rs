@@ -20,10 +20,7 @@ impl CommandExecutor for StartExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             sender
-                .send_message(TextComponent::translate(
-                    "commands.debug.started",
-                    [],
-                ))
+                .send_message(TextComponent::translate("commands.debug.started", []))
                 .await;
             Ok(1)
         })
@@ -41,10 +38,7 @@ impl CommandExecutor for StopExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             sender
-                .send_message(TextComponent::translate(
-                    "commands.debug.stopped",
-                    [],
-                ))
+                .send_message(TextComponent::translate("commands.debug.stopped", []))
                 .await;
             Ok(1)
         })

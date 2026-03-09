@@ -179,11 +179,7 @@ impl CommandExecutor for SpreadExecutor {
 
                 // Check if entity is a player for request_teleport
                 let entity = target.get_entity();
-                if let Some(player) = entity
-                    .world
-                    .load()
-                    .get_player_by_id(entity.entity_id)
-                {
+                if let Some(player) = entity.world.load().get_player_by_id(entity.entity_id) {
                     player.request_teleport(dest, 0.0, 0.0).await;
                 } else {
                     let target_clone: Arc<dyn EntityBase> = target.clone();

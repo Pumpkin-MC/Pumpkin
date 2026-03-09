@@ -29,9 +29,7 @@ impl CommandExecutor for TriggerSimpleExecutor {
                 return Err(CommandError::InvalidConsumption(Some(ARG_OBJECTIVE.into())));
             };
 
-            let player = sender
-                .as_player()
-                .ok_or(CommandError::InvalidRequirement)?;
+            let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
             let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
             let mut scoreboard = world.scoreboard.lock().await;
 
@@ -81,9 +79,7 @@ impl CommandExecutor for TriggerAddExecutor {
                 .parse()
                 .map_err(|_| CommandError::InvalidConsumption(Some(ARG_VALUE.into())))?;
 
-            let player = sender
-                .as_player()
-                .ok_or(CommandError::InvalidRequirement)?;
+            let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
             let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
             let mut scoreboard = world.scoreboard.lock().await;
 
@@ -136,9 +132,7 @@ impl CommandExecutor for TriggerSetExecutor {
                 .parse()
                 .map_err(|_| CommandError::InvalidConsumption(Some(ARG_VALUE.into())))?;
 
-            let player = sender
-                .as_player()
-                .ok_or(CommandError::InvalidRequirement)?;
+            let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
             let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
             let mut scoreboard = world.scoreboard.lock().await;
 

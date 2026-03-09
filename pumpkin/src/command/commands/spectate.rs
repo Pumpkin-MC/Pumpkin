@@ -36,8 +36,7 @@ impl CommandExecutor for SpectateExecutor {
     ) -> CommandResult<'a> {
         let has_player_arg = self.has_player_arg;
         Box::pin(async move {
-            let target: Arc<dyn EntityBase> =
-                EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
+            let target: Arc<dyn EntityBase> = EntityArgumentConsumer::find_arg(args, ARG_TARGET)?;
 
             let player: Arc<Player> = if has_player_arg {
                 let players = PlayersArgumentConsumer::find_arg(args, ARG_PLAYER)?;
@@ -101,9 +100,7 @@ impl CommandExecutor for StopSpectateExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let player = sender
-                .as_player()
-                .ok_or(CommandError::InvalidRequirement)?;
+            let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
 
             if player.gamemode.load() != GameMode::Spectator {
                 sender
@@ -134,23 +131,16 @@ impl CommandExecutor for StopSpectateExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(
-            require(CommandSender::is_player)
-                .execute(StopSpectateExecutor),
-        )
+        .then(require(CommandSender::is_player).execute(StopSpectateExecutor))
         .then(
             argument(ARG_TARGET, EntityArgumentConsumer)
+                .then(require(CommandSender::is_player).execute(SpectateExecutor {
+                    has_player_arg: false,
+                }))
                 .then(
-                    require(CommandSender::is_player)
-                        .execute(SpectateExecutor {
-                            has_player_arg: false,
-                        }),
-                )
-                .then(
-                    argument(ARG_PLAYER, PlayersArgumentConsumer)
-                        .execute(SpectateExecutor {
-                            has_player_arg: true,
-                        }),
+                    argument(ARG_PLAYER, PlayersArgumentConsumer).execute(SpectateExecutor {
+                        has_player_arg: true,
+                    }),
                 ),
         )
 }

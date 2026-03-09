@@ -66,9 +66,7 @@ fn lookup_attribute(name: &str) -> Option<Attributes> {
 
 fn get_attribute_arg<'a>(args: &'a ConsumedArgs<'a>) -> Result<Attributes, CommandError> {
     let Some(Arg::Simple(attr_name)) = args.get(ARG_ATTRIBUTE) else {
-        return Err(CommandError::InvalidConsumption(Some(
-            ARG_ATTRIBUTE.into(),
-        )));
+        return Err(CommandError::InvalidConsumption(Some(ARG_ATTRIBUTE.into())));
     };
     lookup_attribute(attr_name).ok_or(CommandError::CommandFailed(TextComponent::translate(
         translation::COMMANDS_ATTRIBUTE_FAILED_NO_ATTRIBUTE,
@@ -236,12 +234,9 @@ pub fn init_command_tree() -> CommandTree {
                 .then(
                     literal("base")
                         .then(
-                            literal("get")
-                                .execute(BaseGetExecutor)
-                                .then(
-                                    argument(ARG_SCALE, SimpleArgConsumer)
-                                        .execute(BaseGetExecutor),
-                                ),
+                            literal("get").execute(BaseGetExecutor).then(
+                                argument(ARG_SCALE, SimpleArgConsumer).execute(BaseGetExecutor),
+                            ),
                         )
                         .then(
                             literal("set").then(

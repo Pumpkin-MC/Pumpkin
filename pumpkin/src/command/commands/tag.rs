@@ -212,10 +212,7 @@ impl CommandExecutor for ListExecutor {
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION).then(
         argument_default_name(EntitiesArgumentConsumer)
-            .then(
-                literal("add")
-                    .then(argument(ARG_NAME, SimpleArgConsumer).execute(AddExecutor)),
-            )
+            .then(literal("add").then(argument(ARG_NAME, SimpleArgConsumer).execute(AddExecutor)))
             .then(
                 literal("remove")
                     .then(argument(ARG_NAME, SimpleArgConsumer).execute(RemoveExecutor)),

@@ -61,16 +61,12 @@ async fn fill_biome_region(
 
             for by in biome_min_y..=biome_max_y {
                 if let Some(replace) = replace_biome {
-                    let section_idx =
-                        ((by - (chunk.section.min_y >> 2)) / 4).max(0) as usize;
-                    let rel_y_in_section =
-                        ((by - (chunk.section.min_y >> 2)) & 3) as usize;
-                    if let Some(current_biome_id) = chunk.section.get_noise_biome(
-                        section_idx,
-                        rel_x,
-                        rel_y_in_section,
-                        rel_z,
-                    )
+                    let section_idx = ((by - (chunk.section.min_y >> 2)) / 4).max(0) as usize;
+                    let rel_y_in_section = ((by - (chunk.section.min_y >> 2)) & 3) as usize;
+                    if let Some(current_biome_id) =
+                        chunk
+                            .section
+                            .get_noise_biome(section_idx, rel_x, rel_y_in_section, rel_z)
                         && current_biome_id != replace.id
                     {
                         continue;

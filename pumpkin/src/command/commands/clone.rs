@@ -50,21 +50,13 @@ struct StoredBlock {
     state_id: u16,
 }
 
-const fn regions_overlap(
-    src_min: Vector3<i32>,
-    src_max: Vector3<i32>,
-    dst: Vector3<i32>,
-) -> bool {
+const fn regions_overlap(src_min: Vector3<i32>, src_max: Vector3<i32>, dst: Vector3<i32>) -> bool {
     let size = Vector3::new(
         src_max.x - src_min.x,
         src_max.y - src_min.y,
         src_max.z - src_min.z,
     );
-    let dst_max = Vector3::new(
-        dst.x + size.x,
-        dst.y + size.y,
-        dst.z + size.z,
-    );
+    let dst_max = Vector3::new(dst.x + size.x, dst.y + size.y, dst.z + size.z);
 
     src_min.x <= dst_max.x
         && src_max.x >= dst.x
@@ -133,7 +125,10 @@ impl CommandExecutor for CloneExecutor {
 
             let world = sender.world().ok_or(CommandError::InvalidRequirement)?;
 
-            if !world.is_in_build_limit(begin) || !world.is_in_build_limit(end) || !world.is_in_build_limit(destination) {
+            if !world.is_in_build_limit(begin)
+                || !world.is_in_build_limit(end)
+                || !world.is_in_build_limit(destination)
+            {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     "argument.pos.outofbounds",
                     [],
@@ -171,7 +166,9 @@ impl CommandExecutor for CloneExecutor {
             }
 
             // Check overlap for normal mode
-            if matches!(clone_mode, CloneMode::Normal) && regions_overlap(src_min, src_max, destination.0) {
+            if matches!(clone_mode, CloneMode::Normal)
+                && regions_overlap(src_min, src_max, destination.0)
+            {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
                     translation::COMMANDS_CLONE_OVERLAP,
                     [],

@@ -146,18 +146,12 @@ impl CommandExecutor for IfBlockExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(
-            literal("run")
-                .then(argument(ARG_COMMAND, MsgArgConsumer).execute(RunExecutor)),
-        )
-        .then(
-            literal("as").then(
-                argument(ARG_TARGETS, EntitiesArgumentConsumer).then(
-                    literal("run")
-                        .then(argument(ARG_COMMAND, MsgArgConsumer).execute(AsExecutor)),
-                ),
+        .then(literal("run").then(argument(ARG_COMMAND, MsgArgConsumer).execute(RunExecutor)))
+        .then(literal("as").then(
+            argument(ARG_TARGETS, EntitiesArgumentConsumer).then(
+                literal("run").then(argument(ARG_COMMAND, MsgArgConsumer).execute(AsExecutor)),
             ),
-        )
+        ))
         .then(
             literal("if").then(
                 literal("block").then(

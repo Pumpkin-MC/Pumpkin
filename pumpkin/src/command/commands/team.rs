@@ -55,9 +55,7 @@ impl CommandExecutor for RemoveExecutor {
             };
             // TODO: Implement team removal when team system is built
             sender
-                .send_message(TextComponent::text(
-                    "Removed team",
-                ))
+                .send_message(TextComponent::text("Removed team"))
                 .await;
             Ok(1)
         })
@@ -160,14 +158,8 @@ impl CommandExecutor for EmptyExecutor {
 
 pub fn init_command_tree() -> CommandTree {
     CommandTree::new(NAMES, DESCRIPTION)
-        .then(
-            literal("add")
-                .then(argument(ARG_TEAM, SimpleArgConsumer).execute(AddExecutor)),
-        )
-        .then(
-            literal("remove")
-                .then(argument(ARG_TEAM, SimpleArgConsumer).execute(RemoveExecutor)),
-        )
+        .then(literal("add").then(argument(ARG_TEAM, SimpleArgConsumer).execute(AddExecutor)))
+        .then(literal("remove").then(argument(ARG_TEAM, SimpleArgConsumer).execute(RemoveExecutor)))
         .then(literal("list").execute(ListExecutor))
         .then(
             literal("join").then(
@@ -177,11 +169,7 @@ pub fn init_command_tree() -> CommandTree {
             ),
         )
         .then(
-            literal("leave")
-                .then(argument(ARG_MEMBERS, SimpleArgConsumer).execute(LeaveExecutor)),
+            literal("leave").then(argument(ARG_MEMBERS, SimpleArgConsumer).execute(LeaveExecutor)),
         )
-        .then(
-            literal("empty")
-                .then(argument(ARG_TEAM, SimpleArgConsumer).execute(EmptyExecutor)),
-        )
+        .then(literal("empty").then(argument(ARG_TEAM, SimpleArgConsumer).execute(EmptyExecutor)))
 }

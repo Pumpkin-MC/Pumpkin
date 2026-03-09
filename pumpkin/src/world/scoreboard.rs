@@ -15,7 +15,7 @@ use super::World;
 pub struct Scoreboard {
     objectives: HashMap<String, StoredObjective>,
     scores: HashMap<String, HashMap<String, i32>>, // entity_name -> objective_name -> value
-    display_slots: HashMap<u8, String>, // slot (as u8) -> objective_name
+    display_slots: HashMap<u8, String>,            // slot (as u8) -> objective_name
 }
 
 pub struct StoredObjective {

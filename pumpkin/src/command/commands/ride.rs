@@ -27,10 +27,8 @@ impl CommandExecutor for MountExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let target: Arc<dyn EntityBase> =
-                EntityArgumentConsumer::find_arg(args, "target")?;
-            let vehicle: Arc<dyn EntityBase> =
-                EntityArgumentConsumer::find_arg(args, ARG_VEHICLE)?;
+            let target: Arc<dyn EntityBase> = EntityArgumentConsumer::find_arg(args, "target")?;
+            let vehicle: Arc<dyn EntityBase> = EntityArgumentConsumer::find_arg(args, ARG_VEHICLE)?;
 
             let target_entity = target.get_entity();
             let vehicle_entity = vehicle.get_entity();
@@ -113,8 +111,7 @@ impl CommandExecutor for DismountExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let target: Arc<dyn EntityBase> =
-                EntityArgumentConsumer::find_arg(args, "target")?;
+            let target: Arc<dyn EntityBase> = EntityArgumentConsumer::find_arg(args, "target")?;
 
             let target_entity = target.get_entity();
             let vehicle = target_entity.vehicle.lock().await.clone();

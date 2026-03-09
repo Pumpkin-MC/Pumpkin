@@ -162,10 +162,7 @@ pub async fn default_dispatcher(
         attribute::init_command_tree(),
         "minecraft:command.attribute",
     );
-    dispatcher.register(
-        spectate::init_command_tree(),
-        "minecraft:command.spectate",
-    );
+    dispatcher.register(spectate::init_command_tree(), "minecraft:command.spectate");
     dispatcher.register(clone::init_command_tree(), "minecraft:command.clone");
     dispatcher.register(
         fillbiome::init_command_tree(),
