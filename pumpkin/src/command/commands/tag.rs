@@ -57,10 +57,18 @@ impl CommandExecutor for AddExecutor {
             }
 
             if count == 1 {
+                let entity_name = targets[0]
+                    .get_entity()
+                    .entity_type
+                    .resource_name
+                    .to_string();
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_TAG_ADD_SUCCESS_SINGLE,
-                        [TextComponent::text(tag_name)],
+                        [
+                            TextComponent::text(tag_name.clone()),
+                            TextComponent::text(entity_name),
+                        ],
                     ))
                     .await;
             } else {
@@ -117,10 +125,18 @@ impl CommandExecutor for RemoveExecutor {
             }
 
             if count == 1 {
+                let entity_name = targets[0]
+                    .get_entity()
+                    .entity_type
+                    .resource_name
+                    .to_string();
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_TAG_REMOVE_SUCCESS_SINGLE,
-                        [TextComponent::text(tag_name)],
+                        [
+                            TextComponent::text(tag_name.clone()),
+                            TextComponent::text(entity_name),
+                        ],
                     ))
                     .await;
             } else {
@@ -154,6 +170,7 @@ impl CommandExecutor for ListExecutor {
 
             let is_single = targets.len() == 1;
             let mut total_tags = 0;
+            let mut all_tags: Vec<String> = Vec::new();
 
             for target in targets {
                 let entity = target.get_entity();
@@ -161,11 +178,12 @@ impl CommandExecutor for ListExecutor {
                 total_tags += tags.len();
 
                 if is_single {
+                    let entity_name = entity.entity_type.resource_name;
                     if tags.is_empty() {
                         sender
                             .send_message(TextComponent::translate(
                                 translation::COMMANDS_TAG_LIST_SINGLE_EMPTY,
-                                [],
+                                [TextComponent::text(entity_name.to_string())],
                             ))
                             .await;
                     } else {
@@ -174,11 +192,18 @@ impl CommandExecutor for ListExecutor {
                             .send_message(TextComponent::translate(
                                 translation::COMMANDS_TAG_LIST_SINGLE_SUCCESS,
                                 [
+                                    TextComponent::text(entity_name.to_string()),
                                     TextComponent::text(tags.len().to_string()),
                                     TextComponent::text(tag_list),
                                 ],
                             ))
                             .await;
+                    }
+                } else {
+                    for tag in tags.iter() {
+                        if !all_tags.contains(tag) {
+                            all_tags.push(tag.clone());
+                        }
                     }
                 }
             }
@@ -188,16 +213,18 @@ impl CommandExecutor for ListExecutor {
                     sender
                         .send_message(TextComponent::translate(
                             translation::COMMANDS_TAG_LIST_MULTIPLE_EMPTY,
-                            [],
+                            [TextComponent::text(targets.len().to_string())],
                         ))
                         .await;
                 } else {
+                    let tag_list = all_tags.join(", ");
                     sender
                         .send_message(TextComponent::translate(
                             translation::COMMANDS_TAG_LIST_MULTIPLE_SUCCESS,
                             [
                                 TextComponent::text(targets.len().to_string()),
                                 TextComponent::text(total_tags.to_string()),
+                                TextComponent::text(tag_list),
                             ],
                         ))
                         .await;

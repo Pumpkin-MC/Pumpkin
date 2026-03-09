@@ -204,6 +204,8 @@ impl CommandExecutor for SpreadExecutor {
                     translation::COMMANDS_SPREADPLAYERS_SUCCESS_ENTITIES,
                     [
                         TextComponent::text(spread_count.to_string()),
+                        TextComponent::text(format!("{:.1}", center.x)),
+                        TextComponent::text(format!("{:.1}", center.y)),
                         TextComponent::text(format!("{:.1}", max_range * 2.0)),
                     ],
                 ))

@@ -96,6 +96,9 @@ impl CommandExecutor for GetExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let target = EntityArgumentConsumer::find_arg(args, "target")?;
+            let Some(Arg::Simple(attr_name)) = args.get(ARG_ATTRIBUTE) else {
+                return Err(CommandError::InvalidConsumption(Some(ARG_ATTRIBUTE.into())));
+            };
             let attribute = get_attribute_arg(args)?;
             let living = get_living_entity(&target)?;
 
@@ -111,11 +114,16 @@ impl CommandExecutor for GetExecutor {
                 .unwrap_or(1.0);
 
             let value = living.get_attribute_value(&attribute) * scale;
+            let entity_name = target.get_entity().entity_type.resource_name;
 
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_ATTRIBUTE_VALUE_GET_SUCCESS,
-                    [TextComponent::text(format!("{value:.2}"))],
+                    [
+                        TextComponent::text(attr_name.to_string()),
+                        TextComponent::text(entity_name.to_string()),
+                        TextComponent::text(format!("{value:.2}")),
+                    ],
                 ))
                 .await;
             Ok(value as i32)
@@ -134,6 +142,9 @@ impl CommandExecutor for BaseGetExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let target = EntityArgumentConsumer::find_arg(args, "target")?;
+            let Some(Arg::Simple(attr_name)) = args.get(ARG_ATTRIBUTE) else {
+                return Err(CommandError::InvalidConsumption(Some(ARG_ATTRIBUTE.into())));
+            };
             let attribute = get_attribute_arg(args)?;
             let living = get_living_entity(&target)?;
 
@@ -149,11 +160,16 @@ impl CommandExecutor for BaseGetExecutor {
                 .unwrap_or(1.0);
 
             let value = living.get_attribute_base(&attribute) * scale;
+            let entity_name = target.get_entity().entity_type.resource_name;
 
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_ATTRIBUTE_BASE_VALUE_GET_SUCCESS,
-                    [TextComponent::text(format!("{value:.2}"))],
+                    [
+                        TextComponent::text(attr_name.to_string()),
+                        TextComponent::text(entity_name.to_string()),
+                        TextComponent::text(format!("{value:.2}")),
+                    ],
                 ))
                 .await;
             Ok(value as i32)
@@ -172,6 +188,9 @@ impl CommandExecutor for BaseSetExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let target = EntityArgumentConsumer::find_arg(args, "target")?;
+            let Some(Arg::Simple(attr_name)) = args.get(ARG_ATTRIBUTE) else {
+                return Err(CommandError::InvalidConsumption(Some(ARG_ATTRIBUTE.into())));
+            };
             let attribute = get_attribute_arg(args)?;
             let living = get_living_entity(&target)?;
 
@@ -183,11 +202,16 @@ impl CommandExecutor for BaseSetExecutor {
                 .map_err(|_| CommandError::InvalidConsumption(Some(ARG_VALUE.into())))?;
 
             living.set_attribute_base(&attribute, value);
+            let entity_name = target.get_entity().entity_type.resource_name;
 
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_ATTRIBUTE_BASE_VALUE_SET_SUCCESS,
-                    [],
+                    [
+                        TextComponent::text(attr_name.to_string()),
+                        TextComponent::text(entity_name.to_string()),
+                        TextComponent::text(format!("{value:.2}")),
+                    ],
                 ))
                 .await;
             Ok(1)
@@ -206,15 +230,23 @@ impl CommandExecutor for BaseResetExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let target = EntityArgumentConsumer::find_arg(args, "target")?;
+            let Some(Arg::Simple(attr_name)) = args.get(ARG_ATTRIBUTE) else {
+                return Err(CommandError::InvalidConsumption(Some(ARG_ATTRIBUTE.into())));
+            };
             let attribute = get_attribute_arg(args)?;
             let living = get_living_entity(&target)?;
 
             living.set_attribute_base(&attribute, attribute.default_value);
+            let entity_name = target.get_entity().entity_type.resource_name;
 
             sender
                 .send_message(TextComponent::translate(
                     translation::COMMANDS_ATTRIBUTE_BASE_VALUE_RESET_SUCCESS,
-                    [],
+                    [
+                        TextComponent::text(attr_name.to_string()),
+                        TextComponent::text(entity_name.to_string()),
+                        TextComponent::text(format!("{:.2}", attribute.default_value)),
+                    ],
                 ))
                 .await;
             Ok(1)

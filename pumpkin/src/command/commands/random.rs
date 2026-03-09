@@ -129,7 +129,8 @@ impl CommandExecutor for RollExecutor {
                 [
                     TextComponent::text(sender_name),
                     TextComponent::text(result.to_string()),
-                    TextComponent::text(format!("{min}..{max}")),
+                    TextComponent::text(min.to_string()),
+                    TextComponent::text(max.to_string()),
                 ],
             );
 

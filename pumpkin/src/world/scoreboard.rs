@@ -96,10 +96,10 @@ impl Scoreboard {
             self.display_slots.remove(&slot_id);
         }
         world
-            .broadcast_packet_all(&CDisplayObjective::new(
-                ScoreboardDisplaySlot::Sidebar,
-                objective_name.unwrap_or("").to_string(),
-            ))
+            .broadcast_packet_all(&CDisplayObjective {
+                position: VarInt(i32::from(slot_id)),
+                score_name: objective_name.unwrap_or("").to_string(),
+            })
             .await;
     }
 
