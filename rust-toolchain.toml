@@ -1,4 +1,4 @@
 [toolchain]
 # Anything in the latest stable version of Rust is fine to use.
 channel = "stable"
-components = ["rust-analyzer", "rust-src"]
+components = ["rust-analyzer", "rust-src", "rustfmt", "clippy"]

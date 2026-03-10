@@ -13,62 +13,35 @@ jobs:
   format:
     name: Check formatting
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v6
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
   machete:
     name: Detect unused dependencies
     runs-on: ubuntu-latest
-    needs: [format]
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v6
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: bnjbvr/cargo-machete@main
   clippy_debug:
     name: Run lints (debug)
     runs-on: ubuntu-latest
-    needs: [machete]
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v6
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
       - name: Clippy (debug)
         run: cargo clippy --all-targets --all-features
   clippy_release:
     name: Run lints (release)
     runs-on: ubuntu-latest
-    needs: [machete]
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v6
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
       - name: Clippy (release)
         run: cargo clippy --release --all-targets --all-features
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
-    needs: [clippy_debug, clippy_release]
     strategy:
       matrix:
         os:
@@ -80,11 +53,8 @@ jobs:
             macos-latest,
             macos-15-intel,
           ]
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v6
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
       - name: Cargo nextest
@@ -94,7 +64,7 @@ jobs:
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
-    needs: [build_and_test]
+    needs: [format, machete, clippy_debug, clippy_release, build_and_test]
     strategy:
       matrix:
         os:
@@ -106,12 +76,9 @@ jobs:
             macos-latest,
             macos-15-intel,
           ]
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v6
 
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
       - name: Build Release
         shell: bash
