@@ -532,13 +532,7 @@ mod tests {
     fn damage_increases_damage_value() {
         // Without Unbreaking, every point of damage is applied.
         // Each sub-array is (amount, expected_damage); each case gets a fresh iron_sword.
-        let cases: &[(i32, i32)] = &[
-            (1, 1),
-            (5, 5),
-            (10, 10),
-            (100, 100),
-            (249, 249),
-        ];
+        let cases: &[(i32, i32)] = &[(1, 1), (5, 5), (10, 10), (100, 100), (249, 249)];
         for &(amount, expected) in cases {
             let mut stack = iron_sword();
             assert!(
