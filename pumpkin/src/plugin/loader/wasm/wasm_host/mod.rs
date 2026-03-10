@@ -2,6 +2,7 @@ use std::{fs, path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use wasmtime::{Cache, CacheConfig, Engine, Store, component::Component};
+use wasmtime_wasi::WasiCtxBuilder;
 
 use crate::plugin::{Context, PluginMetadata, loader::wasm::wasm_host::state::PluginHostState};
 
@@ -153,6 +154,17 @@ impl WasmPlugin {
         context: Arc<Context>,
     ) -> Result<Result<(), String>, wasmtime::Error> {
         let mut store = self.store.lock().await;
+
+        let mut builder = WasiCtxBuilder::new();
+
+        builder.preopened_dir(
+            context.get_data_folder(),
+            context.get_data_folder().to_string_lossy(),
+            wasmtime_wasi::DirPerms::all(),
+            wasmtime_wasi::FilePerms::all(),
+        )?;
+
+        store.data_mut().wasi_ctx = builder.build();
 
         store.data_mut().server = Some(context.server.clone());
 
