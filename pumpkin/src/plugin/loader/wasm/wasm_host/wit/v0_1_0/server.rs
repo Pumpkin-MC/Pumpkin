@@ -39,11 +39,6 @@ impl DowncastResourceExt<ServerResource> for Resource<Server> {
 impl pumpkin::plugin::server::Host for PluginHostState {}
 
 impl pumpkin::plugin::server::HostServer for PluginHostState {
-    async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
-        rep.consume(self);
-        Ok(())
-    }
-
     async fn get_difficulty(&mut self, server: Resource<Server>) -> Difficulty {
         match server.downcast_ref(self).provider.get_difficulty() {
             pumpkin_util::Difficulty::Peaceful => Difficulty::Peaceful,
@@ -75,5 +70,10 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
 
     async fn set_motd(&mut self, server: Resource<Server>, motd: String) {
         server.downcast_ref(self).provider.set_motd(motd).await;
+    }
+
+    async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
+        rep.consume(self);
+        Ok(())
     }
 }
