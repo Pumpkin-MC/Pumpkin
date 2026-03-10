@@ -85,7 +85,8 @@ impl PlantBlockBase for KelpBlock {
         let support_pos = pos;
         let (replacing_block, replacing_block_state) =
             block_accessor.get_block_and_state(&pos.up()).await;
-        let support_block = block_accessor.get_block(support_pos).await;
+        let (support_block, support_block_state) =
+            block_accessor.get_block_and_state(support_pos).await;
         if replacing_block == &Block::WATER {
             let water_props =
                 WaterLikeProperties::from_state_id(replacing_block_state.id, replacing_block);
@@ -104,7 +105,12 @@ impl PlantBlockBase for KelpBlock {
         if support_block == &Block::KELP || support_block == &Block::KELP_PLANT {
             return true;
         }
-        if support_block.default_state.is_full_cube() {
+        if support_block == &Block::MAGMA_BLOCK {
+            return false;
+        }
+        if support_block_state.is_side_solid(pumpkin_data::BlockDirection::Up)
+            && support_block.is_solid()
+        {
             return true;
         }
         false
