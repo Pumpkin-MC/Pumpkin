@@ -14,6 +14,7 @@ use crate::command::{
         builder::{argument, literal},
     },
 };
+use crate::entity::EntityBase;
 
 const NAMES: [&str; 1] = ["damage"];
 const DESCRIPTION: &str = "Deals damage to entities";
@@ -126,8 +127,8 @@ impl CommandExecutor for EntityExecutor {
                     amount,
                     damage_type,
                     None,
-                    source.as_ref().map(AsRef::as_ref),
-                    cause.as_ref().map(AsRef::as_ref),
+                    source.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
+                    cause.as_ref().map(|e| e.as_ref() as &dyn EntityBase),
                 )
                 .await;
 

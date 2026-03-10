@@ -2524,7 +2524,7 @@ impl World {
     ) -> Vec<Arc<dyn EntityBase>> {
         self.get_all_at_box_where(|entity| {
             entity.get_entity().bounding_box.load().intersects(aabb)
-                && !std::ptr::addr_eq(entity, except)
+                && entity.get_entity().entity_id != except.get_entity().entity_id
         })
     }
 
