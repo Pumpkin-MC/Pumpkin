@@ -8,10 +8,11 @@ use std::{
     },
 };
 
-pub use crate::wit::pumpkin::plugin::event::{
-    Event, EventPriority, PlayerJoinEventData, PlayerLeaveEventData,
+pub use crate::wit::pumpkin::plugin::event::{Event, EventPriority};
+use crate::{
+    Context, Result, Server,
+    wit::pumpkin::plugin::event::{EventType, PlayerJoinEventData, PlayerLeaveEventData},
 };
-use crate::{Context, Result, Server, wit::pumpkin::plugin::event::EventType};
 
 pub(crate) static NEXT_HANDLER_ID: AtomicU32 = AtomicU32::new(0);
 pub(crate) static EVENT_HANDLERS: Mutex<BTreeMap<u32, Box<dyn ErasedEventHandler>>> =
@@ -19,51 +20,58 @@ pub(crate) static EVENT_HANDLERS: Mutex<BTreeMap<u32, Box<dyn ErasedEventHandler
 
 pub trait FromIntoEvent: Sized {
     const EVENT_TYPE: EventType;
+    type Data;
 
-    fn from_event(event: Event) -> Self;
-    fn into_event(self) -> Event;
+    fn data_from_event(event: Event) -> Self::Data;
+    fn data_into_event(data: Self::Data) -> Event;
 }
 
-impl FromIntoEvent for PlayerJoinEventData {
-    const EVENT_TYPE: EventType = EventType::PlayerJoinEvent;
+pub type EventData<E> = <E as FromIntoEvent>::Data;
 
-    fn from_event(event: Event) -> Self {
+pub struct PlayerJoinEvent;
+impl FromIntoEvent for PlayerJoinEvent {
+    const EVENT_TYPE: EventType = EventType::PlayerJoinEvent;
+    type Data = PlayerJoinEventData;
+
+    fn data_from_event(event: Event) -> Self::Data {
         match event {
             Event::PlayerJoinEvent(data) => data,
             _ => panic!("unexpected event"),
         }
     }
 
-    fn into_event(self) -> Event {
-        Event::PlayerJoinEvent(self)
+    fn data_into_event(data: Self::Data) -> Event {
+        Event::PlayerJoinEvent(data)
     }
 }
 
-impl FromIntoEvent for PlayerLeaveEventData {
+pub struct PlayerLeaveEvent;
+impl FromIntoEvent for PlayerLeaveEvent {
     const EVENT_TYPE: EventType = EventType::PlayerLeaveEvent;
+    type Data = PlayerLeaveEventData;
 
-    fn from_event(event: Event) -> Self {
+    fn data_from_event(event: Event) -> Self::Data {
         match event {
             Event::PlayerLeaveEvent(data) => data,
             _ => panic!("unexpected event"),
         }
     }
 
-    fn into_event(self) -> Event {
-        Event::PlayerLeaveEvent(self)
+    fn data_into_event(data: Self::Data) -> Event {
+        Event::PlayerLeaveEvent(data)
     }
 }
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-pub trait EventHandler<E> {
-    fn handle(&self, server: Server, event: E) -> E;
+pub trait EventHandler<E: FromIntoEvent> {
+    fn handle(&self, server: Server, event: E::Data) -> E::Data;
 }
 
 pub(crate) trait ErasedEventHandler: Send + Sync {
     fn handle_erased(&self, server: Server, event: Event) -> Event;
 }
 
-struct HandlerWrapper<E, H> {
+struct HandlerWrapper<E: FromIntoEvent, H> {
     handler: H,
     _phantom: PhantomData<E>,
 }
@@ -72,8 +80,9 @@ impl<E: FromIntoEvent + Send + Sync, H: EventHandler<E> + Send + Sync> ErasedEve
     for HandlerWrapper<E, H>
 {
     fn handle_erased(&self, server: Server, event: Event) -> Event {
-        let specific_event = E::from_event(event);
-        self.handler.handle(server, specific_event).into_event()
+        let data = E::data_from_event(event);
+        let result = self.handler.handle(server, data);
+        E::data_into_event(result)
     }
 }
 

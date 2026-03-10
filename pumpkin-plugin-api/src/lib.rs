@@ -13,7 +13,7 @@ pub mod command {
 
 pub use wit::pumpkin::plugin::{
     context::{Context, Server},
-    text,
+    permission, text,
 };
 
 pub mod logging;

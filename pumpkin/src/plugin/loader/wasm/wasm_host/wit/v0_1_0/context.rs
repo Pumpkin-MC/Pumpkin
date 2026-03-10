@@ -1,5 +1,4 @@
-use std::sync::Arc;
-
+use std::{collections::HashMap, sync::Arc};
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
@@ -13,6 +12,7 @@ use crate::plugin::loader::wasm::wasm_host::{
                 command::Command,
                 context::Context,
                 event::{EventPriority, EventType},
+                permission::{Permission, PermissionDefault, PermissionLevel},
                 server::Server,
             },
         },
@@ -25,9 +25,28 @@ impl DowncastResourceExt<ContextResource> for Resource<Context> {
             .resource_table
             .get_any_mut(self.rep())
             .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
+            .downcast_ref()
             .expect("resource type mismatch")
     }
+
+    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut ContextResource {
+        state
+            .resource_table
+            .get_any_mut(self.rep())
+            .expect("invalid context resource handle")
+            .downcast_mut()
+            .expect("resource type mismatch")
+    }
+
+    fn consume(self, state: &mut PluginHostState) -> ContextResource {
+        state
+            .resource_table
+            .delete(Resource::new_own(self.rep()))
+            .expect("invalid context resource handle")
+    }
+}
+
+impl pumpkin::plugin::context::Host for PluginHostState {}
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut ContextResource {
         state
@@ -112,6 +131,42 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .register_command(command, permission)
             .await;
     }
+  
+    async fn register_permission(
+        &mut self,
+        context: Resource<Context>,
+        permission: Permission,
+    ) -> Result<(), String> {
+        let mut children: HashMap<String, bool> = HashMap::with_capacity(permission.children.len());
+        for child in permission.children {
+            children.insert(child.node, child.value);
+        }
+
+        let permission = pumpkin_util::permission::Permission {
+            node: permission.node,
+            description: permission.description,
+            default: match permission.default {
+                PermissionDefault::Deny => pumpkin_util::permission::PermissionDefault::Deny,
+                PermissionDefault::Allow => pumpkin_util::permission::PermissionDefault::Allow,
+                PermissionDefault::Op(permission_level) => {
+                    pumpkin_util::permission::PermissionDefault::Op(match permission_level {
+                        PermissionLevel::Zero => pumpkin_util::permission::PermissionLvl::Zero,
+                        PermissionLevel::One => pumpkin_util::permission::PermissionLvl::One,
+                        PermissionLevel::Two => pumpkin_util::permission::PermissionLvl::Two,
+                        PermissionLevel::Three => pumpkin_util::permission::PermissionLvl::Three,
+                        PermissionLevel::Four => pumpkin_util::permission::PermissionLvl::Four,
+                    })
+                }
+            },
+            children,
+        };
+
+        context
+            .downcast_mut(self)
+            .provider
+            .register_permission(permission)
+            .await
+    }
 
     async fn get_data_folder(&mut self, context: Resource<Context>) -> String {
         context
@@ -133,5 +188,4 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .resource_table
             .delete::<ContextResource>(Resource::new_own(rep.rep()));
         Ok(())
-    }
 }
