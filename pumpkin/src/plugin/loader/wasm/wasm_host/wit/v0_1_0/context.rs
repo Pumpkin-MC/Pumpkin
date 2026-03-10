@@ -172,13 +172,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     }
 
     async fn get_server(&mut self, context: Resource<Context>) -> Resource<Server> {
-        let resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-        let server_provider = resource.provider.server.clone();
+        let server_provider = context.downcast_ref(self).provider.server.clone();
         self.add_server(server_provider)
             .expect("failed to add server resource")
     }
