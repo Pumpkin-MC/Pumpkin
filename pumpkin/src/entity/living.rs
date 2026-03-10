@@ -34,7 +34,7 @@ use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, Food
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{Block, translation};
+use pumpkin_data::{Block, Enchantment, item::Item, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
@@ -787,6 +787,7 @@ impl LivingEntity {
             self.travel_in_air(caller.clone()).await;
         }
 
+        // TODO: Apply Soul Speed boot durability when tick_block_underneath is implemented.
         //self.entity.tick_block_underneath(&caller);
 
         let suffocating = self.entity.tick_block_collisions(&caller, server).await;
@@ -1507,9 +1508,16 @@ impl LivingEntity {
         false
     }
 
-    async fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
+    async fn damage_armor_items(
+        &self,
+        caller: &dyn EntityBase,
+        damage_amount: f32,
+        source: Option<&dyn EntityBase>,
+    ) {
         let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
         let mut equipment_updates = Vec::new();
+
+        // TODO: Falling anvil/stalactite should only damage the helmet slot.
 
         for (slot_index, slot) in self.equipment_slots.iter() {
             if !slot.is_armor_slot() {
@@ -1517,20 +1525,50 @@ impl LivingEntity {
             }
 
             let equipment = self.entity_equipment.lock().await.get(slot);
-            let updated_stack = {
+            let (worst_result, thorns_procs, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
-                if stack.is_empty() {
-                    None
-                } else if stack.damage_item_with_context(armor_damage, true) {
-                    Some(stack.clone())
+                if stack.is_empty() || stack.item == &Item::ELYTRA {
+                    // Vanilla parity: elytras are not damaged when hit while worn.
+                    (pumpkin_world::item::DamageResult::Untouched, false, None)
                 } else {
-                    None
+                    let base_result = stack.damage_item_with_context(armor_damage, true);
+
+                    // Vanilla parity: Thorns enchantment extra durability and attacker retaliation.
+                    let thorns_level = stack.get_enchantment_level(&Enchantment::THORNS);
+                    let thorns_procs = thorns_level > 0
+                        && rand::rng().random::<f32>() < thorns_level as f32 * 0.15;
+                    let thorns_result = if thorns_procs {
+                        stack.damage_item_with_context(2, true)
+                    } else {
+                        pumpkin_world::item::DamageResult::Untouched
+                    };
+
+                    let worst_result = match (base_result, thorns_result) {
+                        (pumpkin_world::item::DamageResult::Broken, _)
+                        | (_, pumpkin_world::item::DamageResult::Broken) => {
+                            pumpkin_world::item::DamageResult::Broken
+                        }
+                        (pumpkin_world::item::DamageResult::Damaged, _)
+                        | (_, pumpkin_world::item::DamageResult::Damaged) => {
+                            pumpkin_world::item::DamageResult::Damaged
+                        }
+                        _ => pumpkin_world::item::DamageResult::Untouched,
+                    };
+
+                    let changed = worst_result != pumpkin_world::item::DamageResult::Untouched;
+                    (worst_result, thorns_procs, changed.then_some(stack.clone()))
                 }
             };
 
-            if let Some(updated_stack) = updated_stack {
+            // Thorns retaliation: deal 1–4 magic damage to the attacker (outside the lock).
+            if let Some(src) = source.filter(|_| thorns_procs) {
+                let thorns_damage = (1 + rand::rng().random_range(0..4i32)) as f32;
+                src.damage(src, thorns_damage, DamageType::THORNS).await;
+            }
+
+            if let Some(updated_stack) = updated_stack_opt {
                 // Broadcast break status before clearing the slot.
-                if updated_stack.is_empty() {
+                if worst_result == pumpkin_world::item::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
                         .send_entity_status(&self.entity, super::equipment_break_status(slot))
@@ -1968,8 +2006,10 @@ impl EntityBase for LivingEntity {
                 self.on_death(damage_type, source, cause).await;
             }
 
-            if remaining > 0.0 {
-                self.damage_armor_items(caller, remaining).await;
+            // Vanilla parity: armor durability is only worn down when the damage source does
+            // NOT appear in the `minecraft:bypasses_armor` data tag.
+            if remaining > 0.0 && !bypasses_armor_durability(&damage_type) {
+                self.damage_armor_items(caller, remaining, source).await;
             }
 
             true
@@ -2122,5 +2162,104 @@ impl EntityBase for LivingEntity {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+}
+
+/// Returns `true` when `damage_type` is a member of the vanilla
+/// `minecraft:bypasses_armor` data tag (1.21.11).  Damage sources in this set
+/// do not cause armor durability loss because they bypass armor protection
+/// entirely — falling, suffocating, drowning, freezing, etc.
+pub(crate) fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
+    // `DamageType` is a struct (not an enum), so a `matches!` on the full value
+    // does a complete `PartialEq` comparison (all 5 fields) for each of the 19
+    // arms, including an f32 `exhaustion` comparison.  Comparing by the
+    // generated `id: u8` unique key reduces each check to a single byte.
+    // Exact contents of `minecraft:bypasses_armor` (1.21.11).
+    const BYPASSING_IDS: [u8; 19] = [
+        DamageType::FALL.id,
+        DamageType::FLY_INTO_WALL.id,
+        DamageType::ON_FIRE.id,
+        DamageType::IN_WALL.id,
+        DamageType::CRAMMING.id,
+        DamageType::DROWN.id,
+        DamageType::GENERIC.id,
+        DamageType::WITHER.id,
+        DamageType::DRAGON_BREATH.id,
+        DamageType::STARVE.id,
+        DamageType::ENDER_PEARL.id,
+        DamageType::FREEZE.id,
+        DamageType::STALAGMITE.id,
+        DamageType::MAGIC.id,
+        DamageType::INDIRECT_MAGIC.id,
+        DamageType::OUT_OF_WORLD.id,
+        DamageType::GENERIC_KILL.id,
+        DamageType::SONIC_BOOM.id,
+        DamageType::OUTSIDE_BORDER.id,
+    ];
+    BYPASSING_IDS.contains(&damage_type.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── bypasses_armor_durability ─────────────────────────────────────
+
+    /// Every member of `minecraft:bypasses_armor` (1.21.11) must return `true`.
+    #[test]
+    fn bypasses_armor_durability_returns_true_for_tag_members() {
+        // Exact contents of the minecraft:bypasses_armor tag in 1.21.11.
+        let bypassing: &[DamageType] = &[
+            DamageType::ON_FIRE,
+            DamageType::IN_WALL,
+            DamageType::CRAMMING,
+            DamageType::DROWN,
+            DamageType::FLY_INTO_WALL,
+            DamageType::GENERIC,
+            DamageType::WITHER,
+            DamageType::DRAGON_BREATH,
+            DamageType::STARVE,
+            DamageType::FALL,
+            DamageType::ENDER_PEARL,
+            DamageType::FREEZE,
+            DamageType::STALAGMITE,
+            DamageType::MAGIC,
+            DamageType::INDIRECT_MAGIC,
+            DamageType::OUT_OF_WORLD,
+            DamageType::GENERIC_KILL,
+            DamageType::SONIC_BOOM,
+            DamageType::OUTSIDE_BORDER,
+        ];
+        for dt in bypassing {
+            assert!(
+                bypasses_armor_durability(dt),
+                "{dt:?} should bypass armor durability"
+            );
+        }
+    }
+
+    /// Physical/combat damage types must NOT bypass armor durability.
+    #[test]
+    fn bypasses_armor_durability_returns_false_for_physical_sources() {
+        let physical: &[DamageType] = &[
+            DamageType::MOB_ATTACK,
+            DamageType::PLAYER_ATTACK,
+            DamageType::ARROW,
+            DamageType::CACTUS,
+            DamageType::SWEET_BERRY_BUSH,
+            DamageType::LAVA,
+            DamageType::EXPLOSION,
+            DamageType::PLAYER_EXPLOSION,
+            DamageType::LIGHTNING_BOLT,
+            DamageType::FIREBALL,
+            DamageType::THORNS,
+            DamageType::TRIDENT,
+        ];
+        for dt in physical {
+            assert!(
+                !bypasses_armor_durability(dt),
+                "{dt:?} should NOT bypass armor durability"
+            );
+        }
     }
 }

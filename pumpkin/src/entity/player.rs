@@ -768,9 +768,24 @@ impl Player {
             }
         }
 
-        self.damage_held_item(1).await;
+        self.damage_held_item({
+            let stack = item_stack.lock().await;
+            Self::combat_weapon_durability_cost(&stack)
+        })
+        .await;
 
         if config.swing {}
+    }
+
+    /// Returns the durability cost for using the held item as a weapon in combat.
+    /// Vanilla parity: axes, pickaxes, shovels, and hoes cost 2 durability per hit;
+    /// all other items (swords, tridents, maces, bare hands, …) cost 1.
+    fn combat_weapon_durability_cost(stack: &ItemStack) -> i32 {
+        if stack.is_axe() || stack.is_pickaxe() || stack.is_shovel() || stack.is_hoe() {
+            2
+        } else {
+            1
+        }
     }
 
     pub async fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {
@@ -817,16 +832,17 @@ impl Player {
         let stack_arc = self.inventory.get_stack(slot_index).await;
 
         let updated = {
+            let is_armor = slot.is_armor_slot();
             let mut stack = stack_arc.lock().await;
-            stack
-                .damage_item_with_context(amount, false)
-                .then_some(stack.clone())
+            let result = stack.damage_item_with_context(amount, is_armor);
+            (result != pumpkin_world::item::DamageResult::Untouched)
+                .then_some((result, stack.clone()))
         };
 
-        if let Some(updated_stack) = updated {
-            // Send the break status before clearing the slot; the client
-            // needs the old item texture for break particles.
-            if updated_stack.is_empty() {
+        if let Some((result, updated_stack)) = updated {
+            // Send the break status before clearing the slot so the client can
+            // use the item texture for break particles.
+            if result == pumpkin_world::item::DamageResult::Broken {
                 self.world()
                     .send_entity_status(
                         &self.living_entity.entity,
@@ -3186,6 +3202,7 @@ impl EntityBase for Player {
             {
                 return false;
             }
+            // TODO: Implement shield blocking durability.
             let result = self
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)
