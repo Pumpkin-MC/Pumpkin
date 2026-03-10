@@ -3,6 +3,7 @@ use std::sync::Arc;
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
+    DowncastResourceExt,
     state::{CommandResource, ContextResource, PluginHostState},
     wit::v0_1_0::{
         events::WasmPluginV0_1_0EventHandler,
@@ -18,28 +19,36 @@ use crate::plugin::loader::wasm::wasm_host::{
     },
 };
 
+impl DowncastResourceExt<ContextResource> for Resource<Context> {
+    fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a ContextResource {
+        state
+            .resource_table
+            .get_any_mut(self.rep())
+            .expect("invalid context resource handle")
+            .downcast_ref::<ContextResource>()
+            .expect("resource type mismatch")
+    }
+
+    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut ContextResource {
+        state
+            .resource_table
+            .get_any_mut(self.rep())
+            .expect("invalid context resource handle")
+            .downcast_mut::<ContextResource>()
+            .expect("resource type mismatch")
+    }
+
+    fn consume(self, state: &mut PluginHostState) -> ContextResource {
+        state
+            .resource_table
+            .delete::<ContextResource>(Resource::new_own(self.rep()))
+            .expect("invalid context resource handle")
+    }
+}
+
 impl pumpkin::plugin::context::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
-    async fn drop(&mut self, rep: Resource<Context>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<ContextResource>(Resource::new_own(rep.rep()));
-        Ok(())
-    }
-
-    async fn get_server(&mut self, context: Resource<Context>) -> Resource<Server> {
-        let resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-        let server_provider = resource.provider.server.clone();
-        self.add_server(server_provider)
-            .expect("failed to add server resource")
-    }
-
     async fn register_event(
         &mut self,
         context: Resource<Context>,
@@ -48,12 +57,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_priority: EventPriority,
         blocking: bool,
     ) {
-        let resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
+        let provider = context.downcast_ref(self).provider.clone();
 
         let priority = match event_priority {
             EventPriority::Highest => crate::plugin::EventPriority::Highest,
@@ -74,16 +78,14 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
 
         match event_type {
             EventType::PlayerJoinEvent => {
-                resource
-                    .provider
+                provider
                     .register_event::<crate::plugin::player::player_join::PlayerJoinEvent, _>(
                         handler, priority, blocking,
                     )
                     .await;
             }
             EventType::PlayerLeaveEvent => {
-                resource
-                    .provider
+                provider
                     .register_event::<crate::plugin::player::player_leave::PlayerLeaveEvent, _>(
                         handler, priority, blocking,
                     )
@@ -104,16 +106,32 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .expect("invalid command resource handle")
             .provider;
 
-        let context_resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-
-        context_resource
+        context
+            .downcast_ref(self)
             .provider
             .register_command(command, permission)
             .await;
+    }
+
+    async fn get_data_folder(&mut self, context: Resource<Context>) -> String {
+        context
+            .downcast_ref(self)
+            .provider
+            .get_data_folder()
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    async fn get_server(&mut self, context: Resource<Context>) -> Resource<Server> {
+        let server_provider = context.downcast_ref(self).provider.server.clone();
+        self.add_server(server_provider)
+            .expect("failed to add server resource")
+    }
+
+    async fn drop(&mut self, rep: Resource<Context>) -> wasmtime::Result<()> {
+        let _ = self
+            .resource_table
+            .delete::<ContextResource>(Resource::new_own(rep.rep()));
+        Ok(())
     }
 }
