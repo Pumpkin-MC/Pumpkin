@@ -882,13 +882,21 @@ impl World {
             SpawnState::new(spawning_chunks_map.len() as i32, &self.entities, self).await; // TODO store it
 
         // TODO gamerule this.spawnEnemies || this.spawnFriendlies
+        let (spawn_mobs, spawn_monsters, peaceful) = {
+            let lock = self.level_info.load();
+            (
+                lock.game_rules.spawn_mobs,
+                lock.game_rules.spawn_monsters,
+                lock.difficulty == Difficulty::Peaceful,
+            )
+        };
         let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
         let spawn_list: Vec<&'static MobCategory> =
             natural_spawner::get_filtered_spawning_categories(
                 &spawn_state,
-                true,
-                true,
-                spawn_passives,
+                spawn_mobs,
+                peaceful && spawn_mobs && spawn_monsters,
+                peaceful && spawn_mobs && spawn_passives && spawn_monsters,
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());
