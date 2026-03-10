@@ -53,6 +53,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
+        ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -193,6 +194,11 @@ impl DataComponentImpl for ItemNameImpl {
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct ItemModelImpl {
     pub id: String,
+}
+impl ItemModelImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|id| Self { id: String::from(id) })
+    }
 }
 impl DataComponentImpl for ItemModelImpl {
     fn write_data(&self) -> NbtTag {
