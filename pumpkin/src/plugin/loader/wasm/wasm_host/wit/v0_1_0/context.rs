@@ -48,25 +48,6 @@ impl DowncastResourceExt<ContextResource> for Resource<Context> {
 
 impl pumpkin::plugin::context::Host for PluginHostState {}
 
-    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut ContextResource {
-        state
-            .resource_table
-            .get_any_mut(self.rep())
-            .expect("invalid context resource handle")
-            .downcast_mut::<ContextResource>()
-            .expect("resource type mismatch")
-    }
-
-    fn consume(self, state: &mut PluginHostState) -> ContextResource {
-        state
-            .resource_table
-            .delete::<ContextResource>(Resource::new_own(self.rep()))
-            .expect("invalid context resource handle")
-    }
-}
-
-impl pumpkin::plugin::context::Host for PluginHostState {}
-
 impl pumpkin::plugin::context::HostContext for PluginHostState {
     async fn register_event(
         &mut self,
@@ -76,7 +57,12 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_priority: EventPriority,
         blocking: bool,
     ) {
-        let provider = context.downcast_ref(self).provider.clone();
+        let resource = self
+            .resource_table
+            .get_any_mut(context.rep())
+            .expect("invalid context resource handle")
+            .downcast_ref::<ContextResource>()
+            .expect("resource type mismatch");
 
         let priority = match event_priority {
             EventPriority::Highest => crate::plugin::EventPriority::Highest,
@@ -97,14 +83,16 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
 
         match event_type {
             EventType::PlayerJoinEvent => {
-                provider
+                resource
+                    .provider
                     .register_event::<crate::plugin::player::player_join::PlayerJoinEvent, _>(
                         handler, priority, blocking,
                     )
                     .await;
             }
             EventType::PlayerLeaveEvent => {
-                provider
+                resource
+                    .provider
                     .register_event::<crate::plugin::player::player_leave::PlayerLeaveEvent, _>(
                         handler, priority, blocking,
                     )
@@ -125,13 +113,19 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .expect("invalid command resource handle")
             .provider;
 
-        context
-            .downcast_ref(self)
+        let context_resource = self
+            .resource_table
+            .get_any_mut(context.rep())
+            .expect("invalid context resource handle")
+            .downcast_ref::<ContextResource>()
+            .expect("resource type mismatch");
+
+        context_resource
             .provider
             .register_command(command, permission)
             .await;
     }
-  
+
     async fn register_permission(
         &mut self,
         context: Resource<Context>,
@@ -178,7 +172,13 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     }
 
     async fn get_server(&mut self, context: Resource<Context>) -> Resource<Server> {
-        let server_provider = context.downcast_ref(self).provider.server.clone();
+        let resource = self
+            .resource_table
+            .get_any_mut(context.rep())
+            .expect("invalid context resource handle")
+            .downcast_ref::<ContextResource>()
+            .expect("resource type mismatch");
+        let server_provider = resource.provider.server.clone();
         self.add_server(server_provider)
             .expect("failed to add server resource")
     }
@@ -188,4 +188,5 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .resource_table
             .delete::<ContextResource>(Resource::new_own(rep.rep()));
         Ok(())
+    }
 }
