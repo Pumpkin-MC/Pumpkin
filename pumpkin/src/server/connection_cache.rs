@@ -37,7 +37,7 @@ fn load_icon_from_bytes(png_data: &[u8]) -> String {
 
 pub struct CachedStatus {
     pub status_response: StatusResponse,
-    // We cache the json response here so we don't parse it every time someone makes a status request.
+    // We cache the JSON response here so we don't parse it every time someone makes a status request.
     // Keep in mind that we must parse this again when the StatusResponse changes, which usually happen when a player joins or leaves.
     status_response_json: String,
     player_samples: Vec<(Uuid, String)>,
@@ -137,6 +137,16 @@ impl CachedStatus {
         }
     }
 
+    pub fn get_motd(&self) -> &str {
+        &self.status_response.description
+    }
+
+    pub fn set_motd(&mut self, motd: String) {
+        self.status_response.description = motd;
+        self.status_response_json = serde_json::to_string(&self.status_response)
+            .expect("Failed to parse status response into JSON");
+    }
+
     pub fn build_response(config: &BasicConfiguration) -> StatusResponse {
         let favicon = if config.use_favicon {
             config.favicon_path.as_ref().map_or_else(
@@ -147,7 +157,7 @@ impl CachedStatus {
                     Some(load_icon_from_bytes(DEFAULT_ICON))
                 },
                 |icon_path| {
-                    if !std::path::Path::new(icon_path)
+                    if !Path::new(icon_path)
                         .extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
                     {

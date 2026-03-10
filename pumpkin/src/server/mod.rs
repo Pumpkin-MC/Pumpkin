@@ -551,6 +551,14 @@ impl Server {
             .await;
     }
 
+    pub async fn get_motd(&self) -> String {
+        self.listing.lock().await.get_motd().to_owned()
+    }
+
+    pub async fn set_motd(&self, motd: String) {
+        self.listing.lock().await.set_motd(motd);
+    }
+
     /// Searches for a player by their username across all worlds.
     ///
     /// This function iterates through each world managed by the server and attempts to find a player with the specified username.

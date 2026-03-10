@@ -8,5 +8,8 @@ interface server {
 
     resource server {
         get-difficulty: func() -> difficulty;
+        set-difficulty: func(difficulty: difficulty);
+        get-motd: func() -> string;
+        set-motd: func(motd: string);
     }
 }
