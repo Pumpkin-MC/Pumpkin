@@ -4,8 +4,8 @@ use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
-    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemName,
-    JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
+    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
+    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -191,7 +191,20 @@ impl DataComponentImpl for ItemNameImpl {
     default_impl!(ItemName);
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub struct ItemModelImpl;
+pub struct ItemModelImpl {
+    pub id: String,
+}
+impl DataComponentImpl for ItemModelImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.id.clone())
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.id.as_str()) as i32
+    }
+
+    default_impl!(ItemModel);
+}
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct LoreImpl;
 #[derive(Clone, Hash, PartialEq, Eq)]

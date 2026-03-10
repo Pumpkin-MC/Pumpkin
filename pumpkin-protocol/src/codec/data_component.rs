@@ -3,8 +3,8 @@ use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl, FireworkExplosionShape,
-    FireworksImpl, MaxStackSizeImpl, PotionContentsImpl, StatusEffectInstance, UnbreakableImpl,
-    get,
+    FireworksImpl, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl, StatusEffectInstance,
+    UnbreakableImpl, get,
 };
 use serde::de;
 use serde::de::SeqAccess;
@@ -92,6 +92,19 @@ impl DataComponentCodec<Self> for UnbreakableImpl {
     }
     fn deserialize<'a, A: SeqAccess<'a>>(_seq: &mut A) -> Result<Self, A::Error> {
         Ok(Self)
+    }
+}
+
+impl DataComponentCodec<Self> for ItemModelImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<String>("", &self.id)
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let id = seq
+            .next_element::<String>()?
+            .ok_or(de::Error::custom("No ItemModelImpl id string!"))?;
+        Ok(Self { id })
     }
 }
 
@@ -426,6 +439,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
         _ => Err(serde::de::Error::custom("TODO")),
     }
 }
@@ -442,6 +456,7 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::PotionContents => get::<PotionContentsImpl>(value).serialize(seq),
         DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
         DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
+        DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
         _ => todo!("{} not yet implemented", id.to_name()),
     }
 }
