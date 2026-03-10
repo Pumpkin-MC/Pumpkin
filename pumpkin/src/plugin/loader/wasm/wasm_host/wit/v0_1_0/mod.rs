@@ -12,6 +12,7 @@ pub mod context;
 pub mod entity;
 pub mod events;
 pub mod logging;
+pub mod permission;
 pub mod player;
 pub mod server;
 pub mod text;

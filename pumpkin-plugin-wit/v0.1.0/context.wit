@@ -2,10 +2,12 @@ interface context {
     use server.{server};
     use event.{event-type, event-priority};
     use command.{command};
+    use permission.{permission};
 
     resource context {
         register-event: func(handler-id: u32, event-type: event-type, event-priority: event-priority, blocking: bool);
         register-command: func(command: command, permission: string);
+        register-permission: func(permission: permission) -> result<_, string>;
         get-server: func() -> server;
     }
 }
