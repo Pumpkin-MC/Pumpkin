@@ -23,4 +23,14 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             .expect("resource type mismatch");
         resource.provider.gameprofile.id.to_string()
     }
+
+    async fn get_name(&mut self, player: Resource<Player>) -> String {
+        let resource = self
+            .resource_table
+            .get_any_mut(player.rep())
+            .expect("invalid player resource handle")
+            .downcast_ref::<PlayerResource>()
+            .expect("resource type mismatch");
+        resource.provider.gameprofile.name.clone()
+    }
 }
