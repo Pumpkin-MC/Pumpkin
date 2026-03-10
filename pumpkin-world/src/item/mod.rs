@@ -531,9 +531,26 @@ mod tests {
     #[test]
     fn damage_increases_damage_value() {
         // Without Unbreaking, every point of damage is applied.
-        let mut stack = iron_sword();
-        assert!(stack.damage_item_with_context(5, false));
-        assert_eq!(stack.get_damage(), 5);
+        // Each sub-array is (amount, expected_damage); each case gets a fresh iron_sword.
+        let cases: &[(i32, i32)] = &[
+            (1, 1),
+            (5, 5),
+            (10, 10),
+            (100, 100),
+            (249, 249),
+        ];
+        for &(amount, expected) in cases {
+            let mut stack = iron_sword();
+            assert!(
+                stack.damage_item_with_context(amount, false),
+                "expected damage_item_with_context to return true for amount={amount}"
+            );
+            assert_eq!(
+                stack.get_damage(),
+                expected,
+                "damage mismatch for amount={amount}"
+            );
+        }
     }
 
     #[test]
