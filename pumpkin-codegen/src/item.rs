@@ -43,6 +43,8 @@ pub struct ItemComponents {
     pub death_protection: Option<DeathProtection>,
     #[serde(rename = "minecraft:damage_resistant")]
     pub damage_resistant: Option<DamageResistantComponent>,
+    #[serde(rename = "minecraft:weapon")]
+    pub weapon: Option<WeaponComponent>,
 }
 
 impl ToTokens for ItemComponents {
@@ -239,6 +241,11 @@ impl ToTokens for ItemComponents {
 
         if self.death_protection.is_some() {
             tokens.extend(quote! { (DeathProtection, &DeathProtectionImpl), });
+        }
+
+        if let Some(weapon) = &self.weapon {
+            let damage = LitInt::new(&weapon.item_damage_per_attack.to_string(), Span::call_site());
+            tokens.extend(quote! { (Weapon, &WeaponImpl { item_damage_per_attack: #damage }), });
         }
 
         if let Some(damage_resistant) = &self.damage_resistant {
@@ -449,6 +456,13 @@ pub struct Consumable {
 #[derive(Deserialize, Clone)]
 pub struct DeathProtection {
     // TODO
+}
+
+#[derive(Deserialize, Clone)]
+pub struct WeaponComponent {
+    #[serde(default = "return_1u32")]
+    pub item_damage_per_attack: u32,
+    // disable_blocking_for_seconds is intentionally omitted; not needed for combat damage calc
 }
 
 #[derive(Deserialize, Clone)]

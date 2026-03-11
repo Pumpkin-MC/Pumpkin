@@ -33,7 +33,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
@@ -778,14 +778,14 @@ impl Player {
     }
 
     /// Returns the durability cost for using the held item as a weapon in combat.
-    /// Vanilla parity: axes, pickaxes, shovels, and hoes cost 2 durability per hit;
-    /// all other items (swords, tridents, maces, bare hands, …) cost 1.
+    /// Derived from the `Weapon` data component: items without it (e.g. shears, tools
+    /// not designed for combat) take no durability damage on attack.
+    /// Items with the component use its `item_damage_per_attack` value (default 1;
+    /// axes, pickaxes, shovels, and hoes carry a value of 2).
     fn combat_weapon_durability_cost(stack: &ItemStack) -> i32 {
-        if stack.is_axe() || stack.is_pickaxe() || stack.is_shovel() || stack.is_hoe() {
-            2
-        } else {
-            1
-        }
+        stack
+            .get_data_component::<WeaponImpl>()
+            .map_or(0, |w| w.item_damage_per_attack as i32)
     }
 
     pub async fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {

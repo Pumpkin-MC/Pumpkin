@@ -5,7 +5,7 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
     DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemName,
-    JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable,
+    JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -623,7 +623,27 @@ impl Hash for ToolImpl {
     }
 }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct WeaponImpl;
+pub struct WeaponImpl {
+    pub item_damage_per_attack: u32,
+}
+impl WeaponImpl {
+    const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            item_damage_per_attack: 1,
+        })
+    }
+}
+impl DataComponentImpl for WeaponImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("item_damage_per_attack", self.item_damage_per_attack as i32);
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        self.item_damage_per_attack as i32
+    }
+    default_impl!(Weapon);
+}
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum EquipmentType {
