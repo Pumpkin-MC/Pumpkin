@@ -832,9 +832,8 @@ impl Player {
         let stack_arc = self.inventory.get_stack(slot_index).await;
 
         let updated = {
-            let is_armor = slot.is_armor_slot();
             let mut stack = stack_arc.lock().await;
-            let result = stack.damage_item_with_context(amount, is_armor);
+            let result = stack.damage_item(amount);
             (result != pumpkin_world::item::DamageResult::Untouched)
                 .then_some((result, stack.clone()))
         };

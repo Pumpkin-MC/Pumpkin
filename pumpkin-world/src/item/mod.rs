@@ -15,7 +15,7 @@ use std::cmp::{max, min};
 
 mod categories;
 
-/// The outcome of a [`ItemStack::damage_item_with_context`] call.
+/// The outcome of a [`ItemStack::damage_item`] call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DamageResult {
     /// No damage was applied (zero/negative amount, not damageable, unbreakable,
@@ -180,13 +180,14 @@ impl ItemStack {
         repaired
     }
 
-    fn should_apply_durability_damage(&self, is_armor: bool) -> bool {
+    fn should_apply_durability_damage(&self) -> bool {
         let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
         if unbreaking_level <= 0 {
             return true;
         }
 
-        if is_armor {
+        // `#minecraft:enchantable/armor` uses the armor formula; all others use the tool formula.
+        if self.is_armor() {
             let chance = 0.6 + (0.4 / (unbreaking_level as f32 + 1.0));
             rand::random::<f32>() < chance
         } else {
@@ -194,7 +195,7 @@ impl ItemStack {
         }
     }
 
-    pub fn damage_item_with_context(&mut self, amount: i32, is_armor: bool) -> DamageResult {
+    pub fn damage_item(&mut self, amount: i32) -> DamageResult {
         if amount <= 0 || !self.is_damageable() || self.is_unbreakable() {
             return DamageResult::Untouched;
         }
@@ -206,7 +207,7 @@ impl ItemStack {
 
         let mut applied = 0;
         for _ in 0..amount {
-            if self.should_apply_durability_damage(is_armor) {
+            if self.should_apply_durability_damage() {
                 applied += 1;
             }
         }
@@ -217,17 +218,6 @@ impl ItemStack {
 
         let new_damage = self.get_damage().saturating_add(applied);
         if new_damage >= max_damage {
-            // Vanilla parity: elytras enter a "broken" state capped at max_damage - 1 and
-            // are never deleted from the inventory, so a player can glide until they land
-            // and repair them. Further damage calls on an already-broken elytra are no-ops.
-            if self.item == &Item::ELYTRA {
-                let current = self.get_damage();
-                if current < max_damage - 1 {
-                    self.set_damage(max_damage - 1);
-                    return DamageResult::Broken;
-                }
-                return DamageResult::Untouched;
-            }
             if self.item_count > 1 {
                 self.item_count = self.item_count.saturating_sub(1);
                 self.set_damage(0);
@@ -241,8 +231,34 @@ impl ItemStack {
         DamageResult::Damaged
     }
 
-    pub fn damage_item(&mut self, amount: i32) -> DamageResult {
-        self.damage_item_with_context(amount, false)
+    /// Returns `true` when `damage >= max_damage - 1` (one hit from breaking).
+    #[must_use]
+    pub fn next_damage_will_break(&self) -> bool {
+        match self.get_max_damage() {
+            Some(max) if max > 0 => self.get_damage() >= max - 1,
+            _ => false,
+        }
+    }
+
+    /// Elytra glide-tick: applies 1 durability clamped to `max_damage - 1` (broken state, never deleted).
+    /// Returns `Untouched` if already at the broken threshold or immune.
+    pub fn damage_elytra_glide_tick(&mut self) -> DamageResult {
+        if !self.is_damageable() || self.is_unbreakable() {
+            return DamageResult::Untouched;
+        }
+        let max_damage = self.get_max_damage().unwrap_or(0);
+        if max_damage <= 0 {
+            return DamageResult::Untouched;
+        }
+        // Already at broken threshold — flight gate should have stopped us.
+        if self.next_damage_will_break() {
+            return DamageResult::Untouched;
+        }
+        let new_damage = self.get_damage().saturating_add(1);
+        // Clamp to max_damage - 1 (broken texture, never deleted).
+        let clamped = new_damage.min(max_damage - 1);
+        self.set_damage(clamped);
+        DamageResult::Damaged
     }
 
     #[must_use]
@@ -519,15 +535,12 @@ mod tests {
         ItemStack::new(1, &Item::IRON_SWORD)
     }
 
-    // ── damage_item_with_context ──────────────────────────────────────
+    // ── damage_item ───────────────────────────────────────────────
 
     #[test]
     fn damage_zero_amount_is_noop() {
         let mut stack = iron_sword();
-        assert_eq!(
-            stack.damage_item_with_context(0, false),
-            DamageResult::Untouched
-        );
+        assert_eq!(stack.damage_item(0), DamageResult::Untouched);
         assert_eq!(stack.get_damage(), 0);
     }
 
@@ -537,7 +550,7 @@ mod tests {
         for &amount in cases {
             let mut stack = iron_sword();
             assert_eq!(
-                stack.damage_item_with_context(amount, false),
+                stack.damage_item(amount),
                 DamageResult::Untouched,
                 "expected no damage for amount={amount}"
             );
@@ -549,10 +562,7 @@ mod tests {
     fn damage_non_damageable_item_is_noop() {
         // AIR has no MaxDamage component.
         let mut stack = ItemStack::new(1, &Item::AIR);
-        assert_eq!(
-            stack.damage_item_with_context(1, false),
-            DamageResult::Untouched
-        );
+        assert_eq!(stack.damage_item(1), DamageResult::Untouched);
     }
 
     #[test]
@@ -564,7 +574,7 @@ mod tests {
                 .patch
                 .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
             assert_eq!(
-                stack.damage_item_with_context(amount, false),
+                stack.damage_item(amount),
                 DamageResult::Untouched,
                 "expected no damage for unbreakable item, amount={amount}"
             );
@@ -584,9 +594,9 @@ mod tests {
         for &(amount, expected) in cases {
             let mut stack = iron_sword();
             assert_eq!(
-                stack.damage_item_with_context(amount, false),
+                stack.damage_item(amount),
                 DamageResult::Damaged,
-                "expected damage_item_with_context to return Damaged for amount={amount}"
+                "expected damage_item to return Damaged for amount={amount}"
             );
             assert_eq!(
                 stack.get_damage(),
@@ -602,8 +612,8 @@ mod tests {
         let cases: &[(i32, i32, i32)] = &[(100, 50, 150), (10, 20, 30), (1, 1, 2), (50, 100, 150)];
         for &(first, second, expected) in cases {
             let mut stack = iron_sword();
-            stack.damage_item_with_context(first, false);
-            stack.damage_item_with_context(second, false);
+            stack.damage_item(first);
+            stack.damage_item(second);
             assert_eq!(
                 stack.get_damage(),
                 expected,
@@ -619,7 +629,7 @@ mod tests {
         for &amount in cases {
             let mut stack = iron_sword();
             assert_eq!(
-                stack.damage_item_with_context(amount, false),
+                stack.damage_item(amount),
                 DamageResult::Broken,
                 "expected item to break for amount={amount}"
             );
@@ -633,7 +643,7 @@ mod tests {
     #[test]
     fn damage_breaks_single_item_to_empty() {
         let mut stack = iron_sword();
-        stack.damage_item_with_context(300, false);
+        stack.damage_item(300);
         assert!(stack.is_empty());
         assert_eq!(stack.item_count, 0);
     }
@@ -763,47 +773,78 @@ mod tests {
     }
 
     #[test]
-    fn damage_elytra_clamps_at_max_minus_one() {
-        // Applying enough damage to exceed max should leave the elytra at
-        // max_damage - 1 (broken state), not delete it.
+    fn elytra_damage_item_breaks_normally() {
+        // Elytra clamp lives in `damage_elytra_glide_tick`, not `damage_item`;
+        // a raw over-damage call destroys it like any other item.
+        let max_damage = elytra()
+            .get_max_damage()
+            .expect("ELYTRA must have MaxDamage");
+        let mut stack = elytra();
+        assert_eq!(stack.damage_item(max_damage), DamageResult::Broken);
+        assert!(
+            stack.is_empty(),
+            "elytra should be destroyed by damage_item"
+        );
+    }
+
+    #[test]
+    fn next_damage_will_break_reflects_threshold() {
+        let max_damage = elytra()
+            .get_max_damage()
+            .expect("ELYTRA must have MaxDamage");
+        let mut stack = elytra();
+        assert!(
+            !stack.next_damage_will_break(),
+            "fresh elytra is not broken"
+        );
+
+        stack.set_damage(max_damage - 2);
+        assert!(
+            !stack.next_damage_will_break(),
+            "one point below threshold is still usable"
+        );
+
+        stack.set_damage(max_damage - 1);
+        assert!(
+            stack.next_damage_will_break(),
+            "at max_damage - 1 the elytra should report next damage will break"
+        );
+    }
+
+    #[test]
+    fn damage_elytra_glide_tick_clamps_at_broken_state() {
         let max_damage = elytra()
             .get_max_damage()
             .expect("ELYTRA must have MaxDamage");
         let broken_state = max_damage - 1;
-        let cases: &[i32] = &[max_damage, max_damage + 68, max_damage + 568];
-        for &amount in cases {
-            let mut stack = elytra();
-            assert_eq!(
-                stack.damage_item_with_context(amount, false),
-                DamageResult::Broken,
-                "expected Broken for amount={amount}"
-            );
-            assert_eq!(
-                stack.get_damage(),
-                broken_state,
-                "elytra damage should be capped at max_damage-1 for amount={amount}"
-            );
-            assert!(
-                !stack.is_empty(),
-                "elytra must NOT be deleted for amount={amount}"
-            );
-        }
+
+        // Normal glide tick at damage 0 → damage becomes 1.
+        let mut stack = elytra();
+        assert_eq!(stack.damage_elytra_glide_tick(), DamageResult::Damaged);
+        assert_eq!(stack.get_damage(), 1);
+
+        // Approaching the threshold → clamp to max_damage - 1.
+        let mut stack = elytra();
+        stack.set_damage(max_damage - 2);
+        assert_eq!(stack.damage_elytra_glide_tick(), DamageResult::Damaged);
+        assert_eq!(stack.get_damage(), broken_state);
+        assert!(!stack.is_empty(), "elytra must NOT be deleted");
+
+        // Already at broken threshold → no-op.
+        assert_eq!(stack.damage_elytra_glide_tick(), DamageResult::Untouched);
+        assert_eq!(stack.get_damage(), broken_state);
+        assert!(!stack.is_empty());
     }
 
     #[test]
-    fn damage_elytra_already_broken_is_noop() {
-        // An elytra already at max_damage - 1 should return Untouched and stay intact.
+    fn damage_elytra_already_broken_glide_tick_is_noop() {
         let max_damage = elytra()
             .get_max_damage()
             .expect("ELYTRA must have MaxDamage");
         let broken_state = max_damage - 1;
         let mut stack = elytra();
-        stack.set_damage(broken_state); // already broken
-        assert_eq!(
-            stack.damage_item_with_context(1, false),
-            DamageResult::Untouched,
-            "further damage on a broken elytra should be Untouched"
-        );
+        stack.set_damage(broken_state);
+        assert_eq!(stack.damage_elytra_glide_tick(), DamageResult::Untouched);
         assert_eq!(stack.get_damage(), broken_state);
         assert!(!stack.is_empty());
     }
@@ -817,7 +858,7 @@ mod tests {
         let mut stack = ItemStack::new(2, &Item::IRON_SWORD);
         stack.set_damage(249);
 
-        let result = stack.damage_item_with_context(1, false);
+        let result = stack.damage_item(1);
 
         assert_eq!(
             result,
@@ -838,8 +879,7 @@ mod tests {
 
     // ── weapon category predicates ───────────────────────────────────
 
-    /// Weapons with a 2-durability combat cost must be identified by their
-    /// category predicates so `attack()` can apply the correct penalty.
+    /// 2-durability combat weapons (axes/pickaxes/shovels/hoes) must match their category predicate.
     #[test]
     fn weapon_categories_identify_2_cost_items() {
         // Items that should have is_axe / is_pickaxe / is_shovel / is_hoe = true.
@@ -930,7 +970,7 @@ mod tests {
 
     // ── Unbreaking (statistical) ─────────────────────────────────────
 
-    /// Helper: returns a fresh item stack with Unbreaking at `level` patched in.
+    /// Helper: iron sword with Unbreaking at `level`.
     fn with_unbreaking(item: &'static Item, level: i32) -> ItemStack {
         let mut s = ItemStack::new(1, item);
         s.patch.push((
@@ -945,18 +985,13 @@ mod tests {
         s
     }
 
-    /// Unbreaking III on a **tool** applies damage with probability 1/(3+1) = 25%.
-    ///
-    /// Over 4 000 independent trials the expected hit count is 1 000 (σ ≈ 27).
-    /// A ±30 % window ([700, 1300]) is more than 10 σ wide, so a spurious
-    /// failure is statistically negligible.  The Netherite Pickaxe (max 2 031)
-    /// can absorb the maximum plausible number of hits without breaking.
+    /// Unbreaking III tool: 25% apply probability. 4 000 trials, expect ~1 000 hits (window 700–1300).
     #[test]
     fn unbreaking_iii_tool_applies_roughly_25_percent_of_hits() {
         let mut stack = with_unbreaking(&Item::NETHERITE_PICKAXE, 3);
         let mut applied: u32 = 0;
         for _ in 0..4_000 {
-            if stack.damage_item_with_context(1, false) != DamageResult::Untouched {
+            if stack.damage_item(1) != DamageResult::Untouched {
                 applied += 1;
             }
         }
@@ -966,18 +1001,13 @@ mod tests {
         );
     }
 
-    /// Unbreaking III on **armor** applies damage with probability
-    /// 60 % + 40 %/(3+1) = 70 %.
-    ///
-    /// Over 500 independent trials the expected hit count is 350 (σ ≈ 10).
-    /// A ±40 % window ([210, 490]) is more than 14 σ wide.
-    /// The Diamond Chestplate (max 528) can absorb up to 490 hits safely.
+    /// Unbreaking III armor: 70% apply probability. 500 trials, expect ~350 hits (window 210–490).
     #[test]
     fn unbreaking_iii_armor_applies_roughly_70_percent_of_hits() {
         let mut stack = with_unbreaking(&Item::DIAMOND_CHESTPLATE, 3);
         let mut applied: u32 = 0;
         for _ in 0..500 {
-            if stack.damage_item_with_context(1, true) != DamageResult::Untouched {
+            if stack.damage_item(1) != DamageResult::Untouched {
                 applied += 1;
             }
         }

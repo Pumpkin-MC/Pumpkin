@@ -40,6 +40,13 @@ impl ItemStack {
         self.item.has_tag(&tag::Item::MINECRAFT_FOOT_ARMOR)
     }
 
+    /// `true` if item is in `#minecraft:enchantable/armor` (selects armor Unbreaking formula).
+    #[inline]
+    #[must_use]
+    pub fn is_armor(&self) -> bool {
+        self.item.has_tag(&tag::Item::MINECRAFT_ENCHANTABLE_ARMOR)
+    }
+
     #[inline]
     #[must_use]
     pub fn is_axe(&self) -> bool {

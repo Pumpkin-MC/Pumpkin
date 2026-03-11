@@ -1518,6 +1518,8 @@ impl LivingEntity {
         let mut equipment_updates = Vec::new();
 
         // TODO: Falling anvil/stalactite should only damage the helmet slot.
+        // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
+        // TODO: Move Thorns into a dedicated post-attack effects phase.
 
         for (slot_index, slot) in self.equipment_slots.iter() {
             if !slot.is_armor_slot() {
@@ -1528,17 +1530,20 @@ impl LivingEntity {
             let (worst_result, thorns_procs, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() || stack.item == &Item::ELYTRA {
-                    // Vanilla parity: elytras are not damaged when hit while worn.
+                    // Elytra: `damageOnHurt = false` — skipped during armor hit processing.
                     (pumpkin_world::item::DamageResult::Untouched, false, None)
                 } else {
-                    let base_result = stack.damage_item_with_context(armor_damage, true);
-
-                    // Vanilla parity: Thorns enchantment extra durability and attacker retaliation.
+                    // Check Thorns trigger before durability to preserve effect ordering.
                     let thorns_level = stack.get_enchantment_level(&Enchantment::THORNS);
                     let thorns_procs = thorns_level > 0
                         && rand::rng().random::<f32>() < thorns_level as f32 * 0.15;
+
+                    // Base armor durability damage.
+                    let base_result = stack.damage_item(armor_damage);
+
+                    // Thorns extra +2 durability cost on the armor piece.
                     let thorns_result = if thorns_procs {
-                        stack.damage_item_with_context(2, true)
+                        stack.damage_item(2)
                     } else {
                         pumpkin_world::item::DamageResult::Untouched
                     };
@@ -1560,10 +1565,20 @@ impl LivingEntity {
                 }
             };
 
-            // Thorns retaliation: deal 1–4 magic damage to the attacker (outside the lock).
+            // Thorns: retaliation fires before the break broadcast (vanilla `all_of` ordering).
             if let Some(src) = source.filter(|_| thorns_procs) {
-                let thorns_damage = (1 + rand::rng().random_range(0..4i32)) as f32;
-                src.damage(src, thorns_damage, DamageType::THORNS).await;
+                // Uniform float in [1.0, 5.0) — `Mth.randomBetween(rng, 1.0f, 5.0f)`.
+                let thorns_damage = 1.0 + rand::rng().random::<f32>() * 4.0;
+                // Include caller as source for death messages and combat tracking.
+                src.damage_with_context(
+                    src,
+                    thorns_damage,
+                    DamageType::THORNS,
+                    None,
+                    Some(caller),
+                    None,
+                )
+                .await;
             }
 
             if let Some(updated_stack) = updated_stack_opt {
@@ -2006,10 +2021,10 @@ impl EntityBase for LivingEntity {
                 self.on_death(damage_type, source, cause).await;
             }
 
-            // Vanilla parity: armor durability is only worn down when the damage source does
-            // NOT appear in the `minecraft:bypasses_armor` data tag.
-            if remaining > 0.0 && !bypasses_armor_durability(&damage_type) {
-                self.damage_armor_items(caller, remaining, source).await;
+            // Armor durability uses raw damage (pre-absorption), per vanilla `getDamageAfterArmorAbsorb`.
+            // Only applied when the source is not in `#minecraft:bypasses_armor`.
+            if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
+                self.damage_armor_items(caller, damage_amount, source).await;
             }
 
             true
@@ -2165,16 +2180,11 @@ impl EntityBase for LivingEntity {
     }
 }
 
-/// Returns `true` when `damage_type` is a member of the vanilla
-/// `minecraft:bypasses_armor` data tag (1.21.11).  Damage sources in this set
-/// do not cause armor durability loss because they bypass armor protection
-/// entirely — falling, suffocating, drowning, freezing, etc.
+/// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
+/// These sources bypass armor entirely (fall, drown, freeze, etc.).
 pub(crate) fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
-    // `DamageType` is a struct (not an enum), so a `matches!` on the full value
-    // does a complete `PartialEq` comparison (all 5 fields) for each of the 19
-    // arms, including an f32 `exhaustion` comparison.  Comparing by the
-    // generated `id: u8` unique key reduces each check to a single byte.
-    // Exact contents of `minecraft:bypasses_armor` (1.21.11).
+    // Compare by `id: u8` (unique key) to avoid full PartialEq with f32 fields.
+    // TODO: Make data-driven once the data pack system can handle it without performance regressions.
     const BYPASSING_IDS: [u8; 19] = [
         DamageType::FALL.id,
         DamageType::FLY_INTO_WALL.id,
