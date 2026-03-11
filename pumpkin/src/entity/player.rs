@@ -791,9 +791,8 @@ impl Player {
         }
     }
 
-    /// Damages the item in the given equipment slot by `amount` durability points.
-    /// Broadcasts an [`EntityStatus`] break event when the item is destroyed.
-    /// Returns `true` if the item stack was modified.
+    /// Applies `amount` durability damage to the item in `slot`.
+    /// Broadcasts an [`EntityStatus`] break event and syncs the slot if the item is destroyed.
     pub async fn damage_item_in_slot(&self, slot: &EquipmentSlot, amount: i32) -> bool {
         if matches!(
             self.gamemode.load(),
@@ -810,6 +809,8 @@ impl Player {
             EquipmentSlot::Legs(_) => 37,
             EquipmentSlot::Chest(_) => 38,
             EquipmentSlot::Head(_) => 39,
+            // Players do not have Body or Saddle equipment slots;
+            // these are only used by non-player entities (e.g. horses).
             EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_) => return false,
         };
 
@@ -823,8 +824,8 @@ impl Player {
         };
 
         if let Some(updated_stack) = updated {
-            // Send the break status before clearing the slot so the client can
-            // use the item texture for break particles.
+            // Send the break status before clearing the slot; the client
+            // needs the old item texture for break particles.
             if updated_stack.is_empty() {
                 self.world()
                     .send_entity_status(

@@ -2695,37 +2695,24 @@ mod tests {
 
     #[test]
     fn equipment_break_status_maps_all_slots() {
-        assert!(matches!(
-            equipment_break_status(&EquipmentSlot::MAIN_HAND),
-            EntityStatus::BreakMainhand
-        ));
-        assert!(matches!(
-            equipment_break_status(&EquipmentSlot::OFF_HAND),
-            EntityStatus::BreakOffhand
-        ));
-        assert!(matches!(
-            equipment_break_status(&EquipmentSlot::HEAD),
-            EntityStatus::BreakHead
-        ));
-        assert!(matches!(
-            equipment_break_status(&EquipmentSlot::CHEST),
-            EntityStatus::BreakChest
-        ));
-        assert!(matches!(
-            equipment_break_status(&EquipmentSlot::LEGS),
-            EntityStatus::BreakLegs
-        ));
-        assert!(matches!(
-            equipment_break_status(&EquipmentSlot::FEET),
-            EntityStatus::BreakFeet
-        ));
-        assert!(matches!(
-            equipment_break_status(&EquipmentSlot::BODY),
-            EntityStatus::BreakBody
-        ));
-        assert!(matches!(
-            equipment_break_status(&EquipmentSlot::SADDLE),
-            EntityStatus::BreakSaddle
-        ));
+        // Status bytes from vanilla EntityEvent: mainhand=47, offhand=48,
+        // head=49, chest=50, legs=51, feet=52, body=65, saddle=68.
+        let cases: &[(&EquipmentSlot, u8)] = &[
+            (&EquipmentSlot::MAIN_HAND, EntityStatus::BreakMainhand as u8),
+            (&EquipmentSlot::OFF_HAND, EntityStatus::BreakOffhand as u8),
+            (&EquipmentSlot::HEAD, EntityStatus::BreakHead as u8),
+            (&EquipmentSlot::CHEST, EntityStatus::BreakChest as u8),
+            (&EquipmentSlot::LEGS, EntityStatus::BreakLegs as u8),
+            (&EquipmentSlot::FEET, EntityStatus::BreakFeet as u8),
+            (&EquipmentSlot::BODY, EntityStatus::BreakBody as u8),
+            (&EquipmentSlot::SADDLE, EntityStatus::BreakSaddle as u8),
+        ];
+        for (i, (slot, expected)) in cases.iter().enumerate() {
+            assert_eq!(
+                equipment_break_status(slot) as u8,
+                *expected,
+                "status mismatch at index {i}"
+            );
+        }
     }
 }
