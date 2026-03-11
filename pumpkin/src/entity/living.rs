@@ -1898,12 +1898,24 @@ impl EntityBase for LivingEntity {
             self.try_spawn_infested_silverfish().await;
 
             if play_sound {
+                // Get the entity-specific hurt sound
+                let entity_type = &self.entity.entity_type;
+                let entity_id = entity_type.id;
+
+                // For slimes (117) and magma cubes (80), determine size from bounding box
+                // Small slimes have width ~0.6, larger ones have width >= 1.0
+                let size = if entity_id == 117 || entity_id == 80 {
+                    let entity_width = self.entity.entity_dimension.load().width;
+                    // Width < 1.0 indicates a small slime/magma cube (size 1)
+                    if entity_width < 1.0 { Some(1) } else { None }
+                } else {
+                    None
+                };
+
+                let hurt_sound = get_hurt_sound_for_entity(entity_type, size);
+
                 world
-                    .play_sound(
-                        Sound::EntityGenericHurt,
-                        SoundCategory::Players,
-                        &self.entity.pos.load(),
-                    )
+                    .play_sound(hurt_sound, SoundCategory::Players, &self.entity.pos.load())
                     .await;
 
                 if let Some(source) = source {
@@ -2117,3 +2129,118 @@ impl EntityBase for LivingEntity {
         self
     }
 }
+
+/// Returns the correct hurt sound for a given entity type.
+///
+/// # Arguments
+/// * `entity_type` - The type of entity
+/// * `size` - Optional size parameter for entities like slimes and magma cubes
+///           (1 = small, >1 = big)
+pub fn get_hurt_sound_for_entity(entity_type: &EntityType, size: Option<i32>) -> Sound {
+    // Entity IDs are from pumpkin-data::entity::EntityType
+    match entity_type.id {
+        // Slimes and Magma Cubes have size-dependent sounds
+        117 => match size {
+            // SLIME
+            Some(1) => Sound::EntitySlimeHurtSmall,
+            _ => Sound::EntitySlimeHurt,
+        },
+        80 => match size {
+            // MAGMA_CUBE
+            Some(1) => Sound::EntityMagmaCubeHurtSmall,
+            _ => Sound::EntityMagmaCubeHurt,
+        },
+        // Hostile mobs
+        150 => Sound::EntityZombieHurt,         // ZOMBIE
+        115 => Sound::EntitySkeletonHurt,       // SKELETON
+        32 => Sound::EntityCreeperHurt,         // CREEPER
+        124 => Sound::EntitySpiderHurt,         // SPIDER
+        41 => Sound::EntityEndermanHurt,        // ENDERMAN
+        144 => Sound::EntityWitchHurt,          // WITCH
+        14 => Sound::EntityBlazeHurt,           // BLAZE
+        57 => Sound::EntityGhastHurt,           // GHAST
+        99 => Sound::EntityPhantomHurt,         // PHANTOM
+        38 => Sound::EntityDrownedHurt,         // DROWNED
+        67 => Sound::EntityHuskHurt,            // HUSK
+        10 => Sound::EntityBatHurt,             // BAT
+        68 => Sound::EntityIllusionerHurt,      // ILLUSIONER
+        128 => Sound::EntityStrayHurt,          // STRAY
+        146 => Sound::EntityWitherSkeletonHurt, // WITHER_SKELETON
+        16 => Sound::EntityBoggedHurt,          // BOGGED
+        // Nether mobs
+        101 => Sound::EntityPiglinHurt,          // PIGLIN
+        102 => Sound::EntityPiglinBruteHurt,     // PIGLIN_BRUTE
+        154 => Sound::EntityZombifiedPiglinHurt, // ZOMBIFIED_PIGLIN
+        64 => Sound::EntityHoglinHurt,           // HOGLIN
+        129 => Sound::EntityStriderHurt,         // STRIDER
+        149 => Sound::EntityZoglinHurt,          // ZOGLIN
+        // Passive/ambient mobs
+        148 => Sound::EntityWolfHurt,      // WOLF
+        21 => Sound::EntityCatHurt,        // CAT
+        26 => Sound::EntityChickenHurt,    // CHICKEN
+        30 => Sound::EntityCowHurt,        // COW
+        100 => Sound::EntityPigHurt,       // PIG
+        111 => Sound::EntitySheepHurt,     // SHEEP
+        66 => Sound::EntityHorseHurt,      // HORSE
+        36 => Sound::EntityDonkeyHurt,     // DONKEY
+        87 => Sound::EntityMuleHurt,       // MULE
+        78 => Sound::EntityLlamaHurt,      // LLAMA
+        19 => Sound::EntityCamelHurt,      // CAMEL
+        20 => Sound::EntityCamelHuskHurt,  // CAMEL_HUSK
+        54 => Sound::EntityFoxHurt,        // FOX
+        96 => Sound::EntityPandaHurt,      // PANDA
+        104 => Sound::EntityPolarBearHurt, // POLAR_BEAR
+        137 => Sound::EntityTurtleHurt,    // TURTLE
+        108 => Sound::EntityRabbitHurt,    // RABBIT
+        55 => Sound::EntityFrogHurt,       // FROG
+        7 => Sound::EntityAxolotlHurt,     // AXOLOTL
+        62 => Sound::EntityGoatHurt,       // GOAT
+        11 => Sound::EntityBeeHurt,        // BEE
+        91 => Sound::EntityOcelotHurt,     // OCELOT
+        98 => Sound::EntityParrotHurt,     // PARROT
+        2 => Sound::EntityAllayHurt,       // ALLAY
+        17 => Sound::EntityBreezeHurt,     // BREEZE
+        4 => Sound::EntityArmadilloHurt,   // ARMADILLO
+        119 => Sound::EntitySnifferHurt,   // SNIFFER
+        // Ocean mobs
+        63 => Sound::EntityGuardianHurt,      // GUARDIAN
+        40 => Sound::EntityElderGuardianHurt, // ELDER_GUARDIAN
+        35 => Sound::EntityDolphinHurt,       // DOLPHIN
+        27 => Sound::EntityCodHurt,           // COD
+        110 => Sound::EntitySalmonHurt,       // SALMON
+        107 => Sound::EntityPufferFishHurt,   // PUFFERFISH
+        136 => Sound::EntityTropicalFishHurt, // TROPICAL_FISH
+        130 => Sound::EntityTadpoleHurt,      // TADPOLE
+        88 => Sound::EntityNautilusHurt,      // NAUTILUS
+        127 => Sound::EntitySquidHurt,        // SQUID
+        61 => Sound::EntityGlowSquidHurt,     // GLOW_SQUID
+        // Villagers and raiders
+        139 => Sound::EntityVillagerHurt,        // VILLAGER
+        141 => Sound::EntityWanderingTraderHurt, // WANDERING_TRADER
+        140 => Sound::EntityVindicatorHurt,      // VINDICATOR
+        46 => Sound::EntityEvokerHurt,           // EVOKER
+        138 => Sound::EntityVexHurt,             // VEX
+        103 => Sound::EntityPillagerHurt,        // PILLAGER
+        109 => Sound::EntityRavagerHurt,         // RAVAGER
+        153 => Sound::EntityZombieVillagerHurt,  // ZOMBIE_VILLAGER
+        // Golems
+        70 => Sound::EntityIronGolemHurt,  // IRON_GOLEM
+        121 => Sound::EntitySnowGolemHurt, // SNOW_GOLEM
+        112 => Sound::EntityShulkerHurt,   // SHULKER
+        // Other mobs
+        42 => Sound::EntityEndermiteHurt,   // ENDERMITE
+        114 => Sound::EntitySilverfishHurt, // SILVERFISH
+        43 => Sound::EntityEnderDragonHurt, // ENDER_DRAGON
+        145 => Sound::EntityWitherHurt,     // WITHER
+        142 => Sound::EntityWardenHurt,     // WARDEN
+        // Horses
+        116 => Sound::EntitySkeletonHorseHurt, // SKELETON_HORSE
+        151 => Sound::EntityZombieHorseHurt,   // ZOMBIE_HORSE
+        // Player
+        155 => Sound::EntityPlayerHurt, // PLAYER
+        _ => Sound::EntityGenericHurt,
+    }
+}
+
+#[cfg(test)]
+mod living_test;
