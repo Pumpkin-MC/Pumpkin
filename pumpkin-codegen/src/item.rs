@@ -1,5 +1,5 @@
 use crate::enchantments::AttributeModifierSlot;
-use heck::ToShoutySnakeCase;
+use heck::{ToPascalCase, ToShoutySnakeCase};
 use proc_macro2::{Span, TokenStream};
 use pumpkin_util::registry::TagType;
 use pumpkin_util::text::TextContent;
@@ -247,9 +247,25 @@ impl ToTokens for ItemComponents {
                 &format!("{:.1}", consumable.consume_seconds.unwrap_or(1.6)),
                 Span::call_site(),
             );
+            let consume_particles = LitBool::new(
+                consumable.has_consume_particles.unwrap_or(true),
+                Span::call_site(),
+            );
+
+            let anim_str = consumable.animation.clone().unwrap_or("eat".to_string());
+            let animation = format_ident!("{}", anim_str.to_pascal_case());
+
+            let mut sound_id = consumable
+                .sound
+                .clone()
+                .unwrap_or("minecraft:entity.generic.eat".to_string());
+            let variant_name = format_ident!("{}", sound_id.split_off(10).to_pascal_case());
 
             tokens.extend(quote! { (Consumable, &ConsumableImpl {
                 consume_seconds: #consume_seconds,
+                animation: ConsumeAnimation::#animation,
+                sound_event: IdOr::Id(Sound::#variant_name),
+                consume_particles: #consume_particles, // TODO consume effects
             }), });
         }
 
@@ -549,8 +565,10 @@ const fn _true() -> bool {
 /// Deserialized consumable component describing use duration.
 #[derive(Deserialize, Clone)]
 pub struct Consumable {
-    /// Time in seconds to fully consume the item; defaults to `1.6` if absent.
-    consume_seconds: Option<f32>, // TODO
+    consume_seconds: Option<f32>,
+    has_consume_particles: Option<bool>,
+    animation: Option<String>,
+    sound: Option<String>, // TODO consume effects
 }
 
 /// Deserialized death-protection component (e.g., totem of undying); fields are unimplemented.
@@ -673,6 +691,7 @@ pub fn build() -> TokenStream {
         use crate::data_component_impl::IDSet::{Blocks, Tag};
         use crate::data_component::DataComponent;
         use crate::Block;
+        use crate::sound::Sound;
 
         #[derive(Clone)]
         pub struct Item {

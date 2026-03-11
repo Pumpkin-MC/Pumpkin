@@ -5,6 +5,7 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::*;
 use crate::data_component_impl::IDSet::{Blocks, Tag};
 use crate::data_component_impl::*;
+use crate::sound::Sound;
 use crate::tag::{RegistryKey, Taggable};
 use crate::{AttributeModifierSlot, tag};
 use pumpkin_util::text::TextComponent;
@@ -671,6 +672,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -913,6 +917,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -1459,6 +1466,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -1511,6 +1521,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -1563,6 +1576,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -3097,6 +3113,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -4024,6 +4043,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -4821,6 +4843,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5139,6 +5164,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5552,6 +5580,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5745,6 +5776,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5778,6 +5812,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5811,6 +5848,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5844,6 +5884,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5877,6 +5920,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5910,6 +5956,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5943,6 +5992,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -5976,6 +6028,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -10242,6 +10297,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 0.8,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -10540,6 +10598,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -11945,6 +12006,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -12206,6 +12270,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -12353,6 +12420,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -13984,6 +14054,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 2.0,
+                    animation: ConsumeAnimation::Drink,
+                    sound_event: IdOr::Id(Sound::ItemHoneyBottleDrink),
+                    consume_particles: false,
                 },
             ),
         ],
@@ -18223,6 +18296,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -18248,6 +18324,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Drink,
+                    sound_event: IdOr::Id(Sound::EntityGenericDrink),
+                    consume_particles: false,
                 },
             ),
         ],
@@ -18718,6 +18797,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -19276,6 +19358,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -20944,6 +21029,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Drink,
+                    sound_event: IdOr::Id(Sound::EntityGenericDrink),
+                    consume_particles: false,
                 },
             ),
         ],
@@ -22938,6 +23026,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -23560,6 +23651,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -23593,6 +23687,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -23618,6 +23715,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Drink,
+                    sound_event: IdOr::Id(Sound::EntityGenericDrink),
+                    consume_particles: false,
                 },
             ),
         ],
@@ -23879,6 +23979,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -23977,6 +24080,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -24541,6 +24647,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -24631,6 +24740,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -25765,6 +25877,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -25835,6 +25950,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -27298,6 +27416,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -29018,6 +29139,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -29051,6 +29175,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],
@@ -29554,6 +29681,9 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
                 },
             ),
         ],

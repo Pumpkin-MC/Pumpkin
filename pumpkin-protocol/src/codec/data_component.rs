@@ -2,10 +2,11 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    DamageImpl, DataComponentImpl, EnchantmentsImpl, FireworkExplosionImpl, FireworkExplosionShape,
-    FireworksImpl, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl, StatusEffectInstance,
-    UnbreakableImpl, get,
+    ConsumableImpl, ConsumeAnimation, DamageImpl, DataComponentImpl, EnchantmentsImpl,
+    FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, IdOr, ItemModelImpl,
+    MaxStackSizeImpl, PotionContentsImpl, SoundEvent, StatusEffectInstance, UnbreakableImpl, get,
 };
+use pumpkin_data::sound::Sound;
 use serde::de;
 use serde::de::SeqAccess;
 use serde::ser::SerializeStruct;
@@ -105,6 +106,63 @@ impl DataComponentCodec<Self> for ItemModelImpl {
             .next_element::<String>()?
             .ok_or(de::Error::custom("No ItemModelImpl id string!"))?;
         Ok(Self { id })
+    }
+}
+
+impl DataComponentCodec<Self> for ConsumableImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        let protocol_event = match &self.sound_event {
+            IdOr::Id(id) => crate::IdOr::Id(*id as u16),
+            IdOr::Value(sound) => crate::IdOr::Value(crate::SoundEvent {
+                sound_name: sound.sound_name.clone(),
+                range: sound.range,
+            }),
+        };
+        seq.serialize_field::<f32>("", &self.consume_seconds)?;
+        seq.serialize_field::<VarInt>("", &VarInt(self.animation.clone() as i32))?;
+        seq.serialize_field::<crate::IdOr<crate::SoundEvent>>("", &protocol_event)?;
+        seq.serialize_field::<bool>("", &self.consume_particles)?;
+        seq.serialize_field::<u8>("", &0u8) // Placeholder for future fields to avoid breaking compatibility
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let consume_seconds = seq.next_element::<f32>()?.ok_or(de::Error::custom(
+            "No ConsumableImpl consume_seconds float!",
+        ))?;
+        let animation_id = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No ConsumableImpl animation VarInt!"))?;
+
+        let animation: ConsumeAnimation = animation_id
+            .0
+            .try_into()
+            .map_err(|()| de::Error::custom("Invalid ConsumableImpl animation id!"))?;
+        let proto_sound_event = seq
+            .next_element::<crate::IdOr<crate::SoundEvent>>()?
+            .ok_or(de::Error::custom(
+                "No ConsumableImpl sound_event IdOr<SoundEvent>!",
+            ))?;
+        let consume_particles = seq.next_element::<bool>()?.ok_or(de::Error::custom(
+            "No ConsumableImpl consume_particles bool!",
+        ))?;
+
+        let sound_event = match proto_sound_event {
+            crate::IdOr::Id(id) => IdOr::Id(
+                Sound::from_name(Sound::NAMES[id as usize])
+                    .ok_or(de::Error::custom("Invalid ConsumableImpl sound_event id!"))?,
+            ),
+            crate::IdOr::Value(sound) => IdOr::Value(SoundEvent {
+                sound_name: sound.sound_name,
+                range: sound.range,
+            }),
+        };
+        // TODO consume effects
+        Ok(Self {
+            consume_seconds,
+            animation,
+            sound_event,
+            consume_particles,
+        })
     }
 }
 
@@ -440,6 +498,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         _ => Err(serde::de::Error::custom("TODO")),
     }
 }
@@ -457,6 +516,7 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
         DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
         DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
+        DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
         _ => todo!("{} not yet implemented", id.to_name()),
     }
 }

@@ -8,6 +8,7 @@ use crate::data_component::DataComponent::{
     ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
 };
 use crate::entity_type::EntityType;
+use crate::sound::Sound;
 use crate::tag::{Tag, Taggable};
 use crate::{AttributeModifierSlot, Block, Enchantment};
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
@@ -21,8 +22,10 @@ use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, de};
 use std::any::Any;
 use std::borrow::Cow;
+use std::error::Error;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::str::FromStr;
 
 pub trait DataComponentImpl: Send + Sync {
     fn write_data(&self) -> NbtTag {
@@ -54,6 +57,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
+        Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -197,7 +201,9 @@ pub struct ItemModelImpl {
 }
 impl ItemModelImpl {
     fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_string().map(|id| Self { id: String::from(id) })
+        data.extract_string().map(|id| Self {
+            id: String::from(id),
+        })
     }
 }
 impl DataComponentImpl for ItemModelImpl {
@@ -247,6 +253,13 @@ fn get_i32_hash(val: i32) -> u32 {
     let mut digest = Digest::new(Crc32Iscsi);
     digest.update(&[8u8]);
     digest.update(&val.to_le_bytes());
+    digest.finalize() as u32
+}
+
+fn get_f32_hash(val: f32) -> u32 {
+    let mut digest = Digest::new(Crc32Iscsi);
+    digest.update(&[7u8]);
+    digest.update(&val.to_bits().to_le_bytes());
     digest.finalize() as u32
 }
 
@@ -347,22 +360,221 @@ impl Hash for FoodImpl {
         self.can_always_eat.hash(state);
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SoundEvent {
+    pub sound_name: String,
+    pub range: Option<f32>,
+}
+
+impl SoundEvent {
+    pub const fn new(sound_name: String, range: Option<f32>) -> Self {
+        Self { sound_name, range }
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IdOr<T> {
+    Id(Sound),
+    Value(T),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConsumableImpl {
     pub consume_seconds: f32,
-    // TODO: more
+    pub animation: ConsumeAnimation,
+    pub sound_event: IdOr<SoundEvent>,
+    pub consume_particles: bool,
+    // pub effects: [ConsumeEffect] // TODO
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum ConsumeAnimation {
+    None,
+    Eat,
+    Drink,
+    Block,
+    Bow,
+    Spear,
+    Crossbow,
+    Spyglass,
+    Horn,
+    Brush,
+}
+
+impl ConsumeAnimation {
+    #[must_use]
+    pub const fn to_str(&self) -> &'static str {
+        match self {
+            ConsumeAnimation::None => "none",
+            ConsumeAnimation::Eat => "eat",
+            ConsumeAnimation::Drink => "drink",
+            ConsumeAnimation::Block => "block",
+            ConsumeAnimation::Bow => "bow",
+            ConsumeAnimation::Spear => "spear",
+            ConsumeAnimation::Crossbow => "crossbow",
+            ConsumeAnimation::Spyglass => "spyglass",
+            ConsumeAnimation::Horn => "horn",
+            ConsumeAnimation::Brush => "brush",
+        }
+    }
+}
+impl TryFrom<i32> for ConsumeAnimation {
+    type Error = ();
+
+    /// Attempts to convert an `i32` value into a [`ConsumeAnimation`].
+    ///
+    /// # Parameters
+    /// - `value`: The numeric representation of a consume animation.
+    ///
+    /// # Returns
+    /// - `Ok(ConsumeAnimation)` if the value corresponds to a valid consume animation:
+    ///   - `0` → `None`
+    ///   - `1` → `Eat`
+    ///   - `2` → `Drink`
+    ///   - `3` → `Block`
+    ///   - `4` → `Bow`
+    ///   - `5` → `Spear`
+    ///   - `6` → `Crossbow`
+    ///   - `7` → `Spyglass`
+    ///   - `8` → `Horn`
+    ///   - `9` → `Brush`
+    /// - `Err(())` if the value does not correspond to any valid consume animation.
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::None),
+            1 => Ok(Self::Eat),
+            2 => Ok(Self::Drink),
+            3 => Ok(Self::Block),
+            4 => Ok(Self::Bow),
+            5 => Ok(Self::Spear),
+            6 => Ok(Self::Crossbow),
+            7 => Ok(Self::Spyglass),
+            8 => Ok(Self::Horn),
+            9 => Ok(Self::Brush),
+            _ => Err(()),
+        }
+    }
+}
+impl FromStr for ConsumeAnimation {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "none" => Ok(Self::None),
+            "eat" => Ok(Self::Eat),
+            "drink" => Ok(Self::Drink),
+            "block" => Ok(Self::Block),
+            "bow" => Ok(Self::Bow),
+            "spear" => Ok(Self::Spear),
+            "crossbow" => Ok(Self::Crossbow),
+            "spyglass" => Ok(Self::Spyglass),
+            "horn" => Ok(Self::Horn),
+            "brush" => Ok(Self::Brush),
+            _ => Err(()),
+        }
+    }
 }
 
 impl ConsumableImpl {
+    pub const fn new(
+        consume_seconds: f32,
+        animation: ConsumeAnimation,
+        sound_event: IdOr<SoundEvent>,
+        consume_particles: bool,
+        // effects: Option<bool>,
+    ) -> Self {
+        Self {
+            consume_seconds,
+            animation,
+            sound_event,
+            consume_particles,
+        }
+    }
     #[must_use]
     pub fn consume_ticks(&self) -> i32 {
         (self.consume_seconds * 20.0) as i32
     }
-}
 
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let consume_seconds = compound.get_float("consume_seconds")?;
+        let animation = compound
+            .get_string("animation")?
+            .parse::<ConsumeAnimation>()
+            .ok()?;
+        let sound_event = if let Some(sound) = compound.get_string("sound") {
+            IdOr::Id(Sound::from_name(sound).unwrap_or(Sound::EntityGenericEat)) // Default to generic eat sound if the sound name is invalid
+        } else if let Some(sound_compound) = compound.get_compound("sound") {
+            let sound_name = sound_compound.get_string("sound_name")?;
+            let range = sound_compound.get_float("range");
+            IdOr::Value(SoundEvent {
+                sound_name: sound_name.to_string(),
+                range,
+            })
+        } else {
+            return None;
+        };
+        let consume_particles = compound.get_bool("has_consume_particles").unwrap_or(false);
+        // TODO consume effects
+
+        Some(Self {
+            consume_seconds,
+            animation,
+            sound_event,
+            consume_particles,
+        })
+    }
+}
 impl DataComponentImpl for ConsumableImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_float("consume_seconds", self.consume_seconds);
+        compound.put_string("animation", self.animation.to_str().to_string());
+        match self.sound_event.clone() {
+            IdOr::Id(id) => compound.put_string("sound", id.to_name().to_string()),
+            IdOr::Value(sound) => {
+                let mut sound_compound = NbtCompound::new();
+
+                sound_compound.put_string("sound_name", sound.sound_name.clone());
+                if let Some(range) = sound.range {
+                    sound_compound.put_float("range", range);
+                }
+                compound.put("sound", NbtTag::Compound(sound_compound));
+            }
+        }
+        compound.put_bool("has_consume_particles", self.consume_particles);
+        // TODO consume effects
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        digest.update(&get_f32_hash(self.consume_seconds).to_le_bytes());
+        digest.update(&get_i32_hash(self.animation.clone() as i32).to_le_bytes());
+        match &self.sound_event {
+            IdOr::Id(sound) => {
+                digest.update(&[1u8]);
+                digest.update(&get_str_hash(sound.to_name()).to_le_bytes());
+            }
+            IdOr::Value(sound) => {
+                digest.update(&[2u8]);
+                digest.update(&get_str_hash(sound.sound_name.as_str()).to_le_bytes());
+                if let Some(range) = sound.range {
+                    digest.update(&[1u8]);
+                    digest.update(&get_f32_hash(range).to_le_bytes());
+                } else {
+                    digest.update(&[0u8]);
+                }
+            }
+        }
+        digest.update(&[self.consume_particles as u8]);
+        digest.update(&[3u8]);
+        digest.finalize() as i32
+    }
+
     default_impl!(Consumable);
 }
+
 impl Hash for ConsumableImpl {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         unsafe { (*(&raw const self.consume_seconds).cast::<u32>()).hash(state) };

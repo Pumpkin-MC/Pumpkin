@@ -1842,7 +1842,7 @@ pub enum Sound {
     ItemNautilusSaddleEquip,
 }
 impl Sound {
-    const NAMES: &[&str] = &[
+    pub const NAMES: &[&str] = &[
         "entity.allay.ambient_with_item",
         "entity.allay.ambient_without_item",
         "entity.allay.death",
