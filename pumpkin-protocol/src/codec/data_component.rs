@@ -489,7 +489,7 @@ impl DataComponentCodec<Self> for ContainerImpl {
             item_compound.put_byte("Slot", slot as i8);
             stack.write_item_stack(&mut item_compound);
             let mut wrapper = NbtCompound::new();
-            wrapper.put_component("item", item_compound);
+            wrapper.put_compound("item", item_compound);
             wrapper.put_byte("Slot", slot as i8);
             items.push(NbtTag::Compound(wrapper));
         }
