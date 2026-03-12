@@ -1,3 +1,4 @@
+use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
@@ -211,9 +212,17 @@ impl ToTokens for MaterialConditionStruct {
                 min_threshold,
                 max_threshold,
             } => {
+                let noise_id = quote::format_ident!(
+                    "{}",
+                    noise
+                        .strip_prefix("minecraft:")
+                        .unwrap()
+                        .to_shouty_snake_case()
+                );
+
                 tokens.extend(quote!(
                     MaterialCondition::NoiseThreshold(NoiseThresholdMaterialCondition {
-                        noise: #noise,
+                        noise: DoublePerlinNoiseParameters::#noise_id,
                         min_threshold: #min_threshold,
                         max_threshold: #max_threshold,
                     })
@@ -363,6 +372,8 @@ pub fn build() -> TokenStream {
 
     quote!(
         use crate::dimension::Dimension;
+        use crate::chunk::DoublePerlinNoiseParameters;
+
         use std::{cell::RefCell, num::NonZeroUsize};
         use pumpkin_util::random::RandomDeriver;
         use pumpkin_util::y_offset::YOffset;
@@ -393,11 +404,11 @@ pub fn build() -> TokenStream {
         }
 
         impl GenerationShapeConfig {
-            #[inline] 
+            #[inline]
             #[must_use]
             pub const fn vertical_cell_block_count(&self) -> u8 { self.size_vertical << 2 }
 
-            #[inline] 
+            #[inline]
             #[must_use]
             pub const fn horizontal_cell_block_count(&self) -> u8 { self.size_horizontal << 2 }
 
@@ -462,7 +473,7 @@ pub fn build() -> TokenStream {
         }
 
         pub struct NoiseThresholdMaterialCondition {
-            pub noise: &'static str,
+            pub noise: DoublePerlinNoiseParameters,
             pub min_threshold: f64,
             pub max_threshold: f64,
         }

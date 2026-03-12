@@ -21,7 +21,7 @@ pub fn build() -> TokenStream {
             pub const #name: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(#first_octave, &[#(#amplitudes),*], #raw_name);
         }]);
         match_variants.extend([quote! {
-            #simple_id => &#name,
+            #simple_id => &Self::#name,
         }]);
     }
 
@@ -51,8 +51,8 @@ pub fn build() -> TokenStream {
                     _ => return None,
                 })
             }
+            #variants
         }
 
-        #variants
     }
 }

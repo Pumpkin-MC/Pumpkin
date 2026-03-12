@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
@@ -67,6 +68,7 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
+    fn add_block_entity(&mut self, pos: &Vector3<i32>, nbt: NbtCompound);
     fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32;
@@ -172,10 +174,15 @@ impl TerrainCache {
     #[must_use]
     pub fn from_random(random_config: &GlobalRandomConfig) -> Self {
         let random = &random_config.base_random_deriver;
-        let noise_builder = DoublePerlinNoiseBuilder::new(&random_config.base_random_deriver);
-        let terrain_builder = SurfaceTerrainBuilder::new(&noise_builder, random);
-        let surface_noise = noise_builder.get_noise_sampler_for_id("surface");
-        let secondary_noise = noise_builder.get_noise_sampler_for_id("surface_secondary");
+        let terrain_builder = SurfaceTerrainBuilder::new(random);
+        let surface_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_config.base_random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE,
+        );
+        let secondary_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_config.base_random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE_SECONDARY,
+        );
         Self {
             terrain_builder,
             surface_noise,
@@ -350,7 +357,7 @@ impl ProtoChunk {
     /// Adds a pending block entity to be created when the chunk is finalized.
     ///
     /// The NBT compound should include the block entity's position (x, y, z) and id fields.
-    pub fn add_pending_block_entity(&mut self, nbt: NbtCompound) {
+    pub fn add_block_entity(&mut self, nbt: NbtCompound) {
         self.pending_block_entities.push(nbt);
     }
 
@@ -806,11 +813,9 @@ impl ProtoChunk {
         let min_y = self.bottom_y();
 
         let random = &random_config.base_random_deriver;
-        let noise_builder = DoublePerlinNoiseBuilder::new(&random_config.base_random_deriver);
         let mut context = MaterialRuleContext::new(
             min_y,
             self.height(),
-            noise_builder,
             random,
             &terrain_cache.terrain_builder,
             &terrain_cache.surface_noise,

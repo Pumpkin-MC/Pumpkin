@@ -26,8 +26,8 @@ pub type BlockStateId = u16;
 
 pub const CURRENT_MC_VERSION: &str = "1.21.11";
 
-pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.21.132";
-pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 898;
+pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26";
+pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 924;
 
 #[macro_export]
 macro_rules! global_path {

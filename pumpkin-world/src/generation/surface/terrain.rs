@@ -1,4 +1,7 @@
-use pumpkin_data::{Block, BlockState, chunk::Biome};
+use pumpkin_data::{
+    Block, BlockState,
+    chunk::{Biome, DoublePerlinNoiseParameters},
+};
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{
@@ -30,24 +33,39 @@ pub struct SurfaceTerrainBuilder {
 }
 
 impl SurfaceTerrainBuilder {
-    pub fn new(
-        noise_builder: &DoublePerlinNoiseBuilder,
-        random_deriver: &XoroshiroSplitter,
-    ) -> Self {
+    pub fn new(random_deriver: &XoroshiroSplitter) -> Self {
         Self {
             terracotta_bands: Self::create_terracotta_bands(
                 random_deriver.split_string("minecraft:clay_bands"),
             ),
-            terracotta_bands_offset_noise: noise_builder
-                .get_noise_sampler_for_id("clay_bands_offset"),
-            badlands_pillar_noise: noise_builder.get_noise_sampler_for_id("badlands_pillar"),
-            badlands_surface_noise: noise_builder.get_noise_sampler_for_id("badlands_surface"),
-            badlands_pillar_roof_noise: noise_builder
-                .get_noise_sampler_for_id("badlands_pillar_roof"),
-            iceberg_pillar_noise: noise_builder.get_noise_sampler_for_id("iceberg_pillar"),
-            iceberg_pillar_roof_noise: noise_builder
-                .get_noise_sampler_for_id("iceberg_pillar_roof"),
-            iceberg_surface_noise: noise_builder.get_noise_sampler_for_id("iceberg_surface"),
+            terracotta_bands_offset_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::CLAY_BANDS_OFFSET,
+            ),
+            badlands_pillar_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::BADLANDS_PILLAR,
+            ),
+            badlands_surface_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::BADLANDS_SURFACE,
+            ),
+            badlands_pillar_roof_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::BADLANDS_PILLAR_ROOF,
+            ),
+            iceberg_pillar_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::ICEBERG_PILLAR,
+            ),
+            iceberg_pillar_roof_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::ICEBERG_PILLAR_ROOF,
+            ),
+            iceberg_surface_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::ICEBERG_SURFACE,
+            ),
         }
     }
 

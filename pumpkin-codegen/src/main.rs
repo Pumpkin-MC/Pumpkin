@@ -115,7 +115,10 @@ pub fn main() {
         (potion_brewing::build, "potion_brewing.rs"),
         (recipe_remainder::build, "recipe_remainder.rs"),
         (placed_feature::build, "placed_features_generated.rs"),
-        (configured_feature::build, "configured_features_generated.rs"),
+        (
+            configured_feature::build,
+            "configured_features_generated.rs",
+        ),
     ];
     build_functions.extend(remap::build());
 

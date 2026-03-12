@@ -11,7 +11,7 @@ pub struct SpawnerBlock;
 impl BlockBehaviour for SpawnerBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let hopper_block_entity = MobSpawnerBlockEntity::new(*args.position);
+            let hopper_block_entity = MobSpawnerBlockEntity::new(*args.position, None);
             args.world
                 .add_block_entity(Arc::new(hopper_block_entity))
                 .await;

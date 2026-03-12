@@ -614,6 +614,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 break;
             }
         }
+        drop(rx);
         debug!("Stopped console commands task");
     });
 }

@@ -4,6 +4,8 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
 };
 
+use heck::ToShoutySnakeCase;
+
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{ToTokens, TokenStreamExt, quote};
 use serde::Deserialize;
@@ -595,14 +597,14 @@ impl DensityFunctionRepr {
                 BaseNoiseFunctionComponent::EndIslands
             },
             Self::Noise { data } => {
-                let noise_id = &data.noise_id;
+                let noise_id = quote::format_ident!("{}", data.noise_id.to_shouty_snake_case());
                 let xz_scale = &data.xz_scale;
                 let y_scale = &data.y_scale;
 
                 quote! {
                     BaseNoiseFunctionComponent::Noise {
                         data: &NoiseData {
-                            noise_id: #noise_id,
+                            noise_id: DoublePerlinNoiseParameters::#noise_id,
                             xz_scale: #xz_scale,
                             y_scale: #y_scale,
                         }
@@ -610,16 +612,20 @@ impl DensityFunctionRepr {
                 }
             }
             Self::ShiftA { noise_id } => {
+                let noise_id = quote::format_ident!("{}", noise_id.to_shouty_snake_case());
+
                 quote! {
                     BaseNoiseFunctionComponent::ShiftA {
-                        noise_id: #noise_id
+                        noise_id: DoublePerlinNoiseParameters::#noise_id,
                     }
                 }
             }
             Self::ShiftB { noise_id } => {
+                let noise_id = quote::format_ident!("{}", noise_id.to_shouty_snake_case());
+
                 quote! {
                     BaseNoiseFunctionComponent::ShiftB {
-                        noise_id: #noise_id
+                        noise_id: DoublePerlinNoiseParameters::#noise_id,
                     }
                 }
             }
@@ -659,7 +665,7 @@ impl DensityFunctionRepr {
 
                 let xz_scale = &data.xz_scale;
                 let y_scale = &data.y_scale;
-                let noise_id = &data.noise_id;
+                let noise_id = quote::format_ident!("{}", data.noise_id.to_shouty_snake_case());
 
                 quote! {
                     BaseNoiseFunctionComponent::ShiftedNoise {
@@ -669,7 +675,7 @@ impl DensityFunctionRepr {
                         data: &ShiftedNoiseData {
                             xz_scale: #xz_scale,
                             y_scale: #y_scale,
-                            noise_id: #noise_id,
+                            noise_id: DoublePerlinNoiseParameters::#noise_id,
                         },
                     }
                 }
@@ -802,14 +808,14 @@ impl DensityFunctionRepr {
             Self::WeirdScaled { input, data } => {
                 let input_index = input.get_index_for_component(stack, hash_to_index_map);
 
-                let noise_id = &data.noise_id;
+                let noise_id = quote::format_ident!("{}", data.noise_id.to_shouty_snake_case());
                 let action = data.mapper.into_token_stream();
 
                 quote! {
                     BaseNoiseFunctionComponent::WeirdScaled {
                         input_index: #input_index,
                         data: &WeirdScaledData {
-                            noise_id: #noise_id,
+                            noise_id: DoublePerlinNoiseParameters::#noise_id,
                             mapper: #action,
                         },
                     }
@@ -1015,8 +1021,10 @@ pub fn build() -> TokenStream {
     let end_router = reprs.end.into_token_stream();
 
     quote! {
+        use crate::chunk::DoublePerlinNoiseParameters;
+
         pub struct NoiseData {
-            pub noise_id: &'static str,
+            pub noise_id: DoublePerlinNoiseParameters,
             pub xz_scale: f64,
             pub y_scale: f64,
         }
@@ -1024,7 +1032,7 @@ pub fn build() -> TokenStream {
         pub struct ShiftedNoiseData {
             pub xz_scale: f64,
             pub y_scale: f64,
-            pub noise_id: &'static str,
+            pub noise_id: DoublePerlinNoiseParameters,
         }
 
         #[derive(Copy, Clone)]
@@ -1074,7 +1082,7 @@ pub fn build() -> TokenStream {
         }
 
         pub struct WeirdScaledData {
-            pub noise_id: &'static str,
+            pub noise_id: DoublePerlinNoiseParameters,
             pub mapper: WeirdScaledMapper,
         }
 
@@ -1223,10 +1231,10 @@ pub fn build() -> TokenStream {
                 data: &'static NoiseData,
             },
             ShiftA {
-                noise_id: &'static str,
+                noise_id: DoublePerlinNoiseParameters,
             },
             ShiftB {
-                noise_id: &'static str,
+                noise_id: DoublePerlinNoiseParameters,
             },
             ShiftedNoise {
                 shift_x_index: usize,

@@ -36,7 +36,7 @@ impl MobSpawnerBlockEntity {
     pub const DEFAULT_SPAWN_RANGE: i32 = 4;
 
     #[must_use]
-    pub const fn new(position: BlockPos) -> Self {
+    pub const fn new(position: BlockPos, entity_type: Option<&'static EntityType>) -> Self {
         Self {
             position,
             delay: AtomicI32::new(Self::DEFAULT_DELAY),
@@ -44,7 +44,26 @@ impl MobSpawnerBlockEntity {
             min_delay: Self::DEFAULT_MIN_SPAWN_DELAY,
             spawn_count: Self::DEFAULT_SPAWN_COUNT,
             spawn_range: Self::DEFAULT_SPAWN_RANGE,
-            entity_type: AtomicCell::new(None),
+            entity_type: AtomicCell::new(entity_type),
+        }
+    }
+
+    pub fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) {
+        // TODO: this is ugly af
+        nbt.put_string("id", self.resource_location().to_string());
+        let position = self.get_position();
+        nbt.put_int("x", position.0.x);
+        nbt.put_int("y", position.0.y);
+        nbt.put_int("z", position.0.z);
+        if let Some(entity_type) = self.entity_type.load() {
+            let mut spawn_entry = NbtCompound::new();
+
+            let mut entity_nbt = NbtCompound::new();
+            entity_nbt.put_string("id", format!("minecraft:{}", entity_type.resource_name));
+
+            spawn_entry.put_compound("entity", entity_nbt);
+
+            nbt.put_compound("SpawnData", spawn_entry);
         }
     }
 }
@@ -151,7 +170,15 @@ impl BlockEntity for MobSpawnerBlockEntity {
         let spawn_range = nbt
             .get_int("SpawnRange")
             .unwrap_or(Self::DEFAULT_SPAWN_RANGE);
-        let _spawn_entry = nbt.get_compound("SpawnData");
+
+        let entity_type = nbt
+            .get_compound("SpawnData")
+            .and_then(|data| data.get_compound("entity"))
+            .and_then(|entity| entity.get_string("id"))
+            .and_then(|id| {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id);
+                EntityType::from_name(name)
+            });
 
         Self {
             position,
@@ -160,7 +187,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
             min_delay,
             spawn_count,
             spawn_range,
-            entity_type: AtomicCell::new(None), // TODO
+            entity_type: AtomicCell::new(entity_type),
         }
     }
 
@@ -169,12 +196,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
         nbt: &'a mut NbtCompound,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(entity_type) = self.entity_type.load() {
-                let mut entity_nbt = NbtCompound::new();
-                entity_nbt.put_string("id", format!("minecraft:{}", entity_type.resource_name));
-
-                nbt.put_compound("entity", entity_nbt);
-            }
+            self.write_nbt(nbt);
         })
     }
 
