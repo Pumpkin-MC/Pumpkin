@@ -89,6 +89,9 @@ impl BlockBehaviour for RedstoneWireBlock {
             }
 
             wire = get_regulated_sides(wire, args.world, args.position).await;
+            wire.power =
+                Integer0To15::from_index(calculate_power(args.world, args.position).await.into());
+
             if is_cross(old_state) && new_side.is_none() {
                 return wire.to_state_id(args.block);
             }
