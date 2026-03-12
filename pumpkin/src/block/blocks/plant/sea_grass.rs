@@ -1,15 +1,17 @@
 use pumpkin_data::{Block, BlockDirection};
-use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     blocks::plant::PlantBlockBase,
 };
-
-#[pumpkin_block("minecraft:seagrass")]
 pub struct SeaGrassBlock;
-
+impl BlockMetadata for SeaGrassBlock {
+    fn ids() -> Box<[u16]> {
+        [Block::SEAGRASS.id, Block::TALL_SEAGRASS.id].into()
+    }
+}
 impl BlockBehaviour for SeaGrassBlock {
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
@@ -39,8 +41,44 @@ impl PlantBlockBase for SeaGrassBlock {
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
-        let block = block_accessor.get_block(pos).await;
-        let block_state = block_accessor.get_block_state(pos).await;
-        block_state.is_side_solid(BlockDirection::Up) && block != &Block::MAGMA_BLOCK
+        let (support_block, support_block_state) = block_accessor.get_block_and_state(pos).await;
+        let replacing_block = block_accessor.get_block(&pos.up()).await;
+        if replacing_block != &Block::WATER
+            && replacing_block != &Block::SEAGRASS
+            && replacing_block != &Block::TALL_SEAGRASS
+        {
+            return false;
+        }
+
+        if replacing_block == &Block::TALL_SEAGRASS {
+            //only for blockupdate
+            let block_above = block_accessor.get_block(&pos.up_height(2)).await;
+            let is_support_seagrass_block = support_block == &Block::TALL_SEAGRASS;
+            let is_above_seagrass_block = block_above == &Block::TALL_SEAGRASS;
+            match (is_support_seagrass_block, is_above_seagrass_block) {
+                (true, true) | (false, false) => return false,
+                _ => {}
+            }
+        }
+        if support_block_state.is_side_solid(BlockDirection::Up)
+            && support_block != &Block::MAGMA_BLOCK
+        {
+            return true;
+        }
+        if support_block == &Block::TALL_SEAGRASS {
+            return true;
+        }
+        false
+    }
+    async fn get_state_for_neighbor_update(
+        &self,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        block_state: BlockStateId,
+    ) -> BlockStateId {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+            return Block::WATER.default_state.id;
+        }
+        block_state
     }
 }
