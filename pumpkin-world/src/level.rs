@@ -465,6 +465,10 @@ impl Level {
                 .extend(chunk.block_entities.lock().unwrap().values().cloned());
 
             for i in 0..section_count {
+                // Skip sections that are entirely air — no random ticks can occur there
+                if chunk.section.block_sections.read().unwrap()[i].has_only_air() {
+                    continue;
+                }
                 let y_base = i as i32 * 16;
                 for _ in 0..3 {
                     let x_offset = (r & 0xF) as usize;
