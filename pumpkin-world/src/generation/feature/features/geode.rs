@@ -19,7 +19,7 @@ struct NormalNoise(crate::generation::noise::perlin::DoublePerlinNoiseSampler);
 
 impl NormalNoise {
     fn create(rand: &mut RandomGenerator, first_octave: i32, amplitudes: &[f64]) -> Self {
-        NormalNoise(
+        Self(
             crate::generation::noise::perlin::DoublePerlinNoiseSampler::new(
                 rand,
                 first_octave,
@@ -259,7 +259,7 @@ impl GeodeFeature {
             }
             if matches!(
                 dist_sum_shell.partial_cmp(&outer_crust),
-                Some(Ordering::Greater) | Some(Ordering::Equal)
+                Some(Ordering::Greater | Ordering::Equal)
             ) {
                 if should_generate_crack
                     && dist_sum_crack >= crack_size

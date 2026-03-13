@@ -4,7 +4,7 @@ use pumpkin_data::noise_router::{InterpolatedNoiseSamplerData, NoiseData, Shifte
 use pumpkin_util::{
     math::{clamped_lerp, vector3::Vector3},
     noise::perlin::OctavePerlinNoiseSampler,
-    random::RandomGenerator,
+    random::xoroshiro128::Xoroshiro,
 };
 
 use crate::generation::{
@@ -190,7 +190,7 @@ pub struct InterpolatedNoiseSampler {
 }
 
 impl InterpolatedNoiseSampler {
-    pub fn new(data: &'static InterpolatedNoiseSamplerData, random: &mut RandomGenerator) -> Self {
+    pub fn new(data: &'static InterpolatedNoiseSamplerData, random: &mut Xoroshiro) -> Self {
         let big_start = -15;
         let big_amplitudes = [1.0; 16];
 

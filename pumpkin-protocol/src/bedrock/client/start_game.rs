@@ -55,6 +55,33 @@ pub struct CStartGame {
     pub enable_clientside_generation: bool,
     pub blocknetwork_ids_are_hashed: bool,
     pub server_auth_sounds: bool,
+
+    // 2 Optionals is what we need Mojang :cap:
+    pub server_join_information: Option<ServerJoinInformation>,
+    pub telemetry: ServerTelemetryData,
+}
+
+#[derive(PacketWrite)]
+pub struct ServerJoinInformation {
+    gathering_info: Option<GatheringJoinInfo>,
+}
+
+#[derive(PacketWrite)]
+pub struct GatheringJoinInfo {
+    experience_id: String,
+    experience_name: String,
+    experience_world_id: String,
+    experience_world_name: String,
+    creator_id: String,
+    store_id: String,
+}
+
+#[derive(PacketWrite)]
+pub struct ServerTelemetryData {
+    pub server_id: String,
+    pub scenario_id: String,
+    pub world_id: String,
+    pub owner_id: String,
 }
 
 #[derive(PacketWrite)]
@@ -120,10 +147,6 @@ pub struct LevelSettings {
     pub override_force_experimental_gameplay_has_value: bool,
     pub chat_restriction_level: i8,
     pub disable_player_interactions: bool,
-    pub server_id: String,
-    pub world_id: String,
-    pub scenario_id: String,
-    pub owner_id: String,
 }
 
 #[derive(Default, PacketWrite)]

@@ -2440,10 +2440,10 @@ impl Entity {
                     return;
                 }
             }
-            v if v == EntityType::SPIDER.id || v == EntityType::CAVE_SPIDER.id => {
-                if Block::from_state_id(state.id).id == Block::COBWEB.id {
-                    return;
-                }
+            v if (v == EntityType::SPIDER.id || v == EntityType::CAVE_SPIDER.id)
+                && Block::from_state_id(state.id).id == Block::COBWEB.id =>
+            {
+                return;
             }
             v if v == EntityType::WITHER.id => {
                 return;

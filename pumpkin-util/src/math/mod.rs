@@ -73,7 +73,7 @@ pub fn subtract_angles(start: f32, end: f32) -> f32 {
 /// # Returns
 /// `a² + b² + c²`
 #[must_use]
-pub fn squared_magnitude(a: f64, b: f64, c: f64) -> f64 {
+pub const fn squared_magnitude(a: f64, b: f64, c: f64) -> f64 {
     c.mul_add(c, a.mul_add(a, b * b))
 }
 
@@ -179,7 +179,14 @@ pub fn floor_div<T: PrimInt + Zero + One>(x: T, y: T) -> T {
 /// # Returns
 /// n²
 #[inline]
-pub fn square<T: Float>(n: T) -> T {
+#[must_use]
+pub const fn square_f64(n: f64) -> f64 {
+    n * n
+}
+
+#[inline]
+#[must_use]
+pub const fn square_f32(n: f32) -> f32 {
     n * n
 }
 

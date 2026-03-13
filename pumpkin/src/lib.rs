@@ -191,7 +191,6 @@ impl PumpkinServer {
     pub fn log_info(&self, message: &str) {
         tracing::info!(target: "plugin", "{}", message);
     }
-    #[expect(clippy::if_then_some_else_none)]
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
@@ -615,6 +614,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 break;
             }
         }
+        drop(rx);
         debug!("Stopped console commands task");
     });
 }

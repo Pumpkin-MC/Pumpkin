@@ -77,19 +77,19 @@ pub fn build() -> TokenStream {
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/sky_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
         let fog_color = dim
             .attributes
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/fog_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
         let cloud_color = dim
             .attributes
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/cloud_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
 
         let fixed_time = if let Some(t) = dim.fixed_time {
             quote! { Some(#t) }
@@ -124,9 +124,21 @@ pub fn build() -> TokenStream {
             format!("minecraft:{name}")
         };
 
-        let sky_color_literal = if let Some(c) = sky_color { quote! { Some(#c) } } else { quote! { None } };
-        let fog_color_literal = if let Some(c) = fog_color { quote! { Some(#c) } } else { quote! { None } };
-        let cloud_color_literal = if let Some(c) = cloud_color { quote! { Some(#c) } } else { quote! { None } };
+        let sky_color_literal = if let Some(c) = sky_color {
+            quote! { Some(#c) }
+        } else {
+            quote! { None }
+        };
+        let fog_color_literal = if let Some(c) = fog_color {
+            quote! { Some(#c) }
+        } else {
+            quote! { None }
+        };
+        let cloud_color_literal = if let Some(c) = cloud_color {
+            quote! { Some(#c) }
+        } else {
+            quote! { None }
+        };
         let timelines_literal = if let Some(t) = timelines.clone() {
             quote! { Some(#t) }
         } else {

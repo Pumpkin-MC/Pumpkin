@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::{
-    math::{position::BlockPos, vector3::Vector3},
+    math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomDeriverImpl, RandomGenerator, RandomImpl},
 };
 use tracing::debug;
@@ -41,8 +41,8 @@ const TEMPLATE_NAMES: [&str; 14] = [
 ];
 
 /// Vanilla height provider bounds for nether fossils.
-/// From nether_fossil.json: uniform(absolute=32, below_top=2).
-/// Vanilla BelowTop: height - 1 + min_y - offset = 256 - 1 + 0 - 2 = 253.
+/// From `nether_fossil.json`: uniform(absolute=32, `below_top=2`).
+/// Vanilla `BelowTop`: height - 1 + `min_y` - offset = 256 - 1 + 0 - 2 = 253.
 const HEIGHT_MIN: i32 = 32;
 const HEIGHT_MAX: i32 = 253;
 
@@ -122,7 +122,7 @@ struct NetherFossilPiece {
 }
 
 impl NetherFossilPiece {
-    /// Vanilla column scan: search downward from initial_y for air above (soul sand OR solid block).
+    /// Vanilla column scan: search downward from `initial_y` for air above (soul sand OR solid block).
     /// Returns the Y of the support block, or None if no valid position found above sea level.
     ///
     /// Mirrors vanilla's pre-decrement loop:
@@ -134,7 +134,7 @@ impl NetherFossilPiece {
     /// }
     /// if (l <= k) return empty;
     /// ```
-    /// After the loop, l is the support block Y. Vanilla rejects if l <= sea_level.
+    /// After the loop, l is the support block Y. Vanilla rejects if l <= `sea_level`.
     fn find_placement_y(&self, chunk: &ProtoChunk) -> Option<i32> {
         let origin = self.shiftable_structure_piece.piece.bounding_box.min;
         let mut y = self.initial_y;
@@ -166,7 +166,13 @@ impl StructurePieceBase for NetherFossilPiece {
         Box::new(self.clone())
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        seed: i64,
+        _chunk_box: &BlockBox,
+    ) {
         // Vanilla column scan: find air above soul sand or solid block
         let Some(placement_y) = self.find_placement_y(chunk) else {
             debug!(
@@ -213,9 +219,9 @@ impl NetherFossilPiece {
         use pumpkin_util::random::xoroshiro128::Xoroshiro;
 
         let bbox = self.shiftable_structure_piece.piece.bounding_box;
-        let center_x = (bbox.min.x + bbox.max.x) / 2;
-        let center_y = (bbox.min.y + bbox.max.y) / 2;
-        let center_z = (bbox.min.z + bbox.max.z) / 2;
+        let center_x = i32::midpoint(bbox.min.x, bbox.max.x);
+        let center_y = i32::midpoint(bbox.min.y, bbox.max.y);
+        let center_z = i32::midpoint(bbox.min.z, bbox.max.z);
 
         // Vanilla: Random.create(world.getSeed()).nextSplitter().split(box.getCenter())
         let mut rng = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));

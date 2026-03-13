@@ -33,12 +33,11 @@ impl BlockStateResolver {
         // Find the block
         let block = Block::from_name(&entry.name).or_else(|| Block::from_registry_key(block_name));
 
-        let block = match block {
-            Some(b) => b,
-            None => {
-                warn!("Unknown block in template: {}", entry.name);
-                return None;
-            }
+        let block = if let Some(b) = block {
+            b
+        } else {
+            warn!("Unknown block in template: {}", entry.name);
+            return None;
         };
 
         // If no properties, return default state
@@ -108,7 +107,7 @@ impl BlockStateResolver {
     }
 
     /// Converts a rotation value (0-15) to a static string.
-    fn rotation_to_str(rotation: i32) -> &'static str {
+    const fn rotation_to_str(rotation: i32) -> &'static str {
         match rotation % 16 {
             0 => "0",
             1 => "1",

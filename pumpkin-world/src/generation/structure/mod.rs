@@ -9,9 +9,10 @@ use crate::{
         biome_coords,
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
-            buried_treasure::BuriedTreasureGenerator, create_chunk_random, igloo::IglooGenerator,
-            nether_fossil::NetherFossilGenerator, stronghold::StrongholdGenerator,
-            swamp_hut::SwampHutGenerator,
+            buried_treasure::BuriedTreasureGenerator, create_chunk_random,
+            desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
+            nether_fortress::NetherFortressGenerator, nether_fossil::NetherFossilGenerator,
+            stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
         },
     },
 };
@@ -49,10 +50,14 @@ pub fn try_generate_structure(
         StructureKeys::Stronghold => {
             StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
         }
+        StructureKeys::Fortress => {
+            NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
+        }
         StructureKeys::NetherFossil => {
             NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
         }
         StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
+        StructureKeys::DesertPyramid => DesertPyramidGenerator.get_structure_position(context),
         // TODO: Implement other structure types
         _ => None,
     };

@@ -14,6 +14,7 @@ use crate::block::blocks::chests::{ChestBlock, CopperChestBlock, TrappedChestBlo
 use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
+use crate::block::blocks::conduit::ConduitBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
@@ -261,6 +262,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FungusBlock);
     manager.register(NetherSproutsBlock);
     manager.register(SporeBlossomBlock);
+    manager.register(ConduitBlock);
 
     manager.register(FallingBlock);
 

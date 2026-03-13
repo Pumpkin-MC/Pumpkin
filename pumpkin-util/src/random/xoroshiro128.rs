@@ -126,6 +126,13 @@ impl Xoroshiro {
         self.hi = m.rotate_left(28);
         n
     }
+
+    pub const fn next_splitter(&mut self) -> XoroshiroSplitter {
+        XoroshiroSplitter {
+            lo: self.next_random(),
+            hi: self.next_random(),
+        }
+    }
 }
 
 impl GaussianGenerator for Xoroshiro {
@@ -160,10 +167,7 @@ impl RandomImpl for Xoroshiro {
     }
 
     fn next_splitter(&mut self) -> RandomDeriver {
-        RandomDeriver::Xoroshiro(XoroshiroSplitter {
-            lo: self.next_random(),
-            hi: self.next_random(),
-        })
+        RandomDeriver::Xoroshiro(self.next_splitter())
     }
 
     fn next_i32(&mut self) -> i32 {
@@ -220,25 +224,36 @@ pub struct XoroshiroSplitter {
     hi: u64,
 }
 
-impl RandomDeriverImpl for XoroshiroSplitter {
-    fn split_string(&self, seed: &str) -> RandomGenerator {
+impl XoroshiroSplitter {
+    #[must_use]
+    pub fn split_string(&self, seed: &str) -> Xoroshiro {
         let bytes = md5::compute(seed.as_bytes());
         let l = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
         let m = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
 
-        RandomGenerator::Xoroshiro(Xoroshiro::new(l ^ self.lo, m ^ self.hi))
+        Xoroshiro::new(l ^ self.lo, m ^ self.hi)
+    }
+
+    #[must_use]
+    pub fn split_pos(&self, x: i32, y: i32, z: i32) -> Xoroshiro {
+        let l = hash_block_pos(x, y, z) as u64;
+        let m = l ^ self.lo;
+
+        Xoroshiro::new(m, self.hi)
+    }
+}
+
+impl RandomDeriverImpl for XoroshiroSplitter {
+    fn split_string(&self, seed: &str) -> RandomGenerator {
+        RandomGenerator::Xoroshiro(self.split_string(seed))
     }
 
     fn split_u64(&self, seed: u64) -> RandomGenerator {
         RandomGenerator::Xoroshiro(Xoroshiro::new(seed ^ self.lo, seed ^ self.hi))
     }
 
-    #[expect(clippy::many_single_char_names)]
     fn split_pos(&self, x: i32, y: i32, z: i32) -> RandomGenerator {
-        let l = hash_block_pos(x, y, z) as u64;
-        let m = l ^ self.lo;
-
-        RandomGenerator::Xoroshiro(Xoroshiro::new(m, self.hi))
+        RandomGenerator::Xoroshiro(self.split_pos(x, y, z))
     }
 }
 

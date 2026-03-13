@@ -1,0 +1,74 @@
+use std::sync::Arc;
+
+use crate::{
+    plugin::{
+        BoxFuture, EventHandler, Payload,
+        loader::wasm::wasm_host::{
+            PluginInstance, WasmPlugin,
+            state::PluginHostState,
+            wit::{self, v0_1_0::pumpkin},
+        },
+    },
+    server::Server,
+};
+
+pub mod player;
+
+impl pumpkin::plugin::event::Host for PluginHostState {}
+
+pub struct WasmPluginV0_1_0EventHandler {
+    pub handler_id: u32,
+    pub plugin: Arc<WasmPlugin>,
+}
+
+pub trait ToFromV0_1_0WasmEvent {
+    fn to_v0_1_0_wasm_event(
+        &self,
+        state: &mut PluginHostState,
+    ) -> wit::v0_1_0::pumpkin::plugin::event::Event;
+
+    fn from_v0_1_0_wasm_event(
+        event: wit::v0_1_0::pumpkin::plugin::event::Event,
+        state: &mut PluginHostState,
+    ) -> Self;
+}
+
+impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0EventHandler {
+    fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
+        Box::pin(async {
+            let mut store = self.plugin.store.lock().await;
+            let event = event.to_v0_1_0_wasm_event(store.data_mut());
+            match self.plugin.plugin_instance {
+                PluginInstance::V0_1_0(ref plugin) => {
+                    let server = store.data_mut().add_server(server.clone()).unwrap();
+                    plugin
+                        .call_handle_event(&mut *store, self.handler_id, server, event)
+                        .await
+                        .unwrap();
+                }
+            }
+        })
+    }
+
+    fn handle_blocking<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        event: &'a mut E,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async {
+            let mut store = self.plugin.store.lock().await;
+            let wasm_event = event.to_v0_1_0_wasm_event(store.data_mut());
+            match self.plugin.plugin_instance {
+                PluginInstance::V0_1_0(ref plugin) => {
+                    let server = store.data_mut().add_server(server.clone()).unwrap();
+                    let returned_event = plugin
+                        .call_handle_event(&mut *store, self.handler_id, server, wasm_event)
+                        .await
+                        .unwrap();
+
+                    *event = E::from_v0_1_0_wasm_event(returned_event, store.data_mut());
+                }
+            }
+        })
+    }
+}
