@@ -63,7 +63,7 @@ impl<'a> CachedBranding {
 
     fn build_brand() -> Box<[u8]> {
         let mut buf = Vec::new();
-        VarInt(Self::BRAND.len() as i32).encode(&mut buf).unwrap();
+        VarInt(Self::BRAND.len() as i32).encode(&mut buf).expect("Failed to encode brand length");
         buf.extend_from_slice(Self::BRAND_BYTES);
         buf.into_boxed_slice()
     }
@@ -74,7 +74,7 @@ impl CachedStatus {
     pub fn new(config: &BasicConfiguration) -> Self {
         let status_response = Self::build_response(config);
         let status_response_json = serde_json::to_string(&status_response)
-            .expect("Failed to parse status response into JSON");
+            .expect("Failed to serialize status response to JSON");
 
         Self {
             status_response,
@@ -114,7 +114,7 @@ impl CachedStatus {
             }
 
             self.status_response_json = serde_json::to_string(&status_response)
-                .expect("Failed to parse status response into JSON");
+                .expect("Failed to serialize status response to JSON");
         }
     }
 
@@ -133,7 +133,7 @@ impl CachedStatus {
             }
 
             self.status_response_json = serde_json::to_string(&status_response)
-                .expect("Failed to parse status response into JSON");
+                .expect("Failed to serialize status response to JSON");
         }
     }
 

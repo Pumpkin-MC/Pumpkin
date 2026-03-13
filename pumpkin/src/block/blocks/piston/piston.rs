@@ -198,7 +198,7 @@ impl BlockBehaviour for PistonBlock {
                 let piston = block_entity
                     .as_any()
                     .downcast_ref::<PistonBlockEntity>()
-                    .unwrap();
+                    .expect("block entity should be PistonBlockEntity");
                 piston.finish(world.clone()).await;
             }
 
@@ -220,7 +220,7 @@ impl BlockBehaviour for PistonBlock {
 
             let mut props = PistonProps::default(block);
             props.facing = BlockDirection::by_index((data & 7) as usize)
-                .unwrap()
+                .expect("invalid piston direction from synced block event")
                 .to_facing();
 
             world
@@ -243,7 +243,10 @@ impl BlockBehaviour for PistonBlock {
                 if block == &Block::MOVING_PISTON
                     && let Some(entity) = world.get_block_entity(&pull_pos).await
                 {
-                    let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
+                    let piston = entity
+                        .as_any()
+                        .downcast_ref::<PistonBlockEntity>()
+                        .expect("block entity should be PistonBlockEntity");
                     if piston.facing == dir && piston.extending {
                         piston.finish(world.clone()).await;
                         bl2 = true;
@@ -350,7 +353,10 @@ async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
             if new_props.facing == props.facing
                 && let Some(entity) = world.get_block_entity(&new_pos).await
             {
-                let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
+                let piston = entity
+                    .as_any()
+                    .downcast_ref::<PistonBlockEntity>()
+                    .expect("block entity should be PistonBlockEntity");
                 if piston.extending && piston.current_progress.load() < 0.5
                 // TODO: more stuff...
                 {

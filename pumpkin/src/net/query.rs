@@ -131,8 +131,8 @@ async fn handle_packet(
                                 // Although there is no documented limit, we will limit to 4 players
                                 .iter()
                                 .take(4 - players.len())
-                                .map(|player| {
-                                    CString::new(player.gameprofile.name.as_str()).unwrap()
+                                .filter_map(|player| {
+                                    CString::new(player.gameprofile.name.as_str()).ok()
                                 })
                                 .collect::<Vec<_>>();
 

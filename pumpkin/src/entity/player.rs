@@ -547,7 +547,8 @@ impl Player {
             watched_section: AtomicCell::new(Cylindrical::new(
                 Vector2::new(0, 0),
                 // Since 1 is not possible in vanilla it is used as uninit
-                NonZeroU8::new(1).unwrap(),
+                // SAFETY: 1 is always non-zero
+                unsafe { NonZeroU8::new_unchecked(1) },
             )),
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicI64::new(0),
@@ -1821,7 +1822,8 @@ impl Player {
 
         self.watched_section.store(Cylindrical::new(
             Vector2::new(0, 0),
-            NonZeroU8::new(1).unwrap(),
+            // SAFETY: 1 is always non-zero
+            unsafe { NonZeroU8::new_unchecked(1) },
         ));
     }
 
