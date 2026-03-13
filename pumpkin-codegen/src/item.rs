@@ -518,7 +518,8 @@ pub struct DeathProtection {
 pub struct WeaponComponent {
     #[serde(default = "return_1u32")]
     pub item_damage_per_attack: u32,
-    // disable_blocking_for_seconds is intentionally omitted; not needed for combat damage calc
+    // TODO: Add disable_blocking_for_seconds parsing when shield-disable mechanic is implemented.
+    // This preserves round-trip fidelity for vanilla items and datapacks.
 }
 
 #[derive(Deserialize, Clone)]

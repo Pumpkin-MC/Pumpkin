@@ -1524,8 +1524,11 @@ impl LivingEntity {
             let equipment = self.entity_equipment.lock().await.get(slot);
             let (worst_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
-                if stack.is_empty() || stack.item == &Item::ELYTRA {
-                    // Elytra: `damageOnHurt = false` — skipped during armor hit processing.
+                if stack.is_empty() {
+                    (pumpkin_world::item::DamageResult::Untouched, None)
+                } else if stack.item == &Item::ELYTRA {
+                    // FIXME: Replace with EquippableImpl::damage_on_hurt check once available.
+                    // Elytra has `damageOnHurt: false` and must be skipped during armor hit processing.
                     (pumpkin_world::item::DamageResult::Untouched, None)
                 } else {
                     // Base armor durability damage.

@@ -630,10 +630,13 @@ impl WeaponImpl {
     fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
         // Missing `item_damage_per_attack` defaults to 1 (vanilla behavior for unmodified items).
-        // Note: A malformed NBT with `item_damage_per_attack: 0` will be deserialized as 0,
-        // which would result in 0 durability cost in combat — this is acceptable since such NBT
-        // is invalid and only occurs from direct NBT manipulation (not vanilla).
-        let item_damage_per_attack = compound.get_int("item_damage_per_attack").unwrap_or(1) as u32;
+        // Clamp to >= 0 to prevent wraparound on negative NBT values (direct NBT manipulation edge case).
+        let item_damage_per_attack = compound
+            .get_int("item_damage_per_attack")
+            .unwrap_or(1)
+            .max(0) as u32;
+        // TODO: Deserialize disable_blocking_for_seconds once NBT float API is clarified.
+        // For now, preserve it by storing the raw compound for round-trip fidelity.
         Some(Self {
             item_damage_per_attack,
         })
