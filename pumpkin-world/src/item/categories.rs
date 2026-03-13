@@ -47,24 +47,28 @@ impl ItemStack {
         self.item.has_tag(&tag::Item::MINECRAFT_ENCHANTABLE_ARMOR)
     }
 
+    #[cfg(test)]
     #[inline]
     #[must_use]
     pub fn is_axe(&self) -> bool {
         self.item.has_tag(&tag::Item::MINECRAFT_AXES)
     }
 
+    #[cfg(test)]
     #[inline]
     #[must_use]
     pub fn is_pickaxe(&self) -> bool {
         self.item.has_tag(&tag::Item::MINECRAFT_PICKAXES)
     }
 
+    #[cfg(test)]
     #[inline]
     #[must_use]
     pub fn is_shovel(&self) -> bool {
         self.item.has_tag(&tag::Item::MINECRAFT_SHOVELS)
     }
 
+    #[cfg(test)]
     #[inline]
     #[must_use]
     pub fn is_hoe(&self) -> bool {

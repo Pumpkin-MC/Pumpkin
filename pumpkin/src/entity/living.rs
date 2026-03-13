@@ -1508,12 +1508,7 @@ impl LivingEntity {
         false
     }
 
-    async fn damage_armor_items(
-        &self,
-        caller: &dyn EntityBase,
-        damage_amount: f32,
-        _source: Option<&dyn EntityBase>,
-    ) {
+    async fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
         let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
         let mut equipment_updates = Vec::new();
 
@@ -1982,7 +1977,7 @@ impl EntityBase for LivingEntity {
             // Armor durability uses raw damage (pre-absorption), per vanilla `getDamageAfterArmorAbsorb`.
             // Only applied when the source is not in `#minecraft:bypasses_armor`.
             if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
-                self.damage_armor_items(caller, damage_amount, source).await;
+                self.damage_armor_items(caller, damage_amount).await;
             }
 
             true

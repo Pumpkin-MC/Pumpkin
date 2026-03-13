@@ -627,9 +627,11 @@ pub struct WeaponImpl {
     pub item_damage_per_attack: u32,
 }
 impl WeaponImpl {
-    const fn read_data(_data: &NbtTag) -> Option<Self> {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let item_damage_per_attack = compound.get_int("item_damage_per_attack").unwrap_or(1) as u32;
         Some(Self {
-            item_damage_per_attack: 1,
+            item_damage_per_attack,
         })
     }
 }
