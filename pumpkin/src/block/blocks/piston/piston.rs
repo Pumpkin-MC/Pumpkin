@@ -328,7 +328,7 @@ async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDir
     false
 }
 
-async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
+pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
     let state = world.get_block_state(block_pos).await;
     let props = PistonProps::from_state_id(state.id, block);
     let dir = props.facing.to_block_direction();

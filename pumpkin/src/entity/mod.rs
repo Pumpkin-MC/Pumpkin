@@ -14,6 +14,7 @@ use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
@@ -83,6 +84,22 @@ pub mod vehicle;
 
 mod combat;
 pub mod predicate;
+
+/// Returns the [`EntityStatus`] that should be broadcast when the given
+/// equipment slot breaks.
+#[must_use]
+pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
+    match slot {
+        EquipmentSlot::MainHand(_) => EntityStatus::BreakMainhand,
+        EquipmentSlot::OffHand(_) => EntityStatus::BreakOffhand,
+        EquipmentSlot::Head(_) => EntityStatus::BreakHead,
+        EquipmentSlot::Chest(_) => EntityStatus::BreakChest,
+        EquipmentSlot::Legs(_) => EntityStatus::BreakLegs,
+        EquipmentSlot::Feet(_) => EntityStatus::BreakFeet,
+        EquipmentSlot::Body(_) => EntityStatus::BreakBody,
+        EquipmentSlot::Saddle(_) => EntityStatus::BreakSaddle,
+    }
+}
 
 pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -2670,4 +2687,32 @@ pub enum Flag {
     Glowing = 6,
     /// Indicates if the entity is flying due to a fall.
     FallFlying = 7,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equipment_break_status_maps_all_slots() {
+        // Status bytes from vanilla EntityEvent: mainhand=47, offhand=48,
+        // head=49, chest=50, legs=51, feet=52, body=65, saddle=68.
+        let cases: &[(&EquipmentSlot, u8)] = &[
+            (&EquipmentSlot::MAIN_HAND, EntityStatus::BreakMainhand as u8),
+            (&EquipmentSlot::OFF_HAND, EntityStatus::BreakOffhand as u8),
+            (&EquipmentSlot::HEAD, EntityStatus::BreakHead as u8),
+            (&EquipmentSlot::CHEST, EntityStatus::BreakChest as u8),
+            (&EquipmentSlot::LEGS, EntityStatus::BreakLegs as u8),
+            (&EquipmentSlot::FEET, EntityStatus::BreakFeet as u8),
+            (&EquipmentSlot::BODY, EntityStatus::BreakBody as u8),
+            (&EquipmentSlot::SADDLE, EntityStatus::BreakSaddle as u8),
+        ];
+        for (i, (slot, expected)) in cases.iter().enumerate() {
+            assert_eq!(
+                equipment_break_status(slot) as u8,
+                *expected,
+                "status mismatch at index {i}"
+            );
+        }
+    }
 }
