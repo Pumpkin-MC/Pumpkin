@@ -209,19 +209,17 @@ impl GenerationCache for Cache {
     fn add_block_entity(&mut self, pos: &Vector3<i32>, nbt: NbtCompound) {
         let dx = (pos.x >> 4) - self.x;
         let dz = (pos.z >> 4) - self.z;
-        // debug_assert!(dx < self.size && dz < self.size);
-        // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
-            // breakpoint here
             debug!(
-                "illegal set_block_state {pos:?} cache pos ({}, {}) size {}",
+                "illegal add_block_entity {pos:?} cache pos ({}, {}) size {}",
                 self.x, self.z, self.size
             );
             return;
         }
+
         match &mut self.chunks[(dx * self.size + dz) as usize] {
-            Chunk::Level(_data) => {
-                todo!()
+            Chunk::Level(_) => {
+                debug!("add_block_entity on non-proto chunk at {pos:?}");
             }
             Chunk::Proto(data) => {
                 data.add_block_entity(nbt);

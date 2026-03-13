@@ -4,9 +4,10 @@ use serde_json::Value;
 use std::fs;
 
 pub fn build() -> TokenStream {
-    let json_content =
-        fs::read_to_string("../assets/placed_feature.json").expect("Failed to read placed_feature.json");
-    let json: Value = serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
+    let json_content = fs::read_to_string("../assets/placed_feature.json")
+        .expect("Failed to read placed_feature.json");
+    let json: Value =
+        serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
 
     let entries: Vec<TokenStream> = json
         .as_object()
@@ -53,8 +54,14 @@ pub fn build() -> TokenStream {
 
 fn value_to_placed_feature(v: &Value) -> TokenStream {
     let feature = value_to_feature(&v["feature"]);
-    let placement_arr = v["placement"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
-    let placement: Vec<TokenStream> = placement_arr.iter().map(value_to_placement_modifier).collect();
+    let placement_arr = v["placement"]
+        .as_array()
+        .map(|a| a.as_slice())
+        .unwrap_or(&[]);
+    let placement: Vec<TokenStream> = placement_arr
+        .iter()
+        .map(value_to_placement_modifier)
+        .collect();
     quote! {
         PlacedFeature {
             feature: #feature,
@@ -84,7 +91,8 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
         "minecraft:in_square" => quote! { PlacementModifier::InSquare(SquarePlacementModifier) },
         "minecraft:fixed_placement" => quote! { PlacementModifier::FixedPlacement },
         "minecraft:heightmap" => {
-            let heightmap = value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
+            let heightmap =
+                value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
             quote! {
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: #heightmap,
@@ -179,7 +187,9 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
         "minecraft:environment_scan" => {
             let dir = value_to_block_direction(v["direction_of_search"].as_str().unwrap_or("down"));
             let target = value_to_block_predicate(&v["target_condition"]);
-            let allowed = if v["allowed_search_condition"].is_null() || v["allowed_search_condition"].is_object() {
+            let allowed = if v["allowed_search_condition"].is_null()
+                || v["allowed_search_condition"].is_object()
+            {
                 if v["allowed_search_condition"].is_object() {
                     let p = value_to_block_predicate(&v["allowed_search_condition"]);
                     quote! { Some(#p) }
@@ -450,11 +460,13 @@ pub fn value_to_int_provider(v: &Value) -> TokenStream {
                     let entries: Vec<TokenStream> = v["distribution"]
                         .as_array()
                         .map(|arr| {
-                            arr.iter().map(|e| {
-                                let data = value_to_int_provider(&e["data"]);
-                                let weight = e["weight"].as_i64().unwrap_or(1) as i32;
-                                quote! { WeightedEntry { data: #data, weight: #weight } }
-                            }).collect()
+                            arr.iter()
+                                .map(|e| {
+                                    let data = value_to_int_provider(&e["data"]);
+                                    let weight = e["weight"].as_i64().unwrap_or(1) as i32;
+                                    quote! { WeightedEntry { data: #data, weight: #weight } }
+                                })
+                                .collect()
                         })
                         .unwrap_or_default();
                     quote! { IntProvider::Object(NormalIntProvider::WeightedList(WeightedListIntProvider { distribution: vec![#(#entries),*] })) }
@@ -494,7 +506,7 @@ pub fn value_to_block_direction(s: &str) -> TokenStream {
 }
 
 fn value_to_offset_predicate(v: &Value) -> TokenStream {
-    if v.is_null() || v.is_object() && v.as_object().map_or(true, |o| o.is_empty()) {
+    if v.is_null() || v.is_object() && v.as_object().is_none_or(|o| o.is_empty()) {
         quote! { OffsetBlocksBlockPredicate { offset: None } }
     } else if v.is_array() {
         let x = v[0].as_i64().unwrap_or(0) as i32;
@@ -525,7 +537,8 @@ fn value_to_matching_blocks_wrapper(v: &Value) -> TokenStream {
 pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
     let name = v["Name"].as_str().unwrap_or("minecraft:air");
     let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
-    let block_ident = quote::format_ident!("{}", name_stripped.to_uppercase().replace(':', "_").replace('-', "_"));
+    let block_ident =
+        quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
     if let Some(props) = v["Properties"].as_object() {
         let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
         let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();

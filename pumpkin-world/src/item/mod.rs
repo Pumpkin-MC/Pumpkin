@@ -1016,7 +1016,6 @@ mod tests {
             "Unbreaking III armor: expected ~350 applications in 500 trials, got {applied}"
         );
     }
-
     // ── set_damage ───────────────────────────────────────────────────
 
     #[test]
