@@ -163,7 +163,13 @@ impl StructurePieceBase for TemplatePiece {
         Box::new(self.clone())
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        _chunk_box: &BlockBox,
+    ) {
         self.place_blocks(chunk);
 
         // TODO: Spawn entities from template

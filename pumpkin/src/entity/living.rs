@@ -1529,6 +1529,13 @@ impl LivingEntity {
             };
 
             if let Some(updated_stack) = updated_stack {
+                // Broadcast break status before clearing the slot.
+                if updated_stack.is_empty() {
+                    let world = self.entity.world.load();
+                    world
+                        .send_entity_status(&self.entity, super::equipment_break_status(slot))
+                        .await;
+                }
                 equipment_updates.push((slot.clone(), updated_stack.clone()));
                 if let Some(player) = caller.get_player() {
                     player
@@ -1992,7 +1999,11 @@ impl EntityBase for LivingEntity {
 
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).
-            if !self.dead.load(Relaxed) && self.health.load() > 0.0 {
+            // We allow movement during death animation (20 ticks) so knockback is applied.
+            let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
+            let in_death_animation =
+                self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
+            if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
                 self.tick_movement(server, caller.clone()).await;
                 // Vanilla-like order: freeze logic runs after movement/collisions.
                 self.entity.tick_frozen(caller.as_ref()).await;

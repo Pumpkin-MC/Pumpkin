@@ -483,3 +483,258 @@ impl From<&RecipeResultStruct> for ItemStack {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::data_component::DataComponent;
+    use pumpkin_data::data_component_impl::{DataComponentImpl, UnbreakableImpl};
+
+    /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
+    fn iron_sword() -> ItemStack {
+        ItemStack::new(1, &Item::IRON_SWORD)
+    }
+
+    // ── damage_item_with_context ──────────────────────────────────────
+
+    #[test]
+    fn damage_zero_amount_is_noop() {
+        let mut stack = iron_sword();
+        assert!(!stack.damage_item_with_context(0, false));
+        assert_eq!(stack.get_damage(), 0);
+    }
+
+    #[test]
+    fn damage_negative_amount_is_noop() {
+        let cases: &[i32] = &[-1, -5, -10, -100];
+        for &amount in cases {
+            let mut stack = iron_sword();
+            assert!(
+                !stack.damage_item_with_context(amount, false),
+                "expected no damage for amount={amount}"
+            );
+            assert_eq!(stack.get_damage(), 0, "damage mismatch for amount={amount}");
+        }
+    }
+
+    #[test]
+    fn damage_non_damageable_item_is_noop() {
+        // AIR has no MaxDamage component.
+        let mut stack = ItemStack::new(1, &Item::AIR);
+        assert!(!stack.damage_item_with_context(1, false));
+    }
+
+    #[test]
+    fn damage_unbreakable_item_is_noop() {
+        let cases: &[i32] = &[1, 5, 10, 100, 250];
+        for &amount in cases {
+            let mut stack = iron_sword();
+            stack
+                .patch
+                .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
+            assert!(
+                !stack.damage_item_with_context(amount, false),
+                "expected no damage for unbreakable item, amount={amount}"
+            );
+            assert_eq!(
+                stack.get_damage(),
+                0,
+                "damage mismatch for unbreakable item, amount={amount}"
+            );
+        }
+    }
+
+    #[test]
+    fn damage_increases_damage_value() {
+        // Without Unbreaking, every point of damage is applied.
+        // Each sub-array is (amount, expected_damage); each case gets a fresh iron_sword.
+        let cases: &[(i32, i32)] = &[(1, 1), (5, 5), (10, 10), (100, 100), (249, 249)];
+        for &(amount, expected) in cases {
+            let mut stack = iron_sword();
+            assert!(
+                stack.damage_item_with_context(amount, false),
+                "expected damage_item_with_context to return true for amount={amount}"
+            );
+            assert_eq!(
+                stack.get_damage(),
+                expected,
+                "damage mismatch for amount={amount}"
+            );
+        }
+    }
+
+    #[test]
+    fn damage_accumulates() {
+        // Each entry: (first_amount, second_amount, expected_total)
+        let cases: &[(i32, i32, i32)] = &[(100, 50, 150), (10, 20, 30), (1, 1, 2), (50, 100, 150)];
+        for &(first, second, expected) in cases {
+            let mut stack = iron_sword();
+            stack.damage_item_with_context(first, false);
+            stack.damage_item_with_context(second, false);
+            assert_eq!(
+                stack.get_damage(),
+                expected,
+                "accumulated damage mismatch for first={first}, second={second}"
+            );
+        }
+    }
+
+    #[test]
+    fn damage_breaks_item_when_exceeding_max() {
+        // Iron Sword max_damage = 250; any amount >= 250 should destroy it.
+        let cases: &[i32] = &[250, 260, 300, 1000];
+        for &amount in cases {
+            let mut stack = iron_sword();
+            assert!(
+                stack.damage_item_with_context(amount, false),
+                "expected item to break for amount={amount}"
+            );
+            assert!(
+                stack.is_empty(),
+                "item should be destroyed for amount={amount}"
+            );
+        }
+    }
+
+    #[test]
+    fn damage_breaks_single_item_to_empty() {
+        let mut stack = iron_sword();
+        stack.damage_item_with_context(300, false);
+        assert!(stack.is_empty());
+        assert_eq!(stack.item_count, 0);
+    }
+
+    // ── repair_item ──────────────────────────────────────────────────
+
+    #[test]
+    fn repair_zero_amount_is_noop() {
+        let initial_damages: &[i32] = &[1, 5, 10, 100, 249];
+        for &initial in initial_damages {
+            let mut stack = iron_sword();
+            stack.set_damage(initial);
+            assert_eq!(
+                stack.repair_item(0),
+                0,
+                "repair(0) should return 0 for initial={initial}"
+            );
+            assert_eq!(
+                stack.get_damage(),
+                initial,
+                "damage should be unchanged for initial={initial}"
+            );
+        }
+    }
+
+    #[test]
+    fn repair_negative_amount_is_noop() {
+        let cases: &[i32] = &[-1, -5, -10, -100];
+        for &amount in cases {
+            let mut stack = iron_sword();
+            stack.set_damage(10);
+            assert_eq!(
+                stack.repair_item(amount),
+                0,
+                "repair({amount}) should return 0"
+            );
+            assert_eq!(
+                stack.get_damage(),
+                10,
+                "damage should be unchanged for repair({amount})"
+            );
+        }
+    }
+
+    #[test]
+    fn repair_undamaged_item_is_noop() {
+        let amounts: &[i32] = &[1, 5, 10, 100];
+        for &amount in amounts {
+            let mut stack = iron_sword();
+            assert_eq!(
+                stack.repair_item(amount),
+                0,
+                "repair({amount}) on undamaged item should return 0"
+            );
+            assert_eq!(
+                stack.get_damage(),
+                0,
+                "undamaged item should remain at 0 after repair({amount})"
+            );
+        }
+    }
+
+    #[test]
+    fn repair_partial() {
+        // Each entry: (initial_damage, repair_amount, expected_repaired, expected_remaining)
+        let cases: &[(i32, i32, i32, i32)] = &[
+            (20, 8, 8, 12),
+            (50, 25, 25, 25),
+            (100, 30, 30, 70),
+            (249, 1, 1, 248),
+        ];
+        for &(initial, repair, exp_repaired, exp_remaining) in cases {
+            let mut stack = iron_sword();
+            stack.set_damage(initial);
+            let repaired = stack.repair_item(repair);
+            assert_eq!(
+                repaired, exp_repaired,
+                "repaired amount mismatch for initial={initial}, repair={repair}"
+            );
+            assert_eq!(
+                stack.get_damage(),
+                exp_remaining,
+                "remaining damage mismatch for initial={initial}, repair={repair}"
+            );
+        }
+    }
+
+    #[test]
+    fn repair_capped_at_current_damage() {
+        // Each entry: (initial_damage, repair_amount); repair exceeds damage, so repaired == initial.
+        let cases: &[(i32, i32)] = &[(5, 6), (5, 100), (10, 11), (100, 200)];
+        for &(initial, repair) in cases {
+            let mut stack = iron_sword();
+            stack.set_damage(initial);
+            let repaired = stack.repair_item(repair);
+            assert_eq!(
+                repaired, initial,
+                "repaired amount mismatch for initial={initial}, repair={repair}"
+            );
+            assert_eq!(
+                stack.get_damage(),
+                0,
+                "damage should be 0 after over-repair for initial={initial}"
+            );
+        }
+    }
+
+    #[test]
+    fn repair_fully_clears_damage_component() {
+        let mut stack = iron_sword();
+        stack.set_damage(10);
+        stack.repair_item(10);
+        assert_eq!(stack.get_damage(), 0);
+        // set_damage(0) removes the Damage patch entry.
+        assert!(
+            !stack
+                .patch
+                .iter()
+                .any(|(id, _)| *id == DataComponent::Damage)
+        );
+    }
+
+    // ── set_damage ───────────────────────────────────────────────────
+
+    #[test]
+    fn set_damage_negative_clamps_to_zero() {
+        let cases: &[i32] = &[-1, -10, -100, i32::MIN];
+        for &amount in cases {
+            let mut stack = iron_sword();
+            stack.set_damage(amount);
+            assert_eq!(
+                stack.get_damage(),
+                0,
+                "damage should clamp to 0 for set_damage({amount})"
+            );
+        }
+    }
+}

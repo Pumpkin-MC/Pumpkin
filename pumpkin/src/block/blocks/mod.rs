@@ -14,6 +14,7 @@ pub mod chiseled_bookshelf;
 pub mod cobweb;
 pub mod command;
 pub mod composter;
+pub mod conduit;
 pub mod crafting_table;
 pub mod dirt_path;
 pub mod doors;

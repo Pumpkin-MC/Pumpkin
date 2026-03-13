@@ -477,7 +477,7 @@ mod tests {
     use crate::{
         assert_eq_delta,
         noise::perlin::{OctavePerlinNoiseSampler, PerlinNoiseSampler},
-        random::{RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro},
+        random::{RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro},
         read_data_from_file,
     };
 

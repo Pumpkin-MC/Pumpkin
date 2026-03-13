@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::{
-    math::{position::BlockPos, vector3::Vector3},
+    math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomDeriverImpl, RandomGenerator, RandomImpl},
 };
 use tracing::debug;
@@ -166,7 +166,13 @@ impl StructurePieceBase for NetherFossilPiece {
         Box::new(self.clone())
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        seed: i64,
+        _chunk_box: &BlockBox,
+    ) {
         // Vanilla column scan: find air above soul sand or solid block
         let Some(placement_y) = self.find_placement_y(chunk) else {
             debug!(

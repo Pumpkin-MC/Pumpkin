@@ -8,7 +8,10 @@
 
 use std::sync::Arc;
 
-use pumpkin_util::{math::position::BlockPos, math::vector3::Vector3, random::RandomGenerator};
+use pumpkin_util::{
+    math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
+    random::RandomGenerator,
+};
 use serde::Deserialize;
 
 use crate::{
@@ -142,7 +145,13 @@ impl StructurePieceBase for IglooPiece {
         Box::new(self.clone())
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        _chunk_box: &BlockBox,
+    ) {
         let origin = self.shiftable_structure_piece.piece.bounding_box.min;
 
         // Vanilla samples height at the entrance position (3, 0, 5 in template space)
