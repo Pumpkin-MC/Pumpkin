@@ -34,7 +34,7 @@ use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, Food
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{Block, Enchantment, item::Item, translation};
+use pumpkin_data::{Block, item::Item, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
@@ -1512,14 +1512,13 @@ impl LivingEntity {
         &self,
         caller: &dyn EntityBase,
         damage_amount: f32,
-        source: Option<&dyn EntityBase>,
+        _source: Option<&dyn EntityBase>,
     ) {
         let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
         let mut equipment_updates = Vec::new();
 
         // TODO: Falling anvil/stalactite should only damage the helmet slot.
         // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
-        // TODO: Move Thorns into a dedicated post-attack effects phase.
 
         for (slot_index, slot) in self.equipment_slots.iter() {
             if !slot.is_armor_slot() {
@@ -1527,59 +1526,18 @@ impl LivingEntity {
             }
 
             let equipment = self.entity_equipment.lock().await.get(slot);
-            let (worst_result, thorns_procs, updated_stack_opt) = {
+            let (worst_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() || stack.item == &Item::ELYTRA {
                     // Elytra: `damageOnHurt = false` — skipped during armor hit processing.
-                    (pumpkin_world::item::DamageResult::Untouched, false, None)
+                    (pumpkin_world::item::DamageResult::Untouched, None)
                 } else {
-                    // Check Thorns trigger before durability to preserve effect ordering.
-                    let thorns_level = stack.get_enchantment_level(&Enchantment::THORNS);
-                    let thorns_procs = thorns_level > 0
-                        && rand::rng().random::<f32>() < thorns_level as f32 * 0.15;
-
                     // Base armor durability damage.
-                    let base_result = stack.damage_item(armor_damage);
-
-                    // Thorns extra +2 durability cost on the armor piece.
-                    let thorns_result = if thorns_procs {
-                        stack.damage_item(2)
-                    } else {
-                        pumpkin_world::item::DamageResult::Untouched
-                    };
-
-                    let worst_result = match (base_result, thorns_result) {
-                        (pumpkin_world::item::DamageResult::Broken, _)
-                        | (_, pumpkin_world::item::DamageResult::Broken) => {
-                            pumpkin_world::item::DamageResult::Broken
-                        }
-                        (pumpkin_world::item::DamageResult::Damaged, _)
-                        | (_, pumpkin_world::item::DamageResult::Damaged) => {
-                            pumpkin_world::item::DamageResult::Damaged
-                        }
-                        _ => pumpkin_world::item::DamageResult::Untouched,
-                    };
-
-                    let changed = worst_result != pumpkin_world::item::DamageResult::Untouched;
-                    (worst_result, thorns_procs, changed.then_some(stack.clone()))
+                    let result = stack.damage_item(armor_damage);
+                    let changed = result != pumpkin_world::item::DamageResult::Untouched;
+                    (result, changed.then_some(stack.clone()))
                 }
             };
-
-            // Thorns: retaliation fires before the break broadcast (vanilla `all_of` ordering).
-            if let Some(src) = source.filter(|_| thorns_procs) {
-                // Uniform float in [1.0, 5.0) — `Mth.randomBetween(rng, 1.0f, 5.0f)`.
-                let thorns_damage = 1.0 + rand::rng().random::<f32>() * 4.0;
-                // Include caller as source for death messages and combat tracking.
-                src.damage_with_context(
-                    src,
-                    thorns_damage,
-                    DamageType::THORNS,
-                    None,
-                    Some(caller),
-                    None,
-                )
-                .await;
-            }
 
             if let Some(updated_stack) = updated_stack_opt {
                 // Broadcast break status before clearing the slot.
