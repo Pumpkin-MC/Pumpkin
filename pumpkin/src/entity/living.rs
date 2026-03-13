@@ -1509,6 +1509,7 @@ impl LivingEntity {
     }
 
     async fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
+        // Formula: armor loses floor(incoming_damage / 4) durability, minimum 1.
         let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
         let mut equipment_updates = Vec::new();
 
@@ -1974,8 +1975,9 @@ impl EntityBase for LivingEntity {
                 self.on_death(damage_type, source, cause).await;
             }
 
-            // Armor durability uses raw damage (pre-absorption), per vanilla `getDamageAfterArmorAbsorb`.
-            // Only applied when the source is not in `#minecraft:bypasses_armor`.
+            // Armor durability is based on incoming raw damage, not post-absorption remaining.
+            // Armor loses floor(raw_damage / 4) durability, minimum 1.
+            // Not applied when the source is in `#minecraft:bypasses_armor`.
             if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
                 self.damage_armor_items(caller, damage_amount).await;
             }

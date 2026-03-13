@@ -888,7 +888,7 @@ mod tests {
         );
     }
 
-    /// Unbreaking III armor: 70% apply probability. 500 trials, expect ~350 hits (window 210–490).
+    /// Unbreaking III armor: 70% apply probability. 500 trials, expect ~350 hits (window 300–400).
     #[test]
     fn unbreaking_iii_armor_applies_roughly_70_percent_of_hits() {
         let mut stack = with_unbreaking(&Item::DIAMOND_CHESTPLATE, 3);
@@ -898,8 +898,9 @@ mod tests {
                 applied += 1;
             }
         }
+        // ~350 expected with 70% probability, ±5σ confidence (300–400 window, ~99.7% non-flaky).
         assert!(
-            (210..=490).contains(&applied),
+            (300..=400).contains(&applied),
             "Unbreaking III armor: expected ~350 applications in 500 trials, got {applied}"
         );
     }
