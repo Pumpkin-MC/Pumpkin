@@ -47,6 +47,9 @@ impl ItemStack {
         self.item.has_tag(&tag::Item::MINECRAFT_ENCHANTABLE_ARMOR)
     }
 
+    /// Test-only predicates: identify 2-durability tools (axes/pickaxes/shovels/hoes).
+    /// In production, durability cost is data-driven via the `Weapon` component.
+    /// These helpers exist only to validate item categorization in tests.
     #[cfg(test)]
     #[inline]
     #[must_use]

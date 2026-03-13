@@ -241,7 +241,8 @@ impl ItemStack {
     }
 
     /// Elytra glide-tick: applies 1 durability clamped to `max_damage - 1` (broken state, never deleted).
-    /// Returns `Untouched` if already at the broken threshold or immune.
+    /// Respects Unbreaking enchantment; returns `Untouched` if Unbreaking negates the roll,
+    /// if already at broken threshold, or if the item is immune to durability damage.
     pub fn damage_elytra_glide_tick(&mut self) -> DamageResult {
         if !self.is_damageable() || self.is_unbreakable() {
             return DamageResult::Untouched;
@@ -252,6 +253,10 @@ impl ItemStack {
         }
         // Already at broken threshold — flight gate should have stopped us.
         if self.next_damage_will_break() {
+            return DamageResult::Untouched;
+        }
+        // Respect Unbreaking enchantment even for elytra glide ticks.
+        if !self.should_apply_durability_damage() {
             return DamageResult::Untouched;
         }
         let new_damage = self.get_damage().saturating_add(1);
@@ -1016,6 +1021,36 @@ mod tests {
             "Unbreaking III armor: expected ~350 applications in 500 trials, got {applied}"
         );
     }
+
+    #[test]
+    fn elytra_glide_tick_respects_unbreaking() {
+        // Elytra with Unbreaking III should apply damage less often than without.
+        let max_damage = elytra()
+            .get_max_damage()
+            .expect("ELYTRA must have MaxDamage");
+        let mut stack_no_unbreaking = elytra();
+        let mut stack_unbreaking_iii = with_unbreaking(&Item::ELYTRA, 3);
+
+        let mut no_unbreaking_count = 0;
+        let mut unbreaking_count = 0;
+        for _ in 0..500 {
+            if stack_no_unbreaking.damage_elytra_glide_tick() != DamageResult::Untouched {
+                no_unbreaking_count += 1;
+            }
+            if stack_unbreaking_iii.damage_elytra_glide_tick() != DamageResult::Untouched {
+                unbreaking_count += 1;
+            }
+        }
+
+        // Unbreaking III should apply roughly 70% of the time (armor formula).
+        // No enchantment should apply 100% of the time.
+        // Sanity check: unbreaking_count < no_unbreaking_count
+        assert!(
+            unbreaking_count < no_unbreaking_count,
+            "Elytra with Unbreaking III ({unbreaking_count}) should take less damage than vanilla ({no_unbreaking_count})"
+        );
+    }
+
     // ── set_damage ───────────────────────────────────────────────────
 
     #[test]
