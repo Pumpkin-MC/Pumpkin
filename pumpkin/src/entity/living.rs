@@ -2140,31 +2140,30 @@ impl EntityBase for LivingEntity {
 
 /// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
 /// These sources bypass armor entirely (fall, drown, freeze, etc.).
-pub(crate) fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
-    // Compare by `id: u8` (unique key) to avoid full PartialEq with f32 fields.
+pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
+    // Bitmask lookup: O(1) with two instructions (shift + AND), no array scan.
+    // DamageType IDs can exceed 31; use u64 for sufficient range.
     // TODO: Make data-driven once the data pack system can handle it without performance regressions.
-    const BYPASSING_IDS: [u8; 19] = [
-        DamageType::FALL.id,
-        DamageType::FLY_INTO_WALL.id,
-        DamageType::ON_FIRE.id,
-        DamageType::IN_WALL.id,
-        DamageType::CRAMMING.id,
-        DamageType::DROWN.id,
-        DamageType::GENERIC.id,
-        DamageType::WITHER.id,
-        DamageType::DRAGON_BREATH.id,
-        DamageType::STARVE.id,
-        DamageType::ENDER_PEARL.id,
-        DamageType::FREEZE.id,
-        DamageType::STALAGMITE.id,
-        DamageType::MAGIC.id,
-        DamageType::INDIRECT_MAGIC.id,
-        DamageType::OUT_OF_WORLD.id,
-        DamageType::GENERIC_KILL.id,
-        DamageType::SONIC_BOOM.id,
-        DamageType::OUTSIDE_BORDER.id,
-    ];
-    BYPASSING_IDS.contains(&damage_type.id)
+    const BYPASS_MASK: u64 = (1u64 << DamageType::FALL.id)
+        | (1u64 << DamageType::FLY_INTO_WALL.id)
+        | (1u64 << DamageType::ON_FIRE.id)
+        | (1u64 << DamageType::IN_WALL.id)
+        | (1u64 << DamageType::CRAMMING.id)
+        | (1u64 << DamageType::DROWN.id)
+        | (1u64 << DamageType::GENERIC.id)
+        | (1u64 << DamageType::WITHER.id)
+        | (1u64 << DamageType::DRAGON_BREATH.id)
+        | (1u64 << DamageType::STARVE.id)
+        | (1u64 << DamageType::ENDER_PEARL.id)
+        | (1u64 << DamageType::FREEZE.id)
+        | (1u64 << DamageType::STALAGMITE.id)
+        | (1u64 << DamageType::MAGIC.id)
+        | (1u64 << DamageType::INDIRECT_MAGIC.id)
+        | (1u64 << DamageType::OUT_OF_WORLD.id)
+        | (1u64 << DamageType::GENERIC_KILL.id)
+        | (1u64 << DamageType::SONIC_BOOM.id)
+        | (1u64 << DamageType::OUTSIDE_BORDER.id);
+    (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
 }
 
 #[cfg(test)]

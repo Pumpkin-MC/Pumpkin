@@ -180,14 +180,21 @@ impl ItemStack {
         repaired
     }
 
+    #[allow(dead_code)]
     fn should_apply_durability_damage(&self) -> bool {
         let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
+        self.should_apply_durability_damage_with(self.is_armor(), unbreaking_level)
+    }
+
+    /// Core logic: apply Unbreaking chance with precomputed armor category and level.
+    /// Extracted for use in damage_item where these values are hoisted outside the loop.
+    fn should_apply_durability_damage_with(&self, is_armor: bool, unbreaking_level: i32) -> bool {
         if unbreaking_level <= 0 {
             return true;
         }
 
         // `#minecraft:enchantable/armor` uses the armor formula; all others use the tool formula.
-        if self.is_armor() {
+        if is_armor {
             let chance = 0.6 + (0.4 / (unbreaking_level as f32 + 1.0));
             rand::random::<f32>() < chance
         } else {
@@ -205,9 +212,12 @@ impl ItemStack {
             return DamageResult::Untouched;
         }
 
+        // Hoist armor check and enchantment level outside loop to avoid repeated lookups.
+        let is_armor = self.is_armor();
+        let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
         let mut applied = 0;
         for _ in 0..amount {
-            if self.should_apply_durability_damage() {
+            if self.should_apply_durability_damage_with(is_armor, unbreaking_level) {
                 applied += 1;
             }
         }
