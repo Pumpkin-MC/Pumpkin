@@ -1873,7 +1873,7 @@ impl EntityBase for LivingEntity {
                 };
 
             // Finalize state
-            self.last_damage_taken.store(amount);
+            self.last_damage_taken.store(effective_amount);
             let damage_amount = damage_amount.max(0.0);
 
             let config = &world.server.upgrade().unwrap().advanced_config.pvp;
