@@ -244,7 +244,7 @@ impl Mob for CreeperEntity {
                 .await;
 
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                item_stack.damage_item(1);
+                let _ = item_stack.damage_item(1);
             }
 
             true

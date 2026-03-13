@@ -180,6 +180,9 @@ impl ItemStack {
         repaired
     }
 
+    /// Convenience wrapper: test whether this item should lose durability on this hit.
+    /// Encapsulates the Unbreaking enchantment formula for armor vs. tools.
+    /// This is kept for API symmetry and future extensibility despite current lack of direct callsites.
     #[allow(dead_code)]
     fn should_apply_durability_damage(&self) -> bool {
         let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
@@ -202,6 +205,9 @@ impl ItemStack {
         }
     }
 
+    /// Apply durability damage to this item and return the outcome.
+    /// Callers *must* check the return value to handle break broadcasts and item stack updates.
+    #[must_use]
     pub fn damage_item(&mut self, amount: i32) -> DamageResult {
         if amount <= 0 || !self.is_damageable() || self.is_unbreakable() {
             return DamageResult::Untouched;
@@ -592,8 +598,8 @@ mod tests {
         let cases: &[(i32, i32, i32)] = &[(100, 50, 150), (10, 20, 30), (1, 1, 2), (50, 100, 150)];
         for &(first, second, expected) in cases {
             let mut stack = iron_sword();
-            stack.damage_item(first);
-            stack.damage_item(second);
+            let _ = stack.damage_item(first);
+            let _ = stack.damage_item(second);
             assert_eq!(
                 stack.get_damage(),
                 expected,
@@ -623,7 +629,7 @@ mod tests {
     #[test]
     fn damage_breaks_single_item_to_empty() {
         let mut stack = iron_sword();
-        stack.damage_item(300);
+        let _ = stack.damage_item(300);
         assert!(stack.is_empty());
         assert_eq!(stack.item_count, 0);
     }

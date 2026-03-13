@@ -569,7 +569,7 @@ pub trait SunSensitive: Mob + Send + Sync {
             if head_item.is_empty() {
                 entity.set_on_fire_for(8.0);
             } else {
-                head_item.damage_item(damage_amount);
+                let _ = head_item.damage_item(damage_amount);
             }
         })
     }

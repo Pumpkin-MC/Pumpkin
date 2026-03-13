@@ -49,7 +49,7 @@ impl ItemBehaviour for FlintAndSteelItem {
             .await;
 
             if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                item.damage_item(1);
+                let _ = item.damage_item(1);
             }
         })
     }

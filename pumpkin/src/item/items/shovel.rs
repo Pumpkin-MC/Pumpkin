@@ -91,7 +91,7 @@ impl ItemBehaviour for ShovelItem {
             }
 
             if changed && player.gamemode.load() != GameMode::Creative {
-                item.damage_item(1);
+                let _ = item.damage_item(1);
             }
         })
     }

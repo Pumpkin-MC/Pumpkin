@@ -1524,11 +1524,13 @@ impl LivingEntity {
             }
 
             let equipment = self.entity_equipment.lock().await.get(slot);
-            let (worst_result, updated_stack_opt) = {
+            let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
                     (pumpkin_world::item::DamageResult::Untouched, None)
                 } else {
+                    // Items without `EquippableImpl` component take damage freely.
+                    // Items with `damage_on_hurt: false` (e.g. elytra) are exempt from armor hit durability.
                     let takes_damage = stack
                         .get_data_component::<EquippableImpl>()
                         .is_none_or(|equippable| equippable.damage_on_hurt);
@@ -1547,7 +1549,7 @@ impl LivingEntity {
 
             if let Some(updated_stack) = updated_stack_opt {
                 // Broadcast break status before clearing the slot.
-                if worst_result == pumpkin_world::item::DamageResult::Broken {
+                if slot_result == pumpkin_world::item::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
                         .send_entity_status(&self.entity, super::equipment_break_status(slot))
@@ -2151,6 +2153,10 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
     // Bitmask lookup: O(1) with two instructions (shift + AND), no array scan.
     // DamageType IDs can exceed 31; use u64 for sufficient range.
     // TODO: Make data-driven once the data pack system can handle it without performance regressions.
+    const _: () = assert!(
+        DamageType::OUTSIDE_BORDER.id < 64,
+        "DamageType ID exceeds bitmask width"
+    );
     const BYPASS_MASK: u64 = (1u64 << DamageType::FALL.id)
         | (1u64 << DamageType::FLY_INTO_WALL.id)
         | (1u64 << DamageType::ON_FIRE.id)

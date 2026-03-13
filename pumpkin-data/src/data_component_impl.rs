@@ -630,7 +630,8 @@ impl WeaponImpl {
     fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
         // Missing `item_damage_per_attack` defaults to 1 (vanilla behavior for unmodified items).
-        // Clamp to >= 0 to prevent wraparound on negative NBT values (direct NBT manipulation edge case).
+        // `.unwrap_or(1)` is applied only when the key is absent via `get_int`, which already handles missing keys.
+        // `.max(0)` protects against negative NBT values (direct NBT manipulation edge case).
         let item_damage_per_attack = compound
             .get_int("item_damage_per_attack")
             .unwrap_or(1)
