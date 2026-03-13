@@ -231,41 +231,6 @@ impl ItemStack {
         DamageResult::Damaged
     }
 
-    /// Returns `true` when `damage >= max_damage - 1` (one hit from breaking).
-    #[must_use]
-    pub fn next_damage_will_break(&self) -> bool {
-        match self.get_max_damage() {
-            Some(max) if max > 0 => self.get_damage() >= max - 1,
-            _ => false,
-        }
-    }
-
-    /// Elytra glide-tick: applies 1 durability clamped to `max_damage - 1` (broken state, never deleted).
-    /// Respects Unbreaking enchantment; returns `Untouched` if Unbreaking negates the roll,
-    /// if already at broken threshold, or if the item is immune to durability damage.
-    pub fn damage_elytra_glide_tick(&mut self) -> DamageResult {
-        if !self.is_damageable() || self.is_unbreakable() {
-            return DamageResult::Untouched;
-        }
-        let max_damage = self.get_max_damage().unwrap_or(0);
-        if max_damage <= 0 {
-            return DamageResult::Untouched;
-        }
-        // Already at broken threshold — flight gate should have stopped us.
-        if self.next_damage_will_break() {
-            return DamageResult::Untouched;
-        }
-        // Respect Unbreaking enchantment even for elytra glide ticks.
-        if !self.should_apply_durability_damage() {
-            return DamageResult::Untouched;
-        }
-        let new_damage = self.get_damage().saturating_add(1);
-        // Clamp to max_damage - 1 (broken texture, never deleted).
-        let clamped = new_damage.min(max_damage - 1);
-        self.set_damage(clamped);
-        DamageResult::Damaged
-    }
-
     #[must_use]
     pub fn get_max_use_time(&self) -> i32 {
         if let Some(value) = self.get_data_component::<ConsumableImpl>() {
@@ -771,89 +736,6 @@ mod tests {
         );
     }
 
-    // ── elytra ───────────────────────────────────────────────────────
-
-    fn elytra() -> ItemStack {
-        ItemStack::new(1, &Item::ELYTRA)
-    }
-
-    #[test]
-    fn elytra_damage_item_breaks_normally() {
-        // Elytra clamp lives in `damage_elytra_glide_tick`, not `damage_item`;
-        // a raw over-damage call destroys it like any other item.
-        let max_damage = elytra()
-            .get_max_damage()
-            .expect("ELYTRA must have MaxDamage");
-        let mut stack = elytra();
-        assert_eq!(stack.damage_item(max_damage), DamageResult::Broken);
-        assert!(
-            stack.is_empty(),
-            "elytra should be destroyed by damage_item"
-        );
-    }
-
-    #[test]
-    fn next_damage_will_break_reflects_threshold() {
-        let max_damage = elytra()
-            .get_max_damage()
-            .expect("ELYTRA must have MaxDamage");
-        let mut stack = elytra();
-        assert!(
-            !stack.next_damage_will_break(),
-            "fresh elytra is not broken"
-        );
-
-        stack.set_damage(max_damage - 2);
-        assert!(
-            !stack.next_damage_will_break(),
-            "one point below threshold is still usable"
-        );
-
-        stack.set_damage(max_damage - 1);
-        assert!(
-            stack.next_damage_will_break(),
-            "at max_damage - 1 the elytra should report next damage will break"
-        );
-    }
-
-    #[test]
-    fn damage_elytra_glide_tick_clamps_at_broken_state() {
-        let max_damage = elytra()
-            .get_max_damage()
-            .expect("ELYTRA must have MaxDamage");
-        let broken_state = max_damage - 1;
-
-        // Normal glide tick at damage 0 → damage becomes 1.
-        let mut stack = elytra();
-        assert_eq!(stack.damage_elytra_glide_tick(), DamageResult::Damaged);
-        assert_eq!(stack.get_damage(), 1);
-
-        // Approaching the threshold → clamp to max_damage - 1.
-        let mut stack = elytra();
-        stack.set_damage(max_damage - 2);
-        assert_eq!(stack.damage_elytra_glide_tick(), DamageResult::Damaged);
-        assert_eq!(stack.get_damage(), broken_state);
-        assert!(!stack.is_empty(), "elytra must NOT be deleted");
-
-        // Already at broken threshold → no-op.
-        assert_eq!(stack.damage_elytra_glide_tick(), DamageResult::Untouched);
-        assert_eq!(stack.get_damage(), broken_state);
-        assert!(!stack.is_empty());
-    }
-
-    #[test]
-    fn damage_elytra_already_broken_glide_tick_is_noop() {
-        let max_damage = elytra()
-            .get_max_damage()
-            .expect("ELYTRA must have MaxDamage");
-        let broken_state = max_damage - 1;
-        let mut stack = elytra();
-        stack.set_damage(broken_state);
-        assert_eq!(stack.damage_elytra_glide_tick(), DamageResult::Untouched);
-        assert_eq!(stack.get_damage(), broken_state);
-        assert!(!stack.is_empty());
-    }
-
     // ── stacked item breaking ────────────────────────────────────────
 
     #[test]
@@ -1019,35 +901,6 @@ mod tests {
         assert!(
             (210..=490).contains(&applied),
             "Unbreaking III armor: expected ~350 applications in 500 trials, got {applied}"
-        );
-    }
-
-    #[test]
-    fn elytra_glide_tick_respects_unbreaking() {
-        // Elytra with Unbreaking III should apply damage less often than without.
-        let max_damage = elytra()
-            .get_max_damage()
-            .expect("ELYTRA must have MaxDamage");
-        let mut stack_no_unbreaking = elytra();
-        let mut stack_unbreaking_iii = with_unbreaking(&Item::ELYTRA, 3);
-
-        let mut no_unbreaking_count = 0;
-        let mut unbreaking_count = 0;
-        for _ in 0..500 {
-            if stack_no_unbreaking.damage_elytra_glide_tick() != DamageResult::Untouched {
-                no_unbreaking_count += 1;
-            }
-            if stack_unbreaking_iii.damage_elytra_glide_tick() != DamageResult::Untouched {
-                unbreaking_count += 1;
-            }
-        }
-
-        // Unbreaking III should apply roughly 70% of the time (armor formula).
-        // No enchantment should apply 100% of the time.
-        // Sanity check: unbreaking_count < no_unbreaking_count
-        assert!(
-            unbreaking_count < no_unbreaking_count,
-            "Elytra with Unbreaking III ({unbreaking_count}) should take less damage than vanilla ({no_unbreaking_count})"
         );
     }
 
