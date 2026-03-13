@@ -768,6 +768,11 @@ impl Player {
             }
         }
 
+        // NOTE: Potential TOCTOU window: the cost is computed with item_stack locked,
+        // but damage_held_item re-acquires the lock. In an async context, another task
+        // could theoretically modify the held item between these operations. In practice,
+        // single-player scenarios are safe, but for robustness, consider holding the lock
+        // across both operations: compute cost, then apply damage without releasing the lock.
         self.damage_held_item({
             let stack = item_stack.lock().await;
             Self::combat_weapon_durability_cost(&stack)

@@ -629,9 +629,12 @@ pub struct WeaponImpl {
 impl WeaponImpl {
     fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
-        // Missing `item_damage_per_attack` defaults to 1 (vanilla behavior for unmodified items).
-        // `.unwrap_or(1)` is applied only when the key is absent via `get_int`, which already handles missing keys.
-        // `.max(0)` protects against negative NBT values (direct NBT manipulation edge case).
+        // NOTE: Error handling for item_damage_per_attack:
+        // - Missing key: defaults to 1 (vanilla behavior for unmodified items).
+        // - Wrong NBT type (e.g. float instead of int): silently defaults to 1.
+        // - Negative value: clamped to 0 then cast to u32 (protects against direct NBT manipulation).
+        // This conservative approach prioritizes safety over strict validation. Future improvement:
+        // add a warning log for type mismatches and negative values to help debug datapacks.
         let item_damage_per_attack = compound
             .get_int("item_damage_per_attack")
             .unwrap_or(1)

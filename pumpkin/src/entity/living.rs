@@ -2153,9 +2153,28 @@ pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool 
     // Bitmask lookup: O(1) with two instructions (shift + AND), no array scan.
     // DamageType IDs can exceed 31; use u64 for sufficient range.
     // TODO: Make data-driven once the data pack system can handle it without performance regressions.
+    // Compile-time assertions: ensure all bypassing types fit in u64 bitmask.
     const _: () = assert!(
-        DamageType::OUTSIDE_BORDER.id < 64,
-        "DamageType ID exceeds bitmask width"
+        DamageType::FALL.id < 64
+            && DamageType::FLY_INTO_WALL.id < 64
+            && DamageType::ON_FIRE.id < 64
+            && DamageType::IN_WALL.id < 64
+            && DamageType::CRAMMING.id < 64
+            && DamageType::DROWN.id < 64
+            && DamageType::GENERIC.id < 64
+            && DamageType::WITHER.id < 64
+            && DamageType::DRAGON_BREATH.id < 64
+            && DamageType::STARVE.id < 64
+            && DamageType::ENDER_PEARL.id < 64
+            && DamageType::FREEZE.id < 64
+            && DamageType::STALAGMITE.id < 64
+            && DamageType::MAGIC.id < 64
+            && DamageType::INDIRECT_MAGIC.id < 64
+            && DamageType::OUT_OF_WORLD.id < 64
+            && DamageType::GENERIC_KILL.id < 64
+            && DamageType::SONIC_BOOM.id < 64
+            && DamageType::OUTSIDE_BORDER.id < 64,
+        "One or more bypass DamageType IDs exceed u64 bitmask width (>= 64)"
     );
     const BYPASS_MASK: u64 = (1u64 << DamageType::FALL.id)
         | (1u64 << DamageType::FLY_INTO_WALL.id)

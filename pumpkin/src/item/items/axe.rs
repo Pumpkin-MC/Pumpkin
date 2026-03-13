@@ -84,6 +84,7 @@ impl ItemBehaviour for AxeItem {
             };
 
             if changed && player.gamemode.load() != GameMode::Creative {
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
                 let _ = item.damage_item(1);
             }
         })

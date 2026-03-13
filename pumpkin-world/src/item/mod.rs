@@ -180,15 +180,6 @@ impl ItemStack {
         repaired
     }
 
-    /// Convenience wrapper: test whether this item should lose durability on this hit.
-    /// Encapsulates the Unbreaking enchantment formula for armor vs. tools.
-    /// This is kept for API symmetry and future extensibility despite current lack of direct callsites.
-    #[allow(dead_code)]
-    fn should_apply_durability_damage(&self) -> bool {
-        let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
-        self.should_apply_durability_damage_with(self.is_armor(), unbreaking_level)
-    }
-
     /// Core logic: apply Unbreaking chance with precomputed armor category and level.
     /// Extracted for use in damage_item where these values are hoisted outside the loop.
     fn should_apply_durability_damage_with(&self, is_armor: bool, unbreaking_level: i32) -> bool {
@@ -222,6 +213,8 @@ impl ItemStack {
         let is_armor = self.is_armor();
         let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
         let mut applied = 0;
+        // TODO: Short-circuit once applied >= (max_damage - current_damage) to avoid
+        // iterating the full amount for high-damage hits on high-durability items.
         for _ in 0..amount {
             if self.should_apply_durability_damage_with(is_armor, unbreaking_level) {
                 applied += 1;
@@ -234,6 +227,11 @@ impl ItemStack {
 
         let new_damage = self.get_damage().saturating_add(applied);
         if new_damage >= max_damage {
+            // NOTE: Stacked item multi-break edge case. When amount is large enough to break
+            // multiple durability bars in one call (e.g. amount=1000 on a stacked item), only
+            // one item is consumed regardless of total damage. This is latent behavior, not a
+            // regression. Fixing would require per-item durability tracking or refactoring to
+            // loop over item stack consumption rather than a single amount pass.
             if self.item_count > 1 {
                 self.item_count = self.item_count.saturating_sub(1);
                 self.set_damage(0);
@@ -889,7 +887,8 @@ mod tests {
     }
 
     /// Unbreaking III tool: 25% apply probability. 4 000 trials, expect ~1 000 hits (window 500–1500).
-    /// Widened window for CI robustness; statistical tests with Thread-local RNG can be flaky on fixed-seed CI runners.
+    /// Widened window for CI robustness. Note: uses thread-local rand::random().
+    /// Could be made fully deterministic by refactoring should_apply_durability_damage_with to accept RNG parameter.
     #[test]
     fn unbreaking_iii_tool_applies_roughly_25_percent_of_hits() {
         let mut stack = with_unbreaking(&Item::NETHERITE_PICKAXE, 3);
@@ -906,6 +905,7 @@ mod tests {
     }
 
     /// Unbreaking III armor: 70% apply probability. 500 trials, expect ~350 hits (window 300–400).
+    /// See tool test notes on thread-local RNG; refactor would allow full determinism via seeded RNG parameter.
     #[test]
     fn unbreaking_iii_armor_applies_roughly_70_percent_of_hits() {
         let mut stack = with_unbreaking(&Item::DIAMOND_CHESTPLATE, 3);

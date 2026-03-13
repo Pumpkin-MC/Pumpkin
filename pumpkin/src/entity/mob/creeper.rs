@@ -244,6 +244,7 @@ impl Mob for CreeperEntity {
                 .await;
 
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
                 let _ = item_stack.damage_item(1);
             }
 
