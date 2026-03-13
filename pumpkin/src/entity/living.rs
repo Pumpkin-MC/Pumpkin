@@ -30,11 +30,13 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
-use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
+use pumpkin_data::data_component_impl::{
+    DeathProtectionImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{Block, item::Item, translation};
+use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
@@ -1526,15 +1528,20 @@ impl LivingEntity {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
                     (pumpkin_world::item::DamageResult::Untouched, None)
-                } else if stack.item == &Item::ELYTRA {
-                    // FIXME: Replace with EquippableImpl::damage_on_hurt check once available.
-                    // Elytra has `damageOnHurt: false` and must be skipped during armor hit processing.
-                    (pumpkin_world::item::DamageResult::Untouched, None)
                 } else {
-                    // Base armor durability damage.
-                    let result = stack.damage_item(armor_damage);
-                    let changed = result != pumpkin_world::item::DamageResult::Untouched;
-                    (result, changed.then_some(stack.clone()))
+                    let takes_damage = stack
+                        .get_data_component::<EquippableImpl>()
+                        .is_none_or(|equippable| equippable.damage_on_hurt);
+
+                    if takes_damage {
+                        // Base armor durability damage.
+                        let result = stack.damage_item(armor_damage);
+                        let changed = result != pumpkin_world::item::DamageResult::Untouched;
+                        (result, changed.then_some(stack.clone()))
+                    } else {
+                        // Equippable items can opt out of on-hurt durability loss (e.g. elytra).
+                        (pumpkin_world::item::DamageResult::Untouched, None)
+                    }
                 }
             };
 
