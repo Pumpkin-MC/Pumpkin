@@ -461,10 +461,6 @@ const fn default_item_damage() -> u32 {
     1
 }
 
-const fn return_1f32() -> f32 {
-    1.
-}
-
 #[derive(Deserialize)]
 pub struct ToolComponent {
     rules: Vec<ToolRule>,

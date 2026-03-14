@@ -203,6 +203,7 @@ impl ItemStack {
     /// TODO: Restore #[must_use] once all callsites (esp. tool/mob block-hit/damage sites)
     /// implement proper DamageResult::Broken handling instead of suppressing with let _ =.
     /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
+    #[must_use]
     pub fn damage_item(&mut self, amount: i32) -> DamageResult {
         if amount <= 0 || !self.is_damageable() || self.is_unbreakable() {
             return DamageResult::Untouched;
