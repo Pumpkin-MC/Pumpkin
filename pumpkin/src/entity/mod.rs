@@ -55,7 +55,7 @@ use std::pin::Pin;
 use std::sync::{
     Arc,
     atomic::{
-        AtomicBool, AtomicI32, AtomicU32,
+        AtomicBool, AtomicI32, AtomicU8, AtomicU32,
         Ordering::{self, Relaxed},
     },
 };
@@ -476,6 +476,10 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
+    /// The last sent yaw value (encoded as u8) for change detection
+    pub last_sent_yaw: AtomicU8,
+    /// The last sent pitch value (encoded as u8) for change detection
+    pub last_sent_pitch: AtomicU8,
 }
 
 impl Entity {
@@ -565,6 +569,8 @@ impl Entity {
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
+            last_sent_yaw: AtomicU8::new(0),
+            last_sent_pitch: AtomicU8::new(0),
         }
     }
 
@@ -1045,13 +1051,21 @@ impl Entity {
 
         let pitch = self.pitch.load();
 
-        // Broadcast the update packet.
-
-        // TODO: Do caching to only send the packet when needed.
-
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
-        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
+        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
+
+        // Only broadcast when position or rotation has actually changed.
+        let pos_changed = converted.x != 0 || converted.y != 0 || converted.z != 0;
+        let rot_changed = yaw != self.last_sent_yaw.load(Relaxed)
+            || pitch != self.last_sent_pitch.load(Relaxed);
+
+        if !pos_changed && !rot_changed {
+            return;
+        }
+
+        self.last_sent_yaw.store(yaw, Relaxed);
+        self.last_sent_pitch.store(pitch, Relaxed);
 
         self.world
             .load()
@@ -1059,7 +1073,7 @@ impl Entity {
                 self.entity_id.into(),
                 Vector3::new(converted.x, converted.y, converted.z),
                 yaw,
-                pitch as u8,
+                pitch,
                 self.on_ground.load(Relaxed),
             ))
             .await;
@@ -1083,6 +1097,11 @@ impl Entity {
             new.y.mul_add(4096.0, -(old.y * 4096.0)) as i16,
             new.z.mul_add(4096.0, -(old.z * 4096.0)) as i16,
         );
+
+        // Only broadcast when position has actually changed.
+        if converted.x == 0 && converted.y == 0 && converted.z == 0 {
+            return;
+        }
 
         self.world
             .load()
