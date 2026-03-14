@@ -450,30 +450,10 @@ impl Mob for EndermanEntity {
                     .await;
             }
 
-            let pos = entity.pos.load();
-            let world = entity.world.load();
-            let particles = {
-                let mut rng = self.get_random();
-                std::array::from_fn::<_, 2, _>(|_| {
-                    (
-                        Vector3::new(
-                            pos.x + rng.random_range(-0.5..0.5),
-                            pos.y + rng.random_range(0.0..2.9),
-                            pos.z + rng.random_range(-0.5..0.5),
-                        ),
-                        Vector3::new(
-                            (rng.random_range(0.0f32..1.0) - 0.5) * 2.0,
-                            -rng.random_range(0.0f32..1.0),
-                            (rng.random_range(0.0f32..1.0) - 0.5) * 2.0,
-                        ),
-                    )
-                })
-            };
-            for (particle_pos, offset) in particles {
-                world
-                    .spawn_particle(particle_pos, offset, 0.0, 1, Particle::Portal)
-                    .await;
-            }
+            // NOTE: Enderman ambient portal particles are intentionally NOT sent server-side.
+            // The vanilla Minecraft client generates these particles locally in the entity
+            // renderer. Sending them from the server would cause duplicate particles and
+            // massive network overhead (2 packets/tick/enderman = 40 packets/sec/enderman).
         })
     }
 
