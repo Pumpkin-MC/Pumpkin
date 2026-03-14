@@ -324,9 +324,13 @@ impl World {
     }
 
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
-        // TODO: only nearby
-        self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
-            .await;
+        let pos = entity.pos.load();
+        self.broadcast_packet_nearby(
+            &pos,
+            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+            &CEntityStatus::new(entity.entity_id, status as i8),
+        )
+        .await;
     }
 
     pub async fn send_remove_mob_effect(
@@ -334,11 +338,15 @@ impl World {
         entity: &Entity,
         effect_type: &'static StatusEffect,
     ) {
-        // TODO: only nearby
-        self.broadcast_packet_all(&CRemoveMobEffect::new(
-            entity.entity_id.into(),
-            VarInt(i32::from(effect_type.id)),
-        ))
+        let pos = entity.pos.load();
+        self.broadcast_packet_nearby(
+            &pos,
+            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+            &CRemoveMobEffect::new(
+                entity.entity_id.into(),
+                VarInt(i32::from(effect_type.id)),
+            ),
+        )
         .await;
     }
 
@@ -380,12 +388,21 @@ impl World {
             {
                 continue;
             }
-            self.broadcast_packet_all(&CBlockEvent::new(
-                event.pos,
-                event.r#type,
-                event.data,
-                VarInt(i32::from(block.id)),
-            ))
+            let center = Vector3::new(
+                f64::from(event.pos.0.x),
+                f64::from(event.pos.0.y),
+                f64::from(event.pos.0.z),
+            );
+            self.broadcast_packet_nearby(
+                &center,
+                Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+                &CBlockEvent::new(
+                    event.pos,
+                    event.r#type,
+                    event.data,
+                    VarInt(i32::from(block.id)),
+                ),
+            )
             .await;
         }
     }
@@ -439,6 +456,50 @@ impl World {
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         let players = self.players.load();
         let recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
+    }
+
+    /// The default maximum squared distance for entity tracking broadcasts.
+    /// Corresponds to 128 blocks (8 chunks), which matches vanilla entity tracking range.
+    pub const DEFAULT_ENTITY_TRACKING_DISTANCE_SQ: f64 = 128.0 * 128.0;
+
+    /// Broadcasts a packet to all connected players within a given distance of a position.
+    ///
+    /// Only sends to players whose position is within `max_distance_squared` of `center`.
+    /// This prevents sending entity updates to players who are too far away to see the entity.
+    pub async fn broadcast_packet_nearby<P: ClientPacket>(
+        &self,
+        center: &Vector3<f64>,
+        max_distance_squared: f64,
+        packet: &P,
+    ) {
+        let players = self.players.load();
+        let recipients_by_version = Self::collect_java_recipients_by_version(
+            players
+                .iter()
+                .filter(|p| p.position().squared_distance_to_vec(center) <= max_distance_squared),
+        );
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
+    }
+
+    /// Broadcasts a packet to nearby players, excluding the specified players.
+    ///
+    /// Combines distance filtering with player exclusion for entity updates
+    /// that shouldn't be sent to the entity's own player.
+    pub async fn broadcast_packet_nearby_except<P: ClientPacket>(
+        &self,
+        center: &Vector3<f64>,
+        max_distance_squared: f64,
+        except: &[uuid::Uuid],
+        packet: &P,
+    ) {
+        let players = self.players.load();
+        let recipients_by_version = Self::collect_java_recipients_by_version(
+            players.iter().filter(|p| {
+                !except.contains(&p.gameprofile.id)
+                    && p.position().squared_distance_to_vec(center) <= max_distance_squared
+            }),
+        );
         Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
@@ -557,10 +618,15 @@ impl World {
         particle_count: i32,
         particle: Particle,
     ) {
+        // Only send particles to players within tracking distance
         for player in self.players.load().iter() {
-            player
-                .spawn_particle(position, offset, max_speed, particle_count, particle)
-                .await;
+            if player.position().squared_distance_to_vec(&position)
+                <= Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ
+            {
+                player
+                    .spawn_particle(position, offset, max_speed, particle_count, particle)
+                    .await;
+            }
         }
     }
 
@@ -602,7 +668,11 @@ impl World {
     ) {
         let seed = rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
-        self.broadcast_packet_all(&packet).await;
+        // Vanilla audible distance: max(volume, 1.0) * 16 blocks
+        let audible_distance = f64::from(volume.max(1.0)) * 16.0;
+        let max_distance_sq = audible_distance * audible_distance;
+        self.broadcast_packet_nearby(position, max_distance_sq, &packet)
+            .await;
     }
 
     pub async fn play_sound_raw_expect(
@@ -616,8 +686,16 @@ impl World {
     ) {
         let seed = rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
-        self.broadcast_packet_except(&[player.gameprofile.id], &packet)
-            .await;
+        // Vanilla audible distance: max(volume, 1.0) * 16 blocks
+        let audible_distance = f64::from(volume.max(1.0)) * 16.0;
+        let max_distance_sq = audible_distance * audible_distance;
+        self.broadcast_packet_nearby_except(
+            position,
+            max_distance_sq,
+            &[player.gameprofile.id],
+            &packet,
+        )
+        .await;
     }
 
     pub async fn play_block_sound(
@@ -723,22 +801,34 @@ impl World {
                 .push((position, block_state_id));
         }
 
-        // TODO: only send packet to players who have the chunks loaded
+        // Send block updates only to players who are within tracking distance
         // TODO: Send light updates to update the wire directly next to a broken block
         for chunk_section in block_state_updates_by_chunk_section.values() {
             if chunk_section.is_empty() {
                 continue;
             }
+            // Use the first block position in the section as the center for distance filtering
+            let center_pos = &chunk_section[0].0;
+            let center = Vector3::new(
+                f64::from(center_pos.0.x),
+                f64::from(center_pos.0.y),
+                f64::from(center_pos.0.z),
+            );
             if chunk_section.len() == 1 {
                 let (block_pos, block_state_id) = chunk_section[0];
-                self.broadcast_packet_all(&CBlockUpdate::new(
-                    block_pos,
-                    i32::from(block_state_id).into(),
-                ))
+                self.broadcast_packet_nearby(
+                    &center,
+                    Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+                    &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
+                )
                 .await;
             } else {
-                self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
-                    .await;
+                self.broadcast_packet_nearby(
+                    &center,
+                    Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+                    &CMultiBlockUpdate::new(chunk_section),
+                )
+                .await;
             }
         }
     }
@@ -2718,8 +2808,13 @@ impl World {
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
-        self.broadcast_packet_all(&base_entity.create_spawn_packet())
-            .await;
+        let pos = base_entity.pos.load();
+        self.broadcast_packet_nearby(
+            &pos,
+            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+            &base_entity.create_spawn_packet(),
+        )
+        .await;
         entity.init_data_tracker().await;
 
         let chunk_coordinate = base_entity.block_pos.load().chunk_position();
@@ -2745,8 +2840,13 @@ impl World {
             new_entities
         });
 
-        self.broadcast_packet_all(&CRemoveEntities::new(&[entity.entity_id.into()]))
-            .await;
+        let pos = entity.pos.load();
+        self.broadcast_packet_nearby(
+            &pos,
+            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+            &CRemoveEntities::new(&[entity.entity_id.into()]),
+        )
+        .await;
 
         self.remove_entity_data(entity).await;
     }
@@ -3093,8 +3193,17 @@ impl World {
     /* End ItemScatterer.java */
 
     pub async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
-        self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
-            .await;
+        let center = Vector3::new(
+            f64::from(position.0.x),
+            f64::from(position.0.y),
+            f64::from(position.0.z),
+        );
+        self.broadcast_packet_nearby(
+            &center,
+            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+            &CWorldEvent::new(world_event as i32, position, data, false),
+        )
+        .await;
     }
     #[must_use]
     pub fn is_valid(dest: BlockPos) -> bool {
