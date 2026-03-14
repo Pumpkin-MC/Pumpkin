@@ -453,8 +453,6 @@ impl Level {
             block_entities: Vec::new(),
         };
 
-        let r = rand::random::<u32>();
-
         for chunk in self.loaded_chunks.iter() {
             let chunk_x_base = chunk.x * 16;
             let chunk_z_base = chunk.z * 16;
@@ -464,23 +462,25 @@ impl Level {
                 .block_entities
                 .extend(chunk.block_entities.lock().unwrap().values().cloned());
 
+            // Acquire the read lock once per chunk to avoid per-section lock overhead
+            let sections = chunk.section.block_sections.read().unwrap();
             for i in 0..section_count {
                 // Skip sections that are entirely air — no random ticks can occur there
-                if chunk.section.block_sections.read().unwrap()[i].has_only_air() {
+                if sections[i].has_only_air() {
                     continue;
                 }
                 let y_base = i as i32 * 16;
                 for _ in 0..3 {
+                    // Generate a fresh random per tick attempt
+                    let r = rand::random::<u32>();
                     let x_offset = (r & 0xF) as usize;
                     let z_offset = (r >> 8 & 0xF) as usize;
-                    let y_in_section = ((r >> 4) & 0xF) as i32;
-                    let absolute_y = y_base + y_in_section;
+                    let y_in_section = ((r >> 4) & 0xF) as usize;
 
-                    if let Some(block_state_id) = chunk
-                        .section
-                        .get_block_absolute_y(x_offset, absolute_y, z_offset)
-                        && has_random_ticks(block_state_id)
-                    {
+                    // Read directly from the already-locked section palette
+                    let block_state_id = sections[i].get(x_offset, y_in_section, z_offset);
+                    if has_random_ticks(block_state_id) {
+                        let absolute_y = y_base + y_in_section as i32;
                         ticks.random_ticks.push(ScheduledTick {
                             position: BlockPos::new(
                                 chunk_x_base + x_offset as i32,
@@ -494,6 +494,7 @@ impl Level {
                     }
                 }
             }
+            drop(sections);
             ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
             ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
         }
