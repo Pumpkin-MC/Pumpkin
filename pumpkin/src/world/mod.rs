@@ -342,10 +342,7 @@ impl World {
         self.broadcast_packet_nearby(
             &pos,
             Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
-            &CRemoveMobEffect::new(
-                entity.entity_id.into(),
-                VarInt(i32::from(effect_type.id)),
-            ),
+            &CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id))),
         )
         .await;
     }
@@ -494,12 +491,11 @@ impl World {
         packet: &P,
     ) {
         let players = self.players.load();
-        let recipients_by_version = Self::collect_java_recipients_by_version(
-            players.iter().filter(|p| {
+        let recipients_by_version =
+            Self::collect_java_recipients_by_version(players.iter().filter(|p| {
                 !except.contains(&p.gameprofile.id)
                     && p.position().squared_distance_to_vec(center) <= max_distance_squared
-            }),
-        );
+            }));
         Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
