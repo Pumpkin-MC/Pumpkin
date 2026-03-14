@@ -324,13 +324,8 @@ impl World {
     }
 
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
-        let pos = entity.pos.load();
-        self.broadcast_packet_nearby(
-            &pos,
-            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
-            &CEntityStatus::new(entity.entity_id, status as i8),
-        )
-        .await;
+        self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
+            .await;
     }
 
     pub async fn send_remove_mob_effect(
@@ -341,7 +336,7 @@ impl World {
         let pos = entity.pos.load();
         self.broadcast_packet_nearby(
             &pos,
-            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+            Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
             &CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id))),
         )
         .await;
@@ -392,7 +387,7 @@ impl World {
             );
             self.broadcast_packet_nearby(
                 &center,
-                Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+                Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
                 &CBlockEvent::new(
                     event.pos,
                     event.r#type,
@@ -456,9 +451,9 @@ impl World {
         Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 
-    /// The default maximum squared distance for entity tracking broadcasts.
+    /// The default maximum squared distance for world event broadcasts.
     /// Corresponds to 128 blocks (8 chunks), which matches vanilla entity tracking range.
-    pub const DEFAULT_ENTITY_TRACKING_DISTANCE_SQ: f64 = 128.0 * 128.0;
+    pub const DEFAULT_WORLD_EVENT_DISTANCE_SQ: f64 = 128.0 * 128.0;
 
     /// Broadcasts a packet to all connected players within a given distance of a position.
     ///
@@ -617,7 +612,7 @@ impl World {
         // Only send particles to players within tracking distance
         for player in self.players.load().iter() {
             if player.position().squared_distance_to_vec(&position)
-                <= Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ
+                <= Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ
             {
                 player
                     .spawn_particle(position, offset, max_speed, particle_count, particle)
@@ -797,34 +792,22 @@ impl World {
                 .push((position, block_state_id));
         }
 
-        // Send block updates only to players who are within tracking distance
-        // TODO: Send light updates to update the wire directly next to a broken block
+        // Send block updates to all players who have the chunk loaded (revert to broadcast_packet_all)
+        // TODO: Replace with chunk subscription membership filtering
         for chunk_section in block_state_updates_by_chunk_section.values() {
             if chunk_section.is_empty() {
                 continue;
             }
-            // Use the first block position in the section as the center for distance filtering
-            let center_pos = &chunk_section[0].0;
-            let center = Vector3::new(
-                f64::from(center_pos.0.x),
-                f64::from(center_pos.0.y),
-                f64::from(center_pos.0.z),
-            );
             if chunk_section.len() == 1 {
                 let (block_pos, block_state_id) = chunk_section[0];
-                self.broadcast_packet_nearby(
-                    &center,
-                    Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
-                    &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
-                )
+                self.broadcast_packet_all(&CBlockUpdate::new(
+                    block_pos,
+                    i32::from(block_state_id).into(),
+                ))
                 .await;
             } else {
-                self.broadcast_packet_nearby(
-                    &center,
-                    Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
-                    &CMultiBlockUpdate::new(chunk_section),
-                )
-                .await;
+                self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
+                    .await;
             }
         }
     }
@@ -2804,13 +2787,8 @@ impl World {
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
-        let pos = base_entity.pos.load();
-        self.broadcast_packet_nearby(
-            &pos,
-            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
-            &base_entity.create_spawn_packet(),
-        )
-        .await;
+        self.broadcast_packet_all(&base_entity.create_spawn_packet())
+            .await;
         entity.init_data_tracker().await;
 
         let chunk_coordinate = base_entity.block_pos.load().chunk_position();
@@ -2836,13 +2814,8 @@ impl World {
             new_entities
         });
 
-        let pos = entity.pos.load();
-        self.broadcast_packet_nearby(
-            &pos,
-            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
-            &CRemoveEntities::new(&[entity.entity_id.into()]),
-        )
-        .await;
+        self.broadcast_packet_all(&CRemoveEntities::new(&[entity.entity_id.into()]))
+            .await;
 
         self.remove_entity_data(entity).await;
     }
@@ -3196,7 +3169,7 @@ impl World {
         );
         self.broadcast_packet_nearby(
             &center,
-            Self::DEFAULT_ENTITY_TRACKING_DISTANCE_SQ,
+            Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
             &CWorldEvent::new(world_event as i32, position, data, false),
         )
         .await;
