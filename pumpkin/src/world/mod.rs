@@ -324,8 +324,14 @@ impl World {
     }
 
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
-        self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
-            .await;
+        // TODO: Only send to entity viewers when available
+        let pos = entity.pos.load();
+        self.broadcast_packet_nearby(
+            &pos,
+            Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
+            &CEntityStatus::new(entity.entity_id, status as i8),
+        )
+        .await;
     }
 
     pub async fn send_remove_mob_effect(
@@ -2787,8 +2793,14 @@ impl World {
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
-        self.broadcast_packet_all(&base_entity.create_spawn_packet())
-            .await;
+        // TODO: Use entity viewers when available
+        let pos = base_entity.pos.load();
+        self.broadcast_packet_nearby(
+            &pos,
+            Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
+            &base_entity.create_spawn_packet(),
+        )
+        .await;
         entity.init_data_tracker().await;
 
         let chunk_coordinate = base_entity.block_pos.load().chunk_position();
@@ -2814,14 +2826,28 @@ impl World {
             new_entities
         });
 
-        self.broadcast_packet_all(&CRemoveEntities::new(&[entity.entity_id.into()]))
-            .await;
+        // TODO: Use entity viewers when available
+        let pos = entity.pos.load();
+        self.broadcast_packet_nearby(
+            &pos,
+            Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
+            &CRemoveEntities::new(&[entity.entity_id.into()]),
+        )
+        .await;
 
         self.remove_entity_data(entity).await;
     }
 
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {
-        self.broadcast_packet_except(
+        // TODO: Use chunk subscribers when available
+        let center = Vector3::new(
+            f64::from(location.0.x),
+            f64::from(location.0.y),
+            f64::from(location.0.z),
+        );
+        self.broadcast_packet_nearby_except(
+            &center,
+            Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
             &[from.entity_uuid],
             &CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8),
         )
@@ -3068,10 +3094,24 @@ impl World {
                 );
                 match cause {
                     Some(player) => {
-                        self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
-                            .await;
+                        // TODO(stopgap): Only broadcast to nearby players for break_block particles
+                        self.broadcast_packet_nearby_except(
+                            &position.to_centered_f64(),
+                            Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
+                            &[player.gameprofile.id],
+                            &particles_packet,
+                        )
+                        .await;
                     }
-                    None => self.broadcast_packet_all(&particles_packet).await,
+                    None => {
+                        // TODO(stopgap): Only broadcast to nearby players for break_block particles
+                        self.broadcast_packet_nearby(
+                            &position.to_centered_f64(),
+                            Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
+                            &particles_packet,
+                        )
+                        .await;
+                    }
                 }
             }
 
@@ -3437,11 +3477,16 @@ impl World {
         if let Some(nbt) = &block_entity_nbt {
             let mut bytes = Vec::new();
             to_bytes_unnamed(nbt, &mut bytes).unwrap();
-            self.broadcast_packet_all(&CBlockEntityData::new(
-                block_entity.get_position(),
-                VarInt(block_entity.get_id() as i32),
-                bytes.into_boxed_slice(),
-            ))
+            // TODO(stopgap): Only broadcast to nearby players for block entity data
+            self.broadcast_packet_nearby(
+                &block_entity.get_position().to_centered_f64(),
+                Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
+                &CBlockEntityData::new(
+                    block_entity.get_position(),
+                    VarInt(block_entity.get_id() as i32),
+                    bytes.into_boxed_slice(),
+                ),
+            )
             .await;
         }
 
@@ -3474,11 +3519,16 @@ impl World {
         if let Some(nbt) = &block_entity_nbt {
             let mut bytes = Vec::new();
             to_bytes_unnamed(nbt, &mut bytes).unwrap();
-            self.broadcast_packet_all(&CBlockEntityData::new(
-                block_entity.get_position(),
-                VarInt(block_entity.get_id() as i32),
-                bytes.into_boxed_slice(),
-            ))
+            // TODO(stopgap): Only broadcast to nearby players for block entity data
+            self.broadcast_packet_nearby(
+                &block_entity.get_position().to_centered_f64(),
+                Self::DEFAULT_WORLD_EVENT_DISTANCE_SQ,
+                &CBlockEntityData::new(
+                    block_entity.get_position(),
+                    VarInt(block_entity.get_id() as i32),
+                    bytes.into_boxed_slice(),
+                ),
+            )
             .await;
         }
         chunk.mark_dirty(true);
