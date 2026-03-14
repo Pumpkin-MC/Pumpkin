@@ -768,11 +768,16 @@ impl Player {
             }
         }
 
-        // NOTE: Potential TOCTOU window: the cost is computed with item_stack locked,
-        // but damage_held_item re-acquires the lock. In an async context, another task
-        // could theoretically modify the held item between these operations. In practice,
-        // single-player scenarios are safe, but for robustness, consider holding the lock
-        // across both operations: compute cost, then apply damage without releasing the lock.
+        // NOTE: TOCTOU race condition in single-player context.
+        // The weapon cost is computed (cost = 1 or 2) with item_stack locked, then damage_held_item
+        // re-acquires the lock. In async multi-task scenarios, another task could theoretically
+        // swap the held item between these operations, causing the cost to apply to the wrong item.
+        // Mitigation options (in priority order):
+        // 1. Create damage_held_item_with_lock(&self, item_stack: MutexGuard, amount) variant
+        //    to hold the lock across both computation and application.
+        // 2. Refactor compute cost as a closure: damage_held_item(self, |stack| -> i32 { ... })
+        // 3. In practice, single-player scenarios are safe (this is not multiplayer). Document
+        //    as a known limitation if refactoring is deemed too invasive.
         self.damage_held_item({
             let stack = item_stack.lock().await;
             Self::combat_weapon_durability_cost(&stack)

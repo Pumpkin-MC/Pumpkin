@@ -449,10 +449,6 @@ impl ToTokens for ItemComponents {
     }
 }
 
-const fn return_1u32() -> u32 {
-    1
-}
-
 const fn return_1f32() -> f32 {
     1.
 }
@@ -460,12 +456,21 @@ const fn return_1f32() -> f32 {
 const fn return_true() -> bool {
     true
 }
+
+const fn default_item_damage() -> u32 {
+    1
+}
+
+const fn return_1f32() -> f32 {
+    1.
+}
+
 #[derive(Deserialize)]
 pub struct ToolComponent {
     rules: Vec<ToolRule>,
     #[serde(default = "return_1f32")]
     default_mining_speed: f32,
-    #[serde(default = "return_1u32")]
+    #[serde(default = "default_item_damage")]
     damage_per_block: u32,
     #[serde(default = "return_true")]
     can_destroy_blocks_in_creative: bool,
@@ -516,7 +521,7 @@ pub struct DeathProtection {
 
 #[derive(Deserialize, Clone)]
 pub struct WeaponComponent {
-    #[serde(default = "return_1u32")]
+    #[serde(default = "default_item_damage")]
     pub item_damage_per_attack: u32,
     // TODO: Add disable_blocking_for_seconds parsing when shield-disable mechanic is implemented.
     // This preserves round-trip fidelity for vanilla items and datapacks.

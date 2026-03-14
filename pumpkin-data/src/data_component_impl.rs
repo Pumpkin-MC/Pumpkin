@@ -622,6 +622,8 @@ impl Hash for ToolImpl {
         self.can_destroy_blocks_in_creative.hash(state);
     }
 }
+/// Weapon component: specifies durability cost per attack.
+/// NOTE: If additional fields are added, update `get_hash()` to include them.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct WeaponImpl {
     pub item_damage_per_attack: u32,
@@ -633,8 +635,9 @@ impl WeaponImpl {
         // - Missing key: defaults to 1 (vanilla behavior for unmodified items).
         // - Wrong NBT type (e.g. float instead of int): silently defaults to 1.
         // - Negative value: clamped to 0 then cast to u32 (protects against direct NBT manipulation).
-        // This conservative approach prioritizes safety over strict validation. Future improvement:
-        // add a warning log for type mismatches and negative values to help debug datapacks.
+        // This conservative approach prioritizes safety over strict validation.
+        // TODO: Add tracing::warn! at the call site (in pumpkin crate where tracing is available)
+        // to help datapack authors debug negative values or type mismatches.
         let item_damage_per_attack = compound
             .get_int("item_damage_per_attack")
             .unwrap_or(1)
