@@ -1057,8 +1057,8 @@ impl Entity {
 
         // Only broadcast when position or rotation has actually changed.
         let pos_changed = converted.x != 0 || converted.y != 0 || converted.z != 0;
-        let rot_changed = yaw != self.last_sent_yaw.load(Relaxed)
-            || pitch != self.last_sent_pitch.load(Relaxed);
+        let rot_changed =
+            yaw != self.last_sent_yaw.load(Relaxed) || pitch != self.last_sent_pitch.load(Relaxed);
 
         if !pos_changed && !rot_changed {
             return;
