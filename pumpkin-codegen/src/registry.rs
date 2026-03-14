@@ -1,10 +1,45 @@
 use indexmap::IndexMap;
 use proc_macro2::{Literal, TokenStream};
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use quote::{format_ident, quote};
 use serde_json::Value;
 use std::fs;
 
 use crate::version::MinecraftVersion;
+
+/// Converts a `serde_json::Value` into an `NbtCompound` with correct NBT types.
+///
+/// `serde_json` represents all integers as i64, which causes the NBT serializer
+/// to emit Long (tag 0x04) for values that should be Int (tag 0x03). This breaks
+/// clients like mineflayer that expect standard Minecraft NBT types.
+fn json_to_nbt_compound(obj: &serde_json::Map<String, Value>) -> NbtCompound {
+    let mut compound = NbtCompound::new();
+    for (key, value) in obj {
+        compound.put(key, json_to_nbt_tag(value));
+    }
+    compound
+}
+
+fn json_to_nbt_tag(value: &Value) -> NbtTag {
+    match value {
+        Value::Bool(b) => NbtTag::Byte(i8::from(*b)),
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if let Ok(i32_val) = i32::try_from(i) {
+                    NbtTag::Int(i32_val)
+                } else {
+                    NbtTag::Long(i)
+                }
+            } else {
+                NbtTag::Double(n.as_f64().unwrap())
+            }
+        }
+        Value::String(s) => NbtTag::String(s.clone()),
+        Value::Array(arr) => NbtTag::List(arr.iter().map(json_to_nbt_tag).collect()),
+        Value::Object(obj) => NbtTag::Compound(json_to_nbt_compound(obj)),
+        Value::Null => NbtTag::End,
+    }
+}
 
 const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
 
@@ -42,8 +77,11 @@ pub(crate) fn build() -> TokenStream {
                 let entry_tokens: Vec<TokenStream> = entries
                     .iter()
                     .map(|(entry_name, entry_data)| {
+                        let compound = json_to_nbt_compound(
+                            entry_data.as_object().expect("registry entry must be an object"),
+                        );
                         let mut bytes = Vec::new();
-                        pumpkin_nbt::serializer::to_bytes_unnamed(entry_data, &mut bytes).unwrap();
+                        pumpkin_nbt::serializer::to_bytes_unnamed(&compound, &mut bytes).unwrap();
                         let byte_literal = Literal::byte_string(&bytes);
 
                         quote! {
