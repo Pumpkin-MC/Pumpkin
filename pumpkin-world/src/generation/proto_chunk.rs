@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
@@ -173,10 +174,15 @@ impl TerrainCache {
     #[must_use]
     pub fn from_random(random_config: &GlobalRandomConfig) -> Self {
         let random = &random_config.base_random_deriver;
-        let noise_builder = DoublePerlinNoiseBuilder::new(&random_config.base_random_deriver);
-        let terrain_builder = SurfaceTerrainBuilder::new(&noise_builder, random);
-        let surface_noise = noise_builder.get_noise_sampler_for_id("surface");
-        let secondary_noise = noise_builder.get_noise_sampler_for_id("surface_secondary");
+        let terrain_builder = SurfaceTerrainBuilder::new(random);
+        let surface_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_config.base_random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE,
+        );
+        let secondary_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_config.base_random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE_SECONDARY,
+        );
         Self {
             terrain_builder,
             surface_noise,
@@ -807,11 +813,9 @@ impl ProtoChunk {
         let min_y = self.bottom_y();
 
         let random = &random_config.base_random_deriver;
-        let noise_builder = DoublePerlinNoiseBuilder::new(&random_config.base_random_deriver);
         let mut context = MaterialRuleContext::new(
             min_y,
             self.height(),
-            noise_builder,
             random,
             &terrain_cache.terrain_builder,
             &terrain_cache.surface_noise,

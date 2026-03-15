@@ -327,11 +327,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:simple_random_selector" => {
             let features: Vec<TokenStream> = config["features"]
                 .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .map(|f| value_to_inline_placed_feature(f))
-                        .collect()
-                })
+                .map(|arr| arr.iter().map(value_to_inline_placed_feature).collect())
                 .unwrap_or_default();
             quote! {
                 ConfiguredFeature::SimpleRandomSelector(SimpleRandomFeature {
@@ -363,7 +359,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                     quote! {
                         Spike { center_x: #cx, center_z: #cz, radius: #r, height: #h, guarded: #g }
                     }
-                    }).collect()
+                }).collect()
                 })
                 .unwrap_or_default();
             quote! {
@@ -406,7 +402,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 value_to_block_state_provider(&blocks["outer_layer_provider"]);
             let inner_placements: Vec<TokenStream> = blocks["inner_placements"]
                 .as_array()
-                .map(|arr| arr.iter().map(|s| value_to_block_state_codec(s)).collect())
+                .map(|arr| arr.iter().map(value_to_block_state_codec).collect())
                 .unwrap_or_default();
             let cannot_replace = value_to_block_wrapper(&blocks["cannot_replace"]);
             let invalid_blocks = value_to_block_wrapper(&blocks["invalid_blocks"]);
@@ -658,7 +654,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             let base = value_to_noise_base(v);
             let states: Vec<TokenStream> = v["states"]
                 .as_array()
-                .map(|arr| arr.iter().map(|s| value_to_block_state_codec(s)).collect())
+                .map(|arr| arr.iter().map(value_to_block_state_codec).collect())
                 .unwrap_or_default();
             quote! {
                 BlockStateProvider::NoiseProvider(NoiseBlockStateProvider {
@@ -671,7 +667,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             let base_provider = value_to_noise_base(v);
             let states: Vec<TokenStream> = v["states"]
                 .as_array()
-                .map(|arr| arr.iter().map(|s| value_to_block_state_codec(s)).collect())
+                .map(|arr| arr.iter().map(value_to_block_state_codec).collect())
                 .unwrap_or_default();
             let base_noise_provider = quote! {
                 NoiseBlockStateProvider { base: #base_provider, states: vec![#(#states),*] }
@@ -696,11 +692,11 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             let default = value_to_block_state_codec(&v["default_state"]);
             let low: Vec<TokenStream> = v["low_states"]
                 .as_array()
-                .map(|a| a.iter().map(|s| value_to_block_state_codec(s)).collect())
+                .map(|a| a.iter().map(value_to_block_state_codec).collect())
                 .unwrap_or_default();
             let high: Vec<TokenStream> = v["high_states"]
                 .as_array()
-                .map(|a| a.iter().map(|s| value_to_block_state_codec(s)).collect())
+                .map(|a| a.iter().map(value_to_block_state_codec).collect())
                 .unwrap_or_default();
             quote! {
                 BlockStateProvider::NoiseThreshold(NoiseThresholdBlockStateProvider {
@@ -1122,7 +1118,7 @@ fn value_to_inline_placed_feature(v: &Value) -> TokenStream {
         .unwrap_or(&[]);
     let placement: Vec<TokenStream> = placement_arr
         .iter()
-        .map(|p| value_to_placement_modifier_cf(p))
+        .map(value_to_placement_modifier_cf)
         .collect();
     quote! {
         PlacedFeature {

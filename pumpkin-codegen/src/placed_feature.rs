@@ -574,7 +574,7 @@ pub fn value_to_block_direction(s: &str) -> TokenStream {
 /// # Returns
 /// An `OffsetBlocksBlockPredicate` with `offset: None` or `offset: Some(Vector3::new(x, y, z))`.
 fn value_to_offset_predicate(v: &Value) -> TokenStream {
-    if v.is_null() || v.is_object() && v.as_object().map_or(true, |o| o.is_empty()) {
+    if v.is_null() || v.is_object() && v.as_object().is_none_or(|o| o.is_empty()) {
         quote! { OffsetBlocksBlockPredicate { offset: None } }
     } else if v.is_array() {
         let x = v[0].as_i64().unwrap_or(0) as i32;
@@ -619,13 +619,8 @@ fn value_to_matching_blocks_wrapper(v: &Value) -> TokenStream {
 pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
     let name = v["Name"].as_str().unwrap_or("minecraft:air");
     let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
-    let block_ident = quote::format_ident!(
-        "{}",
-        name_stripped
-            .to_uppercase()
-            .replace(':', "_")
-            .replace('-', "_")
-    );
+    let block_ident =
+        quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
     if let Some(props) = v["Properties"].as_object() {
         let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
         let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();

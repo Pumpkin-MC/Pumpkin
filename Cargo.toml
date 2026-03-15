@@ -10,6 +10,7 @@ members = [
     "pumpkin-world",
     "pumpkin/",
     "pumpkin-data",
+    "pumpkin-plugin-api",
 ]
 exclude = ["pumpkin-codegen"]
 
@@ -100,11 +101,11 @@ futures = { version = "0.3", default-features = false, features = ["executor"] }
 rayon = "1.11"
 crossbeam = "0.8"
 
-uuid = { version = "1.21", features = ["serde", "v3", "v4"] }
+uuid = { version = "1.22", features = ["serde", "v3", "v4"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-tempfile = { version = "3.26.0", default-features = false }
+tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = "2"
 aes = "0.8"
 async-compression = "0.4.41"
@@ -117,7 +118,7 @@ console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
-crossfire = { version = "3.1.4", features = ["compat"] }
+crossfire = { version = "3.1.5", features = ["compat"] }
 dashmap = "6.1"
 ecdsa = "0.16.9"
 enum_dispatch = "0.3.13"
@@ -148,7 +149,7 @@ pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
 rand = "0.10.0"
-rsa = "=0.10.0-rc.16"
+rsa = "=0.10.0-rc.17"
 rustc-hash = "2.1.1"
 rustyline = "17.0.2"
 ruzstd = "0.8.2"
@@ -157,7 +158,7 @@ sha1 = "=0.11.0-rc.5"
 sha2 = "=0.11.0-rc.5"
 signature = "2.2.0"
 tracing = "0.1.44"
-tracing-subscriber = { version = "=0.3.19", features = [
+tracing-subscriber = { version = "0.3.23", features = [
     "env-filter",
     "fmt",
     "time",
@@ -171,3 +172,11 @@ arc-swap = "1.8"
 tokio-util = "0.7.18"
 toml = "1.0"
 ureq = "3.2.0"
+
+wasmtime = "42.0"
+wasmtime-wasi = "42.0"
+wit-bindgen = "0.53"
+wasmparser = "0.245"
+
+postcard = { version = "1.1", features = ["alloc"] }
+tracing-serde-structured = "0.4"

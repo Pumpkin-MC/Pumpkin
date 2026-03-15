@@ -124,13 +124,11 @@ pub(crate) fn build() -> TokenStream {
     let mut timeline_id_map: BTreeMap<String, u16> = BTreeMap::new();
     if let Ok(registries) = serde_json::from_str::<serde_json::Value>(
         &fs::read_to_string("../assets/registry/1_21_11_synced_registries.json").unwrap(),
-    ) {
-        if let Some(timelines) = registries.get("timeline") {
-            if let Some(obj) = timelines.as_object() {
-                for (i, name) in obj.keys().enumerate() {
-                    timeline_id_map.insert(name.clone(), i as u16);
-                }
-            }
+    ) && let Some(timelines) = registries.get("timeline")
+        && let Some(obj) = timelines.as_object()
+    {
+        for (i, name) in obj.keys().enumerate() {
+            timeline_id_map.insert(name.clone(), i as u16);
         }
     }
     // dimension_id_map will be used when resolving dimension_type tag entries below

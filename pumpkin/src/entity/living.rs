@@ -1529,6 +1529,13 @@ impl LivingEntity {
             };
 
             if let Some(updated_stack) = updated_stack {
+                // Broadcast break status before clearing the slot.
+                if updated_stack.is_empty() {
+                    let world = self.entity.world.load();
+                    world
+                        .send_entity_status(&self.entity, super::equipment_break_status(slot))
+                        .await;
+                }
                 equipment_updates.push((slot.clone(), updated_stack.clone()));
                 if let Some(player) = caller.get_player() {
                     player
