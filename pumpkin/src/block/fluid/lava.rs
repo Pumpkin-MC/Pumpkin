@@ -250,7 +250,7 @@ impl FluidBehaviour for FlowingLava {
                             Self::ignite_fire_if_possible(world, &test_pos).await;
                             return;
                         }
-                    } else if blocks_movement(&block_state, Block::from_state_id(block_state.id).id)
+                    } else if blocks_movement(block_state, Block::from_state_id(block_state.id).id)
                     {
                         return;
                     }
