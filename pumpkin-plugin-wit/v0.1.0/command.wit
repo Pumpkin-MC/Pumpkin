@@ -72,6 +72,7 @@ interface command {
         rotation(tuple<f32, bool, f32, bool>),
         game-mode(gamemode),
         difficulty(difficulty),
+        command-tree(command),
         item(string),
         item-predicate(string),
         resource-location(string),

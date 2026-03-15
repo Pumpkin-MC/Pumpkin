@@ -138,7 +138,10 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                 Arg::Difficulty(difficulty)
             }
 
-            OwnedArg::CommandTree(_) => Arg::Simple("<command-tree>".to_string()),
+            OwnedArg::CommandTree(command_tree) => Arg::Command(
+                self.add_command(command_tree)
+                    .expect("failed to add command tree resource"),
+            ),
 
             OwnedArg::Item(s) => Arg::Item(s),
             OwnedArg::ItemPredicate(s) => Arg::ItemPredicate(s),
