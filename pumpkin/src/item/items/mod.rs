@@ -61,6 +61,9 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(SwordItem);
     manager.register(MaceItem);
     manager.register(TridentItem);
+    // TODO: Register CrossbowItem with per-shot durability cost.
+    // TODO: Register BrushItem with per-stroke durability cost.
+    // TODO: Register CarrotOnAStickItem and WarpedFungusOnAStickItem with boost durability costs.
     manager.register(EmptyBucketItem);
     manager.register(FilledBucketItem);
     manager.register(ShovelItem);

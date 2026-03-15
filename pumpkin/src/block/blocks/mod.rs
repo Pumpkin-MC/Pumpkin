@@ -18,6 +18,7 @@ pub mod conduit;
 pub mod crafting_table;
 pub mod dirt_path;
 pub mod doors;
+pub mod dripstone;
 pub mod end_portal;
 pub mod end_portal_frame;
 pub mod end_rod;

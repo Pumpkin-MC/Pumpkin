@@ -60,6 +60,8 @@ pub struct ItemComponents {
     /// Damage type resistance, if this item is immune to specific damage types.
     #[serde(rename = "minecraft:damage_resistant")]
     pub damage_resistant: Option<DamageResistantComponent>,
+    #[serde(rename = "minecraft:weapon")]
+    pub weapon: Option<WeaponComponent>,
 }
 
 impl ToTokens for ItemComponents {
@@ -257,6 +259,11 @@ impl ToTokens for ItemComponents {
 
         if self.death_protection.is_some() {
             tokens.extend(quote! { (DeathProtection, &DeathProtectionImpl), });
+        }
+
+        if let Some(weapon) = &self.weapon {
+            let damage = LitInt::new(&weapon.item_damage_per_attack.to_string(), Span::call_site());
+            tokens.extend(quote! { (Weapon, &WeaponImpl { item_damage_per_attack: #damage }), });
         }
 
         if let Some(damage_resistant) = &self.damage_resistant {
@@ -460,12 +467,7 @@ impl ToTokens for ItemComponents {
     }
 }
 
-/// Serde default helper returning `1u32`.
-const fn return_1u32() -> u32 {
-    1
-}
-
-/// Serde default helper returning `1.0f32`.
+/// Serde default helper returning `1f32`.
 const fn return_1f32() -> f32 {
     1.
 }
@@ -476,6 +478,10 @@ const fn return_true() -> bool {
 }
 
 /// Deserialized tool component containing mining rules and default speed.
+const fn default_item_damage() -> u32 {
+    1
+}
+
 #[derive(Deserialize)]
 pub struct ToolComponent {
     /// Ordered list of mining rules applied per block or block tag.
@@ -484,7 +490,7 @@ pub struct ToolComponent {
     #[serde(default = "return_1f32")]
     default_mining_speed: f32,
     /// Durability consumed per block broken, defaults to `1`.
-    #[serde(default = "return_1u32")]
+    #[serde(default = "default_item_damage")]
     damage_per_block: u32,
     /// Whether the tool can destroy blocks in creative mode, defaults to `true`.
     #[serde(default = "return_true")]
@@ -554,6 +560,14 @@ pub struct DeathProtection {
 }
 
 /// Deserialized attack-blocking component (e.g., shield); fields are unimplemented.
+#[derive(Deserialize, Clone)]
+pub struct WeaponComponent {
+    #[serde(default = "default_item_damage")]
+    pub item_damage_per_attack: u32,
+    // TODO: Add disable_blocking_for_seconds parsing when shield-disable mechanic is implemented.
+    // This preserves round-trip fidelity for vanilla items and datapacks.
+}
+
 #[derive(Deserialize, Clone)]
 pub struct BlocksAttacks {
     // TODO

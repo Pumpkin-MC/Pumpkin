@@ -49,7 +49,8 @@ impl ItemBehaviour for FlintAndSteelItem {
             .await;
 
             if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                item.damage_item_with_context(1, false);
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                let _ = item.damage_item(1);
             }
         })
     }
