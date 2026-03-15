@@ -464,12 +464,16 @@ impl Level {
 
             // Acquire the read lock once per chunk to avoid per-section lock overhead
             let sections = chunk.section.block_sections.read().unwrap();
+            let min_y = chunk.section.min_y;
+
             for i in 0..section_count {
                 // Skip sections that are entirely air — no random ticks can occur there
                 if sections[i].has_only_air() {
                     continue;
                 }
-                let y_base = i as i32 * 16;
+                
+                let y_base = min_y + (i as i32 * 16);
+                
                 for _ in 0..3 {
                     // Generate a fresh random per tick attempt
                     let r = rand::random::<u32>();
