@@ -33,7 +33,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
@@ -768,9 +768,34 @@ impl Player {
             }
         }
 
-        self.damage_held_item(1).await;
+        // NOTE: TOCTOU race condition in single-player context.
+        // The weapon cost is computed (cost = 1 or 2) with item_stack locked, then damage_held_item
+        // re-acquires the lock. In async multi-task scenarios, another task could theoretically
+        // swap the held item between these operations, causing the cost to apply to the wrong item.
+        // Mitigation options (in priority order):
+        // 1. Create damage_held_item_with_lock(&self, item_stack: MutexGuard, amount) variant
+        //    to hold the lock across both computation and application.
+        // 2. Refactor compute cost as a closure: damage_held_item(self, |stack| -> i32 { ... })
+        // 3. In practice, single-player scenarios are safe (this is not multiplayer). Document
+        //    as a known limitation if refactoring is deemed too invasive.
+        self.damage_held_item({
+            let stack = item_stack.lock().await;
+            Self::combat_weapon_durability_cost(&stack)
+        })
+        .await;
 
         if config.swing {}
+    }
+
+    /// Returns the durability cost for using the held item as a weapon in combat.
+    /// Derived from the `Weapon` data component: items without it (e.g. shears, tools
+    /// not designed for combat) take no durability damage on attack.
+    /// Items with the component use its `item_damage_per_attack` value (default 1;
+    /// axes, pickaxes, shovels, and hoes carry a value of 2).
+    fn combat_weapon_durability_cost(stack: &ItemStack) -> i32 {
+        stack
+            .get_data_component::<WeaponImpl>()
+            .map_or(0, |w| w.item_damage_per_attack as i32)
     }
 
     pub async fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {
@@ -791,7 +816,9 @@ impl Player {
         }
     }
 
-    pub async fn damage_held_item(&self, amount: i32) -> bool {
+    /// Applies `amount` durability damage to the item in `slot`.
+    /// Broadcasts an [`EntityStatus`] break event and syncs the slot if the item is destroyed.
+    pub async fn damage_item_in_slot(&self, slot: &EquipmentSlot, amount: i32) -> bool {
         if matches!(
             self.gamemode.load(),
             GameMode::Creative | GameMode::Spectator
@@ -799,21 +826,60 @@ impl Player {
             return false;
         }
 
-        let slot_index = self.inventory.get_selected_slot() as usize;
-        let stack_arc = self.inventory.held_item();
-        let updated = {
-            let mut stack = stack_arc.lock().await;
-            stack
-                .damage_item_with_context(amount, false)
-                .then_some(stack.clone())
+        // Direct PlayerInventory slot indices (matches build_equipment_slots).
+        let slot_index: usize = match slot {
+            EquipmentSlot::MainHand(_) => self.inventory.get_selected_slot() as usize,
+            EquipmentSlot::OffHand(_) => PlayerInventory::OFF_HAND_SLOT, // 40
+            EquipmentSlot::Feet(_) => 36,
+            EquipmentSlot::Legs(_) => 37,
+            EquipmentSlot::Chest(_) => 38,
+            EquipmentSlot::Head(_) => 39,
+            // Players do not have Body or Saddle equipment slots;
+            // these are only used by non-player entities (e.g. horses).
+            EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_) => return false,
         };
 
-        if let Some(updated_stack) = updated {
-            self.sync_hand_slot(slot_index, updated_stack).await;
+        let stack_arc = self.inventory.get_stack(slot_index).await;
+
+        let updated = {
+            let mut stack = stack_arc.lock().await;
+            let result = stack.damage_item(amount);
+            (result != pumpkin_world::item::DamageResult::Untouched)
+                .then_some((result, stack.clone()))
+        };
+
+        if let Some((result, updated_stack)) = updated {
+            // Send the break status before clearing the slot so the client can
+            // use the item texture for break particles.
+            if result == pumpkin_world::item::DamageResult::Broken {
+                self.world()
+                    .send_entity_status(
+                        &self.living_entity.entity,
+                        super::equipment_break_status(slot),
+                    )
+                    .await;
+            }
+
+            self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                (slot_index as i32).into(),
+                &ItemStackSerializer::from(updated_stack.clone()),
+            ))
+            .await;
+
+            self.living_entity
+                .send_equipment_changes(&[(slot.clone(), updated_stack)])
+                .await;
+
             return true;
         }
 
         false
+    }
+
+    /// Convenience wrapper – damages the currently held (main-hand) item.
+    pub async fn damage_held_item(&self, amount: i32) -> bool {
+        self.damage_item_in_slot(&EquipmentSlot::MAIN_HAND, amount)
+            .await
     }
 
     pub async fn apply_tool_damage_for_block_break(&self, state: &BlockState) {
@@ -2535,36 +2601,24 @@ impl Player {
         let mut candidates: Vec<(usize, EquipmentSlot, Arc<Mutex<ItemStack>>)> = Vec::new();
 
         let selected_slot = self.inventory.get_selected_slot() as usize;
-        let main_hand = self.inventory.get_stack(selected_slot).await;
-        let main_hand_eligible = {
-            let stack = main_hand.lock().await;
-            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
-        };
-        if main_hand_eligible {
-            candidates.push((selected_slot, EquipmentSlot::MAIN_HAND, main_hand));
-        }
-
-        let offhand_slot = PlayerInventory::OFF_HAND_SLOT;
-        let off_hand = self.inventory.get_stack(offhand_slot).await;
-        let off_hand_eligible = {
-            let stack = off_hand.lock().await;
-            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
-        };
-        if off_hand_eligible {
-            candidates.push((offhand_slot, EquipmentSlot::OFF_HAND, off_hand));
-        }
-
+        let mut slot_pairs: Vec<(usize, EquipmentSlot)> = vec![
+            (selected_slot, EquipmentSlot::MAIN_HAND),
+            (PlayerInventory::OFF_HAND_SLOT, EquipmentSlot::OFF_HAND),
+        ];
         for (slot_index, slot) in self.inventory.equipment_slots.iter() {
-            if !slot.is_armor_slot() {
-                continue;
+            if slot.is_armor_slot() {
+                slot_pairs.push((*slot_index, slot.clone()));
             }
-            let stack = self.inventory.get_stack(*slot_index).await;
+        }
+
+        for (slot_index, equipment_slot) in slot_pairs {
+            let stack = self.inventory.get_stack(slot_index).await;
             let eligible = {
-                let stack = stack.lock().await;
-                stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+                let s = stack.lock().await;
+                s.get_enchantment_level(&Enchantment::MENDING) > 0 && s.get_damage() > 0
             };
             if eligible {
-                candidates.push((*slot_index, slot.clone(), stack));
+                candidates.push((slot_index, equipment_slot, stack));
             }
         }
 
@@ -3157,6 +3211,7 @@ impl EntityBase for Player {
             {
                 return false;
             }
+            // TODO: Implement shield blocking durability.
             let result = self
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)

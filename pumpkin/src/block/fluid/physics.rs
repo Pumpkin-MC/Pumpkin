@@ -40,6 +40,7 @@ pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -
         || id == Block::CAMPFIRE.id
         || id == Block::DRAGON_EGG.id
         || id == Block::KELP.id
+        || id == Block::KELP_PLANT.id
         || id == Block::SEAGRASS.id
         || id == Block::TALL_SEAGRASS.id
         || id == Block::LADDER.id

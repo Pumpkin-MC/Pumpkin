@@ -43,6 +43,8 @@ pub struct ItemComponents {
     pub death_protection: Option<DeathProtection>,
     #[serde(rename = "minecraft:damage_resistant")]
     pub damage_resistant: Option<DamageResistantComponent>,
+    #[serde(rename = "minecraft:weapon")]
+    pub weapon: Option<WeaponComponent>,
 }
 
 impl ToTokens for ItemComponents {
@@ -239,6 +241,11 @@ impl ToTokens for ItemComponents {
 
         if self.death_protection.is_some() {
             tokens.extend(quote! { (DeathProtection, &DeathProtectionImpl), });
+        }
+
+        if let Some(weapon) = &self.weapon {
+            let damage = LitInt::new(&weapon.item_damage_per_attack.to_string(), Span::call_site());
+            tokens.extend(quote! { (Weapon, &WeaponImpl { item_damage_per_attack: #damage }), });
         }
 
         if let Some(damage_resistant) = &self.damage_resistant {
@@ -442,10 +449,6 @@ impl ToTokens for ItemComponents {
     }
 }
 
-const fn return_1u32() -> u32 {
-    1
-}
-
 const fn return_1f32() -> f32 {
     1.
 }
@@ -453,12 +456,17 @@ const fn return_1f32() -> f32 {
 const fn return_true() -> bool {
     true
 }
+
+const fn default_item_damage() -> u32 {
+    1
+}
+
 #[derive(Deserialize)]
 pub struct ToolComponent {
     rules: Vec<ToolRule>,
     #[serde(default = "return_1f32")]
     default_mining_speed: f32,
-    #[serde(default = "return_1u32")]
+    #[serde(default = "default_item_damage")]
     damage_per_block: u32,
     #[serde(default = "return_true")]
     can_destroy_blocks_in_creative: bool,
@@ -505,6 +513,14 @@ pub struct Consumable {
 #[derive(Deserialize, Clone)]
 pub struct DeathProtection {
     // TODO
+}
+
+#[derive(Deserialize, Clone)]
+pub struct WeaponComponent {
+    #[serde(default = "default_item_damage")]
+    pub item_damage_per_attack: u32,
+    // TODO: Add disable_blocking_for_seconds parsing when shield-disable mechanic is implemented.
+    // This preserves round-trip fidelity for vanilla items and datapacks.
 }
 
 #[derive(Deserialize, Clone)]
