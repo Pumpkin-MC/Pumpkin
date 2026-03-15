@@ -471,9 +471,7 @@ impl Level {
                 if sections[i].has_only_air() {
                     continue;
                 }
-                
                 let y_base = min_y + (i as i32 * 16);
-                
                 for _ in 0..3 {
                     // Generate a fresh random per tick attempt
                     let r = rand::random::<u32>();
