@@ -67,16 +67,12 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
             .get::<ConsumedArgsResource>(&Resource::new_own(consumed_args.rep()))
             .expect("invalid consumed-args resource handle");
 
-        let owned = resource
-            .provider
-            .get(&key)
-            .cloned()
-            .unwrap_or_else(|| {
-                panic!(
-                    "consumed-args.get-value called with unknown key '{key}' (available keys: {:?})",
-                    resource.provider.keys().collect::<Vec<_>>()
-                )
-            });
+        let owned = resource.provider.get(&key).cloned().unwrap_or_else(|| {
+            panic!(
+                "consumed-args.get-value called with unknown key '{key}' (available keys: {:?})",
+                resource.provider.keys().collect::<Vec<_>>()
+            )
+        });
 
         match owned {
             // NOTE: The WIT entity API is currently very limited; until a richer entity handle
@@ -110,16 +106,26 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
 
             OwnedArg::GameMode(mode) => {
                 let mode = match mode {
-                    pumpkin_util::GameMode::Survival => pumpkin::plugin::command::Gamemode::Survival,
-                    pumpkin_util::GameMode::Creative => pumpkin::plugin::command::Gamemode::Creative,
-                    pumpkin_util::GameMode::Adventure => pumpkin::plugin::command::Gamemode::Adventure,
-                    pumpkin_util::GameMode::Spectator => pumpkin::plugin::command::Gamemode::Spectator,
+                    pumpkin_util::GameMode::Survival => {
+                        pumpkin::plugin::command::Gamemode::Survival
+                    }
+                    pumpkin_util::GameMode::Creative => {
+                        pumpkin::plugin::command::Gamemode::Creative
+                    }
+                    pumpkin_util::GameMode::Adventure => {
+                        pumpkin::plugin::command::Gamemode::Adventure
+                    }
+                    pumpkin_util::GameMode::Spectator => {
+                        pumpkin::plugin::command::Gamemode::Spectator
+                    }
                 };
                 Arg::GameMode(mode)
             }
             OwnedArg::Difficulty(difficulty) => {
                 let difficulty = match difficulty {
-                    pumpkin_util::Difficulty::Peaceful => pumpkin::plugin::server::Difficulty::Peaceful,
+                    pumpkin_util::Difficulty::Peaceful => {
+                        pumpkin::plugin::server::Difficulty::Peaceful
+                    }
                     pumpkin_util::Difficulty::Easy => pumpkin::plugin::server::Difficulty::Easy,
                     pumpkin_util::Difficulty::Normal => pumpkin::plugin::server::Difficulty::Normal,
                     pumpkin_util::Difficulty::Hard => pumpkin::plugin::server::Difficulty::Hard,
@@ -315,9 +321,13 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                 };
                 Arg::SoundCategory(category)
             }
-            OwnedArg::DamageType(damage_type) => Arg::DamageType(damage_type.message_id.to_string()),
+            OwnedArg::DamageType(damage_type) => {
+                Arg::DamageType(damage_type.message_id.to_string())
+            }
             OwnedArg::Effect(effect) => Arg::Effect(effect.minecraft_name.to_string()),
-            OwnedArg::Enchantment(enchantment) => Arg::Enchantment(enchantment.registry_key.to_string()),
+            OwnedArg::Enchantment(enchantment) => {
+                Arg::Enchantment(enchantment.registry_key.to_string())
+            }
             OwnedArg::EntityAnchor(anchor) => {
                 let anchor = match anchor {
                     crate::command::args::EntityAnchor::Feet => {
