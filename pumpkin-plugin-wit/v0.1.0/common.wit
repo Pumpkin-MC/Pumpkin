@@ -167,4 +167,21 @@ interface common {
         zh-tw,
         zlm-arab,
     }
+
+    record damage-type-data {}
+    resource damage-type {
+        constructor(data: damage-type-data);
+        get-data: func() -> damage-type-data;
+        set-data: func(data: damage-type-data);
+        from-name: func(name: string) -> damage-type;
+    }
+
+    enum block-direction {
+        down,
+        up,
+        north,
+        south,
+        west,
+        east
+    }
 }

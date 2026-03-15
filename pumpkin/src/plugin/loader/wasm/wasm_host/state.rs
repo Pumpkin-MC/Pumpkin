@@ -33,6 +33,7 @@ pub type CommandResource = WasmResource<CommandTree>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
 pub type ConsumedArgsResource = WasmResource<OwnedConsumedArgs>;
 pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
+pub type EntityProvider = WasmResource<Arc<dyn crate::entity::EntityBase>>;
 
 pub type OwnedConsumedArgs = HashMap<String, OwnedArg>;
 
@@ -132,6 +133,14 @@ impl PluginHostState {
         provider: NonLeafNodeBuilder,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(CommandNodeResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_entity<T>(
+        &mut self,
+        provider: Arc<dyn crate::entity::EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(EntityProvider { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 }

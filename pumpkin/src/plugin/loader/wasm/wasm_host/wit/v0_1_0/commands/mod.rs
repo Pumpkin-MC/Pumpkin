@@ -44,6 +44,7 @@ use crate::{
                         ConsumedArgs, PermissionLevel, StringType,
                     },
                     common::{Locale, Position},
+                    entity::EntityBase,
                     player::Player,
                     server::Server,
                     text::TextComponent,
@@ -77,15 +78,19 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
         match owned {
             // NOTE: The WIT entity API is currently very limited; until a richer entity handle
             // exists, fall back to a stable string representation.
-            OwnedArg::Entities(entities) => Arg::Simple(
+            OwnedArg::Entities(entities) => Arg::Entities(
                 entities
                     .into_iter()
-                    .map(|e| e.get_entity().entity_uuid.to_string())
-                    .collect::<Vec<_>>()
-                    .join(","),
+                    .map(|e| {
+                        self.add_entity::<EntityBase>(e)
+                            .expect("failed to add entity resource")
+                    })
+                    .collect::<Vec<_>>(),
             ),
-            OwnedArg::Entity(entity) => Arg::Simple(entity.get_entity().entity_uuid.to_string()),
-
+            OwnedArg::Entity(entity) => Arg::Entity(
+                self.add_entity::<EntityBase>(entity)
+                    .expect("failed to add entity resource"),
+            ),
             OwnedArg::Players(players) => {
                 let players = players
                     .into_iter()
