@@ -207,7 +207,7 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                             pumpkin::plugin::command::Number::Int64(v)
                         }
                     })
-                    .map_ewfrr(|e| match e {
+                    .map_err(|e| match e {
                         crate::command::args::bounded_num::NotInBounds::LowerBound(val, bound) => {
                             pumpkin::plugin::command::NotInBounds::LowerBound((
                                 match val {
