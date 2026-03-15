@@ -2101,7 +2101,7 @@ impl EntityBase for LivingEntity {
                 let time = self.death_time.fetch_add(1, Relaxed);
                 // Only send death particles once (on the exact tick death_time reaches 20)
                 // and then remove the entity, preventing entity_event spam.
-                if time == 20 && self.entity.is_alive() {
+                if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
                     self.entity
                         .world
                         .load()
