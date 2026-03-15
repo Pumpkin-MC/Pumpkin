@@ -8,6 +8,7 @@ use crate::{
         ChunkData, ChunkEntityData, ChunkReadingError,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
+        palette::has_random_ticking_fluid,
     },
     generation::get_world_gen,
     tick::{OrderedTick, ScheduledTick, TickPriority},
@@ -106,8 +107,15 @@ pub struct Level {
 pub struct TickData {
     pub block_ticks: Vec<OrderedTick<&'static Block>>,
     pub fluid_ticks: Vec<OrderedTick<&'static Fluid>>,
-    pub random_ticks: Vec<ScheduledTick<()>>,
+    pub random_ticks: Vec<RandomTickSample>,
     pub block_entities: Vec<Arc<dyn BlockEntity>>,
+}
+
+#[derive(Clone, Copy)]
+pub struct RandomTickSample {
+    pub position: BlockPos,
+    pub tick_block: bool,
+    pub tick_fluid: bool,
 }
 
 #[derive(Clone)]
@@ -464,11 +472,11 @@ impl Level {
 
             // Acquire the read lock once per chunk to avoid per-section lock overhead
             let sections = chunk.section.block_sections.read().unwrap();
+            let random_tick_sections = chunk.section.random_tick_sections.read().unwrap();
             let min_y = chunk.section.min_y;
 
             for i in 0..section_count {
-                // Skip sections that are entirely air — no random ticks can occur there
-                if sections[i].has_only_air() {
+                if !random_tick_sections[i].is_randomly_ticking() {
                     continue;
                 }
                 let y_base = min_y + (i as i32 * 16);
@@ -481,21 +489,23 @@ impl Level {
 
                     // Read directly from the already-locked section palette
                     let block_state_id = sections[i].get(x_offset, y_in_section, z_offset);
-                    if has_random_ticks(block_state_id) {
+                    let tick_block = has_random_ticks(block_state_id);
+                    let tick_fluid = has_random_ticking_fluid(block_state_id);
+                    if tick_block || tick_fluid {
                         let absolute_y = y_base + y_in_section as i32;
-                        ticks.random_ticks.push(ScheduledTick {
+                        ticks.random_ticks.push(RandomTickSample {
                             position: BlockPos::new(
                                 chunk_x_base + x_offset as i32,
                                 absolute_y,
                                 chunk_z_base + z_offset as i32,
                             ),
-                            delay: 0,
-                            priority: TickPriority::Normal,
-                            value: (),
+                            tick_block,
+                            tick_fluid,
                         });
                     }
                 }
             }
+            drop(random_tick_sections);
             drop(sections);
             ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
             ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());

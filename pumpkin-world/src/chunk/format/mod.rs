@@ -160,9 +160,11 @@ impl ChunkData {
 
         // Assemble the ChunkSections
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
+        let random_tick_sections = ChunkSections::build_random_tick_sections_cache(&block_palettes);
         let section = ChunkSections {
             count: block_palettes.len(),
             block_sections: RwLock::new(block_palettes.into_boxed_slice()),
+            random_tick_sections: RwLock::new(random_tick_sections),
             biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
             min_y,
         };

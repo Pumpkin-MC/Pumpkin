@@ -1,6 +1,11 @@
 use std::{collections::HashMap, hash::Hash, iter::repeat_n};
 
-use pumpkin_data::{Block, BlockState, block_properties::is_air, chunk::Biome};
+use pumpkin_data::{
+    Block, BlockState,
+    block_properties::{has_random_ticks, is_air},
+    chunk::Biome,
+    fluid::Fluid,
+};
 use pumpkin_util::encompassing_bits;
 use tracing::warn;
 
@@ -10,6 +15,13 @@ use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEnt
 
 /// 3d array indexed by y,z,x
 type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
+
+#[inline]
+#[must_use]
+pub fn has_random_ticking_fluid(state_id: u16) -> bool {
+    Fluid::from_state_id(state_id)
+        .is_some_and(|fluid| Fluid::same_fluid_type(fluid.id, Fluid::LAVA.id))
+}
 
 #[derive(Clone)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
@@ -471,6 +483,41 @@ impl BlockPalette {
         match self {
             Self::Homogeneous(id) => is_air(*id),
             Self::Heterogeneous(data) => data.palette.iter().all(|&id| is_air(id)),
+        }
+    }
+
+    #[must_use]
+    pub fn random_ticking_counts(&self) -> (u16, u16) {
+        match self {
+            Self::Homogeneous(registry_id) => {
+                let block_count = if has_random_ticks(*registry_id) {
+                    Self::VOLUME as u16
+                } else {
+                    0
+                };
+                let fluid_count = if has_random_ticking_fluid(*registry_id) {
+                    Self::VOLUME as u16
+                } else {
+                    0
+                };
+                (block_count, fluid_count)
+            }
+            Self::Heterogeneous(data) => data.palette.iter().zip(data.counts.iter()).fold(
+                (0, 0),
+                |(block_count, fluid_count), (registry_id, count)| {
+                    let block_count = if has_random_ticks(*registry_id) {
+                        block_count.saturating_add(*count)
+                    } else {
+                        block_count
+                    };
+                    let fluid_count = if has_random_ticking_fluid(*registry_id) {
+                        fluid_count.saturating_add(*count)
+                    } else {
+                        fluid_count
+                    };
+                    (block_count, fluid_count)
+                },
+            ),
         }
     }
 
