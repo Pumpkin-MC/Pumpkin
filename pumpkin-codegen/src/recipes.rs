@@ -4,43 +4,63 @@ use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use serde::Deserialize;
 
+/// Deserialized recipe entry from `recipes.json`, tagged by the `"type"` field.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum RecipeTypes {
+    /// Blast furnace recipe.
     #[serde(rename = "minecraft:blasting")]
     Blasting(CookingRecipeStruct),
+    /// Campfire cooking recipe.
     #[serde(rename = "minecraft:campfire_cooking")]
     CampfireCooking(CookingRecipeStruct),
+    /// Shaped crafting table recipe.
     #[serde(rename = "minecraft:crafting_shaped")]
     CraftingShaped(CraftingShapedRecipeStruct),
+    /// Shapeless crafting table recipe.
     #[serde(rename = "minecraft:crafting_shapeless")]
     CraftingShapeless(CraftingShapelessRecipeStruct),
+    /// Transmute crafting recipe (preserves NBT/components from one slot to another).
     #[serde(rename = "minecraft:crafting_transmute")]
     CraftingTransmute(CraftingTransmuteRecipeStruct),
+    /// Decorated-pot crafting recipe.
     #[serde(rename = "minecraft:crafting_decorated_pot")]
     CraftingDecoratedPot(CraftingDecoratedPotStruct),
+    /// Furnace smelting recipe.
     #[serde(rename = "minecraft:smelting")]
     Smelting(CookingRecipeStruct),
+    /// Smithing table transform recipe (not yet codegen'd).
     #[serde(rename = "minecraft:smithing_transform")]
     SmithingTransform,
+    /// Smithing table armor-trim recipe (not yet codegen'd).
     #[serde(rename = "minecraft:smithing_trim")]
     SmithingTrim,
+    /// Smoker cooking recipe.
     #[serde(rename = "minecraft:smoking")]
     Smoking(CookingRecipeStruct),
+    /// Stonecutter recipe (not yet codegen'd).
     #[serde(rename = "minecraft:stonecutting")]
     Stonecutting,
+    /// Any special crafting recipe type (not yet codegen'd).
     #[serde(other)]
     #[serde(rename = "minecraft:crafting_special_*")]
     CraftingSpecial,
 }
 
+/// Deserialized cooking recipe (furnace, blast furnace, smoker, or campfire).
 #[derive(Deserialize)]
 pub struct CookingRecipeStruct {
+    /// UI category for this recipe.
     category: Option<RecipeCategoryTypes>,
+    /// Optional recipe group used for advancement tracking.
     group: Option<String>,
+    /// The single ingredient required by this recipe.
     ingredient: RecipeIngredientTypes,
+    /// Number of ticks required to cook this recipe.
     cookingtime: i32,
+    /// Experience points awarded when the result is extracted.
     experience: f32,
+    /// The item produced by this recipe.
     result: RecipeResultStruct,
 }
 
@@ -73,6 +93,11 @@ impl CookingRecipeStruct {
         format!("minecraft:{result_name}_from_{cooking_type}_{ingredient_name}")
     }
 
+    /// Emits the cooking-recipe struct fields including the provided `recipe_id`.
+    ///
+    /// # Arguments
+    /// – `tokens` – the token stream to extend.
+    /// – `recipe_id` – the pre-generated vanilla-format recipe ID string.
     fn to_tokens_with_id(&self, tokens: &mut TokenStream, recipe_id: &str) {
         let category = match &self.category {
             Some(category) => category.to_token_stream(),
@@ -129,13 +154,20 @@ impl ToTokens for CookingRecipeStruct {
     }
 }
 
+/// Deserialized shaped crafting recipe.
 #[derive(Deserialize)]
 pub struct CraftingShapedRecipeStruct {
+    /// UI category for this recipe.
     category: Option<RecipeCategoryTypes>,
+    /// Optional recipe group used for advancement tracking.
     group: Option<String>,
+    /// Whether to show a toast notification when unlocked.
     show_notification: Option<bool>,
+    /// Map from pattern key characters to their ingredient types.
     key: BTreeMap<String, RecipeIngredientTypes>,
+    /// Row strings defining the crafting grid layout.
     pattern: Vec<String>,
+    /// The item produced by this recipe.
     result: RecipeResultStruct,
 }
 
@@ -179,11 +211,16 @@ impl ToTokens for CraftingShapedRecipeStruct {
     }
 }
 
+/// Deserialized shapeless crafting recipe.
 #[derive(Deserialize)]
 pub struct CraftingShapelessRecipeStruct {
+    /// UI category for this recipe.
     category: Option<RecipeCategoryTypes>,
+    /// Optional recipe group used for advancement tracking.
     group: Option<String>,
+    /// The unordered list of ingredients required.
     ingredients: Vec<RecipeIngredientTypes>,
+    /// The item produced by this recipe.
     result: RecipeResultStruct,
 }
 
@@ -216,12 +253,18 @@ impl ToTokens for CraftingShapelessRecipeStruct {
     }
 }
 
+/// Deserialized transmute crafting recipe (copies components from input to result).
 #[derive(Deserialize)]
 pub struct CraftingTransmuteRecipeStruct {
+    /// UI category for this recipe.
     category: Option<RecipeCategoryTypes>,
+    /// Optional recipe group used for advancement tracking.
     group: Option<String>,
+    /// The item whose data components are copied to the result.
     input: RecipeIngredientTypes,
+    /// The material item consumed alongside `input`.
     material: RecipeIngredientTypes,
+    /// The base item type of the result (inherits components from `input`).
     result: RecipeResultStruct,
 }
 
@@ -252,8 +295,10 @@ impl ToTokens for CraftingTransmuteRecipeStruct {
     }
 }
 
+/// Deserialized decorated-pot crafting recipe.
 #[derive(Deserialize)]
 pub struct CraftingDecoratedPotStruct {
+    /// UI category for this recipe.
     category: Option<RecipeCategoryTypes>,
 }
 
@@ -272,9 +317,12 @@ impl ToTokens for CraftingDecoratedPotStruct {
     }
 }
 
+/// Deserialized recipe result specifying the output item and count.
 #[derive(Deserialize)]
 pub struct RecipeResultStruct {
+    /// Registry key of the result item.
     id: String,
+    /// Number of result items produced (defaults to 1).
     count: Option<u8>,
     // TODO: components: Option<RecipeResultComponentsStruct>,
 }
@@ -293,10 +341,13 @@ impl ToTokens for RecipeResultStruct {
     }
 }
 
+/// Deserialized recipe ingredient, which is either a single item/tag or a list of alternatives.
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum RecipeIngredientTypes {
+    /// A single item registry key or tag (prefixed with `#`).
     Simple(String),
+    /// A list of acceptable alternative item registry keys.
     OneOf(Vec<String>),
 }
 
@@ -323,18 +374,25 @@ impl ToTokens for RecipeIngredientTypes {
     }
 }
 
+/// Deserialized recipe UI category used to group recipes in the recipe book.
 #[derive(Deserialize)]
 pub enum RecipeCategoryTypes {
+    /// Equipment recipes (tools, weapons, armor).
     #[serde(rename = "equipment")]
     Equipment,
+    /// Building block recipes.
     #[serde(rename = "building")]
     Building,
+    /// Redstone component recipes.
     #[serde(rename = "redstone")]
     Restone,
+    /// Miscellaneous recipes that don't fit other categories.
     #[serde(rename = "misc")]
     Misc,
+    /// Food item recipes.
     #[serde(rename = "food")]
     Food,
+    /// Block recipes.
     #[serde(rename = "blocks")]
     Blocks,
 }
@@ -366,6 +424,7 @@ impl ToTokens for RecipeCategoryTypes {
     }
 }
 
+/// Reads `recipes.json` and emits the complete recipe constants and helpers `TokenStream`.
 pub fn build() -> TokenStream {
     let recipes_assets: Vec<RecipeTypes> =
         serde_json::from_str(&fs::read_to_string("../assets/recipes.json").unwrap())

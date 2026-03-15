@@ -5,16 +5,23 @@ use std::{collections::BTreeMap, fs};
 
 use crate::version::MinecraftVersion;
 
+/// The newest protocol version used as the fallback for unknown versions in `PacketId::to_id`.
 const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
 
+/// Raw deserialization shape for a single versioned packet mapping file.
 #[derive(Deserialize)]
 pub struct Packets {
+    /// Protocol version number (unused at runtime; present for JSON completeness).
     #[allow(dead_code)]
     version: u32,
+    /// Serverbound packet IDs grouped by protocol phase, then by packet name.
     serverbound: BTreeMap<String, BTreeMap<String, i32>>,
+    /// Clientbound packet IDs grouped by protocol phase, then by packet name.
     clientbound: BTreeMap<String, BTreeMap<String, i32>>,
 }
 
+/// Generates the `TokenStream` for the `PacketId` struct, `CURRENT_MC_VERSION`, and
+/// all `serverbound`/`clientbound` packet ID constants.
 pub(crate) fn build() -> TokenStream {
     let assets = [
         (MinecraftVersion::V_1_21, "1_21_packets.json"),
@@ -118,6 +125,11 @@ fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
     }
 }
 
+/// Generates `PacketId` constants for all packets in either the serverbound or clientbound direction.
+///
+/// # Arguments
+/// - `versions` – Map from `MinecraftVersion` to parsed `Packets` data.
+/// - `is_serverbound` – When `true`, emits serverbound constants; otherwise emits clientbound constants.
 fn generate_mapped_consts(
     versions: &BTreeMap<MinecraftVersion, Packets>,
     is_serverbound: bool,

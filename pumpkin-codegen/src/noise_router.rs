@@ -7,10 +7,11 @@ use std::{
 use heck::ToShoutySnakeCase;
 
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::{ToTokens, TokenStreamExt, quote};
+use quote::{quote, ToTokens, TokenStreamExt};
 use serde::Deserialize;
 use syn::Ident;
 
+/// Wraps an `f32` to provide a bitwise-exact `Hash` implementation for use as a map key.
 struct HashableF32(pub f32);
 
 // Normally this is bad, but we just care about checking if components are the same
@@ -46,6 +47,7 @@ impl<'de> Deserialize<'de> for HashableF32 {
     }
 }
 
+/// Wraps an `f64` to provide a bitwise-exact `Hash` implementation for use as a map key.
 struct HashableF64(pub f64);
 
 // Normally this is bad, but we just care about checking if components are the same
@@ -81,22 +83,37 @@ impl<'de> Deserialize<'de> for HashableF64 {
     }
 }
 
+/// Deserialized representation of a cubic spline used inside density functions.
 #[derive(Deserialize, Hash)]
 #[serde(tag = "_type", content = "value")]
 enum SplineRepr {
+    /// A standard multipoint spline evaluated against a location density function.
     #[serde(rename(deserialize = "standard"))]
     Standard {
+        /// The density function that drives the spline location axis.
         #[serde(rename(deserialize = "locationFunction"))]
         location_function: Box<DensityFunctionRepr>,
+        /// X-axis sample locations for each spline segment.
         locations: Box<[HashableF32]>,
+        /// Nested spline values at each sample location.
         values: Box<[Self]>,
+        /// Derivative (tangent) values at each sample location.
         derivatives: Box<[HashableF32]>,
     },
+    /// A spline that returns a single constant value regardless of input.
     #[serde(rename(deserialize = "fixed"))]
-    Fixed { value: HashableF32 },
+    Fixed {
+        /// The constant output value.
+        value: HashableF32,
+    },
 }
 
 impl SplineRepr {
+    /// Emits the `SplineRepr` token stream, registering any subcomponents into `stack`.
+    ///
+    /// # Arguments
+    /// – `stack` – accumulator of all unique density-function component token streams.
+    /// – `hash_to_index_map` – maps a component's hash to its index in `stack`.
     fn get_token_stream(
         &self,
         stack: &mut Vec<TokenStream>,
@@ -152,19 +169,25 @@ impl SplineRepr {
     }
 }
 
+/// Arithmetic operation applied to two density function arguments.
 #[derive(Deserialize, Hash, Copy, Clone)]
 enum BinaryOperation {
+    /// Adds the two arguments.
     #[serde(rename(deserialize = "ADD"))]
     Add,
+    /// Multiplies the two arguments.
     #[serde(rename(deserialize = "MUL"))]
     Mul,
+    /// Takes the minimum of the two arguments.
     #[serde(rename(deserialize = "MIN"))]
     Min,
+    /// Takes the maximum of the two arguments.
     #[serde(rename(deserialize = "MAX"))]
     Max,
 }
 
 impl BinaryOperation {
+    /// Emits the token stream for this binary operation variant.
     fn get_token_stream(&self) -> TokenStream {
         match self {
             Self::Add => {
@@ -191,15 +214,19 @@ impl BinaryOperation {
     }
 }
 
+/// Arithmetic operation applied to a single density function argument and a scalar.
 #[derive(Deserialize, Hash, Copy, Clone)]
 enum LinearOperation {
+    /// Adds the scalar argument to the density value.
     #[serde(rename(deserialize = "ADD"))]
     Add,
+    /// Multiplies the density value by the scalar argument.
     #[serde(rename(deserialize = "MUL"))]
     Mul,
 }
 
 impl LinearOperation {
+    /// Emits the token stream for this linear operation variant.
     fn into_token_stream(self) -> TokenStream {
         match self {
             Self::Add => {
@@ -216,23 +243,31 @@ impl LinearOperation {
     }
 }
 
+/// Single-argument transformation applied to a density value.
 #[derive(Deserialize, Hash, Copy, Clone)]
 enum UnaryOperation {
+    /// Returns the absolute value.
     #[serde(rename(deserialize = "ABS"))]
     Abs,
+    /// Squares the value.
     #[serde(rename(deserialize = "SQUARE"))]
     Square,
+    /// Cubes the value.
     #[serde(rename(deserialize = "CUBE"))]
     Cube,
+    /// Halves the value only if it is negative, passes it through otherwise.
     #[serde(rename(deserialize = "HALF_NEGATIVE"))]
     HalfNegative,
+    /// Quarters the value only if it is negative, passes it through otherwise.
     #[serde(rename(deserialize = "QUARTER_NEGATIVE"))]
     QuarterNegative,
+    /// Applies a smooth cubic "squeeze" mapping to `[-1, 1]`.
     #[serde(rename(deserialize = "SQUEEZE"))]
     Squeeze,
 }
 
 impl UnaryOperation {
+    /// Emits the token stream for this unary operation variant.
     fn into_token_stream(self) -> TokenStream {
         match self {
             Self::Abs => {
@@ -269,15 +304,19 @@ impl UnaryOperation {
     }
 }
 
+/// Rarity-value mapper used by the `WeirdScaled` density function.
 #[derive(Deserialize, Hash, Copy, Clone)]
 enum WeirdScaledMapper {
+    /// Cave-type scaling curve (TYPE2).
     #[serde(rename(deserialize = "TYPE2"))]
     Caves,
+    /// Tunnel-type scaling curve (TYPE1).
     #[serde(rename(deserialize = "TYPE1"))]
     Tunnels,
 }
 
 impl WeirdScaledMapper {
+    /// Emits the token stream for this mapper variant.
     fn into_token_stream(self) -> TokenStream {
         match self {
             Self::Caves => {
@@ -294,17 +333,24 @@ impl WeirdScaledMapper {
     }
 }
 
+/// Caching or interpolation wrapper applied around an inner density function.
 #[derive(Copy, Clone, Deserialize, PartialEq, Eq, Hash)]
 enum WrapperType {
+    /// Trilinear interpolation over noise cells.
     Interpolated,
+    /// Flat (2D) per-column cache.
     #[serde(rename(deserialize = "FlatCache"))]
     CacheFlat,
+    /// 2D (XZ) per-chunk cache.
     Cache2D,
+    /// Evaluate once and cache for the entire invocation.
     CacheOnce,
+    /// Per-noise-cell cache.
     CellCache,
 }
 
 impl WrapperType {
+    /// Emits the token stream for this wrapper type variant.
     fn into_token_stream(self) -> TokenStream {
         match self {
             Self::Interpolated => {
@@ -336,46 +382,64 @@ impl WrapperType {
     }
 }
 
+/// Deserialized parameters for a simple noise density function.
 #[derive(Deserialize, Hash)]
 struct NoiseData {
+    /// Resource location ID of the noise generator.
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
+    /// Horizontal (XZ) frequency scale factor.
     #[serde(rename(deserialize = "xzScale"))]
     xz_scale: HashableF64,
+    /// Vertical (Y) frequency scale factor.
     #[serde(rename(deserialize = "yScale"))]
     y_scale: HashableF64,
 }
 
+/// Deserialized parameters for a shifted-noise density function.
 #[derive(Deserialize, Hash)]
 struct ShiftedNoiseData {
+    /// Horizontal (XZ) frequency scale factor.
     #[serde(rename(deserialize = "xzScale"))]
     xz_scale: HashableF64,
+    /// Vertical (Y) frequency scale factor.
     #[serde(rename(deserialize = "yScale"))]
     y_scale: HashableF64,
+    /// Resource location ID of the noise generator.
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
 }
 
+/// Deserialized parameters for a weird-scaled-sampler density function.
 #[derive(Deserialize, Hash, Clone)]
 struct WeirdScaledData {
+    /// Resource location ID of the noise generator.
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
+    /// The rarity-value mapper that scales the noise output.
     #[serde(rename(deserialize = "rarityValueMapper"))]
     mapper: WeirdScaledMapper,
 }
 
+/// Deserialized parameters for the interpolated noise sampler density function.
 #[derive(Deserialize, Hash)]
 struct InterpolatedNoiseSamplerData {
+    /// XZ scale after cell-size scaling has been applied.
     #[serde(rename(deserialize = "scaledXzScale"))]
     scaled_xz_scale: HashableF64,
+    /// Y scale after cell-size scaling has been applied.
     #[serde(rename(deserialize = "scaledYScale"))]
     scaled_y_scale: HashableF64,
+    /// Horizontal cell-size factor.
     #[serde(rename(deserialize = "xzFactor"))]
     xz_factor: HashableF64,
+    /// Vertical cell-size factor.
     #[serde(rename(deserialize = "yFactor"))]
     y_factor: HashableF64,
+    /// Multiplier applied to smear-scale for blending.
     #[serde(rename(deserialize = "smearScaleMultiplier"))]
     smear_scale_multiplier: HashableF64,
+    /// Maximum possible output value.
     #[serde(rename(deserialize = "maxValue"))]
     max_value: HashableF64,
     // These are unused currently
@@ -385,181 +449,265 @@ struct InterpolatedNoiseSamplerData {
     //y_scale: HashableF64,
 }
 
+/// Deserialized parameters for a clamped Y-gradient density function.
 #[derive(Deserialize, Hash)]
 struct ClampedYGradientData {
+    /// Y coordinate at which the gradient starts.
     #[serde(rename(deserialize = "fromY"))]
     from_y: i32,
+    /// Y coordinate at which the gradient ends.
     #[serde(rename(deserialize = "toY"))]
     to_y: i32,
+    /// Density value at `from_y`.
     #[serde(rename(deserialize = "fromValue"))]
     from_value: HashableF64,
+    /// Density value at `to_y`.
     #[serde(rename(deserialize = "toValue"))]
     to_value: HashableF64,
 }
 
+/// Deserialized parameters for a binary density function operation.
 #[derive(Deserialize, Hash)]
 struct BinaryData {
+    /// The binary operation to apply to the two arguments.
     #[serde(rename(deserialize = "type"))]
     operation: BinaryOperation,
+    /// Minimum possible output value (informational, not enforced).
     #[serde(rename(deserialize = "minValue"))]
     min_value: HashableF64,
+    /// Maximum possible output value (informational, not enforced).
     #[serde(rename(deserialize = "maxValue"))]
     max_value: HashableF64,
 }
 
+/// Deserialized parameters for a linear density function operation.
 #[derive(Deserialize, Hash)]
 struct LinearData {
+    /// The linear operation (add or multiply) to apply with `argument`.
     #[serde(rename(deserialize = "specificType"))]
     operation: LinearOperation,
+    /// The scalar operand for the linear operation.
     argument: HashableF64,
+    /// Minimum possible output value (informational, not enforced).
     #[serde(rename(deserialize = "minValue"))]
     min_value: HashableF64,
+    /// Maximum possible output value (informational, not enforced).
     #[serde(rename(deserialize = "maxValue"))]
     max_value: HashableF64,
 }
 
+/// Deserialized parameters for a unary density function transformation.
 #[derive(Deserialize, Hash)]
 struct UnaryData {
+    /// The unary transformation to apply.
     #[serde(rename(deserialize = "type"))]
     operation: UnaryOperation,
+    /// Minimum possible output value (informational, not enforced).
     #[serde(rename(deserialize = "minValue"))]
     min_value: HashableF64,
+    /// Maximum possible output value (informational, not enforced).
     #[serde(rename(deserialize = "maxValue"))]
     max_value: HashableF64,
 }
 
+/// Deserialized parameters for a clamp density function.
 #[derive(Deserialize, Hash)]
 struct ClampData {
+    /// Lower bound of the clamp range.
     #[serde(rename(deserialize = "minValue"))]
     min_value: HashableF64,
+    /// Upper bound of the clamp range.
     #[serde(rename(deserialize = "maxValue"))]
     max_value: HashableF64,
 }
 
+/// Deserialized range bounds for the `RangeChoice` density function.
 #[derive(Deserialize, Hash)]
 struct RangeChoiceData {
+    /// Inclusive lower bound of the "in-range" interval.
     #[serde(rename(deserialize = "minInclusive"))]
     min_inclusive: HashableF64,
+    /// Exclusive upper bound of the "in-range" interval.
     #[serde(rename(deserialize = "maxExclusive"))]
     max_exclusive: HashableF64,
 }
 
+/// Deserialized output-range metadata for a spline density function.
 #[derive(Deserialize, Hash)]
 struct SplineData {
+    /// Minimum possible output value of the spline.
     #[serde(rename(deserialize = "minValue"))]
     min_value: HashableF64,
+    /// Maximum possible output value of the spline.
     #[serde(rename(deserialize = "maxValue"))]
     max_value: HashableF64,
 }
 
+/// Deserialized representation of any density function node in the noise router tree.
 #[derive(Deserialize, Hash)]
 #[serde(tag = "_class", content = "value")]
 enum DensityFunctionRepr {
+    /// Placeholder that leaves space for world-structure contributions at runtime.
     // This is a placeholder for leaving space for world structures
     Beardifier,
-    // These functions is initialized by a seed at runtime
+    /// Blending alpha factor, initialized from a world seed at runtime.
+    // These functions are initialized by a seed at runtime
     BlendAlpha,
+    /// Blending offset factor, initialized from a world seed at runtime.
     BlendOffset,
+    /// Blends the density from an inner function.
     BlendDensity {
+        /// The inner density function to blend.
         input: Box<Self>,
     },
+    /// End-islands noise sampler, seeded at runtime.
     EndIslands,
+    /// A standard noise sampler.
     Noise {
+        /// Noise parameters (ID and frequency scales).
         #[serde(flatten)]
         data: NoiseData,
     },
+    /// Horizontal shift noise along the A axis.
     ShiftA {
+        /// Noise ID for the offset generator.
         #[serde(rename(deserialize = "offsetNoise"))]
         noise_id: String,
     },
+    /// Horizontal shift noise along the B axis.
     ShiftB {
+        /// Noise ID for the offset generator.
         #[serde(rename(deserialize = "offsetNoise"))]
         noise_id: String,
     },
+    /// A noise sample shifted in XYZ by three inner density functions.
     ShiftedNoise {
+        /// Density function providing the X shift.
         #[serde(rename(deserialize = "shiftX"))]
         shift_x: Box<Self>,
+        /// Density function providing the Y shift.
         #[serde(rename(deserialize = "shiftY"))]
         shift_y: Box<Self>,
+        /// Density function providing the Z shift.
         #[serde(rename(deserialize = "shiftZ"))]
         shift_z: Box<Self>,
+        /// Noise ID and frequency scales for the shifted sample.
         #[serde(flatten)]
         data: ShiftedNoiseData,
     },
+    /// A trilinearly interpolated multi-octave noise sampler.
     InterpolatedNoiseSampler {
+        /// Sampler configuration parameters.
         #[serde(flatten)]
         data: InterpolatedNoiseSamplerData,
     },
+    /// Scales an input density function by a cave/tunnel rarity curve.
     #[serde(rename(deserialize = "WeirdScaledSampler"))]
     WeirdScaled {
+        /// The density function to scale.
         input: Box<Self>,
+        /// Noise ID and mapper type for scaling.
         #[serde(flatten)]
         data: WeirdScaledData,
     },
+    /// Wraps an inner function with a caching or interpolation layer.
     // The wrapped function is wrapped in a new wrapper at runtime
     #[serde(rename(deserialize = "Wrapping"))]
     Wrapper {
+        /// The inner density function to wrap.
         #[serde(rename(deserialize = "wrapped"))]
         input: Box<Self>,
+        /// The type of wrapper to apply.
         #[serde(rename(deserialize = "type"))]
         wrapper: WrapperType,
     },
+    /// Returns a constant density value.
     // These functions are unchanged except possibly for internal functions
     Constant {
+        /// The constant output value.
         value: HashableF64,
     },
+    /// A linear gradient clamped between two Y levels.
     #[serde(rename(deserialize = "YClampedGradient"))]
     ClampedYGradient {
+        /// Gradient parameters.
         #[serde(flatten)]
         data: ClampedYGradientData,
     },
+    /// Applies a binary operation to two inner density functions.
     #[serde(rename(deserialize = "BinaryOperation"))]
     Binary {
+        /// First argument density function.
         argument1: Box<Self>,
+        /// Second argument density function.
         argument2: Box<Self>,
+        /// Operation type and output range metadata.
         #[serde(flatten)]
         data: BinaryData,
     },
+    /// Applies a linear (add or multiply) operation with a scalar.
     #[serde(rename(deserialize = "LinearOperation"))]
     Linear {
+        /// The inner density function to transform.
         input: Box<Self>,
+        /// Operation type, scalar argument, and output range metadata.
         #[serde(flatten)]
         data: LinearData,
     },
+    /// Applies a unary transformation to an inner density function.
     #[serde(rename(deserialize = "UnaryOperation"))]
     Unary {
+        /// The inner density function to transform.
         input: Box<Self>,
+        /// Transformation type and output range metadata.
         #[serde(flatten)]
         data: UnaryData,
     },
+    /// Clamps an inner density function's output to a range.
     Clamp {
+        /// The inner density function to clamp.
         input: Box<Self>,
+        /// Clamp range parameters.
         #[serde(flatten)]
         data: ClampData,
     },
+    /// Selects one of two density functions based on whether the input is within a range.
     RangeChoice {
+        /// The density function to evaluate for range testing.
         input: Box<Self>,
+        /// Density function used when `input` is within the range.
         #[serde(rename(deserialize = "whenInRange"))]
         when_in_range: Box<Self>,
+        /// Density function used when `input` is outside the range.
         #[serde(rename(deserialize = "whenOutOfRange"))]
         when_out_range: Box<Self>,
+        /// Range bounds and output metadata.
         #[serde(flatten)]
         data: RangeChoiceData,
     },
+    /// Evaluates a cubic spline over a location density function.
     Spline {
+        /// The spline structure.
         spline: SplineRepr,
+        /// Output range metadata.
         #[serde(flatten)]
         data: SplineData,
     },
 }
 
 impl DensityFunctionRepr {
+    /// Computes a stable 64-bit hash for this density function node.
     fn unique_id(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         hasher.finish()
     }
 
+    /// Returns the index of this component in `stack`, inserting it if not yet present.
+    ///
+    /// # Arguments
+    /// – `stack` – accumulator of all unique density-function component token streams.
+    /// – `hash_to_index_map` – maps a component's hash to its index in `stack`.
     fn get_index_for_component(
         &self,
         stack: &mut Vec<TokenStream>,
@@ -577,6 +725,11 @@ impl DensityFunctionRepr {
         }
     }
 
+    /// Emits the `BaseNoiseFunctionComponent` token stream for this node, registering subcomponents into `stack`.
+    ///
+    /// # Arguments
+    /// – `stack` – accumulator of all unique density-function component token streams.
+    /// – `hash_to_index_map` – maps a component's hash to its index in `stack`.
     fn get_token_stream(
         &self,
         stack: &mut Vec<TokenStream>,
@@ -844,48 +997,72 @@ impl DensityFunctionRepr {
     }
 }
 
+/// Top-level container for all dimension noise router representations deserialized from JSON.
 #[derive(Deserialize)]
 struct NoiseRouterReprs {
+    /// Standard overworld noise router.
     overworld: NoiseRouterRepr,
+    /// Large-biomes overworld noise router variant.
     #[serde(rename(deserialize = "large_biomes"))]
     overworld_large_biomes: NoiseRouterRepr,
+    /// Amplified overworld noise router variant.
     #[serde(rename(deserialize = "amplified"))]
     overworld_amplified: NoiseRouterRepr,
+    /// Nether dimension noise router.
     nether: NoiseRouterRepr,
+    /// End dimension noise router.
     end: NoiseRouterRepr,
+    /// Floating-islands (End) noise router variant.
     #[serde(rename(deserialize = "floating_islands"))]
     end_islands: NoiseRouterRepr,
 }
 
+/// Deserialized noise router for a single dimension, containing all density function roots.
 #[derive(Deserialize)]
 struct NoiseRouterRepr {
+    /// Density function controlling aquifer barrier generation.
     #[serde(rename(deserialize = "barrierNoise"))]
     barrier_noise: DensityFunctionRepr,
+    /// Density function controlling fluid-level floodedness.
     #[serde(rename(deserialize = "fluidLevelFloodednessNoise"))]
     fluid_level_floodedness_noise: DensityFunctionRepr,
+    /// Density function controlling how fluid levels spread.
     #[serde(rename(deserialize = "fluidLevelSpreadNoise"))]
     fluid_level_spread_noise: DensityFunctionRepr,
+    /// Density function controlling lava pocket generation.
     #[serde(rename(deserialize = "lavaNoise"))]
     lava_noise: DensityFunctionRepr,
+    /// Density function for biome temperature noise.
     temperature: DensityFunctionRepr,
+    /// Density function for biome vegetation noise.
     vegetation: DensityFunctionRepr,
+    /// Density function for continental-scale terrain shaping.
     continents: DensityFunctionRepr,
+    /// Density function for erosion-based terrain shaping.
     erosion: DensityFunctionRepr,
+    /// Density function encoding terrain depth below the surface.
     depth: DensityFunctionRepr,
+    /// Density function for terrain ridge shaping.
     ridges: DensityFunctionRepr,
+    /// Preliminary surface density used for above-surface checks (without jaggedness).
     #[serde(rename(deserialize = "initialDensityWithoutJaggedness"))]
     initial_density_without_jaggedness: DensityFunctionRepr,
+    /// Final solid/air density used for block placement.
     #[serde(rename(deserialize = "finalDensity"))]
     final_density: DensityFunctionRepr,
+    /// Density function toggling ore-vein generation.
     #[serde(rename(deserialize = "veinToggle"))]
     vein_toggle: DensityFunctionRepr,
+    /// Density function for ridged ore-vein shaping.
     #[serde(rename(deserialize = "veinRidged"))]
     vein_ridged: DensityFunctionRepr,
+    /// Density function controlling gaps within ore veins.
     #[serde(rename(deserialize = "veinGap"))]
     vein_gap: DensityFunctionRepr,
 }
 
 impl NoiseRouterRepr {
+    /// Consumes this router representation and emits the `BaseNoiseRouters` token stream.
     fn into_token_stream(self) -> TokenStream {
         let mut noise_component_stack = Vec::new();
         let mut noise_lookup_map = BTreeMap::new();
@@ -985,6 +1162,8 @@ impl NoiseRouterRepr {
     }
 }
 
+/// Wraps `$router.final_density` in a `Beardifier`-add and `CellCache` wrapper, mirroring the
+/// Java runtime mutation applied to aquifer generators.
 macro_rules! fix_final_density {
     ($router:expr) => {{
         $router.final_density = DensityFunctionRepr::Wrapper {
@@ -1002,6 +1181,7 @@ macro_rules! fix_final_density {
     }};
 }
 
+/// Reads `density_function.json` and emits the complete noise-router constants `TokenStream`.
 pub fn build() -> TokenStream {
     let mut reprs: NoiseRouterReprs =
         serde_json5::from_str(&fs::read_to_string("../assets/density_function.json").unwrap())
@@ -1220,7 +1400,7 @@ pub fn build() -> TokenStream {
         pub enum BaseNoiseFunctionComponent {
             // This is a placeholder for leaving space for world structures
             Beardifier,
-            // These functions is initialized by a seed at runtime
+            // These functions are initialized by a seed at runtime
             BlendAlpha,
             BlendOffset,
             BlendDensity {
