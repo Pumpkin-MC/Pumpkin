@@ -368,7 +368,7 @@ impl GenerationSchedule {
 
                 // Expire tasks that have been waiting too long
                 if now.duration_since(inserted_at) > Self::WAITING_TASK_TIMEOUT {
-                    warn!(
+                    debug!(
                         "Expiring stale waiting task for chunk {:?} stage {:?} (waited {:?})",
                         node.pos,
                         node.stage,
