@@ -335,7 +335,10 @@ impl ChunkEntityData {
                 if uuid.len() != 4 {
                     debug!(
                         "Entity in chunk {},{} has invalid UUID array length {}: {:?}",
-                        position.x, position.y, uuid.len(), entity_nbt
+                        position.x,
+                        position.y,
+                        uuid.len(),
+                        entity_nbt
                     );
                     continue;
                 }
