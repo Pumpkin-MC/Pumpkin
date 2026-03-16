@@ -14,9 +14,11 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::data_component_impl::DataComponentImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use tokio::sync::Mutex;
 
 pub struct BrewingStandBlockEntity {
@@ -99,7 +101,11 @@ impl BrewingStandBlockEntity {
     }
 
     /// Perform brewing on all valid potion slots
-    async fn do_brew(&self, ingredient: &ItemStack) {
+    async fn do_brew(
+        &self,
+        world: &Arc<dyn crate::world::SimpleWorld>,
+        ingredient: &ItemStack,
+    ) {
         let ingredient_id = ingredient.get_item().id;
 
         // Apply recipes to each slot
@@ -182,6 +188,16 @@ impl BrewingStandBlockEntity {
 
         // Update the slot with the decremented stack
         self.set_stack(3, updated_ingredient).await;
+
+        // Play sound at the center of the block
+        let pos = Vector3::new(
+            self.position.0.x as f64 + 0.5,
+            self.position.0.y as f64 + 0.5,
+            self.position.0.z as f64 + 0.5,
+        );
+        world
+            .play_sound(Sound::BlockBrewingStandBrew, SoundCategory::Blocks, &pos)
+            .await;
 
         // Mark dirty to trigger update
         self.mark_dirty();
@@ -400,7 +416,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
     fn tick<'a>(
         &'a self,
-        _world: &'a Arc<dyn crate::world::SimpleWorld>,
+        world: &'a Arc<dyn crate::world::SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             // Refill fuel counter from fuel item if needed
@@ -436,7 +452,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
                 if is_done_brewing && brewable {
                     // Brewing complete
-                    self.do_brew(&ingredient).await;
+                    self.do_brew(world, &ingredient).await;
                 } else if !brewable || !self.ingredient_matches(&ingredient).await {
                     // Cancel brewing
                     self.brew_time.store(0, Ordering::Relaxed);
@@ -477,7 +493,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
             if needs_update {
                 // Update the block state properties for the brewing stand to reflect bottle presence
-                let world = _world.clone();
+                let world = world.clone();
                 let (block, state) = world.get_block_and_state(&self.position).await;
                 // Use generated block properties helper to produce a new state id with the bits set
                 let mut props =
