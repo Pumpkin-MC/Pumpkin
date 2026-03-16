@@ -360,37 +360,40 @@ impl GenerationSchedule {
         let mut expired: Vec<NodeKey> = Vec::new();
         let now = Instant::now();
 
-        self.waiting_for_chunks.retain(|&node_key, &mut inserted_at| {
-            let Some(node) = self.graph.nodes.get(node_key) else {
-                return false; // node was dropped, discard silently
-            };
+        self.waiting_for_chunks
+            .retain(|&node_key, &mut inserted_at| {
+                let Some(node) = self.graph.nodes.get(node_key) else {
+                    return false; // node was dropped, discard silently
+                };
 
-            // Expire tasks that have been waiting too long
-            if now.duration_since(inserted_at) > Self::WAITING_TASK_TIMEOUT {
-                warn!(
-                    "Expiring stale waiting task for chunk {:?} stage {:?} (waited {:?})",
-                    node.pos, node.stage, now.duration_since(inserted_at)
-                );
-                expired.push(node_key);
-                return false;
-            }
+                // Expire tasks that have been waiting too long
+                if now.duration_since(inserted_at) > Self::WAITING_TASK_TIMEOUT {
+                    warn!(
+                        "Expiring stale waiting task for chunk {:?} stage {:?} (waited {:?})",
+                        node.pos,
+                        node.stage,
+                        now.duration_since(inserted_at)
+                    );
+                    expired.push(node_key);
+                    return false;
+                }
 
-            let write_radius = node.stage.get_write_radius();
-            let pos = node.pos;
-            let all_ready = (-write_radius..=write_radius).all(|dx| {
-                (-write_radius..=write_radius).all(|dy| {
-                    self.chunk_map
-                        .get(&pos.add_raw(dx, dy))
-                        .is_some_and(|h| h.chunk.is_some())
-                })
+                let write_radius = node.stage.get_write_radius();
+                let pos = node.pos;
+                let all_ready = (-write_radius..=write_radius).all(|dx| {
+                    (-write_radius..=write_radius).all(|dy| {
+                        self.chunk_map
+                            .get(&pos.add_raw(dx, dy))
+                            .is_some_and(|h| h.chunk.is_some())
+                    })
+                });
+                if all_ready {
+                    now_ready.push(node_key);
+                    false
+                } else {
+                    true
+                }
             });
-            if all_ready {
-                now_ready.push(node_key);
-                false
-            } else {
-                true
-            }
-        });
 
         // Drop expired nodes so their downstream dependents can be unblocked
         for node_key in expired {
@@ -870,35 +873,34 @@ impl GenerationSchedule {
                         self.unload_chunks.insert(pos);
                         self.chunk_map.insert(pos, holder);
                     } else {
-
-                    if !holder.occupied.is_null() {
-                        if self.graph.nodes.contains_key(holder.occupied) {
-                            self.drop_node(holder.occupied);
+                        if !holder.occupied.is_null() {
+                            if self.graph.nodes.contains_key(holder.occupied) {
+                                self.drop_node(holder.occupied);
+                            }
+                            holder.occupied = NodeKey::null();
                         }
-                        holder.occupied = NodeKey::null();
-                    }
 
-                    for i in 0..holder.tasks.len() {
-                        if !holder.tasks[i].is_null() {
-                            self.waiting_for_chunks.remove(&holder.tasks[i]);
-                            self.drop_node(holder.tasks[i]);
-                            holder.tasks[i] = NodeKey::null();
+                        for i in 0..holder.tasks.len() {
+                            if !holder.tasks[i].is_null() {
+                                self.waiting_for_chunks.remove(&holder.tasks[i]);
+                                self.drop_node(holder.tasks[i]);
+                                holder.tasks[i] = NodeKey::null();
+                            }
                         }
-                    }
 
-                    holder.current_stage = StagedChunkEnum::None;
-                    holder.dependency_stage = StagedChunkEnum::None;
-                    holder.chunk = None;
+                        holder.current_stage = StagedChunkEnum::None;
+                        holder.dependency_stage = StagedChunkEnum::None;
+                        holder.chunk = None;
 
-                    for i in (StagedChunkEnum::None as usize + 1)..=(target_stage as usize) {
-                        let stage_enum = StagedChunkEnum::from(i as u8);
-                        let task_node = Node::new(pos, stage_enum);
-                        holder.tasks[i] = self.graph.nodes.insert(task_node);
+                        for i in (StagedChunkEnum::None as usize + 1)..=(target_stage as usize) {
+                            let stage_enum = StagedChunkEnum::from(i as u8);
+                            let task_node = Node::new(pos, stage_enum);
+                            holder.tasks[i] = self.graph.nodes.insert(task_node);
 
-                        if i > (StagedChunkEnum::None as usize + 1) {
-                            self.graph.add_edge(holder.tasks[i - 1], holder.tasks[i]);
+                            if i > (StagedChunkEnum::None as usize + 1) {
+                                self.graph.add_edge(holder.tasks[i - 1], holder.tasks[i]);
+                            }
                         }
-                    }
 
                         if target_stage > StagedChunkEnum::None {
                             let first_task = holder.tasks[StagedChunkEnum::None as usize + 1];
@@ -907,14 +909,16 @@ impl GenerationSchedule {
                             }
                             // Use retry_count for exponential backoff in priority:
                             // each retry gets deprioritized further
-                            let priority_penalty = 50i8.saturating_sub(holder.retry_count as i8 * 10);
+                            let priority_penalty =
+                                50i8.saturating_sub(holder.retry_count as i8 * 10);
                             self.queue.push(TaskHeapNode(
                                 Self::calc_priority(
                                     &self.last_level,
                                     &self.last_high_priority,
                                     pos,
                                     StagedChunkEnum::from(1),
-                                ).saturating_sub(priority_penalty),
+                                )
+                                .saturating_sub(priority_penalty),
                                 first_task,
                             ));
                         }
