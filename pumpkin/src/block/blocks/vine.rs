@@ -1,16 +1,23 @@
+use std::collections::HashSet;
+
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+        UseWithItemArgs, registry::BlockActionResult,
     },
     entity::player::Player,
 };
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{BlockProperties, VineLikeProperties},
+    item::Item,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, world::BlockAccessor};
+use pumpkin_world::{
+    BlockStateId,
+    world::{BlockAccessor, BlockFlags},
+};
 
 #[pumpkin_block("minecraft:vine")]
 pub struct VineBlock;
@@ -56,6 +63,44 @@ impl BlockBehaviour for VineBlock {
                 return Block::AIR.default_state.id;
             }
             args.state_id
+        })
+    }
+
+    fn use_with_item<'a>(
+        &'a self,
+        args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let state = args.world.get_block_state(args.position).await;
+            let mut props = VineLikeProperties::from_state_id(state.id, args.block);
+
+            let item_lock = args.item_stack.lock().await;
+            let item = item_lock.item;
+            drop(item_lock);
+
+            if item.id != Item::VINE.id {
+                return BlockActionResult::Pass;
+            }
+            let Some(accurate_dir) = get_accurate_direction(
+                args.world.as_ref(),
+                args.position,
+                Some(args.player),
+                BlockDirection::Down,
+            )
+            .await
+            else {
+                return BlockActionResult::Pass;
+            };
+            println!("accurate_dir use with item: {accurate_dir:?}");
+            vine_direction_mapper(&accurate_dir, &mut props);
+            args.world
+                .set_block_state(
+                    args.position,
+                    props.to_state_id(args.block),
+                    BlockFlags::NOTIFY_ALL,
+                )
+                .await;
+            BlockActionResult::Consume
         })
     }
 }
@@ -166,18 +211,18 @@ async fn can_place_vine_at(
         //then this is blockupdate check. vine block is already placed and we can retrieve the direction from props
         let (block, state) = block_accessor.get_block_and_state(position).await;
         let props = VineLikeProperties::from_state_id(state.id, block);
-        let Some(dir) = vine_block_direction(&props) else {
-            return false;
-        };
+        let directions = get_vine_block_directions(&props);
+        for dir in directions {
+            let support_pos = position.offset(dir.to_offset());
+            let (support_block, _support_block_state) =
+                block_accessor.get_block_and_state(&support_pos).await;
 
-        let support_pos = position.offset(dir.to_offset());
-        let (support_block, _support_block_state) =
-            block_accessor.get_block_and_state(&support_pos).await;
-
-        if !supports_vine(support_block) {
-            println!("can_place_vine_at: returning false cuz not full cube 1");
-            return false;
+            if !supports_vine(support_block) {
+                println!("can_place_vine_at: returning false cuz not full cube 1");
+                return false;
+            }
         }
+
         return true;
     };
     let Some(direction) =
@@ -213,6 +258,13 @@ async fn get_accurate_direction(
     player_wrapper: Option<&Player>,
     click_direction: BlockDirection,
 ) -> Option<BlockDirection> {
+    let (replacing_block, replacing_block_state) =
+        block_accessor.get_block_and_state(block_pos).await;
+    let mut active_directions = HashSet::new();
+    if replacing_block == &Block::VINE {
+        let props = VineLikeProperties::from_state_id(replacing_block_state.id, replacing_block);
+        active_directions = get_vine_block_directions(&props);
+    }
     if click_direction != BlockDirection::Down {
         let support_pos = block_pos.offset(click_direction.to_offset());
 
@@ -225,7 +277,7 @@ async fn get_accurate_direction(
     if let Some(player) = player_wrapper {
         let mut up = false;
         for dir in get_nearest_looking_directions(player, false, click_direction) {
-            if dir != BlockDirection::Down {
+            if dir != BlockDirection::Down && !active_directions.contains(&dir) {
                 let support_pos = block_pos.offset(dir.to_offset());
 
                 let (support_block, _support_block_state) =
@@ -248,20 +300,25 @@ async fn get_accurate_direction(
     }
     None
 }
-fn vine_block_direction(props: &VineLikeProperties) -> Option<BlockDirection> {
+
+fn get_vine_block_directions(props: &VineLikeProperties) -> HashSet<BlockDirection> {
+    let mut set = HashSet::new();
     if props.north {
-        Some(BlockDirection::North)
-    } else if props.south {
-        Some(BlockDirection::South)
-    } else if props.east {
-        Some(BlockDirection::East)
-    } else if props.west {
-        Some(BlockDirection::West)
-    } else if props.up {
-        Some(BlockDirection::Up)
-    } else {
-        None
+        set.insert(BlockDirection::North);
     }
+    if props.south {
+        set.insert(BlockDirection::South);
+    }
+    if props.east {
+        set.insert(BlockDirection::East);
+    }
+    if props.west {
+        set.insert(BlockDirection::West);
+    }
+    if props.up {
+        set.insert(BlockDirection::Up);
+    }
+    set
 }
 fn vine_direction_mapper(direction: &BlockDirection, props: &mut VineLikeProperties) {
     match direction {
