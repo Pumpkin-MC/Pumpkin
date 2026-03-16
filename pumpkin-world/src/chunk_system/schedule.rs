@@ -20,7 +20,7 @@ use std::mem::swap;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{debug, error, info, trace, warn};
 
 pub(crate) struct TaskHeapNode(i8, NodeKey);
@@ -62,7 +62,8 @@ pub struct GenerationSchedule {
     /// Tasks that are graph-ready (in_degree == 0) but cannot yet run because
     /// one or more of their required neighbor chunks haven't been delivered yet.
     /// Parked here and re-queued by `check_waiting_tasks()` as chunk data arrives.
-    waiting_for_chunks: HashSetType<NodeKey>,
+    /// Tracks insertion time so orphaned entries can be expired.
+    waiting_for_chunks: HashMap<NodeKey, Instant>,
 
     io_lock: IOLock,
     running_task_count: u16,
@@ -138,7 +139,7 @@ impl GenerationSchedule {
                     send_level: level_channel,
                     public_chunk_map: level_sched.loaded_chunks.clone(),
                     unload_chunks: HashSetType::default(),
-                    waiting_for_chunks: HashSetType::default(),
+                    waiting_for_chunks: HashMap::default(),
                     io_lock,
                     running_task_count: 0,
                     recv_chunk,
@@ -347,17 +348,33 @@ impl GenerationSchedule {
     /// Check if any tasks parked in `waiting_for_chunks` now have all their neighbor
     /// chunk data available, and re-queue them if so.
     /// Must be called after every `receive_chunk` call.
+    /// Maximum time a task can sit in `waiting_for_chunks` before being expired.
+    const WAITING_TASK_TIMEOUT: Duration = Duration::from_secs(30);
+
     fn check_waiting_tasks(&mut self) {
         if self.waiting_for_chunks.is_empty() {
             return;
         }
 
         let mut now_ready: Vec<NodeKey> = Vec::new();
+        let mut expired: Vec<NodeKey> = Vec::new();
+        let now = Instant::now();
 
-        self.waiting_for_chunks.retain(|&node_key| {
+        self.waiting_for_chunks.retain(|&node_key, &mut inserted_at| {
             let Some(node) = self.graph.nodes.get(node_key) else {
                 return false; // node was dropped, discard silently
             };
+
+            // Expire tasks that have been waiting too long
+            if now.duration_since(inserted_at) > Self::WAITING_TASK_TIMEOUT {
+                warn!(
+                    "Expiring stale waiting task for chunk {:?} stage {:?} (waited {:?})",
+                    node.pos, node.stage, now.duration_since(inserted_at)
+                );
+                expired.push(node_key);
+                return false;
+            }
+
             let write_radius = node.stage.get_write_radius();
             let pos = node.pos;
             let all_ready = (-write_radius..=write_radius).all(|dx| {
@@ -374,6 +391,11 @@ impl GenerationSchedule {
                 true
             }
         });
+
+        // Drop expired nodes so their downstream dependents can be unblocked
+        for node_key in expired {
+            self.drop_node(node_key);
+        }
 
         for node_key in now_ready {
             if let Some(n) = self.graph.nodes.get_mut(node_key)
@@ -422,7 +444,7 @@ impl GenerationSchedule {
                 {
                     let task = &mut holder.tasks[i];
                     if !task.is_null() {
-                        self.waiting_for_chunks.remove(task);
+                        self.waiting_for_chunks.remove(&task);
                         self.drop_node(*task);
                         *task = NodeKey::null();
                     }
@@ -615,7 +637,7 @@ impl GenerationSchedule {
                 if node.in_degree == 0 && !node.in_queue {
                     // Don't queue if parked in waiting_for_chunks — check_waiting_tasks()
                     // will re-queue it once chunk data arrives.
-                    if !self.waiting_for_chunks.contains(&cur.to) {
+                    if !self.waiting_for_chunks.contains_key(&cur.to) {
                         self.queue.push(TaskHeapNode(
                             Self::calc_priority(
                                 &self.last_level,
@@ -837,6 +859,18 @@ impl GenerationSchedule {
                 if let Some(mut holder) = self.chunk_map.remove(&pos) {
                     let target_stage = holder.target_stage;
 
+                    // Increment retry count and check if we should abandon
+                    holder.retry_count += 1;
+                    if holder.retry_count > 5 {
+                        warn!(
+                            "Chunk {:?} failed {} times, abandoning (setting target to None)",
+                            pos, holder.retry_count
+                        );
+                        holder.target_stage = StagedChunkEnum::None;
+                        self.unload_chunks.insert(pos);
+                        self.chunk_map.insert(pos, holder);
+                    } else {
+
                     if !holder.occupied.is_null() {
                         if self.graph.nodes.contains_key(holder.occupied) {
                             self.drop_node(holder.occupied);
@@ -866,28 +900,33 @@ impl GenerationSchedule {
                         }
                     }
 
-                    if target_stage > StagedChunkEnum::None {
-                        let first_task = holder.tasks[StagedChunkEnum::None as usize + 1];
-                        if let Some(node) = self.graph.nodes.get_mut(first_task) {
-                            node.in_queue = true;
+                        if target_stage > StagedChunkEnum::None {
+                            let first_task = holder.tasks[StagedChunkEnum::None as usize + 1];
+                            if let Some(node) = self.graph.nodes.get_mut(first_task) {
+                                node.in_queue = true;
+                            }
+                            // Use retry_count for exponential backoff in priority:
+                            // each retry gets deprioritized further
+                            let priority_penalty = 50i8.saturating_sub(holder.retry_count as i8 * 10);
+                            self.queue.push(TaskHeapNode(
+                                Self::calc_priority(
+                                    &self.last_level,
+                                    &self.last_high_priority,
+                                    pos,
+                                    StagedChunkEnum::from(1),
+                                ).saturating_sub(priority_penalty),
+                                first_task,
+                            ));
                         }
-                        self.queue.push(TaskHeapNode(
-                            Self::calc_priority(
-                                &self.last_level,
-                                &self.last_high_priority,
-                                pos,
-                                StagedChunkEnum::from(1),
-                            ) - 50,
-                            first_task,
-                        ));
+
+                        let retries = holder.retry_count;
+                        self.chunk_map.insert(pos, holder);
+
+                        warn!(
+                            "Chunk {:?} reset to None and re-queued for regeneration (target: {:?}, retry #{})",
+                            pos, target_stage, retries
+                        );
                     }
-
-                    self.chunk_map.insert(pos, holder);
-
-                    warn!(
-                        "Chunk {:?} reset to None and re-queued for regeneration (target: {:?})",
-                        pos, target_stage
-                    );
                 } else {
                     error!("Failed to find holder for failed chunk {:?}", pos);
                 }
@@ -927,8 +966,13 @@ impl GenerationSchedule {
                     self.queue.push(task);
                     break 'out2;
                 }
-                while let Ok((pos, data)) = self.recv_chunk.try_recv() {
-                    self.receive_chunk(pos, data);
+                // Bug #7 fix: cap the drain to prevent starvation when gen
+                // workers produce results faster than we can dispatch new tasks.
+                for _ in 0..64 {
+                    match self.recv_chunk.try_recv() {
+                        Ok((pos, data)) => self.receive_chunk(pos, data),
+                        Err(_) => break,
+                    }
                 }
                 if let Some(node) = self.graph.nodes.get_mut(task.1) {
                     if node.in_degree != 0 {
@@ -982,7 +1026,7 @@ impl GenerationSchedule {
                                 if let Some(n) = self.graph.nodes.get_mut(task.1) {
                                     n.in_queue = false;
                                 }
-                                self.waiting_for_chunks.insert(task.1);
+                                self.waiting_for_chunks.insert(task.1, Instant::now());
                                 // Close the TOCTOU window: the chunk we're waiting for may
                                 // have arrived in the recv_chunk drain that happened earlier
                                 // in this same loop iteration, before this task was parked.
@@ -1075,11 +1119,21 @@ impl GenerationSchedule {
                 {
                     if let Ok((pos, data)) = self.recv_chunk.try_recv() {
                         self.receive_chunk(pos, data);
+                        // Bug #3 fix: also poll for level changes so player movement
+                        // is processed promptly even when waiting for in-flight tasks.
                         self.resort_work(self.send_level.get());
                     } else {
                         if level.shut_down_chunk_system.load(Relaxed) {
                             break;
                         }
+                        // Bug #3 fix: poll level changes even when no chunks arrived,
+                        // so new player positions are processed during the wait.
+                        if self.resort_work(self.send_level.get()) {
+                            // New level data arrived, re-check the queue
+                            continue;
+                        }
+                        // Bug #2 fix: periodically expire stale waiting_for_chunks
+                        self.check_waiting_tasks();
                         thread::sleep(Duration::from_millis(50));
                     }
                 }
@@ -1123,7 +1177,7 @@ impl GenerationSchedule {
             for holder in self.chunk_map.values_mut() {
                 for task in &mut holder.tasks {
                     if !task.is_null() {
-                        self.waiting_for_chunks.remove(task);
+                        self.waiting_for_chunks.remove(&task);
                         nodes_to_drop.push(*task);
                         *task = NodeKey::null();
                     }

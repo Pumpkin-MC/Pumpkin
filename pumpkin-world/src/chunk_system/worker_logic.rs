@@ -64,21 +64,60 @@ pub async fn io_read_work(
     debug!("io read thread start");
     let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
     let dimension = &level.world_gen.dimension;
-    let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
 
     // Cleaner loop and async recv
     while let Ok(pos) = recv.recv().await {
-        // Lock handling
-        tokio::task::block_in_place(|| {
+        tokio::task::yield_now().await;
+
+        // Wait for the IO write lock to be released for this chunk position.
+        // Uses Condvar to block properly instead of busy-spinning.
+        // The IO write worker calls lock.1.notify_all() when it finishes writing.
+        let lock_acquired = tokio::task::block_in_place(|| {
             let mut data = lock.0.lock().unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
             while data.contains_key(&pos) {
-                data = lock.1.wait(data).unwrap();
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    return false;
+                }
+                let (guard, timeout_result) = lock.1.wait_timeout(data, remaining).unwrap();
+                data = guard;
+                if timeout_result.timed_out() && data.contains_key(&pos) {
+                    return false;
+                }
             }
+            true
         });
+
+        if !lock_acquired {
+            warn!(
+                "io_read: timed out waiting for IO write lock on chunk {:?}, re-queuing",
+                pos
+            );
+            // Send failure back to scheduler so running_task_count is decremented
+            // and the chunk can be retried later
+            if send
+                .send((
+                    pos,
+                    RecvChunk::GenerationFailure {
+                        pos,
+                        stage: StagedChunkEnum::Empty,
+                        error: "IO write lock timeout".to_string(),
+                    },
+                ))
+                .is_err()
+            {
+                break;
+            }
+            continue;
+        }
+
+        // Create the channel inside the loop!
+        let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
 
         level
             .chunk_saver
-            .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
+            .fetch_chunks(&level.level_folder, &[pos], t_send)
             .await;
 
         let data = match t_recv.recv().await {

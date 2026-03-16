@@ -15,6 +15,9 @@ pub struct ChunkHolder {
     pub occupied_by: EdgeKey,
     pub public: bool,
     pub tasks: [NodeKey; 10],
+    /// How many times this chunk has been retried after generation/IO failure.
+    /// Used to prevent infinite retry storms.
+    pub retry_count: u8,
 }
 
 impl Default for ChunkHolder {
@@ -28,6 +31,7 @@ impl Default for ChunkHolder {
             occupied_by: EdgeKey::null(),
             public: false,
             tasks: [NodeKey::null(); 10],
+            retry_count: 0,
         }
     }
 }
