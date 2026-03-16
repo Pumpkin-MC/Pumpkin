@@ -447,7 +447,7 @@ impl GenerationSchedule {
                 {
                     let task = &mut holder.tasks[i];
                     if !task.is_null() {
-                        self.waiting_for_chunks.remove(&task);
+                        self.waiting_for_chunks.remove(task);
                         self.drop_node(*task);
                         *task = NodeKey::null();
                     }
@@ -1181,7 +1181,7 @@ impl GenerationSchedule {
             for holder in self.chunk_map.values_mut() {
                 for task in &mut holder.tasks {
                     if !task.is_null() {
-                        self.waiting_for_chunks.remove(&task);
+                        self.waiting_for_chunks.remove(task);
                         nodes_to_drop.push(*task);
                         *task = NodeKey::null();
                     }
