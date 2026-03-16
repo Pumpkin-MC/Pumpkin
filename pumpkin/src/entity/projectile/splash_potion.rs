@@ -5,11 +5,13 @@ use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
     server::Server,
 };
+use pumpkin_data::Block;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
+use pumpkin_world::world::BlockFlags;
 use tokio::sync::RwLock;
 
 pub struct SplashPotionEntity {
@@ -52,6 +54,49 @@ impl SplashPotionEntity {
 }
 
 impl NBTStorage for SplashPotionEntity {}
+
+fn is_water_potion(stack: &ItemStack) -> bool {
+    stack
+        .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+        .and_then(|pc| pc.potion_id)
+        .map_or(false, |id| id == pumpkin_data::potion::Potion::WATER.id as i32)
+}
+
+/// Extinguishes fire (including soul fire) at the hit position and its four horizontal neighbors.
+async fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>) {
+    let air_state_id = Block::AIR.default_state.id;
+    let fire_id = Block::FIRE.id;
+    let soul_fire_id = Block::SOUL_FIRE.id;
+
+    let neighbors = [
+        hit_pos,
+        Vector3::new(hit_pos.x + 1.0, hit_pos.y, hit_pos.z),
+        Vector3::new(hit_pos.x - 1.0, hit_pos.y, hit_pos.z),
+        Vector3::new(hit_pos.x, hit_pos.y, hit_pos.z + 1.0),
+        Vector3::new(hit_pos.x, hit_pos.y, hit_pos.z - 1.0),
+    ];
+
+    for p in neighbors {
+        let pos = BlockPos(Vector3::new(p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32));
+        let state_id = world.get_block_state_id(&pos).await;
+        let raw_block_id = Block::get_raw_id_from_state_id(state_id);
+        if raw_block_id == fire_id || raw_block_id == soul_fire_id {
+            let _ = world
+                .set_block_state(&pos, air_state_id, BlockFlags::NOTIFY_ALL)
+                .await;
+        }
+    }
+}
+
+pub(crate) async fn extinguish_fire_if_water_potion(
+    world: &Arc<crate::world::World>,
+    hit_pos: Vector3<f64>,
+    stack: &ItemStack,
+) {
+    if is_water_potion(stack) {
+        extinguish_fire(world, hit_pos).await;
+    }
+}
 
 impl EntityBase for SplashPotionEntity {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -97,8 +142,10 @@ impl EntityBase for SplashPotionEntity {
             let world = self.get_entity().world.load();
             let hit_pos = hit.hit_pos();
 
-            // Read stored item stack and compute potion effects
+            // Only extinguish fire for plain water potions
             let stack = self.item_stack.read().await.clone();
+            extinguish_fire_if_water_potion(&world, hit_pos, &stack).await;
+
             let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
 
             let mut color = 0x385dc6; // Default to water color if no effects/color found

@@ -5,6 +5,7 @@ use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
     server::Server,
 };
+use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::position::BlockPos;
@@ -103,6 +104,10 @@ impl EntityBase for LingeringPotionEntity {
         Box::pin(async move {
             let world = self.get_entity().world.load();
             let hit_pos = hit.hit_pos();
+
+            // Only extinguish fire for plain water potions
+            let stack = self.item_stack.read().await.clone();
+            extinguish_fire_if_water_potion(&world, hit_pos, &stack).await;
 
             // Play impact particles
             world
