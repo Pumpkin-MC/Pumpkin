@@ -128,11 +128,12 @@ impl VillagerInventory {
         if let Some(inv_list) = nbt.get_list("Inventory") {
             for tag in inv_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(item_nbt) = tag {
-                    let slot_idx = item_nbt.get_byte("Slot").unwrap_or(0) as usize;
-                    if slot_idx < 8
+                    let slot_raw = item_nbt.get_byte("Slot").unwrap_or(-1);
+                    if slot_raw >= 0
+                        && (slot_raw as usize) < 8
                         && let Some(stack) = ItemStack::read_item_stack(item_nbt)
                     {
-                        self.slots[slot_idx] = stack;
+                        self.slots[slot_raw as usize] = stack;
                     }
                 }
             }

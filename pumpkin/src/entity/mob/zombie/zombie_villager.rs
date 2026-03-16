@@ -169,14 +169,13 @@ impl Mob for ZombieVillagerEntity {
                 return false;
             }
 
+            // Store who is curing (for gossip discount) and start conversion
+            // before consuming the apple, so state is committed first
+            *self.curer_uuid.lock().await = Some(player.gameprofile.id);
+            self.start_conversion();
+
             // Consume the golden apple
             item_stack.item_count = item_stack.item_count.saturating_sub(1);
-
-            // Store who is curing (for gossip discount)
-            *self.curer_uuid.lock().await = Some(player.gameprofile.id);
-
-            // Start conversion
-            self.start_conversion();
 
             // Play cure sound and particles
             let entity = &self.mob_entity.mob_entity.living_entity.entity;

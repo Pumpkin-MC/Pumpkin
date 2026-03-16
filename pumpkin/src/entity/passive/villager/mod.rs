@@ -128,6 +128,7 @@ impl VillagerType {
         match v {
             0 => Self::Desert,
             1 => Self::Jungle,
+            2 => Self::Plains,
             3 => Self::Savanna,
             4 => Self::Snow,
             5 => Self::Swamp,
@@ -879,29 +880,30 @@ impl Mob for VillagerEntity {
             }
 
             // --- Drain trade completion channel (process completed trades) ---
-            let completed_trades = {
-                let mut rx_guard = self.trade_completion_rx.lock().await;
-                let mut trades = Vec::new();
-                if let Some(ref mut rx) = *rx_guard {
-                    while let Ok(trade_idx) = rx.try_recv() {
-                        trades.push(trade_idx);
+            // Validate trading player first, then process trades
+            let trading_id = self.trading_player_id.load(Ordering::Relaxed);
+            if trading_id != -1 {
+                let completed_trades = {
+                    let mut rx_guard = self.trade_completion_rx.lock().await;
+                    let mut trades = Vec::new();
+                    if let Some(ref mut rx) = *rx_guard {
+                        while let Ok(trade_idx) = rx.try_recv() {
+                            trades.push(trade_idx);
+                        }
                     }
-                }
-                trades
-            };
-            if !completed_trades.is_empty() {
-                let trading_id = self.trading_player_id.load(Ordering::Relaxed);
-                let player_uuid = if trading_id == -1 {
-                    None
-                } else {
-                    let entities = world.entities.load();
-                    entities
-                        .iter()
-                        .find(|e| e.get_entity().entity_id == trading_id)
-                        .map(|e| e.get_entity().entity_uuid)
+                    trades
                 };
-                for trade_idx in completed_trades {
-                    self.on_trade_completed(trade_idx, player_uuid).await;
+                if !completed_trades.is_empty() {
+                    let player_uuid = {
+                        let entities = world.entities.load();
+                        entities
+                            .iter()
+                            .find(|e| e.get_entity().entity_id == trading_id)
+                            .map(|e| e.get_entity().entity_uuid)
+                    };
+                    for trade_idx in completed_trades {
+                        self.on_trade_completed(trade_idx, player_uuid).await;
+                    }
                 }
             }
 

@@ -108,7 +108,7 @@ impl GossipContainer {
             .iter_mut()
             .find(|e| e.gossip_type == gossip_type && e.target == target)
         {
-            entry.value = (entry.value + amount).min(gossip_type.max_value());
+            entry.value = entry.value.saturating_add(amount).min(gossip_type.max_value());
         } else {
             self.entries.push(GossipEntry {
                 gossip_type,
