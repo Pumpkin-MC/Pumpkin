@@ -51,8 +51,8 @@ impl DamageSource {
             } else {
                 DamageType::EXPLOSION
             },
-            direct_entity,
             causing_entity,
+            direct_entity,
             None,
         )
     }

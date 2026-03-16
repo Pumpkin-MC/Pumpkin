@@ -369,16 +369,16 @@ impl Explosion {
     }
 
     pub fn affect_block_like_entities(&self, world: &World) -> bool {
-        let b = self.source_entity.is_none()
+        if self.source_entity.is_none()
             || self.source_entity.as_ref().is_some_and(|e| {
                 let t = e.get_entity().entity_type;
                 t == &EntityType::WIND_CHARGE || t == &EntityType::BREEZE_WIND_CHARGE
-            });
-
-        if world.level_info.load().game_rules.mob_griefing {
-            b
+            })
+        {
+            world.level_info.load().game_rules.mob_griefing
+                || self.block_interaction.affect_block_like_entities()
         } else {
-            self.block_interaction.affect_block_like_entities()
+            false
         }
     }
 
