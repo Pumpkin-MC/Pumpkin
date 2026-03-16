@@ -59,7 +59,7 @@ fn is_water_potion(stack: &ItemStack) -> bool {
     stack
         .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
         .and_then(|pc| pc.potion_id)
-        .map_or(false, |id| id == pumpkin_data::potion::Potion::WATER.id as i32)
+        == Some(pumpkin_data::potion::Potion::WATER.id as i32)
 }
 
 /// Extinguishes fire (including soul fire) at the hit position and its four horizontal neighbors.
@@ -77,7 +77,11 @@ async fn extinguish_fire(world: &Arc<crate::world::World>, hit_pos: Vector3<f64>
     ];
 
     for p in neighbors {
-        let pos = BlockPos(Vector3::new(p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32));
+        let pos = BlockPos(Vector3::new(
+            p.x.floor() as i32,
+            p.y.floor() as i32,
+            p.z.floor() as i32,
+        ));
         let state_id = world.get_block_state_id(&pos).await;
         let raw_block_id = Block::get_raw_id_from_state_id(state_id);
         if raw_block_id == fire_id || raw_block_id == soul_fire_id {
@@ -108,7 +112,7 @@ impl EntityBase for SplashPotionEntity {
             entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::DATA_ITEM,
-                    pumpkin_data::meta_data_type::MetaDataType::ItemStack,
+                    pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
                     &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
                         stack.clone(),
                     ),

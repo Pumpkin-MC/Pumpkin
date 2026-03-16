@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
 use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
     server::Server,
 };
-use crate::entity::projectile::splash_potion::extinguish_fire_if_water_potion;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::position::BlockPos;
@@ -71,7 +71,7 @@ impl EntityBase for LingeringPotionEntity {
             entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::DATA_ITEM,
-                    pumpkin_data::meta_data_type::MetaDataType::ItemStack,
+                    pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
                     &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
                         stack.clone(),
                     ),

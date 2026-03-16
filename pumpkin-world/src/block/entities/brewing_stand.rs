@@ -101,11 +101,7 @@ impl BrewingStandBlockEntity {
     }
 
     /// Perform brewing on all valid potion slots
-    async fn do_brew(
-        &self,
-        world: &Arc<dyn crate::world::SimpleWorld>,
-        ingredient: &ItemStack,
-    ) {
+    async fn do_brew(&self, world: &Arc<dyn crate::world::SimpleWorld>, ingredient: &ItemStack) {
         let ingredient_id = ingredient.get_item().id;
 
         // Apply recipes to each slot

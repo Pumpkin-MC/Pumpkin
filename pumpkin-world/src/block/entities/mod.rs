@@ -186,7 +186,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         >(nbt)),
         BrewingStandBlockEntity::ID => {
             Arc::new(block_entity_from_generic::<BrewingStandBlockEntity>(nbt))
-        },
+        }
         _ => return None,
     })
 }

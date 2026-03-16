@@ -97,11 +97,20 @@ impl EntityBase for AreaEffectCloudEntity {
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
+        // Serialize bytes to the packet without a length prefix.
+        // This matches how the Minecraft protocol encodes particle data in EntityEffect.
+        fn serialize_bytes_no_prefix<S>(data: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            serializer.serialize_bytes(data)
+        }
+
         Box::pin(async move {
             #[derive(serde::Serialize)]
             struct ParticleMeta<'a> {
                 particle_id: pumpkin_protocol::codec::var_int::VarInt,
-                #[serde(serialize_with = "pumpkin_protocol::ser::network_serialize_no_prefix")]
+                #[serde(serialize_with = "serialize_bytes_no_prefix")]
                 data: &'a [u8],
             }
 
@@ -167,7 +176,7 @@ impl EntityBase for AreaEffectCloudEntity {
             self.entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::DATA_PARTICLE,
-                    pumpkin_data::meta_data_type::MetaDataType::Particle,
+                    pumpkin_data::meta_data_type::MetaDataType::PARTICLE,
                     &meta,
                 )])
                 .await;
@@ -175,7 +184,7 @@ impl EntityBase for AreaEffectCloudEntity {
             self.entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::DATA_RADIUS,
-                    pumpkin_data::meta_data_type::MetaDataType::Float,
+                    pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                     radius,
                 )])
                 .await;
@@ -186,7 +195,7 @@ impl EntityBase for AreaEffectCloudEntity {
             self.entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::DATA_WAITING,
-                    pumpkin_data::meta_data_type::MetaDataType::Boolean,
+                    pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
                     is_waiting,
                 )])
                 .await;
@@ -222,7 +231,7 @@ impl EntityBase for AreaEffectCloudEntity {
                 self.entity
                     .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                         pumpkin_data::tracked_data::TrackedData::DATA_WAITING,
-                        pumpkin_data::meta_data_type::MetaDataType::Boolean,
+                        pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
                         false,
                     )])
                     .await;
@@ -249,7 +258,7 @@ impl EntityBase for AreaEffectCloudEntity {
                 self.entity
                     .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                         pumpkin_data::tracked_data::TrackedData::DATA_RADIUS,
-                        pumpkin_data::meta_data_type::MetaDataType::Float,
+                        pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                         current_radius,
                     )])
                     .await;
@@ -379,7 +388,7 @@ impl EntityBase for AreaEffectCloudEntity {
                     self.entity
                         .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                             pumpkin_data::tracked_data::TrackedData::DATA_RADIUS,
-                            pumpkin_data::meta_data_type::MetaDataType::Float,
+                            pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                             current_radius,
                         )])
                         .await;
