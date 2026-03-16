@@ -15,6 +15,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
 use crate::command::CommandSender;
 use crate::entity::EntityBase;
+use crate::entity::equipment_break_status;
 use crate::entity::player::{ChatMode, ChatSession, Player};
 use crate::error::PumpkinError;
 use crate::log_at_level;
@@ -1715,6 +1716,21 @@ impl JavaClient {
 
         let after = stack.clone();
         drop(stack);
+
+        // Broadcast the break entity status before the slot sync; the client
+        // needs the old item texture in the slot for break particles.
+        if !before.is_empty() && after.is_empty() {
+            let slot = if slot_index == player.inventory.get_selected_slot() as usize {
+                &EquipmentSlot::MAIN_HAND
+            } else {
+                &EquipmentSlot::OFF_HAND
+            };
+            player
+                .world()
+                .send_entity_status(&player.living_entity.entity, equipment_break_status(slot))
+                .await;
+        }
+
         if !after.are_equal(&before) {
             player.sync_hand_slot(slot_index, after).await;
         }
@@ -1914,7 +1930,10 @@ impl JavaClient {
                 .enqueue_equipment_change(equippable.slot, &held)
                 .await;
 
-            let binding = inventory.entity_equipment.lock().await.get(equippable.slot);
+            let binding = {
+                let mut equipment = inventory.entity_equipment.lock().await;
+                equipment.get_or_insert(equippable.slot)
+            };
             let mut equip_item = binding.lock().await;
             if equip_item.is_empty() {
                 *equip_item = held.clone();
@@ -1938,6 +1957,7 @@ impl JavaClient {
             return true;
         }
 
+        // TODO: Apply fishing rod durability on retrieval based on catch type.
         let fish_event = PlayerFishEvent::new(
             player.clone(),
             None,

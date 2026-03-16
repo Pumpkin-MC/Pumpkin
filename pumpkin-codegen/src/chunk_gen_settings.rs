@@ -1,117 +1,197 @@
+use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs};
 
+/// Deserialized block reference used in chunk generation settings (e.g., default block or fluid).
 #[derive(Deserialize)]
 pub struct BlockStateCodecStruct {
+    /// Block registry name including the `minecraft:` namespace prefix.
     #[serde(rename = "Name")]
     pub name: String,
+    /// Optional block state properties (e.g., `{"facing": "north"}`).
     #[serde(rename = "Properties")]
     pub properties: Option<BTreeMap<String, String>>,
 }
 
+/// Deserialized chunk generation settings for a dimension, sourced from `chunk_gen_settings.json`.
 #[derive(Deserialize)]
 pub struct GenerationSettingsStruct {
+    /// Whether aquifer (underground water pocket) generation is enabled.
     #[serde(default)]
     pub aquifers_enabled: bool,
+    /// Whether ore-vein generation is enabled.
     #[serde(default)]
     pub ore_veins_enabled: bool,
+    /// Whether to use the legacy random number source for this dimension.
     #[serde(default)]
     pub legacy_random_source: bool,
+    /// Y-level treated as sea level for this dimension.
     pub sea_level: i32,
+    /// Default fluid block (usually water or lava) placed by the aquifer generator.
     pub default_fluid: BlockStateCodecStruct,
+    /// Default solid block used to fill the terrain.
     pub default_block: BlockStateCodecStruct,
+    /// Noise shape parameters controlling vertical and horizontal cell sizes.
     #[serde(rename = "noise")]
     pub shape: GenerationShapeConfigStruct,
+    /// Hierarchical surface material rule determining which block is placed at each surface point.
     pub surface_rule: MaterialRuleStruct,
 }
 
+/// Deserialized noise-shape configuration controlling terrain cell dimensions.
 #[derive(Deserialize)]
 pub struct GenerationShapeConfigStruct {
+    /// Minimum Y level for terrain generation.
     pub min_y: i8,
+    /// Total vertical span of the generation region in blocks.
     pub height: u16,
+    /// Log₂ of the horizontal cell block count (cell width = `1 << size_horizontal`).
     pub size_horizontal: u8,
+    /// Log₂ of the vertical cell block count (cell height = `1 << size_vertical`).
     pub size_vertical: u8,
 }
 
+/// Deserialized surface material rule that determines which block to place at a given surface point.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum MaterialRuleStruct {
+    /// Place a specific block state unconditionally.
     #[serde(rename = "minecraft:block")]
-    Block { result_state: BlockStateCodecStruct },
+    Block {
+        /// The block state to place.
+        result_state: BlockStateCodecStruct,
+    },
+    /// Evaluate each rule in order, stopping at the first match.
     #[serde(rename = "minecraft:sequence")]
-    Sequence { sequence: Vec<Self> },
+    Sequence {
+        /// The ordered list of child rules.
+        sequence: Vec<Self>,
+    },
+    /// Apply `then_run` only when `if_true` evaluates to true.
     #[serde(rename = "minecraft:condition")]
     Condition {
+        /// The condition that must be satisfied.
         if_true: MaterialConditionStruct,
+        /// The rule to apply when the condition is met.
         then_run: Box<Self>,
     },
+    /// Special Badlands terrain coloring rule.
     #[serde(rename = "minecraft:bandlands")]
     Badlands,
+    /// Any material rule type not handled by this codegen.
     #[serde(other)]
     Unsupported,
 }
 
+/// Deserialized surface material condition that gates a material rule.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum MaterialConditionStruct {
+    /// True when the current position is in one of the listed biomes.
     #[serde(rename = "minecraft:biome")]
-    Biome { biome_is: Vec<String> },
+    Biome {
+        /// List of biome resource locations to match against.
+        biome_is: Vec<String>,
+    },
+    /// True when a named noise value is within the given range.
     #[serde(rename = "minecraft:noise_threshold")]
     NoiseThreshold {
+        /// Resource location of the noise parameter.
         noise: String,
+        /// Minimum threshold (inclusive).
         min_threshold: f64,
+        /// Maximum threshold (inclusive).
         max_threshold: f64,
     },
+    /// True below a Y offset and false above another, with a linear gradient in between.
     #[serde(rename = "minecraft:vertical_gradient")]
     VerticalGradient {
+        /// Name of the random source used for this gradient.
         random_name: String,
+        /// Y offset below which the condition is always true.
         true_at_and_below: YOffsetStruct,
+        /// Y offset above which the condition is always false.
         false_at_and_above: YOffsetStruct,
     },
+    /// True when the position is above a given Y anchor.
     #[serde(rename = "minecraft:y_above")]
     YAbove {
+        /// The Y offset anchor to compare against.
         anchor: YOffsetStruct,
+        /// Multiplier applied to surface depth when computing the threshold.
         surface_depth_multiplier: i32,
+        /// Whether to add stone depth to the comparison value.
         add_stone_depth: bool,
     },
+    /// True when the position is above a water surface within a certain offset.
     #[serde(rename = "minecraft:water")]
     Water {
+        /// Y offset relative to the water surface.
         offset: i32,
+        /// Multiplier applied to surface depth.
         surface_depth_multiplier: i32,
+        /// Whether to add stone depth to the comparison value.
         add_stone_depth: bool,
     },
+    /// True when the biome temperature is cold (below freezing).
     #[serde(rename = "minecraft:temperature")]
     Temperature,
+    /// True when the terrain is steep (high slope).
     #[serde(rename = "minecraft:steep")]
     Steep,
+    /// Inverts the inner condition.
     #[serde(rename = "minecraft:not")]
-    Not { invert: Box<Self> },
+    Not {
+        /// The condition to invert.
+        invert: Box<Self>,
+    },
+    /// True when there is a hole (cave opening) at the position.
     #[serde(rename = "minecraft:hole")]
     Hole,
+    /// True when the position is above the preliminary surface estimate.
     #[serde(rename = "minecraft:above_preliminary_surface")]
     AbovePreliminarySurface,
+    /// True based on the depth of stone/ceiling relative to the surface.
     #[serde(rename = "minecraft:stone_depth")]
     StoneDepth {
+        /// Y offset added to the depth value.
         offset: i32,
+        /// Whether to include surface depth in the calculation.
         add_surface_depth: bool,
+        /// Additional secondary depth range.
         secondary_depth_range: i32,
-        surface_type: String, // "ceiling" or "floor"
+        /// Surface type to measure from: `"ceiling"` or `"floor"`.
+        surface_type: String,
     },
 }
 
+/// Deserialized Y offset that can be expressed relative to different reference points.
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum YOffsetStruct {
-    Absolute { absolute: i16 },
-    AboveBottom { above_bottom: i8 },
-    BelowTop { below_top: i8 },
+    /// An absolute Y coordinate.
+    Absolute {
+        /// The absolute Y level.
+        absolute: i16,
+    },
+    /// A Y level measured upward from the dimension's minimum Y.
+    AboveBottom {
+        /// Number of blocks above the bottom of the dimension.
+        above_bottom: i8,
+    },
+    /// A Y level measured downward from the dimension's maximum Y.
+    BelowTop {
+        /// Number of blocks below the top of the dimension.
+        below_top: i8,
+    },
 }
 
 // --- ToTokens Implementations ---
 
 impl ToTokens for BlockStateCodecStruct {
+    /// Emits a `BlockBlueprint` literal, stripping the `minecraft:` namespace prefix from the block name.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = &self.name.strip_prefix("minecraft:").unwrap_or(&self.name);
 
@@ -133,6 +213,7 @@ impl ToTokens for BlockStateCodecStruct {
 }
 
 impl ToTokens for GenerationSettingsStruct {
+    /// Emits a `GenerationSettings` struct literal with all fields populated from the deserialized data.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let aquifers = self.aquifers_enabled;
         let ores = self.ore_veins_enabled;
@@ -159,6 +240,7 @@ impl ToTokens for GenerationSettingsStruct {
 }
 
 impl ToTokens for GenerationShapeConfigStruct {
+    /// Emits a `GenerationShapeConfig` struct literal with all noise-shape dimensions.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let min_y = self.min_y;
         let height = self.height;
@@ -171,6 +253,7 @@ impl ToTokens for GenerationShapeConfigStruct {
 }
 
 impl ToTokens for YOffsetStruct {
+    /// Emits a `YOffset` enum variant literal corresponding to the deserialized offset kind.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Absolute { absolute } => {
@@ -187,6 +270,7 @@ impl ToTokens for YOffsetStruct {
 }
 
 impl ToTokens for MaterialConditionStruct {
+    /// Emits a `MaterialCondition` enum variant literal for each surface condition kind.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Biome { biome_is } => {
@@ -211,9 +295,17 @@ impl ToTokens for MaterialConditionStruct {
                 min_threshold,
                 max_threshold,
             } => {
+                let noise_id = quote::format_ident!(
+                    "{}",
+                    noise
+                        .strip_prefix("minecraft:")
+                        .unwrap()
+                        .to_shouty_snake_case()
+                );
+
                 tokens.extend(quote!(
                     MaterialCondition::NoiseThreshold(NoiseThresholdMaterialCondition {
-                        noise: #noise,
+                        noise: DoublePerlinNoiseParameters::#noise_id,
                         min_threshold: #min_threshold,
                         max_threshold: #max_threshold,
                     })
@@ -311,6 +403,7 @@ impl ToTokens for MaterialConditionStruct {
 }
 
 impl ToTokens for MaterialRuleStruct {
+    /// Emits a `MaterialRule` enum variant literal for each surface placement rule kind.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Block { result_state } => {
@@ -345,6 +438,7 @@ impl ToTokens for MaterialRuleStruct {
     }
 }
 
+/// Reads `chunk_gen_settings.json` and emits the complete chunk generation settings `TokenStream`.
 pub fn build() -> TokenStream {
     let json: BTreeMap<String, GenerationSettingsStruct> =
         serde_json::from_str(&fs::read_to_string("../assets/chunk_gen_settings.json").unwrap())
@@ -363,6 +457,8 @@ pub fn build() -> TokenStream {
 
     quote!(
         use crate::dimension::Dimension;
+        use crate::chunk::DoublePerlinNoiseParameters;
+
         use std::{cell::RefCell, num::NonZeroUsize};
         use pumpkin_util::random::RandomDeriver;
         use pumpkin_util::y_offset::YOffset;
@@ -393,11 +489,13 @@ pub fn build() -> TokenStream {
         }
 
         impl GenerationShapeConfig {
-            #[inline] #[must_use]
-            pub fn vertical_cell_block_count(&self) -> u8 { self.size_vertical << 2 }
+            #[inline]
+            #[must_use]
+            pub const fn vertical_cell_block_count(&self) -> u8 { self.size_vertical << 2 }
 
-            #[inline] #[must_use]
-            pub fn horizontal_cell_block_count(&self) -> u8 { self.size_horizontal << 2 }
+            #[inline]
+            #[must_use]
+            pub const fn horizontal_cell_block_count(&self) -> u8 { self.size_horizontal << 2 }
 
             #[must_use]
             pub const fn max_y(&self) -> u16 {
@@ -460,7 +558,7 @@ pub fn build() -> TokenStream {
         }
 
         pub struct NoiseThresholdMaterialCondition {
-            pub noise: &'static str,
+            pub noise: DoublePerlinNoiseParameters,
             pub min_threshold: f64,
             pub max_threshold: f64,
         }

@@ -46,7 +46,7 @@ impl Clone for SpiralStaircasePiece {
 impl SpiralStaircasePiece {
     /// Matches Start(Random random, int i, int j)
     pub fn new_start(random: &mut impl RandomImpl, x: i32, z: i32) -> Self {
-        let orientation = StructurePiece::get_random_horizontal_direction(random);
+        let orientation = BlockDirection::get_random_horizontal_direction(random);
         let bounding_box = BlockBox::create_box(x, 64, z, orientation.get_axis(), 5, 11, 5);
         let mut piece = StrongholdPiece::new(StructurePieceType::StrongholdStart, 0, bounding_box);
         piece.piece.set_facing(Some(orientation));
@@ -138,9 +138,15 @@ impl StructurePieceBase for SpiralStaircasePiece {
         );
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, _seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let randomizer = StoneBrickRandomizer;
-        let box_limit = self.piece.piece.bounding_box;
+        let box_limit = *chunk_box;
 
         let p = &self.piece;
 

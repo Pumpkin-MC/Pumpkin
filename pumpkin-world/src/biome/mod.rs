@@ -73,7 +73,7 @@ mod test {
     #[test]
     fn biome_desert() {
         let seed = 13579;
-        let random_config = GlobalRandomConfig::new(seed, false);
+        let random_config = GlobalRandomConfig::new(seed);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
@@ -101,7 +101,7 @@ mod test {
             read_data_from_file!("../../assets/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
-        let random_config = GlobalRandomConfig::new(seed, false);
+        let random_config = GlobalRandomConfig::new(seed);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let surface_settings = GenerationSettings::from_dimension(&Dimension::OVERWORLD);

@@ -5,6 +5,7 @@ pub struct BlockStateMatchRuleTest {
 }
 
 impl BlockStateMatchRuleTest {
+    #[must_use]
     pub fn test(&self, state: RawBlockState) -> bool {
         state.0 == self.block_state.get_state_id()
     }

@@ -1,0 +1,12 @@
+interface server {
+    enum difficulty {
+        peaceful,
+        easy,
+        normal,
+        hard,
+    }
+
+    resource server {
+        get-difficulty: func() -> difficulty;
+    }
+}

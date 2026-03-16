@@ -1,5 +1,5 @@
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
-use pumpkin_util::{noise::perlin::OctavePerlinNoiseSampler, random::RandomGenerator};
+use pumpkin_util::{noise::perlin::OctavePerlinNoiseSampler, random::RandomImpl};
 
 pub struct DoublePerlinNoiseSampler {
     first_sampler: OctavePerlinNoiseSampler,
@@ -9,7 +9,7 @@ pub struct DoublePerlinNoiseSampler {
 }
 
 impl DoublePerlinNoiseSampler {
-    fn create_amplitude(octaves: i32) -> f64 {
+    const fn create_amplitude(octaves: i32) -> f64 {
         0.1f64 * (1f64 + 1f64 / (octaves + 1) as f64)
     }
 
@@ -19,7 +19,7 @@ impl DoublePerlinNoiseSampler {
     }
 
     pub fn from_params(
-        rand: &mut RandomGenerator,
+        rand: &mut impl RandomImpl,
         parameters: &DoublePerlinNoiseParameters,
         legacy: bool,
     ) -> Self {
@@ -27,7 +27,7 @@ impl DoublePerlinNoiseSampler {
     }
 
     pub fn new(
-        rand: &mut RandomGenerator,
+        rand: &mut impl RandomImpl,
         first_octave: i32,
         amplitudes: &[f64],
         legacy: bool,

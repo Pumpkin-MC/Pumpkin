@@ -6,6 +6,7 @@ use quote::{format_ident, quote};
 
 use crate::array_to_tokenstream;
 
+/// Generates the `TokenStream` for the `Particle` enum and its `from_name`/`to_name` methods.
 pub fn build() -> TokenStream {
     let particle: Vec<String> =
         serde_json::from_str(&fs::read_to_string("../assets/particles.json").unwrap())

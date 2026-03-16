@@ -49,7 +49,7 @@ pub use template_piece::TemplatePiece;
 /// - Block entities are created from template NBT data
 ///
 /// `origin` is the base world position (x, y, z).
-/// `offset` is the un-rotated XZ offset from origin (x_offset, z_offset) - rotation is applied automatically.
+/// `offset` is the un-rotated XZ offset from origin (`x_offset`, `z_offset`) - rotation is applied automatically.
 pub fn place_template(
     chunk: &mut ProtoChunk,
     template: &StructureTemplate,
@@ -96,10 +96,10 @@ pub fn place_template(
             let block_entity_id = block_entity_id.unwrap_or(&palette_entry.name);
             let mut block_entity_nbt = NbtCompound::new();
 
+            block_entity_nbt.put_string("id", block_entity_id.to_string());
             block_entity_nbt.put_int("x", wx);
             block_entity_nbt.put_int("y", wy);
             block_entity_nbt.put_int("z", wz);
-            block_entity_nbt.put_string("id", block_entity_id.to_string());
 
             if let Some(template_nbt) = &block.nbt {
                 for (key, value) in &template_nbt.child_tags {
@@ -111,7 +111,7 @@ pub fn place_template(
                 }
             }
 
-            chunk.add_pending_block_entity(block_entity_nbt);
+            chunk.add_block_entity(block_entity_nbt);
         }
     }
 }
