@@ -390,6 +390,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         self.dirty.load(Ordering::Relaxed)
     }
 
+    fn clear_dirty(&self) {
+        self.dirty.store(false, Ordering::Relaxed);
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
