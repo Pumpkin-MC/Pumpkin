@@ -970,7 +970,7 @@ impl GenerationSchedule {
                     self.queue.push(task);
                     break 'out2;
                 }
-                // Bug #7 fix: cap the drain to prevent starvation when gen
+                // Cap the drain to prevent starvation when gen
                 // workers produce results faster than we can dispatch new tasks.
                 for _ in 0..64 {
                     match self.recv_chunk.try_recv() {
@@ -1123,20 +1123,20 @@ impl GenerationSchedule {
                 {
                     if let Ok((pos, data)) = self.recv_chunk.try_recv() {
                         self.receive_chunk(pos, data);
-                        // Bug #3 fix: also poll for level changes so player movement
+                        // Poll for level changes so player movement
                         // is processed promptly even when waiting for in-flight tasks.
                         self.resort_work(self.send_level.get());
                     } else {
                         if level.shut_down_chunk_system.load(Relaxed) {
                             break;
                         }
-                        // Bug #3 fix: poll level changes even when no chunks arrived,
+                        // Poll level changes even when no chunks arrived,
                         // so new player positions are processed during the wait.
                         if self.resort_work(self.send_level.get()) {
                             // New level data arrived, re-check the queue
                             continue;
                         }
-                        // Bug #2 fix: periodically expire stale waiting_for_chunks
+                        // Periodically expire stale waiting_for_chunks
                         self.check_waiting_tasks();
                         thread::sleep(Duration::from_millis(50));
                     }
