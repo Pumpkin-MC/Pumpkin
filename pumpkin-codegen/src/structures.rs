@@ -3,52 +3,77 @@ use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs};
 
+/// Deserialized structure set containing placement rules and weighted structure entries.
 #[derive(Deserialize)]
 pub struct StructureSetStruct {
+    /// Placement algorithm and parameters for distributing this structure set.
     pub placement: StructurePlacementStruct,
+    /// Weighted list of structures that belong to this set.
     pub structures: Vec<WeightedEntryStruct>,
 }
 
+/// Deserialized weighted structure entry within a structure set.
 #[derive(Deserialize, Clone)]
 pub struct WeightedEntryStruct {
+    /// Registry key of the structure (e.g., `"minecraft:village_plains"`).
     pub structure: String,
+    /// Relative weight controlling how often this structure is chosen.
     pub weight: u32,
 }
 
+/// Deserialized placement configuration for a structure set.
 #[derive(Deserialize)]
 pub struct StructurePlacementStruct {
+    /// Optional frequency-reduction method name applied before placement.
     frequency_reduction_method: Option<String>,
+    /// Optional probability (0–1) that a candidate chunk actually spawns the structure.
     frequency: Option<f32>,
+    /// Per-structure salt mixed into the placement RNG seed.
     salt: u32,
+    /// The specific placement algorithm and its parameters.
     #[serde(flatten)]
     r#type: StructurePlacementTypeStruct,
 }
 
+/// Deserialized placement algorithm for a structure set.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum StructurePlacementTypeStruct {
+    /// Places structures at pseudo-random positions within regularly spaced grid regions.
     #[serde(rename = "minecraft:random_spread")]
     RandomSpread {
+        /// Region size (spacing between potential structure positions).
         spacing: i32,
+        /// Minimum separation between two structures in the same region.
         separation: i32,
+        /// Optional distribution type (`"linear"` or `"triangular"`).
         spread_type: Option<String>,
     },
+    /// Places structures in concentric rings around the world origin.
     #[serde(rename = "minecraft:concentric_rings")]
     ConcentricRings {
+        /// Angular spread between ring placements.
         spread: i32,
+        /// Distance increment between successive rings.
         distance: i32,
+        /// Total number of structures placed across all rings.
         count: i32,
+        /// Biome tag that ring placements must be located within.
         preferred_biomes: String,
     },
 }
 
+/// Deserialized structure entry specifying its valid biomes and generation step.
 #[derive(Deserialize, Clone)]
 pub struct StructureStruct {
+    /// Biome tag that this structure can generate in.
     pub biomes: String,
+    /// Generation step during which this structure is placed.
     pub step: String,
 }
 
 impl ToTokens for StructureSetStruct {
+    /// Emits a `StructureSet { … }` struct literal token stream for the wrapped structure set.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let placement = &self.placement;
         let structures = &self.structures;
@@ -63,6 +88,7 @@ impl ToTokens for StructureSetStruct {
 }
 
 impl ToTokens for WeightedEntryStruct {
+    /// Emits a `WeightedEntry { … }` struct literal token stream for the wrapped entry.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let structure = structure_key_to_token(&self.structure);
         let weight = self.weight;
@@ -77,6 +103,7 @@ impl ToTokens for WeightedEntryStruct {
 }
 
 impl ToTokens for StructurePlacementStruct {
+    /// Emits a `StructurePlacement { … }` struct literal token stream for the wrapped placement config.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let frequency_reduction = if let Some(method) = &self.frequency_reduction_method {
             let method_token = frequency_reduction_to_token(method);
@@ -106,6 +133,7 @@ impl ToTokens for StructurePlacementStruct {
 }
 
 impl ToTokens for StructurePlacementTypeStruct {
+    /// Emits a `StructurePlacementType` variant token stream for the wrapped placement algorithm.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::RandomSpread {
@@ -148,6 +176,7 @@ impl ToTokens for StructurePlacementTypeStruct {
 }
 
 impl ToTokens for StructureStruct {
+    /// Emits a `Structure { … }` struct literal token stream for the wrapped structure entry.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let biomes = &self.biomes;
         let step = generation_step_to_token(&self.step);
@@ -163,6 +192,10 @@ impl ToTokens for StructureStruct {
 
 // Helper functions
 
+/// Converts a structure registry key to the corresponding `StructureKeys` enum variant token stream.
+///
+/// # Arguments
+/// – `key` – structure registry name with or without the `minecraft:` prefix.
 fn structure_key_to_token(key: &str) -> TokenStream {
     let stripped = key.strip_prefix("minecraft:").unwrap_or(key);
 
@@ -205,6 +238,10 @@ fn structure_key_to_token(key: &str) -> TokenStream {
     }
 }
 
+/// Converts a frequency-reduction method string to its `FrequencyReductionMethod` variant token stream.
+///
+/// # Arguments
+/// – `method` – one of `"default"`, `"legacy_type_1"`, `"legacy_type_2"`, or `"legacy_type_3"`.
 fn frequency_reduction_to_token(method: &str) -> TokenStream {
     match method {
         "default" => quote!(FrequencyReductionMethod::Default),
@@ -215,6 +252,10 @@ fn frequency_reduction_to_token(method: &str) -> TokenStream {
     }
 }
 
+/// Converts a spread type string to its `SpreadType` variant token stream.
+///
+/// # Arguments
+/// – `spread` – `"linear"` or `"triangular"`.
 fn spread_type_to_token(spread: &str) -> TokenStream {
     match spread {
         "linear" => quote!(SpreadType::Linear),
@@ -223,6 +264,10 @@ fn spread_type_to_token(spread: &str) -> TokenStream {
     }
 }
 
+/// Converts a generation step name to its `GenerationStep` variant token stream.
+///
+/// # Arguments
+/// – `step` – the generation step name as it appears in the JSON (e.g., `"surface_structures"`).
 fn generation_step_to_token(step: &str) -> TokenStream {
     match step {
         "raw_generation" => quote!(GenerationStep::RawGeneration),
@@ -240,6 +285,7 @@ fn generation_step_to_token(step: &str) -> TokenStream {
     }
 }
 
+/// Reads `structures.json` and `structure_set.json` and emits the complete structures `TokenStream`.
 pub fn build() -> TokenStream {
     let structures_json: BTreeMap<String, StructureStruct> =
         serde_json::from_str(&fs::read_to_string("../assets/structures.json").unwrap())

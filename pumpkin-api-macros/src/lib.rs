@@ -81,12 +81,14 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
             std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::runtime::Runtime::new().unwrap()));
 
         #[unsafe(no_mangle)]
-        pub static METADATA: pumpkin::plugin::PluginMetadata = pumpkin::plugin::PluginMetadata {
-            name: env!("CARGO_PKG_NAME"),
-            version: env!("CARGO_PKG_VERSION"),
-            authors: env!("CARGO_PKG_AUTHORS"),
-            description: env!("CARGO_PKG_DESCRIPTION"),
-        };
+        pub static METADATA: std::sync::LazyLock<pumpkin::plugin::PluginMetadata> = std::sync::LazyLock::new(|| {
+            pumpkin::plugin::PluginMetadata {
+                name: env!("CARGO_PKG_NAME").to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                authors: env!("CARGO_PKG_AUTHORS").split(',').map(String::from).collect(),
+                description: env!("CARGO_PKG_DESCRIPTION").to_string(),
+            }
+        });
 
         #[unsafe(no_mangle)]
         pub static PUMPKIN_API_VERSION: u32 = pumpkin::plugin::PLUGIN_API_VERSION;

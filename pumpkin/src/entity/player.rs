@@ -28,10 +28,12 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
@@ -83,8 +85,10 @@ use crate::command::dispatcher::CommandDispatcher;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
+use crate::plugin::player::exp_change::PlayerExpChangeEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
+use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
 use crate::server::Server;
 use crate::world::World;
@@ -305,7 +309,7 @@ impl ChunkManager {
         self.last_chunk_batch_sent_at = Instant::now();
     }
 
-    pub fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
+    pub const fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
         self.batches_sent_since_ack = BatchState::Count(0);
         self.chunks_per_tick = chunks_per_tick.ceil() as usize;
     }
@@ -591,6 +595,11 @@ impl Player {
         }
     }
 
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.1)
+    }
+
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
     /// when the client. This means tasks should complete in a reasonable amount of time or select
     /// on `Self::await_close_interrupt` to cancel the task when the client is closed
@@ -659,14 +668,16 @@ impl Player {
         let inventory = self.inventory();
         let item_stack = inventory.held_item();
 
-        let base_damage = 1.0;
+        let base_damage = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_DAMAGE);
         let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
         let mut add_damage = 0.0;
         let mut add_speed = 0.0;
 
-        // Get the attack damage
+        // Get the attack damage from the held item
         // TODO: this should be cached in memory, we shouldn't just use default here either
         if let Some(modifiers) = item_stack
             .lock()
@@ -698,11 +709,10 @@ impl Player {
         if attack_cooldown_progress < 1.0 {
             damage_multiplier = attack_cooldown_progress.powi(2).mul_add(0.8, 0.2);
         }
+
         // Modify the added damage based on the multiplier.
         let mut damage = base_damage + add_damage * damage_multiplier;
-
         let pos = victim_entity.pos.load();
-
         let attack_type = AttackType::new(self, attack_cooldown_progress as f32).await;
 
         if matches!(attack_type, AttackType::Critical) {
@@ -732,6 +742,18 @@ impl Player {
 
         player_attack_sound(&pos, &world, attack_type).await;
 
+        self.living_entity.last_attacking_id.store(
+            victim_entity.entity_id,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        self.living_entity.last_attack_time.store(
+            self.living_entity
+                .entity
+                .age
+                .load(std::sync::atomic::Ordering::Relaxed),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
         if victim.get_living_entity().is_some() {
             let mut knockback_strength = 1.0;
             match attack_type {
@@ -746,9 +768,34 @@ impl Player {
             }
         }
 
-        self.damage_held_item(1).await;
+        // NOTE: TOCTOU race condition in single-player context.
+        // The weapon cost is computed (cost = 1 or 2) with item_stack locked, then damage_held_item
+        // re-acquires the lock. In async multi-task scenarios, another task could theoretically
+        // swap the held item between these operations, causing the cost to apply to the wrong item.
+        // Mitigation options (in priority order):
+        // 1. Create damage_held_item_with_lock(&self, item_stack: MutexGuard, amount) variant
+        //    to hold the lock across both computation and application.
+        // 2. Refactor compute cost as a closure: damage_held_item(self, |stack| -> i32 { ... })
+        // 3. In practice, single-player scenarios are safe (this is not multiplayer). Document
+        //    as a known limitation if refactoring is deemed too invasive.
+        self.damage_held_item({
+            let stack = item_stack.lock().await;
+            Self::combat_weapon_durability_cost(&stack)
+        })
+        .await;
 
         if config.swing {}
+    }
+
+    /// Returns the durability cost for using the held item as a weapon in combat.
+    /// Derived from the `Weapon` data component: items without it (e.g. shears, tools
+    /// not designed for combat) take no durability damage on attack.
+    /// Items with the component use its `item_damage_per_attack` value (default 1;
+    /// axes, pickaxes, shovels, and hoes carry a value of 2).
+    fn combat_weapon_durability_cost(stack: &ItemStack) -> i32 {
+        stack
+            .get_data_component::<WeaponImpl>()
+            .map_or(0, |w| w.item_damage_per_attack as i32)
     }
 
     pub async fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {
@@ -769,7 +816,9 @@ impl Player {
         }
     }
 
-    pub async fn damage_held_item(&self, amount: i32) -> bool {
+    /// Applies `amount` durability damage to the item in `slot`.
+    /// Broadcasts an [`EntityStatus`] break event and syncs the slot if the item is destroyed.
+    pub async fn damage_item_in_slot(&self, slot: &EquipmentSlot, amount: i32) -> bool {
         if matches!(
             self.gamemode.load(),
             GameMode::Creative | GameMode::Spectator
@@ -777,21 +826,60 @@ impl Player {
             return false;
         }
 
-        let slot_index = self.inventory.get_selected_slot() as usize;
-        let stack_arc = self.inventory.held_item();
-        let updated = {
-            let mut stack = stack_arc.lock().await;
-            stack
-                .damage_item_with_context(amount, false)
-                .then_some(stack.clone())
+        // Direct PlayerInventory slot indices (matches build_equipment_slots).
+        let slot_index: usize = match slot {
+            EquipmentSlot::MainHand(_) => self.inventory.get_selected_slot() as usize,
+            EquipmentSlot::OffHand(_) => PlayerInventory::OFF_HAND_SLOT, // 40
+            EquipmentSlot::Feet(_) => 36,
+            EquipmentSlot::Legs(_) => 37,
+            EquipmentSlot::Chest(_) => 38,
+            EquipmentSlot::Head(_) => 39,
+            // Players do not have Body or Saddle equipment slots;
+            // these are only used by non-player entities (e.g. horses).
+            EquipmentSlot::Body(_) | EquipmentSlot::Saddle(_) => return false,
         };
 
-        if let Some(updated_stack) = updated {
-            self.sync_hand_slot(slot_index, updated_stack).await;
+        let stack_arc = self.inventory.get_stack(slot_index).await;
+
+        let updated = {
+            let mut stack = stack_arc.lock().await;
+            let result = stack.damage_item(amount);
+            (result != pumpkin_world::item::DamageResult::Untouched)
+                .then_some((result, stack.clone()))
+        };
+
+        if let Some((result, updated_stack)) = updated {
+            // Send the break status before clearing the slot so the client can
+            // use the item texture for break particles.
+            if result == pumpkin_world::item::DamageResult::Broken {
+                self.world()
+                    .send_entity_status(
+                        &self.living_entity.entity,
+                        super::equipment_break_status(slot),
+                    )
+                    .await;
+            }
+
+            self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
+                (slot_index as i32).into(),
+                &ItemStackSerializer::from(updated_stack.clone()),
+            ))
+            .await;
+
+            self.living_entity
+                .send_equipment_changes(&[(slot.clone(), updated_stack)])
+                .await;
+
             return true;
         }
 
         false
+    }
+
+    /// Convenience wrapper – damages the currently held (main-hand) item.
+    pub async fn damage_held_item(&self, amount: i32) -> bool {
+        self.damage_item_in_slot(&EquipmentSlot::MAIN_HAND, amount)
+            .await
     }
 
     pub async fn apply_tool_damage_for_block_break(&self, state: &BlockState) {
@@ -1160,7 +1248,7 @@ impl Player {
         self.get_entity()
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SLEEPING_POSITION,
-                MetaDataType::OptionalBlockPos,
+                MetaDataType::OPTIONAL_BLOCK_POS,
                 Some(bed_head_pos),
             )])
             .await;
@@ -1284,7 +1372,7 @@ impl Player {
             .entity
             .send_meta_data(&[Metadata::new(
                 TrackedData::DATA_SLEEPING_POSITION,
-                MetaDataType::OptionalBlockPos,
+                MetaDataType::OPTIONAL_BLOCK_POS,
                 None::<BlockPos>,
             )])
             .await;
@@ -1444,6 +1532,10 @@ impl Player {
         }
 
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
+        self.living_entity
+            .entity
+            .age
+            .fetch_add(1, Ordering::Relaxed);
         if let Some(sleeping_since) = self.sleeping_since.load()
             && sleeping_since < 101
         {
@@ -1959,7 +2051,7 @@ impl Player {
 
     pub fn can_food_heal(&self) -> bool {
         let health = self.living_entity.health.load();
-        let max_health = 20.0; // TODO
+        let max_health = self.living_entity.get_max_health();
         health > 0.0 && health < max_health
     }
 
@@ -2132,12 +2224,12 @@ impl Player {
             .send_meta_data(&[
                 Metadata::new(
                     TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
-                    MetaDataType::Byte,
+                    MetaDataType::BYTE,
                     config.skin_parts,
                 ),
                 // Metadata::new(
                 //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::Arm,
+                //     MetaDataType::ARM,
                 //     VarInt(config.main_hand as u8 as i32),
                 // ),
             ])
@@ -2373,7 +2465,6 @@ impl Player {
     }
 
     pub async fn add_effect(&self, effect: Effect) {
-        self.send_effect(effect.clone()).await;
         self.living_entity.add_effect(effect).await;
     }
 
@@ -2384,6 +2475,10 @@ impl Player {
         }
     }
 
+    /**
+     * Send a clientside only effect to the player.
+     * It won't be tracked on the server.
+     */
     pub async fn send_effect(&self, effect: Effect) {
         let mut flag: i8 = 0;
 
@@ -2482,7 +2577,13 @@ impl Player {
     }
 
     /// Add experience points to the player.
-    pub async fn add_experience_points(&self, added_points: i32) {
+    pub async fn add_experience_points(self: &Arc<Self>, mut added_points: i32) {
+        if let Some(server) = self.world().server.upgrade() {
+            let event = PlayerExpChangeEvent::new(self.clone(), added_points);
+            let event = server.plugin_manager.fire(event).await;
+            added_points = event.amount;
+        }
+
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
         let total_exp = experience::points_to_level(current_level) + current_points;
@@ -2500,36 +2601,24 @@ impl Player {
         let mut candidates: Vec<(usize, EquipmentSlot, Arc<Mutex<ItemStack>>)> = Vec::new();
 
         let selected_slot = self.inventory.get_selected_slot() as usize;
-        let main_hand = self.inventory.get_stack(selected_slot).await;
-        let main_hand_eligible = {
-            let stack = main_hand.lock().await;
-            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
-        };
-        if main_hand_eligible {
-            candidates.push((selected_slot, EquipmentSlot::MAIN_HAND, main_hand));
-        }
-
-        let offhand_slot = PlayerInventory::OFF_HAND_SLOT;
-        let off_hand = self.inventory.get_stack(offhand_slot).await;
-        let off_hand_eligible = {
-            let stack = off_hand.lock().await;
-            stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
-        };
-        if off_hand_eligible {
-            candidates.push((offhand_slot, EquipmentSlot::OFF_HAND, off_hand));
-        }
-
+        let mut slot_pairs: Vec<(usize, EquipmentSlot)> = vec![
+            (selected_slot, EquipmentSlot::MAIN_HAND),
+            (PlayerInventory::OFF_HAND_SLOT, EquipmentSlot::OFF_HAND),
+        ];
         for (slot_index, slot) in self.inventory.equipment_slots.iter() {
-            if !slot.is_armor_slot() {
-                continue;
+            if slot.is_armor_slot() {
+                slot_pairs.push((*slot_index, slot.clone()));
             }
-            let stack = self.inventory.get_stack(*slot_index).await;
+        }
+
+        for (slot_index, equipment_slot) in slot_pairs {
+            let stack = self.inventory.get_stack(slot_index).await;
             let eligible = {
-                let stack = stack.lock().await;
-                stack.get_enchantment_level(&Enchantment::MENDING) > 0 && stack.get_damage() > 0
+                let s = stack.lock().await;
+                s.get_enchantment_level(&Enchantment::MENDING) > 0 && s.get_damage() > 0
             };
             if eligible {
-                candidates.push((*slot_index, slot.clone(), stack));
+                candidates.push((slot_index, equipment_slot, stack));
             }
         }
 
@@ -2740,11 +2829,22 @@ impl Player {
     }
 
     /// Check if the player has a specific permission
-    pub async fn has_permission(&self, server: &Server, node: &str) -> bool {
+    pub async fn has_permission(self: &Arc<Self>, server: &Server, node: &str) -> bool {
         let perm_manager = server.permission_manager.read().await;
-        perm_manager
+        let result = perm_manager
             .has_permission(&self.gameprofile.id, node, self.permission_lvl.load())
-            .await
+            .await;
+        drop(perm_manager);
+
+        let event = server
+            .plugin_manager
+            .fire(PlayerPermissionCheckEvent::new(
+                self.clone(),
+                node.to_string(),
+                result,
+            ))
+            .await;
+        event.result
     }
 
     pub fn is_creative(&self) -> bool {
@@ -2973,19 +3073,19 @@ impl NBTStorage for PlayerInventory {
                     drop(stack);
                     match slot {
                         EquipmentSlot::OffHand(_) => {
-                            equipment_compound.put_component("offhand", item_compound);
+                            equipment_compound.put_compound("offhand", item_compound);
                         }
                         EquipmentSlot::Feet(_) => {
-                            equipment_compound.put_component("feet", item_compound);
+                            equipment_compound.put_compound("feet", item_compound);
                         }
                         EquipmentSlot::Legs(_) => {
-                            equipment_compound.put_component("legs", item_compound);
+                            equipment_compound.put_compound("legs", item_compound);
                         }
                         EquipmentSlot::Chest(_) => {
-                            equipment_compound.put_component("chest", item_compound);
+                            equipment_compound.put_compound("chest", item_compound);
                         }
                         EquipmentSlot::Head(_) => {
-                            equipment_compound.put_component("head", item_compound);
+                            equipment_compound.put_compound("head", item_compound);
                         }
                         _ => {
                             warn!("Invalid equipment slot for a player");
@@ -2993,7 +3093,7 @@ impl NBTStorage for PlayerInventory {
                     }
                 }
             }
-            nbt.put_component("equipment", equipment_compound);
+            nbt.put_compound("equipment", equipment_compound);
             nbt.put("Inventory", NbtTag::List(items));
         })
     }
@@ -3111,6 +3211,7 @@ impl EntityBase for Player {
             {
                 return false;
             }
+            // TODO: Implement shield blocking durability.
             let result = self
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)
@@ -3256,7 +3357,7 @@ impl NBTStorage for Abilities {
             component.put_bool("mayBuild", self.allow_modify_world);
             component.put_float("flySpeed", self.fly_speed);
             component.put_float("walkSpeed", self.walk_speed);
-            nbt.put_component("abilities", component);
+            nbt.put_compound("abilities", component);
         })
     }
 
@@ -3597,7 +3698,9 @@ impl InventoryPlayer for Player {
             debug!("Player::award_experience called with amount={amount}");
             if amount > 0 {
                 debug!("Player: adding {amount} experience points");
-                self.add_experience_points(amount).await;
+                if let Some(player) = self.world().get_player_by_uuid(self.gameprofile.id) {
+                    player.add_experience_points(amount).await;
+                }
             }
         })
     }

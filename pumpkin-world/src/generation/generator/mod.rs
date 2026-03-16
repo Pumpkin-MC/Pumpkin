@@ -26,7 +26,7 @@ pub struct VanillaGenerator {
 
 impl GeneratorInit for VanillaGenerator {
     fn new(seed: Seed, dimension: Dimension) -> Self {
-        let random_config = GlobalRandomConfig::new(seed.0, false);
+        let random_config = GlobalRandomConfig::new(seed.0);
 
         // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
         // use only the generation settings?

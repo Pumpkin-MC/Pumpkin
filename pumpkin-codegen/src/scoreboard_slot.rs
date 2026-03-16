@@ -5,6 +5,7 @@ use quote::quote;
 
 use crate::array_to_tokenstream;
 
+/// Generates the `TokenStream` for the `ScoreboardDisplaySlot` enum.
 pub fn build() -> TokenStream {
     let sound_categories: Vec<String> = serde_json::from_str(
         &fs::read_to_string("../assets/scoreboard_display_slot.json").unwrap(),

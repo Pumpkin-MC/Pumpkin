@@ -165,7 +165,7 @@ impl ChunkLoading {
         true
     }
     pub fn dump_level_debug(
-        pri: &Vec<ChunkPos>,
+        pri: &[ChunkPos],
         map: &ChunkLevel,
         sx: i32,
         tx: i32,

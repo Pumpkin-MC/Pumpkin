@@ -58,7 +58,7 @@ pub struct WrapperData {
 
 impl WrapperData {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         cell_x_block_position: usize,
         cell_y_block_position: usize,
         cell_z_block_position: usize,
@@ -77,7 +77,7 @@ impl WrapperData {
         }
     }
 
-    pub fn update_position(
+    pub const fn update_position(
         &mut self,
         cell_x_block_position: usize,
         cell_y_block_position: usize,
@@ -246,7 +246,7 @@ impl DensityInterpolator {
         cell_z_position * (self.vertical_cell_count + 1) + cell_y_position
     }
 
-    pub(crate) fn on_sampled_cell_corners(
+    pub(crate) const fn on_sampled_cell_corners(
         &mut self,
         cell_y_position: usize,
         cell_z_position: usize,

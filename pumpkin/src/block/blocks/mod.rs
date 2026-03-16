@@ -46,6 +46,7 @@ pub mod banners;
 pub mod bed;
 pub mod carpet;
 pub mod chiseled_bookshelf;
+pub mod conduit;
 pub mod flower_pots;
 pub mod jukebox;
 pub mod lectern;
@@ -65,6 +66,7 @@ pub mod torches;
 
 // Plants, crops & natural blocks
 pub mod carved_pumpkin;
+pub mod dripstone;
 pub mod farmland;
 pub mod hay;
 pub mod logs;
@@ -72,7 +74,6 @@ pub mod mangrove_roots;
 pub mod plant;
 pub mod pumpkin;
 pub mod vine;
-pub mod wither_rose;
 
 // Terrain / environment / physics
 pub mod cobweb;

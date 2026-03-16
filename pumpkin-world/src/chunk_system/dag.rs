@@ -12,6 +12,7 @@ pub struct Node {
 }
 
 impl Node {
+    #[must_use]
     pub fn new(pos: ChunkPos, stage: StagedChunkEnum) -> Self {
         Self {
             pos,
@@ -30,6 +31,7 @@ pub struct Edge {
 }
 
 impl Edge {
+    #[must_use]
     pub const fn new(to: NodeKey, next: EdgeKey) -> Self {
         Self { to, next }
     }

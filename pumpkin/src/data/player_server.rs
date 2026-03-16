@@ -278,7 +278,7 @@ mod test {
     async fn server_player_data_new() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
-        let save_interval = Duration::from_secs(300);
+        let save_interval = Duration::from_mins(5);
 
         let player_data = ServerPlayerData::new(path, save_interval, true);
 

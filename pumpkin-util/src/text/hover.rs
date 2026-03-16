@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{TextComponent, TextComponentBase};
 
+/// Represents the hover event action in a chat component.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum HoverEvent {
@@ -11,9 +12,9 @@ pub enum HoverEvent {
     ShowText { value: Vec<TextComponentBase> },
     /// Shows an item.
     ShowItem {
-        /// Resource identifier of the item
+        /// Resource identifier of the item.
         id: Cow<'static, str>,
-        /// Number of the items in the stack
+        /// Number of the items in the stack.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         count: Option<i32>,
         // #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -21,24 +22,41 @@ pub enum HoverEvent {
     },
     /// Shows an entity.
     ShowEntity {
-        /// The entity's ID Entity Type
+        /// The entity's ID Entity Type.
         id: Cow<'static, str>,
         /// The entity's UUID
-        /// The UUID cannot use `uuid::Uuid` because its serialization parses it into bytes, so its double bytes serialized
+        /// The UUID cannot use `uuid::Uuid` because its serialization parses it into bytes, so its double bytes serialized.
         uuid: Cow<'static, str>,
-        /// Optional custom name for the entity
+        /// Optional custom name for the entity.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name: Option<Vec<TextComponentBase>>,
     },
 }
 
 impl HoverEvent {
+    /// Creates a new hover event that displays text.
+    ///
+    /// # Arguments
+    /// - `text` – The text component to display in the tooltip.
+    ///
+    /// # Returns
+    /// A `HoverEvent::ShowText` variant containing the provided text.
     #[must_use]
     pub fn show_text(text: TextComponent) -> Self {
         Self::ShowText {
             value: vec![text.0],
         }
     }
+
+    /// Creates a new hover event that displays entity information.
+    ///
+    /// # Arguments
+    /// - `uuid` – The entity's UUID as a string.
+    /// - `kind` – The entity type identifier (e.g., "minecraft:pig").
+    /// - `name` – Optional custom name for the entity.
+    ///
+    /// # Returns
+    /// A `HoverEvent::ShowEntity` variant containing the entity information.
     pub fn show_entity<P: Into<Cow<'static, str>>>(
         uuid: P,
         kind: P,

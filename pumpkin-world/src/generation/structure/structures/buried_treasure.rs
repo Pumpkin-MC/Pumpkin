@@ -6,7 +6,6 @@ use pumpkin_util::{
     math::{block_box::BlockBox, position::BlockPos},
     random::RandomGenerator,
 };
-use serde::Deserialize;
 
 use crate::{
     ProtoChunk,
@@ -22,7 +21,6 @@ use crate::{
     },
 };
 
-#[derive(Deserialize)]
 pub struct BuriedTreasureGenerator;
 
 impl StructureGenerator for BuriedTreasureGenerator {
@@ -58,7 +56,13 @@ impl StructurePieceBase for BuriedTreasurePiece {
         Box::new((*self).clone())
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        _chunk_box: &BlockBox,
+    ) {
         let boundingbox = self.bounding_box();
         let y = chunk.get_top_y(
             &HeightMap::OceanFloorWg,

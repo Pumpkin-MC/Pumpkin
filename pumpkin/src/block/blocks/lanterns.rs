@@ -15,7 +15,19 @@ pub struct LanternBlock;
 
 impl BlockMetadata for LanternBlock {
     fn ids() -> Box<[u16]> {
-        [Block::LANTERN.id, Block::SOUL_LANTERN.id].into()
+        [
+            Block::LANTERN.id,
+            Block::SOUL_LANTERN.id,
+            Block::COPPER_LANTERN.id,
+            Block::EXPOSED_COPPER_LANTERN.id,
+            Block::WEATHERED_COPPER_LANTERN.id,
+            Block::OXIDIZED_COPPER_LANTERN.id,
+            Block::WAXED_COPPER_LANTERN.id,
+            Block::WAXED_EXPOSED_COPPER_LANTERN.id,
+            Block::WAXED_WEATHERED_COPPER_LANTERN.id,
+            Block::WAXED_OXIDIZED_COPPER_LANTERN.id,
+        ]
+        .into()
     }
 }
 

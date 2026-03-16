@@ -26,6 +26,9 @@ pub mod generation_cache;
 pub mod schedule;
 pub mod worker_logic;
 
+#[cfg(test)]
+mod tests;
+
 pub use channel::LevelChannel;
 pub use chunk_holder::ChunkHolder;
 pub use chunk_listener::ChunkListener;

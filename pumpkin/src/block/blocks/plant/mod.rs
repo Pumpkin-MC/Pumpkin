@@ -10,17 +10,22 @@ pub mod crop;
 pub mod dry_vegetation;
 pub mod flower;
 pub mod flowerbed;
+pub mod fungus;
+pub mod kelp;
 pub mod leaf_litter;
 pub mod lily_pad;
 pub mod mushroom_plant;
+pub mod nether_sprouts;
 pub mod roots;
 pub mod sapling;
 pub mod sea_grass;
 pub mod sea_pickles;
 pub mod segmented;
 pub mod short_plant;
+pub mod spore_blossom;
 pub mod sugar_cane;
 pub mod tall_plant;
+pub mod wither_rose;
 
 trait PlantBlockBase {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {

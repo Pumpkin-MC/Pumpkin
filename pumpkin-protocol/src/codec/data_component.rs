@@ -54,10 +54,15 @@ impl DataComponentCodec<Self> for EnchantmentsImpl {
         Ok(())
     }
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        const MAX_ENCHANTMENTS: usize = 256;
+
         let len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No EnchantmentsImpl len VarInt!"))?
             .0 as usize;
+        if len > MAX_ENCHANTMENTS {
+            return Err(de::Error::custom("Too many enchantments"));
+        }
         let mut enc = Vec::with_capacity(len);
         for _ in 0..len {
             let id = seq
@@ -134,39 +139,39 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        const MAX_EFFECTS: usize = 128;
+
         // Potion ID (optional)
         let has_potion = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_potion bool!"))?;
-        let potion_id = if has_potion {
-            Some(
+        let potion_id = has_potion
+            .then(|| {
                 seq.next_element::<VarInt>()?
-                    .ok_or(de::Error::custom("No PotionContents potion_id VarInt!"))?
-                    .0,
-            )
-        } else {
-            None
-        };
+                    .ok_or(de::Error::custom("No PotionContents potion_id VarInt!"))
+                    .map(|value| value.0)
+            })
+            .transpose()?;
 
         // Custom color (optional)
         let has_color = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_color bool!"))?;
-        let custom_color = if has_color {
-            Some(
+        let custom_color = has_color
+            .then(|| {
                 seq.next_element::<i32>()?
-                    .ok_or(de::Error::custom("No PotionContents custom_color i32!"))?,
-            )
-        } else {
-            None
-        };
+                    .ok_or(de::Error::custom("No PotionContents custom_color i32!"))
+            })
+            .transpose()?;
 
         // Custom effects list
         let effects_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No PotionContents effects_len VarInt!"))?
             .0 as usize;
-
+        if effects_len > MAX_EFFECTS {
+            return Err(de::Error::custom("Too many potion effects"));
+        }
         let mut custom_effects = Vec::with_capacity(effects_len);
         for _ in 0..effects_len {
             let effect_id = seq
@@ -216,14 +221,12 @@ impl DataComponentCodec<Self> for PotionContentsImpl {
         let has_name = seq
             .next_element::<bool>()?
             .ok_or(de::Error::custom("No PotionContents has_name bool!"))?;
-        let custom_name = if has_name {
-            Some(
+        let custom_name = has_name
+            .then(|| {
                 seq.next_element::<String>()?
-                    .ok_or(de::Error::custom("No PotionContents custom_name String!"))?,
-            )
-        } else {
-            None
-        };
+                    .ok_or(de::Error::custom("No PotionContents custom_name String!"))
+            })
+            .transpose()?;
 
         Ok(Self {
             potion_id,
@@ -423,7 +426,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
-        _ => todo!("{} not yet implemented", id.to_name()),
+        _ => Err(serde::de::Error::custom("TODO")),
     }
 }
 pub fn serialize<T: SerializeStruct>(
