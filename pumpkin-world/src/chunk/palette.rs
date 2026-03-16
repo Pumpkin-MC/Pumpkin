@@ -382,13 +382,13 @@ impl BlockPalette {
                         .as_flattened()
                         .chunks(values_per_i64 as usize)
                         .map(|chunk| {
-                            chunk.iter().enumerate().fold(0, |acc, (index, value)| {
+                            chunk.iter().enumerate().fold(0u64, |acc, (index, value)| {
                                 debug_assert!((1 << bits_per_entry) > *value);
 
                                 let packed_offset_index =
-                                    (*value as i64) << (bits_per_entry as u64 * index as u64);
+                                    (*value as u64) << (bits_per_entry as u64 * index as u64);
                                 acc | packed_offset_index
-                            })
+                            }) as i64
                         })
                         .collect();
 

@@ -332,6 +332,13 @@ impl ChunkEntityData {
         let mut map = FxHashMap::default();
         for entity_nbt in chunk_entity_data.entities {
             let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
+                if uuid.len() != 4 {
+                    debug!(
+                        "Entity in chunk {},{} has invalid UUID array length {}: {:?}",
+                        position.x, position.y, uuid.len(), entity_nbt
+                    );
+                    continue;
+                }
                 Uuid::from_u128(
                     (uuid[0] as u128) << 96
                         | (uuid[1] as u128) << 64
