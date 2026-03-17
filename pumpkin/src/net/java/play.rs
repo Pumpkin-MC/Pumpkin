@@ -1541,11 +1541,6 @@ impl JavaClient {
                             use crate::item::items::bow::BowItem;
                             BowItem::release_bow(player).await;
                         }
-                        // Handle crossbow release
-                        else if item_id == Item::CROSSBOW.id {
-                            use crate::item::items::crossbow::CrossbowItem;
-                            CrossbowItem::release_crossbow(player).await;
-                        }
                     }
 
                     player.living_entity.clear_active_hand().await;

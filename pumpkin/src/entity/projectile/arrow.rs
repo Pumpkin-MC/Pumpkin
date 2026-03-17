@@ -10,6 +10,7 @@ use crate::{
 };
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item::Item;
+use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CEntityVelocity;
@@ -19,7 +20,6 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
-use pumpkin_data::particle::Particle;
 
 /// Represents the pickup rules for arrows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,6 +188,7 @@ impl ArrowEntity {
 impl NBTStorage for ArrowEntity {}
 
 impl EntityBase for ArrowEntity {
+    #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
         caller: Arc<dyn EntityBase>,
@@ -279,7 +280,9 @@ impl EntityBase for ArrowEntity {
             let mut hit = None;
 
             // Block collisions
-            let (block_cols, block_positions) = world.get_block_collisions(search_box).await;
+            let (block_cols, block_positions) = world
+                .get_block_collisions(search_box, self.get_entity())
+                .await;
             for (idx, bb) in block_cols.iter().enumerate() {
                 if let Some(t) = calculate_ray_intersection(&start_pos, &velocity, bb)
                     && t < closest_t

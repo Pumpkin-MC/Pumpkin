@@ -4,7 +4,6 @@ pub mod axe;
 pub mod boat;
 pub mod bow;
 pub mod bucket;
-pub mod crossbow;
 pub mod dye;
 pub mod egg;
 pub mod end_crystal;
@@ -39,7 +38,6 @@ use arrow::ArrowItem;
 use axe::AxeItem;
 use bow::BowItem;
 use bucket::{EmptyBucketItem, FilledBucketItem};
-use crossbow::CrossbowItem;
 use dye::DyeItem;
 use egg::EggItem;
 use ender_eye::EnderEyeItem;
@@ -62,7 +60,6 @@ pub fn default_registry() -> Arc<ItemRegistry> {
 
     manager.register(ArrowItem);
     manager.register(BowItem);
-    manager.register(CrossbowItem);
     manager.register(SnowBallItem);
     manager.register(HoeItem);
     manager.register(EggItem);

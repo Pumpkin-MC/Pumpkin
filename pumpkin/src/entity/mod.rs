@@ -2116,7 +2116,10 @@ impl Entity {
     /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
     pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
         // Nothing is immune to void or kill
-        if matches!(*damage_type, DamageType::GENERIC_KILL | DamageType::OUT_OF_WORLD) {
+        if matches!(
+            *damage_type,
+            DamageType::GENERIC_KILL | DamageType::OUT_OF_WORLD
+        ) {
             return false;
         }
 
@@ -2127,10 +2130,7 @@ impl Entity {
 
         // Specific type immunities
         futures::executor::block_on(async {
-            self.damage_immunities
-                .lock()
-                .await
-                .contains(damage_type)
+            self.damage_immunities.lock().await.contains(damage_type)
         })
     }
 
@@ -2147,7 +2147,7 @@ impl Entity {
         }
     }
 
-    /// Sets if the entity is invulnerable to all damage types (except GENERIC_KILL and OUT_OF_WORLD)
+    /// Sets if the entity is invulnerable to all damage types (except `GENERIC_KILL` and `OUT_OF_WORLD`)
     pub fn set_invulnerable(&self, invulnerable: bool) {
         self.invulnerable.store(invulnerable, Relaxed);
     }
