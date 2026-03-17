@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use pumpkin_util::{GameMode, Hand, math::vector3::Vector3};
+use pumpkin_util::{
+    GameMode, Hand,
+    math::{position::BlockPos, vector3::Vector3},
+};
 use wasmtime::component::Resource;
 
 use crate::{
@@ -9,15 +12,17 @@ use crate::{
         BoxFuture, EventHandler, Payload,
         loader::wasm::wasm_host::{
             PluginInstance, WasmPlugin,
-            state::{PlayerResource, PluginHostState, TextComponentResource},
+            state::{PlayerResource, PluginHostState, TextComponentResource, WorldResource},
             wit::{self, v0_1_0::pumpkin},
         },
     },
     server::Server,
+    world::World,
 };
 
 pub mod player;
 pub mod server;
+pub mod world;
 
 impl pumpkin::plugin::event::Host for PluginHostState {}
 
@@ -46,6 +51,16 @@ pub(super) const fn from_wasm_position(
     position: pumpkin::plugin::common::Position,
 ) -> Vector3<f64> {
     Vector3::new(position.0, position.1, position.2)
+}
+
+pub(super) fn to_wasm_block_position(position: BlockPos) -> pumpkin::plugin::common::BlockPosition {
+    (position.0.x, position.0.y, position.0.z)
+}
+
+pub(super) fn from_wasm_block_position(
+    position: pumpkin::plugin::common::BlockPosition,
+) -> BlockPos {
+    BlockPos::new(position.0, position.1, position.2)
 }
 
 pub(super) const fn to_wasm_hand(hand: Hand) -> pumpkin::plugin::common::Hand {
@@ -99,6 +114,17 @@ pub(super) fn consume_text_component(
         .resource_table
         .delete::<TextComponentResource>(Resource::new_own(text_component.rep()))
         .expect("invalid text-component resource handle")
+        .provider
+}
+
+pub(super) fn consume_world(
+    state: &mut PluginHostState,
+    world: Resource<pumpkin::plugin::world::World>,
+) -> Arc<World> {
+    state
+        .resource_table
+        .delete::<WorldResource>(Resource::new_own(world.rep()))
+        .expect("invalid world resource handle")
         .provider
 }
 

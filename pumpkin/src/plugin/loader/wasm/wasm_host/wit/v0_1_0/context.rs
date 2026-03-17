@@ -47,6 +47,7 @@ async fn register_player_event(
     use crate::plugin::player::{
         changed_main_hand::PlayerChangedMainHandEvent, exp_change::PlayerExpChangeEvent,
         fish::PlayerFishEvent, item_held::PlayerItemHeldEvent, player_chat::PlayerChatEvent,
+        player_change_world::PlayerChangeWorldEvent,
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent, player_join::PlayerJoinEvent,
@@ -85,6 +86,12 @@ async fn register_player_event(
             register_typed_event::<PlayerTeleportEvent>(resource, handler, priority, blocking)
                 .await;
         }
+        EventType::PlayerChangeWorldEvent => {
+            register_typed_event::<PlayerChangeWorldEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
         EventType::PlayerExpChangeEvent => {
             register_typed_event::<PlayerExpChangeEvent>(resource, handler, priority, blocking)
                 .await;
@@ -113,6 +120,23 @@ async fn register_player_event(
             register_typed_event::<PlayerFishEvent>(resource, handler, priority, blocking).await;
         }
         _ => unreachable!("non-player event should not be routed to register_player_event"),
+    }
+}
+
+async fn register_world_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::world::spawn_change::SpawnChangeEvent;
+
+    match event_type {
+        EventType::SpawnChangeEvent => {
+            register_typed_event::<SpawnChangeEvent>(resource, handler, priority, blocking).await;
+        }
+        _ => unreachable!("non-world event should not be routed to register_world_event"),
     }
 }
 
@@ -198,6 +222,9 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         match event_type {
             event_type @ (EventType::ServerCommandEvent | EventType::ServerBroadcastEvent) => {
                 register_server_event(resource, &handler, priority, blocking, event_type).await;
+            }
+            event_type @ EventType::SpawnChangeEvent => {
+                register_world_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type => {
                 register_player_event(resource, &handler, priority, blocking, event_type).await;
