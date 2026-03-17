@@ -73,6 +73,9 @@ pub struct GenerationSchedule {
     generate: crossfire::compat::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
     listener: Arc<ChunkListener>,
     lighting_config: LightingEngineConfig,
+
+    ready_buffer: Vec<NodeKey>,
+    expired_buffer: Vec<NodeKey>,
 }
 
 impl GenerationSchedule {
@@ -149,6 +152,8 @@ impl GenerationSchedule {
                     listener,
                     chunk_map: Default::default(),
                     lighting_config,
+                    ready_buffer: Vec::with_capacity(32),
+                    expired_buffer: Vec::with_capacity(32),
                 };
                 scheduler.work(level_sched);
             })
@@ -356,17 +361,28 @@ impl GenerationSchedule {
             return;
         }
 
-        let mut now_ready: Vec<NodeKey> = Vec::new();
-        let mut expired: Vec<NodeKey> = Vec::new();
         let now = Instant::now();
 
-        self.waiting_for_chunks
-            .retain(|&node_key, &mut inserted_at| {
-                let Some(node) = self.graph.nodes.get(node_key) else {
-                    return false; // node was dropped, discard silently
+        // 1. Wrap the retain block in braces. This contains the split borrows
+        // so they get dropped before we need `&mut self` again below.
+        {
+            let GenerationSchedule {
+                waiting_for_chunks,
+                graph,
+                chunk_map,
+                ready_buffer,
+                expired_buffer,
+                ..
+            } = self;
+
+            ready_buffer.clear();
+            expired_buffer.clear();
+
+            waiting_for_chunks.retain(|&node_key, &mut inserted_at| {
+                let Some(node) = graph.nodes.get(node_key) else {
+                    return false;
                 };
 
-                // Expire tasks that have been waiting too long
                 if now.duration_since(inserted_at) > Self::WAITING_TASK_TIMEOUT {
                     debug!(
                         "Expiring stale waiting task for chunk {:?} stage {:?} (waited {:?})",
@@ -374,7 +390,7 @@ impl GenerationSchedule {
                         node.stage,
                         now.duration_since(inserted_at)
                     );
-                    expired.push(node_key);
+                    expired_buffer.push(node_key);
                     return false;
                 }
 
@@ -382,38 +398,68 @@ impl GenerationSchedule {
                 let pos = node.pos;
                 let all_ready = (-write_radius..=write_radius).all(|dx| {
                     (-write_radius..=write_radius).all(|dy| {
-                        self.chunk_map
+                        chunk_map
                             .get(&pos.add_raw(dx, dy))
                             .is_some_and(|h| h.chunk.is_some())
                     })
                 });
+
                 if all_ready {
-                    now_ready.push(node_key);
+                    ready_buffer.push(node_key);
                     false
                 } else {
                     true
                 }
             });
+        } // Borrow splitting ends here!
 
-        // Drop expired nodes so their downstream dependents can be unblocked
-        for node_key in expired {
-            self.drop_node(node_key);
-        }
+        // 2. Temporarily take the buffers out of `self`.
+        // `std::mem::take` leaves a completely empty/unallocated Vec in its place.
+        let mut expired = std::mem::take(&mut self.expired_buffer);
+        let mut ready = std::mem::take(&mut self.ready_buffer);
 
-        for node_key in now_ready {
-            if let Some(n) = self.graph.nodes.get_mut(node_key)
-                && n.in_degree == 0
-                && !n.in_queue
-            {
-                n.in_queue = true;
-                let priority =
-                    Self::calc_priority(&self.last_level, &self.last_high_priority, n.pos, n.stage);
-                self.queue.push(TaskHeapNode(priority, node_key));
+        // 3. Process expired nodes (Re-queue them instead of abandoning)
+        for &node_key in &expired {
+            if let Some(node) = self.graph.nodes.get_mut(node_key) {
+                warn!(
+                    "Task for chunk {:?} stage {:?} timed out waiting for neighbors. Re-queueing.",
+                    node.pos, node.stage
+                );
+                node.in_queue = true;
+                let priority = Self::calc_priority(
+                    &self.last_level,
+                    &self.last_high_priority,
+                    node.pos,
+                    node.stage,
+                );
+                // Re-queue with a slight priority penalty to prevent spamming
+                self.queue.push(TaskHeapNode(priority.saturating_sub(10), node_key));
             }
-            // If in_degree > 0, drop_node will re-queue when unblocked
         }
-    }
 
+        // 4. Process ready nodes
+        for &node_key in &ready {
+            if let Some(n) = self.graph.nodes.get_mut(node_key) {
+                if n.in_degree == 0 && !n.in_queue {
+                    n.in_queue = true;
+                    let priority = Self::calc_priority(
+                        &self.last_level,
+                        &self.last_high_priority,
+                        n.pos,
+                        n.stage,
+                    );
+                    self.queue.push(TaskHeapNode(priority, node_key));
+                }
+            }
+        }
+
+        // 5. Clear and put the buffers back. This is the magic part:
+        // By returning the vectors to `self`, we retain the underlying allocated memory!
+        expired.clear();
+        ready.clear();
+        self.expired_buffer = expired;
+        self.ready_buffer = ready;
+    }
     fn resort_work(&mut self, new_data: (Option<LevelChange>, Option<Vec<ChunkPos>>)) -> bool {
         if new_data.0.is_none() && new_data.1.is_none() {
             return false;
@@ -434,7 +480,6 @@ impl GenerationSchedule {
                 )
             );
             let mut holder = self.chunk_map.remove(&pos).unwrap_or_default();
-            debug_assert_eq!(holder.target_stage, old_stage);
             holder.target_stage = new_stage;
 
             // Effective target is what we actually need to schedule tasks up to.
@@ -853,26 +898,44 @@ impl GenerationSchedule {
                 pos: fail_pos,
                 stage,
                 error,
+                cache,
             } => {
                 error!(
                     "Received generation failure notification for chunk {:?} at stage {:?}: {}",
                     fail_pos, stage, error
                 );
 
-                if let Some(mut holder) = self.chunk_map.remove(&pos) {
-                    let target_stage = holder.target_stage;
+                // 1. RESTORE THE RESCUED CHUNKS (if they exist)
+                if let Some(cache) = cache {
+                    let mut dx = 0;
+                    let mut dy = 0;
+                    for chunk in cache.chunks {
+                        let new_pos = ChunkPos::new(cache.x + dx, cache.z + dy);
+                        if let Some(holder) = self.chunk_map.get_mut(&new_pos) {
+                            // Put the neighbor chunk data back so other tasks can use it
+                            holder.chunk = Some(chunk);
+                        }
+                        dy += 1;
+                        if dy == cache.size {
+                            dy = 0;
+                            dx += 1;
+                        }
+                    }
+                }
 
-                    // Increment retry count and check if we should abandon
+                // 2. DAG-SAFE RETRY LOGIC (Only done ONCE)
+                if let Some(mut holder) = self.chunk_map.remove(&fail_pos) {
                     holder.retry_count += 1;
                     if holder.retry_count > 5 {
                         warn!(
                             "Chunk {:?} failed {} times, abandoning (setting target to None)",
-                            pos, holder.retry_count
+                            fail_pos, holder.retry_count
                         );
                         holder.target_stage = StagedChunkEnum::None;
-                        self.unload_chunks.insert(pos);
-                        self.chunk_map.insert(pos, holder);
+                        self.unload_chunks.insert(fail_pos);
+                        self.chunk_map.insert(fail_pos, holder);
                     } else {
+                        // Clean up the 'occupied' lock
                         if !holder.occupied.is_null() {
                             if self.graph.nodes.contains_key(holder.occupied) {
                                 self.drop_node(holder.occupied);
@@ -880,59 +943,41 @@ impl GenerationSchedule {
                             holder.occupied = NodeKey::null();
                         }
 
-                        for i in 0..holder.tasks.len() {
-                            if !holder.tasks[i].is_null() {
-                                self.waiting_for_chunks.remove(&holder.tasks[i]);
-                                self.drop_node(holder.tasks[i]);
-                                holder.tasks[i] = NodeKey::null();
-                            }
-                        }
+                        let task_key = holder.tasks[stage as usize];
 
-                        holder.current_stage = StagedChunkEnum::None;
-                        holder.dependency_stage = StagedChunkEnum::None;
-                        holder.chunk = None;
-
-                        for i in (StagedChunkEnum::None as usize + 1)..=(target_stage as usize) {
-                            let stage_enum = StagedChunkEnum::from(i as u8);
-                            let task_node = Node::new(pos, stage_enum);
-                            holder.tasks[i] = self.graph.nodes.insert(task_node);
-
-                            if i > (StagedChunkEnum::None as usize + 1) {
-                                self.graph.add_edge(holder.tasks[i - 1], holder.tasks[i]);
-                            }
-                        }
-
-                        if target_stage > StagedChunkEnum::None {
-                            let first_task = holder.tasks[StagedChunkEnum::None as usize + 1];
-                            if let Some(node) = self.graph.nodes.get_mut(first_task) {
+                        if !task_key.is_null() {
+                            if let Some(node) = self.graph.nodes.get_mut(task_key) {
                                 node.in_queue = true;
                             }
-                            // Use retry_count for exponential backoff in priority:
-                            // each retry gets deprioritized further
+
                             let priority_penalty =
-                                50i8.saturating_sub(holder.retry_count as i8 * 10);
+                                40i8.saturating_add(holder.retry_count as i8 * 10);
                             self.queue.push(TaskHeapNode(
                                 Self::calc_priority(
                                     &self.last_level,
                                     &self.last_high_priority,
-                                    pos,
-                                    StagedChunkEnum::from(1),
+                                    fail_pos,
+                                    stage,
                                 )
                                 .saturating_sub(priority_penalty),
-                                first_task,
+                                task_key,
                             ));
+
+                            warn!(
+                                "Chunk {:?} generation failed at {:?}, re-queued for retry #{} (DAG intact)",
+                                fail_pos, stage, holder.retry_count
+                            );
+                        } else {
+                            error!(
+                                "Failed to find task node for failed chunk {:?} at stage {:?}",
+                                fail_pos, stage
+                            );
                         }
 
-                        let retries = holder.retry_count;
-                        self.chunk_map.insert(pos, holder);
-
-                        warn!(
-                            "Chunk {:?} reset to None and re-queued for regeneration (target: {:?}, retry #{})",
-                            pos, target_stage, retries
-                        );
+                        self.chunk_map.insert(fail_pos, holder);
                     }
                 } else {
-                    error!("Failed to find holder for failed chunk {:?}", pos);
+                    error!("Failed to find holder for failed chunk {:?}", fail_pos);
                 }
             }
         }

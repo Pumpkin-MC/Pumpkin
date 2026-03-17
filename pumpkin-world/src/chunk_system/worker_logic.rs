@@ -23,6 +23,7 @@ pub enum RecvChunk {
         pos: ChunkPos,
         stage: StagedChunkEnum,
         error: String,
+        cache: Option<Cache>,
     },
 }
 
@@ -67,8 +68,6 @@ pub async fn io_read_work(
 
     // Cleaner loop and async recv
     while let Ok(pos) = recv.recv().await {
-        tokio::task::yield_now().await;
-
         // Wait for the IO write lock to be released for this chunk position.
         // Uses Condvar to block properly instead of busy-spinning.
         // The IO write worker calls lock.1.notify_all() when it finishes writing.
@@ -103,6 +102,7 @@ pub async fn io_read_work(
                         pos,
                         stage: StagedChunkEnum::Empty,
                         error: "IO write lock timeout".to_string(),
+                        cache: None,
                     },
                 ))
                 .is_err()
@@ -281,22 +281,25 @@ pub fn generation_work(
         };
 
         // Run generation with panic catching
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            cache.advance(
-                stage,
-                &level.lighting_config,
-                level.block_registry.as_ref(),
-                settings,
-                &level.world_gen.random_config,
-                &level.world_gen.terrain_cache,
-                &level.world_gen.base_router,
-                level.world_gen.dimension,
-            );
-            cache // Return cache on success
-        }));
+        let result = {
+            let cache_ref = &mut cache;
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                cache_ref.advance(
+                    stage,
+                    &level.lighting_config,
+                    level.block_registry.as_ref(),
+                    settings,
+                    &level.world_gen.random_config,
+                    &level.world_gen.terrain_cache,
+                    &level.world_gen.base_router,
+                    level.world_gen.dimension,
+                );
+            }))
+        };
 
         match result {
-            Ok(cache) => {
+            Ok(_) => {
+                // If Ok, the borrow is over, and we can safely move `cache` into the success message.
                 if send.send((pos, RecvChunk::Generation(cache))).is_err() {
                     break;
                 }
@@ -321,6 +324,7 @@ pub fn generation_work(
                         pos,
                         stage,
                         error: msg.to_string(),
+                        cache: Some(cache),
                     },
                 ));
             }
