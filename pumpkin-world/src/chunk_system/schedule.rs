@@ -256,7 +256,9 @@ impl GenerationSchedule {
         chunk_pos: ChunkPos,
         holder: &mut ChunkHolder,
         req_stage: StagedChunkEnum,
-    ) {
+    ) -> Vec<(NodeKey, ChunkPos, StagedChunkEnum)> {
+        let mut newly_spawned = Vec::new();
+
         // Insert occupied_by edge head
         holder.occupied_by = graph.edges.insert(crate::chunk_system::dag::Edge::new(
             dependency_task,
@@ -307,6 +309,10 @@ impl GenerationSchedule {
                 }
                 let cur = holder.tasks[stage_i];
 
+                if stage_i > 1 {
+                    newly_spawned.push((cur, chunk_pos, StagedChunkEnum::from(stage_i as u8)));
+                }
+
                 if stage_i > empty {
                     let prev = holder.tasks[stage_i - 1];
                     if !prev.is_null() {
@@ -345,7 +351,7 @@ impl GenerationSchedule {
         // it was only blocked on `occupied` (handled above) and the stage itself is done.
         // Do NOT add an edge here: tasks[req_stage] is null (completed and dropped).
         if holder.current_stage >= req_stage {
-            return;
+            return newly_spawned;
         }
 
         // Wire req_stage task → dependency_task so dependency_task can't run until
@@ -360,6 +366,8 @@ impl GenerationSchedule {
             "holder.tasks[req_stage] must not be null before adding edge"
         );
         graph.add_edge(ano_task, dependency_task);
+
+        newly_spawned
     }
 
     /// Check if any tasks parked in `waiting_for_chunks` now have all their neighbor
@@ -484,6 +492,9 @@ impl GenerationSchedule {
             self.sort_queue();
             return true;
         };
+
+        let mut pending_deps = Vec::new();
+
         for (pos, (old_stage, new_stage)) in new_level.0 {
             debug_assert_ne!(old_stage, new_stage);
             debug_assert_eq!(
@@ -541,40 +552,7 @@ impl GenerationSchedule {
                     }
                     let task = *task;
                     if i > 1 {
-                        let stage = StagedChunkEnum::from(i);
-                        let dependency = stage.get_direct_dependencies();
-                        let radius = stage.get_direct_radius();
-                        for dx in -radius..=radius {
-                            for dz in -radius..=radius {
-                                let new_pos = pos.add_raw(dx, dz);
-                                let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
-                                if new_pos == pos {
-                                    Self::ensure_dependency_chain(
-                                        &mut self.graph,
-                                        &mut self.queue,
-                                        &self.last_level,
-                                        &self.last_high_priority,
-                                        task,
-                                        new_pos,
-                                        &mut holder,
-                                        req_stage,
-                                    );
-                                    continue;
-                                }
-
-                                let ano_chunk = self.chunk_map.entry(new_pos).or_default();
-                                Self::ensure_dependency_chain(
-                                    &mut self.graph,
-                                    &mut self.queue,
-                                    &self.last_level,
-                                    &self.last_high_priority,
-                                    task,
-                                    new_pos,
-                                    ano_chunk,
-                                    req_stage,
-                                );
-                            }
-                        }
+                        pending_deps.push((task, pos, StagedChunkEnum::from(i)));
                     }
                     let node = self.graph.nodes.get_mut(task).unwrap();
                     if node.in_degree == 0 && !node.in_queue {
@@ -585,6 +563,32 @@ impl GenerationSchedule {
             }
             self.chunk_map.insert(pos, holder);
         }
+
+        while let Some((dep_task, pos, stage)) = pending_deps.pop() {
+            let dependency = stage.get_direct_dependencies();
+            let radius = stage.get_direct_radius();
+            for dx in -radius..=radius {
+                for dz in -radius..=radius {
+                    let new_pos = pos.add_raw(dx, dz);
+                    let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
+                    
+                    let ano_chunk = self.chunk_map.entry(new_pos).or_default();
+                    let newly_spawned = Self::ensure_dependency_chain(
+                        &mut self.graph,
+                        &mut self.queue,
+                        &self.last_level,
+                        &self.last_high_priority,
+                        dep_task,
+                        new_pos,
+                        ano_chunk,
+                        req_stage,
+                    );
+                    
+                    pending_deps.extend(newly_spawned);
+                }
+            }
+        }
+
         self.last_level = new_level.1;
         self.sort_queue();
         true
