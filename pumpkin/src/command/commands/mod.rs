@@ -63,6 +63,7 @@ mod whitelist;
 mod worldborder;
 
 #[must_use]
+#[expect(clippy::too_many_lines)]
 pub async fn default_dispatcher(
     registry: &RwLock<PermissionRegistry>,
     basic_config: &BasicConfiguration,
