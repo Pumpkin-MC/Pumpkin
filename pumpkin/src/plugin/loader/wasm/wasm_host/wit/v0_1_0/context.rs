@@ -152,8 +152,7 @@ async fn register_block_event(
 
     match event_type {
         EventType::BlockRedstoneEvent => {
-            register_typed_event::<BlockRedstoneEvent>(resource, handler, priority, blocking)
-                .await;
+            register_typed_event::<BlockRedstoneEvent>(resource, handler, priority, blocking).await;
         }
         EventType::BlockBreakEvent => {
             register_typed_event::<BlockBreakEvent>(resource, handler, priority, blocking).await;
