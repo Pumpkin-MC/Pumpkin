@@ -97,12 +97,15 @@ impl GenerationSchedule {
 
         let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(gen_thread_count + 5);
 
-        let io_lock = Arc::new((Mutex::new(HashMapType::default()), tokio::sync::Notify::new()));
-        
+        let io_lock = Arc::new((
+            Mutex::new(HashMapType::default()),
+            tokio::sync::Notify::new(),
+        ));
+
         for _ in 0..io_read_thread_count {
             level.chunk_system_tasks.spawn(io_read_work(
                 recv_read_io.clone(),
-                send_chunk.clone(),
+                send_chunk.clone().into(),
                 level.clone(),
                 io_lock.clone(),
             ));
@@ -210,21 +213,30 @@ impl GenerationSchedule {
     }
 
     fn sort_queue(&mut self) {
-        let mut new_queue = BinaryHeap::with_capacity(self.queue.len());
-        for i in &self.queue {
-            if let Some(node) = self.graph.nodes.get(i.1) {
-                new_queue.push(TaskHeapNode(
-                    Self::calc_priority(
-                        &self.last_level,
-                        &self.last_high_priority,
-                        node.pos,
-                        node.stage,
-                    ),
-                    i.1,
-                ));
-            }
-        }
-        self.queue = new_queue;
+        // 1. Move the old queue out of self and convert it to a Vec
+        // This leaves self.queue empty without unnecessary allocations.
+        let old_items = std::mem::take(&mut self.queue).into_vec();
+
+        // 2. Map the old items to updated TaskHeapNodes
+        let updated_vec: Vec<TaskHeapNode> = old_items
+            .into_iter()
+            .filter_map(|item| {
+                let node_id = item.1;
+                self.graph.nodes.get(node_id).map(|node| {
+                    TaskHeapNode(
+                        Self::calc_priority(
+                            &self.last_level,
+                            &self.last_high_priority,
+                            node.pos,
+                            node.stage,
+                        ),
+                        node_id,
+                    )
+                })
+            })
+            .collect();
+        // 3. Rebuild the heap in O(N) time
+        self.queue = BinaryHeap::from(updated_vec);
     }
 
     /// Ensure that the dependency chain for `req_stage` exists on `holder` (for chunk at
@@ -579,8 +591,7 @@ impl GenerationSchedule {
     }
 
     fn unload_chunk(&mut self) {
-        let mut unload_chunks = HashSetType::default();
-        swap(&mut unload_chunks, &mut self.unload_chunks);
+        let unload_chunks = std::mem::take(&mut self.unload_chunks);
         let mut chunks = Vec::with_capacity(unload_chunks.len());
         for pos in unload_chunks {
             let holder = self.chunk_map.get_mut(&pos).unwrap();
@@ -847,7 +858,7 @@ impl GenerationSchedule {
                                     // Task is dead (finished), remove the dependency edge
                                     let next = edge.next;
                                     self.graph.edges.remove(cur_edge);
-                                    
+
                                     if prev_edge.is_null() {
                                         holder.occupied_by = next;
                                     } else {
@@ -910,11 +921,12 @@ impl GenerationSchedule {
                                     } else {
                                         let next = edge.next;
                                         self.graph.edges.remove(cur_edge);
-                                        
+
                                         if prev_edge.is_null() {
                                             holder.occupied_by = next;
                                         } else {
-                                            self.graph.edges.get_mut(prev_edge).unwrap().next = next;
+                                            self.graph.edges.get_mut(prev_edge).unwrap().next =
+                                                next;
                                         }
                                         cur_edge = next;
                                     }

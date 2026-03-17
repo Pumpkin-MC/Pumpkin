@@ -57,7 +57,7 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: &LightingEngineConf
 
 pub async fn io_read_work(
     recv: crossfire::compat::MAsyncRx<ChunkPos>,
-    send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+    send: crossfire::compat::MAsyncTx<(ChunkPos, RecvChunk)>,
     level: Arc<Level>,
     lock: IOLock,
 ) {
@@ -71,8 +71,8 @@ pub async fn io_read_work(
         let lock_acquired = tokio::time::timeout(std::time::Duration::from_secs(5), async {
             loop {
                 // 1. Get the future BEFORE checking the condition to avoid race conditions
-                let notified = lock.1.notified(); 
-                
+                let notified = lock.1.notified();
+
                 // 2. Briefly lock the Mutex to check the state
                 {
                     let data = lock.0.lock().unwrap();
@@ -80,7 +80,7 @@ pub async fn io_read_work(
                         break; // Lock conceptually acquired, proceed
                     }
                 }
-                
+
                 // 3. Await the notification if the chunk was still locked
                 notified.await;
             }
@@ -89,11 +89,9 @@ pub async fn io_read_work(
         .is_ok();
 
         if !lock_acquired {
-            warn!(
-                "io_read: timed out waiting for IO write lock on chunk {:?}, re-queuing",
-                pos
-            );
-            
+            warn!("io_read: timed out waiting for IO write lock on chunk {pos:?}, re-queuing");
+
+            // Fix: Added .await here
             if send
                 .send((
                     pos,
@@ -104,6 +102,7 @@ pub async fn io_read_work(
                         cache: None,
                     },
                 ))
+                .await
                 .is_err()
             {
                 break;
@@ -153,6 +152,7 @@ pub async fn io_read_work(
 
                         if send
                             .send((pos, RecvChunk::IO(Chunk::Proto(Box::new(proto)))))
+                            .await
                             .is_err()
                         {
                             break;
@@ -160,6 +160,7 @@ pub async fn io_read_work(
                     } else {
                         if send
                             .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
+                            .await
                             .is_err()
                         {
                             break;
@@ -172,7 +173,7 @@ pub async fn io_read_work(
                         level.world_gen.default_block,
                         biome_mixer_seed,
                     ))));
-                    if send.send((pos, val)).is_err() {
+                    if send.send((pos, val)).await.is_err() {
                         break;
                     }
                 }
@@ -195,6 +196,7 @@ pub async fn io_read_work(
                     biome_mixer_seed,
                 )))),
             ))
+            .await
             .is_err()
         {
             break;
@@ -209,7 +211,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             Ok(d) => d,
             Err(_) => break,
         };
-        
+
         let mut vec = Vec::with_capacity(data.len());
         for (pos, chunk) in data {
             match chunk {
@@ -222,7 +224,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                 }
             }
         }
-        
+
         let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
         if let Err(e) = level
             .chunk_saver
