@@ -709,9 +709,7 @@ impl Entity {
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
-        if yaw == self.last_sent_yaw.load(Relaxed)
-            && pitch == self.last_sent_pitch.load(Relaxed)
-        {
+        if yaw == self.last_sent_yaw.load(Relaxed) && pitch == self.last_sent_pitch.load(Relaxed) {
             return;
         }
 
