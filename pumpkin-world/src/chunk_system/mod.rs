@@ -13,8 +13,8 @@ pub type ChunkLevel = HashMapType<ChunkPos, i8>;
 
 // FIXED: Added <ChunkPos, usize> to HashMapType
 pub type IOLock = std::sync::Arc<(
-    std::sync::Mutex<HashMapType<ChunkPos, usize>>, 
-    tokio::sync::Notify
+    std::sync::Mutex<HashMapType<ChunkPos, usize>>,
+    tokio::sync::Notify,
 )>;
 
 pub mod channel;

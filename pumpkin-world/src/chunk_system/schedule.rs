@@ -460,17 +460,14 @@ impl GenerationSchedule {
 
         // 4. Process ready nodes
         for &node_key in &ready {
-            if let Some(n) = self.graph.nodes.get_mut(node_key) {
-                if n.in_degree == 0 && !n.in_queue {
-                    n.in_queue = true;
-                    let priority = Self::calc_priority(
-                        &self.last_level,
-                        &self.last_high_priority,
-                        n.pos,
-                        n.stage,
-                    );
-                    self.queue.push(TaskHeapNode(priority, node_key));
-                }
+            if let Some(n) = self.graph.nodes.get_mut(node_key)
+                && n.in_degree == 0
+                && !n.in_queue
+            {
+                n.in_queue = true;
+                let priority =
+                    Self::calc_priority(&self.last_level, &self.last_high_priority, n.pos, n.stage);
+                self.queue.push(TaskHeapNode(priority, node_key));
             }
         }
 
@@ -571,7 +568,7 @@ impl GenerationSchedule {
                 for dz in -radius..=radius {
                     let new_pos = pos.add_raw(dx, dz);
                     let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
-                    
+
                     let ano_chunk = self.chunk_map.entry(new_pos).or_default();
                     let newly_spawned = Self::ensure_dependency_chain(
                         &mut self.graph,
@@ -583,7 +580,7 @@ impl GenerationSchedule {
                         ano_chunk,
                         req_stage,
                     );
-                    
+
                     pending_deps.extend(newly_spawned);
                 }
             }
