@@ -38,6 +38,7 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod ride;
 mod rotate;
 mod say;
 mod seed;
@@ -45,9 +46,11 @@ mod setblock;
 mod setidletimeout;
 mod setworldspawn;
 mod spawnpoint;
+mod spectate;
 mod stop;
 mod stopsound;
 mod summon;
+mod tag;
 mod teleport;
 mod tellraw;
 mod tick;
@@ -134,6 +137,9 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(tag::init_command_tree(), "minecraft:command.tag");
+    dispatcher.register(ride::init_command_tree(), "minecraft:command.ride");
+    dispatcher.register(spectate::init_command_tree(), "minecraft:command.spectate");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -425,6 +431,27 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.tps",
             "Displays the server TPS and MSPT",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.tag",
+            "Controls entity tags",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.ride",
+            "Mounts or dismounts entities",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spectate",
+            "Makes a player in Spectator mode spectate an entity",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
