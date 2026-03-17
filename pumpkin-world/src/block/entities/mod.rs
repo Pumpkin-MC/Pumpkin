@@ -5,6 +5,7 @@ use barrel::BarrelBlockEntity;
 use bed::BedBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
+use daylight_detector::DaylightDetectorBlockEntity;
 use end_portal::EndPortalBlockEntity;
 use furnace::FurnaceBlockEntity;
 use furnace_like_block_entity::ExperienceContainer;
@@ -36,6 +37,7 @@ pub mod chest_like_block_entity;
 pub mod chiseled_bookshelf;
 pub mod command_block;
 pub mod comparator;
+pub mod daylight_detector;
 pub mod dropper;
 pub mod end_portal;
 pub mod ender_chest;
@@ -51,7 +53,7 @@ pub mod smoker;
 pub mod trapped_chest;
 
 //TODO: We need a mark_dirty for chests
-pub trait BlockEntity: Send + Sync {
+pub trait BlockEntity: Any + Send + Sync {
     fn write_nbt<'a>(
         &'a self,
         nbt: &'a mut NbtCompound,
@@ -177,6 +179,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             Arc::new(block_entity_from_generic::<BlastingFurnaceBlockEntity>(nbt))
         }
         SmokerBlockEntity::ID => Arc::new(block_entity_from_generic::<SmokerBlockEntity>(nbt)),
+        DaylightDetectorBlockEntity::ID => Arc::new(block_entity_from_generic::<
+            DaylightDetectorBlockEntity,
+        >(nbt)),
         _ => return None,
     })
 }

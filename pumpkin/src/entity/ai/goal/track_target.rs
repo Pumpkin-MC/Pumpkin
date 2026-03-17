@@ -3,7 +3,7 @@ use crate::entity::ai::goal::GoalFuture;
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::Mob;
-use crate::entity::mob::MobEntity;
+use pumpkin_data::attributes::Attributes;
 use rand::RngExt;
 
 const UNSET: i32 = 0;
@@ -42,11 +42,6 @@ impl TrackTargetGoal {
         Self::new(check_visibility, false)
     }
 
-    // TODO: get from entity attribute
-    pub const fn get_follow_range(_mob: &MobEntity) -> f64 {
-        32.0
-    }
-
     fn can_navigate_to_entity(&mut self, mob: &dyn Mob, _target: &LivingEntity) -> bool {
         self.check_can_navigate_cooldown = to_goal_ticks(10 + mob.get_random().random_range(0..5));
         // TODO: after implementing path
@@ -67,10 +62,8 @@ impl TrackTargetGoal {
         let world = mob_entity.living_entity.entity.world.load_full();
         if !target_predicate.test(&world, Some(&mob_entity.living_entity), target) {
             return false;
-        } /*else if (!this.mob.isInPositionTargetRange(target.getBlockPos())) {
-        return false;
-        }*/
-        // TODO: implement this
+        }
+        // TODO: isInPositionTargetRange check
 
         if self.check_can_navigate {
             self.check_can_navigate_cooldown -= 1;
@@ -106,7 +99,6 @@ impl Goal for TrackTargetGoal {
                 return false;
             };
 
-            // Downcast to LivingEntity for vanilla checks
             let Some(target) = target_base.get_living_entity() else {
                 return false;
             };
@@ -115,27 +107,22 @@ impl Goal for TrackTargetGoal {
                 return false;
             }
 
-            // Vanilla check: Distance vs Follow Range
             let dist_sq = mob_entity
                 .living_entity
                 .entity
                 .pos
                 .load()
                 .squared_distance_to_vec(&target.entity.pos.load());
-            let follow_range = Self::get_follow_range(mob_entity);
+
+            // Get follow range attribute value and check if target is within range
+            let follow_range = mob_entity
+                .living_entity
+                .get_attribute_value(&Attributes::FOLLOW_RANGE);
             if dist_sq > follow_range * follow_range {
                 return false;
             }
 
-            // Vanilla check: Visibility timeout
-            // if self.check_visibility {
-            //     if mob_entity.get_visibility_cache().can_see(target) {
-            //         // Reset timeout if seen
-            //         // (Note: in a real impl, this requires &mut self which should_continue usually lacks)
-            //     } else {
-            //         // Logic for incrementing time_without_visibility would occur in tick()
-            //     }
-            // }
+            // TODO: Visibility timeout (check_visibility flag)
 
             true
         })
@@ -151,9 +138,7 @@ impl Goal for TrackTargetGoal {
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            let mob = mob.get_mob_entity();
-            let mut mob_target = mob.target.lock().await;
-            *mob_target = None;
+            mob.set_mob_target(None).await;
         })
     }
 

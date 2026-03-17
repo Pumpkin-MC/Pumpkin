@@ -13,10 +13,10 @@ mod attributes;
 mod biome;
 mod bitsets;
 mod block;
-mod block_state_remap;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
+mod configured_feature;
 mod damage_type;
 mod data_component;
 mod dimension;
@@ -31,7 +31,6 @@ mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
-mod item_id_remap;
 mod jukebox_song;
 pub mod loot;
 mod message_type;
@@ -40,11 +39,13 @@ mod noise_parameter;
 mod noise_router;
 mod packet;
 mod particle;
+mod placed_feature;
 mod potion;
 mod potion_brewing;
 mod recipe_remainder;
 mod recipes;
 mod registry;
+mod remap;
 mod scoreboard_slot;
 mod screen;
 mod sound;
@@ -54,16 +55,20 @@ mod structures;
 mod tag;
 mod tracked_data;
 mod translations;
+mod version;
 mod world_event;
 
+/// Output directory where all generated Rust source files are written.
 pub const OUT_DIR: &str = "../pumpkin-data/src/generated";
 
+/// Entry point for the code generator. Runs all registered builder functions in parallel
+/// and writes their output to [`OUT_DIR`].
 pub fn main() {
     type BuilderFn = fn() -> TokenStream;
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
-    let build_functions: Vec<(BuilderFn, &str)> = vec![
+    let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),
@@ -88,9 +93,7 @@ pub fn main() {
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
-        (block_state_remap::build, "block_state_remap.rs"),
         (item::build, "item.rs"),
-        (item_id_remap::build, "item_id_remap.rs"),
         (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),
@@ -114,7 +117,13 @@ pub fn main() {
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
         (recipe_remainder::build, "recipe_remainder.rs"),
+        (placed_feature::build, "placed_features_generated.rs"),
+        (
+            configured_feature::build,
+            "configured_features_generated.rs",
+        ),
     ];
+    build_functions.extend(remap::build());
 
     build_functions.par_iter().for_each(|(build_fn, file)| {
         println!("Parsing {}", file);
@@ -133,6 +142,10 @@ pub fn main() {
     println!("Done")
 }
 
+/// Converts a slice of strings into a `TokenStream` of PascalCase enum variants.
+///
+/// # Arguments
+/// - `array` – Slice of raw name strings to convert into variant identifiers.
 #[must_use]
 pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
     let variants = array.iter().map(|item| {
@@ -145,6 +158,12 @@ pub fn array_to_tokenstream(array: &[String]) -> TokenStream {
     }
 }
 
+/// Writes generated source code to a file in [`OUT_DIR`], skipping the write if the
+/// content is unchanged.
+///
+/// # Arguments
+/// - `new_code` – The formatted source code string to write.
+/// - `out_file` – The filename (relative to [`OUT_DIR`]) to write into.
 pub fn write_generated_file(new_code: &str, out_file: &str) {
     let path = Path::new(OUT_DIR).join(out_file);
 
@@ -159,8 +178,17 @@ pub fn write_generated_file(new_code: &str, out_file: &str) {
         .unwrap_or_else(|_| panic!("Failed to write to file: {}", path.display()));
 }
 
+/// Error returned when `rustfmt` is unavailable or fails to format code.
 pub struct RustFmtError;
 
+/// Formats a Rust source string by piping it through `rustfmt`.
+///
+/// # Arguments
+/// - `unformatted_code` – Raw Rust source code to format.
+///
+/// # Returns
+/// The formatted source string, or `Err(RustFmtError)` if `rustfmt` is not available
+/// or formatting fails.
 pub fn format_code(unformatted_code: &str) -> Result<String, RustFmtError> {
     let child_result = Command::new("rustfmt")
         .stdin(Stdio::piped())

@@ -71,9 +71,15 @@ impl StructurePieceBase for LibraryPiece {
         &mut self.piece.piece
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, _seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let randomizer = StoneBrickRandomizer;
-        let box_limit = self.piece.piece.bounding_box;
+        let box_limit = *chunk_box;
         let p = &self.piece;
         let inner = &p.piece;
 

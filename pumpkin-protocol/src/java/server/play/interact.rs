@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_INTERACT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
 use crate::{
     ServerPacket,
@@ -21,9 +21,7 @@ pub struct SInteract {
 
 // Great job Mojang ;D
 impl ServerPacket for SInteract {
-    fn read(read: impl Read) -> Result<Self, ReadingError> {
-        let mut read = read;
-
+    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
         let entity_id = read.get_var_int()?;
         let r#type = read.get_var_int()?;
         let action = ActionType::try_from(r#type.0)

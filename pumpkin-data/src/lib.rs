@@ -207,6 +207,11 @@ pub mod block_state_remap;
 #[path = "generated/item_id_remap.rs"]
 pub mod item_id_remap;
 
+#[cfg(feature = "entity_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/entity_id_remap.rs"]
+pub mod entity_id_remap;
+
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]

@@ -4,8 +4,10 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
+/// Raw deserialization shape for a single chat type entry from `message_type.json`.
 #[derive(Deserialize)]
 pub struct RawChatType {
+    /// Numeric ID assigned to this chat type in the vanilla registry.
     id: u32,
     //    components: ChatType,
 }
@@ -24,6 +26,7 @@ pub struct RawChatType {
 //     parameters: Vec<String>,
 // }
 
+/// Generates the `TokenStream` for message type `u8` constants, including a synthetic `RAW` variant.
 pub fn build() -> TokenStream {
     let json: BTreeMap<String, RawChatType> =
         serde_json::from_str(&fs::read_to_string("../assets/message_type.json").unwrap())
@@ -40,7 +43,7 @@ pub fn build() -> TokenStream {
 
     let raw_id = json.len() as u8;
     variants.extend([quote! {
-        pub const RAW: u8 = #raw_id; // One higher than highest vanilla id
+        pub const RAW: u8 = #raw_id; // One higher than the highest vanilla id
     }]);
 
     quote! {

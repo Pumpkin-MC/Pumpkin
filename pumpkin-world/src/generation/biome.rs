@@ -1,4 +1,4 @@
-use pumpkin_util::math::{floor_mod, square, vector3::Vector3};
+use pumpkin_util::math::{square_f64, vector3::Vector3};
 
 use super::biome_coords;
 
@@ -110,7 +110,7 @@ pub fn get_biome_blend(
 
 // This is effectively getting a random offset (+/- 0.0-0.8ish) to our biome position quarters and
 // returning a hypotenuse squared of the parts + the offset
-fn score_permutation(
+const fn score_permutation(
     seed: i64,
     x: i32,
     y: i32,
@@ -131,12 +131,15 @@ fn score_permutation(
     let mix = salt_mix(mix, seed);
     let offset_z = scale_mix(mix);
 
-    square(z_part + offset_z) + square(y_part + offset_y) + square(x_part + offset_x)
+    square_f64(z_part + offset_z) + square_f64(y_part + offset_y) + square_f64(x_part + offset_x)
 }
 
 #[inline]
-fn scale_mix(l: i64) -> f64 {
-    let d = floor_mod(l >> 24, 1024i64) as i32 as f64 / 1024.0;
+pub const fn scale_mix(l: i64) -> f64 {
+    // Shifting and then masking with 1023 (1024 - 1)
+    // This is mathematically identical to floor_mod(l >> 24, 1024)
+    // but executes in a single CPU cycle.
+    let d = ((l >> 24) & 1023) as f64 / 1024.0;
 
     (d - 0.5) * 0.9
 }

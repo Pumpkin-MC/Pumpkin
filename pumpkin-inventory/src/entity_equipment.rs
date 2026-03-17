@@ -34,6 +34,14 @@ impl EntityEquipment {
     }
 
     #[must_use]
+    pub fn get_or_insert(&mut self, slot: &EquipmentSlot) -> Arc<Mutex<ItemStack>> {
+        self.equipment
+            .entry(slot.clone())
+            .or_insert_with(|| Arc::new(Mutex::new(ItemStack::EMPTY.clone())))
+            .clone()
+    }
+
+    #[must_use]
     pub fn get(&self, slot: &EquipmentSlot) -> Arc<Mutex<ItemStack>> {
         self.equipment
             .get(slot)

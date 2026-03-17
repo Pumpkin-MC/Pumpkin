@@ -55,6 +55,70 @@ impl NbtTag {
         Ok(())
     }
 
+    /// Gets the element type of [`NbtTag::List`] the provided `Vec`
+    /// represents. If any elements in the `Vec` are found to be of
+    /// different types, this returns [`COMPOUND_ID`].
+    #[must_use]
+    fn get_list_element_type_id(vec: &Vec<Self>) -> u8 {
+        let mut element_id = END_ID;
+
+        for tag in vec {
+            let id = tag.get_type_id();
+            if element_id == END_ID {
+                element_id = id;
+            } else if element_id != id {
+                return COMPOUND_ID;
+            }
+        }
+
+        element_id
+    }
+
+    /// Tries to unwrap (flatten) a wrapped `NbtTag`. If there is a wrapped tag, it is returned.
+    /// If no unwrap is possible, this returns the given tag.
+    fn flatten(tag: Self) -> Self {
+        if let Self::Compound(mut compound) = tag {
+            // Try to get the wrapped tag, stored by "".
+            if Self::is_wrapper_compound(&compound) {
+                compound.child_tags.remove(0).1
+            } else {
+                Self::Compound(compound)
+            }
+        } else {
+            tag
+        }
+    }
+
+    /// Returns whether an [`NbtCompound`] is a wrapper compound.
+    ///
+    /// A *wrapper compound* is a compound that stores exactly one
+    /// key-value pair, an empty string key (`""`) and an `NbtTag`.
+    fn is_wrapper_compound(compound: &NbtCompound) -> bool {
+        compound.child_tags.len() == 1 && compound.child_tags[0].0.is_empty()
+    }
+
+    /// Wraps the provided tag if needed with the provided element type of list
+    /// the wrapped tag, if any, would be added to.
+    fn wrap_tag_if_needed(element_type: u8, tag: Self) -> Self {
+        if element_type == COMPOUND_ID {
+            if let Self::Compound(compound) = &tag
+                && !Self::is_wrapper_compound(compound)
+            {
+                tag
+            } else {
+                Self::wrap_tag(tag)
+            }
+        } else {
+            tag
+        }
+    }
+
+    fn wrap_tag(tag: Self) -> Self {
+        let mut compound = NbtCompound::new();
+        compound.put("", tag);
+        Self::Compound(compound)
+    }
+
     pub fn serialize_data<W: Write>(self, w: &mut WriteAdaptor<W>) -> serializer::Result<()> {
         match self {
             Self::End => {}
@@ -82,10 +146,15 @@ impl NbtTag {
                     return Err(Error::LargeLength(len));
                 }
 
-                w.write_u8_be(list.first().unwrap_or(&Self::End).get_type_id())?;
+                let list_element_id = Self::get_list_element_type_id(&list);
+
+                w.write_u8_be(list_element_id)?;
                 w.write_i32_be(len as i32)?;
                 for nbt_tag in list {
-                    nbt_tag.serialize_data(w)?;
+                    // Since tags in the same list tag must have the same type,
+                    // we need to handle those of different tag types by
+                    // wrapping them in `NbtCompound`s if needed.
+                    Self::wrap_tag_if_needed(list_element_id, nbt_tag).serialize_data(w)?;
                 }
             }
             Self::Compound(compound) => {
@@ -229,7 +298,8 @@ impl NbtTag {
                 for _ in 0..len {
                     let tag = Self::deserialize_data(reader, tag_type_id)?;
                     assert_eq!(tag.get_type_id(), tag_type_id);
-                    list.push(tag);
+                    // Try unwrapping the tag.
+                    list.push(Self::flatten(tag));
                 }
                 Ok(Self::List(list))
             }

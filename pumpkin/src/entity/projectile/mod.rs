@@ -34,7 +34,7 @@ pub struct ThrownItemEntity {
 impl ThrownItemEntity {
     pub fn new(entity: Entity, owner: &Entity) -> Self {
         let mut owner_pos = owner.pos.load();
-        owner_pos.y = owner.get_eye_height() - 0.1;
+        owner_pos.y += owner.get_eye_height() - 0.1;
         entity.pos.store(owner_pos);
         Self {
             entity,
@@ -144,7 +144,9 @@ impl ThrownItemEntity {
         let mut hit = None;
 
         // Block collisions
-        let (block_cols, block_positions) = world.get_block_collisions(search_box).await;
+        let (block_cols, block_positions) = world
+            .get_block_collisions(search_box, caller.as_ref())
+            .await;
         for (idx, bb) in block_cols.iter().enumerate() {
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb)
                 && t < closest_t

@@ -14,8 +14,10 @@ use crate::block::blocks::chests::{ChestBlock, CopperChestBlock, TrappedChestBlo
 use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
+use crate::block::blocks::conduit::ConduitBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
+use crate::block::blocks::dripstone::DripstoneBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
 use crate::block::blocks::falling::FallingBlock;
@@ -54,21 +56,27 @@ use crate::block::blocks::plant::crop::wheat::WheatBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
+use crate::block::blocks::plant::fungus::FungusBlock;
+use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
 use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
+use crate::block::blocks::plant::nether_sprouts::NetherSproutsBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
+use crate::block::blocks::plant::spore_blossom::SporeBlossomBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::plant::wither_rose::WitherRoseBlock;
 use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
 use crate::block::blocks::redstone::copper_bulb::CopperBulbBlock;
+use crate::block::blocks::redstone::daylight_detector::DaylightDetectorBlock;
 use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
 use crate::block::blocks::redstone::lever::LeverBlock;
@@ -100,7 +108,6 @@ use crate::block::blocks::torches::TorchBlock;
 use crate::block::blocks::trapdoor::TrapDoorBlock;
 use crate::block::blocks::vine::VineBlock;
 use crate::block::blocks::walls::WallBlock;
-use crate::block::blocks::wither_rose::WitherRose;
 use crate::block::blocks::wither_skull::WitherSkeletonSkullBlock;
 use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
@@ -211,6 +218,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
+    manager.register(KelpBlock);
     manager.register(NetherWartBlock);
     manager.register(WheatBlock);
     manager.register(TorchBlock);
@@ -251,7 +259,12 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
     manager.register(CobwebBlock);
-    manager.register(WitherRose);
+    manager.register(WitherRoseBlock);
+    manager.register(FungusBlock);
+    manager.register(NetherSproutsBlock);
+    manager.register(SporeBlossomBlock);
+    manager.register(ConduitBlock);
+    manager.register(DripstoneBlock);
 
     manager.register(FallingBlock);
 
@@ -286,6 +299,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(DropperBlock);
     manager.register(DispenserBlock);
     manager.register(LadderBlock);
+    manager.register(DaylightDetectorBlock);
 
     // Rails
     manager.register(RailBlock);

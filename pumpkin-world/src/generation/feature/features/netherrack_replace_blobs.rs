@@ -3,16 +3,14 @@ use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::RandomGenerator,
 };
-use serde::Deserialize;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{block::BlockStateCodec, world::BlockRegistryExt};
 
-#[derive(Deserialize)]
 pub struct ReplaceBlobsFeature {
-    target: BlockStateCodec,
-    state: BlockStateCodec,
-    radius: IntProvider,
+    pub target: BlockStateCodec,
+    pub state: BlockStateCodec,
+    pub radius: IntProvider,
 }
 
 impl ReplaceBlobsFeature {

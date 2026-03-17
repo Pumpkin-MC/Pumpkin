@@ -1,5 +1,3 @@
-use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
-
 use crate::command::{
     CommandError, CommandExecutor, CommandResult, CommandSender,
     args::{
@@ -8,6 +6,8 @@ use crate::command::{
     },
     tree::{CommandTree, builder::argument},
 };
+use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
+use pumpkin_world::block::entities::BlockEntity;
 const NAMES: [&str; 1] = ["particle"];
 
 const DESCRIPTION: &str = "Spawns a Particle at position.";
@@ -40,7 +40,7 @@ impl CommandExecutor for Executor {
             let speed = speed.unwrap_or(Ok(0.0))?;
             let count = count.unwrap_or(Ok(0))?;
             let (world, pos) = match sender {
-                CommandSender::Console | CommandSender::Rcon(_) => {
+                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
                     let guard = server.worlds.load();
                     let world = guard
                         .first()
