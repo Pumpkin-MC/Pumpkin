@@ -38,17 +38,7 @@ impl CommandExecutor for SaveAllExecutor {
                 .await;
 
             for world in server.worlds.load().iter() {
-                world.level.should_save.store(true, Ordering::Relaxed);
-                world.level.level_channel.notify();
-            }
-
-            if flush {
-                // Flush: save entities and wait for chunk saver
-                for world in server.worlds.load().iter() {
-                    for entity in world.entities.load().iter() {
-                        world.save_entity(entity).await;
-                    }
-                }
+                world.save_all(flush).await;
             }
 
             sender
