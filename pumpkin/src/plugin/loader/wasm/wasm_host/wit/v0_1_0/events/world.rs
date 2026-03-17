@@ -32,7 +32,7 @@ impl ToFromV0_1_0WasmEvent for SpawnChangeEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::SpawnChangeEvent(data) => Self {
-                world: consume_world(state, data.target_world),
+                world: consume_world(state, &data.target_world),
                 previous_position: from_wasm_block_position(data.previous_position),
                 previous_yaw: data.previous_yaw,
                 previous_pitch: data.previous_pitch,

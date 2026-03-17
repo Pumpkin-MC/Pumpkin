@@ -53,11 +53,13 @@ pub(super) const fn from_wasm_position(
     Vector3::new(position.0, position.1, position.2)
 }
 
-pub(super) fn to_wasm_block_position(position: BlockPos) -> pumpkin::plugin::common::BlockPosition {
+pub(super) const fn to_wasm_block_position(
+    position: BlockPos,
+) -> pumpkin::plugin::common::BlockPosition {
     (position.0.x, position.0.y, position.0.z)
 }
 
-pub(super) fn from_wasm_block_position(
+pub(super) const fn from_wasm_block_position(
     position: pumpkin::plugin::common::BlockPosition,
 ) -> BlockPos {
     BlockPos::new(position.0, position.1, position.2)
@@ -119,7 +121,7 @@ pub(super) fn consume_text_component(
 
 pub(super) fn consume_world(
     state: &mut PluginHostState,
-    world: Resource<pumpkin::plugin::world::World>,
+    world: &Resource<pumpkin::plugin::world::World>,
 ) -> Arc<World> {
     state
         .resource_table

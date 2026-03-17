@@ -317,9 +317,9 @@ impl ToFromV0_1_0WasmEvent for PlayerChangeWorldEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerChangeWorldEvent(data) => Self {
-                player: consume_player(state, data.player),
-                previous_world: consume_world(state, data.previous_world),
-                new_world: consume_world(state, data.new_world),
+                player: consume_player(state, &data.player),
+                previous_world: consume_world(state, &data.previous_world),
+                new_world: consume_world(state, &data.new_world),
                 position: from_wasm_position(data.position),
                 yaw: data.yaw,
                 pitch: data.pitch,
