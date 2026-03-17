@@ -66,35 +66,34 @@ pub async fn io_read_work(
     let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
     let dimension = &level.world_gen.dimension;
 
-    // Cleaner loop and async recv
     while let Ok(pos) = recv.recv().await {
-        // Wait for the IO write lock to be released for this chunk position.
-        // Uses Condvar to block properly instead of busy-spinning.
-        // The IO write worker calls lock.1.notify_all() when it finishes writing.
-        let lock_acquired = tokio::task::block_in_place(|| {
-            let mut data = lock.0.lock().unwrap();
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-            while data.contains_key(&pos) {
-                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-                if remaining.is_zero() {
-                    return false;
+        // Asynchronously wait for the lock using Tokio's Notify and Timeout
+        let lock_acquired = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                // 1. Get the future BEFORE checking the condition to avoid race conditions
+                let notified = lock.1.notified(); 
+                
+                // 2. Briefly lock the Mutex to check the state
+                {
+                    let data = lock.0.lock().unwrap();
+                    if !data.contains_key(&pos) {
+                        break; // Lock conceptually acquired, proceed
+                    }
                 }
-                let (guard, timeout_result) = lock.1.wait_timeout(data, remaining).unwrap();
-                data = guard;
-                if timeout_result.timed_out() && data.contains_key(&pos) {
-                    return false;
-                }
+                
+                // 3. Await the notification if the chunk was still locked
+                notified.await;
             }
-            true
-        });
+        })
+        .await
+        .is_ok();
 
         if !lock_acquired {
             warn!(
                 "io_read: timed out waiting for IO write lock on chunk {:?}, re-queuing",
                 pos
             );
-            // Send failure back to scheduler so running_task_count is decremented
-            // and the chunk can be retried later
+            
             if send
                 .send((
                     pos,
@@ -128,7 +127,6 @@ pub async fn io_read_work(
         match data {
             Loaded(chunk) => {
                 if chunk.status == ChunkStatus::Full {
-                    // Relighting check
                     let needs_relight = needs_relighting(&chunk, &level.lighting_config);
 
                     if needs_relight {
@@ -136,7 +134,6 @@ pub async fn io_read_work(
                             "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
                         );
 
-                        // Create ProtoChunk using the async method
                         let mut proto = ProtoChunk::from_chunk_data(
                             &chunk,
                             dimension,
@@ -144,7 +141,6 @@ pub async fn io_read_work(
                             biome_mixer_seed,
                         );
 
-                        // Clear all lighting data
                         let section_count = proto.light.sky_light.len();
                         proto.light.sky_light = (0..section_count)
                             .map(|_| LightContainer::new_empty(0))
@@ -153,7 +149,6 @@ pub async fn io_read_work(
                             .map(|_| LightContainer::new_empty(0))
                             .collect();
 
-                        // Set stage to Features
                         proto.stage = StagedChunkEnum::Features;
 
                         if send
@@ -163,7 +158,6 @@ pub async fn io_read_work(
                             break;
                         }
                     } else {
-                        // Send fully valid chunk
                         if send
                             .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
                             .is_err()
@@ -172,7 +166,6 @@ pub async fn io_read_work(
                         }
                     }
                 } else {
-                    // Standard ProtoChunk handling for non-full chunks
                     let val = RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
                         &chunk,
                         dimension,
@@ -191,7 +184,6 @@ pub async fn io_read_work(
             }
         }
 
-        // Final send for missing/error cases (regenerate)
         if send
             .send((
                 pos,
@@ -213,12 +205,11 @@ pub async fn io_read_work(
 
 pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
     loop {
-        // Don't check cancel_token here (keep saving chunks)
         let data = match recv.recv().await {
             Ok(d) => d,
             Err(_) => break,
         };
-        // debug!("io write thread receive chunks size {}", data.len());
+        
         let mut vec = Vec::with_capacity(data.len());
         for (pos, chunk) in data {
             match chunk {
@@ -231,6 +222,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                 }
             }
         }
+        
         let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
         if let Err(e) = level
             .chunk_saver
@@ -247,8 +239,9 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                     let rc = entry.get_mut();
                     if *rc == 1 {
                         entry.remove();
-                        drop(data);
-                        lock.1.notify_all();
+                        drop(data); // Drop the lock BEFORE notifying
+                        // Wake up all parked tasks checking the map
+                        lock.1.notify_waiters();
                     } else {
                         *rc -= 1;
                     }
@@ -258,13 +251,11 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                         "io_write: attempted to release missing lock entry for {:?}",
                         i
                     );
-                    // continue without panicking to avoid crashing on shutdown races
                 }
             }
         }
     }
 }
-
 pub fn generation_work(
     recv: crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
     send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
