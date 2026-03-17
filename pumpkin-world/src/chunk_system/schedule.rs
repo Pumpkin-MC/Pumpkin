@@ -831,11 +831,36 @@ impl GenerationSchedule {
                             }
                             holder.occupied = NodeKey::null();
 
-                            // If this neighbor chunk was only loaded for a dependency and
-                            // is no longer needed, clear dependency_stage and queue unload.
+                            // Dynamically check if any remaining tasks actually depend on this neighbor.
+                            // We do this by traversing the `occupied_by` linked list and pruning dead edges.
+                            let mut has_deps = false;
+                            let mut cur_edge = holder.occupied_by;
+                            let mut prev_edge = EdgeKey::null();
+
+                            while !cur_edge.is_null() {
+                                let edge = self.graph.edges.get(cur_edge).unwrap();
+                                if self.graph.nodes.contains_key(edge.to) {
+                                    has_deps = true; // Task is still alive and needs this chunk
+                                    prev_edge = cur_edge;
+                                    cur_edge = edge.next;
+                                } else {
+                                    // Task is dead (finished), remove the dependency edge
+                                    let next = edge.next;
+                                    self.graph.edges.remove(cur_edge);
+                                    
+                                    if prev_edge.is_null() {
+                                        holder.occupied_by = next;
+                                    } else {
+                                        self.graph.edges.get_mut(prev_edge).unwrap().next = next;
+                                    }
+                                    cur_edge = next;
+                                }
+                            }
+
+                            // If NO live tasks depend on it, and the player doesn't want it, unload it.
                             if holder.target_stage == StagedChunkEnum::None
                                 && new_pos != pos
-                                && holder.current_stage >= holder.dependency_stage
+                                && !has_deps
                             {
                                 holder.dependency_stage = StagedChunkEnum::None;
                                 self.unload_chunks.insert(new_pos);
@@ -871,10 +896,31 @@ impl GenerationSchedule {
                                     self.drop_node(holder.occupied);
                                 }
 
-                                // Clear dependency_stage and queue unload if no longer needed
-                                if holder.target_stage == StagedChunkEnum::None
-                                    && holder.current_stage >= holder.dependency_stage
-                                {
+                                // Dynamically check if any remaining tasks actually depend on this neighbor.
+                                let mut has_deps = false;
+                                let mut cur_edge = holder.occupied_by;
+                                let mut prev_edge = EdgeKey::null();
+
+                                while !cur_edge.is_null() {
+                                    let edge = self.graph.edges.get(cur_edge).unwrap();
+                                    if self.graph.nodes.contains_key(edge.to) {
+                                        has_deps = true;
+                                        prev_edge = cur_edge;
+                                        cur_edge = edge.next;
+                                    } else {
+                                        let next = edge.next;
+                                        self.graph.edges.remove(cur_edge);
+                                        
+                                        if prev_edge.is_null() {
+                                            holder.occupied_by = next;
+                                        } else {
+                                            self.graph.edges.get_mut(prev_edge).unwrap().next = next;
+                                        }
+                                        cur_edge = next;
+                                    }
+                                }
+
+                                if holder.target_stage == StagedChunkEnum::None && !has_deps {
                                     holder.dependency_stage = StagedChunkEnum::None;
                                     self.unload_chunks.insert(new_pos);
                                 }
