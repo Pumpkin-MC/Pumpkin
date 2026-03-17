@@ -480,6 +480,10 @@ pub struct Entity {
     pub last_sent_yaw: AtomicU8,
     /// The last sent pitch value (encoded as u8) for change detection
     pub last_sent_pitch: AtomicU8,
+    /// Cache for the last sent position to optimize Entity Pos update packets
+    pub last_sent_pos: AtomicCell<Vector3<f64>>,
+    /// Cache for the last sent head yaw byte
+    pub last_sent_head_yaw: AtomicU8,
 }
 
 impl Entity {
@@ -571,6 +575,8 @@ impl Entity {
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
+            last_sent_head_yaw: AtomicU8::new(0),
+            last_sent_pos: AtomicCell::new(position),
         }
     }
 
@@ -700,20 +706,24 @@ impl Entity {
 
         // Broadcast the update packet.
 
-        // TODO: Do caching to only send the packet when needed.
-
-        let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0);
-
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
-        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
+        if yaw == self.last_sent_yaw.load(Relaxed)
+            && pitch == self.last_sent_pitch.load(Relaxed)
+        {
+            return;
+        }
+
+        self.last_sent_yaw.store(yaw, Relaxed);
+        self.last_sent_pitch.store(pitch, Relaxed);
 
         self.world
             .load()
             .broadcast_packet_all(&CUpdateEntityRot::new(
                 self.entity_id.into(),
                 yaw,
-                pitch as u8,
+                pitch,
                 self.on_ground.load(Relaxed),
             ))
             .await;
@@ -722,6 +732,11 @@ impl Entity {
     }
 
     pub async fn send_head_rot(&self, head_yaw: u8) {
+        if head_yaw == self.last_sent_head_yaw.load(Relaxed) {
+            return;
+        }
+        self.last_sent_head_yaw.store(head_yaw, Relaxed);
+
         self.world
             .load()
             .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), head_yaw))
@@ -1037,8 +1052,7 @@ impl Entity {
     }
 
     pub async fn send_pos_rot(&self) {
-        let old = self.update_last_pos();
-
+        let old = self.last_sent_pos.load();
         let new = self.pos.load();
 
         let converted = Vector3::new(
@@ -1050,9 +1064,7 @@ impl Entity {
         let yaw = self.yaw.load();
 
         let pitch = self.pitch.load();
-
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
-
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
         // Only broadcast when position or rotation has actually changed.
@@ -1064,19 +1076,42 @@ impl Entity {
             return;
         }
 
+        self.last_sent_pos.store(new);
         self.last_sent_yaw.store(yaw, Relaxed);
         self.last_sent_pitch.store(pitch, Relaxed);
 
-        self.world
-            .load()
-            .broadcast_packet_all(&CUpdateEntityPosRot::new(
-                self.entity_id.into(),
-                Vector3::new(converted.x, converted.y, converted.z),
-                yaw,
-                pitch,
-                self.on_ground.load(Relaxed),
-            ))
-            .await;
+        // Dynamically pick the most efficient packet
+        if pos_changed && rot_changed {
+            self.world
+                .load()
+                .broadcast_packet_all(&CUpdateEntityPosRot::new(
+                    self.entity_id.into(),
+                    Vector3::new(converted.x, converted.y, converted.z),
+                    yaw,
+                    pitch,
+                    self.on_ground.load(Relaxed),
+                ))
+                .await;
+        } else if pos_changed {
+            self.world
+                .load()
+                .broadcast_packet_all(&CUpdateEntityPos::new(
+                    self.entity_id.into(),
+                    Vector3::new(converted.x, converted.y, converted.z),
+                    self.on_ground.load(Relaxed),
+                ))
+                .await;
+        } else if rot_changed {
+            self.world
+                .load()
+                .broadcast_packet_all(&CUpdateEntityRot::new(
+                    self.entity_id.into(),
+                    yaw,
+                    pitch,
+                    self.on_ground.load(Relaxed),
+                ))
+                .await;
+        }
         self.send_head_rot(yaw).await;
     }
 
@@ -1089,7 +1124,7 @@ impl Entity {
     }
 
     pub async fn send_pos(&self) {
-        let old = self.update_last_pos();
+        let old = self.last_sent_pos.load();
         let new = self.pos.load();
 
         let converted = Vector3::new(
@@ -1102,6 +1137,8 @@ impl Entity {
         if converted.x == 0 && converted.y == 0 && converted.z == 0 {
             return;
         }
+
+        self.last_sent_pos.store(new);
 
         self.world
             .load()
@@ -2205,6 +2242,18 @@ impl Entity {
         }
         if let Some(pitch) = pitch {
             self.set_pitch(pitch);
+        }
+        // Update cache so we don't send rubberbanding deltas
+        self.last_sent_pos.store(position);
+        if let Some(yaw) = yaw {
+            self.last_sent_yaw
+                .store((yaw * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
+            self.last_sent_head_yaw
+                .store((yaw * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
+        }
+        if let Some(pitch) = pitch {
+            self.last_sent_pitch
+                .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
         }
         self.world
             .load()
