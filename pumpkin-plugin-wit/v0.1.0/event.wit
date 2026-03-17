@@ -124,6 +124,28 @@ interface event {
         cancelled: bool
     }
 
+    record block-break-event-data {
+        player: option<player>,
+        block: string,
+        block-position: block-position,
+        exp: u32,
+        should-drop: bool,
+        cancelled: bool
+    }
+
+    record block-burn-event-data {
+        igniting-block: string,
+        block: string,
+        cancelled: bool
+    }
+
+    record block-can-build-event-data {
+        block-to-build: string,
+        buildable: bool,
+        player: player,
+        block: string,
+        cancelled: bool
+    }
     record server-command-event-data {
         command: string,
         cancelled: bool
@@ -161,6 +183,9 @@ interface event {
         player-gamemode-change-event,
         player-custom-payload-event,
         player-fish-event,
+        block-break-event,
+        block-burn-event,
+        block-can-build-event,
         server-command-event,
         spawn-change-event,
         server-broadcast-event,
@@ -182,6 +207,9 @@ interface event {
         player-gamemode-change-event(player-gamemode-change-event-data),
         player-custom-payload-event(player-custom-payload-event-data),
         player-fish-event(player-fish-event-data),
+        block-break-event(block-break-event-data),
+        block-burn-event(block-burn-event-data),
+        block-can-build-event(block-can-build-event-data),
         server-command-event(server-command-event-data),
         spawn-change-event(spawn-change-event-data),
         server-broadcast-event(server-broadcast-event-data),
