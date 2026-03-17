@@ -208,28 +208,8 @@ pub fn lookup_profile_by_name(
         .read_json()
         .map_err(|_| AuthError::FailedParse)?;
 
-    let parsed_uuid = parse_uuid_flexible(&profile.id).ok_or(AuthError::FailedParse)?;
+    let parsed_uuid = Uuid::parse_str(&profile.id).map_err(|_| AuthError::FailedParse)?;
     Ok(Some((parsed_uuid, profile.name)))
-}
-
-fn parse_uuid_flexible(id: &str) -> Option<Uuid> {
-    if let Ok(uuid) = Uuid::parse_str(id) {
-        return Some(uuid);
-    }
-
-    if id.len() != 32 {
-        return None;
-    }
-
-    let dashed = format!(
-        "{}-{}-{}-{}-{}",
-        &id[0..8],
-        &id[8..12],
-        &id[12..16],
-        &id[16..20],
-        &id[20..32]
-    );
-    Uuid::parse_str(&dashed).ok()
 }
 
 #[derive(Error, Debug)]
