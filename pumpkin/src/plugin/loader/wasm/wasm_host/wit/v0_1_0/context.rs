@@ -158,8 +158,7 @@ async fn register_block_event(
             register_typed_event::<BlockBurnEvent>(resource, handler, priority, blocking).await;
         }
         EventType::BlockCanBuildEvent => {
-            register_typed_event::<BlockCanBuildEvent>(resource, handler, priority, blocking)
-                .await;
+            register_typed_event::<BlockCanBuildEvent>(resource, handler, priority, blocking).await;
         }
         _ => unreachable!("non-block event should not be routed to register_block_event"),
     }
