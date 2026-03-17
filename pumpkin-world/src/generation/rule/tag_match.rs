@@ -7,6 +7,7 @@ pub struct TagMatchRuleTest {
 }
 
 impl TagMatchRuleTest {
+    #[must_use]
     pub fn test(&self, state: RawBlockState) -> bool {
         let values = get_tag_ids(RegistryKey::Block, &self.tag).unwrap();
         values.contains(&state.to_block_id())

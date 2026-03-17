@@ -5,6 +5,7 @@ use quote::quote;
 
 use crate::array_to_tokenstream;
 
+/// Generates the `TokenStream` for the `GameEvent` enum.
 pub fn build() -> TokenStream {
     let game_events: Vec<String> =
         serde_json::from_str(&fs::read_to_string("../assets/game_event.json").unwrap())

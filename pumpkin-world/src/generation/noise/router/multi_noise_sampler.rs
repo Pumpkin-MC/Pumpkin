@@ -238,7 +238,7 @@ mod test {
     #[test]
     fn sample() {
         let seed = 123;
-        let random_config = GlobalRandomConfig::new(seed, false);
+        let random_config = GlobalRandomConfig::new(seed);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
@@ -259,7 +259,7 @@ mod test {
     fn sample_2() {
         // we use a different seed
         let seed = 13579;
-        let random_config = GlobalRandomConfig::new(seed, false);
+        let random_config = GlobalRandomConfig::new(seed);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);

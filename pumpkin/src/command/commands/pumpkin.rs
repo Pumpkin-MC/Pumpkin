@@ -103,7 +103,7 @@ impl CommandExecutor for Executor {
                         vec![TextComponent::text(version_string.clone())],
                     )
                     .hover_event(HoverEvent::show_text(
-                        TextComponent::text(format!("Commit: {GIT_HASH_FULL}\n\nContributors:\n",))
+                        TextComponent::text(format!("Commit: {GIT_HASH_FULL}\n\nContributors:\n"))
                             .add_child(
                                 TextComponent::text(contributor_names)
                                     .gradient_named(&[NamedColor::DarkGreen, NamedColor::Green])

@@ -119,9 +119,15 @@ impl StructurePieceBase for CorridorPiece {
         }
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, _seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
         let randomizer = StoneBrickRandomizer;
-        let box_limit = self.piece.piece.bounding_box;
+        let box_limit = *chunk_box;
         let p = &self.piece;
         let inner = &p.piece;
         let air = Block::AIR.default_state;
@@ -246,8 +252,14 @@ impl StructurePieceBase for SmallCorridorPiece {
         &mut self.piece.piece
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
-        let box_limit = self.piece.piece.bounding_box;
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
+        let box_limit = *chunk_box;
         let p = &self.piece.piece;
 
         let stone = Block::STONE_BRICKS.default_state;

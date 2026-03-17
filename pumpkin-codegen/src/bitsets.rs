@@ -2,12 +2,24 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::Ident;
 
+/// A compiled bitset, ready to be embedded in generated code.
 pub struct Bitset {
+    /// The generated module containing the bitset constants and lookup function.
     pub items: TokenStream,
+    /// The identifier of the private module wrapping the bitset.
     pub mod_ident: Ident,
+    /// The identifier of the `contains` function exposed from the module.
     pub contains_ident: Ident,
 }
 
+/// Builds a compact `u64`-word bitset for a set of `u16` IDs and returns the generated code.
+///
+/// # Arguments
+/// - `name` – Base name used to derive all generated identifier names.
+/// - `ids` – Slice of numeric IDs to include in the bitset.
+///
+/// # Returns
+/// A [`Bitset`] containing the generated module `TokenStream` and helper identifiers.
 pub fn gen_u16_bitset(name: &str, ids: &[u16]) -> Bitset {
     let max_id = ids.iter().copied().max().unwrap_or(0);
     //let min_id = ids.iter().copied().min().unwrap_or(0);

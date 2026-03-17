@@ -131,7 +131,7 @@ mod tests {
         // Create a nested compound
         let mut nested = NbtCompound::new();
         nested.put_int("nested_int", 42);
-        compound.put_component("nested_compound", nested);
+        compound.put_compound("nested_compound", nested);
 
         // Write to GZip using streaming
         let mut buffer = Vec::new();

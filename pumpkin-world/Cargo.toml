@@ -8,7 +8,7 @@ rust-version.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-util.workspace = true
 pumpkin-config.workspace = true
-pumpkin-data.workspace = true
+pumpkin-data = { workspace = true, features = ["default"] }
 
 futures.workspace = true
 

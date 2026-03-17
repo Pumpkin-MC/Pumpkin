@@ -5,6 +5,8 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde_json::Value;
 
+/// Generates the `TokenStream` for the `GameRule` enum, `GameRuleRegistry` struct, and their
+/// accessor methods with proper default values for each rule.
 pub fn build() -> TokenStream {
     let game_rules: BTreeMap<String, Value> =
         serde_json::from_str(&fs::read_to_string("../assets/game_rules.json").unwrap())

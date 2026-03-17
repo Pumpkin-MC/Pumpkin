@@ -4,7 +4,7 @@ use crate::generation::height_limit::HeightLimitView;
 use pumpkin_util::math::position::BlockPos;
 
 #[inline(always)]
-fn get_chunk_index(cache: &Cache, chunk_x: i32, chunk_z: i32) -> Option<usize> {
+const fn get_chunk_index(cache: &Cache, chunk_x: i32, chunk_z: i32) -> Option<usize> {
     let rel_x = chunk_x - cache.x;
     let rel_z = chunk_z - cache.z;
     if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
@@ -24,6 +24,7 @@ fn get_section_y(cache: &Cache, pos_y: i32) -> Option<usize> {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn get_block_light(cache: &Cache, pos: BlockPos) -> u8 {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;
@@ -90,6 +91,7 @@ pub fn set_block_light(cache: &mut Cache, pos: BlockPos, level: u8) {
 }
 
 #[inline(always)]
+#[must_use]
 pub fn get_sky_light(cache: &Cache, pos: BlockPos) -> u8 {
     let chunk_x = pos.0.x >> 4;
     let chunk_z = pos.0.z >> 4;

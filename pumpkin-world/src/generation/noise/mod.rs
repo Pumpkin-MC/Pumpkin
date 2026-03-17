@@ -4,7 +4,10 @@ pub mod perlin;
 pub mod router;
 
 use pumpkin_data::{Block, BlockState, chunk_gen_settings::GenerationShapeConfig};
-use pumpkin_util::math::{floor_div, floor_mod, vector3::Vector3};
+use pumpkin_util::{
+    math::{floor_div, floor_mod, vector3::Vector3},
+    random::xoroshiro128::XoroshiroSplitter,
+};
 
 use crate::generation::{
     noise::{
@@ -45,14 +48,14 @@ impl BlockStateSampler {
     pub fn sample(
         &mut self,
         router: &mut ChunkNoiseRouter,
-        random_config: &GlobalRandomConfig,
+        ore_random_deriver: &XoroshiroSplitter,
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         match self {
             Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
-            Self::Ore(ore) => ore.sample(router, random_config, pos, sample_options),
+            Self::Ore(ore) => ore.sample(router, ore_random_deriver, pos, sample_options),
         }
     }
 }
@@ -70,15 +73,19 @@ impl ChainedBlockStateSampler {
     fn sample(
         &mut self,
         router: &mut ChunkNoiseRouter,
-        random_config: &GlobalRandomConfig,
+        ore_random_deriver: &XoroshiroSplitter,
         pos: &Vector3<i32>,
         sample_options: &ChunkNoiseFunctionSampleOptions,
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         for sampler in &mut self.samplers {
-            if let Some(state) =
-                sampler.sample(router, random_config, pos, sample_options, height_estimator)
-            {
+            if let Some(state) = sampler.sample(
+                router,
+                ore_random_deriver,
+                pos,
+                sample_options,
+                height_estimator,
+            ) {
                 return Some(state);
             }
         }
@@ -371,7 +378,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
     #[expect(clippy::too_many_arguments)]
     pub fn sample_block_state(
         &mut self,
-        random_config: &GlobalRandomConfig,
+        ore_random_deriver: &XoroshiroSplitter,
         start_x: i32,
         start_y: i32,
         start_z: i32,
@@ -399,7 +406,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
 
         self.state_sampler.sample(
             &mut self.router,
-            random_config,
+            ore_random_deriver,
             &pos,
             &options,
             height_estimator,
@@ -408,13 +415,13 @@ impl<'a> ChunkNoiseGenerator<'a> {
 
     #[inline]
     #[must_use]
-    pub fn horizontal_cell_block_count(&self) -> u8 {
+    pub const fn horizontal_cell_block_count(&self) -> u8 {
         self.generation_shape.horizontal_cell_block_count()
     }
 
     #[inline]
     #[must_use]
-    pub fn vertical_cell_block_count(&self) -> u8 {
+    pub const fn vertical_cell_block_count(&self) -> u8 {
         self.generation_shape.vertical_cell_block_count()
     }
 

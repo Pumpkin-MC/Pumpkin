@@ -5,6 +5,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::LitInt;
 
+/// Generates the `TokenStream` for the `EntityStatus` enum with `u8` discriminants.
 pub fn build() -> TokenStream {
     let events: BTreeMap<String, u8> =
         serde_json::from_str(&fs::read_to_string("../assets/entity_statuses.json").unwrap())

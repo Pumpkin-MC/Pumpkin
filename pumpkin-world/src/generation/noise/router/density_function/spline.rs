@@ -53,7 +53,7 @@ impl SplinePoint {
         }
     }
 
-    fn sample_outside_range(&self, sample_location: f32, last_known_sample: f32) -> f32 {
+    const fn sample_outside_range(&self, sample_location: f32, last_known_sample: f32) -> f32 {
         if self.derivative == 0f32 {
             last_known_sample
         } else {

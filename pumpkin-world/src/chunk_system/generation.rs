@@ -70,3 +70,46 @@ pub fn generate_single_chunk(
     let mid = ((cache.size * cache.size) >> 1) as usize;
     cache.chunks.swap_remove(mid)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::biome::hash_seed;
+    use crate::chunk_system::{StagedChunkEnum, generate_single_chunk};
+    use crate::generation::get_world_gen;
+    use crate::world::BlockRegistryExt;
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_util::world_seed::Seed;
+    use std::sync::Arc;
+
+    struct BlockRegistry;
+    impl BlockRegistryExt for BlockRegistry {
+        fn can_place_at(
+            &self,
+            _block: &pumpkin_data::Block,
+            _state: &pumpkin_data::BlockState,
+            _block_accessor: &dyn crate::world::BlockAccessor,
+            _block_pos: &pumpkin_util::math::position::BlockPos,
+        ) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn generate_chunk_should_return() {
+        let dimension = Dimension::OVERWORLD;
+        let seed = Seed(42);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(seed, dimension);
+        let biome_mixer_seed = hash_seed(world_gen.random_config.seed);
+
+        let _ = generate_single_chunk(
+            &dimension,
+            biome_mixer_seed,
+            &world_gen,
+            block_registry.as_ref(),
+            0,
+            0,
+            StagedChunkEnum::Full,
+        );
+    }
+}
