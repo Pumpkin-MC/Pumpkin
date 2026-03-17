@@ -1,21 +1,53 @@
 use crate::plugin::{
     block::{
         block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
-        block_can_build::BlockCanBuildEvent,
+        block_can_build::BlockCanBuildEvent, block_redstone::BlockRedstoneEvent,
     },
     loader::wasm::wasm_host::{
         state::PluginHostState,
         wit::v0_1_0::{
             events::{
-                ToFromV0_1_0WasmEvent, consume_player, from_wasm_block_name,
+                ToFromV0_1_0WasmEvent, consume_player, consume_world, from_wasm_block_name,
                 from_wasm_block_position, to_wasm_block_name, to_wasm_block_position,
             },
             pumpkin::plugin::event::{
-                BlockBreakEventData, BlockBurnEventData, BlockCanBuildEventData, Event,
+                BlockBreakEventData, BlockBurnEventData, BlockCanBuildEventData,
+                BlockRedstoneEventData, Event,
             },
         },
     },
 };
+
+impl ToFromV0_1_0WasmEvent for BlockRedstoneEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let target_world = state
+            .add_world(self.world.clone())
+            .expect("failed to add world resource");
+
+        Event::BlockRedstoneEvent(BlockRedstoneEventData {
+            target_world,
+            state_id: self.block_state_id,
+            block_position: to_wasm_block_position(self.block_pos),
+            old_current: self.old_current,
+            new_current: self.new_current,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockRedstoneEvent(data) => Self {
+                world: consume_world(state, &data.target_world),
+                block_state_id: data.state_id,
+                block_pos: from_wasm_block_position(data.block_position),
+                old_current: data.old_current,
+                new_current: data.new_current,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
 
 impl ToFromV0_1_0WasmEvent for BlockBreakEvent {
     fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {

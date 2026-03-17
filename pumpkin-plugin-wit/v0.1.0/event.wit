@@ -124,6 +124,15 @@ interface event {
         cancelled: bool
     }
 
+    record block-redstone-event-data {
+        target-world: %world,
+        state-id: u16,
+        block-position: block-position,
+        old-current: s32,
+        new-current: s32,
+        cancelled: bool
+    }
+
     record block-break-event-data {
         player: option<player>,
         block: string,
@@ -183,6 +192,7 @@ interface event {
         player-gamemode-change-event,
         player-custom-payload-event,
         player-fish-event,
+        block-redstone-event,
         block-break-event,
         block-burn-event,
         block-can-build-event,
@@ -207,6 +217,7 @@ interface event {
         player-gamemode-change-event(player-gamemode-change-event-data),
         player-custom-payload-event(player-custom-payload-event-data),
         player-fish-event(player-fish-event-data),
+        block-redstone-event(block-redstone-event-data),
         block-break-event(block-break-event-data),
         block-burn-event(block-burn-event-data),
         block-can-build-event(block-can-build-event-data),

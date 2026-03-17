@@ -147,10 +147,14 @@ async fn register_block_event(
 ) {
     use crate::plugin::block::{
         block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
-        block_can_build::BlockCanBuildEvent,
+        block_can_build::BlockCanBuildEvent, block_redstone::BlockRedstoneEvent,
     };
 
     match event_type {
+        EventType::BlockRedstoneEvent => {
+            register_typed_event::<BlockRedstoneEvent>(resource, handler, priority, blocking)
+                .await;
+        }
         EventType::BlockBreakEvent => {
             register_typed_event::<BlockBreakEvent>(resource, handler, priority, blocking).await;
         }
@@ -158,7 +162,8 @@ async fn register_block_event(
             register_typed_event::<BlockBurnEvent>(resource, handler, priority, blocking).await;
         }
         EventType::BlockCanBuildEvent => {
-            register_typed_event::<BlockCanBuildEvent>(resource, handler, priority, blocking).await;
+            register_typed_event::<BlockCanBuildEvent>(resource, handler, priority, blocking)
+                .await;
         }
         _ => unreachable!("non-block event should not be routed to register_block_event"),
     }
@@ -249,7 +254,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             event_type @ EventType::SpawnChangeEvent => {
                 register_world_event(resource, &handler, priority, blocking, event_type).await;
             }
-            event_type @ (EventType::BlockBreakEvent
+            event_type @ (EventType::BlockRedstoneEvent
+            | EventType::BlockBreakEvent
             | EventType::BlockBurnEvent
             | EventType::BlockCanBuildEvent) => {
                 register_block_event(resource, &handler, priority, blocking, event_type).await;
