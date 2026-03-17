@@ -992,6 +992,24 @@ impl GenerationSchedule {
                             fail_pos, holder.retry_count
                         );
                         holder.target_stage = StagedChunkEnum::None;
+
+                        // Traverse 'occupied_by' and drop dependent tasks so they don't deadlock
+                        let mut cur_edge = holder.occupied_by;
+                        while !cur_edge.is_null() {
+                            if let Some(edge) = self.graph.edges.remove(cur_edge) {
+                                if self.graph.nodes.contains_key(edge.to) {
+                                    // Remove the dependent task from the waitlist
+                                    self.waiting_for_chunks.remove(&edge.to);
+                                    // Drop the dependent task entirely so it stops looping
+                                    self.drop_node(edge.to);
+                                }
+                                cur_edge = edge.next;
+                            } else {
+                                break;
+                            }
+                        }
+                        holder.occupied_by = EdgeKey::null();
+
                         self.unload_chunks.insert(fail_pos);
                         self.chunk_map.insert(fail_pos, holder);
                     } else {

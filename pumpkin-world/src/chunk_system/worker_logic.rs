@@ -68,7 +68,7 @@ pub async fn io_read_work(
 
     while let Ok(pos) = recv.recv().await {
         // Asynchronously wait for the lock using Tokio's Notify and Timeout
-        let lock_acquired = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let lock_acquired = tokio::time::timeout(std::time::Duration::from_secs(30), async {
             loop {
                 // 1. Get the future BEFORE checking the condition to avoid race conditions
                 let notified = lock.1.notified();
