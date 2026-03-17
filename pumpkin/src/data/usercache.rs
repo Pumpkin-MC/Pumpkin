@@ -2,22 +2,20 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::{env, fs};
 
+use chrono::{DateTime, FixedOffset, Local, Months, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
-use time::{Date, Month, OffsetDateTime, UtcOffset};
 use tracing::warn;
 use uuid::Uuid;
 
 const USER_CACHE_PATH: &str = "usercache.json";
 const USER_CACHE_MRU_LIMIT: usize = 1000;
-const USER_CACHE_DATE_FORMAT: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
-    "[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory][offset_minute]"
-);
+const USER_CACHE_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S %z";
 
 #[derive(Clone, Debug)]
 pub struct UserCacheEntry {
     pub uuid: Uuid,
     pub name: String,
-    expiration_date: OffsetDateTime,
+    expiration_date: DateTime<FixedOffset>,
     last_access: u64,
 }
 
@@ -194,7 +192,7 @@ impl UserCache {
             let Ok(uuid) = Uuid::parse_str(uuid_raw) else {
                 continue;
             };
-            let Ok(expiration_date) = OffsetDateTime::parse(expires_on, USER_CACHE_DATE_FORMAT)
+            let Ok(expiration_date) = DateTime::parse_from_str(expires_on, USER_CACHE_DATE_FORMAT)
             else {
                 continue;
             };
@@ -211,71 +209,16 @@ impl UserCache {
     }
 }
 
-fn format_cache_date(date: OffsetDateTime) -> String {
-    date.format(USER_CACHE_DATE_FORMAT)
-        .unwrap_or_else(|_| "1970-01-01 00:00:00 +0000".to_string())
+fn format_cache_date(date: DateTime<FixedOffset>) -> String {
+    date.format(USER_CACHE_DATE_FORMAT).to_string()
 }
 
-fn is_expired(expiration_date: OffsetDateTime) -> bool {
-    OffsetDateTime::now_utc() >= expiration_date
+fn is_expired(expiration_date: DateTime<FixedOffset>) -> bool {
+    Utc::now() >= expiration_date.with_timezone(&Utc)
 }
 
-fn one_month_from_now() -> OffsetDateTime {
-    let now = now_with_local_offset();
-    let date = now.date();
-    let year = date.year();
-    let month = date.month();
-    let day = date.day();
-
-    let (next_year, next_month) = match month {
-        Month::January => (year, Month::February),
-        Month::February => (year, Month::March),
-        Month::March => (year, Month::April),
-        Month::April => (year, Month::May),
-        Month::May => (year, Month::June),
-        Month::June => (year, Month::July),
-        Month::July => (year, Month::August),
-        Month::August => (year, Month::September),
-        Month::September => (year, Month::October),
-        Month::October => (year, Month::November),
-        Month::November => (year, Month::December),
-        Month::December => (year + 1, Month::January),
-    };
-
-    let max_day = days_in_month(next_year, next_month);
-    let clamped_day = day.min(max_day);
-
-    Date::from_calendar_date(next_year, next_month, clamped_day).map_or_else(
-        |_| now + time::Duration::days(30),
-        |next_date| now.replace_date(next_date),
-    )
-}
-
-fn now_with_local_offset() -> OffsetDateTime {
-    let now = OffsetDateTime::now_utc();
-    UtcOffset::current_local_offset().map_or(now, |offset| now.to_offset(offset))
-}
-
-const fn days_in_month(year: i32, month: Month) -> u8 {
-    match month {
-        Month::January
-        | Month::March
-        | Month::May
-        | Month::July
-        | Month::August
-        | Month::October
-        | Month::December => 31,
-        Month::February => {
-            if is_leap_year(year) {
-                29
-            } else {
-                28
-            }
-        }
-        Month::April | Month::June | Month::September | Month::November => 30,
-    }
-}
-
-const fn is_leap_year(year: i32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+fn one_month_from_now() -> DateTime<FixedOffset> {
+    let now = Local::now().fixed_offset();
+    now.checked_add_months(Months::new(1))
+        .unwrap_or(now + TimeDelta::days(30))
 }
