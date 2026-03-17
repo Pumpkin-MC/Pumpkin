@@ -5,7 +5,7 @@ use crate::plugin::loader::wasm::wasm_host::{
     DowncastResourceExt,
     state::{CommandResource, ContextResource, PluginHostState},
     wit::v0_1_0::{
-        events::WasmPluginV0_1_0EventHandler,
+        events::{ToFromV0_1_0WasmEvent, WasmPluginV0_1_0EventHandler},
         pumpkin::{
             self,
             plugin::{
@@ -18,6 +18,126 @@ use crate::plugin::loader::wasm::wasm_host::{
         },
     },
 };
+
+macro_rules! register_host_event {
+    ($resource:expr, $handler:expr, $priority:expr, $blocking:expr, $event_ty:ty) => {
+        $resource
+            .provider
+            .register_event::<$event_ty, _>(Arc::clone($handler), $priority, $blocking)
+            .await
+    };
+}
+
+async fn register_typed_event<E: crate::plugin::Payload + ToFromV0_1_0WasmEvent + 'static>(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+) {
+    register_host_event!(resource, handler, priority, blocking, E);
+}
+
+async fn register_player_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::player::{
+        changed_main_hand::PlayerChangedMainHandEvent, exp_change::PlayerExpChangeEvent,
+        fish::PlayerFishEvent, item_held::PlayerItemHeldEvent, player_chat::PlayerChatEvent,
+        player_command_send::PlayerCommandSendEvent,
+        player_custom_payload::PlayerCustomPayloadEvent,
+        player_gamemode_change::PlayerGamemodeChangeEvent, player_join::PlayerJoinEvent,
+        player_leave::PlayerLeaveEvent, player_login::PlayerLoginEvent,
+        player_move::PlayerMoveEvent, player_permission_check::PlayerPermissionCheckEvent,
+        player_teleport::PlayerTeleportEvent,
+    };
+
+    match event_type {
+        EventType::PlayerJoinEvent => {
+            register_typed_event::<PlayerJoinEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerLeaveEvent => {
+            register_typed_event::<PlayerLeaveEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerLoginEvent => {
+            register_typed_event::<PlayerLoginEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerChatEvent => {
+            register_typed_event::<PlayerChatEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerCommandSendEvent => {
+            register_typed_event::<PlayerCommandSendEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerPermissionCheckEvent => {
+            register_typed_event::<PlayerPermissionCheckEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::PlayerMoveEvent => {
+            register_typed_event::<PlayerMoveEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerTeleportEvent => {
+            register_typed_event::<PlayerTeleportEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerExpChangeEvent => {
+            register_typed_event::<PlayerExpChangeEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerItemHeldEvent => {
+            register_typed_event::<PlayerItemHeldEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerChangedMainHandEvent => {
+            register_typed_event::<PlayerChangedMainHandEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::PlayerGamemodeChangeEvent => {
+            register_typed_event::<PlayerGamemodeChangeEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::PlayerCustomPayloadEvent => {
+            register_typed_event::<PlayerCustomPayloadEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerFishEvent => {
+            register_typed_event::<PlayerFishEvent>(resource, handler, priority, blocking).await;
+        }
+        _ => unreachable!("non-player event should not be routed to register_player_event"),
+    }
+}
+
+async fn register_server_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::server::{
+        server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent,
+    };
+
+    match event_type {
+        EventType::ServerCommandEvent => {
+            register_typed_event::<ServerCommandEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::ServerBroadcastEvent => {
+            register_typed_event::<ServerBroadcastEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        _ => unreachable!("non-server event should not be routed to register_server_event"),
+    }
+}
 
 impl DowncastResourceExt<ContextResource> for Resource<Context> {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a ContextResource {
@@ -57,13 +177,6 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_priority: EventPriority,
         blocking: bool,
     ) {
-        let resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-
         let priority = match event_priority {
             EventPriority::Highest => crate::plugin::EventPriority::Highest,
             EventPriority::High => crate::plugin::EventPriority::High,
@@ -79,143 +192,15 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .upgrade()
             .expect("plugin has been dropped");
 
+        let resource = context.downcast_ref(self);
         let handler = Arc::new(WasmPluginV0_1_0EventHandler { handler_id, plugin });
 
         match event_type {
-            EventType::PlayerJoinEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::player_join::PlayerJoinEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
+            event_type @ (EventType::ServerCommandEvent | EventType::ServerBroadcastEvent) => {
+                register_server_event(resource, &handler, priority, blocking, event_type).await;
             }
-            EventType::PlayerLeaveEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::player_leave::PlayerLeaveEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-            EventType::PlayerLoginEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::player_login::PlayerLoginEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-            EventType::PlayerChatEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::player_chat::PlayerChatEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-            EventType::PlayerCommandSendEvent => {
-                resource
-                    .provider
-                    .register_event::<
-                        crate::plugin::player::player_command_send::PlayerCommandSendEvent,
-                        _,
-                    >(handler, priority, blocking)
-                    .await;
-            }
-            EventType::PlayerPermissionCheckEvent => {
-                resource
-                    .provider
-                    .register_event::<
-                        crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent,
-                        _,
-                    >(handler, priority, blocking)
-                    .await;
-            }
-            EventType::PlayerMoveEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::player_move::PlayerMoveEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-            EventType::PlayerTeleportEvent => {
-                resource
-                    .provider
-                    .register_event::<
-                        crate::plugin::player::player_teleport::PlayerTeleportEvent,
-                        _,
-                    >(handler, priority, blocking)
-                    .await;
-            }
-            EventType::PlayerExpChangeEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::exp_change::PlayerExpChangeEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-            EventType::PlayerItemHeldEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::item_held::PlayerItemHeldEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-            EventType::PlayerChangedMainHandEvent => {
-                resource
-                    .provider
-                    .register_event::<
-                        crate::plugin::player::changed_main_hand::PlayerChangedMainHandEvent,
-                        _,
-                    >(handler, priority, blocking)
-                    .await;
-            }
-            EventType::PlayerGamemodeChangeEvent => {
-                resource
-                    .provider
-                    .register_event::<
-                        crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent,
-                        _,
-                    >(handler, priority, blocking)
-                    .await;
-            }
-            EventType::PlayerCustomPayloadEvent => {
-                resource
-                    .provider
-                    .register_event::<
-                        crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent,
-                        _,
-                    >(handler, priority, blocking)
-                    .await;
-            }
-            EventType::PlayerFishEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::fish::PlayerFishEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-            EventType::ServerCommandEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::server::server_command::ServerCommandEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
-            }
-            EventType::ServerBroadcastEvent => {
-                resource
-                    .provider
-                    .register_event::<
-                        crate::plugin::server::server_broadcast::ServerBroadcastEvent,
-                        _,
-                    >(handler, priority, blocking)
-                    .await;
+            event_type => {
+                register_player_event(resource, &handler, priority, blocking, event_type).await;
             }
         }
     }

@@ -47,8 +47,8 @@ impl ToFromV0_1_0WasmEvent for ServerBroadcastEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::ServerBroadcastEvent(data) => Self {
-                message: consume_text_component(state, data.message),
-                sender: consume_text_component(state, data.sender),
+                message: consume_text_component(state, &data.message),
+                sender: consume_text_component(state, &data.sender),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

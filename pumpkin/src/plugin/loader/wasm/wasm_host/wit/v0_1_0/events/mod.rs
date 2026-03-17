@@ -38,11 +38,13 @@ pub trait ToFromV0_1_0WasmEvent {
     ) -> Self;
 }
 
-pub(super) fn to_wasm_position(position: Vector3<f64>) -> pumpkin::plugin::common::Position {
+pub(super) const fn to_wasm_position(position: Vector3<f64>) -> pumpkin::plugin::common::Position {
     (position.x, position.y, position.z)
 }
 
-pub(super) fn from_wasm_position(position: pumpkin::plugin::common::Position) -> Vector3<f64> {
+pub(super) const fn from_wasm_position(
+    position: pumpkin::plugin::common::Position,
+) -> Vector3<f64> {
     Vector3::new(position.0, position.1, position.2)
 }
 
@@ -80,7 +82,7 @@ pub(super) const fn from_wasm_game_mode(game_mode: pumpkin::plugin::common::Game
 
 pub(super) fn consume_player(
     state: &mut PluginHostState,
-    player: Resource<pumpkin::plugin::player::Player>,
+    player: &Resource<pumpkin::plugin::player::Player>,
 ) -> Arc<Player> {
     state
         .resource_table
@@ -91,7 +93,7 @@ pub(super) fn consume_player(
 
 pub(super) fn consume_text_component(
     state: &mut PluginHostState,
-    text_component: Resource<pumpkin::plugin::text::TextComponent>,
+    text_component: &Resource<pumpkin::plugin::text::TextComponent>,
 ) -> pumpkin_util::text::TextComponent {
     state
         .resource_table

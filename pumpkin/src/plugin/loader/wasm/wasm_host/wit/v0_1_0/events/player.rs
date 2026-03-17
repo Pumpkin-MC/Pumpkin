@@ -79,8 +79,8 @@ impl ToFromV0_1_0WasmEvent for PlayerJoinEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerJoinEvent(data) => Self {
-                player: consume_player(state, data.player),
-                join_message: consume_text_component(state, data.join_message),
+                player: consume_player(state, &data.player),
+                join_message: consume_text_component(state, &data.join_message),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -107,8 +107,8 @@ impl ToFromV0_1_0WasmEvent for PlayerLeaveEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerLeaveEvent(data) => Self {
-                player: consume_player(state, data.player),
-                leave_message: consume_text_component(state, data.leave_message),
+                player: consume_player(state, &data.player),
+                leave_message: consume_text_component(state, &data.leave_message),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -135,8 +135,8 @@ impl ToFromV0_1_0WasmEvent for PlayerLoginEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerLoginEvent(data) => Self {
-                player: consume_player(state, data.player),
-                kick_message: consume_text_component(state, data.kick_message),
+                player: consume_player(state, &data.player),
+                kick_message: consume_text_component(state, &data.kick_message),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -171,12 +171,12 @@ impl ToFromV0_1_0WasmEvent for PlayerChatEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerChatEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 message: data.message,
                 recipients: data
                     .recipients
                     .into_iter()
-                    .map(|recipient| consume_player(state, recipient))
+                    .map(|recipient| consume_player(state, &recipient))
                     .collect(),
                 cancelled: data.cancelled,
             },
@@ -201,7 +201,7 @@ impl ToFromV0_1_0WasmEvent for PlayerCommandSendEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerCommandSendEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 command: data.command,
                 cancelled: data.cancelled,
             },
@@ -226,7 +226,7 @@ impl ToFromV0_1_0WasmEvent for PlayerPermissionCheckEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerPermissionCheckEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 permission: data.permission,
                 result: data.permission_result,
             },
@@ -252,7 +252,7 @@ impl ToFromV0_1_0WasmEvent for PlayerMoveEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerMoveEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 from: from_wasm_position(data.from_position),
                 to: from_wasm_position(data.to_position),
                 cancelled: data.cancelled,
@@ -279,7 +279,7 @@ impl ToFromV0_1_0WasmEvent for PlayerTeleportEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerTeleportEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 from: from_wasm_position(data.from_position),
                 to: from_wasm_position(data.to_position),
                 cancelled: data.cancelled,
@@ -304,7 +304,7 @@ impl ToFromV0_1_0WasmEvent for PlayerExpChangeEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerExpChangeEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 amount: data.amount,
             },
             _ => panic!("unexpected event type"),
@@ -329,7 +329,7 @@ impl ToFromV0_1_0WasmEvent for PlayerItemHeldEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerItemHeldEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 previous_slot: data.previous_slot,
                 new_slot: data.new_slot,
                 cancelled: data.cancelled,
@@ -354,7 +354,7 @@ impl ToFromV0_1_0WasmEvent for PlayerChangedMainHandEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerChangedMainHandEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 main_hand: from_wasm_hand(data.main_hand),
             },
             _ => panic!("unexpected event type"),
@@ -379,7 +379,7 @@ impl ToFromV0_1_0WasmEvent for PlayerGamemodeChangeEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerGamemodeChangeEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 previous_gamemode: from_wasm_game_mode(data.previous_gamemode),
                 new_gamemode: from_wasm_game_mode(data.new_gamemode),
                 cancelled: data.cancelled,
@@ -405,7 +405,7 @@ impl ToFromV0_1_0WasmEvent for PlayerCustomPayloadEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerCustomPayloadEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 channel: data.channel,
                 data: Bytes::from(data.data),
             },
@@ -435,7 +435,7 @@ impl ToFromV0_1_0WasmEvent for PlayerFishEvent {
     fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerFishEvent(data) => Self {
-                player: consume_player(state, data.player),
+                player: consume_player(state, &data.player),
                 caught_uuid: data
                     .caught_uuid
                     .map(|uuid| uuid::Uuid::parse_str(&uuid).expect("invalid caught UUID")),
