@@ -46,8 +46,8 @@ async fn register_player_event(
 ) {
     use crate::plugin::player::{
         changed_main_hand::PlayerChangedMainHandEvent, exp_change::PlayerExpChangeEvent,
-        fish::PlayerFishEvent, item_held::PlayerItemHeldEvent, player_chat::PlayerChatEvent,
-        player_change_world::PlayerChangeWorldEvent,
+        fish::PlayerFishEvent, item_held::PlayerItemHeldEvent,
+        player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent, player_join::PlayerJoinEvent,
@@ -87,10 +87,8 @@ async fn register_player_event(
                 .await;
         }
         EventType::PlayerChangeWorldEvent => {
-            register_typed_event::<PlayerChangeWorldEvent>(
-                resource, handler, priority, blocking,
-            )
-            .await;
+            register_typed_event::<PlayerChangeWorldEvent>(resource, handler, priority, blocking)
+                .await;
         }
         EventType::PlayerExpChangeEvent => {
             register_typed_event::<PlayerExpChangeEvent>(resource, handler, priority, blocking)
