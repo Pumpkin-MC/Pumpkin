@@ -75,7 +75,7 @@ base64.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
-# Remove time in favor of chrono?
+chrono.workspace = true
 time = { workspace = true, features = ["parsing", "macros"] }
 
 # plugins

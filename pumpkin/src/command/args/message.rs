@@ -38,13 +38,13 @@ impl ArgumentConsumer for MsgArgConsumer {
         let first_word_opt = args.pop();
 
         let mut msg = match first_word_opt {
-            Some(word) => word.to_string(),
+            Some(word) => word.value.to_string(),
             None => return Box::pin(async { None }),
         };
 
         while let Some(word) = args.pop() {
             msg.push(' ');
-            msg.push_str(word);
+            msg.push_str(word.value);
         }
 
         Box::pin(async move { Some(Arg::Msg(msg)) })
