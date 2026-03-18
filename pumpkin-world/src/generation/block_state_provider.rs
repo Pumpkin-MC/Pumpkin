@@ -11,6 +11,9 @@ use pumpkin_util::{
 };
 
 use crate::block::BlockStateCodec;
+use crate::generation::block_predicate::BlockPredicate;
+use crate::generation::proto_chunk::GenerationCache;
+use crate::world::BlockRegistryExt;
 
 use super::noise::perlin::DoublePerlinNoiseSampler;
 
@@ -22,6 +25,7 @@ pub enum BlockStateProvider {
     DualNoise(DualNoiseBlockStateProvider),
     Pillar(PillarBlockStateProvider),
     RandomizedInt(RandomizedIntBlockStateProvider),
+    Rule(RuleBasedBlockStateProvider),
 }
 
 impl BlockStateProvider {
@@ -34,8 +38,52 @@ impl BlockStateProvider {
             Self::DualNoise(provider) => provider.get(pos),
             Self::Pillar(provider) => provider.get(pos),
             Self::RandomizedInt(provider) => provider.get(random, pos),
+            // Without chunk context, fall through to fallback (rules cannot be evaluated)
+            Self::Rule(provider) => provider.fallback.get(random, pos),
         }
     }
+
+    pub fn get_with_context<T: GenerationCache>(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> &'static BlockState {
+        match self {
+            Self::Rule(provider) => provider.get(block_registry, chunk, random, pos),
+            _ => self.get(random, pos),
+        }
+    }
+}
+
+pub struct RuleBasedBlockStateProvider {
+    pub fallback: Box<BlockStateProvider>,
+    pub rules: Vec<BlockStateRule>,
+}
+
+impl RuleBasedBlockStateProvider {
+    pub fn get<T: GenerationCache>(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> &'static BlockState {
+        for rule in &self.rules {
+            if rule.if_true.test(block_registry, chunk, &pos) {
+                return rule
+                    .then
+                    .get_with_context(block_registry, chunk, random, pos);
+            }
+        }
+        self.fallback.get(random, pos)
+    }
+}
+
+pub struct BlockStateRule {
+    pub if_true: BlockPredicate,
+    pub then: BlockStateProvider,
 }
 
 pub struct RandomizedIntBlockStateProvider {
