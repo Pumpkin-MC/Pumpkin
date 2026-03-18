@@ -321,6 +321,7 @@ impl ConfiguredFeature {
             Self::MonsterRoom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::BasaltPillar(feature) => feature.generate(chunk, random, pos),
             _ => false, // TODO
         }
     }
