@@ -487,6 +487,14 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 )
             }
         }
+        "minecraft:forest_rock" => {
+            let state = value_to_block_state_codec(&config["state"]);
+            quote! {
+                ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {
+                    state: #state,
+                })
+            }
+        }
 
         // All TODO/empty features
         "minecraft:fossil" => {
@@ -533,9 +541,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:iceberg" => {
             quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature {}) }
-        }
-        "minecraft:forest_rock" => {
-            quote! { ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {}) }
         }
         "minecraft:end_platform" => {
             quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
