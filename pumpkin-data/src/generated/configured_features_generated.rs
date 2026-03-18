@@ -17,6 +17,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     use crate::generation::feature::features::drip_stone::small::SmallDripstoneFeature;
     use crate::generation::feature::features::{
         bamboo::BambooFeature,
+        basalt_columns::BasaltColumnsFeature,
         block_column::{BlockColumnFeature, Layer},
         end_spike::{EndSpikeFeature, Spike},
         fallen_tree::FallenTreeFeature,
@@ -4997,8 +4998,16 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     );
     map.insert(
         "large_basalt_columns".to_string(),
-        ConfiguredFeature::BasaltColumns(
-            crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {},
+        ConfiguredFeature::BasaltColumns(BasaltColumnsFeature {
+                height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    min_inclusive: 5i32,
+                    max_inclusive: 10i32,
+                })),
+                reach: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    min_inclusive: 2i32,
+                    max_inclusive: 3i32,
+                })),
+            },
         ),
     );
     map.insert(
@@ -8711,8 +8720,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     );
     map.insert(
         "small_basalt_columns".to_string(),
-        ConfiguredFeature::BasaltColumns(
-            crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {},
+        ConfiguredFeature::BasaltColumns(BasaltColumnsFeature {
+                height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    min_inclusive: 1i32,
+                    max_inclusive: 4i32,
+                })),
+                reach: IntProvider::Constant(1i32),
+            },
         ),
     );
     map.insert(

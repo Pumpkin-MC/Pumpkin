@@ -487,6 +487,16 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 )
             }
         }
+        "minecraft:basalt_columns" => {
+            let height = value_to_int_provider(&config["height"]);
+            let reach = value_to_int_provider(&config["reach"]);
+            quote! {
+                ConfiguredFeature::BasaltColumns(crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {
+                    height: #height,
+                    reach: #reach,
+                })
+            }
+        }
 
         // All TODO/empty features
         "minecraft:fossil" => {
@@ -566,9 +576,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:twisting_vines" => {
             quote! { ConfiguredFeature::TwistingVines(crate::generation::feature::features::twisting_vines::TwistingVinesFeature {}) }
-        }
-        "minecraft:basalt_columns" => {
-            quote! { ConfiguredFeature::BasaltColumns(crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {}) }
         }
         "minecraft:delta_feature" => {
             quote! { ConfiguredFeature::DeltaFeature(crate::generation::feature::features::delta_feature::DeltaFeatureFeature {}) }
