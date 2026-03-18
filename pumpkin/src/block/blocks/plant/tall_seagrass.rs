@@ -1,18 +1,15 @@
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    blocks::plant::PlantBlockBase,
+    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    blocks::plant::{PlantBlockBase, seagrass::supports_seagrass},
 };
-pub struct SeaGrassBlock;
-impl BlockMetadata for SeaGrassBlock {
-    fn ids() -> Box<[u16]> {
-        [Block::SEAGRASS.id, Block::TALL_SEAGRASS.id].into()
-    }
-}
-impl BlockBehaviour for SeaGrassBlock {
+#[pumpkin_block("minecraft:tall_seagrass")]
+pub struct TallSeaGrassBlock;
+impl BlockBehaviour for TallSeaGrassBlock {
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
             <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
@@ -35,7 +32,7 @@ impl BlockBehaviour for SeaGrassBlock {
     }
 }
 
-impl PlantBlockBase for SeaGrassBlock {
+impl PlantBlockBase for TallSeaGrassBlock {
     async fn can_plant_on_top(
         &self,
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
@@ -43,10 +40,7 @@ impl PlantBlockBase for SeaGrassBlock {
     ) -> bool {
         let (support_block, support_block_state) = block_accessor.get_block_and_state(pos).await;
         let replacing_block = block_accessor.get_block(&pos.up()).await;
-        if replacing_block != &Block::WATER
-            && replacing_block != &Block::SEAGRASS
-            && replacing_block != &Block::TALL_SEAGRASS
-        {
+        if replacing_block != &Block::WATER && replacing_block != &Block::TALL_SEAGRASS {
             return false;
         }
 
@@ -60,12 +54,10 @@ impl PlantBlockBase for SeaGrassBlock {
                 _ => {}
             }
         }
-        if support_block_state.is_side_solid(BlockDirection::Up)
-            && support_block != &Block::MAGMA_BLOCK
-        {
+        if support_block == &Block::TALL_SEAGRASS {
             return true;
         }
-        if support_block == &Block::TALL_SEAGRASS {
+        if supports_seagrass(support_block, support_block_state) {
             return true;
         }
         false
