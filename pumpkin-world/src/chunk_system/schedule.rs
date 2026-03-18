@@ -441,7 +441,7 @@ impl GenerationSchedule {
         // 3. Process expired nodes (Re-queue them instead of abandoning)
         for &node_key in &expired {
             if let Some(node) = self.graph.nodes.get_mut(node_key) {
-                warn!(
+                debug!(
                     "Task for chunk {:?} stage {:?} timed out waiting for neighbors. Re-queueing.",
                     node.pos, node.stage
                 );
