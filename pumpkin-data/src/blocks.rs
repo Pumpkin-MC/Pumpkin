@@ -14,7 +14,7 @@ use std::hash::{Hash, Hasher};
 /// This struct contains the base properties shared by all instances of a block
 /// Data-driven attributes like `hardness` and `blast_resistance` are defined here,
 /// while specific orientations or variations are stored in the associated `BlockState`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block {
     /// The numeric ID used for internal registry mapping.
     pub id: u16,

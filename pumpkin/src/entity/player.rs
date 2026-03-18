@@ -64,6 +64,7 @@ use pumpkin_protocol::java::client::play::{
     PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
+use pumpkin_protocol::{IdOr, SoundEvent};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -1436,6 +1437,27 @@ impl Player {
         self.client
             .enqueue_packet(&CSoundEffect::new(
                 IdOr::Id(sound_id),
+                category,
+                position,
+                volume,
+                pitch,
+                seed,
+            ))
+            .await;
+    }
+
+    pub async fn play_sound_event(
+        &self,
+        sound: SoundEvent,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+        seed: f64,
+    ) {
+        self.client
+            .enqueue_packet(&CSoundEffect::new(
+                IdOr::Value(sound),
                 category,
                 position,
                 volume,
@@ -3686,16 +3708,13 @@ impl InventoryPlayer for Player {
                 )
                 .await;
 
-            if let Some(equippable) = stack.get_data_component::<EquippableImpl>()
-                && let Some(sound) = Sound::from_name(
-                    equippable
-                        .equip_sound
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(equippable.equip_sound),
-                )
-            {
+            if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
                 self.world()
-                    .play_sound(sound, SoundCategory::Players, &self.position())
+                    .play_sound_event(
+                        equippable.equip_sound.clone(),
+                        SoundCategory::Players,
+                        &self.position(),
+                    )
                     .await;
             }
         })
