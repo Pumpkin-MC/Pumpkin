@@ -1,7 +1,8 @@
 interface event {
-    use common.{game-mode, hand, position};
+    use common.{block-position, game-mode, hand, position};
     use player.{player};
     use text.{text-component};
+    use %world.{%world};
 
     enum event-priority {
         highest,
@@ -62,6 +63,16 @@ interface event {
         cancelled: bool
     }
 
+    record player-change-world-event-data {
+        player: player,
+        previous-world: %world,
+        new-world: %world,
+        position: position,
+        yaw: f32,
+        pitch: f32,
+        cancelled: bool
+    }
+
     record player-exp-change-event-data {
         player: player,
         amount: s32
@@ -118,6 +129,16 @@ interface event {
         cancelled: bool
     }
 
+    record spawn-change-event-data {
+        target-world: %world,
+        previous-position: block-position,
+        previous-yaw: f32,
+        previous-pitch: f32,
+        new-position: block-position,
+        new-yaw: f32,
+        new-pitch: f32
+    }
+
     record server-broadcast-event-data {
         message: text-component,
         sender: text-component,
@@ -133,6 +154,7 @@ interface event {
         player-permission-check-event,
         player-move-event,
         player-teleport-event,
+        player-change-world-event,
         player-exp-change-event,
         player-item-held-event,
         player-changed-main-hand-event,
@@ -140,6 +162,7 @@ interface event {
         player-custom-payload-event,
         player-fish-event,
         server-command-event,
+        spawn-change-event,
         server-broadcast-event,
     }
 
@@ -152,6 +175,7 @@ interface event {
         player-permission-check-event(player-permission-check-event-data),
         player-move-event(player-move-event-data),
         player-teleport-event(player-teleport-event-data),
+        player-change-world-event(player-change-world-event-data),
         player-exp-change-event(player-exp-change-event-data),
         player-item-held-event(player-item-held-event-data),
         player-changed-main-hand-event(player-changed-main-hand-event-data),
@@ -159,6 +183,7 @@ interface event {
         player-custom-payload-event(player-custom-payload-event-data),
         player-fish-event(player-fish-event-data),
         server-command-event(server-command-event-data),
+        spawn-change-event(spawn-change-event-data),
         server-broadcast-event(server-broadcast-event-data),
     }
 }

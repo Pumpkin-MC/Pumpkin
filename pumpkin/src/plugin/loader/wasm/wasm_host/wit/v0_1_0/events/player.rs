@@ -3,17 +3,18 @@ use crate::plugin::{
         state::PluginHostState,
         wit::v0_1_0::{
             events::{
-                ToFromV0_1_0WasmEvent, consume_player, consume_text_component, from_wasm_game_mode,
-                from_wasm_hand, from_wasm_position, to_wasm_game_mode, to_wasm_hand,
-                to_wasm_position,
+                ToFromV0_1_0WasmEvent, consume_player, consume_text_component, consume_world,
+                from_wasm_game_mode, from_wasm_hand, from_wasm_position, to_wasm_game_mode,
+                to_wasm_hand, to_wasm_position,
             },
             pumpkin::plugin::event::{
-                Event, PlayerChangedMainHandEventData, PlayerChatEventData,
-                PlayerCommandSendEventData, PlayerCustomPayloadEventData, PlayerExpChangeEventData,
-                PlayerFishEventData, PlayerFishState as WasmPlayerFishState,
-                PlayerGamemodeChangeEventData, PlayerItemHeldEventData, PlayerJoinEventData,
-                PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
-                PlayerPermissionCheckEventData, PlayerTeleportEventData,
+                Event, PlayerChangeWorldEventData, PlayerChangedMainHandEventData,
+                PlayerChatEventData, PlayerCommandSendEventData, PlayerCustomPayloadEventData,
+                PlayerExpChangeEventData, PlayerFishEventData,
+                PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
+                PlayerItemHeldEventData, PlayerJoinEventData, PlayerLeaveEventData,
+                PlayerLoginEventData, PlayerMoveEventData, PlayerPermissionCheckEventData,
+                PlayerTeleportEventData,
             },
         },
     },
@@ -22,6 +23,7 @@ use crate::plugin::{
         exp_change::PlayerExpChangeEvent,
         fish::{PlayerFishEvent, PlayerFishState},
         item_held::PlayerItemHeldEvent,
+        player_change_world::PlayerChangeWorldEvent,
         player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
@@ -282,6 +284,45 @@ impl ToFromV0_1_0WasmEvent for PlayerTeleportEvent {
                 player: consume_player(state, &data.player),
                 from: from_wasm_position(data.from_position),
                 to: from_wasm_position(data.to_position),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerChangeWorldEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+        let previous_world = state
+            .add_world(self.previous_world.clone())
+            .expect("failed to add world resource");
+        let new_world = state
+            .add_world(self.new_world.clone())
+            .expect("failed to add world resource");
+
+        Event::PlayerChangeWorldEvent(PlayerChangeWorldEventData {
+            player,
+            previous_world,
+            new_world,
+            position: to_wasm_position(self.position),
+            yaw: self.yaw,
+            pitch: self.pitch,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerChangeWorldEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                previous_world: consume_world(state, &data.previous_world),
+                new_world: consume_world(state, &data.new_world),
+                position: from_wasm_position(data.position),
+                yaw: data.yaw,
+                pitch: data.pitch,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
