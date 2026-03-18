@@ -613,9 +613,13 @@ impl Entity {
 
     pub async fn send_velocity(&self) {
         let velocity = self.velocity.load();
+        let chunk_pos = self.chunk_pos.load();
         self.world
             .load()
-            .broadcast_packet_all(&CEntityVelocity::new(self.entity_id.into(), velocity))
+            .broadcast_to_chunk(
+                chunk_pos,
+                &CEntityVelocity::new(self.entity_id.into(), velocity),
+            )
             .await;
     }
 
@@ -703,6 +707,7 @@ impl Entity {
     pub async fn send_rotation(&self) {
         let yaw = self.yaw.load();
         let pitch = self.pitch.load();
+        let chunk_pos = self.chunk_pos.load();
 
         // Broadcast the update packet.
 
@@ -718,18 +723,22 @@ impl Entity {
 
         self.world
             .load()
-            .broadcast_packet_all(&CUpdateEntityRot::new(
-                self.entity_id.into(),
-                yaw,
-                pitch,
-                self.on_ground.load(Relaxed),
-            ))
+            .broadcast_to_chunk(
+                chunk_pos,
+                &CUpdateEntityRot::new(
+                    self.entity_id.into(),
+                    yaw,
+                    pitch,
+                    self.on_ground.load(Relaxed),
+                ),
+            )
             .await;
 
         self.send_head_rot(yaw).await;
     }
 
     pub async fn send_head_rot(&self, head_yaw: u8) {
+        let chunk_pos = self.chunk_pos.load();
         if head_yaw == self.last_sent_head_yaw.load(Relaxed) {
             return;
         }
@@ -737,7 +746,7 @@ impl Entity {
 
         self.world
             .load()
-            .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), head_yaw))
+            .broadcast_to_chunk(chunk_pos, &CHeadRot::new(self.entity_id.into(), head_yaw))
             .await;
     }
 
@@ -1052,6 +1061,7 @@ impl Entity {
     pub async fn send_pos_rot(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
+        let chunk_pos = self.chunk_pos.load();
 
         let converted = Vector3::new(
             new.x.mul_add(4096.0, -(old.x * 4096.0)) as i16,
@@ -1082,32 +1092,41 @@ impl Entity {
         if pos_changed && rot_changed {
             self.world
                 .load()
-                .broadcast_packet_all(&CUpdateEntityPosRot::new(
-                    self.entity_id.into(),
-                    Vector3::new(converted.x, converted.y, converted.z),
-                    yaw,
-                    pitch,
-                    self.on_ground.load(Relaxed),
-                ))
+                .broadcast_to_chunk(
+                    chunk_pos,
+                    &CUpdateEntityPosRot::new(
+                        self.entity_id.into(),
+                        Vector3::new(converted.x, converted.y, converted.z),
+                        yaw,
+                        pitch,
+                        self.on_ground.load(Relaxed),
+                    ),
+                )
                 .await;
         } else if pos_changed {
             self.world
                 .load()
-                .broadcast_packet_all(&CUpdateEntityPos::new(
-                    self.entity_id.into(),
-                    Vector3::new(converted.x, converted.y, converted.z),
-                    self.on_ground.load(Relaxed),
-                ))
+                .broadcast_to_chunk(
+                    chunk_pos,
+                    &CUpdateEntityPos::new(
+                        self.entity_id.into(),
+                        Vector3::new(converted.x, converted.y, converted.z),
+                        self.on_ground.load(Relaxed),
+                    ),
+                )
                 .await;
         } else if rot_changed {
             self.world
                 .load()
-                .broadcast_packet_all(&CUpdateEntityRot::new(
-                    self.entity_id.into(),
-                    yaw,
-                    pitch,
-                    self.on_ground.load(Relaxed),
-                ))
+                .broadcast_to_chunk(
+                    chunk_pos,
+                    &CUpdateEntityRot::new(
+                        self.entity_id.into(),
+                        yaw,
+                        pitch,
+                        self.on_ground.load(Relaxed),
+                    ),
+                )
                 .await;
         }
         self.send_head_rot(yaw).await;
@@ -1124,6 +1143,7 @@ impl Entity {
     pub async fn send_pos(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
+        let chunk_pos = self.chunk_pos.load();
 
         let converted = Vector3::new(
             new.x.mul_add(4096.0, -(old.x * 4096.0)) as i16,
@@ -1140,11 +1160,14 @@ impl Entity {
 
         self.world
             .load()
-            .broadcast_packet_all(&CUpdateEntityPos::new(
-                self.entity_id.into(),
-                Vector3::new(converted.x, converted.y, converted.z),
-                self.on_ground.load(Relaxed),
-            ))
+            .broadcast_to_chunk(
+                chunk_pos,
+                &CUpdateEntityPos::new(
+                    self.entity_id.into(),
+                    Vector3::new(converted.x, converted.y, converted.z),
+                    self.on_ground.load(Relaxed),
+                ),
+            )
             .await;
     }
 
@@ -2128,17 +2151,28 @@ impl Entity {
         }
         buf.put_u8(255);
         let world = self.world.load();
+        let chunk_pos = self.chunk_pos.load();
         for player in world.players.load().iter() {
             if let ClientPlatform::Java(client) = &player.client {
-                let mut buf = Vec::new();
-                for meta in meta {
-                    meta.write(&mut buf, &client.version.load()).unwrap();
+                // Apply Chebyshev distance check
+                let center = player.living_entity.entity.chunk_pos.load();
+                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+
+                if (chunk_pos.x - center.x)
+                    .abs()
+                    .max((chunk_pos.y - center.y).abs())
+                    <= view_distance
+                {
+                    let mut buf = Vec::new();
+                    for m in meta {
+                        m.write(&mut buf, &client.version.load()).unwrap();
+                    }
+                    buf.put_u8(255);
+                    player
+                        .client
+                        .enqueue_packet(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()))
+                        .await;
                 }
-                buf.put_u8(255);
-                player
-                    .client
-                    .enqueue_packet(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()))
-                    .await;
             }
         }
     }
@@ -2253,16 +2287,20 @@ impl Entity {
             self.last_sent_pitch
                 .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
         }
+        let chunk_pos = self.chunk_pos.load();
         self.world
             .load()
-            .broadcast_packet_all(&CEntityPositionSync::new(
-                self.entity_id.into(),
-                position,
-                Vector3::new(0.0, 0.0, 0.0),
-                yaw.unwrap_or(self.yaw.load()),
-                pitch.unwrap_or(self.pitch.load()),
-                self.on_ground.load(Ordering::SeqCst),
-            ))
+            .broadcast_to_chunk(
+                chunk_pos,
+                &CEntityPositionSync::new(
+                    self.entity_id.into(),
+                    position,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    yaw.unwrap_or(self.yaw.load()),
+                    pitch.unwrap_or(self.pitch.load()),
+                    self.on_ground.load(Ordering::SeqCst),
+                ),
+            )
             .await;
     }
 
@@ -2313,8 +2351,12 @@ impl Entity {
             .collect();
 
         let world = self.world.load();
+        let chunk_pos = self.chunk_pos.load();
         world
-            .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
+            .broadcast_to_chunk(
+                chunk_pos,
+                &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+            )
             .await;
     }
 
@@ -2337,6 +2379,8 @@ impl Entity {
             .map(|p| VarInt(p.get_entity().entity_id))
             .collect();
         drop(passengers);
+
+        let chunk_pos = self.chunk_pos.load();
 
         if let Some(passenger) = removed_passenger {
             let vehicle_box = self.bounding_box.load();
@@ -2375,10 +2419,16 @@ impl Entity {
             if let Some(player) = passenger.get_player() {
                 player.client.enqueue_packet(&passengers_packet).await;
                 world
-                    .broadcast_packet_except(&[player.gameprofile.id], &passengers_packet)
+                    .broadcast_to_chunk_except(
+                        chunk_pos,
+                        &[player.gameprofile.id],
+                        &passengers_packet,
+                    )
                     .await;
             } else {
-                world.broadcast_packet_all(&passengers_packet).await;
+                world
+                    .broadcast_to_chunk(chunk_pos, &passengers_packet)
+                    .await;
             }
 
             // Calculate dismount offset (vanilla getPassengerDismountOffset)
@@ -2496,7 +2546,10 @@ impl Entity {
             // No passenger was removed, still need to broadcast the passenger list
             let world = self.world.load();
             world
-                .broadcast_packet_all(&CSetPassengers::new(VarInt(self.entity_id), &passenger_ids))
+                .broadcast_to_chunk(
+                    chunk_pos,
+                    &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+                )
                 .await;
         }
     }
