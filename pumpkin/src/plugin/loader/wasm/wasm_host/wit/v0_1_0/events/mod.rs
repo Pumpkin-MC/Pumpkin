@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
+use pumpkin_util::{GameMode, Hand, math::vector3::Vector3};
+use wasmtime::component::Resource;
+
 use crate::{
+    entity::player::Player,
     plugin::{
         BoxFuture, EventHandler, Payload,
         loader::wasm::wasm_host::{
             PluginInstance, WasmPlugin,
-            state::PluginHostState,
+            state::{PlayerResource, PluginHostState, TextComponentResource},
             wit::{self, v0_1_0::pumpkin},
         },
     },
@@ -13,6 +17,7 @@ use crate::{
 };
 
 pub mod player;
+pub mod server;
 
 impl pumpkin::plugin::event::Host for PluginHostState {}
 
@@ -33,6 +38,70 @@ pub trait ToFromV0_1_0WasmEvent {
     ) -> Self;
 }
 
+pub(super) const fn to_wasm_position(position: Vector3<f64>) -> pumpkin::plugin::common::Position {
+    (position.x, position.y, position.z)
+}
+
+pub(super) const fn from_wasm_position(
+    position: pumpkin::plugin::common::Position,
+) -> Vector3<f64> {
+    Vector3::new(position.0, position.1, position.2)
+}
+
+pub(super) const fn to_wasm_hand(hand: Hand) -> pumpkin::plugin::common::Hand {
+    match hand {
+        Hand::Left => pumpkin::plugin::common::Hand::Left,
+        Hand::Right => pumpkin::plugin::common::Hand::Right,
+    }
+}
+
+pub(super) const fn from_wasm_hand(hand: pumpkin::plugin::common::Hand) -> Hand {
+    match hand {
+        pumpkin::plugin::common::Hand::Left => Hand::Left,
+        pumpkin::plugin::common::Hand::Right => Hand::Right,
+    }
+}
+
+pub(super) const fn to_wasm_game_mode(game_mode: GameMode) -> pumpkin::plugin::common::GameMode {
+    match game_mode {
+        GameMode::Survival => pumpkin::plugin::common::GameMode::Survival,
+        GameMode::Creative => pumpkin::plugin::common::GameMode::Creative,
+        GameMode::Adventure => pumpkin::plugin::common::GameMode::Adventure,
+        GameMode::Spectator => pumpkin::plugin::common::GameMode::Spectator,
+    }
+}
+
+pub(super) const fn from_wasm_game_mode(game_mode: pumpkin::plugin::common::GameMode) -> GameMode {
+    match game_mode {
+        pumpkin::plugin::common::GameMode::Survival => GameMode::Survival,
+        pumpkin::plugin::common::GameMode::Creative => GameMode::Creative,
+        pumpkin::plugin::common::GameMode::Adventure => GameMode::Adventure,
+        pumpkin::plugin::common::GameMode::Spectator => GameMode::Spectator,
+    }
+}
+
+pub(super) fn consume_player(
+    state: &mut PluginHostState,
+    player: &Resource<pumpkin::plugin::player::Player>,
+) -> Arc<Player> {
+    state
+        .resource_table
+        .delete::<PlayerResource>(Resource::new_own(player.rep()))
+        .expect("invalid player resource handle")
+        .provider
+}
+
+pub(super) fn consume_text_component(
+    state: &mut PluginHostState,
+    text_component: &Resource<pumpkin::plugin::text::TextComponent>,
+) -> pumpkin_util::text::TextComponent {
+    state
+        .resource_table
+        .delete::<TextComponentResource>(Resource::new_own(text_component.rep()))
+        .expect("invalid text-component resource handle")
+        .provider
+}
+
 impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0EventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
@@ -42,7 +111,7 @@ impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0Eve
                 PluginInstance::V0_1_0(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
                     plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, event)
+                        .call_handle_event(&mut *store, self.handler_id, server, &event)
                         .await
                         .unwrap();
                 }
@@ -62,7 +131,7 @@ impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0Eve
                 PluginInstance::V0_1_0(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
                     let returned_event = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, wasm_event)
+                        .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
                         .await
                         .unwrap();
 

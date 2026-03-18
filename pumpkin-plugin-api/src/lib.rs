@@ -18,6 +18,7 @@ pub use wit::pumpkin::plugin::{
 
 pub mod logging;
 
+#[allow(clippy::too_many_arguments)]
 mod wit {
     wit_bindgen::generate!({
         skip: ["init-plugin"],
