@@ -15,6 +15,20 @@ use std::cmp::{max, min};
 
 mod categories;
 
+/// The outcome of a [`ItemStack::damage_item`] call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DamageResult {
+    /// No damage was applied (zero/negative amount, not damageable, unbreakable,
+    /// or Unbreaking negated every point).
+    Untouched,
+    /// Damage was applied and the item is still alive.
+    Damaged,
+    /// The item broke: one item was consumed from the stack (durability reset to 0),
+    /// or the stack is now empty if it had only one item. Callers should always
+    /// broadcast the break status — the client handles both cases correctly.
+    Broken,
+}
+
 #[derive(Clone)]
 pub struct ItemStack {
     pub item_count: u8,
@@ -167,12 +181,15 @@ impl ItemStack {
         repaired
     }
 
-    fn should_apply_durability_damage(&self, is_armor: bool) -> bool {
-        let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
+    /// Core logic: apply Unbreaking chance with precomputed armor category and level.
+    /// Extracted for use in damage_item where these values are hoisted outside the loop.
+    /// Private to prevent incorrect usage; only call through damage_item.
+    fn should_apply_durability_damage_with(&self, is_armor: bool, unbreaking_level: i32) -> bool {
         if unbreaking_level <= 0 {
             return true;
         }
 
+        // `#minecraft:enchantable/armor` uses the armor formula; all others use the tool formula.
         if is_armor {
             let chance = 0.6 + (0.4 / (unbreaking_level as f32 + 1.0));
             rand::random::<f32>() < chance
@@ -181,44 +198,54 @@ impl ItemStack {
         }
     }
 
-    pub fn damage_item_with_context(&mut self, amount: i32, is_armor: bool) -> bool {
+    /// Apply durability damage to this item and return the outcome.
+    /// Callers must check the return value to handle break broadcasts and item stack updates.
+    /// TODO: Restore #[must_use] once all callsites (esp. tool/mob block-hit/damage sites)
+    /// implement proper DamageResult::Broken handling instead of suppressing with let _ =.
+    /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
+    #[must_use]
+    pub fn damage_item(&mut self, amount: i32) -> DamageResult {
         if amount <= 0 || !self.is_damageable() || self.is_unbreakable() {
-            return false;
+            return DamageResult::Untouched;
         }
 
         let max_damage = self.get_max_damage().unwrap_or(0);
         if max_damage <= 0 {
-            return false;
+            return DamageResult::Untouched;
         }
 
+        // Hoist armor check and enchantment level outside loop to avoid repeated lookups.
+        let is_armor = self.is_armor();
+        let unbreaking_level = self.get_enchantment_level(&Enchantment::UNBREAKING);
         let mut applied = 0;
+        // TODO: Short-circuit once applied >= (max_damage - current_damage) to avoid
+        // iterating the full amount for high-damage hits on high-durability items.
         for _ in 0..amount {
-            if self.should_apply_durability_damage(is_armor) {
+            if self.should_apply_durability_damage_with(is_armor, unbreaking_level) {
                 applied += 1;
             }
         }
 
         if applied <= 0 {
-            return false;
+            return DamageResult::Untouched;
         }
 
         let new_damage = self.get_damage().saturating_add(applied);
         if new_damage >= max_damage {
+            // Vanilla behavior: breaking consumes one item from the stack and resets
+            // durability to 0. A single damage call never breaks more than one item,
+            // regardless of the damage amount. This matches vanilla item stack behavior.
             if self.item_count > 1 {
                 self.item_count = self.item_count.saturating_sub(1);
                 self.set_damage(0);
             } else {
                 *self = Self::EMPTY.clone();
             }
-            return true;
+            return DamageResult::Broken;
         }
 
         self.set_damage(new_damage);
-        true
-    }
-
-    pub fn damage_item(&mut self, amount: i32) -> bool {
-        self.damage_item_with_context(amount, false)
+        DamageResult::Damaged
     }
 
     #[must_use]
@@ -488,19 +515,19 @@ impl From<&RecipeResultStruct> for ItemStack {
 mod tests {
     use super::*;
     use pumpkin_data::data_component::DataComponent;
-    use pumpkin_data::data_component_impl::{DataComponentImpl, UnbreakableImpl};
+    use pumpkin_data::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
         ItemStack::new(1, &Item::IRON_SWORD)
     }
 
-    // ── damage_item_with_context ──────────────────────────────────────
+    // ── damage_item ───────────────────────────────────────────────
 
     #[test]
     fn damage_zero_amount_is_noop() {
         let mut stack = iron_sword();
-        assert!(!stack.damage_item_with_context(0, false));
+        assert_eq!(stack.damage_item(0), DamageResult::Untouched);
         assert_eq!(stack.get_damage(), 0);
     }
 
@@ -509,8 +536,9 @@ mod tests {
         let cases: &[i32] = &[-1, -5, -10, -100];
         for &amount in cases {
             let mut stack = iron_sword();
-            assert!(
-                !stack.damage_item_with_context(amount, false),
+            assert_eq!(
+                stack.damage_item(amount),
+                DamageResult::Untouched,
                 "expected no damage for amount={amount}"
             );
             assert_eq!(stack.get_damage(), 0, "damage mismatch for amount={amount}");
@@ -521,7 +549,7 @@ mod tests {
     fn damage_non_damageable_item_is_noop() {
         // AIR has no MaxDamage component.
         let mut stack = ItemStack::new(1, &Item::AIR);
-        assert!(!stack.damage_item_with_context(1, false));
+        assert_eq!(stack.damage_item(1), DamageResult::Untouched);
     }
 
     #[test]
@@ -532,8 +560,9 @@ mod tests {
             stack
                 .patch
                 .push((DataComponent::Unbreakable, Some(UnbreakableImpl.to_dyn())));
-            assert!(
-                !stack.damage_item_with_context(amount, false),
+            assert_eq!(
+                stack.damage_item(amount),
+                DamageResult::Untouched,
                 "expected no damage for unbreakable item, amount={amount}"
             );
             assert_eq!(
@@ -551,9 +580,10 @@ mod tests {
         let cases: &[(i32, i32)] = &[(1, 1), (5, 5), (10, 10), (100, 100), (249, 249)];
         for &(amount, expected) in cases {
             let mut stack = iron_sword();
-            assert!(
-                stack.damage_item_with_context(amount, false),
-                "expected damage_item_with_context to return true for amount={amount}"
+            assert_eq!(
+                stack.damage_item(amount),
+                DamageResult::Damaged,
+                "expected damage_item to return Damaged for amount={amount}"
             );
             assert_eq!(
                 stack.get_damage(),
@@ -569,8 +599,8 @@ mod tests {
         let cases: &[(i32, i32, i32)] = &[(100, 50, 150), (10, 20, 30), (1, 1, 2), (50, 100, 150)];
         for &(first, second, expected) in cases {
             let mut stack = iron_sword();
-            stack.damage_item_with_context(first, false);
-            stack.damage_item_with_context(second, false);
+            let _ = stack.damage_item(first);
+            let _ = stack.damage_item(second);
             assert_eq!(
                 stack.get_damage(),
                 expected,
@@ -585,8 +615,9 @@ mod tests {
         let cases: &[i32] = &[250, 260, 300, 1000];
         for &amount in cases {
             let mut stack = iron_sword();
-            assert!(
-                stack.damage_item_with_context(amount, false),
+            assert_eq!(
+                stack.damage_item(amount),
+                DamageResult::Broken,
                 "expected item to break for amount={amount}"
             );
             assert!(
@@ -599,7 +630,7 @@ mod tests {
     #[test]
     fn damage_breaks_single_item_to_empty() {
         let mut stack = iron_sword();
-        stack.damage_item_with_context(300, false);
+        let _ = stack.damage_item(300);
         assert!(stack.is_empty());
         assert_eq!(stack.item_count, 0);
     }
@@ -719,6 +750,179 @@ mod tests {
                 .patch
                 .iter()
                 .any(|(id, _)| *id == DataComponent::Damage)
+        );
+    }
+
+    // ── stacked item breaking ────────────────────────────────────────
+
+    #[test]
+    fn damage_stacked_item_breaks_one_and_resets_durability() {
+        // Two Iron Swords (max_damage 250) at damage 249 — one hit away from breaking.
+        // Without Unbreaking the damage roll is always applied, so this is deterministic.
+        let mut stack = ItemStack::new(2, &Item::IRON_SWORD);
+        stack.set_damage(249);
+
+        let result = stack.damage_item(1);
+
+        assert_eq!(
+            result,
+            DamageResult::Broken,
+            "stacked item at max damage should return Broken"
+        );
+        assert_eq!(stack.item_count, 1, "stack count should drop from 2 to 1");
+        assert_eq!(
+            stack.get_damage(),
+            0,
+            "remaining sword's durability should reset to 0 after breaking"
+        );
+        assert!(
+            !stack.is_empty(),
+            "one sword should still remain in the stack"
+        );
+    }
+
+    // ── weapon category predicates ───────────────────────────────────
+
+    /// 2-durability combat weapons (axes/pickaxes/shovels/hoes) must match their category predicate.
+    #[test]
+    fn weapon_categories_identify_2_cost_items() {
+        // Items that should have is_axe / is_pickaxe / is_shovel / is_hoe = true.
+        let axes: &[&Item] = &[
+            &Item::WOODEN_AXE,
+            &Item::STONE_AXE,
+            &Item::IRON_AXE,
+            &Item::GOLDEN_AXE,
+            &Item::DIAMOND_AXE,
+            &Item::NETHERITE_AXE,
+        ];
+        let pickaxes: &[&Item] = &[
+            &Item::WOODEN_PICKAXE,
+            &Item::STONE_PICKAXE,
+            &Item::IRON_PICKAXE,
+            &Item::GOLDEN_PICKAXE,
+            &Item::DIAMOND_PICKAXE,
+            &Item::NETHERITE_PICKAXE,
+        ];
+        let shovels: &[&Item] = &[
+            &Item::WOODEN_SHOVEL,
+            &Item::STONE_SHOVEL,
+            &Item::IRON_SHOVEL,
+            &Item::GOLDEN_SHOVEL,
+            &Item::DIAMOND_SHOVEL,
+            &Item::NETHERITE_SHOVEL,
+        ];
+        let hoes: &[&Item] = &[
+            &Item::WOODEN_HOE,
+            &Item::STONE_HOE,
+            &Item::IRON_HOE,
+            &Item::GOLDEN_HOE,
+            &Item::DIAMOND_HOE,
+            &Item::NETHERITE_HOE,
+        ];
+
+        for item in axes {
+            let stack = ItemStack::new(1, item);
+            assert!(stack.is_axe(), "{} should be an axe", item.registry_key);
+            assert!(
+                !stack.is_sword(),
+                "{} should not be a sword",
+                item.registry_key
+            );
+        }
+        for item in pickaxes {
+            let stack = ItemStack::new(1, item);
+            assert!(
+                stack.is_pickaxe(),
+                "{} should be a pickaxe",
+                item.registry_key
+            );
+        }
+        for item in shovels {
+            let stack = ItemStack::new(1, item);
+            assert!(
+                stack.is_shovel(),
+                "{} should be a shovel",
+                item.registry_key
+            );
+        }
+        for item in hoes {
+            let stack = ItemStack::new(1, item);
+            assert!(stack.is_hoe(), "{} should be a hoe", item.registry_key);
+        }
+
+        // Swords should cost 1, so they must NOT match any 2-cost predicate.
+        let swords: &[&Item] = &[
+            &Item::IRON_SWORD,
+            &Item::DIAMOND_SWORD,
+            &Item::NETHERITE_SWORD,
+        ];
+        for item in swords {
+            let stack = ItemStack::new(1, item);
+            assert!(stack.is_sword(), "{} should be a sword", item.registry_key);
+            assert!(
+                !stack.is_axe(),
+                "{} should not be an axe",
+                item.registry_key
+            );
+            assert!(
+                !stack.is_pickaxe(),
+                "{} should not be a pickaxe",
+                item.registry_key
+            );
+        }
+    }
+
+    // ── Unbreaking (statistical) ─────────────────────────────────────
+
+    /// Helper: iron sword with Unbreaking at `level`.
+    fn with_unbreaking(item: &'static Item, level: i32) -> ItemStack {
+        let mut s = ItemStack::new(1, item);
+        s.patch.push((
+            DataComponent::Enchantments,
+            Some(
+                EnchantmentsImpl {
+                    enchantment: std::borrow::Cow::Owned(vec![(&Enchantment::UNBREAKING, level)]),
+                }
+                .to_dyn(),
+            ),
+        ));
+        s
+    }
+
+    /// Unbreaking III tool: 25% apply probability. 4 000 trials, expect ~1 000 hits (window 865–1135).
+    /// ±5σ confidence window ensures regressions are caught; CI-safe and statistically meaningful.
+    /// Note: uses thread-local rand::random().
+    /// Could be made fully deterministic by refactoring should_apply_durability_damage_with to accept RNG parameter.
+    #[test]
+    fn unbreaking_iii_tool_applies_roughly_25_percent_of_hits() {
+        let mut stack = with_unbreaking(&Item::NETHERITE_PICKAXE, 3);
+        let mut applied: u32 = 0;
+        for _ in 0..4_000 {
+            if stack.damage_item(1) != DamageResult::Untouched {
+                applied += 1;
+            }
+        }
+        assert!(
+            (865..=1_135).contains(&applied),
+            "Unbreaking III tool: expected ~1 000 applications in 4 000 trials, got {applied}"
+        );
+    }
+
+    /// Unbreaking III armor: 70% apply probability. 500 trials, expect ~350 hits (window 300–400).
+    /// See tool test notes on thread-local RNG; refactor would allow full determinism via seeded RNG parameter.
+    #[test]
+    fn unbreaking_iii_armor_applies_roughly_70_percent_of_hits() {
+        let mut stack = with_unbreaking(&Item::DIAMOND_CHESTPLATE, 3);
+        let mut applied: u32 = 0;
+        for _ in 0..500 {
+            if stack.damage_item(1) != DamageResult::Untouched {
+                applied += 1;
+            }
+        }
+        // ~350 expected with 70% probability, ±5σ confidence (300–400 window, ~99.7% non-flaky).
+        assert!(
+            (300..=400).contains(&applied),
+            "Unbreaking III armor: expected ~350 applications in 500 trials, got {applied}"
         );
     }
 

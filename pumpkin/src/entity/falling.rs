@@ -81,9 +81,10 @@ impl EntityBase for FallingEntity {
 
             entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
 
-            entity.send_pos_rot().await;
-
-            entity.send_velocity().await;
+            if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+                entity.send_pos_rot().await;
+                entity.send_velocity().await;
+            }
         })
     }
 

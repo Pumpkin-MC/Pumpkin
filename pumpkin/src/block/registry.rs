@@ -17,6 +17,7 @@ use crate::block::blocks::composter::ComposterBlock;
 use crate::block::blocks::conduit::ConduitBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
+use crate::block::blocks::dripstone::DripstoneBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
 use crate::block::blocks::falling::FallingBlock;
@@ -263,6 +264,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(NetherSproutsBlock);
     manager.register(SporeBlossomBlock);
     manager.register(ConduitBlock);
+    manager.register(DripstoneBlock);
 
     manager.register(FallingBlock);
 

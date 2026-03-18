@@ -4,6 +4,8 @@ use quote::{format_ident, quote};
 use crate::remap::{MappingNode, ParsedMappings, Remapper};
 use crate::version::MinecraftVersion;
 
+/// Generates the `TokenStream` for per-version block-state remap tables and the
+/// `remap_block_state_for_version` function.
 pub fn build() -> TokenStream {
     let node_1_21 = MappingNode {
         version: MinecraftVersion::V_1_21,

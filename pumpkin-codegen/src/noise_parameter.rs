@@ -4,6 +4,7 @@ use proc_macro2::TokenStream;
 use pumpkin_util::DoublePerlinNoiseParametersCodec;
 use quote::{format_ident, quote};
 
+/// Generates the `TokenStream` for `DoublePerlinNoiseParameters` constants and its `id_to_parameters` lookup.
 pub fn build() -> TokenStream {
     let json: BTreeMap<String, DoublePerlinNoiseParametersCodec> =
         serde_json::from_str(&fs::read_to_string("../assets/noise_parameters.json").unwrap())

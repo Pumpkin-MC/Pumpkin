@@ -6034,6 +6034,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const COPPER_BARS: Item = Item {
@@ -6417,6 +6423,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const COPPER_HORSE_ARMOR: Item = Item {
@@ -6705,6 +6717,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const COPPER_SHOVEL: Item = Item {
@@ -6761,6 +6779,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const COPPER_SPEAR: Item = Item {
@@ -6795,6 +6819,12 @@ impl Item {
                             slot: AttributeModifierSlot::MainHand,
                         },
                     ]),
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -6856,6 +6886,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -9236,6 +9272,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const DIAMOND_BLOCK: Item = Item {
@@ -9465,6 +9507,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 1,
                     can_destroy_blocks_in_creative: true,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
                 },
             ),
         ],
@@ -9698,6 +9746,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const DIAMOND_SHOVEL: Item = Item {
@@ -9754,6 +9808,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const DIAMOND_SPEAR: Item = Item {
@@ -9788,6 +9848,12 @@ impl Item {
                             slot: AttributeModifierSlot::MainHand,
                         },
                     ]),
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -9849,6 +9915,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -12192,6 +12264,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const GOLDEN_BOOTS: Item = Item {
@@ -12437,6 +12515,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const GOLDEN_HORSE_ARMOR: Item = Item {
@@ -12649,6 +12733,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const GOLDEN_SHOVEL: Item = Item {
@@ -12705,6 +12795,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const GOLDEN_SPEAR: Item = Item {
@@ -12739,6 +12835,12 @@ impl Item {
                             slot: AttributeModifierSlot::MainHand,
                         },
                     ]),
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -12800,6 +12902,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -14314,6 +14422,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const IRON_BARS: Item = Item {
@@ -14621,6 +14735,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const IRON_HORSE_ARMOR: Item = Item {
@@ -14890,6 +15010,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const IRON_SHOVEL: Item = Item {
@@ -14946,6 +15072,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const IRON_SPEAR: Item = Item {
@@ -14980,6 +15112,12 @@ impl Item {
                             slot: AttributeModifierSlot::MainHand,
                         },
                     ]),
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -15041,6 +15179,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -17224,6 +17368,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -19495,6 +19645,12 @@ impl Item {
                 },
             ),
             (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
+            (
                 DamageResistant,
                 &DamageResistantImpl {
                     res_type: DamageResistantType::Fire,
@@ -19774,6 +19930,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 1,
                     can_destroy_blocks_in_creative: true,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
                 },
             ),
             (
@@ -20059,6 +20221,12 @@ impl Item {
                 },
             ),
             (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
+            (
                 DamageResistant,
                 &DamageResistantImpl {
                     res_type: DamageResistantType::Fire,
@@ -20146,6 +20314,12 @@ impl Item {
                 },
             ),
             (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
+            (
                 DamageResistant,
                 &DamageResistantImpl {
                     res_type: DamageResistantType::Fire,
@@ -20185,6 +20359,12 @@ impl Item {
                             slot: AttributeModifierSlot::MainHand,
                         },
                     ]),
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
             (
@@ -20252,6 +20432,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
             (
@@ -27702,6 +27888,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const STONE_BRICK_SLAB: Item = Item {
@@ -27853,6 +28045,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const STONE_PICKAXE: Item = Item {
@@ -27907,6 +28105,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 1,
                     can_destroy_blocks_in_creative: true,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
                 },
             ),
         ],
@@ -27984,6 +28188,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const STONE_SLAB: Item = Item {
@@ -28037,6 +28247,12 @@ impl Item {
                             slot: AttributeModifierSlot::MainHand,
                         },
                     ]),
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -28117,6 +28333,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -29274,6 +29496,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -32447,6 +32675,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const WOODEN_HOE: Item = Item {
@@ -32501,6 +32735,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 1,
                     can_destroy_blocks_in_creative: true,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
                 },
             ),
         ],
@@ -32559,6 +32799,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const WOODEN_SHOVEL: Item = Item {
@@ -32615,6 +32861,12 @@ impl Item {
                     can_destroy_blocks_in_creative: true,
                 },
             ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 2,
+                },
+            ),
         ],
     };
     pub const WOODEN_SPEAR: Item = Item {
@@ -32649,6 +32901,12 @@ impl Item {
                             slot: AttributeModifierSlot::MainHand,
                         },
                     ]),
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
@@ -32710,6 +32968,12 @@ impl Item {
                     default_mining_speed: 1.0,
                     damage_per_block: 2,
                     can_destroy_blocks_in_creative: false,
+                },
+            ),
+            (
+                Weapon,
+                &WeaponImpl {
+                    item_damage_per_attack: 1,
                 },
             ),
         ],
