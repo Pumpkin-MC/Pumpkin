@@ -1,8 +1,10 @@
+use crate::entity::projectile::ThrownItemEntityCondition::Owned;
 use crate::{
     entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, projectile::ThrownItemEntity},
     server::Server,
     world::World,
 };
+use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{entity::EntityStatus, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{codec::optional_int::OptionalInt, java::client::play::Metadata};
 use pumpkin_util::{
@@ -36,7 +38,7 @@ impl FireworkRocketEntity {
         Self {
             entity: ThrownItemEntity {
                 entity,
-                owner_id: None,
+                owner_id: AtomicCell::new(None),
                 collides_with_projectiles: false,
                 has_hit: AtomicBool::new(false),
             },
@@ -53,7 +55,7 @@ impl FireworkRocketEntity {
 
         // Set random initial velocity
         // Set on the inner entity after constructing ThrownItemEntity
-        let thrown = ThrownItemEntity::new(entity, shooter);
+        let thrown = ThrownItemEntity::new(entity, &Owned(shooter));
         thrown
             .entity
             .set_velocity(Vector3::new(
@@ -156,7 +158,15 @@ impl EntityBase for FireworkRocketEntity {
         None
     }
 
+    fn get_thrown_item_entity(&self) -> Option<&ThrownItemEntity> {
+        Some(&self.entity)
+    }
+
     fn as_nbt_storage(&self) -> &dyn crate::entity::NBTStorage {
         self
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.03
     }
 }

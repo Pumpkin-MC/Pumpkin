@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs, OnExplosionHitArgs,
     OnNeighborUpdateArgs, OnPlaceArgs,
 };
 use crate::entity::player::Player;
@@ -16,6 +16,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
@@ -40,7 +41,7 @@ fn get_sound(block: &Block, open: bool) -> Sound {
 pub async fn toggle_fence_gate(
     world: &Arc<World>,
     block_pos: &BlockPos,
-    player: &Player,
+    player: Option<&Player>,
 ) -> BlockStateId {
     let (block, state) = world.get_block_and_state_id(block_pos).await;
 
@@ -48,12 +49,13 @@ pub async fn toggle_fence_gate(
     if fence_gate_props.open {
         fence_gate_props.open = false;
     } else {
-        if fence_gate_props.facing
-            == player
-                .living_entity
-                .entity
-                .get_horizontal_facing()
-                .opposite()
+        if let Some(player) = player
+            && fence_gate_props.facing
+                == player
+                    .living_entity
+                    .entity
+                    .get_horizontal_facing()
+                    .opposite()
         {
             fence_gate_props.facing = player.living_entity.entity.get_horizontal_facing();
         }
@@ -61,11 +63,13 @@ pub async fn toggle_fence_gate(
     }
 
     world
-        .play_block_sound_expect(
+        .play_block_sound_raw_except_option(
             player,
-            get_sound(block, fence_gate_props.open),
+            get_sound(block, fence_gate_props.open) as u16,
             SoundCategory::Blocks,
             *block_pos,
+            1.0,
+            1.0,
         )
         .await;
 
@@ -108,7 +112,7 @@ impl BlockBehaviour for FenceGateBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            toggle_fence_gate(args.world, args.position, args.player).await;
+            toggle_fence_gate(args.world, args.position, Some(args.player)).await;
 
             BlockActionResult::Success
         })
@@ -146,6 +150,21 @@ impl BlockBehaviour for FenceGateBlock {
                     BlockFlags::NOTIFY_LISTENERS,
                 )
                 .await;
+        })
+    }
+
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        Box::pin(async move {
+            if args.explosion.triggers_blocks() {
+                let props = FenceGateProperties::from_state_id(args.state.id, args.block);
+                if !props.powered {
+                    toggle_fence_gate(args.world, args.position, None).await;
+                }
+            }
+            self.on_explosion_hit_base(args).await
         })
     }
 }

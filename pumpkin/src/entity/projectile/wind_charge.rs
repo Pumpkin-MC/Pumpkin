@@ -1,76 +1,109 @@
-use pumpkin_util::math::vector3::Vector3;
-use std::{
-    f64,
-    sync::{
-        Arc,
-        atomic::{AtomicU8, Ordering},
-    },
+use crate::entity::ArcEntityBaseFuture;
+use crate::entity::projectile::{
+    HurtingThrownItemEntity, ProjectileHit, ThrownItemEntityCondition,
 };
-
+use crate::world::WorldExplosionArgs;
+use crate::world::explosion::ExplosionInteraction;
+use crate::world::explosion_damage_calculator::ExplosionDamageCalculator;
 use crate::{
     entity::{
         Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity,
-        projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType,
+        projectile::ThrownItemEntity,
     },
     server::Server,
 };
+use pumpkin_data::Block;
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EntityStatus;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::Sound;
+use pumpkin_util::math::vector3::Vector3;
+use std::sync::LazyLock;
+use std::sync::atomic::Ordering::Relaxed;
+use std::{
+    f64,
+    sync::{Arc, atomic::AtomicU8},
+};
 
-const EXPLOSION_POWER: f32 = 1.2;
 const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
 
+static EXPLOSION_DAMAGE_CALCULATOR: LazyLock<ExplosionDamageCalculator> =
+    LazyLock::new(|| ExplosionDamageCalculator::Simple {
+        explodes_blocks: true,
+        damages_entities: false,
+        knockback_multiplier: None,
+        // Block tag: #blocks_wind_charge_explosions
+        immune_blocks: Some([Block::BARRIER, Block::BEDROCK].iter().collect()),
+    });
+
+/// An entity for a wind charge.
 pub struct WindChargeEntity {
-    deflect_cooldown: AtomicU8,
-    thrown_item_entity: ThrownItemEntity,
+    pub hurting: HurtingThrownItemEntity,
+    kind: WindChargeKind,
+}
+
+enum WindChargeKind {
+    /// Represents a wind charge spawned by a player or dispenser.
+    /// This wind charge also has a deflect cooldown counter.
+    Normal { deflect_cooldown: AtomicU8 },
+    /// Represents a wind charge spawned by a breeze.
+    Breeze,
 }
 
 impl WindChargeEntity {
+    fn new(entity: Entity, kind: WindChargeKind, condition: &ThrownItemEntityCondition) -> Self {
+        let entity = Self {
+            hurting: HurtingThrownItemEntity::new(entity, condition),
+            kind,
+        };
+        entity.hurting.acceleration_power.store(0.0);
+        entity
+    }
+
+    /// Creates a normal wind charge (spawned by a player or dispenser.)
     #[must_use]
-    pub const fn new(thrown_item_entity: ThrownItemEntity) -> Self {
-        Self {
-            deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
-            thrown_item_entity,
-        }
+    pub fn new_normal(entity: Entity, condition: &ThrownItemEntityCondition) -> Self {
+        Self::new(
+            entity,
+            WindChargeKind::Normal {
+                deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
+            },
+            condition,
+        )
     }
 
-    pub fn get_deflect_cooldown(&self) -> u8 {
-        self.deflect_cooldown.load(Ordering::Relaxed)
+    /// Creates a breeze wind charge (spawned by a breeze.)
+    #[must_use]
+    pub fn new_breeze(entity: Entity, condition: &ThrownItemEntityCondition) -> Self {
+        Self::new(entity, WindChargeKind::Breeze, condition)
     }
 
-    pub fn set_deflect_cooldown(&self, value: u8) {
-        self.deflect_cooldown.store(value, Ordering::Relaxed);
-    }
-
-    pub async fn create_explosion(&self, position: Vector3<f64>) {
+    pub async fn explode(&self, position: Vector3<f64>) {
         self.get_entity()
             .world
             .load()
-            .explode(position, EXPLOSION_POWER)
+            .explode(position, self.explosion_radius())
             .await;
     }
 
-    pub fn deflect(
-        &mut self,
-        deflection: &ProjectileDeflectionType,
-        deflector: Option<&dyn EntityBase>,
-        _from_attack: bool,
-    ) -> bool {
-        if self.deflect_cooldown.load(Ordering::Relaxed) > 0 {
-            return false;
-        }
+    pub const fn get_entity(&self) -> &Entity {
+        self.hurting.get_entity()
+    }
 
-        deflection.deflect(self, deflector);
-
-        /* TODO: Does this need to be implemented?
-        if self.get_entity().world().is_client() {
-            self.set_owner();
-            self.on_Deflected(from_attack);
+    const fn explosion_radius(&self) -> f32 {
+        match self.kind {
+            WindChargeKind::Normal { .. } => 1.2,
+            WindChargeKind::Breeze => 3.0,
         }
-         */
-        true
+    }
+
+    const fn explosion_sound(&self) -> Sound {
+        match self.kind {
+            WindChargeKind::Normal { .. } => Sound::EntityWindChargeWindBurst,
+            WindChargeKind::Breeze => Sound::EntityBreezeWindBurst,
+        }
     }
 }
-
-impl NBTStorage for WindChargeEntity {}
 
 impl EntityBase for WindChargeEntity {
     fn tick<'a>(
@@ -79,23 +112,127 @@ impl EntityBase for WindChargeEntity {
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            self.thrown_item_entity.process_tick(caller, server).await;
+            // If the wind charge is too high up, immediately explode it.
+            if self.get_entity().block_pos.load().0.y
+                >= self.get_entity().world.load().get_top_y() + 30
+            {
+                if let Some(entity) = self
+                    .get_entity()
+                    .world
+                    .load()
+                    .get_entity_by_id(self.get_entity().entity_id)
+                {
+                    entity.clone().explode(entity.get_entity().pos.load()).await;
+                }
+            } else {
+                self.hurting.thrown.process_tick(caller, server).await;
+            }
 
-            if self.get_deflect_cooldown() > 0 {
-                self.set_deflect_cooldown(self.get_deflect_cooldown() - 1);
+            if let WindChargeKind::Normal { deflect_cooldown } = &self.kind {
+                let loaded = deflect_cooldown.load(Relaxed);
+                if loaded > 0 {
+                    deflect_cooldown.store(loaded - 1, Relaxed);
+                }
             }
         })
     }
 
+    fn explode(self: Arc<Self>, position: Vector3<f64>) -> ArcEntityBaseFuture<()> {
+        Box::pin(async move {
+            self.get_entity()
+                .world
+                .load()
+                .explode_with(WorldExplosionArgs {
+                    source_entity: Some(self.clone()),
+                    damage_source: None,
+                    damage_calculator: Some(EXPLOSION_DAMAGE_CALCULATOR.clone()),
+                    power: self.explosion_radius(),
+                    pos: position,
+                    fire: false,
+                    explosion_interaction: ExplosionInteraction::Trigger,
+                    small_particle: Particle::GustEmitterSmall,
+                    large_particle: Particle::GustEmitterLarge,
+                    sound: self.explosion_sound(),
+                })
+                .await;
+            self.get_entity().remove().await;
+        })
+    }
+
     fn get_entity(&self) -> &Entity {
-        &self.thrown_item_entity.entity
+        self.hurting.get_entity()
     }
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
     }
 
+    fn get_thrown_item_entity(&self) -> Option<&ThrownItemEntity> {
+        Some(self.hurting.get_thrown_item_entity())
+    }
+
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
+
+    fn get_gravity(&self) -> f64 {
+        0.0
+    }
+
+    fn on_hit(self: Arc<Self>, hit: ProjectileHit) -> EntityBaseFuture<'static, ()> {
+        Box::pin(async move {
+            let world = self.get_entity().world.load();
+
+            // Always send particle status regardless of what was hit
+            world
+                .send_entity_status(
+                    self.get_entity(),
+                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
+                )
+                .await;
+
+            match hit {
+                ProjectileHit::Block { hit_pos, face, .. } => {
+                    let vec = face.to_offset().to_f64() * 0.25;
+                    self.clone().explode(hit_pos.to_f64() + vec).await;
+                    self.get_entity().remove().await;
+                }
+
+                ProjectileHit::Entity {
+                    entity: ref target, ..
+                } => {
+                    let mut owner = self
+                        .hurting
+                        .thrown
+                        .owner_id
+                        .load()
+                        .and_then(|i| world.get_player_by_id(i));
+
+                    if let Some(owner) = &mut owner {
+                        owner
+                            .living_entity
+                            .last_attacking_id
+                            .store(target.get_entity().entity_id, Relaxed);
+                    }
+
+                    target
+                        .damage_with_context(
+                            target.as_ref(),
+                            1.0,
+                            DamageType::WIND_CHARGE,
+                            None,
+                            owner.as_ref().map(|o| o.as_ref() as &dyn EntityBase),
+                            Some(target.as_ref()),
+                        )
+                        .await;
+
+                    let pos = self.get_entity().pos.load();
+                    self.clone().explode(pos).await;
+                    self.get_entity().remove().await;
+                }
+            }
+        })
+    }
 }
+
+impl NBTStorage for WindChargeEntity {}

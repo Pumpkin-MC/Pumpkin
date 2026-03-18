@@ -12,6 +12,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
 
+use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 use std::sync::{
     Arc,
     atomic::{
@@ -20,8 +21,6 @@ use std::sync::{
     },
 };
 use tokio::sync::Mutex;
-
-use super::{Entity, EntityBase, NBTStorage, living::LivingEntity, player::Player};
 
 pub struct ItemEntity {
     entity: Entity,
@@ -412,6 +411,7 @@ impl EntityBase for ItemEntity {
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             // Check if entity is fire_immune
+
             let is_fire_damage = damage_type == DamageType::IN_FIRE
                 || damage_type == DamageType::ON_FIRE
                 || damage_type == DamageType::LAVA;

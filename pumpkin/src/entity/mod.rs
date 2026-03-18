@@ -1,6 +1,9 @@
 use crate::entity::item::ItemEntity;
+use crate::entity::projectile::ThrownItemEntity;
+use crate::entity::projectile_deflection::ProjectileDeflectionType;
 use crate::net::ClientPlatform;
 use crate::world::World;
+use crate::world::explosion::Explosion;
 use crate::{
     server::Server,
     world::portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
@@ -102,8 +105,7 @@ pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
 }
 
 pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
-pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub type ArcEntityBaseFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 pub trait EntityBase: Send + Sync + NBTStorage {
     /// Called every tick for this entity.
@@ -153,7 +155,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) -> TeleportFuture
+    ) -> ArcEntityBaseFuture<()>
     where
         Self: 'static,
     {
@@ -251,7 +253,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async {})
     }
 
-    fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
+    fn on_hit(self: Arc<Self>, _hit: projectile::ProjectileHit) -> ArcEntityBaseFuture<()> {
         Box::pin(async {})
     }
 
@@ -277,6 +279,9 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     fn get_entity(&self) -> &Entity;
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+    fn get_thrown_item_entity(&self) -> Option<&ThrownItemEntity> {
+        None
+    }
 
     fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
         None
@@ -336,6 +341,57 @@ pub trait EntityBase: Send + Sync + NBTStorage {
 
     /// Returns itself as the nbt storage for saving and loading data.
     fn as_nbt_storage(&self) -> &dyn NBTStorage;
+
+    /// Gets the blast resistance of a block for this entity when the block should be exploded
+    /// with the provided base resistance.
+    fn block_blast_resistance_with(
+        &self,
+        _explosion: &Explosion,
+        _world: &World,
+        _block: &Block,
+        _block_state: &BlockState,
+        base_blast_resistance: f32,
+    ) -> f32 {
+        base_blast_resistance
+    }
+
+    /// Whether a block should be exploded with the provided base resistance when
+    /// exploded by this entity.
+    fn block_should_explode_with(
+        &self,
+        _explosion: &Explosion,
+        _world: &World,
+        _block: &Block,
+        _block_state: &BlockState,
+    ) -> bool {
+        true
+    }
+
+    fn explode(self: Arc<Self>, _position: Vector3<f64>) -> ArcEntityBaseFuture<()> {
+        Box::pin(async move {})
+    }
+
+    fn deflect<'a>(
+        &'a self,
+        deflection: &'a ProjectileDeflectionType,
+        deflector: Option<&'a (dyn EntityBase + 'a)>,
+        new_owner: i32,
+        from_attack: bool,
+    ) -> EntityBaseFuture<'a, bool>
+    where
+        Self: Sized,
+    {
+        Box::pin(async move {
+            self.get_thrown_item_entity().is_some_and(|entity| {
+                deflection.deflect(self, deflector);
+                entity.owner_id.store(Some(new_owner));
+                if let Some(hurting) = entity.get_hurting_thrown_item_entity() {
+                    hurting.on_deflection(from_attack);
+                }
+                true
+            })
+        })
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -2679,7 +2735,7 @@ impl EntityBase for Entity {
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) -> TeleportFuture {
+    ) -> ArcEntityBaseFuture<()> {
         // TODO: handle world change
         Box::pin(async move {
             self.get_entity()

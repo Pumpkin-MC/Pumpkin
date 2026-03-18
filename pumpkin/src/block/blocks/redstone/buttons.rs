@@ -8,12 +8,12 @@ use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::item::ItemStack;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
 type ButtonLikeProperties = pumpkin_data::block_properties::LeverLikeProperties;
 
-use crate::block::BlockFuture;
 use crate::block::CanPlaceAtArgs;
 use crate::block::EmitsRedstonePowerArgs;
 use crate::block::GetRedstonePowerArgs;
@@ -25,6 +25,7 @@ use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, NormalUseArgs};
+use crate::block::{BlockFuture, OnExplosionHitArgs};
 use crate::world::World;
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
@@ -151,6 +152,21 @@ impl BlockBehaviour for ButtonBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move { WallMountedBlock::get_state_for_neighbor_update(self, args).await })
+    }
+
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        Box::pin(async move {
+            if args.explosion.triggers_blocks() {
+                let props = ButtonLikeProperties::from_state_id(args.state.id, args.block);
+                if !props.powered {
+                    click_button(args.world, args.position).await;
+                }
+            }
+            self.on_explosion_hit_base(args).await
+        })
     }
 }
 

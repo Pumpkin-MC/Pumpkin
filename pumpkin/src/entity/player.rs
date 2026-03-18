@@ -82,7 +82,7 @@ use crate::block;
 use crate::block::blocks::bed::BedBlock;
 use crate::command::client_suggestions;
 use crate::command::dispatcher::CommandDispatcher;
-use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
+use crate::entity::{ArcEntityBaseFuture, EntityBaseFuture, NbtFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
@@ -3234,7 +3234,7 @@ impl EntityBase for Player {
         yaw: Option<f32>,
         pitch: Option<f32>,
         world: Arc<World>,
-    ) -> TeleportFuture {
+    ) -> ArcEntityBaseFuture<()> {
         Box::pin(async move {
             if Arc::ptr_eq(&world, &self.world()) {
                 // Same world

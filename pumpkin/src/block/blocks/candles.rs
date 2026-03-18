@@ -1,16 +1,8 @@
-use pumpkin_data::item::Item;
-use pumpkin_data::{
-    BlockDirection,
-    block_properties::{BlockProperties, CandleLikeProperties, EnumVariants, Integer1To4},
-    entity::EntityPose,
+use crate::block::{
+    BlockFuture, GetStateForNeighborUpdateArgs, OnExplosionHitArgs, OnScheduledTickArgs,
 };
-use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::tick::TickPriority;
-use pumpkin_world::world::BlockAccessor;
-use pumpkin_world::{BlockStateId, world::BlockFlags};
-
-use crate::block::{BlockFuture, GetStateForNeighborUpdateArgs, OnScheduledTickArgs};
+use crate::entity::player::Player;
+use crate::world::World;
 use crate::{
     block::{
         BlockIsReplacing,
@@ -22,9 +14,114 @@ use crate::{
     },
     entity::EntityBase,
 };
+use pumpkin_data::item::Item;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState,
+    block_properties::{BlockProperties, CandleLikeProperties, EnumVariants, Integer1To4},
+    entity::EntityPose,
+};
+use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::item::ItemStack;
+use pumpkin_world::tick::TickPriority;
+use pumpkin_world::world::BlockAccessor;
+use pumpkin_world::{BlockStateId, world::BlockFlags};
+use std::sync::Arc;
 
 #[pumpkin_block_from_tag("minecraft:candles")]
 pub struct CandleBlock;
+
+/// Particle offsets for each number of candles.
+const PARTICLE_OFFSETS: &[&[Vector3<f64>]] = &[
+    &[Vector3::new(8.0, 8.0, 8.0)],
+    &[Vector3::new(6.0, 7.0, 8.0), Vector3::new(10.0, 8.0, 7.0)],
+    &[
+        Vector3::new(8.0, 5.0, 10.0),
+        Vector3::new(6.0, 7.0, 8.0),
+        Vector3::new(9.0, 8.0, 7.0),
+    ],
+    &[
+        Vector3::new(7.0, 5.0, 9.0),
+        Vector3::new(10.0, 7.0, 9.0),
+        Vector3::new(6.0, 7.0, 6.0),
+        Vector3::new(9.0, 8.0, 6.0),
+    ],
+];
+
+/// A trait for a block that can be extinguished.
+pub trait ExtinguishableBlock {
+    /// The type of properties this block has.
+    type Properties: BlockProperties + Send;
+
+    /// Gets the 'lit' state of the block.
+    #[must_use]
+    fn lit(props: &Self::Properties) -> bool;
+
+    /// Sets the 'lit' state of the block to the provided value.
+    fn set_lit(props: &mut Self::Properties, to: bool);
+
+    /// Gives an offset of `n` spawned particles (where `n` is the length
+    /// of the returned array slice), scaled by a factor of 16 with the provided properties.
+    /// For example:
+    /// - to specify 1 single particle with an offset half a block up,
+    ///   you would specify `[Vector3::new(0.0, 8.0, 0.0)]`.
+    /// - to specify 2 particles, one at an unmodified position and one at the opposite corner,
+    ///   you would specify `[Vector3::new(0.0, 0.0, 0.0), Vector3::new(16.0, 16.0, 16.0)]`.
+    fn particle_offsets(props: &Self::Properties) -> &[Vector3<f64>];
+
+    /// Extinguishes this block.
+    #[must_use]
+    fn extinguish(
+        _player: Option<&Player>,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        block: &Block,
+        state: &BlockState,
+    ) -> impl Future<Output = ()> + Send {
+        async {
+            let mut props = Self::Properties::from_state_id(state.id, block);
+            Self::set_lit(&mut props, false);
+
+            world
+                .set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
+                .await;
+            world
+                .play_block_sound(Sound::BlockCandleExtinguish, SoundCategory::Blocks, *pos)
+                .await;
+            for offset in Self::particle_offsets(&props) {
+                world
+                    .spawn_particle(
+                        // 0.0625 = 1/16
+                        pos.to_lower_cornered_f64() + (*offset * 0.0625),
+                        Vector3::new(0.0, 0.0, 0.0),
+                        0.0,
+                        1,
+                        Particle::Smoke,
+                    )
+                    .await;
+            }
+        }
+    }
+
+    /// Provides the actual implementation for when this block
+    /// is hit by a wind charge.
+    #[must_use]
+    fn extinguish_on_explosion_hit(
+        args: &OnExplosionHitArgs<'_>,
+    ) -> impl Future<Output = ()> + Send {
+        async {
+            if args.explosion.triggers_blocks() {
+                let props = Self::Properties::from_state_id(args.state.id, args.block);
+                if Self::lit(&props) {
+                    Self::extinguish(None, args.world, args.position, args.block, args.state).await;
+                }
+            }
+        }
+    }
+}
 
 impl BlockBehaviour for CandleBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
@@ -151,6 +248,33 @@ impl BlockBehaviour for CandleBlock {
             }
             args.state_id
         })
+    }
+
+    fn on_explosion_hit<'a>(
+        &'a self,
+        args: OnExplosionHitArgs<'a>,
+    ) -> BlockFuture<'a, Option<Vec<ItemStack>>> {
+        Box::pin(async move {
+            Self::extinguish_on_explosion_hit(&args).await;
+
+            self.on_explosion_hit_base(args).await
+        })
+    }
+}
+
+impl ExtinguishableBlock for CandleBlock {
+    type Properties = CandleLikeProperties;
+
+    fn lit(props: &Self::Properties) -> bool {
+        props.lit
+    }
+
+    fn set_lit(props: &mut Self::Properties, to: bool) {
+        props.lit = to;
+    }
+
+    fn particle_offsets(props: &Self::Properties) -> &[Vector3<f64>] {
+        PARTICLE_OFFSETS[props.candles as usize]
     }
 }
 
