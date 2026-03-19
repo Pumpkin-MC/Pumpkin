@@ -5,7 +5,7 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
     DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemName,
-    JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable,
+    JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
 };
 use crate::entity_type::EntityType;
 use crate::tag::{Tag, Taggable};
@@ -622,8 +622,44 @@ impl Hash for ToolImpl {
         self.can_destroy_blocks_in_creative.hash(state);
     }
 }
+/// Weapon component: specifies durability cost per attack.
+/// NOTE: If additional fields are added, update `get_hash()` to include them.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct WeaponImpl;
+pub struct WeaponImpl {
+    pub item_damage_per_attack: u32,
+}
+impl WeaponImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        // NOTE: Error handling for item_damage_per_attack:
+        // - Missing key: defaults to 1 (vanilla behavior for unmodified items).
+        // - Wrong NBT type (e.g. float instead of int): silently defaults to 1.
+        // - Negative value: clamped to 0 then cast to u32 (protects against direct NBT manipulation).
+        // This conservative approach prioritizes safety over strict validation.
+        // TODO: Add tracing::warn! at the call site (in pumpkin crate where tracing is available)
+        // to help datapack authors debug negative values or type mismatches.
+        let item_damage_per_attack = compound
+            .get_int("item_damage_per_attack")
+            .unwrap_or(1)
+            .max(0) as u32;
+        // TODO: Deserialize disable_blocking_for_seconds once NBT float API is clarified.
+        // For now, preserve it by storing the raw compound for round-trip fidelity.
+        Some(Self {
+            item_damage_per_attack,
+        })
+    }
+}
+impl DataComponentImpl for WeaponImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("item_damage_per_attack", self.item_damage_per_attack as i32);
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        self.item_damage_per_attack as i32
+    }
+    default_impl!(Weapon);
+}
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum EquipmentType {

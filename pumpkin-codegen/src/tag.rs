@@ -11,15 +11,18 @@ use crate::item::Item;
 use crate::{biome::Biome, version::MinecraftVersion};
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 
-// --- EnumCreator with from_string support ---
+/// Builder that generates an enum with `from_string` and `identifier_string` methods.
 pub struct EnumCreator {
+    /// Name of the enum to generate (converted to PascalCase).
     pub name: String,
+    /// Set of variant names (converted to PascalCase for the enum variants).
     pub values: BTreeSet<String>,
 }
 
 impl ToTokens for EnumCreator {
+    /// Emits the enum definition and its `from_string`/`identifier_string` impl block.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = format_ident!("{}", self.name.to_pascal_case());
 
@@ -62,8 +65,11 @@ impl ToTokens for EnumCreator {
     }
 }
 
+/// The newest protocol version whose tag data is served as the latest-version fallback.
 const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
 
+/// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
+/// modules, and the `Taggable` trait with its lookup helpers.
 pub(crate) fn build() -> TokenStream {
     // --- Rerun Triggers ---
     println!("cargo:rerun-if-changed=../assets/blocks.json");

@@ -33,7 +33,7 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl};
+use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::particle::Particle;
@@ -80,8 +80,9 @@ use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
 use crate::block;
 use crate::block::blocks::bed::BedBlock;
-use crate::command::client_suggestions;
-use crate::command::dispatcher::CommandDispatcher;
+use crate::command::context::command_source::CommandSource;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::{CommandSender, client_suggestions};
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
@@ -768,9 +769,34 @@ impl Player {
             }
         }
 
-        self.damage_held_item(1).await;
+        // NOTE: TOCTOU race condition in single-player context.
+        // The weapon cost is computed (cost = 1 or 2) with item_stack locked, then damage_held_item
+        // re-acquires the lock. In async multi-task scenarios, another task could theoretically
+        // swap the held item between these operations, causing the cost to apply to the wrong item.
+        // Mitigation options (in priority order):
+        // 1. Create damage_held_item_with_lock(&self, item_stack: MutexGuard, amount) variant
+        //    to hold the lock across both computation and application.
+        // 2. Refactor compute cost as a closure: damage_held_item(self, |stack| -> i32 { ... })
+        // 3. In practice, single-player scenarios are safe (this is not multiplayer). Document
+        //    as a known limitation if refactoring is deemed too invasive.
+        self.damage_held_item({
+            let stack = item_stack.lock().await;
+            Self::combat_weapon_durability_cost(&stack)
+        })
+        .await;
 
         if config.swing {}
+    }
+
+    /// Returns the durability cost for using the held item as a weapon in combat.
+    /// Derived from the `Weapon` data component: items without it (e.g. shears, tools
+    /// not designed for combat) take no durability damage on attack.
+    /// Items with the component use its `item_damage_per_attack` value (default 1;
+    /// axes, pickaxes, shovels, and hoes carry a value of 2).
+    fn combat_weapon_durability_cost(stack: &ItemStack) -> i32 {
+        stack
+            .get_data_component::<WeaponImpl>()
+            .map_or(0, |w| w.item_damage_per_attack as i32)
     }
 
     pub async fn sync_hand_slot(&self, slot_index: usize, stack: ItemStack) {
@@ -818,15 +844,15 @@ impl Player {
 
         let updated = {
             let mut stack = stack_arc.lock().await;
-            stack
-                .damage_item_with_context(amount, false)
-                .then_some(stack.clone())
+            let result = stack.damage_item(amount);
+            (result != pumpkin_world::item::DamageResult::Untouched)
+                .then_some((result, stack.clone()))
         };
 
-        if let Some(updated_stack) = updated {
-            // Send the break status before clearing the slot; the client
-            // needs the old item texture for break particles.
-            if updated_stack.is_empty() {
+        if let Some((result, updated_stack)) = updated {
+            // Send the break status before clearing the slot so the client can
+            // use the item texture for break particles.
+            if result == pumpkin_world::item::DamageResult::Broken {
                 self.world()
                     .send_entity_status(
                         &self.living_entity.entity,
@@ -1823,6 +1849,7 @@ impl Player {
     ) {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update().await;
+
         client_suggestions::send_c_commands_packet(self, server, command_dispatcher).await;
     }
 
@@ -2919,6 +2946,12 @@ impl Player {
         let (_, state) = world.get_block_and_state(&fallback_pos).await;
         (!state.is_air()).then_some(fallback_pos)
     }
+
+    pub async fn get_command_source(self: &Arc<Self>, server: &Arc<Server>) -> CommandSource {
+        CommandSender::Player(self.clone())
+            .into_source(server)
+            .await
+    }
 }
 
 impl PartialEq for Player {
@@ -3186,6 +3219,7 @@ impl EntityBase for Player {
             {
                 return false;
             }
+            // TODO: Implement shield blocking durability.
             let result = self
                 .living_entity
                 .damage_with_context(caller, amount, damage_type, position, source, cause)

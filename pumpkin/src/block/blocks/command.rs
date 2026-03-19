@@ -1,5 +1,16 @@
 use std::sync::{Arc, atomic::Ordering};
 
+use super::redstone::block_receives_redstone_power;
+use crate::command::CommandSender;
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs,
+        OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+        registry::BlockActionResult,
+    },
+    server::Server,
+    world::World,
+};
 use pumpkin_data::{
     Block, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -11,18 +22,6 @@ use pumpkin_world::{
     tick::TickPriority,
 };
 use tracing::warn;
-
-use crate::{
-    block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs,
-        OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
-        registry::BlockActionResult,
-    },
-    server::Server,
-    world::World,
-};
-
-use super::redstone::block_receives_redstone_power;
 
 pub struct CommandBlock;
 
@@ -137,15 +136,15 @@ impl CommandBlock {
         if command.is_empty() {
             command_entity.success_count.store(0, Ordering::Release);
         } else {
+            let source = CommandSender::CommandBlock(command_entity, world.clone())
+                .into_source(server)
+                .await;
+
             server
                 .command_dispatcher
                 .read()
                 .await
-                .handle_command(
-                    &crate::command::CommandSender::CommandBlock(command_entity, world),
-                    server,
-                    command,
-                )
+                .handle_command(&source, command)
                 .await;
         }
     }

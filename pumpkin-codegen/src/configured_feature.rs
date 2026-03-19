@@ -8,6 +8,7 @@ use crate::placed_feature::{
     value_to_height_provider, value_to_int_provider,
 };
 
+/// Reads `configured_features.json` and emits a `build_configured_features()` function `TokenStream`.
 pub fn build() -> TokenStream {
     let json_content = fs::read_to_string("../assets/configured_features.json")
         .expect("Failed to read configured_features.json");
@@ -141,6 +142,10 @@ pub fn build() -> TokenStream {
     }
 }
 
+/// Converts a single configured-feature JSON value into its `ConfiguredFeature` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object for the feature, expected to contain `"type"` and `"config"` fields.
 pub fn value_to_configured_feature(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     let config = &v["config"];
@@ -482,6 +487,9 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 )
             }
         }
+        "minecraft:glowstone_blob" => {
+            quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) }
+        }
 
         // All TODO/empty features
         "minecraft:fossil" => {
@@ -501,9 +509,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:ice_spike" => {
             quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
-        }
-        "minecraft:glowstone_blob" => {
-            quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) }
         }
         "minecraft:freeze_top_layer" => {
             quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) }
@@ -608,6 +613,13 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a block-state-provider JSON object into its `BlockStateProvider` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON value for the provider, expected to contain a `"type"` field.
+///
+/// # Returns
+/// A `TokenStream` for the appropriate `BlockStateProvider` variant; defaults to `BlockStateProvider::Simple` with air if the type is unrecognised.
 fn value_to_block_state_provider(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -720,6 +732,10 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a noise-provider JSON object into a `NoiseBlockStateProviderBase` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object containing `"seed"`, `"noise"`, and `"scale"` fields.
 fn value_to_noise_base(v: &Value) -> TokenStream {
     let seed = v["seed"].as_i64().unwrap_or(0);
     let noise = value_to_dpnp(&v["noise"]);
@@ -729,6 +745,10 @@ fn value_to_noise_base(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a double-perlin-noise parameters JSON object into a `DoublePerlinNoiseParametersCodec` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object containing `"firstOctave"` and `"amplitudes"` fields.
 fn value_to_dpnp(v: &Value) -> TokenStream {
     let first_octave = v["firstOctave"].as_i64().unwrap_or(-7) as i32;
     let amplitudes: Vec<f64> = v["amplitudes"]
@@ -743,6 +763,13 @@ fn value_to_dpnp(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a rule-test JSON object into its `RuleTest` enum variant token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object for the rule test, expected to contain a `"predicate_type"` field.
+///
+/// # Returns
+/// A `TokenStream` for the appropriate `RuleTest` variant; emits a `compile_error!` for unrecognised types.
 fn value_to_rule_test(v: &Value) -> TokenStream {
     let type_str = v["predicate_type"].as_str().unwrap_or("");
     match type_str {
@@ -776,6 +803,13 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a block-list JSON value (string or array) into a `BlockWrapper` token stream.
+///
+/// # Arguments
+/// – `v` – a JSON string (single block) or array of strings (multiple blocks).
+///
+/// # Returns
+/// `BlockWrapper::Single` for a string value or `BlockWrapper::Multi` for an array; defaults to `BlockWrapper::Single("")` for other types.
 fn value_to_block_wrapper(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => quote! { BlockWrapper::Single(#s.to_string()) },
@@ -790,6 +824,10 @@ fn value_to_block_wrapper(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a tree-feature config JSON object into a `TreeFeature` token stream.
+///
+/// # Arguments
+/// – `config` – the `"config"` sub-object of a `minecraft:tree` configured feature JSON entry.
 fn value_to_tree_feature(config: &Value) -> TokenStream {
     let dirt = value_to_block_state_provider(&config["dirt_provider"]);
     let trunk = value_to_block_state_provider(&config["trunk_provider"]);
@@ -818,6 +856,10 @@ fn value_to_tree_feature(config: &Value) -> TokenStream {
     }
 }
 
+/// Converts a trunk-placer JSON object into a `TrunkPlacer` token stream.
+///
+/// # Arguments
+/// – `v` – the `"trunk_placer"` sub-object from a tree config, containing `"type"`, `"base_height"`, `"height_rand_a"`, and `"height_rand_b"` fields.
 fn value_to_trunk_placer(v: &Value) -> TokenStream {
     let base = v["base_height"].as_u64().unwrap_or(5) as u8;
     let rand_a = v["height_rand_a"].as_u64().unwrap_or(0) as u8;
@@ -860,6 +902,10 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a foliage-placer JSON object into a `FoliagePlacer` token stream.
+///
+/// # Arguments
+/// – `v` – the `"foliage_placer"` sub-object from a tree config, containing `"type"`, `"radius"`, and `"offset"` fields.
 fn value_to_foliage_placer(v: &Value) -> TokenStream {
     let radius = value_to_int_provider(&v["radius"]);
     let offset = value_to_int_provider(&v["offset"]);
@@ -935,6 +981,10 @@ fn value_to_foliage_placer(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a feature-size JSON object into a `FeatureSize` token stream.
+///
+/// # Arguments
+/// – `v` – the `"minimum_size"` sub-object from a tree config, containing a `"type"` field and size parameters.
 fn value_to_feature_size(v: &Value) -> TokenStream {
     let min_clipped = if v["min_clipped_height"].is_number() {
         let val = v["min_clipped_height"].as_u64().unwrap_or(0) as u8;
@@ -987,6 +1037,13 @@ fn value_to_feature_size(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a tree-decorator JSON object into its `TreeDecorator` enum variant token stream.
+///
+/// # Arguments
+/// – `v` – a JSON object for one decorator entry, expected to contain a `"type"` field.
+///
+/// # Returns
+/// A `TokenStream` for the appropriate `TreeDecorator` variant; emits a `compile_error!` for unrecognised types.
 fn value_to_tree_decorator(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -1049,6 +1106,10 @@ fn value_to_tree_decorator(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts an inline placed-feature JSON object into a `PlacedFeature` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object containing `"feature"` and `"placement"` fields.
 fn value_to_inline_placed_feature(v: &Value) -> TokenStream {
     let feature = value_to_feature_ref(&v["feature"]);
     let placement_arr = v["placement"]
@@ -1067,6 +1128,13 @@ fn value_to_inline_placed_feature(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a placed-feature reference JSON value into a `PlacedFeatureWrapper` token stream.
+///
+/// # Arguments
+/// – `v` – a JSON string (named reference) or object (inline placed feature).
+///
+/// # Returns
+/// `PlacedFeatureWrapper::Named` for a string value or `PlacedFeatureWrapper::Direct` for an inline object; defaults to `PlacedFeatureWrapper::Named("")` for other types.
 fn value_to_placed_feature_wrapper(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
@@ -1082,6 +1150,13 @@ fn value_to_placed_feature_wrapper(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a feature reference JSON value into a `Feature` enum token stream.
+///
+/// # Arguments
+/// – `v` – a JSON string (named reference) or object (inline configured feature).
+///
+/// # Returns
+/// `Feature::Named` for a string value or `Feature::Inlined` for an object; defaults to `Feature::Named("")` for other types.
 fn value_to_feature_ref(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
@@ -1097,6 +1172,13 @@ fn value_to_feature_ref(v: &Value) -> TokenStream {
 }
 
 // Placement modifier in context of configured_features (same as placed_feature but re-imported)
+/// Converts a placement-modifier JSON object into its `PlacementModifier` token stream within the configured-feature context.
+///
+/// # Arguments
+/// – `v` – a JSON object for one modifier entry, expected to contain a `"type"` field.
+///
+/// # Returns
+/// A `TokenStream` for the appropriate `PlacementModifier` variant; defaults to `PlacementModifier::Biome` for unrecognised types.
 fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
