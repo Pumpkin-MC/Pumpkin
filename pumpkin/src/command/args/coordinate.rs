@@ -37,34 +37,39 @@ impl<const IS_Y: bool> MaybeRelativeCoordinate<IS_Y> {
 #[derive(Debug)]
 pub enum MaybeRelativeBlockCoordinate<const IS_Y: bool> {
     Absolute(i32),
-    Relative(i32),
+    Relative(f64),
+}
+
+#[derive(Debug)]
+pub enum ParseMaybeRelativeBlockCoordinateError {
+    InvalidAbsolute,
+    InvalidRelative,
 }
 
 impl<const IS_Y: bool> TryFrom<&str> for MaybeRelativeBlockCoordinate<IS_Y> {
-    type Error = <i32 as FromStr>::Err;
+    type Error = ParseMaybeRelativeBlockCoordinateError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         if let Some(s) = s.strip_prefix('~') {
-            let offset = if s.is_empty() { 0 } else { s.parse()? };
+            let offset = if s.is_empty() {
+                0.0
+            } else {
+                s.parse().map_err(|_| Self::Error::InvalidRelative)?
+            };
             Ok(Self::Relative(offset))
         } else {
-            Ok(Self::Absolute(s.parse()?))
+            Ok(Self::Absolute(
+                s.parse().map_err(|_| Self::Error::InvalidAbsolute)?,
+            ))
         }
     }
 }
 
 impl<const IS_Y: bool> MaybeRelativeBlockCoordinate<IS_Y> {
     pub fn into_absolute(self, origin: Option<f64>) -> Option<i32> {
-        let abs = match self {
+        Some(match self {
             Self::Absolute(v) => v,
-            Self::Relative(offset) => origin?.floor() as i32 + offset,
-        };
-
-        // TODO
-        // if IS_Y && (abs < WORLD_LOWEST_Y.into() || abs >= WORLD_MAX_Y.into()) {
-        //     return None;
-        // }
-
-        Some(abs)
+            Self::Relative(offset) => (origin? + offset).floor() as i32,
+        })
     }
 }
