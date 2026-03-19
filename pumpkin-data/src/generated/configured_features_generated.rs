@@ -4809,13 +4809,23 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     map.insert(
         "iceberg_blue".to_string(),
         ConfiguredFeature::Iceberg(
-            crate::generation::feature::features::iceberg::IcebergFeature {},
+            crate::generation::feature::features::iceberg::IcebergFeature {
+                main_block: BlockStateCodec {
+                    name: &pumpkin_data::Block::BLUE_ICE,
+                    properties: None,
+                },
+            },
         ),
     );
     map.insert(
         "iceberg_packed".to_string(),
         ConfiguredFeature::Iceberg(
-            crate::generation::feature::features::iceberg::IcebergFeature {},
+            crate::generation::feature::features::iceberg::IcebergFeature {
+                main_block: BlockStateCodec {
+                    name: &pumpkin_data::Block::PACKED_ICE,
+                    properties: None,
+                },
+            },
         ),
     );
     map.insert(
