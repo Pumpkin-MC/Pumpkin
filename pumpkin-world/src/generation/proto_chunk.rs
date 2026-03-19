@@ -61,6 +61,12 @@ use crate::{
 };
 use pumpkin_nbt::compound::NbtCompound;
 
+enum ActiveSupplier {
+    Overworld(MultiNoiseBiomeSupplier),
+    Nether(MultiNoiseBiomeSupplier),
+    End(TheEndBiomeSupplier),
+}
+
 pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk;
     fn get_center_chunk(&self) -> &ProtoChunk;
@@ -659,15 +665,19 @@ impl ProtoChunk {
         dimension: Dimension,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
-        let overworld_supplier = MultiNoiseBiomeSupplier::OVERWORLD;
-        let nether_supplier = MultiNoiseBiomeSupplier::NETHER;
-        let end_supplier = TheEndBiomeSupplier;
-        let base_supplier: &dyn BiomeSupplier = if dimension == Dimension::THE_END {
-            &end_supplier
+        // Instantiate ONLY the supplier we actually need
+        let active_supplier = if dimension == Dimension::THE_END {
+            ActiveSupplier::End(TheEndBiomeSupplier)
         } else if dimension == Dimension::THE_NETHER {
-            &nether_supplier
+            ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
         } else {
-            &overworld_supplier
+            ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
+        };
+        // Extract the safe trait object reference
+        let base_supplier: &dyn BiomeSupplier = match &active_supplier {
+            ActiveSupplier::End(s) => s,
+            ActiveSupplier::Nether(s) => s,
+            ActiveSupplier::Overworld(s) => s,
         };
         let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
         let min_y = self.bottom_y();
@@ -1191,19 +1201,20 @@ impl ProtoChunk {
         let seed = random_config.seed as i64;
 
         // 1. Initialize mathematical biome tools (No DAG requirements!)
-        let overworld_supplier = MultiNoiseBiomeSupplier::OVERWORLD;
-        let nether_supplier = MultiNoiseBiomeSupplier::NETHER;
-        let end_supplier = TheEndBiomeSupplier;
-
-        let base_supplier: &dyn BiomeSupplier = if *dimension == Dimension::THE_END {
-            &end_supplier
+        let active_supplier = if *dimension == Dimension::THE_END {
+            ActiveSupplier::End(TheEndBiomeSupplier)
         } else if *dimension == Dimension::THE_NETHER {
-            &nether_supplier
+            ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
         } else {
-            &overworld_supplier
+            ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
+        };
+
+        let base_supplier: &dyn BiomeSupplier = match &active_supplier {
+            ActiveSupplier::End(s) => s,
+            ActiveSupplier::Nether(s) => s,
+            ActiveSupplier::Overworld(s) => s,
         };
         let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
-
         // Use an empty offset sampler since we are querying arbitrary world coordinates
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
         let mut multi_noise_sampler =
