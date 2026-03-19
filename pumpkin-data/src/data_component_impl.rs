@@ -307,12 +307,12 @@ fn put_idor(nbt: &mut NbtCompound, key: &str, val: &IdOr<SoundEvent>) {
 
 fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<SoundEvent> {
     if let Some(sound) = nbt.get_string(key) {
+        let sound = sound.strip_prefix("minecraft:").unwrap_or(sound);
         IdOr::Id(Sound::from_name(sound).unwrap_or(default))
     } else if let Some(sound_compound) = nbt.get_compound(key) {
-        let mut sound_name = sound_compound
+        let sound_name = sound_compound
             .get_string("sound_id")
             .expect("SoundEvent compound must have a 'sound_id' field");
-        sound_name = sound_name.strip_prefix("minecraft:").unwrap_or(sound_name);
         let range = sound_compound.get_float("range");
         IdOr::Value(SoundEvent {
             sound_name: sound_name.to_string(),

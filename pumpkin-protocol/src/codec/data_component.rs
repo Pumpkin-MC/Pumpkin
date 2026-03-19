@@ -445,7 +445,7 @@ impl DataComponentCodec<Self> for EquippableImpl {
         let equip_sound = proto_to_data_sound(
             &seq.next_element::<crate::IdOr<crate::SoundEvent>>()?
                 .ok_or(de::Error::custom(
-                    "No EquippableImpl consume_seconds IdOr<SoundEvent>!",
+                    "No EquippableImpl equip_sound IdOr<SoundEvent>!",
                 ))?,
         );
         let asset_id =
