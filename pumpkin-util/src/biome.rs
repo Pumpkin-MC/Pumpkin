@@ -101,6 +101,12 @@ impl Weather {
         }
     }
 
+    /// Returns the raw base temperature of the biome, without any height or modifier adjustment.
+    #[must_use]
+    pub const fn base_temperature(&self) -> f32 {
+        self.temperature
+    }
+
     /// Computes the effective temperature at a given position.
     ///
     /// # Parameters
