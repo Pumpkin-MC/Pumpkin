@@ -14,6 +14,7 @@ pub mod portal;
 pub mod time;
 
 use crate::block::RandomTickArgs;
+use crate::world::chunker::is_within_view_distance;
 use crate::world::{chunker::get_view_distance, loot::LootContextParameters};
 use crate::{
     block::BlockEvent, entity::experience_orb::ExperienceOrbEntity, entity::item::ItemEntity,
@@ -611,18 +612,15 @@ impl World {
         let seed = rand::rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
-        // Vanilla audible distance: max(volume, 1.0) * 16 blocks (converted to chunks)
-        let audible_chunks = (f64::from(volume.max(1.0)) * 16.0 / 16.0).ceil() as i32;
+        // Calculate the number of chunks the sound can be heard from based on its volume.
+        let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
         let players = self.players.load();
         let recipients = players.iter().filter(|p| {
             let center = p.living_entity.entity.chunk_pos.load();
             // If the sound reaches their chunk, send it!
-            (chunk_pos.x - center.x)
-                .abs()
-                .max((chunk_pos.y - center.y).abs())
-                <= audible_chunks
+            is_within_view_distance(chunk_pos, center, audible_chunks)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -652,10 +650,7 @@ impl World {
             }
 
             let center = p.living_entity.entity.chunk_pos.load();
-            (chunk_pos.x - center.x)
-                .abs()
-                .max((chunk_pos.y - center.y).abs())
-                <= audible_chunks
+            is_within_view_distance(chunk_pos, center, audible_chunks)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -780,7 +775,6 @@ impl World {
                 )
                 .await;
             } else {
-                // CHANGE TO broadcast_to_chunk
                 self.broadcast_to_chunk(chunk_pos, &CMultiBlockUpdate::new(&updates))
                     .await;
             }
@@ -3680,10 +3674,7 @@ impl World {
             let view_distance = get_view_distance(p).get() as i32;
 
             // Chebyshev distance (Minecraft's chunk loading shape)
-            (chunk_pos.x - center.x)
-                .abs()
-                .max((chunk_pos.y - center.y).abs())
-                <= view_distance
+            is_within_view_distance(chunk_pos, center, view_distance)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -3700,16 +3691,13 @@ impl World {
         let players = self.players.load();
 
         let recipients = players.iter().filter(|p| {
-            if except.contains(&p.gameprofile.id) {
+            if except.contains(&p.living_entity.entity.entity_uuid) {
                 return false;
             }
             let center = p.living_entity.entity.chunk_pos.load();
             let view_distance = get_view_distance(p).get() as i32;
 
-            (chunk_pos.x - center.x)
-                .abs()
-                .max((chunk_pos.y - center.y).abs())
-                <= view_distance
+            is_within_view_distance(chunk_pos, center, view_distance)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);

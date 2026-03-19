@@ -2868,7 +2868,7 @@ impl Player {
             world.broadcast_to_chunk(chunk_pos, &packet).await;
         } else {
             world
-                .broadcast_to_chunk_except(chunk_pos, &[self.gameprofile.id], &packet)
+                .broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet)
                 .await;
         }
     }
@@ -3261,7 +3261,7 @@ impl EntityBase for Player {
                             .load()
                             .broadcast_to_chunk_except(
                                 chunk_pos,
-                                &[self.gameprofile.id],
+                                &[self.living_entity.entity.entity_uuid],
                                 &CEntityPositionSync::new(
                                     self.living_entity.entity.entity_id.into(),
                                     position,

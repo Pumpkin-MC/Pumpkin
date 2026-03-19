@@ -1,9 +1,12 @@
 use crate::entity::item::ItemEntity;
 use crate::net::ClientPlatform;
-use crate::world::World;
 use crate::{
     server::Server,
-    world::portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
+    world::{
+        World,
+        chunker::is_within_view_distance,
+        portal::{NetherPortal, PortalManager, PortalSearchResult, SourcePortalInfo},
+    },
 };
 use arc_swap::ArcSwap;
 use bytes::BufMut;
@@ -47,7 +50,6 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::version::MinecraftVersion;
 use pumpkin_world::item::ItemStack;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -2145,11 +2147,6 @@ impl Entity {
     }
 
     pub async fn send_meta_data<T: Serialize>(&self, meta: &[Metadata<T>]) {
-        let mut buf = Vec::new();
-        for meta in meta {
-            meta.write(&mut buf, &MinecraftVersion::V_1_21_11).unwrap();
-        }
-        buf.put_u8(255);
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
         for player in world.players.load().iter() {
@@ -2158,11 +2155,7 @@ impl Entity {
                 let center = player.living_entity.entity.chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
-                if (chunk_pos.x - center.x)
-                    .abs()
-                    .max((chunk_pos.y - center.y).abs())
-                    <= view_distance
-                {
+                if is_within_view_distance(chunk_pos, center, view_distance) {
                     let mut buf = Vec::new();
                     for m in meta {
                         m.write(&mut buf, &client.version.load()).unwrap();
@@ -2421,7 +2414,7 @@ impl Entity {
                 world
                     .broadcast_to_chunk_except(
                         chunk_pos,
-                        &[player.gameprofile.id],
+                        &[player.living_entity.entity.entity_uuid],
                         &passengers_packet,
                     )
                     .await;
