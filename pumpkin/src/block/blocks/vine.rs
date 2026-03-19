@@ -25,22 +25,33 @@ pub struct VineBlock;
 impl BlockBehaviour for VineBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
+            if let BlockIsReplacing::Itself(state_id) = args.replacing {
+                let (Some(direction), _) = get_accurate_direction(
+                    args.world,
+                    args.position,
+                    Some(args.player),
+                    args.direction,
+                    true,
+                )
+                .await
+                else {
+                    return Block::AIR.default_state.id;
+                };
+                let mut props = VineLikeProperties::from_state_id(state_id, args.block);
+                vine_direction_mapper(direction, &mut props);
+                return props.to_state_id(args.block);
+            }
             let (Some(direction), _) = get_accurate_direction(
                 args.world,
                 args.position,
                 Some(args.player),
                 args.direction,
-                args.replacing == BlockIsReplacing::None,
+                false,
             )
             .await
             else {
                 return Block::AIR.default_state.id;
             };
-            if let BlockIsReplacing::Itself(state_id) = args.replacing {
-                let mut props = VineLikeProperties::from_state_id(state_id, args.block);
-                vine_direction_mapper(direction, &mut props);
-                return props.to_state_id(args.block);
-            }
             let mut props = VineLikeProperties::default(args.block);
             vine_direction_mapper(direction, &mut props);
             props.to_state_id(args.block)
@@ -295,6 +306,7 @@ async fn get_accurate_direction(
         HashSet::new()
     };
     if let Some(player) = player_wrapper {
+        let mut up = false;
         for dir in get_nearest_looking_directions(player, replacing, click_direction) {
             if dir != BlockDirection::Down && !already_active_directions.contains(&dir) {
                 let support_pos = block_pos.offset(dir.to_offset());
@@ -310,9 +322,16 @@ async fn get_accurate_direction(
                     }
                     continue;
                 }
+                if dir == BlockDirection::Up && !replacing {
+                    up = true;
+                    continue;
+                }
 
                 return (Some(dir), false);
             }
+        }
+        if up {
+            return (Some(BlockDirection::Up), false);
         }
     }
     (None, false)
