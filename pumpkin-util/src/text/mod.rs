@@ -268,6 +268,19 @@ impl TextComponentBase {
 }
 
 impl TextComponent {
+    /// Creates a new text component without any text content.
+    ///
+    /// Useful to join multiple text components together into one
+    /// by putting them all as a child of an empty text component
+    /// in the required order.
+    ///
+    /// # Returns
+    /// An empty `TextComponent`.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::text("")
+    }
+
     /// Creates a new text component with plain text content.
     ///
     /// # Arguments
@@ -275,6 +288,7 @@ impl TextComponent {
     ///
     /// # Returns
     /// A new `TextComponent` containing the given text.
+    #[must_use]
     pub fn text<P: Into<Cow<'static, str>>>(plain: P) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::Text { text: plain.into() }),
@@ -291,6 +305,7 @@ impl TextComponent {
     ///
     /// # Returns
     /// A new `TextComponent` that will be translated on the client.
+    #[must_use]
     pub fn translate<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(key: K, with: W) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::Translate {
@@ -312,6 +327,7 @@ impl TextComponent {
     ///
     /// # Returns
     /// A new `TextComponent` with custom translation.
+    #[must_use]
     pub fn custom<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(
         namespace: K,
         key: K,

@@ -95,7 +95,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment},
+    java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment, CUpdateMobEffect},
 };
 use pumpkin_protocol::{
     codec::var_int::VarInt,
@@ -342,6 +342,33 @@ impl World {
         .await;
     }
 
+    pub async fn send_add_mob_effect(
+        &self,
+        entity: &Entity,
+        effect: &pumpkin_data::potion::Effect,
+    ) {
+        // TODO: only nearby
+        let mut flags: i8 = 0;
+        if effect.ambient {
+            flags |= 0x01;
+        }
+        if effect.show_particles {
+            flags |= 0x02;
+        }
+        if effect.show_icon {
+            flags |= 0x04;
+        }
+
+        self.broadcast_packet_all(&CUpdateMobEffect::new(
+            VarInt(entity.entity_id),
+            VarInt(i32::from(effect.effect_type.id)),
+            VarInt(i32::from(effect.amplifier)),
+            VarInt(effect.duration),
+            flags,
+        ))
+        .await;
+    }
+
     pub fn get_difficulty(&self, difficulty: Difficulty) {
         let current_info = self.level_info.load();
         let mut new_info = (**current_info).clone();
@@ -505,7 +532,7 @@ impl World {
                 Some(decorated_message.clone()),
                 FilterType::PassThrough,
                 (RAW + 1).into(), // Custom registry chat_type with no sender name
-                TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
+                TextComponent::empty(), // Not needed since we're injecting the name in the message for custom formatting
                 None,
             );
             recipient.client.enqueue_packet(packet).await;
@@ -1559,7 +1586,7 @@ impl World {
         &self,
         base_config: &BasicConfiguration,
         player: &Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         let dimensions: Vec<ResourceLocation> = server
             .dimensions
