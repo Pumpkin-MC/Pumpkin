@@ -1637,6 +1637,7 @@ impl JavaClient {
         let off_hand_item = inventory.off_hand_item().await;
         let held_item_empty = held_item.lock().await.is_empty();
         let off_hand_item_empty = off_hand_item.lock().await.is_empty();
+
         let item = if matches!(hand, Hand::Left) {
             held_item
         } else {
@@ -1672,6 +1673,7 @@ impl JavaClient {
                 return Ok(());
             }
         }
+
         let slot_index = if matches!(hand, Hand::Left) {
             inventory.get_selected_slot() as usize
         } else {
@@ -1832,6 +1834,7 @@ impl JavaClient {
             return;
         };
         self.update_sequence(player, use_item.sequence.0);
+
         let item_in_hand = if hand == Hand::Left {
             inventory.held_item()
         } else {
