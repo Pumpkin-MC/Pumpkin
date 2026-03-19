@@ -136,17 +136,14 @@ pub fn lazily_generate_structure(
 
         let biome = biome_supplier.biome(biome_x, biome_y, biome_z, multi_noise_sampler);
 
-        let biomes = get_tag_ids(
+        if let Some(biomes) = get_tag_ids(
             RegistryKey::WorldgenBiome,
             structure
                 .biomes
                 .strip_prefix('#')
                 .unwrap_or(structure.biomes),
-        )
-        .unwrap();
-
-        // Check if the biome is allowed for this structure
-        if biomes.contains(&(biome.id as u16)) {
+        ) && biomes.contains(&(biome.id as u16))
+        {
             return Some(pos);
         }
     }

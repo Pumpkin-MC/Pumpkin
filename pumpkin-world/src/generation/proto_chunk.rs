@@ -1215,7 +1215,7 @@ impl ProtoChunk {
         for set in StructureSet::ALL {
             let spacing = match &set.placement.placement_type {
                 StructurePlacementType::RandomSpread(spread) => spread.spacing,
-                // Skip strongholds for region grid loop (handled via concentric rings globally)
+                // TODO: Handle ConcentricRings (Strongholds) via a global structure cache
                 StructurePlacementType::ConcentricRings(_) => continue,
             };
 
