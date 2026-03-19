@@ -1479,8 +1479,8 @@ impl Hash for ConsumeEffect {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConsumeEffect {
-    /// Vec of status effect adn a f32 represeting
-    /// the propability
+    /// Vec of status effect and a f32 representing
+    /// the probability
     ApplyEffects((Cow<'static, [StatusEffectInstance]>, f32)),
     RemoveEffects(IDSet<StatusEffect>),
     ClearAllEffects,
