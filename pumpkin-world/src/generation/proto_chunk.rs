@@ -1246,13 +1246,17 @@ impl ProtoChunk {
                     {
                         for entry in set.structures {
                             let structure = Structure::get(&entry.structure);
-                            
+
                             // Group the arguments to satisfy Clippy's argument limit
                             let context = StructureGeneratorContext {
                                 seed,
                                 chunk_x: candidate_chunk_x,
                                 chunk_z: candidate_chunk_z,
-                                random: create_chunk_random(seed, candidate_chunk_x, candidate_chunk_z),
+                                random: create_chunk_random(
+                                    seed,
+                                    candidate_chunk_x,
+                                    candidate_chunk_z,
+                                ),
                                 sea_level: settings.sea_level,
                                 min_y: self.bottom_y() as i32,
                             };
