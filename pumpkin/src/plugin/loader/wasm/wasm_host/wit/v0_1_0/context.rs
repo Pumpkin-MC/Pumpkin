@@ -249,11 +249,9 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             event_type @ EventType::SpawnChangeEvent => {
                 register_world_event(resource, &handler, priority, blocking, event_type).await;
             }
-            event_type
-                @ (EventType::BlockBreakEvent
-                    | EventType::BlockBurnEvent
-                    | EventType::BlockCanBuildEvent) =>
-            {
+            event_type @ (EventType::BlockBreakEvent
+            | EventType::BlockBurnEvent
+            | EventType::BlockCanBuildEvent) => {
                 register_block_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type => {

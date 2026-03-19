@@ -11,8 +11,7 @@ use crate::plugin::{
                 from_wasm_block_position, to_wasm_block_name, to_wasm_block_position,
             },
             pumpkin::plugin::event::{
-                BlockBreakEventData, BlockBurnEventData, BlockCanBuildEventData,
-                Event,
+                BlockBreakEventData, BlockBurnEventData, BlockCanBuildEventData, Event,
             },
         },
     },
