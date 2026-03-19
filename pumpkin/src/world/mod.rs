@@ -3041,12 +3041,12 @@ impl World {
                     broken_state_id.into(),
                     false,
                 );
-                let chunk_pos = position.chunk_position(); // Get chunk pos
+                let chunk_pos = position.chunk_position();
                 match cause {
                     Some(player) => {
                         self.broadcast_to_chunk_except(
                             chunk_pos,
-                            &[player.gameprofile.id],
+                            &[player.living_entity.entity.entity_uuid],
                             &particles_packet,
                         )
                         .await;
