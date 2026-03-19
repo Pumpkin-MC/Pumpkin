@@ -487,6 +487,9 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 )
             }
         }
+        "minecraft:ice_spike" => {
+            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
+        }
 
         // All TODO/empty features
         "minecraft:fossil" => {
@@ -503,9 +506,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:huge_red_mushroom" => {
             quote! { ConfiguredFeature::HugeRedMushroom(crate::generation::feature::features::huge_red_mushroom::HugeRedMushroomFeature {}) }
-        }
-        "minecraft:ice_spike" => {
-            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
         }
         "minecraft:glowstone_blob" => {
             quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) }
