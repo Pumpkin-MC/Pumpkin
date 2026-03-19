@@ -7,6 +7,7 @@ use tokio::sync::RwLock;
 
 use super::dispatcher::CommandDispatcher;
 
+mod advancement;
 mod ban;
 mod banip;
 mod banlist;
@@ -134,6 +135,10 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(
+        advancement::init_command_tree(),
+        "minecraft:command.advancement",
+    );
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -411,6 +416,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.enchant",
             "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.advancement",
+            "Gives, removes, or checks player advancements",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
