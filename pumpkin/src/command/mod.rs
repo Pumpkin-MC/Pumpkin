@@ -11,13 +11,10 @@ use args::ConsumedArgs;
 use crate::command::context::command_source::CommandSource;
 use crate::entity::EntityBase;
 use dispatcher::CommandError;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::CommandBlockLikeProperties;
-use pumpkin_data::block_properties::Facing;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
+    dimension::Dimension,
 };
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
