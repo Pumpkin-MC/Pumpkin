@@ -64,7 +64,7 @@ use pumpkin_protocol::java::client::play::{
     PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
-use pumpkin_protocol::{IdOr, SoundEvent};
+use pumpkin_protocol::SoundEvent;
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
