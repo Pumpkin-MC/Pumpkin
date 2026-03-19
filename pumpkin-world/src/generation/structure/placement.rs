@@ -101,6 +101,30 @@ fn is_start_chunk(
     }
 }
 
+/// Predicts the exact chunk (X, Z) where a structure will attempt to spawn in a given Region (rx, rz).
+#[must_use]
+pub fn get_structure_chunk_in_region(
+    placement: &RandomSpreadStructurePlacement,
+    seed: i64,
+    rx: i32,
+    rz: i32,
+    salt: u32,
+) -> (i32, i32) {
+    let region_seed = get_region_seed(seed as u64, rx, rz, salt);
+    let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(region_seed));
+
+    let bound = placement.spacing - placement.separation;
+    let spread_type = placement.spread_type.unwrap_or(SpreadType::Linear);
+
+    let rand_x = spread_type.get(&mut random, bound);
+    let rand_z = spread_type.get(&mut random, bound);
+
+    (
+        rx * placement.spacing + rand_x,
+        rz * placement.spacing + rand_z,
+    )
+}
+
 fn get_start_chunk_random_spread(
     placement: &RandomSpreadStructurePlacement,
     seed: i64,
@@ -108,18 +132,12 @@ fn get_start_chunk_random_spread(
     chunk_z: i32,
     salt: u32,
 ) -> (i32, i32) {
-    let x = floor_div(chunk_x, placement.spacing);
-    let z = floor_div(chunk_z, placement.spacing);
-    let region_seed = get_region_seed(seed as u64, x, z, salt);
-    let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(region_seed));
-    let bound = placement.spacing - placement.separation;
-    let spread_type = placement.spread_type.unwrap_or(SpreadType::Linear);
-    let rand_x = spread_type.get(&mut random, bound);
-    let rand_z = spread_type.get(&mut random, bound);
-    (
-        x * placement.spacing + rand_x,
-        z * placement.spacing + rand_z,
-    )
+    // 1. Find the region
+    let rx = floor_div(chunk_x, placement.spacing);
+    let rz = floor_div(chunk_z, placement.spacing);
+
+    // 2. Get the structure chunk for that region
+    get_structure_chunk_in_region(placement, seed, rx, rz, salt)
 }
 
 fn is_start_chunk_random_spread(

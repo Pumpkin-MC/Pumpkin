@@ -7,7 +7,8 @@ use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::structures::{
-    Structure, StructureKeys, StructurePlacementCalculator, StructureSet, WeightedEntry,
+    Structure, StructureKeys, StructurePlacementCalculator, StructurePlacementType, StructureSet,
+    WeightedEntry,
 };
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
@@ -41,10 +42,14 @@ use crate::generation::noise::aquifer_sampler::{
     FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl,
 };
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
+use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
+use crate::generation::structure::lazily_generate_structure;
 use crate::generation::structure::placement::should_generate_structure;
-use crate::generation::structure::structures::StructureInstance;
+use crate::generation::structure::structures::{
+    StructureGeneratorContext, StructureInstance, create_chunk_random,
+};
 use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
@@ -1171,52 +1176,119 @@ impl ProtoChunk {
         false
     }
 
-    pub fn set_structure_references<T: GenerationCache>(cache: &mut T) {
-        let (center_x, center_z, start_x, start_z) = {
-            let chunk = cache.get_center_chunk();
-            (
-                chunk.x,
-                chunk.z,
-                chunk_pos::start_block_x(chunk.x),
-                chunk_pos::start_block_z(chunk.z),
-            )
-        };
-
+    pub fn set_structure_references(
+        &mut self,
+        random_config: &GlobalRandomConfig,
+        settings: &GenerationSettings,
+        dimension: &Dimension,
+        noise_router: &ProtoNoiseRouters,
+    ) {
+        let start_x = chunk_pos::start_block_x(self.x);
+        let start_z = chunk_pos::start_block_z(self.z);
         let end_x = start_x + 15;
         let end_z = start_z + 15;
-        let radius = 8;
+
+        let seed = random_config.seed as i64;
+
+        // 1. Initialize mathematical biome tools (No DAG requirements!)
+        let overworld_supplier = MultiNoiseBiomeSupplier::OVERWORLD;
+        let nether_supplier = MultiNoiseBiomeSupplier::NETHER;
+        let end_supplier = TheEndBiomeSupplier;
+
+        let base_supplier: &dyn BiomeSupplier = if *dimension == Dimension::THE_END {
+            &end_supplier
+        } else if *dimension == Dimension::THE_NETHER {
+            &nether_supplier
+        } else {
+            &overworld_supplier
+        };
+        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
+
+        // Use an empty offset sampler since we are querying arbitrary world coordinates
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
 
         let mut references = Vec::new();
 
-        for x in (center_x - radius)..=(center_x + radius) {
-            for z in (center_z - radius)..=(center_z + radius) {
-                if x == center_x && z == center_z {
-                    continue;
-                }
+        // 2. Iterate through all structures
+        for set in StructureSet::ALL {
+            let spacing = match &set.placement.placement_type {
+                StructurePlacementType::RandomSpread(spread) => spread.spacing,
+                // Skip strongholds for region grid loop (handled via concentric rings globally)
+                StructurePlacementType::ConcentricRings(_) => continue,
+            };
 
-                if let Some(neighbor) = cache.get_chunk(x, z) {
-                    for (key, instance) in &neighbor.structure_starts {
-                        if let StructureInstance::Start(start_data) = instance
-                            && start_data
-                                .get_bounding_box()
-                                .intersects_raw_xz(start_x, start_z, end_x, end_z)
-                        {
-                            references.push((*key, start_data.collector.clone()));
+            // Calculate which structure region our current chunk sits in
+            let region_x = pumpkin_util::math::floor_div(self.x, spacing);
+            let region_z = pumpkin_util::math::floor_div(self.z, spacing);
+
+            // 3. Check the 3x3 region grid around us
+            for rx in (region_x - 1)..=(region_x + 1) {
+                for rz in (region_z - 1)..=(region_z + 1) {
+                    let (candidate_chunk_x, candidate_chunk_z) = match &set.placement.placement_type
+                    {
+                        StructurePlacementType::RandomSpread(spread) => {
+                            crate::generation::structure::placement::get_structure_chunk_in_region(
+                                spread,
+                                seed,
+                                rx,
+                                rz,
+                                set.placement.salt,
+                            )
+                        }
+                        StructurePlacementType::ConcentricRings(_) => continue,
+                    };
+
+                    // 4. Distance check (radius = 8 chunks)
+                    if (candidate_chunk_x - self.x).abs() <= 8
+                        && (candidate_chunk_z - self.z).abs() <= 8
+                    {
+                        for entry in set.structures {
+                            let structure = Structure::get(&entry.structure);
+                            
+                            // Group the arguments to satisfy Clippy's argument limit
+                            let context = StructureGeneratorContext {
+                                seed,
+                                chunk_x: candidate_chunk_x,
+                                chunk_z: candidate_chunk_z,
+                                random: create_chunk_random(seed, candidate_chunk_x, candidate_chunk_z),
+                                sea_level: settings.sea_level,
+                                min_y: self.bottom_y() as i32,
+                            };
+
+                            // Notice we pass `self.bottom_y() as i32` for the new `min_y` argument
+                            if let Some(start_data) = lazily_generate_structure(
+                                &entry.structure,
+                                structure,
+                                context,
+                                &biome_supplier,
+                                &mut multi_noise_sampler,
+                            ) {
+                                // Bounding Box check
+                                if start_data
+                                    .get_bounding_box()
+                                    .intersects_raw_xz(start_x, start_z, end_x, end_z)
+                                {
+                                    references
+                                        .push((entry.structure, start_data.collector.clone()));
+                                    break; // Found the structure for this region, break the entry loop
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        let center_chunk = cache.get_center_chunk_mut();
+        // Apply the resolved references to this chunk
         for (key, pos) in references {
-            center_chunk
-                .structure_starts
+            self.structure_starts
                 .entry(key)
                 .or_insert_with(|| StructureInstance::Reference(pos));
         }
 
-        center_chunk.stage = StagedChunkEnum::StructureReferences;
+        self.stage = StagedChunkEnum::StructureReferences;
     }
 
     const fn start_cell_x(&self, horizontal_cell_block_count: i32) -> i32 {

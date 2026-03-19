@@ -351,7 +351,9 @@ impl Cache {
             StagedChunkEnum::StructureStart => self.chunks[mid]
                 .get_proto_chunk_mut()
                 .set_structure_starts(random_config, settings),
-            StagedChunkEnum::StructureReferences => ProtoChunk::set_structure_references(self),
+            StagedChunkEnum::StructureReferences => self.chunks[mid]
+                .get_proto_chunk_mut()
+                .set_structure_references(random_config, settings, &dimension, noise_router),
             StagedChunkEnum::Biomes => self.chunks[mid]
                 .get_proto_chunk_mut()
                 .step_to_biomes(dimension, noise_router),
