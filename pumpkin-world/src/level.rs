@@ -295,7 +295,7 @@ impl Level {
         info!("Joining {} threads for {}...", handle_count, world_id);
         let join_task = tokio::task::spawn_blocking(move || {
             let mut failed_count = 0;
-            for handle in handles.into_iter() {
+            for handle in handles {
                 if handle.join().is_err() {
                     failed_count += 1;
                 }

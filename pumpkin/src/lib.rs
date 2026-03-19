@@ -119,6 +119,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let fmt_layer = fmt::layer()
             .with_writer(std::sync::Mutex::new(logger))
             .with_ansi(advanced_config.logging.color)
+            .with_ansi_sanitization(false)
             .with_target(true)
             .with_thread_names(advanced_config.logging.threads)
             .with_thread_ids(advanced_config.logging.threads);
@@ -539,7 +540,7 @@ fn setup_stdin_console(server: Arc<Server>) {
 
                     'after: {
                         server.command_dispatcher.read().await
-                            .handle_command(&command::CommandSender::Console, &server, command.as_str())
+                            .handle_command(&command::CommandSender::Console.into_source(&server).await, command.as_str())
                             .await;
                     };
                 }}
@@ -606,7 +607,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
 
                     'after: {
                         server.command_dispatcher.read().await
-                            .handle_command(&command::CommandSender::Console, &server, &line)
+                            .handle_command(&command::CommandSender::Console.into_source(&server).await, &line)
                             .await;
                     }
                 }}
@@ -614,6 +615,7 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 break;
             }
         }
+        drop(rx);
         debug!("Stopped console commands task");
     });
 }

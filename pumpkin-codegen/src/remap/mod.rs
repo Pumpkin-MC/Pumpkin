@@ -7,6 +7,7 @@ mod block_state;
 mod entity_id;
 mod item_id;
 
+/// Returns the list of remap builder functions paired with their output file names.
 #[allow(clippy::type_complexity)]
 pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
     vec![
@@ -16,19 +17,34 @@ pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
     ]
 }
 
+/// A node in a linked chain of ViaVersion mapping files, each describing how IDs changed
+/// between consecutive Minecraft versions.
 pub struct MappingNode<'a, P> {
+    /// The Minecraft version this node represents.
     pub version: MinecraftVersion,
+    /// The path to (or data of) the ViaVersion NBT mapping file for this version hop.
     pub value: P,
+    /// The previous version node in the chain, or `None` if this is the oldest supported version.
     pub child: Option<&'a Self>,
 }
 
+/// Drives the recursive processing of a [`MappingNode`] chain, composing intermediate mappings
+/// into per-version translation tables.
 pub struct Remapper<P, R> {
+    /// The target (latest) version that all older mappings are translated toward.
     pub version: MinecraftVersion,
+    /// Combines the current-version mapping with a child mapping into a composed mapping.
     pub remapper: fn(&R, &R) -> R,
+    /// Converts the raw path/data `P` stored in a [`MappingNode`] into the mapping type `R`.
     pub serializer: fn(&P) -> R,
 }
 
 impl<P, R> Remapper<P, R> {
+    /// Recursively processes the [`MappingNode`] chain and returns a list of `(version, mapping)` pairs.
+    ///
+    /// # Returns
+    /// A `Vec` where each entry contains a [`MinecraftVersion`] and its composed mapping relative
+    /// to `self.version`.
     pub fn process(&self, mappings: &MappingNode<'_, P>) -> Vec<(MinecraftVersion, R)> {
         let current_mapping = (self.serializer)(&mappings.value);
         let mut remap = if let Some(child) = mappings.child {
@@ -46,12 +62,23 @@ impl<P, R> Remapper<P, R> {
     }
 }
 
+/// A decoded ViaVersion ID mapping with a forward translation table.
 pub struct ParsedMappings {
+    /// Number of IDs in the mapped (newer) version's namespace.
     pub mapped_size: usize,
+    /// Forward mapping: index is the old ID, value is the new ID (`-1` means unmapped).
     pub forward: Vec<i32>,
 }
 
 impl ParsedMappings {
+    /// Reads and parses a ViaVersion NBT mapping file, extracting the named section.
+    ///
+    /// # Arguments
+    /// - `path` – Path to the `.nbt` mapping file.
+    /// - `section` – Name of the compound section to extract (e.g. `"blockstates"`, `"items"`).
+    ///
+    /// # Returns
+    /// `Some(ParsedMappings)` if the section exists, or `None` if the section is absent.
     pub fn parse_mapping_file(path: &str, section: &str) -> Option<Self> {
         use pumpkin_nbt::Nbt;
         use pumpkin_nbt::deserializer::NbtReadHelper;
@@ -69,6 +96,7 @@ impl ParsedMappings {
         Some(Self::parse_mappings(mappings, path, section))
     }
 
+    /// Decodes a ViaVersion mapping compound into a forward ID translation table.
     fn parse_mappings(mappings: &NbtCompound, path: &str, section: &str) -> Self {
         let mapped_size = mappings
             .get_int("mappedSize")
@@ -174,6 +202,14 @@ impl ParsedMappings {
         }
     }
 
+    /// Inverts the forward mapping into a reverse lookup table where index is the new ID and value
+    /// is the corresponding old ID. Unmapped entries default to their own index cast to `u16`.
+    ///
+    /// # Arguments
+    /// - `name` – Descriptive name used in panic messages for better diagnostics.
+    ///
+    /// # Returns
+    /// A `Vec<u16>` of length `self.mapped_size` mapping new IDs back to old IDs.
     pub fn invert_with_default_to_u16(&self, name: &str) -> Vec<u16> {
         let mut inverse = vec![0u16; self.mapped_size];
         let mut seen = vec![false; self.mapped_size];

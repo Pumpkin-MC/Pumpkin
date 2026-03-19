@@ -55,22 +55,6 @@ impl SText {
         }
     }
 
-    const fn get_dummy_strings(category: u8) -> &'static [&'static str] {
-        match category {
-            0 => &[
-                "raw",
-                "tip",
-                "systemMessage",
-                "textObjectWhisper",
-                "textObjectAnnouncement",
-                "textObject",
-            ],
-            1 => &["chat", "whisper", "announcement"],
-            2 => &["translate", "popup", "jukeboxPopup"],
-            _ => &[],
-        }
-    }
-
     const fn get_category(&self) -> u8 {
         match self.r#type {
             TextPacketType::Raw
@@ -91,18 +75,7 @@ impl PacketRead for SText {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let needs_translation = bool::read(reader)?;
 
-        let category = u8::read(reader)?;
-
-        let expected_dummies = Self::get_dummy_strings(category);
-        for &expected in expected_dummies {
-            let actual = String::read(reader)?;
-            if actual != expected {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!("Dummy string mismatch: expected {expected}, got {actual}"),
-                ));
-            }
-        }
+        let _category = u8::read(reader)?;
 
         let r#type = TextPacketType::read(reader)?;
 
@@ -136,12 +109,9 @@ impl PacketRead for SText {
         let xuid = String::read(reader)?;
         let platform_chat_id = String::read(reader)?;
 
-        let has_filtered = bool::read(reader)?;
-        let filtered_message = if has_filtered {
-            Some(String::read(reader)?)
-        } else {
-            None
-        };
+        let filtered_message = bool::read(reader)?
+            .then(|| String::read(reader))
+            .transpose()?;
 
         Ok(Self {
             needs_translation,
@@ -162,10 +132,6 @@ impl PacketWrite for SText {
 
         let category = self.get_category();
         category.write(writer)?;
-
-        for &dummy in Self::get_dummy_strings(category) {
-            dummy.to_string().write(writer)?;
-        }
 
         self.r#type.write(writer)?;
 

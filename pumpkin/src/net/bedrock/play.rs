@@ -22,7 +22,6 @@ use pumpkin_protocol::{
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 
 use crate::{
-    command::CommandSender,
     entity::{EntityBase, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent},
@@ -186,7 +185,8 @@ impl BedrockClient {
         command: SCommandRequest,
     ) {
         let player_clone = player.clone();
-        let server_clone: Arc<Server> = server.clone();
+        let server_clone = server.clone();
+
         send_cancellable! {{
             server;
             PlayerCommandSendEvent {
@@ -198,17 +198,15 @@ impl BedrockClient {
             'after: {
                 let command = event.command;
                 let command_clone = command.clone();
+
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
                     let dispatcher = server_clone.command_dispatcher.read().await;
-                    dispatcher
-                        .handle_command(
-                            &CommandSender::Player(player_clone),
-                            &server_clone,
-                            &command_clone,
-                        )
-                        .await;
+                    dispatcher.handle_command(
+                        &player_clone.get_command_source(&server_clone).await,
+                        &command_clone
+                    ).await;
                 });
 
                 if server.advanced_config.commands.log_console {

@@ -1,13 +1,14 @@
 /* This file is generated. Do not edit manually. */
+use crate::chunk::DoublePerlinNoiseParameters;
 pub struct NoiseData {
-    pub noise_id: &'static str,
+    pub noise_id: DoublePerlinNoiseParameters,
     pub xz_scale: f64,
     pub y_scale: f64,
 }
 pub struct ShiftedNoiseData {
     pub xz_scale: f64,
     pub y_scale: f64,
-    pub noise_id: &'static str,
+    pub noise_id: DoublePerlinNoiseParameters,
 }
 #[derive(Copy, Clone)]
 pub enum WeirdScaledMapper {
@@ -53,7 +54,7 @@ impl WeirdScaledMapper {
     }
 }
 pub struct WeirdScaledData {
-    pub noise_id: &'static str,
+    pub noise_id: DoublePerlinNoiseParameters,
     pub mapper: WeirdScaledMapper,
 }
 pub struct InterpolatedNoiseSamplerData {
@@ -185,10 +186,10 @@ pub enum BaseNoiseFunctionComponent {
         data: &'static NoiseData,
     },
     ShiftA {
-        noise_id: &'static str,
+        noise_id: DoublePerlinNoiseParameters,
     },
     ShiftB {
-        noise_id: &'static str,
+        noise_id: DoublePerlinNoiseParameters,
     },
     ShiftedNoise {
         shift_x_index: usize,
@@ -324,7 +325,9 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::ShiftA { noise_id: "offset" },
+            BaseNoiseFunctionComponent::ShiftA {
+                noise_id: DoublePerlinNoiseParameters::OFFSET,
+            },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 9usize,
                 wrapper: WrapperType::Cache2D,
@@ -334,7 +337,9 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
-            BaseNoiseFunctionComponent::ShiftB { noise_id: "offset" },
+            BaseNoiseFunctionComponent::ShiftB {
+                noise_id: DoublePerlinNoiseParameters::OFFSET,
+            },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 13usize,
                 wrapper: WrapperType::Cache2D,
@@ -350,7 +355,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "continentalness",
+                    noise_id: DoublePerlinNoiseParameters::CONTINENTALNESS,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -364,7 +369,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "erosion",
+                    noise_id: DoublePerlinNoiseParameters::EROSION,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -378,7 +383,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "ridge",
+                    noise_id: DoublePerlinNoiseParameters::RIDGE,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -2393,7 +2398,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "jagged",
+                    noise_id: DoublePerlinNoiseParameters::JAGGED,
                     xz_scale: 1500f64,
                     y_scale: 0f64,
                 },
@@ -3394,7 +3399,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "cave_entrance",
+                    noise_id: DoublePerlinNoiseParameters::CAVE_ENTRANCE,
                     xz_scale: 0.75f64,
                     y_scale: 0.5f64,
                 },
@@ -3423,7 +3428,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "spaghetti_roughness_modulator",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_ROUGHNESS_MODULATOR,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
@@ -3444,7 +3449,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "spaghetti_roughness",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_ROUGHNESS,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
@@ -3475,7 +3480,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "spaghetti_3d_rarity",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_RARITY,
                     xz_scale: 2f64,
                     y_scale: 1f64,
                 },
@@ -3487,14 +3492,14 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::WeirdScaled {
                 input_index: 68usize,
                 data: &WeirdScaledData {
-                    noise_id: "spaghetti_3d_1",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
                     mapper: WeirdScaledMapper::Tunnels,
                 },
             },
             BaseNoiseFunctionComponent::WeirdScaled {
                 input_index: 68usize,
                 data: &WeirdScaledData {
-                    noise_id: "spaghetti_3d_2",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
                     mapper: WeirdScaledMapper::Tunnels,
                 },
             },
@@ -3507,7 +3512,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "spaghetti_3d_thickness",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_THICKNESS,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
@@ -3574,7 +3579,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "cave_layer",
+                    noise_id: DoublePerlinNoiseParameters::CAVE_LAYER,
                     xz_scale: 1f64,
                     y_scale: 8f64,
                 },
@@ -3594,7 +3599,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "cave_cheese",
+                    noise_id: DoublePerlinNoiseParameters::CAVE_CHEESE,
                     xz_scale: 1f64,
                     y_scale: 0.6666666666666666f64,
                 },
@@ -3657,7 +3662,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "spaghetti_2d_modulator",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D_MODULATOR,
                     xz_scale: 2f64,
                     y_scale: 1f64,
                 },
@@ -3665,13 +3670,13 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::WeirdScaled {
                 input_index: 94usize,
                 data: &WeirdScaledData {
-                    noise_id: "spaghetti_2d",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D,
                     mapper: WeirdScaledMapper::Caves,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "spaghetti_2d_thickness",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D_THICKNESS,
                     xz_scale: 2f64,
                     y_scale: 1f64,
                 },
@@ -3710,7 +3715,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "spaghetti_2d_elevation",
+                    noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D_ELEVATION,
                     xz_scale: 1f64,
                     y_scale: 0f64,
                 },
@@ -3793,7 +3798,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "pillar",
+                    noise_id: DoublePerlinNoiseParameters::PILLAR,
                     xz_scale: 25f64,
                     y_scale: 0.3f64,
                 },
@@ -3807,7 +3812,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "pillar_rareness",
+                    noise_id: DoublePerlinNoiseParameters::PILLAR_RARENESS,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
@@ -3835,7 +3840,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "pillar_thickness",
+                    noise_id: DoublePerlinNoiseParameters::PILLAR_THICKNESS,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
@@ -3969,7 +3974,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "noodle",
+                    noise_id: DoublePerlinNoiseParameters::NOODLE,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
@@ -3991,7 +3996,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             BaseNoiseFunctionComponent::Constant { value: 64f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "noodle_thickness",
+                    noise_id: DoublePerlinNoiseParameters::NOODLE_THICKNESS,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
@@ -4025,7 +4030,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "noodle_ridge_a",
+                    noise_id: DoublePerlinNoiseParameters::NOODLE_RIDGE_A,
                     xz_scale: 2.6666666666666665f64,
                     y_scale: 2.6666666666666665f64,
                 },
@@ -4051,7 +4056,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "noodle_ridge_b",
+                    noise_id: DoublePerlinNoiseParameters::NOODLE_RIDGE_B,
                     xz_scale: 2.6666666666666665f64,
                     y_scale: 2.6666666666666665f64,
                 },
@@ -4126,35 +4131,35 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "aquifer_barrier",
+                    noise_id: DoublePerlinNoiseParameters::AQUIFER_BARRIER,
                     xz_scale: 1f64,
                     y_scale: 0.5f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "aquifer_fluid_level_floodedness",
+                    noise_id: DoublePerlinNoiseParameters::AQUIFER_FLUID_LEVEL_FLOODEDNESS,
                     xz_scale: 1f64,
                     y_scale: 0.67f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "aquifer_fluid_level_spread",
+                    noise_id: DoublePerlinNoiseParameters::AQUIFER_FLUID_LEVEL_SPREAD,
                     xz_scale: 1f64,
                     y_scale: 0.7142857142857143f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "aquifer_lava",
+                    noise_id: DoublePerlinNoiseParameters::AQUIFER_LAVA,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "ore_veininess",
+                    noise_id: DoublePerlinNoiseParameters::ORE_VEININESS,
                     xz_scale: 1.5f64,
                     y_scale: 1.5f64,
                 },
@@ -4174,7 +4179,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "ore_vein_a",
+                    noise_id: DoublePerlinNoiseParameters::ORE_VEIN_A,
                     xz_scale: 4f64,
                     y_scale: 4f64,
                 },
@@ -4200,7 +4205,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "ore_vein_b",
+                    noise_id: DoublePerlinNoiseParameters::ORE_VEIN_B,
                     xz_scale: 4f64,
                     y_scale: 4f64,
                 },
@@ -4240,7 +4245,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
-                    noise_id: "ore_gap",
+                    noise_id: DoublePerlinNoiseParameters::ORE_GAP,
                     xz_scale: 1f64,
                     y_scale: 1f64,
                 },
@@ -4310,7 +4315,9 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::ShiftA { noise_id: "offset" },
+            BaseNoiseFunctionComponent::ShiftA {
+                noise_id: DoublePerlinNoiseParameters::OFFSET,
+            },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 9usize,
                 wrapper: WrapperType::Cache2D,
@@ -4320,7 +4327,9 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
-            BaseNoiseFunctionComponent::ShiftB { noise_id: "offset" },
+            BaseNoiseFunctionComponent::ShiftB {
+                noise_id: DoublePerlinNoiseParameters::OFFSET,
+            },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 13usize,
                 wrapper: WrapperType::Cache2D,
@@ -4336,7 +4345,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "continentalness",
+                    noise_id: DoublePerlinNoiseParameters::CONTINENTALNESS,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -4350,7 +4359,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "erosion",
+                    noise_id: DoublePerlinNoiseParameters::EROSION,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -4364,7 +4373,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "ridge",
+                    noise_id: DoublePerlinNoiseParameters::RIDGE,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -7060,7 +7069,9 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
     },
     multi_noise: BaseMultiNoiseRouter {
         full_component_stack: &[
-            BaseNoiseFunctionComponent::ShiftA { noise_id: "offset" },
+            BaseNoiseFunctionComponent::ShiftA {
+                noise_id: DoublePerlinNoiseParameters::OFFSET,
+            },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 0usize,
                 wrapper: WrapperType::Cache2D,
@@ -7070,7 +7081,9 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
-            BaseNoiseFunctionComponent::ShiftB { noise_id: "offset" },
+            BaseNoiseFunctionComponent::ShiftB {
+                noise_id: DoublePerlinNoiseParameters::OFFSET,
+            },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 4usize,
                 wrapper: WrapperType::Cache2D,
@@ -7086,7 +7099,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "ridge",
+                    noise_id: DoublePerlinNoiseParameters::RIDGE,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -7100,7 +7113,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "temperature",
+                    noise_id: DoublePerlinNoiseParameters::TEMPERATURE,
                 },
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
@@ -7110,7 +7123,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "vegetation",
+                    noise_id: DoublePerlinNoiseParameters::VEGETATION,
                 },
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
@@ -7120,7 +7133,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "continentalness",
+                    noise_id: DoublePerlinNoiseParameters::CONTINENTALNESS,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -7134,7 +7147,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "erosion",
+                    noise_id: DoublePerlinNoiseParameters::EROSION,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -8973,7 +8986,9 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
     multi_noise: BaseMultiNoiseRouter {
         full_component_stack: &[
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
-            BaseNoiseFunctionComponent::ShiftA { noise_id: "offset" },
+            BaseNoiseFunctionComponent::ShiftA {
+                noise_id: DoublePerlinNoiseParameters::OFFSET,
+            },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 1usize,
                 wrapper: WrapperType::Cache2D,
@@ -8982,7 +8997,9 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 input_index: 2usize,
                 wrapper: WrapperType::CacheFlat,
             },
-            BaseNoiseFunctionComponent::ShiftB { noise_id: "offset" },
+            BaseNoiseFunctionComponent::ShiftB {
+                noise_id: DoublePerlinNoiseParameters::OFFSET,
+            },
             BaseNoiseFunctionComponent::Wrapper {
                 input_index: 4usize,
                 wrapper: WrapperType::Cache2D,
@@ -8998,7 +9015,7 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "temperature",
+                    noise_id: DoublePerlinNoiseParameters::TEMPERATURE,
                 },
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
@@ -9008,7 +9025,7 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: "vegetation",
+                    noise_id: DoublePerlinNoiseParameters::VEGETATION,
                 },
             },
         ],
