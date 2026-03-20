@@ -46,76 +46,89 @@ impl GlobalStructureCache {
         self.stronghold_chunks.get_or_init(|| {
             let mut chunks = Vec::with_capacity(placement.count as usize);
 
-            let mut distance = f64::from(placement.distance);
-            let mut current_ring_count = placement.spread;
-            let mut current_ring_index = 0;
+            let distance_param = f64::from(placement.distance); // Usually 32
+            let mut spread = placement.spread; // Usually 3
+            let count = placement.count; // Usually 128
 
-            // 1. Exact Vanilla Angle Derivation
+            // The random generator for stronghold placement is based on the world seed and a fixed salt.
+            // This ensures that the stronghold layout is consistent across all worlds with the same seed.
             let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(seed as u64));
+
+            // The initial angle includes a random rotation jitter for the whole world
             let mut angle = random.next_f64() * PI * 2.0;
+            let mut position_in_circle = 0;
+            let mut circle = 0;
 
-            for _ in 0..placement.count {
-                let math_x = (angle.cos() * distance).round() as i32;
-                let math_z = (angle.sin() * distance).round() as i32;
+            for i in 0..count {
+                // 1. Distance Formula
+                // dist = (4 * spacing) + (spacing * ring_index * 6) + (random_jitter)
+                // The jitter is +/- (spacing * 1.25)
+                let dist = 4.0 * distance_param
+                    + distance_param * f64::from(circle) * 6.0
+                    + (random.next_f64() - 0.5) * (distance_param * 2.5);
 
-                let center_block_x = (math_x << 4) + 8;
-                let center_block_z = (math_z << 4) + 8;
+                let initial_x = (angle.cos() * dist + 0.5).floor() as i32;
+                let initial_z = (angle.sin() * dist + 0.5).floor() as i32;
 
-                let mut final_chunk_x = math_x;
-                let mut final_chunk_z = math_z;
+                // 2. RNG Forking
+                // We must fork/split the random generator for the biome search.
+                // This keeps the main angle/distance sequence identical across all worlds.
+                let fork_seed = random.next_i64();
 
-                // 2. Exact Vanilla Biome Snapping (112 block radius search)
-                let mut closest_dist = i32::MAX;
-                let step: usize = 8;
+                let mut biome_search_generator =
+                    RandomGenerator::Legacy(LegacyRand::from_seed(fork_seed as u64));
 
-                for r in (0_i32..=112_i32).step_by(step) {
-                    for dx in (-r..=r).step_by(step) {
-                        for dz in (-r..=r).step_by(step) {
-                            // Only check the perimeter of the current radius ring
-                            if dx.abs() == r || dz.abs() == r {
-                                let test_x = center_block_x + dx;
-                                let test_z = center_block_z + dz;
+                // 3. Reservoir Sampling Biome Search
+                // Strongholds search the entire 112-block square
+                // and pick one valid location at random (Reservoir Sampling).
+                let mut found_pos = None;
+                let mut found_count = 0;
 
-                                let biome_x = crate::generation::biome_coords::from_block(test_x);
-                                let biome_y = crate::generation::biome_coords::from_block(0);
-                                let biome_z = crate::generation::biome_coords::from_block(test_z);
+                let center_block_x = (initial_x << 4) + 8;
+                let center_block_z = (initial_z << 4) + 8;
+                let step = 4;
+                let search_radius = 112;
 
-                                let biome = biome_supplier.biome(
-                                    biome_x,
-                                    biome_y,
-                                    biome_z,
-                                    multi_noise_sampler,
-                                );
+                for dz in (-search_radius..=search_radius).step_by(step as usize) {
+                    for dx in (-search_radius..=search_radius).step_by(step as usize) {
+                        let test_x = center_block_x + dx;
+                        let test_z = center_block_z + dz;
 
-                                if allowed_biomes.contains(&(biome.id as u16)) {
-                                    let dist = dx * dx + dz * dz;
-                                    if dist < closest_dist {
-                                        closest_dist = dist;
-                                        final_chunk_x = test_x >> 4;
-                                        final_chunk_z = test_z >> 4;
-                                    }
-                                }
+                        let biome_x = crate::generation::biome_coords::from_block(test_x);
+                        let biome_y = crate::generation::biome_coords::from_block(0);
+                        let biome_z = crate::generation::biome_coords::from_block(test_z);
+
+                        let biome =
+                            biome_supplier.biome(biome_x, biome_y, biome_z, multi_noise_sampler);
+
+                        if allowed_biomes.contains(&(biome.id as u16)) {
+                            found_count += 1;
+                            // Reservoir sampling: Pick the Nth valid biome with 1/N probability
+                            if found_pos.is_none()
+                                || biome_search_generator.next_bounded_i32(found_count) == 0
+                            {
+                                found_pos = Some((test_x >> 4, test_z >> 4));
                             }
                         }
                     }
-                    if closest_dist < i32::MAX {
-                        break; // Stop expanding the radius if we found a valid biome
-                    }
                 }
 
+                let (final_chunk_x, final_chunk_z) = found_pos.unwrap_or((initial_x, initial_z));
                 chunks.push((final_chunk_x, final_chunk_z));
 
-                angle += (PI * 2.0) / f64::from(current_ring_count);
-                current_ring_index += 1;
+                // 4. Dynamic Ring Progression
+                angle += (PI * 2.0) / f64::from(spread);
+                position_in_circle += 1;
 
-                if current_ring_index == current_ring_count {
-                    current_ring_index = 0;
-                    current_ring_count += current_ring_count * 2 / 5;
-                    distance += f64::from(placement.distance) * 1.25;
-                    angle += (PI * 2.0) / f64::from(current_ring_count);
+                if position_in_circle == spread {
+                    circle += 1;
+                    position_in_circle = 0;
+
+                    spread += 2 * spread / (circle + 1);
+                    spread = spread.min(count - i);
+                    angle += random.next_f64() * PI * 2.0;
                 }
             }
-
             chunks
         })
     }
