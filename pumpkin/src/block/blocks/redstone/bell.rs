@@ -7,11 +7,11 @@ use crate::block::{
     OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
 };
 use crate::world::World;
+use pumpkin_data::block_properties::Attachment;
 use pumpkin_data::block_properties::BellLikeProperties;
 use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::block_properties::{Attachment};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
