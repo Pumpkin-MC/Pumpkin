@@ -46,6 +46,7 @@ use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuil
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
 use crate::generation::structure::lazily_generate_structure;
+use crate::generation::structure::placement::GlobalStructureCache;
 use crate::generation::structure::placement::should_generate_structure;
 use crate::generation::structure::structures::{
     StructureGeneratorContext, StructureInstance, create_chunk_random,
@@ -1113,12 +1114,15 @@ impl ProtoChunk {
         &mut self,
         random_config: &GlobalRandomConfig,
         settings: &GenerationSettings,
+        global_cache: &GlobalStructureCache,
     ) {
         let seed = random_config.seed;
         let calculator = StructurePlacementCalculator::new(seed as i64);
 
         for set in StructureSet::ALL {
-            if !should_generate_structure(&set.placement, &calculator, self.x, self.z) {
+            // Pass global_cache to should_generate_structure
+            if !should_generate_structure(&set.placement, &calculator, self.x, self.z, global_cache)
+            {
                 continue;
             }
 
@@ -1192,6 +1196,7 @@ impl ProtoChunk {
         settings: &GenerationSettings,
         dimension: &Dimension,
         noise_router: &ProtoNoiseRouters,
+        global_cache: &GlobalStructureCache,
     ) {
         let start_x = chunk_pos::start_block_x(self.x);
         let start_z = chunk_pos::start_block_z(self.z);
@@ -1224,71 +1229,71 @@ impl ProtoChunk {
 
         // 2. Iterate through all structures
         for set in StructureSet::ALL {
-            let spacing = match &set.placement.placement_type {
-                StructurePlacementType::RandomSpread(spread) => spread.spacing,
-                // TODO: Handle ConcentricRings (Strongholds) via a global structure cache
-                StructurePlacementType::ConcentricRings(_) => continue,
-            };
+            let mut candidate_chunks = Vec::new();
 
-            // Calculate which structure region our current chunk sits in
-            let region_x = pumpkin_util::math::floor_div(self.x, spacing);
-            let region_z = pumpkin_util::math::floor_div(self.z, spacing);
+            // 3. Collect Candidate Chunks based on Placement Type
+            match &set.placement.placement_type {
+                StructurePlacementType::RandomSpread(spread) => {
+                    let region_x = pumpkin_util::math::floor_div(self.x, spread.spacing);
+                    let region_z = pumpkin_util::math::floor_div(self.z, spread.spacing);
 
-            // 3. Check the 3x3 region grid around us
-            for rx in (region_x - 1)..=(region_x + 1) {
-                for rz in (region_z - 1)..=(region_z + 1) {
-                    let (candidate_chunk_x, candidate_chunk_z) = match &set.placement.placement_type
-                    {
-                        StructurePlacementType::RandomSpread(spread) => {
-                            crate::generation::structure::placement::get_structure_chunk_in_region(
-                                spread,
-                                seed,
-                                rx,
-                                rz,
-                                set.placement.salt,
-                            )
-                        }
-                        StructurePlacementType::ConcentricRings(_) => continue,
-                    };
-
-                    // 4. Distance check (radius = 8 chunks)
-                    if (candidate_chunk_x - self.x).abs() <= 8
-                        && (candidate_chunk_z - self.z).abs() <= 8
-                    {
-                        for entry in set.structures {
-                            let structure = Structure::get(&entry.structure);
-
-                            // Group the arguments to satisfy Clippy's argument limit
-                            let context = StructureGeneratorContext {
-                                seed,
-                                chunk_x: candidate_chunk_x,
-                                chunk_z: candidate_chunk_z,
-                                random: create_chunk_random(
+                    // Check the 3x3 region grid
+                    for rx in (region_x - 1)..=(region_x + 1) {
+                        for rz in (region_z - 1)..=(region_z + 1) {
+                            candidate_chunks.push(
+                                crate::generation::structure::placement::get_structure_chunk_in_region(
+                                    spread,
                                     seed,
-                                    candidate_chunk_x,
-                                    candidate_chunk_z,
-                                ),
-                                sea_level: settings.sea_level,
-                                min_y: self.bottom_y() as i32,
-                            };
+                                    rx,
+                                    rz,
+                                    set.placement.salt,
+                                )
+                            );
+                        }
+                    }
+                }
+                StructurePlacementType::ConcentricRings(rings) => {
+                    let strongholds = global_cache.get_or_calculate_strongholds(seed, rings);
+                    for &(cx, cz) in strongholds {
+                        // Quick heuristic filter to avoid evaluating far strongholds
+                        if (cx - self.x).abs() <= 8 && (cz - self.z).abs() <= 8 {
+                            candidate_chunks.push((cx, cz));
+                        }
+                    }
+                }
+            }
 
-                            // Notice we pass `self.bottom_y() as i32` for the new `min_y` argument
-                            if let Some(start_data) = lazily_generate_structure(
-                                &entry.structure,
-                                structure,
-                                context,
-                                &biome_supplier,
-                                &mut multi_noise_sampler,
-                            ) {
-                                // Bounding Box check
-                                if start_data
-                                    .get_bounding_box()
-                                    .intersects_raw_xz(start_x, start_z, end_x, end_z)
-                                {
-                                    references
-                                        .push((entry.structure, start_data.collector.clone()));
-                                    break; // Found the structure for this region, break the entry loop
-                                }
+            // 4. Process all gathered candidate chunks
+            for (candidate_chunk_x, candidate_chunk_z) in candidate_chunks {
+                if (candidate_chunk_x - self.x).abs() <= 8
+                    && (candidate_chunk_z - self.z).abs() <= 8
+                {
+                    for entry in set.structures {
+                        let structure = Structure::get(&entry.structure);
+
+                        let context = StructureGeneratorContext {
+                            seed,
+                            chunk_x: candidate_chunk_x,
+                            chunk_z: candidate_chunk_z,
+                            random: create_chunk_random(seed, candidate_chunk_x, candidate_chunk_z),
+                            sea_level: settings.sea_level,
+                            min_y: self.bottom_y() as i32,
+                        };
+
+                        if let Some(start_data) = lazily_generate_structure(
+                            &entry.structure,
+                            structure,
+                            context,
+                            &biome_supplier,
+                            &mut multi_noise_sampler,
+                        ) {
+                            // Bounding Box check
+                            if start_data
+                                .get_bounding_box()
+                                .intersects_raw_xz(start_x, start_z, end_x, end_z)
+                            {
+                                references.push((entry.structure, start_data.collector.clone()));
+                                break;
                             }
                         }
                     }
