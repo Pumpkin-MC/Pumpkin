@@ -3,6 +3,7 @@ use crate::block::RawBlockState;
 use crate::chunk::ChunkHeightmapType;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
+use crate::generation::structure::placement::GlobalStructureCache;
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -344,16 +345,23 @@ impl Cache {
         terrain_cache: &TerrainCache,
         noise_router: &ProtoNoiseRouters,
         dimension: Dimension,
+        global_structure_cache: &GlobalStructureCache, // <--- NEW PARAMETER HERE
     ) {
         let mid = ((self.size * self.size) >> 1) as usize;
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
             StagedChunkEnum::StructureStart => self.chunks[mid]
                 .get_proto_chunk_mut()
-                .set_structure_starts(random_config, settings),
+                .set_structure_starts(random_config, settings, global_structure_cache), // <--- PASSED HERE
             StagedChunkEnum::StructureReferences => self.chunks[mid]
                 .get_proto_chunk_mut()
-                .set_structure_references(random_config, settings, &dimension, noise_router),
+                .set_structure_references(
+                    random_config,
+                    settings,
+                    &dimension,
+                    noise_router,
+                    global_structure_cache,
+                ), // <--- PASSED HERE
             StagedChunkEnum::Biomes => self.chunks[mid]
                 .get_proto_chunk_mut()
                 .step_to_biomes(dimension, noise_router),

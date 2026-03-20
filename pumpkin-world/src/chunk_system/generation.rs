@@ -64,6 +64,7 @@ pub fn generate_single_chunk(
             &generator.terrain_cache,
             &generator.base_router,
             *dimension,
+            &generator.global_structure_cache,
         );
     }
 

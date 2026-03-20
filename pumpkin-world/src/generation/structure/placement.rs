@@ -9,12 +9,80 @@ use pumpkin_util::{
         xoroshiro128::Xoroshiro,
     },
 };
+use std::f64::consts::PI;
+use std::sync::OnceLock;
+
+/// A thread-safe global cache for structures that require world-wide placement calculations
+/// rather than localized chunk-based math (e.g., Strongholds using Concentric Rings).
+///
+/// This prevents chunk generation deadlocks by allowing chunks to query a pre-calculated
+/// mathematical layout in `O(1)` time instead of triggering cascading chunk loads.
+pub struct GlobalStructureCache {
+    /// A cached list of mathematically predicted (chunk_x, chunk_z) coordinates.
+    stronghold_chunks: OnceLock<Vec<(i32, i32)>>,
+}
+impl GlobalStructureCache {
+    /// Creates a new, empty global structure cache.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            stronghold_chunks: OnceLock::new(),
+        }
+    }
+
+    /// Retrieves the list of chunk coordinates for Concentric Ring structures.
+    /// If the cache is empty, it calculates the 128 ring positions mathematically.
+    #[allow(clippy::cast_precision_loss)]
+    pub fn get_or_calculate_strongholds(
+        &self,
+        seed: i64,
+        placement: &ConcentricRingsStructurePlacement,
+    ) -> &[(i32, i32)] {
+        self.stronghold_chunks.get_or_init(|| {
+            let mut chunks = Vec::with_capacity(placement.count as usize);
+
+            let mut distance = f64::from(placement.distance);
+            let mut current_ring_count = placement.spread;
+            let mut current_ring_index = 0;
+
+            // Derive an initial angle from the world seed
+            let mut angle = (seed as f64).sin() * PI * 2.0;
+
+            for _ in 0..placement.count {
+                let chunk_x = (angle.cos() * distance).round() as i32;
+                let chunk_z = (angle.sin() * distance).round() as i32;
+
+                chunks.push((chunk_x, chunk_z));
+
+                angle += (PI * 2.0) / f64::from(current_ring_count);
+                current_ring_index += 1;
+
+                if current_ring_index == current_ring_count {
+                    current_ring_index = 0;
+                    current_ring_count += current_ring_count * 2 / 5;
+                    distance += f64::from(placement.distance) * 1.25;
+                    angle += (PI * 2.0) / f64::from(current_ring_count);
+                }
+            }
+
+            chunks
+        })
+    }
+}
+
+impl Default for GlobalStructureCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[must_use]
 pub fn should_generate_structure(
     placement: &StructurePlacement,
     calculator: &StructurePlacementCalculator,
     chunk_x: i32,
     chunk_z: i32,
+    global_cache: &GlobalStructureCache,
 ) -> bool {
     is_start_chunk(
         &placement.placement_type,
@@ -22,6 +90,7 @@ pub fn should_generate_structure(
         chunk_x,
         chunk_z,
         placement.salt,
+        global_cache,
     ) && apply_frequency_reduction(
         placement.frequency_reduction_method,
         calculator.seed,
@@ -79,7 +148,7 @@ fn should_generate_frequency(
             let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));
             let carver_seed = get_carver_seed(&mut random, seed as u64, chunk_x, chunk_z);
             let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
-            random.next_f64() < frequency as f64
+            random.next_f64() < f64::from(frequency)
         }
     }
 }
@@ -90,13 +159,14 @@ fn is_start_chunk(
     chunk_x: i32,
     chunk_z: i32,
     salt: u32,
+    global_cache: &GlobalStructureCache,
 ) -> bool {
     match placement_type {
         StructurePlacementType::RandomSpread(placement) => {
             is_start_chunk_random_spread(placement, calculator, chunk_x, chunk_z, salt)
         }
         StructurePlacementType::ConcentricRings(placement) => {
-            is_start_chunk_concentric_rings(placement, calculator, chunk_x, chunk_z, salt)
+            is_start_chunk_concentric_rings(placement, calculator, chunk_x, chunk_z, global_cache)
         }
     }
 }
@@ -152,14 +222,14 @@ fn is_start_chunk_random_spread(
 }
 
 fn is_start_chunk_concentric_rings(
-    _placement: &ConcentricRingsStructurePlacement,
-    _calculator: &StructurePlacementCalculator,
-    _chunk_x: i32,
-    _chunk_z: i32,
-    _salt: u32,
+    placement: &ConcentricRingsStructurePlacement,
+    calculator: &StructurePlacementCalculator,
+    chunk_x: i32,
+    chunk_z: i32,
+    global_cache: &GlobalStructureCache,
 ) -> bool {
-    // TODO: Implement proper concentric rings logic
-    rand::random_bool(1.0 / 1000.0)
+    let strongholds = global_cache.get_or_calculate_strongholds(calculator.seed, placement);
+    strongholds.contains(&(chunk_x, chunk_z))
 }
 
 #[cfg(test)]
