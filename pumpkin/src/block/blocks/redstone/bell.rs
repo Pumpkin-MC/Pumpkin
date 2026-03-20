@@ -11,7 +11,7 @@ use pumpkin_data::block_properties::BellLikeProperties;
 use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::block_properties::{Attachment, Axis};
+use pumpkin_data::block_properties::{Attachment};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
@@ -26,12 +26,12 @@ use pumpkin_world::world::BlockFlags;
 async fn ring_bell(
     position: BlockPos,
     world: &Arc<World>,
-    direction2: Option<HorizontalFacing>,
-) -> () {
+    hit_direction: Option<HorizontalFacing>,
+) {
     let state = world.get_block_state(&position).await;
 
     let props = BellLikeProperties::from_state_id(state.id, world.get_block(&position).await);
-    let direction = direction2.map_or(props.facing, |direction3| direction3);
+    let direction = hit_direction.map_or(props.facing, |direction3| direction3);
 
     if let Some(block_entity) = world.get_block_entity(&position).await
         && let Some(be) = block_entity.as_any().downcast_ref::<BellBlockEntity>()
@@ -60,7 +60,7 @@ fn is_point_on_bell(
     if hit.face == &BlockDirection::Up || hit.face == &BlockDirection::Down {
         return false;
     }
-    if hit.face.to_axis() != Axis::Y && hit.cursor_pos.y <= 0.8124f32 {
+    if hit.cursor_pos.y <= 0.8124f32 {
         match attachment {
             Attachment::Floor => hit.face.to_axis() == block_face.to_block_direction().to_axis(),
             Attachment::SingleWall | Attachment::DoubleWall => {
@@ -75,12 +75,7 @@ fn is_point_on_bell(
 
 async fn is_single_wall(position: BlockPos, facing: HorizontalFacing, world: &World) -> bool {
     !world
-        .get_block(&match facing {
-            HorizontalFacing::North => position.add(0, 0, -1),
-            HorizontalFacing::East => position.add(1, 0, 0),
-            HorizontalFacing::South => position.add(0, 0, 1),
-            HorizontalFacing::West => position.add(-1, 0, 0),
-        })
+        .get_block(&position.offset(facing.to_offset()))
         .await
         .is_solid()
 }

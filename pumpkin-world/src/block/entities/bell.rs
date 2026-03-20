@@ -12,8 +12,6 @@ use std::sync::Arc;
 pub struct BellBlockEntity {
     pub position: BlockPos,
     pub last_side_hit: AtomicCell<Option<HorizontalFacing>>,
-    #[allow(dead_code)]
-    last_ring_time: AtomicCell<i64>,
     pub ring_ticks: AtomicCell<i32>,
     pub ringing: AtomicCell<bool>,
     resonating: AtomicCell<bool>,
@@ -30,7 +28,6 @@ impl BellBlockEntity {
             resonate_time: AtomicCell::new(0),
             resonating: AtomicCell::new(false),
             ringing: AtomicCell::new(false),
-            last_ring_time: AtomicCell::new(0),
         }
     }
     pub fn activate(&self, direction: HorizontalFacing) {
