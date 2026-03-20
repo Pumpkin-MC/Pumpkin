@@ -12,6 +12,8 @@ use pumpkin_util::{
 use std::f64::consts::PI;
 use std::sync::OnceLock;
 
+use crate::biome::BiomeSupplier;
+use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 /// A thread-safe global cache for structures that require world-wide placement calculations
 /// rather than localized chunk-based math (e.g., Strongholds using Concentric Rings).
 ///
@@ -37,6 +39,9 @@ impl GlobalStructureCache {
         &self,
         seed: i64,
         placement: &ConcentricRingsStructurePlacement,
+        biome_supplier: &dyn BiomeSupplier,
+        multi_noise_sampler: &mut MultiNoiseSampler,
+        allowed_biomes: &[u16],
     ) -> &[(i32, i32)] {
         self.stronghold_chunks.get_or_init(|| {
             let mut chunks = Vec::with_capacity(placement.count as usize);
@@ -45,14 +50,60 @@ impl GlobalStructureCache {
             let mut current_ring_count = placement.spread;
             let mut current_ring_index = 0;
 
-            // Derive an initial angle from the world seed
-            let mut angle = (seed as f64).sin() * PI * 2.0;
+            // 1. Exact Vanilla Angle Derivation
+            let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(seed as u64));
+            let mut angle = random.next_f64() * PI * 2.0;
 
             for _ in 0..placement.count {
-                let chunk_x = (angle.cos() * distance).round() as i32;
-                let chunk_z = (angle.sin() * distance).round() as i32;
+                let math_x = (angle.cos() * distance).round() as i32;
+                let math_z = (angle.sin() * distance).round() as i32;
 
-                chunks.push((chunk_x, chunk_z));
+                let center_block_x = (math_x << 4) + 8;
+                let center_block_z = (math_z << 4) + 8;
+
+                let mut final_chunk_x = math_x;
+                let mut final_chunk_z = math_z;
+
+                // 2. Exact Vanilla Biome Snapping (112 block radius search)
+                let mut closest_dist = i32::MAX;
+                let step: usize = 8;
+
+                for r in (0_i32..=112_i32).step_by(step) {
+                    for dx in (-r..=r).step_by(step) {
+                        for dz in (-r..=r).step_by(step) {
+                            // Only check the perimeter of the current radius ring
+                            if dx.abs() == r || dz.abs() == r {
+                                let test_x = center_block_x + dx;
+                                let test_z = center_block_z + dz;
+
+                                let biome_x = crate::generation::biome_coords::from_block(test_x);
+                                let biome_y = crate::generation::biome_coords::from_block(0);
+                                let biome_z = crate::generation::biome_coords::from_block(test_z);
+
+                                let biome = biome_supplier.biome(
+                                    biome_x,
+                                    biome_y,
+                                    biome_z,
+                                    multi_noise_sampler,
+                                );
+
+                                if allowed_biomes.contains(&(biome.id as u16)) {
+                                    let dist = dx * dx + dz * dz;
+                                    if dist < closest_dist {
+                                        closest_dist = dist;
+                                        final_chunk_x = test_x >> 4;
+                                        final_chunk_z = test_z >> 4;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if closest_dist < i32::MAX {
+                        break; // Stop expanding the radius if we found a valid biome
+                    }
+                }
+
+                chunks.push((final_chunk_x, final_chunk_z));
 
                 angle += (PI * 2.0) / f64::from(current_ring_count);
                 current_ring_index += 1;
@@ -77,12 +128,16 @@ impl Default for GlobalStructureCache {
 }
 
 #[must_use]
+#[expect(clippy::too_many_arguments)]
 pub fn should_generate_structure(
     placement: &StructurePlacement,
     calculator: &StructurePlacementCalculator,
     chunk_x: i32,
     chunk_z: i32,
     global_cache: &GlobalStructureCache,
+    biome_supplier: &dyn BiomeSupplier,
+    multi_noise_sampler: &mut MultiNoiseSampler,
+    allowed_biomes: &[u16],
 ) -> bool {
     is_start_chunk(
         &placement.placement_type,
@@ -91,6 +146,9 @@ pub fn should_generate_structure(
         chunk_z,
         placement.salt,
         global_cache,
+        biome_supplier,
+        multi_noise_sampler,
+        allowed_biomes,
     ) && apply_frequency_reduction(
         placement.frequency_reduction_method,
         calculator.seed,
@@ -153,6 +211,7 @@ fn should_generate_frequency(
     }
 }
 
+#[expect(clippy::too_many_arguments)]
 fn is_start_chunk(
     placement_type: &StructurePlacementType,
     calculator: &StructurePlacementCalculator,
@@ -160,13 +219,23 @@ fn is_start_chunk(
     chunk_z: i32,
     salt: u32,
     global_cache: &GlobalStructureCache,
+    biome_supplier: &dyn BiomeSupplier,
+    multi_noise_sampler: &mut MultiNoiseSampler,
+    allowed_biomes: &[u16],
 ) -> bool {
     match placement_type {
         StructurePlacementType::RandomSpread(placement) => {
             is_start_chunk_random_spread(placement, calculator, chunk_x, chunk_z, salt)
         }
         StructurePlacementType::ConcentricRings(placement) => {
-            is_start_chunk_concentric_rings(placement, calculator, chunk_x, chunk_z, global_cache)
+            let strongholds = global_cache.get_or_calculate_strongholds(
+                calculator.seed,
+                placement,
+                biome_supplier,
+                multi_noise_sampler,
+                allowed_biomes,
+            );
+            strongholds.contains(&(chunk_x, chunk_z))
         }
     }
 }
@@ -220,18 +289,6 @@ fn is_start_chunk_random_spread(
     let pos = get_start_chunk_random_spread(placement, calculator.seed, chunk_x, chunk_z, salt);
     (chunk_x == pos.0) && (chunk_z == pos.1)
 }
-
-fn is_start_chunk_concentric_rings(
-    placement: &ConcentricRingsStructurePlacement,
-    calculator: &StructurePlacementCalculator,
-    chunk_x: i32,
-    chunk_z: i32,
-    global_cache: &GlobalStructureCache,
-) -> bool {
-    let strongholds = global_cache.get_or_calculate_strongholds(calculator.seed, placement);
-    strongholds.contains(&(chunk_x, chunk_z))
-}
-
 #[cfg(test)]
 mod tests {
     use pumpkin_data::structures::RandomSpreadStructurePlacement;

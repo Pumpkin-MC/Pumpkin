@@ -11,6 +11,7 @@ use pumpkin_data::structures::{
     WeightedEntry,
 };
 use pumpkin_data::tag;
+use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
 use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
 use pumpkin_util::random::{RandomImpl, get_carver_seed};
@@ -60,6 +61,7 @@ use crate::{
     generation::{biome, positions::chunk_pos},
     world::{BlockAccessor, BlockRegistryExt},
 };
+use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
 
 enum ActiveSupplier {
@@ -1110,19 +1112,66 @@ impl ProtoChunk {
         }
     }
 
+    fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
+        let mut allowed_biomes = Vec::new();
+        for entry in set.structures {
+            let structure = Structure::get(&entry.structure);
+            if let Some(biomes) = get_tag_ids(
+                RegistryKey::WorldgenBiome,
+                structure
+                    .biomes
+                    .strip_prefix('#')
+                    .unwrap_or(structure.biomes),
+            ) {
+                allowed_biomes.extend_from_slice(biomes);
+            }
+        }
+        allowed_biomes
+    }
+
     pub fn set_structure_starts(
         &mut self,
         random_config: &GlobalRandomConfig,
         settings: &GenerationSettings,
+        dimension: &Dimension,            // <-- Added Parameter
+        noise_router: &ProtoNoiseRouters, // <-- Added Parameter
         global_cache: &GlobalStructureCache,
     ) {
         let seed = random_config.seed;
         let calculator = StructurePlacementCalculator::new(seed as i64);
 
+        // Initialize mathematical biome tools for ConcentricRings snapping
+        let active_supplier = if *dimension == Dimension::THE_END {
+            ActiveSupplier::End(TheEndBiomeSupplier)
+        } else if *dimension == Dimension::THE_NETHER {
+            ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
+        } else {
+            ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
+        };
+
+        let base_supplier: &dyn BiomeSupplier = match &active_supplier {
+            ActiveSupplier::End(s) => s,
+            ActiveSupplier::Nether(s) => s,
+            ActiveSupplier::Overworld(s) => s,
+        };
+        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
+        let mut multi_noise_sampler =
+            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
+
         for set in StructureSet::ALL {
-            // Pass global_cache to should_generate_structure
-            if !should_generate_structure(&set.placement, &calculator, self.x, self.z, global_cache)
-            {
+            let allowed_biomes = Self::get_allowed_biomes(set);
+
+            if !should_generate_structure(
+                &set.placement,
+                &calculator,
+                self.x,
+                self.z,
+                global_cache,
+                &biome_supplier,
+                &mut multi_noise_sampler,
+                &allowed_biomes,
+            ) {
                 continue;
             }
 
@@ -1253,7 +1302,14 @@ impl ProtoChunk {
                     }
                 }
                 StructurePlacementType::ConcentricRings(rings) => {
-                    let strongholds = global_cache.get_or_calculate_strongholds(seed, rings);
+                    let allowed_biomes = Self::get_allowed_biomes(set);
+                    let strongholds = global_cache.get_or_calculate_strongholds(
+                        seed,
+                        rings,
+                        &biome_supplier,
+                        &mut multi_noise_sampler,
+                        &allowed_biomes,
+                    );
                     for &(cx, cz) in strongholds {
                         // Quick heuristic filter to avoid evaluating far strongholds
                         if (cx - self.x).abs() <= 8 && (cz - self.z).abs() <= 8 {

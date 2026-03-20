@@ -350,9 +350,15 @@ impl Cache {
         let mid = ((self.size * self.size) >> 1) as usize;
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
-            StagedChunkEnum::StructureStart => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .set_structure_starts(random_config, settings, global_structure_cache), // <--- PASSED HERE
+            StagedChunkEnum::StructureStart => {
+                self.chunks[mid].get_proto_chunk_mut().set_structure_starts(
+                    random_config,
+                    settings,
+                    &dimension,
+                    noise_router,
+                    global_structure_cache,
+                )
+            }
             StagedChunkEnum::StructureReferences => self.chunks[mid]
                 .get_proto_chunk_mut()
                 .set_structure_references(
