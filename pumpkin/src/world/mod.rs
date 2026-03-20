@@ -846,14 +846,33 @@ impl World {
         }
 
         for scheduled_tick in tick_data.random_ticks {
-            let block = self.get_block(&scheduled_tick.position).await;
-            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
+            let (block, fluid) = match (scheduled_tick.tick_block, scheduled_tick.tick_fluid) {
+                (true, true) => {
+                    let (block, fluid) = self.get_block_and_fluid(&scheduled_tick.position).await;
+                    (Some(block), Some(fluid))
+                }
+                (true, false) => (Some(self.get_block(&scheduled_tick.position).await), None),
+                (false, true) => (None, Some(self.get_fluid(&scheduled_tick.position).await)),
+                (false, false) => (None, None),
+            };
+
+            if let Some(block) = block
+                && let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id)
+            {
                 pumpkin_block
                     .random_tick(RandomTickArgs {
                         world: self,
                         block,
                         position: &scheduled_tick.position,
                     })
+                    .await;
+            }
+
+            if let Some(fluid) = fluid
+                && let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id)
+            {
+                pumpkin_fluid
+                    .random_tick(fluid, self, &scheduled_tick.position)
                     .await;
             }
         }
@@ -3156,6 +3175,30 @@ impl World {
     pub async fn get_block(&self, position: &BlockPos) -> &'static Block {
         let id = self.get_block_state_id(position).await;
         Block::from_state_id(id)
+    }
+
+    #[must_use]
+    pub fn get_block_state_id_if_loaded(&self, position: &BlockPos) -> Option<BlockStateId> {
+        if !self.is_in_build_limit(*position) {
+            return None;
+        }
+
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.level.try_get_chunk(&chunk_coordinate)?;
+        chunk
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+    }
+
+    #[must_use]
+    pub fn get_block_state_if_loaded(&self, position: &BlockPos) -> Option<&'static BlockState> {
+        self.get_block_state_id_if_loaded(position)
+            .map(BlockState::from_id)
+    }
+
+    #[must_use]
+    pub fn is_loaded(&self, position: &BlockPos) -> bool {
+        self.get_block_state_id_if_loaded(position).is_some()
     }
 
     pub async fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
