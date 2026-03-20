@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::entity::attributes::AttributeBuilder;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
@@ -29,6 +31,14 @@ impl SilverfishEntity {
         };
 
         mob_arc
+    }
+
+    #[must_use]
+    pub fn create_attributes() -> AttributeBuilder {
+        AttributeBuilder::new()
+            .add(Attributes::MAX_HEALTH, 8.0)
+            .add(Attributes::MOVEMENT_SPEED, 0.25)
+            .add(Attributes::ATTACK_DAMAGE, 1.0)
     }
 }
 

@@ -1,9 +1,10 @@
-use crate::{SHOULD_STOP, server::Server};
+use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 use std::{
     sync::{Arc, atomic::Ordering},
     time::{Duration, Instant},
 };
 use tokio::time::sleep;
+use tracing::debug;
 
 pub struct Ticker;
 
@@ -11,7 +12,11 @@ impl Ticker {
     /// IMPORTANT: Run this in a new thread/tokio task.
     pub async fn run(server: &Arc<Server>) {
         let mut last_tick = Instant::now();
-        while !SHOULD_STOP.load(Ordering::Relaxed) {
+        'ticker: loop {
+            if SHOULD_STOP.load(Ordering::Relaxed) {
+                break;
+            }
+
             let tick_start_time = Instant::now();
             let manager = &server.tick_rate_manager;
 
@@ -51,11 +56,18 @@ impl Ticker {
             if let Some(sleep_time) = tick_interval.checked_sub(elapsed)
                 && !sleep_time.is_zero()
             {
-                sleep(sleep_time).await;
+                // Use select! to make sleep interruptible by STOP_INTERRUPT
+                tokio::select! {
+                    () = sleep(sleep_time) => {},
+                    () = STOP_INTERRUPT.cancelled() => {
+                        // Shutdown requested, exit the loop immediately
+                        break 'ticker;
+                    }
+                }
             }
 
             last_tick = Instant::now();
         }
-        log::debug!("Ticker stopped");
+        debug!("Ticker stopped");
     }
 }

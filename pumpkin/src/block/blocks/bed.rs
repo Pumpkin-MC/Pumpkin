@@ -16,6 +16,8 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
 use crate::block::OnLandedUponArgs;
+use crate::block::UpdateEntityMovementAfterFallOnArgs;
+use crate::block::bounce_entity_after_fall;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
@@ -97,6 +99,13 @@ impl BlockBehaviour for BedBlock {
         })
     }
 
+    fn update_entity_movement_after_fall_on<'a>(
+        &'a self,
+        args: UpdateEntityMovementAfterFallOnArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move { bounce_entity_after_fall(args.entity, 0.66) })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let mut bed_props = BedProperties::default(args.block);
@@ -140,6 +149,12 @@ impl BlockBehaviour for BedBlock {
             } else {
                 args.position.offset(bed_props.facing.to_offset())
             };
+
+            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos).await;
+            if neighbor_block_id != args.block.id {
+                args.world.update_neighbors(&other_half_pos, None).await;
+                return;
+            }
 
             let is_creative = args.player.gamemode.load() == GameMode::Creative;
             let flags = if bed_props.part == BedPart::Foot && !is_creative {
@@ -238,7 +253,7 @@ impl BlockBehaviour for BedBlock {
                 .is_solid()
                 || args
                     .world
-                    .get_block_state(&bed_head_pos.up())
+                    .get_block_state(&bed_foot_pos.up())
                     .await
                     .is_solid()
             {

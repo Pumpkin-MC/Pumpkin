@@ -87,7 +87,7 @@ impl BlockBehaviour for ShulkerBoxBlock {
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
-                    .open_handled_screen(&ShulkerBoxScreenFactory(inventory))
+                    .open_handled_screen(&ShulkerBoxScreenFactory(inventory), Some(*args.position))
                     .await;
             }
 

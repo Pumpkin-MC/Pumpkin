@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
@@ -10,6 +11,7 @@ use pumpkin_data::structures::{
 };
 use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
+use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
 use pumpkin_util::random::{RandomImpl, get_carver_seed};
 use pumpkin_util::{
     HeightMap,
@@ -20,6 +22,7 @@ use rustc_hash::FxHashMap;
 
 use super::{
     GlobalRandomConfig, biome_coords,
+    blender::{Blender, BlenderImpl},
     feature::placed_features::PLACED_FEATURES,
     noise::router::{
         multi_noise_sampler::MultiNoiseSampler, proto_noise_router::DoublePerlinNoiseBuilder,
@@ -29,6 +32,7 @@ use super::{
     section_coords,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
+use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
 use crate::chunk::format::LightContainer;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::StagedChunkEnum;
@@ -45,12 +49,12 @@ use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
     BlockStateId, ProtoNoiseRouters,
-    biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier},
     block::RawBlockState,
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
     world::{BlockAccessor, BlockRegistryExt},
 };
+use pumpkin_nbt::compound::NbtCompound;
 
 pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk;
@@ -64,6 +68,7 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_block_state(&self, pos: &Vector3<i32>) -> RawBlockState;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
+    fn add_block_entity(&mut self, pos: &Vector3<i32>, nbt: NbtCompound);
     fn top_motion_blocking_block_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn top_motion_blocking_block_no_leaves_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32;
@@ -154,6 +159,9 @@ pub struct ProtoChunk {
     bottom_y: i8,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
+    /// Block entities pending creation when the chunk is finalized.
+    /// These are created from structure templates during world generation.
+    pub pending_block_entities: Vec<NbtCompound>,
 }
 
 pub struct TerrainCache {
@@ -166,10 +174,15 @@ impl TerrainCache {
     #[must_use]
     pub fn from_random(random_config: &GlobalRandomConfig) -> Self {
         let random = &random_config.base_random_deriver;
-        let noise_builder = DoublePerlinNoiseBuilder::new(random_config);
-        let terrain_builder = SurfaceTerrainBuilder::new(&noise_builder, random);
-        let surface_noise = noise_builder.get_noise_sampler_for_id("surface");
-        let secondary_noise = noise_builder.get_noise_sampler_for_id("surface_secondary");
+        let terrain_builder = SurfaceTerrainBuilder::new(random);
+        let surface_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_config.base_random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE,
+        );
+        let secondary_noise = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+            &random_config.base_random_deriver,
+            &DoublePerlinNoiseParameters::SURFACE_SECONDARY,
+        );
         Self {
             terrain_builder,
             surface_noise,
@@ -231,6 +244,7 @@ impl ProtoChunk {
                     .map(|_| LightContainer::new_filled(0))
                     .collect(),
             },
+            pending_block_entities: Vec::new(),
         }
     }
 
@@ -338,6 +352,18 @@ impl ProtoChunk {
     #[must_use]
     pub const fn bottom_y(&self) -> i8 {
         self.bottom_y
+    }
+
+    /// Adds a pending block entity to be created when the chunk is finalized.
+    ///
+    /// The NBT compound should include the block entity's position (x, y, z) and id fields.
+    pub fn add_block_entity(&mut self, nbt: NbtCompound) {
+        self.pending_block_entities.push(nbt);
+    }
+
+    /// Takes all pending block entities, leaving an empty Vec.
+    pub fn take_pending_block_entities(&mut self) -> Vec<NbtCompound> {
+        std::mem::take(&mut self.pending_block_entities)
     }
 
     fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
@@ -577,7 +603,7 @@ impl ProtoChunk {
         );
         self.populate_noise(
             &mut noise_sampler,
-            random_config,
+            &random_config.ore_random_deriver,
             &mut surface_height_estimate_sampler,
         );
 
@@ -628,6 +654,17 @@ impl ProtoChunk {
         dimension: Dimension,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
+        let overworld_supplier = MultiNoiseBiomeSupplier::OVERWORLD;
+        let nether_supplier = MultiNoiseBiomeSupplier::NETHER;
+        let end_supplier = TheEndBiomeSupplier;
+        let base_supplier: &dyn BiomeSupplier = if dimension == Dimension::THE_END {
+            &end_supplier
+        } else if dimension == Dimension::THE_NETHER {
+            &nether_supplier
+        } else {
+            &overworld_supplier
+        };
+        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
         let min_y = self.bottom_y();
         let bottom_section = section_coords::block_to_section(min_y as i32);
         let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
@@ -646,23 +683,12 @@ impl ProtoChunk {
             for x in 0..biomes_per_section {
                 for y in 0..biomes_per_section {
                     for z in 0..biomes_per_section {
-                        let biome = if dimension == Dimension::THE_END {
-                            TheEndBiomeSupplier::biome(
-                                start_biome_x + x,
-                                start_biome_y + y,
-                                start_biome_z + z,
-                                multi_noise_sampler,
-                                dimension,
-                            )
-                        } else {
-                            MultiNoiseBiomeSupplier::biome(
-                                start_biome_x + x,
-                                start_biome_y + y,
-                                start_biome_z + z,
-                                multi_noise_sampler,
-                                dimension,
-                            )
-                        };
+                        let biome = biome_supplier.biome(
+                            start_biome_x + x,
+                            start_biome_y + y,
+                            start_biome_z + z,
+                            multi_noise_sampler,
+                        );
                         let index = self.local_biome_pos_to_biome_index(
                             x,
                             start_biome_y + y - biome_coords::from_block(min_y as i32),
@@ -680,7 +706,7 @@ impl ProtoChunk {
     pub fn populate_noise(
         &mut self,
         noise_sampler: &mut ChunkNoiseGenerator,
-        random_config: &GlobalRandomConfig,
+        ore_random_deriver: &XoroshiroSplitter,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) {
         let h_count = noise_sampler.horizontal_cell_block_count() as i32;
@@ -732,7 +758,7 @@ impl ProtoChunk {
 
                                 let block_state = noise_sampler
                                     .sample_block_state(
-                                        random_config,
+                                        ore_random_deriver,
                                         sample_start_x,
                                         sample_start_y,
                                         sample_start_z,
@@ -787,11 +813,9 @@ impl ProtoChunk {
         let min_y = self.bottom_y();
 
         let random = &random_config.base_random_deriver;
-        let noise_builder = DoublePerlinNoiseBuilder::new(random_config);
         let mut context = MaterialRuleContext::new(
             min_y,
             self.height(),
-            noise_builder,
             random,
             &terrain_cache.terrain_builder,
             &terrain_cache.surface_noise,
@@ -1004,14 +1028,10 @@ impl ProtoChunk {
 
                 match instance {
                     StructureInstance::Start(pos) => tasks.push(pos.collector.clone()),
-                    StructureInstance::Reference(origin_block_pos) => {
-                        let origin_chunk_x = origin_block_pos.0.x >> 4;
-                        let origin_chunk_z = origin_block_pos.0.z >> 4;
-                        if let Some(neighbor) = cache.get_chunk(origin_chunk_x, origin_chunk_z)
-                            && let Some(StructureInstance::Start(pos)) =
-                                neighbor.structure_starts.get(id)
-                        {
-                            tasks.push(pos.collector.clone());
+                    StructureInstance::Reference(collector) => {
+                        let collector_arc = collector.clone();
+                        if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
+                            tasks.push(collector_arc);
                         }
                     }
                 }
@@ -1051,29 +1071,10 @@ impl ProtoChunk {
                                         }
                                     }
                                 }
-                                StructureInstance::Reference(origin_block_pos) => {
-                                    let origin_chunk_x = origin_block_pos.0.x >> 4;
-                                    let origin_chunk_z = origin_block_pos.0.z >> 4;
-                                    if let Some(origin_neighbor) =
-                                        cache.try_get_proto_chunk(origin_chunk_x, origin_chunk_z)
-                                        && let Some(StructureInstance::Start(pos)) =
-                                            origin_neighbor.structure_starts.get(id)
-                                    {
-                                        let start_x = chunk_pos::start_block_x(center_x);
-                                        let start_z = chunk_pos::start_block_z(center_z);
-                                        let end_x = start_x + 15;
-                                        let end_z = start_z + 15;
-
-                                        if pos
-                                            .get_bounding_box()
-                                            .intersects_raw_xz(start_x, start_z, end_x, end_z)
-                                        {
-                                            let collector_arc = pos.collector.clone();
-                                            if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc))
-                                            {
-                                                tasks.push(collector_arc);
-                                            }
-                                        }
+                                StructureInstance::Reference(collector) => {
+                                    let collector_arc = collector.clone();
+                                    if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
+                                        tasks.push(collector_arc);
                                     }
                                 }
                             }
@@ -1200,7 +1201,7 @@ impl ProtoChunk {
                                 .get_bounding_box()
                                 .intersects_raw_xz(start_x, start_z, end_x, end_z)
                         {
-                            references.push((*key, start_data.start_pos));
+                            references.push((*key, start_data.collector.clone()));
                         }
                     }
                 }

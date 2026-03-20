@@ -12,7 +12,7 @@ use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
-use crate::{command::dispatcher::CommandDispatcher, entity::player::Player, world::World};
+use crate::{command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World};
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
@@ -21,6 +21,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
+use tracing::{debug, error, info, warn};
 
 use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
@@ -147,8 +148,8 @@ impl Server {
                 WorldInfoError::InfoNotFound => (),
                 WorldInfoError::UnsupportedDataVersion(_version)
                 | WorldInfoError::UnsupportedLevelVersion(_version) => {
-                    log::error!("Failed to load world info!");
-                    log::error!("{error}");
+                    error!("Failed to load world info!");
+                    error!("{error}");
                     panic!("Unsupported world version! See the logs for more info.");
                 }
                 e => {
@@ -165,7 +166,7 @@ impl Server {
         let locker = match AnvilLevelLocker::lock(&world_path) {
             Ok(l) => Some(l),
             Err(err) => {
-                log::warn!(
+                warn!(
                     "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
                 );
                 None
@@ -173,7 +174,7 @@ impl Server {
         };
 
         let level_info = level_info.unwrap_or_else(|err| {
-            log::warn!("Failed to get level_info, using default instead: {err}");
+            warn!("Failed to get level_info, using default instead: {err}");
             LevelData::default(basic_config.seed)
         });
 
@@ -199,7 +200,7 @@ impl Server {
             async move {
                 if allow_chat {
                     fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                        log::error!("Failed to fetch Mojang keys: {e}");
+                        error!("Failed to fetch Mojang keys: {e}");
                         Vec::new()
                     })
                 } else {
@@ -248,6 +249,9 @@ impl Server {
         };
         let server = Arc::new(server);
 
+        // Initialize attribute registry for all entities
+        crate::entity::attributes::init_all_attributes();
+
         let server_clone = server.clone();
         tokio::spawn(async move {
             server_clone
@@ -264,7 +268,7 @@ impl Server {
             let config = Arc::new(server.advanced_config.world.clone());
 
             tokio::task::spawn_blocking(move || {
-                log::info!(
+                info!(
                     "Loading {}",
                     TextComponent::text(dim.minecraft_name.to_string())
                         .color_named(NamedColor::DarkGreen)
@@ -280,7 +284,7 @@ impl Server {
             })
         };
 
-        log::info!("Starting parallel world load...");
+        info!("Starting parallel world load...");
         let (overworld, nether, end, keys) = tokio::join!(
             world_loader(Dimension::OVERWORLD),
             world_loader(Dimension::THE_NETHER),
@@ -298,7 +302,7 @@ impl Server {
             server.mojang_public_keys.store(Arc::new(k));
         }
 
-        log::info!("All worlds loaded successfully.");
+        info!("All worlds loaded successfully.");
         server
     }
 
@@ -315,6 +319,7 @@ impl Server {
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
         // TODO: this is really bad
         let world_guard = self.worlds.load();
+
         if dimension == &Dimension::OVERWORLD {
             world_guard.first()
         } else if dimension == &Dimension::THE_NETHER {
@@ -365,7 +370,7 @@ impl Server {
                     let world = self.get_world_from_dimension(dimension);
                     (world, Some(data))
                 } else {
-                    log::warn!("Invalid dimension key in player data: {dimension_key}");
+                    warn!("Invalid dimension key in player data: {dimension_key}");
                     let default_world = self
                         .worlds
                         .load()
@@ -416,7 +421,6 @@ impl Server {
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
-                #[expect(clippy::if_then_some_else_none)]
                 if world
                     .add_player(player.clone())
                     .is_ok() {
@@ -448,11 +452,11 @@ impl Server {
 
     pub async fn shutdown(&self) {
         self.tasks.close();
-        log::debug!("Awaiting tasks for server");
+        debug!("Awaiting tasks for server");
         self.tasks.wait().await;
-        log::debug!("Done awaiting tasks for server");
+        debug!("Done awaiting tasks for server");
 
-        log::info!("Starting worlds");
+        info!("Starting worlds");
         for world in self.worlds.load().iter() {
             world.shutdown().await;
         }
@@ -463,9 +467,9 @@ impl Server {
             .world_info_writer
             .write_world_info(&level_data, &self.basic_config.get_world_path())
         {
-            log::error!("Failed to save level.dat: {err}");
+            error!("Failed to save level.dat: {err}");
         }
-        log::info!("Completed worlds");
+        info!("Completed worlds");
     }
 
     /// Broadcasts a packet to all players in all worlds.
@@ -742,7 +746,7 @@ impl Server {
 
         // Global tasks
         if let Err(e) = self.player_data_storage.tick(self).await {
-            log::error!("Error ticking player data: {e}");
+            error!("Error ticking player data: {e}");
         }
     }
 

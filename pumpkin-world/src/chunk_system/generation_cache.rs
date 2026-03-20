@@ -12,11 +12,13 @@ use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::future::Future;
 use std::pin::Pin;
+use tracing::debug;
 
 pub struct Cache {
     pub x: i32,
@@ -89,8 +91,14 @@ impl GenerationCache for Cache {
         let dx = chunk_x - self.x;
         let dz = chunk_z - self.z;
 
-        (dx >= 0 && dx < self.size && dz >= 0 && dz < self.size)
-            .then(|| self.chunks[(dx * self.size + dz) as usize].get_proto_chunk())
+        if dx < 0 || dx >= self.size || dz < 0 || dz >= self.size {
+            return None;
+        }
+
+        match &self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(chunk) => Some(chunk),
+            Chunk::Level(_) => None,
+        }
     }
 
     fn try_get_proto_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk> {
@@ -155,11 +163,9 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::debug!(
+            debug!(
                 "illegal get_block_state {pos:?} cache pos ({}, {}) size {}",
-                self.x,
-                self.z,
-                self.size
+                self.x, self.z, self.size
             );
             return RawBlockState::AIR;
         }
@@ -179,11 +185,9 @@ impl GenerationCache for Cache {
         // debug_assert!(dx >= 0 && dz >= 0);
         if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
             // breakpoint here
-            log::debug!(
+            debug!(
                 "illegal set_block_state {pos:?} cache pos ({}, {}) size {}",
-                self.x,
-                self.z,
-                self.size
+                self.x, self.z, self.size
             );
             return;
         }
@@ -198,6 +202,27 @@ impl GenerationCache for Cache {
             }
             Chunk::Proto(data) => {
                 data.set_block_state(pos.x, pos.y, pos.z, block_state);
+            }
+        }
+    }
+
+    fn add_block_entity(&mut self, pos: &Vector3<i32>, nbt: NbtCompound) {
+        let dx = (pos.x >> 4) - self.x;
+        let dz = (pos.z >> 4) - self.z;
+        if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
+            debug!(
+                "illegal add_block_entity {pos:?} cache pos ({}, {}) size {}",
+                self.x, self.z, self.size
+            );
+            return;
+        }
+
+        match &mut self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Level(_) => {
+                debug!("add_block_entity on non-proto chunk at {pos:?}");
+            }
+            Chunk::Proto(data) => {
+                data.add_block_entity(nbt);
             }
         }
     }
@@ -299,6 +324,7 @@ impl GenerationCache for Cache {
 }
 
 impl Cache {
+    #[must_use]
     pub fn new(x: i32, z: i32, size: i32) -> Self {
         Self {
             x,

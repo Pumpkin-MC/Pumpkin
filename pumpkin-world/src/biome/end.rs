@@ -1,4 +1,4 @@
-use pumpkin_data::{chunk::Biome, dimension::Dimension};
+use pumpkin_data::chunk::Biome;
 
 use crate::{
     biome::BiomeSupplier,
@@ -18,13 +18,7 @@ impl TheEndBiomeSupplier {
 }
 
 impl BiomeSupplier for TheEndBiomeSupplier {
-    fn biome(
-        x: i32,
-        y: i32,
-        z: i32,
-        noise: &mut MultiNoiseSampler<'_>,
-        _dimension: Dimension,
-    ) -> &'static Biome {
+    fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
         let x = biome_coords::to_block(x);
         let y = biome_coords::to_block(y);
         let z = biome_coords::to_block(z);

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
+use tracing::{info, warn};
 
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
@@ -234,8 +235,7 @@ impl PoiRegion {
 
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as u32)
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_secs() as u32);
 
         // Start after header (2 sectors)
         let mut current_sector: u32 = 2;
@@ -356,7 +356,7 @@ impl PoiRegion {
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to parse POI chunk at index {index}: {e}");
+                    warn!("Failed to parse POI chunk at index {index}: {e}");
                 }
             }
         }
@@ -398,7 +398,7 @@ impl PoiStorage {
             let path = self.region_path(rx, rz);
             let region = PoiRegion::load(&path).unwrap_or_else(|e| {
                 if path.exists() {
-                    log::warn!("Failed to load POI region {}: {}", path.display(), e);
+                    warn!("Failed to load POI region {}: {}", path.display(), e);
                 }
                 PoiRegion::new()
             });
@@ -485,7 +485,7 @@ impl PoiStorage {
         }
 
         if saved > 0 {
-            log::info!("Saved {saved} POI region(s)");
+            info!("Saved {saved} POI region(s)");
         }
         Ok(())
     }

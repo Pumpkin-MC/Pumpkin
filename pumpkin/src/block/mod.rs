@@ -11,6 +11,7 @@ use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 pub mod blocks;
 pub mod fluid;
@@ -33,6 +34,31 @@ pub trait BlockMetadata {
 
 pub type BlockFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+pub(crate) fn stop_vertical_movement_after_fall(entity: &dyn EntityBase) {
+    let entity = entity.get_entity();
+    let mut velocity = entity.velocity.load();
+    velocity.y = 0.0;
+    entity.velocity.store(velocity);
+}
+
+pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplier: f64) {
+    let base_entity = entity.get_entity();
+    let mut velocity = base_entity.velocity.load();
+
+    if base_entity.sneaking.load(Ordering::Relaxed) {
+        velocity.y = 0.0;
+    } else if velocity.y < 0.0 {
+        let entity_factor = if entity.get_living_entity().is_some() {
+            1.0
+        } else {
+            0.8
+        };
+        velocity.y = -velocity.y * bounce_multiplier * entity_factor;
+    }
+
+    base_entity.velocity.store(velocity);
+}
+
 pub trait BlockBehaviour: Send + Sync {
     fn normal_use<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move { BlockActionResult::Pass })
@@ -46,6 +72,11 @@ pub trait BlockBehaviour: Send + Sync {
     }
 
     fn on_entity_collision<'a>(&'a self, _args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async {})
+    }
+
+    /// Called when an entity is standing on / walking over the top face of this block.
+    fn on_entity_step<'a>(&'a self, _args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
 
@@ -100,6 +131,15 @@ pub trait BlockBehaviour: Send + Sync {
                     .handle_fall_damage(args.entity, args.fall_distance, 1.0)
                     .await;
             }
+        })
+    }
+
+    fn update_entity_movement_after_fall_on<'a>(
+        &'a self,
+        args: UpdateEntityMovementAfterFallOnArgs<'a>,
+    ) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            stop_vertical_movement_after_fall(args.entity);
         })
     }
 
@@ -205,6 +245,15 @@ pub struct OnEntityCollisionArgs<'a> {
     pub entity: &'a dyn EntityBase,
 }
 
+pub struct OnEntityStepArgs<'a> {
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub entity: &'a dyn EntityBase,
+    pub below_supporting_block: bool,
+}
+
 pub struct ExplodeArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
@@ -279,6 +328,10 @@ pub struct PlayerPlacedArgs<'a> {
 pub struct OnLandedUponArgs<'a> {
     pub world: &'a Arc<World>,
     pub fall_distance: f32,
+    pub entity: &'a dyn EntityBase,
+}
+
+pub struct UpdateEntityMovementAfterFallOnArgs<'a> {
     pub entity: &'a dyn EntityBase,
 }
 

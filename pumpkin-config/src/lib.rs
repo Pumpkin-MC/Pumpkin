@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::{fs, num::NonZeroU8, path::Path};
+use tracing::{debug, warn};
 pub mod fun;
 pub mod logging;
 pub mod networking;
@@ -189,7 +190,7 @@ pub trait LoadConfiguration {
         Self: Sized + Default + Serialize + DeserializeOwned,
     {
         if !config_dir.exists() {
-            log::debug!("creating new config root folder");
+            debug!("creating new config root folder");
             fs::create_dir(config_dir).expect("Failed to create config root folder");
         }
         let path = config_dir.join(Self::get_path());
@@ -215,7 +216,7 @@ pub trait LoadConfiguration {
                     path.file_name().unwrap().display()
                 );
                 if let Err(err) = fs::write(&path, toml::to_string(&merged_config).unwrap()) {
-                    log::warn!(
+                    warn!(
                         "Couldn't write merged config to {}. Reason: {}",
                         path.display(),
                         err
@@ -227,7 +228,7 @@ pub trait LoadConfiguration {
         } else {
             let content = Self::default();
             if let Err(err) = fs::write(&path, toml::to_string(&content).unwrap()) {
-                log::warn!(
+                warn!(
                     "Couldn't write default config to {:?}. Reason: {}",
                     path.display(),
                     err

@@ -96,7 +96,7 @@ impl BlockBehaviour for BlastFurnaceBlock {
                     experience_container,
                 );
                 args.player
-                    .open_handled_screen(&blasting_furnace_screen_factory)
+                    .open_handled_screen(&blasting_furnace_screen_factory, Some(*args.position))
                     .await;
             }
             crate::block::registry::BlockActionResult::Consume

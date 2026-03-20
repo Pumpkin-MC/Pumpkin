@@ -2,17 +2,14 @@ use crate::entity::player::Player;
 use base64::{Engine as _, engine::general_purpose};
 use core::error;
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::packet::CURRENT_MC_PROTOCOL;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::{
     Players, Sample, StatusResponse, Version,
     codec::var_int::VarInt,
     java::client::{config::CPluginMessage, status::CStatusResponse},
 };
-use pumpkin_world::CURRENT_MC_VERSION;
-use std::{
-    fs::{self},
-    path::Path,
-};
+use std::{fs, path::Path};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../../assets/default_icon.png");
@@ -144,7 +141,7 @@ impl CachedStatus {
         let favicon = if config.use_favicon {
             config.favicon_path.as_ref().map_or_else(
                 || {
-                    log::debug!("Loading default icon");
+                    debug!("Loading default icon");
 
                     // Attempt to load default icon
                     Some(load_icon_from_bytes(DEFAULT_ICON))
@@ -154,10 +151,10 @@ impl CachedStatus {
                         .extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
                     {
-                        log::warn!("Favicon is not a PNG-image, using default.");
+                        warn!("Favicon is not a PNG-image, using default.");
                         return Some(load_icon_from_bytes(DEFAULT_ICON));
                     }
-                    log::debug!("Attempting to load server favicon from '{icon_path}'");
+                    debug!("Attempting to load server favicon from '{icon_path}'");
 
                     match load_icon_from_file(icon_path) {
                         Ok(icon) => Some(icon),
@@ -172,9 +169,7 @@ impl CachedStatus {
                                     }
                                 },
                             );
-                            log::warn!(
-                                "Failed to load favicon from '{icon_path}': {error_message}"
-                            );
+                            warn!("Failed to load favicon from '{icon_path}': {error_message}");
 
                             Some(load_icon_from_bytes(DEFAULT_ICON))
                         }
@@ -182,14 +177,14 @@ impl CachedStatus {
                 },
             )
         } else {
-            log::info!("Favicon usage is disabled.");
+            info!("Favicon usage is disabled.");
             None
         };
 
         StatusResponse {
             version: Some(Version {
-                name: CURRENT_MC_VERSION.into(),
-                protocol: CURRENT_MC_PROTOCOL,
+                name: CURRENT_MC_VERSION.to_string(),
+                protocol: CURRENT_MC_VERSION.protocol_version() as u32,
             }),
             players: Some(Players {
                 max: config.max_players,

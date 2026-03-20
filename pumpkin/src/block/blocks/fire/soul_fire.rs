@@ -8,6 +8,7 @@ use crate::block::{
 };
 
 use super::FireBlockBase;
+use crate::block::OnEntityCollisionArgs;
 
 #[pumpkin_block("minecraft:soul_fire")]
 pub struct SoulFireBlock;
@@ -20,6 +21,10 @@ impl SoulFireBlock {
 }
 
 impl BlockBehaviour for SoulFireBlock {
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        FireBlockBase::apply_fire_collision(args, true)
+    }
+
     fn get_state_for_neighbor_update<'a>(
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,

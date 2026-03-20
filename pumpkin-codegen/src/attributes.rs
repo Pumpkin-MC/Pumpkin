@@ -6,12 +6,16 @@ use std::collections::BTreeMap;
 use std::fs;
 use syn::LitInt;
 
+/// Raw deserialization shape for a single attribute entry from `attributes.json`.
 #[derive(Deserialize)]
 struct Attributes {
+    /// Numeric registry ID for this attribute.
     id: u8,
+    /// Default numeric value applied to entities that do not override this attribute.
     default_value: f64,
 }
 
+/// Generates the `TokenStream` for the `Attributes` struct and its associated constants.
 pub fn build() -> TokenStream {
     let attributes: BTreeMap<String, Attributes> =
         serde_json::from_str(&fs::read_to_string("../assets/attributes.json").unwrap())

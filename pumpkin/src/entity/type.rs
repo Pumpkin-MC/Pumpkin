@@ -4,6 +4,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
+use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
 use crate::{
     entity::{
         Entity, EntityBase,
@@ -13,6 +14,7 @@ use crate::{
         },
         living::LivingEntity,
         mob::{
+            bat::BatEntity,
             creeper::CreeperEntity,
             enderman::EndermanEntity,
             silverfish::SilverfishEntity,
@@ -20,10 +22,12 @@ use crate::{
                 bogged::BoggedSkeletonEntity, parched::ParchedSkeletonEntity,
                 skeleton::SkeletonEntity, stray::StraySkeletonEntity, wither::WitherSkeletonEntity,
             },
-            zombie::{ZombieEntity, drowned::DrownedEntity, husk::HuskEntity},
-            zombie_villager::ZombieVillagerEntity,
+            zombie::{drowned::DrownedEntity, husk::HuskEntity, zombie::ZombieEntity},
         },
-        passive::{iron_golem::IronGolemEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity},
+        passive::{
+            cat::CatEntity, chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
+            pig::PigEntity, sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
+        },
     },
     world::World,
 };
@@ -50,13 +54,22 @@ pub async fn from_type(
         id if id == EntityType::WITHER_SKELETON.id => WitherSkeletonEntity::new(entity).await,
         id if id == EntityType::STRAY.id => StraySkeletonEntity::new(entity).await,
 
+        id if id == EntityType::BAT.id => BatEntity::new(entity).await,
         id if id == EntityType::CREEPER.id => CreeperEntity::new(entity).await,
         id if id == EntityType::ENDERMAN.id => EndermanEntity::new(entity).await,
 
+        id if id == EntityType::CAT.id => CatEntity::new(entity).await,
+        id if id == EntityType::CHICKEN.id => ChickenEntity::new(entity).await,
+        id if id == EntityType::COW.id => CowEntity::new(entity).await,
+        id if id == EntityType::PIG.id => PigEntity::new(entity).await,
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity).await,
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity).await,
+        id if id == EntityType::SHEEP.id => SheepEntity::new(entity).await,
         id if id == EntityType::WOLF.id => WolfEntity::new(entity).await,
         id if id == EntityType::WITHER.id => WitherEntity::new(entity).await,
+        id if id == EntityType::AREA_EFFECT_CLOUD.id => {
+            crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
+        }
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),

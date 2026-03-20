@@ -93,7 +93,7 @@ impl BlockBehaviour for FurnaceBlock {
                 let furnace_screen_factory =
                     FurnaceScreenFactory::new(inventory, property_delegate, experience_container);
                 args.player
-                    .open_handled_screen(&furnace_screen_factory)
+                    .open_handled_screen(&furnace_screen_factory, Some(*args.position))
                     .await;
             }
             crate::block::registry::BlockActionResult::Consume

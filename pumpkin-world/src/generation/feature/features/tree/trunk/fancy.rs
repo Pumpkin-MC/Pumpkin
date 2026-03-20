@@ -8,13 +8,11 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
-use serde::Deserialize;
 
 use super::TrunkPlacer;
 use crate::generation::feature::features::tree::{TreeFeature, TreeNode};
 use crate::generation::proto_chunk::GenerationCache;
 
-#[derive(Deserialize)]
 pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {

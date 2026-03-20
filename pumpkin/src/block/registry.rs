@@ -4,18 +4,21 @@ use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
 use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
+use crate::block::blocks::brewing_stand::BrewingStandBlock;
 use crate::block::blocks::cake::CakeBlock;
 use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::candle_cakes::CandleCakeBlock;
 use crate::block::blocks::candles::CandleBlock;
 use crate::block::blocks::carpet::{CarpetBlock, MossCarpetBlock, PaleMossCarpetBlock};
 use crate::block::blocks::carved_pumpkin::CarvedPumpkinBlock;
-use crate::block::blocks::chests::{ChestBlock, CopperChestBlock};
+use crate::block::blocks::chests::{ChestBlock, CopperChestBlock, TrappedChestBlock};
 use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
+use crate::block::blocks::conduit::ConduitBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
+use crate::block::blocks::dripstone::DripstoneBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
 use crate::block::blocks::falling::FallingBlock;
@@ -33,6 +36,7 @@ use crate::block::blocks::hay::HayBlock;
 use crate::block::blocks::infested::InfestedBlock;
 use crate::block::blocks::iron_bars::IronBarsBlock;
 use crate::block::blocks::logs::LogBlock;
+use crate::block::blocks::magma::MagmaBlock;
 use crate::block::blocks::mangrove_roots::MangroveRootsBlock;
 use crate::block::blocks::nether_portal::NetherPortalBlock;
 use crate::block::blocks::note::NoteBlock;
@@ -53,22 +57,28 @@ use crate::block::blocks::plant::crop::wheat::WheatBlock;
 use crate::block::blocks::plant::dry_vegetation::DryVegetationBlock;
 use crate::block::blocks::plant::flower::FlowerBlock;
 use crate::block::blocks::plant::flowerbed::FlowerbedBlock;
+use crate::block::blocks::plant::fungus::FungusBlock;
+use crate::block::blocks::plant::kelp::KelpBlock;
 use crate::block::blocks::plant::leaf_litter::LeafLitterBlock;
 use crate::block::blocks::plant::lily_pad::LilyPadBlock;
 use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
+use crate::block::blocks::plant::nether_sprouts::NetherSproutsBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
+use crate::block::blocks::plant::spore_blossom::SporeBlossomBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::plant::wither_rose::WitherRoseBlock;
 use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
 use crate::block::blocks::redstone::bell::BellBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
 use crate::block::blocks::redstone::copper_bulb::CopperBulbBlock;
+use crate::block::blocks::redstone::daylight_detector::DaylightDetectorBlock;
 use crate::block::blocks::redstone::dispenser::DispenserBlock;
 use crate::block::blocks::redstone::dropper::DropperBlock;
 use crate::block::blocks::redstone::lever::LeverBlock;
@@ -105,7 +115,8 @@ use crate::block::fluid::lava::FlowingLava;
 use crate::block::fluid::water::FlowingWater;
 use crate::block::{
     BlockBehaviour, BlockHitResult, BlockMetadata, GetInsideCollisionShapeArgs,
-    OnEntityCollisionArgs, OnLandedUponArgs,
+    OnEntityCollisionArgs, OnLandedUponArgs, UpdateEntityMovementAfterFallOnArgs,
+    stop_vertical_movement_after_fall,
 };
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
@@ -134,8 +145,10 @@ use super::{
     OnPlaceArgs, OnStateReplacedArgs, OnSyncedBlockEventArgs, PlacedArgs, PlayerPlacedArgs,
     PrepareArgs, UseWithItemArgs,
 };
+use crate::block::OnEntityStepArgs;
 use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
+use crate::block::blocks::cobweb::CobwebBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
@@ -165,6 +178,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(MossCarpetBlock);
     manager.register(PaleMossCarpetBlock);
     manager.register(ChestBlock);
+    manager.register(TrappedChestBlock);
     manager.register(CopperChestBlock);
     manager.register(EnderChestBlock);
     manager.register(CraftingTableBlock);
@@ -175,6 +189,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FenceBlock);
     manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
+    manager.register(BrewingStandBlock);
     manager.register(BlastFurnaceBlock);
     manager.register(SmokerBlock);
     manager.register(GlassPaneBlock);
@@ -206,6 +221,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
+    manager.register(KelpBlock);
     manager.register(NetherWartBlock);
     manager.register(WheatBlock);
     manager.register(TorchBlock);
@@ -245,12 +261,20 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BarrierBlock);
     manager.register(MangroveRootsBlock);
     manager.register(LayeredSnowBlock);
+    manager.register(CobwebBlock);
+    manager.register(WitherRoseBlock);
+    manager.register(FungusBlock);
+    manager.register(NetherSproutsBlock);
+    manager.register(SporeBlossomBlock);
+    manager.register(ConduitBlock);
+    manager.register(DripstoneBlock);
 
     manager.register(FallingBlock);
 
     // Fire
     manager.register(SoulFireBlock);
     manager.register(FireBlock);
+    manager.register(MagmaBlock);
 
     // Redstone
     manager.register(ButtonBlock);
@@ -279,6 +303,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(DropperBlock);
     manager.register(DispenserBlock);
     manager.register(LadderBlock);
+    manager.register(DaylightDetectorBlock);
 
     // Rails
     manager.register(RailBlock);
@@ -408,6 +433,29 @@ impl BlockRegistry {
                     state,
                     position,
                     entity,
+                })
+                .await;
+        }
+    }
+
+    pub async fn on_entity_step(
+        &self,
+        block: &Block,
+        world: &Arc<World>,
+        entity: &dyn EntityBase,
+        position: &BlockPos,
+        state: &BlockState,
+        below_supporting_block: bool,
+    ) {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            pumpkin_block
+                .on_entity_step(OnEntityStepArgs {
+                    world,
+                    block,
+                    state,
+                    position,
+                    entity,
+                    below_supporting_block,
                 })
                 .await;
         }
@@ -678,6 +726,22 @@ impl BlockRegistry {
         }
     }
 
+    pub async fn update_entity_movement_after_fall_on(
+        &self,
+        block: &Block,
+        entity: &dyn EntityBase,
+    ) {
+        if let Some(pumpkin_block) = self.get_pumpkin_block(block.id) {
+            pumpkin_block
+                .update_entity_movement_after_fall_on(UpdateEntityMovementAfterFallOnArgs {
+                    entity,
+                })
+                .await;
+        } else {
+            stop_vertical_movement_after_fall(entity);
+        }
+    }
+
     pub async fn broken(
         &self,
         world: &Arc<World>,
@@ -851,8 +915,15 @@ impl BlockRegistry {
     }
 
     #[must_use]
-    pub fn get_pumpkin_fluid(&self, fluid: u16) -> Option<&Arc<dyn FluidBehaviour>> {
-        self.fluids.get(&fluid)
+    pub fn get_pumpkin_fluid(&self, fluid_id: u16) -> Option<&Arc<dyn FluidBehaviour>> {
+        self.fluids.get(&fluid_id).or_else(|| {
+            // Still fluids share behavior with their flowing counterpart
+            match fluid_id {
+                2 => self.fluids.get(&1),
+                4 => self.fluids.get(&3),
+                _ => None,
+            }
+        })
     }
 
     pub async fn emits_redstone_power(

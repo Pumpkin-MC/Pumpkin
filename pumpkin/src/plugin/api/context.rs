@@ -4,12 +4,13 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use crate::{LoggerOption, command::client_suggestions};
+use crate::{LoggerOption, command::client_suggestions, plugin::PluginMetadata, plugin_log};
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
 };
 use tokio::sync::RwLock;
+use tracing::Level;
 
 use crate::{
     entity::player::Player,
@@ -17,7 +18,9 @@ use crate::{
     server::Server,
 };
 
-use super::{EventPriority, Payload, PluginMetadata};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+use super::{EventPriority, Payload};
 
 /// The `Context` struct represents the context of a plugin, containing metadata,
 /// a server reference, and event handlers.
@@ -27,7 +30,7 @@ use super::{EventPriority, Payload, PluginMetadata};
 /// - `server`: A reference to the server on which the plugin operates.
 /// - `handlers`: A map of event handlers, protected by a read-write lock for safe access across threads.
 pub struct Context {
-    metadata: PluginMetadata<'static>,
+    metadata: PluginMetadata,
     pub server: Arc<Server>,
     pub handlers: Arc<RwLock<HandlerMap>>,
     pub plugin_manager: Arc<PluginManager>,
@@ -46,7 +49,7 @@ impl Context {
     /// A new instance of `Context`.
     #[must_use]
     pub fn new(
-        metadata: PluginMetadata<'static>,
+        metadata: PluginMetadata,
         server: Arc<Server>,
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
@@ -69,7 +72,7 @@ impl Context {
     /// A string representing the path to the data folder.
     #[must_use]
     pub fn get_data_folder(&self) -> PathBuf {
-        let path = Path::new("./plugins").join(self.metadata.name);
+        let path = Path::new("./plugins").join(&self.metadata.name);
         if !path.exists() {
             fs::create_dir_all(&path).unwrap();
         }
@@ -153,31 +156,22 @@ impl Context {
         tree: crate::command::tree::CommandTree,
         permission: P,
     ) {
-        let plugin_name = self.metadata.name;
         let permission = permission.into();
 
         let full_permission_node = if permission.contains(':') {
             permission
         } else {
-            format!("{plugin_name}:{permission}")
+            format!("{}:{permission}", self.metadata.name)
         };
 
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.register(tree, full_permission_node);
+            dispatcher_lock
+                .fallback_dispatcher
+                .register(tree, full_permission_node);
         };
 
-        for world in self.server.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                let command_dispatcher = self.server.command_dispatcher.read().await;
-                client_suggestions::send_c_commands_packet(
-                    player,
-                    &self.server,
-                    &command_dispatcher,
-                )
-                .await;
-            }
-        }
+        self.reload_commands_for_everyone().await;
     }
 
     /// Asynchronously unregisters a command from the server.
@@ -187,31 +181,40 @@ impl Context {
     pub async fn unregister_command(&self, name: &str) {
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.unregister(name);
+            dispatcher_lock.fallback_dispatcher.unregister(name);
         };
 
+        self.reload_commands_for_everyone().await;
+    }
+
+    /// Asynchronously reloads (resends) all commands for all currently online players.
+    pub async fn reload_commands_for_everyone(&self) {
         for world in self.server.worlds.load().iter() {
             for player in world.players.load().iter() {
-                let command_dispatcher = self.server.command_dispatcher.read().await;
-                client_suggestions::send_c_commands_packet(
-                    player,
-                    &self.server,
-                    &command_dispatcher,
-                )
-                .await;
+                self.reload_commands_for(player).await;
             }
         }
+    }
+
+    /// Asynchronously reloads (resends) all commands for a particular player on the server.
+    ///
+    /// # Arguments
+    /// - `player`: The player for which the commands will be reloaded.
+    pub async fn reload_commands_for(&self, player: &Arc<Player>) {
+        let command_dispatcher = self.server.command_dispatcher.read().await;
+        client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher).await;
     }
 
     /// Register a permission for this plugin
     pub async fn register_permission(&self, permission: Permission) -> Result<(), String> {
         // Ensure the permission has the correct namespace
-        let plugin_name = self.metadata.name;
-
-        if !permission.node.starts_with(&format!("{plugin_name}:")) {
+        if !permission
+            .node
+            .starts_with(&format!("{}:", self.metadata.name))
+        {
             return Err(format!(
                 "Permission {} must use the plugin's namespace ({})",
-                permission.node, plugin_name
+                permission.node, self.metadata.name
             ));
         }
 
@@ -300,15 +303,42 @@ impl Context {
         after_count > before_count
     }
 
-    /// Initializes logging via the log crate for the plugin.
+    /// Initializes logging via the tracing crate for the plugin.
     pub fn init_log(&self) {
-        let logger_arc = self.logger.clone();
+        if let Some(Some((_logger_impl, level, config))) = self.logger.get() {
+            let fmt_layer = fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_ansi(config.color)
+                .with_target(true)
+                .with_thread_names(config.threads)
+                .with_thread_ids(config.threads);
 
-        let static_logger = Box::leak(Box::new(logger_arc));
-
-        if let Some(Some((_logger_impl, level))) = static_logger.get() {
-            // TODO
-            log::set_max_level(*level);
+            if config.timestamp {
+                let fmt_layer = fmt_layer.with_timer(fmt::time::UtcTime::new(
+                    time::macros::format_description!(
+                        "[year]-[month]-[day] [hour]:[minute]:[second]"
+                    ),
+                ));
+                tracing_subscriber::registry()
+                    .with(*level)
+                    .with(fmt_layer)
+                    .init();
+            } else {
+                let fmt_layer = fmt_layer.without_time();
+                tracing_subscriber::registry()
+                    .with(*level)
+                    .with(fmt_layer)
+                    .init();
+            }
         }
+    }
+
+    pub fn log(&self, message: impl std::fmt::Display) {
+        let level = if let Some(Some((_, level, _))) = self.logger.get() {
+            level.into_level().unwrap_or(Level::INFO)
+        } else {
+            Level::INFO
+        };
+        plugin_log!(level, &self.metadata.name, "{}", message);
     }
 }

@@ -39,8 +39,29 @@ pub trait FlowingFluid: Send + Sync {
     fn get_max_flow_distance(&self, world: &World) -> i32;
     fn can_convert_to_source(&self, world: &Arc<World>) -> bool;
 
-    fn is_same_fluid(&self, fluid: &Fluid, other_state_id: BlockStateId) -> bool {
-        Fluid::from_state_id(other_state_id).is_some_and(|other| fluid.id == other.id)
+    /// Returns true if `state_id` represents the given fluid — either as a direct fluid state
+    /// or as a waterlogged block (when the fluid is water-type).
+    fn has_fluid_at(&self, fluid: &Fluid, state_id: BlockStateId) -> bool {
+        self.get_effective_props(fluid, state_id).is_some()
+    }
+
+    /// Returns correct fluid properties for a state, treating waterlogged blocks as water sources
+    /// (level 8, non-falling). Returns `None` if the state doesn't contain this fluid.
+    fn get_effective_props(
+        &self,
+        fluid: &Fluid,
+        state_id: BlockStateId,
+    ) -> Option<FlowingFluidProperties> {
+        if fluid.states.iter().any(|s| s.block_state_id == state_id) {
+            return Some(FlowingFluidProperties::from_state_id(state_id, fluid));
+        }
+        if fluid.id == Fluid::FLOWING_WATER.id || fluid.id == Fluid::WATER.id {
+            let block = Block::from_state_id(state_id);
+            if block.is_waterlogged(state_id) {
+                return Some(self.get_source(fluid, false));
+            }
+        }
+        None
     }
 
     /// Core fluid tick handler that updates fluid state and triggers spreading.
@@ -62,19 +83,14 @@ pub trait FlowingFluid: Send + Sync {
             let current_block_state_id = world.get_block_state_id(block_pos).await;
             let block = Block::from_state_id(current_block_state_id);
 
-            let waterlogged = block.is_waterlogged(current_block_state_id);
-            let is_fluid_state_id = fluid
-                .states
-                .iter()
-                .any(|state| state.block_state_id == current_block_state_id)
-                || waterlogged;
-
-            if !is_fluid_state_id {
+            if !self.has_fluid_at(fluid, current_block_state_id) {
                 return;
             }
 
-            let current_fluid_state =
-                FlowingFluidProperties::from_state_id(current_block_state_id, fluid);
+            let waterlogged = block.is_waterlogged(current_block_state_id);
+            let current_fluid_state = self
+                .get_effective_props(fluid, current_block_state_id)
+                .unwrap();
             let is_source = current_fluid_state.level == Level::L8
                 && current_fluid_state.falling != Falling::True;
             let state_for_spreading: FlowingFluidProperties;
@@ -158,14 +174,14 @@ pub trait FlowingFluid: Send + Sync {
                 if props.level == Level::L8 && props.falling == Falling::False {
                     let source_count = self.count_source_neighbors(world, fluid, block_pos).await;
                     if source_count >= 3 {
-                        self.flow_to_sides(world, fluid, block_pos).await;
+                        self.flow_to_sides(world, fluid, block_pos, props).await;
                     }
                 }
                 return;
             }
 
             // Check if fluid should flow to the side(s)
-            self.flow_to_sides(world, fluid, block_pos).await;
+            self.flow_to_sides(world, fluid, block_pos, props).await;
         }
     }
 
@@ -185,11 +201,11 @@ pub trait FlowingFluid: Send + Sync {
             ] {
                 let neighbor_pos = block_pos.offset(direction.to_offset());
                 let neighbor_id = world.get_block_state_id(&neighbor_pos).await;
-                if self.is_same_fluid(fluid, neighbor_id) {
-                    let props = FlowingFluidProperties::from_state_id(neighbor_id, fluid);
-                    if props.level == Level::L8 && props.falling == Falling::False {
-                        count += 1;
-                    }
+                if self
+                    .get_effective_props(fluid, neighbor_id)
+                    .is_some_and(|p| p.level == Level::L8 && p.falling == Falling::False)
+                {
+                    count += 1;
                 }
             }
             count
@@ -232,12 +248,10 @@ pub trait FlowingFluid: Send + Sync {
             ] {
                 let neighbor_pos = block_pos.offset(direction.to_offset());
                 let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
-                if !self.is_same_fluid(fluid, neighbor_state_id) {
+                let Some(neighbor_props) = self.get_effective_props(fluid, neighbor_state_id)
+                else {
                     continue;
-                }
-
-                let neighbor_props =
-                    FlowingFluidProperties::from_state_id(neighbor_state_id, fluid);
+                };
 
                 // Count horizontal non-falling sources for infinite source formation
                 if neighbor_props.level == Level::L8 && neighbor_props.falling == Falling::False {
@@ -261,12 +275,9 @@ pub trait FlowingFluid: Send + Sync {
                 let below_state_id = below_state.id;
 
                 // Check if block below is a stable source of the same fluid
-                let below_is_same_source = if self.is_same_fluid(fluid, below_state_id) {
-                    let below_props = FlowingFluidProperties::from_state_id(below_state_id, fluid);
-                    below_props.level == Level::L8 && below_props.falling == Falling::False
-                } else {
-                    false
-                };
+                let below_is_same_source = self
+                    .get_effective_props(fluid, below_state_id)
+                    .is_some_and(|p| p.level == Level::L8 && p.falling == Falling::False);
 
                 // If the block below is solid (solid block) or a source of same fluid, form a source here.
                 if below_is_same_source || below_state.is_solid_block() {
@@ -278,11 +289,8 @@ pub trait FlowingFluid: Send + Sync {
             // Then: if there's water above, this block is ALWAYS level 8, falling=true
             let above_pos = block_pos.up();
             let above_state_id = world.get_block_state_id(&above_pos).await;
-            let above_block = Block::from_state_id(above_state_id);
 
-            if self.is_same_fluid(fluid, above_state_id)
-                || above_block.is_waterlogged(above_state_id)
-            {
+            if self.has_fluid_at(fluid, above_state_id) {
                 return Some(self.get_flowing(fluid, Level::L8, true));
             }
 
@@ -317,10 +325,7 @@ pub trait FlowingFluid: Send + Sync {
     ) -> impl std::future::Future<Output = ()> + Send + 'a {
         async move {
             let current_state_id = world.get_block_state_id(pos).await;
-            let is_already_same_fluid = self.is_same_fluid(fluid, current_state_id);
-            if is_already_same_fluid {
-                let current_props = FlowingFluidProperties::from_state_id(current_state_id, fluid);
-
+            if let Some(current_props) = self.get_effective_props(fluid, current_state_id) {
                 let current_level = i32::from(current_props.level.to_index()) + 1;
                 let new_level = i32::from(new_props.level.to_index()) + 1;
                 let current_is_source =
@@ -353,13 +358,7 @@ pub trait FlowingFluid: Send + Sync {
 
                 // If new is a source, always accept it
                 if new_is_source {
-
                     // Continue to set state below
-                } else if current_props.falling == Falling::True
-                    && new_props.falling == Falling::False
-                {
-                    // Never downgrade falling to non-falling (unless new is a source, already checked above)
-                    return;
                 } else if current_props.falling == new_props.falling {
                     // Same falling state - check level
                     if new_level <= current_level {
@@ -434,14 +433,11 @@ pub trait FlowingFluid: Send + Sync {
                 let neighbor_pos = pos.offset(direction.to_offset());
                 let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
 
-                if self.is_same_fluid(fluid, neighbor_state_id) {
-                    let neighbor_props =
-                        FlowingFluidProperties::from_state_id(neighbor_state_id, fluid);
-
-                    if neighbor_props.level == Level::L8 && neighbor_props.falling == Falling::False
-                    {
-                        source_count += 1;
-                    }
+                if self
+                    .get_effective_props(fluid, neighbor_state_id)
+                    .is_some_and(|p| p.level == Level::L8 && p.falling == Falling::False)
+                {
+                    source_count += 1;
                 }
             }
 
@@ -456,13 +452,9 @@ pub trait FlowingFluid: Send + Sync {
             let below_state_id = below_state.id;
 
             // Check if block below is a stable source of the same fluid
-            let below_is_same_source = if self.is_same_fluid(fluid, below_state_id) {
-                let below_props = FlowingFluidProperties::from_state_id(below_state_id, fluid);
-
-                below_props.level == Level::L8 && below_props.falling == Falling::False
-            } else {
-                false
-            };
+            let below_is_same_source = self
+                .get_effective_props(fluid, below_state_id)
+                .is_some_and(|p| p.level == Level::L8 && p.falling == Falling::False);
 
             // Convert to source if below is solid or a source of same fluid
             below_is_same_source || below_state.is_solid_block()
@@ -496,10 +488,9 @@ pub trait FlowingFluid: Send + Sync {
         world: &'a Arc<World>,
         fluid: &'a Fluid,
         block_pos: &'a BlockPos,
+        props: &'a FlowingFluidProperties,
     ) -> impl std::future::Future<Output = ()> + Send + 'a {
         async move {
-            let block_state_id = world.get_block_state_id(block_pos).await;
-            let props = FlowingFluidProperties::from_state_id(block_state_id, fluid);
             let drop_off = self.get_level_decrease_per_block(world);
             let current_level = i32::from(props.level.to_index()) + 1;
             let effective_level = if props.falling == Falling::True {

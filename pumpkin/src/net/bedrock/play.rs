@@ -22,13 +22,13 @@ use pumpkin_protocol::{
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 
 use crate::{
-    command::CommandSender,
     entity::{EntityBase, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
     plugin::player::{player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent},
     server::{Server, seasonal_events},
     world::chunker::{self},
 };
+use tracing::{debug, info};
 
 impl BedrockClient {
     pub async fn handle_request_chunk_radius(
@@ -68,11 +68,9 @@ impl BedrockClient {
         };
 
         if old_view_distance.get() != view_distance as u8 {
-            log::debug!(
+            debug!(
                 "Player {} updated their render distance: {} -> {}.",
-                player.gameprofile.name,
-                old_view_distance,
-                view_distance
+                player.gameprofile.name, old_view_distance, view_distance
             );
             chunker::update_position(player).await;
         }
@@ -145,7 +143,7 @@ impl BedrockClient {
             PlayerChatEvent::new(player.clone(), packet.message, vec![]);
 
             'after: {
-                log::info!("<chat> {}: {}", gameprofile.name, event.message);
+                info!("<chat> {}: {}", gameprofile.name, event.message);
 
                 let config = &server.advanced_config;
 
@@ -187,7 +185,8 @@ impl BedrockClient {
         command: SCommandRequest,
     ) {
         let player_clone = player.clone();
-        let server_clone: Arc<Server> = server.clone();
+        let server_clone = server.clone();
+
         send_cancellable! {{
             server;
             PlayerCommandSendEvent {
@@ -199,21 +198,19 @@ impl BedrockClient {
             'after: {
                 let command = event.command;
                 let command_clone = command.clone();
+
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
                     let dispatcher = server_clone.command_dispatcher.read().await;
-                    dispatcher
-                        .handle_command(
-                            &CommandSender::Player(player_clone),
-                            &server_clone,
-                            &command_clone,
-                        )
-                        .await;
+                    dispatcher.handle_command(
+                        &player_clone.get_command_source(&server_clone).await,
+                        &command_clone
+                    ).await;
                 });
 
                 if server.advanced_config.commands.log_console {
-                    log::info!(
+                    info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,
                         command

@@ -8,7 +8,7 @@ rust-version.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-util.workspace = true
 pumpkin-config.workspace = true
-pumpkin-data.workspace = true
+pumpkin-data = { workspace = true, features = ["default"] }
 
 futures.workspace = true
 
@@ -28,8 +28,7 @@ tokio = { workspace = true, features = [
 uuid.workspace = true
 thiserror.workspace = true
 serde.workspace = true
-serde_json.workspace = true
-log.workspace = true
+tracing.workspace = true
 crossbeam.workspace = true
 
 sha2.workspace = true

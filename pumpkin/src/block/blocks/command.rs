@@ -1,6 +1,16 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use log::warn;
+use super::redstone::block_receives_redstone_power;
+use crate::command::CommandSender;
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs,
+        OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+        registry::BlockActionResult,
+    },
+    server::Server,
+    world::World,
+};
 use pumpkin_data::{
     Block, FacingExt,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -11,18 +21,7 @@ use pumpkin_world::{
     block::entities::{BlockEntity, command_block::CommandBlockEntity},
     tick::TickPriority,
 };
-
-use crate::{
-    block::{
-        BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, NormalUseArgs,
-        OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
-        registry::BlockActionResult,
-    },
-    server::Server,
-    world::World,
-};
-
-use super::redstone::block_receives_redstone_power;
+use tracing::warn;
 
 pub struct CommandBlock;
 
@@ -131,19 +130,21 @@ impl CommandBlock {
         if !command_blocks_work {
             return;
         }
-        let command_entity: &CommandBlockEntity = block_entity.as_any().downcast_ref().unwrap();
+
+        let command_entity: Arc<CommandBlockEntity> = Arc::downcast(block_entity).unwrap();
+
         if command.is_empty() {
             command_entity.success_count.store(0, Ordering::Release);
         } else {
+            let source = CommandSender::CommandBlock(command_entity, world.clone())
+                .into_source(server)
+                .await;
+
             server
                 .command_dispatcher
                 .read()
                 .await
-                .handle_command(
-                    &crate::command::CommandSender::CommandBlock(block_entity, world),
-                    server,
-                    command,
-                )
+                .handle_command(&source, command)
                 .await;
         }
     }

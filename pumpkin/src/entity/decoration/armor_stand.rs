@@ -317,6 +317,13 @@ impl EntityBase for ArmorStandEntity {
         self
     }
 
+    fn kill<'a>(&'a self, _caller: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.get_entity().remove().await;
+            // TODO: emit GameEvent::ENTITY_DIE
+        })
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -324,7 +331,7 @@ impl EntityBase for ArmorStandEntity {
         damage_type: DamageType,
         _position: Option<Vector3<f64>>,
         source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
+        cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
             let entity = self.get_entity();
@@ -344,45 +351,63 @@ impl EntityBase for ArmorStandEntity {
                 return false;
             }
 
-            // TODO: <DamageSource>.isIn(DamageTypeTags::BYPASSES_INVULNERABILITY)
+            let bypasses_invulnerability =
+                damage_type == DamageType::OUT_OF_WORLD || damage_type == DamageType::GENERIC_KILL;
 
-            if damage_type == DamageType::EXPLOSION {
-                // TODO: Implement Dropping Items that are in the Equipment Slots & entity.kill()
-                self.on_break(entity).await;
+            if bypasses_invulnerability {
                 entity.kill(caller).await;
-                //entity.remove().await;
-                return false;
-            } // TODO: Implement <DamageSource>.isIn(DamageTypeTags::IGNITES_ARMOR_STANDS)
-
-            // TODO: Implement <DamageSource>.isIn(DamageTypeTags::BURNS_ARMOR_STANDS)
-
-            /* // TODO:
-            bl1: bool = <DamageSource>.isIn(DamageTypeTags.CAN_BREAK_ARMOR_STAND);
-            bl2: bool = <DamageSource>.isIn(DamageTypeTags.ALWAYS_KILLS_ARMOR_STANDS);
-
-            if !bl1 && !bl2 {
                 return false;
             }
-            */
 
-            let Some(source) = source else { return false };
+            if entity.is_invulnerable_to(&damage_type) || self.is_invisible() || self.is_marker() {
+                return false;
+            }
 
-            if let Some(player) = source.get_player() {
+            let is_explosion = damage_type == DamageType::FIREWORKS
+                || damage_type == DamageType::EXPLOSION
+                || damage_type == DamageType::PLAYER_EXPLOSION
+                || damage_type == DamageType::BAD_RESPAWN_POINT;
+
+            if is_explosion {
+                self.on_break(entity).await;
+                entity.kill(caller).await;
+                return false;
+            }
+
+            // TODO: IGNITES_ARMOR_STANDS (in_fire, campfire) - set on fire
+            // TODO: BURNS_ARMOR_STANDS (on_fire) - reduce health
+
+            let can_break = damage_type == DamageType::PLAYER_EXPLOSION
+                || damage_type == DamageType::PLAYER_ATTACK
+                || damage_type == DamageType::SPEAR
+                || damage_type == DamageType::MACE_SMASH;
+
+            let always_kills = damage_type == DamageType::ARROW
+                || damage_type == DamageType::TRIDENT
+                || damage_type == DamageType::FIREBALL
+                || damage_type == DamageType::WITHER_SKULL
+                || damage_type == DamageType::WIND_CHARGE;
+
+            if !can_break && !always_kills {
+                return false;
+            }
+
+            let attacker = cause.or(source);
+            if let Some(attacker) = attacker
+                && let Some(player) = attacker.get_player()
+            {
                 if !player.abilities.lock().await.allow_modify_world {
                     return false;
                 } else if player.is_creative() {
-                    // In creative mode, instant break without dropping items
                     self.spawn_break_particles(entity).await;
-                    self.on_break(entity).await;
-                    entity.remove().await;
+                    entity.kill(caller).await;
                     return true;
                 }
             }
 
             let time = world.level_time.lock().await.query_gametime();
 
-            if time - self.last_hit_time.load(Ordering::Relaxed) > 5 {
-                // && !bl2 {
+            if time - self.last_hit_time.load(Ordering::Relaxed) > 5 && !always_kills {
                 world
                     .send_entity_status(entity, EntityStatus::HitArmorStand)
                     .await;
@@ -395,6 +420,7 @@ impl EntityBase for ArmorStandEntity {
                     .await;
                 self.last_hit_time.store(time, Ordering::Relaxed);
             } else {
+                self.spawn_break_particles(entity).await;
                 world
                     .play_sound(
                         Sound::EntityArmorStandBreak,
@@ -408,6 +434,10 @@ impl EntityBase for ArmorStandEntity {
 
             true
         })
+    }
+
+    fn get_gravity(&self) -> f64 {
+        0.08
     }
 }
 
