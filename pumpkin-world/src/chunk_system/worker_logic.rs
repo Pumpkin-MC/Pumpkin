@@ -67,8 +67,8 @@ pub async fn io_read_work(
 
     // Cleaner loop and async recv
     while let Ok(pos) = recv.recv().await {
+        // Ensure we dont't starve the generation threads while waiting for io
         tokio::task::yield_now().await;
-
         // Lock handling
         tokio::task::block_in_place(|| {
             let mut data = lock.0.lock().unwrap();
@@ -77,13 +77,12 @@ pub async fn io_read_work(
             }
         });
 
-        // --- THE SURGICAL FIX ---
         // Channel creation moved INSIDE the loop so every chunk gets a clean state.
         let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
 
         level
             .chunk_saver
-            .fetch_chunks(&level.level_folder, &[pos], t_send) // Removed .clone()
+            .fetch_chunks(&level.level_folder, &[pos], t_send)
             .await;
 
         let data = match t_recv.recv().await {
