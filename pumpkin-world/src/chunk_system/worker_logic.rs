@@ -64,10 +64,11 @@ pub async fn io_read_work(
     debug!("io read thread start");
     let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
     let dimension = &level.world_gen.dimension;
-    let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
 
     // Cleaner loop and async recv
     while let Ok(pos) = recv.recv().await {
+        tokio::task::yield_now().await;
+
         // Lock handling
         tokio::task::block_in_place(|| {
             let mut data = lock.0.lock().unwrap();
@@ -76,9 +77,13 @@ pub async fn io_read_work(
             }
         });
 
+        // --- THE SURGICAL FIX ---
+        // Channel creation moved INSIDE the loop so every chunk gets a clean state.
+        let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
+
         level
             .chunk_saver
-            .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
+            .fetch_chunks(&level.level_folder, &[pos], t_send) // Removed .clone()
             .await;
 
         let data = match t_recv.recv().await {
