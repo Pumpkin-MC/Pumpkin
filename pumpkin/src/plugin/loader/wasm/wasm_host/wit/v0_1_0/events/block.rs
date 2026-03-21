@@ -1,7 +1,8 @@
 use crate::plugin::{
     block::{
         block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
-        block_can_build::BlockCanBuildEvent, block_redstone::BlockRedstoneEvent,
+        block_can_build::BlockCanBuildEvent, block_place::BlockPlaceEvent,
+        block_redstone::BlockRedstoneEvent,
     },
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -12,7 +13,7 @@ use crate::plugin::{
             },
             pumpkin::plugin::event::{
                 BlockBreakEventData, BlockBurnEventData, BlockCanBuildEventData,
-                BlockRedstoneEventData, Event,
+                BlockPlaceEventData, BlockRedstoneEventData, Event,
             },
         },
     },
@@ -125,6 +126,37 @@ impl ToFromV0_1_0WasmEvent for BlockCanBuildEvent {
                 buildable: data.buildable,
                 player: consume_player(state, &data.player),
                 block: from_wasm_block_name(&data.block),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for BlockPlaceEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::BlockPlaceEvent(BlockPlaceEventData {
+            player,
+            block_placed: to_wasm_block_name(self.block_placed),
+            block_placed_against: to_wasm_block_name(self.block_placed_against),
+            block_position: to_wasm_block_position(self.block_position),
+            can_build: self.can_build,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockPlaceEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                block_placed: from_wasm_block_name(&data.block_placed),
+                block_placed_against: from_wasm_block_name(&data.block_placed_against),
+                block_position: from_wasm_block_position(data.block_position),
+                can_build: data.can_build,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
