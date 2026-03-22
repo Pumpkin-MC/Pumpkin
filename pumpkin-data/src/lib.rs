@@ -56,6 +56,8 @@ pub mod sound {
 #[path = "generated/advancement.rs"]
 pub mod advancement;
 
+#[cfg(feature = "advancement")]
+pub use advancement::*;
 
 #[cfg(feature = "recipes")]
 #[rustfmt::skip]
