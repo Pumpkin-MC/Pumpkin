@@ -51,6 +51,14 @@ pub mod sound {
     pub use crate::sound_enum::*;
 }
 
+#[cfg(feature = "advancement")]
+#[rustfmt::skip]
+#[path = "generated/advancement.rs"]
+pub mod advancement;
+
+#[cfg(feature = "advancement")]
+pub use advancement::*;
+
 #[cfg(feature = "recipes")]
 #[rustfmt::skip]
 #[path = "generated/recipes.rs"]
