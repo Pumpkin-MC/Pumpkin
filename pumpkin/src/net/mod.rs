@@ -72,7 +72,7 @@ impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
             locale: "en_us".to_string(),
-            view_distance: NonZeroU8::new(8).unwrap(),
+            view_distance: NonZeroU8::new(8).expect("8 is a valid NonZeroU8"),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
             skin_parts: 0,
@@ -185,7 +185,7 @@ pub async fn can_not_join(
             Some(expires) => text.add_child(TextComponent::translate(
                 translation::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap(),
+                    expires.format(FORMAT_DESCRIPTION).expect("format should be valid"),
                 )],
             )),
             None => text,
@@ -220,7 +220,7 @@ pub async fn can_not_join(
             Some(expires) => text.add_child(TextComponent::translate(
                 translation::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
                 [TextComponent::text(
-                    expires.format(FORMAT_DESCRIPTION).unwrap(),
+                    expires.format(FORMAT_DESCRIPTION).expect("format should be valid"),
                 )],
             )),
             None => text,

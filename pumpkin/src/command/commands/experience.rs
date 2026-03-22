@@ -103,7 +103,7 @@ impl Executor {
                         "commands.experience.add.points.success.single",
                         [
                             TextComponent::text(amount.to_string()),
-                            target_name.unwrap(),
+                            target_name.unwrap_or(TextComponent::text("")),
                         ],
                     )
                 }
@@ -122,7 +122,7 @@ impl Executor {
                         "commands.experience.add.levels.success.single",
                         [
                             TextComponent::text(amount.to_string()),
-                            target_name.unwrap(),
+                            target_name.unwrap_or(TextComponent::text("")),
                         ],
                     )
                 }
@@ -141,7 +141,7 @@ impl Executor {
                         "commands.experience.set.points.success.single",
                         [
                             TextComponent::text(amount.to_string()),
-                            target_name.unwrap(),
+                            target_name.unwrap_or(TextComponent::text("")),
                         ],
                     )
                 }
@@ -160,7 +160,7 @@ impl Executor {
                         "commands.experience.set.levels.success.single",
                         [
                             TextComponent::text(amount.to_string()),
-                            target_name.unwrap(),
+                            target_name.unwrap_or(TextComponent::text("")),
                         ],
                     )
                 }

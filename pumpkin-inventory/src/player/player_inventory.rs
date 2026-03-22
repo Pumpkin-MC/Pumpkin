@@ -46,7 +46,7 @@ impl PlayerInventory {
     pub fn held_item(&self) -> Arc<Mutex<ItemStack>> {
         self.main_inventory
             .get(self.get_selected_slot() as usize)
-            .unwrap()
+            .expect("selected slot should always be valid (0-8)")
             .clone()
     }
 
@@ -59,12 +59,18 @@ impl PlayerInventory {
 
     /// getOffHandStack in source
     pub async fn off_hand_item(&self) -> Arc<Mutex<ItemStack>> {
-        let slot = self.equipment_slots.get(&Self::OFF_HAND_SLOT).unwrap();
+        let slot = self
+            .equipment_slots
+            .get(&Self::OFF_HAND_SLOT)
+            .expect("OFF_HAND_SLOT (40) should exist in equipment_slots");
         self.entity_equipment.lock().await.get(slot)
     }
 
     pub async fn swap_item(&self) -> (ItemStack, ItemStack) {
-        let slot = self.equipment_slots.get(&Self::OFF_HAND_SLOT).unwrap();
+        let slot = self
+            .equipment_slots
+            .get(&Self::OFF_HAND_SLOT)
+            .expect("OFF_HAND_SLOT (40) should exist in equipment_slots");
         let mut equipment = self.entity_equipment.lock().await;
         let binding = self.held_item();
         let mut main_hand_item = binding.lock().await;
@@ -355,7 +361,10 @@ impl Inventory for PlayerInventory {
             if slot < self.main_inventory.len() {
                 self.main_inventory[slot].clone()
             } else {
-                let slot = self.equipment_slots.get(&slot).unwrap();
+                let slot = self
+                    .equipment_slots
+                    .get(&slot)
+                    .expect("equipment slot should exist in equipment_slots map");
                 self.entity_equipment.lock().await.get(slot)
             }
         })
@@ -366,7 +375,10 @@ impl Inventory for PlayerInventory {
             if slot < self.main_inventory.len() {
                 split_stack(&self.main_inventory, slot, amount).await
             } else {
-                let slot = self.equipment_slots.get(&slot).unwrap();
+                let slot = self
+                    .equipment_slots
+                    .get(&slot)
+                    .expect("equipment slot should exist in equipment_slots map");
 
                 let equipment = self.entity_equipment.lock().await.get(slot);
                 let mut stack = equipment.lock().await;
@@ -388,7 +400,10 @@ impl Inventory for PlayerInventory {
                 std::mem::swap(&mut removed, &mut *guard);
                 removed
             } else {
-                let slot = self.equipment_slots.get(&slot).unwrap();
+                let slot = self
+                    .equipment_slots
+                    .get(&slot)
+                    .expect("equipment slot should exist in equipment_slots map");
                 self.entity_equipment
                     .lock()
                     .await

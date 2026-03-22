@@ -45,8 +45,8 @@ impl JavaClient {
         ) {
             *self.config.lock().await = Some(PlayerConfig {
                 locale: client_information.locale,
-                // client_information.view_distance was checked above to be > 0 so compiler should optimize this out.
-                view_distance: NonZeroU8::new(client_information.view_distance as u8).unwrap(),
+                // client_information.view_distance was checked above to be > 0 so this should never panic.
+                view_distance: NonZeroU8::new(client_information.view_distance as u8).expect("view distance should never be 0"),
                 chat_mode,
                 chat_colors: client_information.chat_colors,
                 skin_parts: client_information.skin_parts,
@@ -209,7 +209,7 @@ impl JavaClient {
         self.connection_state.store(ConnectionState::Play);
 
         let profile = self.gameprofile.lock().await.clone();
-        let profile = profile.unwrap();
+        let profile = profile.expect("gameprofile missing in config acknowledged");
         let address = self.address.lock().await;
 
         if let Some(reason) = can_not_join(&profile, &address, server).await {
