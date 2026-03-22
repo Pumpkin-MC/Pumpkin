@@ -24,8 +24,17 @@ impl BitSet {
     }
 
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
-        // Read length
+        // A BitSet with more than 8192 longs (512 KiB) would exceed any reasonable
+        // use in the Minecraft protocol. Reject to prevent OOM from crafted packets.
+        const MAX_BITSET_LENGTH: i32 = 8192;
+
         let length = read.get_var_int()?;
+        if length.0 < 0 || length.0 > MAX_BITSET_LENGTH {
+            return Err(ReadingError::Message(format!(
+                "BitSet length {} out of bounds (max {MAX_BITSET_LENGTH})",
+                length.0
+            )));
+        }
         let mut array: Vec<i64> = Vec::with_capacity(length.0 as usize);
         for _ in 0..length.0 {
             let long = read.get_i64_be()?;
