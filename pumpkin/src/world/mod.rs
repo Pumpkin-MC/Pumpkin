@@ -127,6 +127,7 @@ use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
 use scoreboard::Scoreboard;
+use teams::Teams;
 use time::LevelTime;
 use tokio::sync::Mutex;
 
@@ -135,6 +136,7 @@ pub mod bossbar;
 pub mod custom_bossbar;
 pub mod natural_spawner;
 pub mod scoreboard;
+pub mod teams;
 pub mod weather;
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
@@ -182,6 +184,8 @@ pub struct World {
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: Mutex<Scoreboard>,
+    /// The world's teams, used for grouping players and entities.
+    pub teams: Mutex<Teams>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
     pub worldborder: Mutex<Worldborder>,
     /// The world's time, including counting ticks for weather, time cycles, and statistics.
@@ -232,6 +236,7 @@ impl World {
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
             scoreboard: Mutex::new(Scoreboard::default()),
+            teams: Mutex::new(Teams::default()),
             worldborder: Mutex::new(Worldborder::new(0.0, 0.0, 5.999_996_8E7, 0, 5, 300)),
             level_time: Mutex::new(LevelTime::new()),
             dimension,
@@ -1949,6 +1954,9 @@ impl World {
 
         player.send_active_effects().await;
         self.send_player_equipment(player).await;
+
+        // Send existing teams to the joining player
+        self.teams.lock().await.send_to_player(client).await;
     }
 
     async fn send_player_equipment(&self, from: &Player) {

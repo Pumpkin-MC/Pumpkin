@@ -39,6 +39,7 @@ mod plugins;
 mod pumpkin;
 mod rotate;
 mod say;
+mod scoreboard;
 mod seed;
 mod setblock;
 mod setidletimeout;
@@ -47,6 +48,8 @@ mod spawnpoint;
 mod stop;
 mod stopsound;
 mod summon;
+mod team;
+mod teammsg;
 mod teleport;
 mod tellraw;
 mod tick;
@@ -54,6 +57,7 @@ mod time;
 mod title;
 mod tps;
 mod transfer;
+mod trigger;
 mod weather;
 mod whitelist;
 mod worldborder;
@@ -75,6 +79,8 @@ pub async fn default_dispatcher(
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
+    dispatcher.register(trigger::init_command_tree(), "minecraft:command.trigger");
+    dispatcher.register(teammsg::init_command_tree(), "minecraft:command.teammsg");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
@@ -135,6 +141,11 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(
+        scoreboard::init_command_tree(),
+        "minecraft:command.scoreboard",
+    );
+    dispatcher.register(team::init_command_tree(), "minecraft:command.team");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -210,6 +221,20 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.msg",
             "Sends a private message to another player",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.trigger",
+            "Sets a trigger to be activated",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.teammsg",
+            "Sends a message to all players on the sender's team",
             PermissionDefault::Allow,
         ))
         .unwrap();
@@ -425,6 +450,20 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.tps",
             "Displays the server TPS and MSPT",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.scoreboard",
+            "Manages scoreboard objectives and players",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.team",
+            "Controls teams",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

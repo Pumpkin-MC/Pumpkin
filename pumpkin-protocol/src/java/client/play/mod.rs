@@ -91,6 +91,7 @@ mod update_entity_rot;
 mod update_mob_effect;
 mod update_objectives;
 mod update_score;
+mod update_teams;
 mod worldevent;
 
 pub use acknowledge_block::*;
@@ -186,4 +187,5 @@ pub use update_entity_rot::*;
 pub use update_mob_effect::*;
 pub use update_objectives::*;
 pub use update_score::*;
+pub use update_teams::*;
 pub use worldevent::*;
