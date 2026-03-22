@@ -33,6 +33,7 @@ mod op;
 mod pardon;
 mod pardonip;
 mod particle;
+mod place;
 mod playsound;
 mod plugin;
 mod plugins;
@@ -135,6 +136,7 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(place::init_command_tree(), "minecraft:command.place");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -404,6 +406,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.data",
             "Query and modify data of entities and blocks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.place",
+            "Places structures, features, jigsaws, or templates",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
