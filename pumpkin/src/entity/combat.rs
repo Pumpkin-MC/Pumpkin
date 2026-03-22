@@ -7,9 +7,10 @@ use pumpkin_data::{
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
-    entity::{Entity, player::Player},
+    entity::{Entity, EntityBase, player::Player},
     world::World,
 };
+use pumpkin_data::attributes::Attributes;
 
 #[derive(Debug, Clone, Copy)]
 pub enum AttackType {
@@ -50,13 +51,19 @@ impl AttackType {
     }
 }
 
-pub fn handle_knockback(attacker: &Entity, victim: &Entity, strength: f64) {
+pub fn handle_knockback(attacker: &Entity, victim: &dyn EntityBase, strength: f64) {
     let yaw = attacker.yaw.load();
-    victim.knockback(
-        strength * 0.5,
-        f64::from((yaw.to_radians()).sin()),
-        f64::from(-(yaw.to_radians()).cos()),
-    );
+    let sin = f64::from((yaw.to_radians()).sin());
+    let cos = f64::from(-(yaw.to_radians()).cos());
+
+    let adjusted_strength = victim.get_living_entity().map_or(strength * 0.5, |living| {
+        let resistance = living.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+        strength * 0.5 * (1.0 - resistance)
+    });
+
+    victim
+        .get_entity()
+        .apply_knockback(adjusted_strength, sin, cos);
 
     let velocity = attacker.velocity.load();
     attacker.velocity.store(velocity.multiply(0.6, 1.0, 0.6));

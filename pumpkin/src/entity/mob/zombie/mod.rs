@@ -49,6 +49,12 @@ impl ZombieEntityBase {
             );
         };
 
+        // Apply random knockback resistance (0-5%)
+        mob_arc
+            .mob_entity
+            .living_entity
+            .apply_random_knockback_resistance();
+
         mob_arc
     }
 

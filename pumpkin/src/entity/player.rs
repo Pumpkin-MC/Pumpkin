@@ -765,7 +765,7 @@ impl Player {
                 _ => {}
             }
             if config.knockback {
-                combat::handle_knockback(attacker_entity, victim_entity, knockback_strength);
+                combat::handle_knockback(attacker_entity, &*victim, knockback_strength);
             }
         }
 
@@ -3046,6 +3046,8 @@ impl NBTStorage for Player {
                     force,
                 }));
             }
+
+            self.living_entity.recalculate_equipment_modifiers().await;
         })
     }
 }

@@ -11,6 +11,7 @@ use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use std::mem;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
     AtomicBool, AtomicU8,
@@ -29,6 +30,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
@@ -63,6 +65,24 @@ use uuid::Uuid;
 /// Represents a living entity within the game world.
 ///
 /// This struct encapsulates the core properties and behaviors of living entities, including players, mobs, and other creatures.
+/// UUID for the random spawn knockback resistance bonus modifier.
+/// Used by mobs (like Zombies, Drowned, Husk, etc.) that receive random knockback resistance on spawn (0-5%).
+static RANDOM_SPAWN_BONUS_UUID: LazyLock<Uuid> =
+    LazyLock::new(|| Uuid::new_v3(&Uuid::NAMESPACE_OID, b"random_spawn_bonus"));
+
+/// Namespace for equipment attribute modifier UUIDs.
+/// Each equipment slot gets a unique UUID for its modifiers.
+static EQUIPMENT_MODIFIER_NAMESPACE: LazyLock<Uuid> =
+    LazyLock::new(|| Uuid::new_v3(&Uuid::NAMESPACE_OID, b"equipment_modifiers"));
+
+/// Get the UUID for an equipment modifier in a specific slot.
+fn get_equipment_modifier_uuid(slot: &str, modifier_id: &str) -> Uuid {
+    Uuid::new_v3(
+        &EQUIPMENT_MODIFIER_NAMESPACE,
+        format!("{slot}:{modifier_id}").as_bytes(),
+    )
+}
+
 pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
@@ -181,6 +201,14 @@ impl LivingEntity {
     }
 
     pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
+        let mut entity_equipment = self.entity_equipment.lock().await;
+        for (slot, stack) in equipment {
+            entity_equipment.put(slot, stack.clone()).await;
+        }
+        drop(entity_equipment);
+
+        self.recalculate_equipment_modifiers().await;
+
         let equipment: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
             .map(|(slot, stack)| {
@@ -403,6 +431,101 @@ impl LivingEntity {
 
         for effect_type in effects_to_remove {
             self.remove_effect(effect_type).await;
+        }
+    }
+
+    /// Applies random knockback resistance bonus to this entity.
+    ///
+    /// This is used by certain mobs (e.g., Zombies, Drowned, Husk) that receive
+    /// a random knockback resistance value between 0% and 5% when spawned.
+    pub fn apply_random_knockback_resistance(&self) {
+        let resistance = rand::rng().random::<f64>() * 0.05; // 0-5% random value
+
+        let modifier = Modifier {
+            id: *RANDOM_SPAWN_BONUS_UUID,
+            amount: resistance,
+            operation: ModifierOperation::Add,
+        };
+
+        self.update_attribute(&Attributes::KNOCKBACK_RESISTANCE, |inst| {
+            inst.add_or_replace_modifier(modifier);
+        });
+    }
+
+    /// Recalculates attribute modifiers from equipped items.
+    ///
+    /// This scans all equipped items and applies their attribute modifiers
+    /// to the corresponding attributes. Should be called whenever equipment changes.
+    pub async fn recalculate_equipment_modifiers(&self) {
+        use pumpkin_data::data_component_impl::AttributeModifiersImpl;
+
+        // Track which modifiers we're adding from equipment
+        let mut equipment_modifier_uuids: Vec<Uuid> = Vec::new();
+
+        // Collect all modifiers from equipped items
+        for (_slot_index, slot) in self.equipment_slots.iter() {
+            let equipment = self.entity_equipment.lock().await.get(slot);
+            let stack = equipment.lock().await;
+
+            if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+                for item_mod in modifiers.attribute_modifiers.iter() {
+                    // Convert pumpkin_data slot to our EquipmentSlot
+                    let data_slot = match slot {
+                        EquipmentSlot::Head(_) => AttributeModifierSlot::Head,
+                        EquipmentSlot::Chest(_) => AttributeModifierSlot::Chest,
+                        EquipmentSlot::Legs(_) => AttributeModifierSlot::Legs,
+                        EquipmentSlot::Feet(_) => AttributeModifierSlot::Feet,
+                        EquipmentSlot::MainHand(_) => AttributeModifierSlot::MainHand,
+                        EquipmentSlot::OffHand(_) => AttributeModifierSlot::OffHand,
+                        _ => continue,
+                    };
+
+                    // Only apply if the modifier's slot matches or is "Any"
+                    if item_mod.slot == AttributeModifierSlot::Any || item_mod.slot == data_slot {
+                        let slot_name = match item_mod.slot {
+                            AttributeModifierSlot::Head => "head",
+                            AttributeModifierSlot::Chest => "chest",
+                            AttributeModifierSlot::Legs => "legs",
+                            AttributeModifierSlot::Feet => "feet",
+                            AttributeModifierSlot::MainHand => "mainhand",
+                            AttributeModifierSlot::OffHand => "offhand",
+                            _ => "any",
+                        };
+
+                        let modifier_id = get_equipment_modifier_uuid(slot_name, item_mod.id);
+                        equipment_modifier_uuids.push(modifier_id);
+
+                        let modifier = Modifier {
+                            id: modifier_id,
+                            amount: item_mod.amount,
+                            operation: ModifierOperation::Add,
+                        };
+
+                        self.update_attribute(item_mod.r#type, |inst| {
+                            inst.add_or_replace_modifier(modifier);
+                        });
+                    }
+                }
+            }
+        }
+
+        // Remove old equipment modifiers that are no longer present
+        // This handles the case where an item was removed
+        let all_equipment_modifiers: std::collections::HashSet<Uuid> =
+            equipment_modifier_uuids.into_iter().collect();
+
+        let mut map = self.attributes.write().unwrap();
+        for inst in map.values_mut() {
+            inst.modifiers.retain(|m| {
+                // Keep if it's not an equipment modifier (doesn't start with equipment namespace)
+                // Or if it's still in the current equipment
+                if all_equipment_modifiers.contains(&m.id) {
+                    return true;
+                }
+
+                // Keep if it's still in current equipment or is a non-equipment modifier (like random spawn bonus)
+                all_equipment_modifiers.contains(&m.id) || m.id == *RANDOM_SPAWN_BONUS_UUID
+            });
         }
     }
 
@@ -1945,7 +2068,10 @@ impl EntityBase for LivingEntity {
                     let target_pos = self.entity.pos.load();
                     let dx = source_pos.x - target_pos.x;
                     let dz = source_pos.z - target_pos.z;
-                    self.entity.apply_knockback(0.4, dx, dz);
+                    // Apply knockback resistance: strength *= 1.0 - resistance
+                    let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+                    let strength = 0.4 * (1.0 - resistance);
+                    self.entity.apply_knockback(strength, dx, dz);
                     self.entity.send_velocity().await;
                 }
             }
