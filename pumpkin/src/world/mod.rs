@@ -1,3 +1,4 @@
+use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
@@ -596,6 +597,26 @@ impl World {
             .await;
     }
 
+    pub async fn play_sound_event(
+        &self,
+        sound: pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+    ) {
+        let seed = rng().random::<f64>();
+        let packet = CSoundEffect::new(
+            data_to_proto_sound(&sound),
+            category,
+            position,
+            1.0,
+            1.0,
+            seed,
+        );
+        self.broadcast_packet_all(&packet).await;
+    }
+
     pub async fn play_sound_fine(
         &self,
         sound: Sound,
@@ -901,13 +922,21 @@ impl World {
             SpawnState::new(spawning_chunks_map.len() as i32, &self.entities, self).await; // TODO store it
 
         // TODO gamerule this.spawnEnemies || this.spawnFriendlies
+        let (spawn_mobs, spawn_monsters, peaceful) = {
+            let lock = self.level_info.load();
+            (
+                lock.game_rules.spawn_mobs,
+                lock.game_rules.spawn_monsters,
+                lock.difficulty == Difficulty::Peaceful,
+            )
+        };
         let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
         let spawn_list: Vec<&'static MobCategory> =
             natural_spawner::get_filtered_spawning_categories(
                 &spawn_state,
-                true,
-                true,
-                spawn_passives,
+                spawn_mobs,
+                peaceful && spawn_mobs && spawn_monsters,
+                peaceful && spawn_mobs && spawn_passives && spawn_monsters,
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());

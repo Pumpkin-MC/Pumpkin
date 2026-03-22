@@ -310,6 +310,9 @@ impl ItemStack {
     pub fn decrement_unless_creative(&mut self, gamemode: GameMode, amount: u8) {
         if gamemode != GameMode::Creative {
             self.item_count = self.item_count.saturating_sub(amount);
+            if self.item_count == 0 {
+                self.clear();
+            }
         }
     }
 
@@ -403,11 +406,11 @@ impl ItemStack {
                 };
                 match &rule.blocks {
                     IDSet::Tag(tag) => {
-                        if block.has_tag(tag) {
+                        if block.is_tagged_with(tag).unwrap_or(false) {
                             return speed;
                         }
                     }
-                    IDSet::Blocks(blocks) => {
+                    IDSet::IDs(blocks) => {
                         if blocks.contains(&block) {
                             return speed;
                         }
@@ -432,11 +435,11 @@ impl ItemStack {
                 };
                 match &rule.blocks {
                     IDSet::Tag(tag) => {
-                        if block.has_tag(tag) {
+                        if block.is_tagged_with(tag).unwrap_or(false) {
                             return correct;
                         }
                     }
-                    IDSet::Blocks(blocks) => {
+                    IDSet::IDs(blocks) => {
                         if blocks.contains(&block) {
                             return correct;
                         }

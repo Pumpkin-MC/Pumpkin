@@ -1,10 +1,11 @@
 /* This file is generated. Do not edit manually. */
+use crate::data_component_impl::IDSetContent;
 use crate::tag::RegistryKey;
 use crate::tag::Taggable;
 use pumpkin_util::HeightMap;
 use pumpkin_util::loot_table::*;
 use std::hash::Hash;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EntityType {
     pub id: u16,
     pub max_health: Option<f32>,
@@ -47,12 +48,12 @@ impl Taggable for EntityType {
         self.id
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SpawnRestriction {
     pub location: SpawnLocation,
     pub heightmap: HeightMap,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SpawnLocation {
     InLava,
     InWater,
@@ -7288,5 +7289,19 @@ impl EntityType {
             "zombified_piglin" => Some(&Self::ZOMBIFIED_PIGLIN),
             _ => None,
         }
+    }
+}
+impl IDSetContent for EntityType {
+    fn registry_id(&self) -> u16 {
+        Taggable::registry_id(self)
+    }
+    fn to_string(&self) -> String {
+        Taggable::registry_key(self).to_string()
+    }
+    fn from_id(id: u16) -> Option<&'static Self> {
+        EntityType::from_raw(id)
+    }
+    fn from_str(name: &str) -> Option<&'static Self> {
+        EntityType::from_name(name)
     }
 }
