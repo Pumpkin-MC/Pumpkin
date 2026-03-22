@@ -56,6 +56,11 @@ pub struct Navigator {
     path_type_overrides: HashMap<PathType, f32>,
     mob_width: f32,
     mob_height: f32,
+    // Smart re-pathing cooldown
+    repath_cooldown: u32,
+    // Reusable allocations to avoid per-pathfind heap allocations
+    open_set: BinaryHeap,
+    neighbors_buf: Vec<Node>,
 }
 
 impl Default for Navigator {
@@ -71,6 +76,9 @@ impl Default for Navigator {
             path_type_overrides: HashMap::new(),
             mob_width: 0.6,
             mob_height: 1.95,
+            repath_cooldown: 0,
+            open_set: BinaryHeap::new(),
+            neighbors_buf: Vec::new(),
         }
     }
 }
@@ -114,6 +122,7 @@ impl Navigator {
         self.mob_height = height;
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn compute_path(
         &mut self,
         entity: &LivingEntity,
@@ -143,8 +152,6 @@ impl Navigator {
 
         let mut target = self.evaluator.get_target(destination.to_block_pos());
 
-        let mut open_set = BinaryHeap::new();
-
         start_node.g = 0.0;
         let start_dist = start_node.distance(&target);
         target.update_best(start_dist, &start_node);
@@ -156,24 +163,30 @@ impl Navigator {
 
         let start_pos = start_node.pos.0;
 
-        open_set.insert(start_node.clone());
+        // Map to store closed nodes for path reconstruction
+        let mut closed_set: HashMap<Vector3<i32>, Node> = HashMap::new();
+
+        // Reuse the navigator's open_set and neighbors_buf
+        self.open_set.clear();
+        self.open_set.insert(start_node);
 
         let mut iterations = 0usize;
         let mut reached = false;
 
-        while !open_set.is_empty() {
+        while !self.open_set.is_empty() {
             iterations += 1;
             if iterations >= MAX_ITERS {
                 break;
             }
 
-            let Some(current) = open_set.pop() else {
+            let Some(current) = self.open_set.pop() else {
                 break;
             };
             if current.distance_manhattan(&target) < 1.0 {
                 target.reached = true;
                 reached = true;
                 target.update_best(0.0, &current);
+                closed_set.insert(current.pos.0, current);
                 break;
             }
 
@@ -186,24 +199,29 @@ impl Navigator {
 
             let follow_range = entity.get_attribute_value(&Attributes::FOLLOW_RANGE) as f32;
             if euclidean_from_start >= follow_range {
+                closed_set.insert(current.pos.0, current);
                 continue;
             }
 
-            let neighbors_vec = self.evaluator.get_neighbors(&current).await;
+            self.neighbors_buf.clear();
+            self.evaluator
+                .get_neighbors(&current, &mut self.neighbors_buf)
+                .await;
 
-            for mut neighbor in neighbors_vec {
+            for mut neighbor in self.neighbors_buf.drain(..) {
                 let step_cost = current.distance(&neighbor);
                 neighbor.walked_dist = current.walked_dist + step_cost;
                 let tentative_g = current.g + step_cost + neighbor.cost_malus;
 
-                let in_heap = open_set.contains(&neighbor);
+                let in_heap = self.open_set.contains(&neighbor);
                 if neighbor.walked_dist < follow_range
                     && (!in_heap
-                        || open_set
+                        || self
+                            .open_set
                             .get_node(&neighbor)
                             .is_some_and(|existing| tentative_g < existing.g))
                 {
-                    neighbor.came_from = Some(Box::new(current.clone()));
+                    neighbor.came_from = Some(current.pos.0);
                     neighbor.g = tentative_g;
                     let dist_to_target = neighbor.distance(&target);
                     target.update_best(dist_to_target, &neighbor);
@@ -211,21 +229,42 @@ impl Navigator {
                     neighbor.f = neighbor.g + neighbor.h;
 
                     if in_heap {
-                        open_set.update_node(&neighbor, neighbor.clone());
+                        self.open_set.update_node(&neighbor, neighbor);
                     } else {
-                        open_set.insert(neighbor);
+                        self.open_set.insert(neighbor);
                     }
                 }
             }
+
+            closed_set.insert(current.pos.0, current);
+        }
+
+        // Also store any remaining open set nodes for path reconstruction
+        for node in self.open_set.drain() {
+            closed_set.entry(node.pos.0).or_insert(node);
         }
 
         if let Some(best_node) = target.best_node {
             let mut path_nodes: Vec<Node> = Vec::new();
-            let mut node_here = *best_node;
-            path_nodes.push(node_here.clone());
-            while let Some(prev_box) = node_here.came_from.take() {
-                node_here = *prev_box;
-                path_nodes.push(node_here.clone());
+            let mut current_pos = best_node.pos.0;
+            path_nodes.push(best_node);
+            let mut visited: std::collections::HashSet<Vector3<i32>> =
+                std::collections::HashSet::new();
+            visited.insert(current_pos);
+            while let Some(node) = closed_set.get(&current_pos) {
+                if let Some(prev_pos) = node.came_from {
+                    if prev_pos == current_pos || !visited.insert(prev_pos) {
+                        break; // Self-reference or cycle detected
+                    }
+                    if let Some(&prev_node) = closed_set.get(&prev_pos) {
+                        path_nodes.push(prev_node);
+                        current_pos = prev_pos;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
             path_nodes.reverse();
 
@@ -237,16 +276,24 @@ impl Navigator {
     }
 
     fn needs_new_path(&self, goal: &NavigatorGoal) -> bool {
-        self.current_path.is_none()
-            || self.current_path.as_ref().is_some_and(|p| {
-                let path_target = p.get_target();
-                let goal_target = goal.destination.to_i32();
-                let dx = f64::from(path_target.x - goal_target.x);
-                let dy = f64::from(path_target.y - goal_target.y);
-                let dz = f64::from(path_target.z - goal_target.z);
-                let distance = (dx * dx + dy * dy + dz * dz).sqrt();
-                distance > 2.0
-            })
+        if self.current_path.is_none() {
+            return true;
+        }
+        if self.repath_cooldown > 0 {
+            return false;
+        }
+        self.current_path.as_ref().is_some_and(|p| {
+            let path_target = p.get_target();
+            let goal_target = goal.destination.to_i32();
+            let dx = f64::from(path_target.x - goal_target.x);
+            let dy = f64::from(path_target.y - goal_target.y);
+            let dz = f64::from(path_target.z - goal_target.z);
+            let distance_sq = dx * dx + dy * dy + dz * dz;
+            // Adaptive threshold based on remaining distance
+            let remaining = p.get_remaining_distance().clamp(4.0, 16.0);
+            let threshold = remaining * 0.5;
+            distance_sq > f64::from(threshold * threshold)
+        })
     }
 
     #[allow(clippy::too_many_lines)]
@@ -264,12 +311,16 @@ impl Navigator {
         }
 
         self.total_ticks += 1;
+        if self.repath_cooldown > 0 {
+            self.repath_cooldown -= 1;
+        }
 
         if self.needs_new_path(&goal) {
             self.current_path = self.compute_path(entity, goal.destination).await;
             self.ticks_on_current_node = 0;
             self.last_node_index = 0;
             self.path_start_pos = Some(entity.entity.pos.load());
+            self.repath_cooldown = 15; // ~0.75 seconds cooldown before recomputing
         }
 
         if self.current_path.is_none() {
