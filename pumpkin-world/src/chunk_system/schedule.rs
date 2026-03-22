@@ -1080,6 +1080,11 @@ impl GenerationSchedule {
                         if level.shut_down_chunk_system.load(Relaxed) {
                             break;
                         }
+                        // Poll level changes even when no chunks arrived,
+                        // so new player positions are processed during the wait.
+                        if self.resort_work(self.send_level.get()) {
+                            continue;
+                        }
                         thread::sleep(Duration::from_millis(50));
                     }
                 }
