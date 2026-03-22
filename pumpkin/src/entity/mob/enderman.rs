@@ -94,7 +94,7 @@ impl EndermanEntity {
             let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(1, Box::new(ChasePlayerGoal::new(&mob_arc)));
             goal_selector.add_goal(2, Box::new(MeleeAttackGoal::new(1.0, false)));
             goal_selector.add_goal(7, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -102,10 +102,10 @@ impl EndermanEntity {
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
-            goal_selector.add_goal(10, Box::new(PlaceBlockGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(11, Box::new(PickUpBlockGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(10, Box::new(PlaceBlockGoal::new(&mob_arc)));
+            goal_selector.add_goal(11, Box::new(PickUpBlockGoal::new(&mob_arc)));
 
-            target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(mob_arc.clone())));
+            target_selector.add_goal(1, Box::new(TeleportTowardsPlayerGoal::new(&mob_arc)));
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
             target_selector.add_goal(
                 3,

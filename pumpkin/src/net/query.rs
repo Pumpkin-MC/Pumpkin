@@ -110,7 +110,13 @@ async fn handle_packet(
                         .send_to(response.encode().await.as_slice(), addr)
                         .await;
 
-                    clients.write().await.insert(challenge_token, addr);
+                    // Cap the number of pending challenge tokens to prevent OOM
+                    // from handshake flooding. Tokens are cleared every 30s, but
+                    // an attacker could insert thousands per second in between.
+                    let mut clients_guard = clients.write().await;
+                    if clients_guard.len() < 4096 {
+                        clients_guard.insert(challenge_token, addr);
+                    }
                 }
             }
             PacketType::Status => {

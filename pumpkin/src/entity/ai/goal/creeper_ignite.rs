@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
 
 use super::{Controls, Goal};
 use crate::entity::ai::goal::GoalFuture;
@@ -8,15 +8,15 @@ use crate::entity::mob::creeper::CreeperEntity;
 
 pub struct CreeperIgniteGoal {
     goal_control: Controls,
-    creeper: Arc<CreeperEntity>,
+    creeper: Weak<CreeperEntity>,
 }
 
 impl CreeperIgniteGoal {
     #[must_use]
-    pub const fn new(creeper: Arc<CreeperEntity>) -> Self {
+    pub fn new(creeper: &Arc<CreeperEntity>) -> Self {
         Self {
             goal_control: Controls::MOVE,
-            creeper,
+            creeper: Arc::downgrade(creeper),
         }
     }
 }
@@ -24,10 +24,14 @@ impl CreeperIgniteGoal {
 impl Goal for CreeperIgniteGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            let creeper = mob.get_mob_entity();
-            let target_lock = creeper.target.lock().await;
+            let Some(creeper) = self.creeper.upgrade() else {
+                return false;
+            };
 
-            if self.creeper.fuse_speed.load(Ordering::Relaxed) > 0 {
+            let mob_entity = mob.get_mob_entity();
+            let target_lock = mob_entity.target.lock().await;
+
+            if creeper.fuse_speed.load(Ordering::Relaxed) > 0 {
                 return true;
             }
 
@@ -53,16 +57,22 @@ impl Goal for CreeperIgniteGoal {
 
     fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            self.creeper.set_fuse_speed(-1).await;
+            if let Some(creeper) = self.creeper.upgrade() {
+                creeper.set_fuse_speed(-1).await;
+            }
         })
     }
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
+            let Some(creeper) = self.creeper.upgrade() else {
+                return;
+            };
+
             let target_lock = mob.get_mob_entity().target.lock().await;
 
             let Some(target) = target_lock.as_ref() else {
-                self.creeper.set_fuse_speed(-1).await;
+                creeper.set_fuse_speed(-1).await;
                 return;
             };
 
@@ -73,11 +83,11 @@ impl Goal for CreeperIgniteGoal {
                 .squared_distance_to_vec(&target.get_entity().pos.load());
 
             if dist_sq > 49.0 {
-                self.creeper.set_fuse_speed(-1).await;
+                creeper.set_fuse_speed(-1).await;
             }
             // TODO: line of sight check (needs world raycast)
             else {
-                self.creeper.set_fuse_speed(1).await;
+                creeper.set_fuse_speed(1).await;
             }
         })
     }

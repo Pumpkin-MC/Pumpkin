@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use super::track_target::TrackTargetGoal;
 use super::{Controls, Goal, GoalFuture, to_goal_ticks};
@@ -13,7 +13,7 @@ const STARE_CLOSE_DISTANCE_SQ: f64 = 16.0;
 const TELEPORT_FAR_DISTANCE_SQ: f64 = 256.0;
 
 pub struct TeleportTowardsPlayerGoal {
-    enderman: Arc<EndermanEntity>,
+    enderman: Weak<EndermanEntity>,
     track_target_goal: TrackTargetGoal,
     target_player: Option<Arc<dyn EntityBase>>,
     committed_target: Option<Arc<dyn EntityBase>>,
@@ -23,7 +23,7 @@ pub struct TeleportTowardsPlayerGoal {
 }
 
 impl TeleportTowardsPlayerGoal {
-    pub fn new(enderman: Arc<EndermanEntity>) -> Self {
+    pub fn new(enderman: &Arc<EndermanEntity>) -> Self {
         let track_target_goal = TrackTargetGoal::with_default(false);
         let mut target_predicate = TargetPredicate::create_attackable();
         target_predicate.base_max_distance = enderman
@@ -31,7 +31,7 @@ impl TeleportTowardsPlayerGoal {
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
         Self {
-            enderman,
+            enderman: Arc::downgrade(enderman),
             track_target_goal,
             target_player: None,
             committed_target: None,
@@ -42,11 +42,11 @@ impl TeleportTowardsPlayerGoal {
     }
 
     async fn find_staring_player(&self) -> Option<Arc<Player>> {
-        let entity = &self.enderman.mob_entity.living_entity.entity;
+        let enderman = self.enderman.upgrade()?;
+        let entity = &enderman.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
-        let follow_range = self
-            .enderman
+        let follow_range = enderman
             .mob_entity
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
@@ -58,15 +58,14 @@ impl TeleportTowardsPlayerGoal {
         }
 
         let living = player.get_living_entity()?;
-        if !self.target_predicate.test(
-            &world,
-            Some(&self.enderman.mob_entity.living_entity),
-            living,
-        ) {
+        if !self
+            .target_predicate
+            .test(&world, Some(&enderman.mob_entity.living_entity), living)
+        {
             return None;
         }
 
-        if self.enderman.is_player_staring(&player).await || self.enderman.is_angry() {
+        if enderman.is_player_staring(&player).await || enderman.is_angry() {
             return Some(player);
         }
 
@@ -87,10 +86,14 @@ impl Goal for TeleportTowardsPlayerGoal {
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
+            let Some(enderman) = self.enderman.upgrade() else {
+                return false;
+            };
+
             if let Some(target) = &self.target_player
                 && let Some(player) = target.get_player()
             {
-                if !self.enderman.is_player_staring(player).await && !self.enderman.is_angry() {
+                if !enderman.is_player_staring(player).await && !enderman.is_angry() {
                     return false;
                 }
                 let player_pos = player.get_entity().pos.load();
@@ -137,12 +140,18 @@ impl Goal for TeleportTowardsPlayerGoal {
         Box::pin(async move {
             self.warmup = to_goal_ticks(5);
             self.unseen_ticks = 0;
-            self.enderman.set_provoked(true).await;
+            if let Some(enderman) = self.enderman.upgrade() {
+                enderman.set_provoked(true).await;
+            }
         })
     }
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
+            let Some(enderman) = self.enderman.upgrade() else {
+                return;
+            };
+
             let external_target = mob.get_mob_entity().target.lock().await.clone();
             if external_target.is_none()
                 && self.target_player.is_none()
@@ -156,7 +165,7 @@ impl Goal for TeleportTowardsPlayerGoal {
                 if self.warmup <= 0 {
                     let target = self.target_player.take();
                     self.committed_target.clone_from(&target);
-                    self.enderman.set_target(target).await;
+                    enderman.set_target(target).await;
                     self.track_target_goal.start(mob).await;
                 }
                 return;
@@ -173,16 +182,16 @@ impl Goal for TeleportTowardsPlayerGoal {
             let dist_sq = pos.squared_distance_to_vec(&target_pos);
 
             if let Some(player) = target.get_player()
-                && self.enderman.is_player_staring(player).await
+                && enderman.is_player_staring(player).await
             {
                 if dist_sq < STARE_CLOSE_DISTANCE_SQ {
-                    self.enderman.teleport_randomly().await;
+                    enderman.teleport_randomly().await;
                 }
                 self.unseen_ticks = 0;
             } else if dist_sq > TELEPORT_FAR_DISTANCE_SQ {
                 self.unseen_ticks += 1;
                 if self.unseen_ticks >= to_goal_ticks(30) {
-                    self.enderman.teleport_towards(target.as_ref()).await;
+                    enderman.teleport_towards(target.as_ref()).await;
                     self.unseen_ticks = 0;
                 }
             }
@@ -193,7 +202,9 @@ impl Goal for TeleportTowardsPlayerGoal {
         Box::pin(async move {
             self.target_player = None;
             self.committed_target = None;
-            self.enderman.set_target(None).await;
+            if let Some(enderman) = self.enderman.upgrade() {
+                enderman.set_target(None).await;
+            }
         })
     }
 
