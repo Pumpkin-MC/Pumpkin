@@ -26,7 +26,8 @@ use crate::{
         },
         passive::{
             cat::CatEntity, chicken::ChickenEntity, cow::CowEntity, iron_golem::IronGolemEntity,
-            pig::PigEntity, sheep::SheepEntity, snow_golem::SnowGolemEntity, wolf::WolfEntity,
+            pig::PigEntity, sheep::SheepEntity, snow_golem::SnowGolemEntity,
+            villager::VillagerEntity, wolf::WolfEntity,
         },
     },
     world::World,
@@ -65,6 +66,7 @@ pub async fn from_type(
         id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity).await,
         id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity).await,
         id if id == EntityType::SHEEP.id => SheepEntity::new(entity).await,
+        id if id == EntityType::VILLAGER.id => VillagerEntity::new(entity).await,
         id if id == EntityType::WOLF.id => WolfEntity::new(entity).await,
         id if id == EntityType::WITHER.id => WitherEntity::new(entity).await,
         id if id == EntityType::AREA_EFFECT_CLOUD.id => {

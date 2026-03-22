@@ -2840,6 +2840,29 @@ impl World {
         let old_block = Block::from_state_id(replaced_block_state_id);
         let new_block = Block::from_state_id(block_state_id);
 
+        // Update POI storage when blocks with POI types change
+        if old_block != new_block {
+            let old_name = old_block
+                .name
+                .strip_prefix("minecraft:")
+                .unwrap_or(old_block.name);
+            let new_name = new_block
+                .name
+                .strip_prefix("minecraft:")
+                .unwrap_or(new_block.name);
+            let old_poi = pumpkin_world::poi::block_to_poi_type(old_name);
+            let new_poi = pumpkin_world::poi::block_to_poi_type(new_name);
+            if old_poi != new_poi {
+                let mut poi_storage = self.portal_poi.lock().await;
+                if old_poi.is_some() {
+                    poi_storage.remove(position);
+                }
+                if let Some(poi_type) = new_poi {
+                    poi_storage.add(*position, poi_type);
+                }
+            }
+        }
+
         let block_moved = flags.contains(BlockFlags::MOVED);
 
         let is_new_block = old_block != new_block;
