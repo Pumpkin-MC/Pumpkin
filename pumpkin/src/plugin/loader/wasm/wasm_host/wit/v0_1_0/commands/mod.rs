@@ -44,6 +44,7 @@ use crate::{
                         ConsumedArgs, PermissionLevel, StringType,
                     },
                     common::{Locale, Position},
+                    entity::EntityBase,
                     player::Player,
                     server::Server,
                     text::TextComponent,
@@ -59,8 +60,294 @@ pub mod executor;
 impl pumpkin::plugin::command::Host for PluginHostState {}
 
 impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
-    async fn get_value(&mut self, _consumed_args: Resource<ConsumedArgs>, _key: String) -> Arg {
-        todo!()
+    async fn get_value(&mut self, consumed_args: Resource<ConsumedArgs>, key: String) -> Arg {
+        use crate::plugin::loader::wasm::wasm_host::{args::OwnedArg, state::ConsumedArgsResource};
+
+        let resource = self
+            .resource_table
+            .get::<ConsumedArgsResource>(&Resource::new_own(consumed_args.rep()))
+            .expect("invalid consumed-args resource handle");
+
+        let owned = resource.provider.get(&key).cloned().unwrap_or_else(|| {
+            panic!(
+                "consumed-args.get-value called with unknown key '{key}' (available keys: {:?})",
+                resource.provider.keys().collect::<Vec<_>>()
+            )
+        });
+
+        match owned {
+            // NOTE: The WIT entity API is currently very limited; until a richer entity handle
+            // exists, fall back to a stable string representation.
+            OwnedArg::Entities(entities) => Arg::Entities(
+                entities
+                    .into_iter()
+                    .map(|e| {
+                        self.add_entity::<EntityBase>(e)
+                            .expect("failed to add entity resource")
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            OwnedArg::Entity(entity) => Arg::Entity(
+                self.add_entity::<EntityBase>(entity)
+                    .expect("failed to add entity resource"),
+            ),
+            OwnedArg::Players(players) => {
+                let players = players
+                    .into_iter()
+                    .map(|p| {
+                        self.add_player::<Player>(p)
+                            .expect("failed to add player resource")
+                    })
+                    .collect();
+                Arg::Players(players)
+            }
+
+            OwnedArg::BlockPos(pos) => Arg::BlockPos((pos.0.x, pos.0.y, pos.0.z)),
+            OwnedArg::Pos3D(pos) => Arg::Pos3d((pos.x, pos.y, pos.z)),
+            OwnedArg::Pos2D(pos) => Arg::Pos2d((pos.x, pos.y)),
+            OwnedArg::Rotation(yaw, yaw_rel, pitch, pitch_rel) => {
+                Arg::Rotation((yaw, yaw_rel, pitch, pitch_rel))
+            }
+
+            OwnedArg::GameMode(mode) => {
+                let mode = match mode {
+                    pumpkin_util::GameMode::Survival => {
+                        pumpkin::plugin::command::Gamemode::Survival
+                    }
+                    pumpkin_util::GameMode::Creative => {
+                        pumpkin::plugin::command::Gamemode::Creative
+                    }
+                    pumpkin_util::GameMode::Adventure => {
+                        pumpkin::plugin::command::Gamemode::Adventure
+                    }
+                    pumpkin_util::GameMode::Spectator => {
+                        pumpkin::plugin::command::Gamemode::Spectator
+                    }
+                };
+                Arg::GameMode(mode)
+            }
+            OwnedArg::Difficulty(difficulty) => {
+                let difficulty = match difficulty {
+                    pumpkin_util::Difficulty::Peaceful => {
+                        pumpkin::plugin::server::Difficulty::Peaceful
+                    }
+                    pumpkin_util::Difficulty::Easy => pumpkin::plugin::server::Difficulty::Easy,
+                    pumpkin_util::Difficulty::Normal => pumpkin::plugin::server::Difficulty::Normal,
+                    pumpkin_util::Difficulty::Hard => pumpkin::plugin::server::Difficulty::Hard,
+                };
+                Arg::Difficulty(difficulty)
+            }
+
+            OwnedArg::CommandTree(command_tree) => Arg::Command(
+                self.add_command(command_tree)
+                    .expect("failed to add command tree resource"),
+            ),
+
+            OwnedArg::Item(s) => Arg::Item(s),
+            OwnedArg::ItemPredicate(s) => Arg::ItemPredicate(s),
+            OwnedArg::ResourceLocation(s) => Arg::ResourceLocation(s),
+            OwnedArg::Block(s) => Arg::Block(s),
+            OwnedArg::BlockPredicate(s) => Arg::BlockPredicate(s),
+
+            OwnedArg::BossbarColor(color) => {
+                let color = match color {
+                    crate::world::bossbar::BossbarColor::Pink => {
+                        pumpkin::plugin::command::BossbarColor::Pink
+                    }
+                    crate::world::bossbar::BossbarColor::Blue => {
+                        pumpkin::plugin::command::BossbarColor::Blue
+                    }
+                    crate::world::bossbar::BossbarColor::Red => {
+                        pumpkin::plugin::command::BossbarColor::Red
+                    }
+                    crate::world::bossbar::BossbarColor::Green => {
+                        pumpkin::plugin::command::BossbarColor::Green
+                    }
+                    crate::world::bossbar::BossbarColor::Yellow => {
+                        pumpkin::plugin::command::BossbarColor::Yellow
+                    }
+                    crate::world::bossbar::BossbarColor::Purple => {
+                        pumpkin::plugin::command::BossbarColor::Purple
+                    }
+                    crate::world::bossbar::BossbarColor::White => {
+                        pumpkin::plugin::command::BossbarColor::White
+                    }
+                };
+                Arg::BossbarColor(color)
+            }
+            OwnedArg::BossbarStyle(style) => {
+                let style = match style {
+                    crate::world::bossbar::BossbarDivisions::NoDivision => {
+                        pumpkin::plugin::command::BossbarStyle::NoDivision
+                    }
+                    crate::world::bossbar::BossbarDivisions::Notches6 => {
+                        pumpkin::plugin::command::BossbarStyle::Notches6
+                    }
+                    crate::world::bossbar::BossbarDivisions::Notches10 => {
+                        pumpkin::plugin::command::BossbarStyle::Notches10
+                    }
+                    crate::world::bossbar::BossbarDivisions::Notches12 => {
+                        pumpkin::plugin::command::BossbarStyle::Notches12
+                    }
+                    crate::world::bossbar::BossbarDivisions::Notches20 => {
+                        pumpkin::plugin::command::BossbarStyle::Notches20
+                    }
+                };
+                Arg::BossbarStyle(style)
+            }
+
+            OwnedArg::Particle(particle) => Arg::Particle(particle.to_name().to_string()),
+            OwnedArg::Msg(msg) => Arg::Msg(msg),
+            OwnedArg::TextComponent(component) => {
+                let text = self
+                    .add_text_component::<TextComponent>(component)
+                    .expect("failed to add text-component resource");
+                Arg::TextComponent(text)
+            }
+            OwnedArg::Time(time) => Arg::Time(time),
+            OwnedArg::Num(value) => {
+                let value = value
+                    .map(|n| match n {
+                        crate::command::args::bounded_num::Number::F64(v) => {
+                            pumpkin::plugin::command::Number::Float64(v)
+                        }
+                        crate::command::args::bounded_num::Number::F32(v) => {
+                            pumpkin::plugin::command::Number::Float32(v)
+                        }
+                        crate::command::args::bounded_num::Number::I32(v) => {
+                            pumpkin::plugin::command::Number::Int32(v)
+                        }
+                        crate::command::args::bounded_num::Number::I64(v) => {
+                            pumpkin::plugin::command::Number::Int64(v)
+                        }
+                    })
+                    .map_err(|e| match e {
+                        crate::command::args::bounded_num::NotInBounds::LowerBound(val, bound) => {
+                            pumpkin::plugin::command::NotInBounds::LowerBound((
+                                match val {
+                                    crate::command::args::bounded_num::Number::F64(v) => {
+                                        pumpkin::plugin::command::Number::Float64(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::F32(v) => {
+                                        pumpkin::plugin::command::Number::Float32(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::I32(v) => {
+                                        pumpkin::plugin::command::Number::Int32(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::I64(v) => {
+                                        pumpkin::plugin::command::Number::Int64(v)
+                                    }
+                                },
+                                match bound {
+                                    crate::command::args::bounded_num::Number::F64(v) => {
+                                        pumpkin::plugin::command::Number::Float64(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::F32(v) => {
+                                        pumpkin::plugin::command::Number::Float32(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::I32(v) => {
+                                        pumpkin::plugin::command::Number::Int32(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::I64(v) => {
+                                        pumpkin::plugin::command::Number::Int64(v)
+                                    }
+                                },
+                            ))
+                        }
+                        crate::command::args::bounded_num::NotInBounds::UpperBound(val, bound) => {
+                            pumpkin::plugin::command::NotInBounds::UpperBound((
+                                match val {
+                                    crate::command::args::bounded_num::Number::F64(v) => {
+                                        pumpkin::plugin::command::Number::Float64(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::F32(v) => {
+                                        pumpkin::plugin::command::Number::Float32(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::I32(v) => {
+                                        pumpkin::plugin::command::Number::Int32(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::I64(v) => {
+                                        pumpkin::plugin::command::Number::Int64(v)
+                                    }
+                                },
+                                match bound {
+                                    crate::command::args::bounded_num::Number::F64(v) => {
+                                        pumpkin::plugin::command::Number::Float64(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::F32(v) => {
+                                        pumpkin::plugin::command::Number::Float32(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::I32(v) => {
+                                        pumpkin::plugin::command::Number::Int32(v)
+                                    }
+                                    crate::command::args::bounded_num::Number::I64(v) => {
+                                        pumpkin::plugin::command::Number::Int64(v)
+                                    }
+                                },
+                            ))
+                        }
+                    });
+                Arg::Num(value)
+            }
+            OwnedArg::Bool(value) => Arg::Bool(value),
+            OwnedArg::Simple(value) => Arg::Simple(value),
+            OwnedArg::SoundCategory(category) => {
+                let category = match category {
+                    pumpkin_data::sound::SoundCategory::Master => {
+                        pumpkin::plugin::command::SoundCategory::Master
+                    }
+                    pumpkin_data::sound::SoundCategory::Music => {
+                        pumpkin::plugin::command::SoundCategory::Music
+                    }
+                    pumpkin_data::sound::SoundCategory::Records => {
+                        pumpkin::plugin::command::SoundCategory::Records
+                    }
+                    pumpkin_data::sound::SoundCategory::Weather => {
+                        pumpkin::plugin::command::SoundCategory::Weather
+                    }
+                    pumpkin_data::sound::SoundCategory::Blocks => {
+                        pumpkin::plugin::command::SoundCategory::Blocks
+                    }
+                    pumpkin_data::sound::SoundCategory::Hostile => {
+                        pumpkin::plugin::command::SoundCategory::Hostile
+                    }
+                    pumpkin_data::sound::SoundCategory::Neutral => {
+                        pumpkin::plugin::command::SoundCategory::Neutral
+                    }
+                    pumpkin_data::sound::SoundCategory::Players => {
+                        pumpkin::plugin::command::SoundCategory::Players
+                    }
+                    pumpkin_data::sound::SoundCategory::Ambient => {
+                        pumpkin::plugin::command::SoundCategory::Ambient
+                    }
+                    pumpkin_data::sound::SoundCategory::Voice => {
+                        pumpkin::plugin::command::SoundCategory::Voice
+                    }
+                    pumpkin_data::sound::SoundCategory::Ui => {
+                        pumpkin::plugin::command::SoundCategory::Ui
+                    }
+                };
+                Arg::SoundCategory(category)
+            }
+            OwnedArg::DamageType(damage_type) => {
+                Arg::DamageType(damage_type.message_id.to_string())
+            }
+            OwnedArg::Effect(effect) => Arg::Effect(effect.minecraft_name.to_string()),
+            OwnedArg::Enchantment(enchantment) => {
+                Arg::Enchantment(enchantment.registry_key.to_string())
+            }
+            OwnedArg::EntityAnchor(anchor) => {
+                let anchor = match anchor {
+                    crate::command::args::EntityAnchor::Feet => {
+                        pumpkin::plugin::command::EntityAnchor::Feet
+                    }
+                    crate::command::args::EntityAnchor::Eyes => {
+                        pumpkin::plugin::command::EntityAnchor::Eyes
+                    }
+                };
+                Arg::EntityAnchor(anchor)
+            }
+        }
     }
 
     async fn drop(&mut self, rep: Resource<ConsumedArgs>) -> wasmtime::Result<()> {
