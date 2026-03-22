@@ -278,6 +278,18 @@ impl World {
         self.level.shutdown().await;
     }
 
+    /// Saves all chunks and optionally flushes entity data to disk.
+    pub async fn save_all(&self, flush: bool) {
+        self.level.should_save.store(true, Relaxed);
+        self.level.level_channel.notify();
+
+        if flush {
+            for entity in self.entities.load().iter() {
+                self.save_entity(entity).await;
+            }
+        }
+    }
+
     async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
         // First lets see if the entity was saved on an other chunk, and if the current chunk does not match we remove it
         // Otherwise we just update the nbt data
@@ -794,7 +806,7 @@ impl World {
                 }
             }
         }
-        if self.level.autosave_ticks > 0 {
+        if self.level.autosave_ticks > 0 && !self.level.saving_disabled.load(Relaxed) {
             let autosave = self.level.autosave_ticks as i64;
             if autosave > 0 && level_time.world_age % autosave == 0 {
                 self.level.should_save.store(true, Relaxed);

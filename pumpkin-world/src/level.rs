@@ -93,6 +93,9 @@ pub struct Level {
     pub shut_down_chunk_system: AtomicBool,
     pub should_save: AtomicBool,
     pub should_unload: AtomicBool,
+    /// When true, autosave is disabled (chunks won't be written to disk automatically).
+    /// Explicit saves via /save-all still work.
+    pub saving_disabled: AtomicBool,
     /// Number of ticks between autosave checks. If 0, autosave is disabled.
     pub autosave_ticks: u64,
 
@@ -204,6 +207,7 @@ impl Level {
             shut_down_chunk_system: AtomicBool::new(false),
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
+            saving_disabled: AtomicBool::new(false),
             autosave_ticks: level_config.autosave_ticks,
             gen_entity_request_tx,
             pending_entity_generations: pending_entity_generations.clone(),

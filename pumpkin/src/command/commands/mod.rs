@@ -38,6 +38,7 @@ mod plugin;
 mod plugins;
 mod pumpkin;
 mod rotate;
+mod save;
 mod say;
 mod seed;
 mod setblock;
@@ -157,6 +158,18 @@ pub async fn default_dispatcher(
     );
     // Four
     dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
+    dispatcher.register(
+        save::init_command_tree_save_all(),
+        "minecraft:command.save-all",
+    );
+    dispatcher.register(
+        save::init_command_tree_save_off(),
+        "minecraft:command.save-off",
+    );
+    dispatcher.register(
+        save::init_command_tree_save_on(),
+        "minecraft:command.save-on",
+    );
 
     let mut dispatcher = {
         let mut wrapper_dispatcher = CommandDispatcher::new();
@@ -546,6 +559,27 @@ fn register_level_4_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.stop",
             "Stops the server",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-all",
+            "Saves the server to disk",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-off",
+            "Disables automatic saving",
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.save-on",
+            "Enables automatic saving",
             PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();
