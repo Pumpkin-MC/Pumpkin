@@ -1378,11 +1378,12 @@ impl Player {
             )])
             .await;
 
+        let chunk_pos = self.living_entity.entity.chunk_pos.load();
         world
-            .broadcast_packet_all(&CEntityAnimation::new(
-                self.entity_id().into(),
-                Animation::LeaveBed,
-            ))
+            .broadcast_to_chunk(
+                chunk_pos,
+                &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
+            )
             .await;
 
         self.sleeping_since.store(None);
@@ -2857,6 +2858,7 @@ impl Player {
     pub async fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world();
         let entity_id = VarInt(self.entity_id());
+        let chunk_pos = self.living_entity.entity.chunk_pos.load();
 
         let animation = match hand {
             Hand::Left => Animation::SwingMainArm,
@@ -2865,10 +2867,10 @@ impl Player {
 
         let packet = CEntityAnimation::new(entity_id, animation);
         if all {
-            world.broadcast_packet_all(&packet).await;
+            world.broadcast_to_chunk(chunk_pos, &packet).await;
         } else {
             world
-                .broadcast_packet_except(&[self.gameprofile.id], &packet)
+                .broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet)
                 .await;
         }
     }
@@ -3261,17 +3263,22 @@ impl EntityBase for Player {
                         let position = event.to;
                         let entity = self.get_entity();
                         self.request_teleport(position, yaw, pitch).await;
+                        let chunk_pos = entity.chunk_pos.load();
                         entity
                             .world
                             .load()
-                            .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
-                                self.living_entity.entity.entity_id.into(),
-                                position,
-                                Vector3::new(0.0, 0.0, 0.0),
-                                yaw,
-                                pitch,
-                                entity.on_ground.load(Ordering::SeqCst),
-                            ))
+                            .broadcast_to_chunk_except(
+                                chunk_pos,
+                                &[self.living_entity.entity.entity_uuid],
+                                &CEntityPositionSync::new(
+                                    self.living_entity.entity.entity_id.into(),
+                                    position,
+                                    Vector3::new(0.0, 0.0, 0.0),
+                                    yaw,
+                                    pitch,
+                                    entity.on_ground.load(Ordering::SeqCst),
+                                )
+                            )
                             .await;
                     }
                 }}
@@ -3673,8 +3680,10 @@ impl InventoryPlayer for Player {
         stack: &'a ItemStack,
     ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
+            let chunk_pos = self.living_entity.entity.chunk_pos.load();
             self.world()
-                .broadcast_packet_except(
+                .broadcast_to_chunk_except(
+                    chunk_pos,
                     &[self.get_entity().entity_uuid],
                     &CSetEquipment::new(
                         self.entity_id().into(),
