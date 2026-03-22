@@ -104,7 +104,7 @@ impl<R: Read> NetworkReadExt for R {
     fn read_boxed_slice(&mut self, length: usize) -> Result<Box<[u8]>, ReadingError> {
         // Increase this to at least 2MB to handle larger Bedrock batches
         const MAX_SLICE_LENGTH: usize = 2 * 1024 * 1024; // 2MB
-        if !(1..=MAX_SLICE_LENGTH).contains(&length) {
+        if !(0..=MAX_SLICE_LENGTH).contains(&length) {
             return Err(ReadingError::Message(format!(
                 "read_boxed_slice: length {length} out of bounds"
             )));
