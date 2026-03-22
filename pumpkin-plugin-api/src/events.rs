@@ -11,7 +11,9 @@ use std::{
 pub use crate::wit::pumpkin::plugin::event::{Event, EventPriority};
 use crate::{
     Context, Result, Server,
-    wit::pumpkin::plugin::event::{EventType, PlayerJoinEventData, PlayerLeaveEventData},
+    wit::pumpkin::plugin::event::{
+        EventType, PlayerEggThrowEventData, PlayerJoinEventData, PlayerLeaveEventData,
+    },
 };
 
 pub(crate) static NEXT_HANDLER_ID: AtomicU32 = AtomicU32::new(0);
@@ -59,6 +61,23 @@ impl FromIntoEvent for PlayerLeaveEvent {
 
     fn data_into_event(data: Self::Data) -> Event {
         Event::PlayerLeaveEvent(data)
+    }
+}
+
+pub struct PlayerEggThrowEvent;
+impl FromIntoEvent for PlayerEggThrowEvent {
+    const EVENT_TYPE: EventType = EventType::PlayerEggThrowEvent;
+    type Data = PlayerEggThrowEventData;
+
+    fn data_from_event(event: Event) -> Self::Data {
+        match event {
+            Event::PlayerEggThrowEvent(data) => data,
+            _ => panic!("unexpected event"),
+        }
+    }
+
+    fn data_into_event(data: Self::Data) -> Event {
+        Event::PlayerEggThrowEvent(data)
     }
 }
 
