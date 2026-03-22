@@ -11,15 +11,18 @@ use crate::item::Item;
 use crate::{biome::Biome, version::MinecraftVersion};
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 
-// --- EnumCreator with from_string support ---
+/// Builder that generates an enum with `from_string` and `identifier_string` methods.
 pub struct EnumCreator {
+    /// Name of the enum to generate (converted to PascalCase).
     pub name: String,
+    /// Set of variant names (converted to PascalCase for the enum variants).
     pub values: BTreeSet<String>,
 }
 
 impl ToTokens for EnumCreator {
+    /// Emits the enum definition and its `from_string`/`identifier_string` impl block.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = format_ident!("{}", self.name.to_pascal_case());
 
@@ -62,8 +65,11 @@ impl ToTokens for EnumCreator {
     }
 }
 
+/// The newest protocol version whose tag data is served as the latest-version fallback.
 const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
 
+/// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
+/// modules, and the `Taggable` trait with its lookup helpers.
 pub(crate) fn build() -> TokenStream {
     // --- Rerun Triggers ---
     println!("cargo:rerun-if-changed=../assets/blocks.json");
@@ -118,13 +124,11 @@ pub(crate) fn build() -> TokenStream {
     let mut timeline_id_map: BTreeMap<String, u16> = BTreeMap::new();
     if let Ok(registries) = serde_json::from_str::<serde_json::Value>(
         &fs::read_to_string("../assets/registry/1_21_11_synced_registries.json").unwrap(),
-    ) {
-        if let Some(timelines) = registries.get("timeline") {
-            if let Some(obj) = timelines.as_object() {
-                for (i, name) in obj.keys().enumerate() {
-                    timeline_id_map.insert(name.clone(), i as u16);
-                }
-            }
+    ) && let Some(timelines) = registries.get("timeline")
+        && let Some(obj) = timelines.as_object()
+    {
+        for (i, name) in obj.keys().enumerate() {
+            timeline_id_map.insert(name.clone(), i as u16);
         }
     }
     // dimension_id_map will be used when resolving dimension_type tag entries below
@@ -139,7 +143,7 @@ pub(crate) fn build() -> TokenStream {
 
     let mut all_registry_keys = HashSet::new();
     all_registry_keys.insert("dimension_type".to_string());
-    
+
     let mut latest_modules = Vec::new();
     let mut legacy_modules = Vec::new();
 

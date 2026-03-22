@@ -1,7 +1,9 @@
+use crate::block::entities::block_entity_from_nbt;
 use crate::chunk::{ChunkData, ChunkLight, ChunkSections};
 use crate::generation::biome_coords;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::dimension::Dimension;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -87,6 +89,7 @@ impl From<StagedChunkEnum> for ChunkStatus {
 }
 
 impl StagedChunkEnum {
+    #[must_use]
     pub const fn level_to_stage(level: i8) -> Self {
         if level <= 43 {
             Self::Full
@@ -106,12 +109,13 @@ impl StagedChunkEnum {
     pub const FULL_DEPENDENCIES: &'static [Self] =
         &[Self::Full, Self::Lighting, Self::Features, Self::Surface];
     pub const FULL_RADIUS: i32 = 3;
+    #[must_use]
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
         match self {
             Self::Empty => 0,
             Self::StructureStart => 0,
-            Self::StructureReferences => 0,
+            Self::StructureReferences => 8,
             Self::Biomes => 0,
             Self::Noise => 0,
             Self::Surface => 0,
@@ -121,12 +125,13 @@ impl StagedChunkEnum {
             _ => panic!(),
         }
     }
+    #[must_use]
     pub const fn get_write_radius(self) -> i32 {
         // self exclude
         match self {
             Self::Empty => 0,
             Self::StructureStart => 0,
-            Self::StructureReferences => 0,
+            Self::StructureReferences => 8,
             Self::Biomes => 0,
             Self::Noise => 0,
             Self::Surface => 0,
@@ -136,13 +141,24 @@ impl StagedChunkEnum {
             _ => panic!(),
         }
     }
+    #[must_use]
     pub const fn get_direct_dependencies(self) -> &'static [Self] {
         match self {
             // In vanilla StructureStart is first, but since it needs the biome in Vanilla it gets computed in StructureStart and
             // the Biome Step, this should be more efficient
             Self::Biomes => &[Self::Empty],
             Self::StructureStart => &[Self::Biomes],
-            Self::StructureReferences => &[Self::StructureStart],
+            Self::StructureReferences => &[
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+                Self::StructureStart,
+            ],
             Self::Noise => &[Self::StructureReferences],
             Self::Surface => &[Self::Noise],
             Self::Features => &[Self::Surface, Self::Surface],
@@ -159,6 +175,7 @@ pub enum Chunk {
 }
 
 impl Chunk {
+    #[must_use]
     pub fn get_stage_id(&self) -> u8 {
         match self {
             Self::Proto(data) => data.stage_id(),
@@ -168,13 +185,14 @@ impl Chunk {
     pub fn get_proto_chunk_mut(&mut self) -> &mut ProtoChunk {
         match self {
             Self::Level(_) => panic!("chunk isn't a ProtoChunk"),
-            Chunk::Proto(chunk) => chunk,
+            Self::Proto(chunk) => chunk,
         }
     }
+    #[must_use]
     pub fn get_proto_chunk(&self) -> &ProtoChunk {
         match self {
             Self::Level(_) => panic!("chunk isn't a ProtoChunk"),
-            Chunk::Proto(chunk) => chunk,
+            Self::Proto(chunk) => chunk,
         }
     }
     pub fn upgrade_to_level_chunk(
@@ -186,7 +204,7 @@ impl Chunk {
         // This allows us to move the light data instead of cloning it
         let proto_chunk_box = match std::mem::replace(
             self,
-            Chunk::Level(Arc::new(ChunkData {
+            Self::Level(Arc::new(ChunkData {
                 section: ChunkSections::new(0, 0),
                 heightmap: Default::default(),
                 x: 0,
@@ -200,8 +218,8 @@ impl Chunk {
                 dirty: AtomicBool::new(false),
             })),
         ) {
-            Chunk::Proto(proto) => proto,
-            Chunk::Level(_) => panic!("Cannot upgrade a Level chunk"),
+            Self::Proto(proto) => proto,
+            Self::Level(_) => panic!("Cannot upgrade a Level chunk"),
         };
 
         let proto_chunk = *proto_chunk_box;
@@ -264,6 +282,15 @@ impl Chunk {
         let is_lit = proto_chunk.stage >= StagedChunkEnum::Lighting
             && *lighting_config == LightingEngineConfig::Default;
 
+        // Convert pending block entities from structure generation to actual block entities
+        let mut block_entities = FxHashMap::default();
+        for nbt in proto_chunk.pending_block_entities {
+            if let Some(block_entity) = block_entity_from_nbt(&nbt) {
+                let pos = block_entity.get_position();
+                block_entities.insert(pos, block_entity);
+            }
+        }
+
         let mut chunk = ChunkData {
             light_engine: Mutex::new(light_data),
             light_populated: AtomicBool::new(is_lit),
@@ -274,7 +301,7 @@ impl Chunk {
             dirty: AtomicBool::new(true),
             block_ticks: Default::default(),
             fluid_ticks: Default::default(),
-            block_entities: Default::default(),
+            block_entities: Mutex::new(block_entities),
             status: proto_chunk.stage.into(),
         };
 

@@ -272,75 +272,75 @@ pub fn init_all_attributes() {
     // Register per-entity attribute builders here. Add entries as modules implement
     // `create_attributes()` on their entity types.
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::CREEPER, // Aw man
+        &EntityType::CREEPER, // Aw man
         crate::entity::mob::creeper::CreeperEntity::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::ENDERMAN,
+        &EntityType::ENDERMAN,
         crate::entity::mob::enderman::EndermanEntity::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::WOLF,
+        &EntityType::WOLF,
         crate::entity::passive::wolf::WolfEntity::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::IRON_GOLEM,
+        &EntityType::IRON_GOLEM,
         crate::entity::passive::iron_golem::IronGolemEntity::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::SNOW_GOLEM,
+        &EntityType::SNOW_GOLEM,
         crate::entity::passive::snow_golem::SnowGolemEntity::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::SKELETON,
+        &EntityType::SKELETON,
         crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
     );
 
     // Register skeleton variants that reuse the base skeleton attributes
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::STRAY,
+        &EntityType::STRAY,
         crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::WITHER_SKELETON,
+        &EntityType::WITHER_SKELETON,
         crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::ZOMBIE,
-        crate::entity::mob::zombie::ZombieEntity::create_attributes(),
+        &EntityType::ZOMBIE,
+        crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
     );
 
     // Register zombie-family variants that reuse the zombie attributes
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::HUSK,
-        crate::entity::mob::zombie::ZombieEntity::create_attributes(),
+        &EntityType::HUSK,
+        crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::DROWNED,
-        crate::entity::mob::zombie::ZombieEntity::create_attributes(),
+        &EntityType::DROWNED,
+        crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::ZOMBIE_VILLAGER,
-        crate::entity::mob::zombie::ZombieEntity::create_attributes(),
+        &EntityType::ZOMBIE_VILLAGER,
+        crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
     );
 
     // Boss entities
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::WITHER,
+        &EntityType::WITHER,
         crate::entity::boss::wither::WitherEntity::create_attributes(),
     );
 
     reg.register_builder(
-        &pumpkin_data::entity::EntityType::PLAYER,
+        &EntityType::PLAYER,
         crate::entity::player::Player::create_attributes(),
     );
 }

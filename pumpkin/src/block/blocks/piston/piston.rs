@@ -20,7 +20,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-        OnSyncedBlockEventArgs, PlacedArgs, blocks::redstone::is_emitting_redstone_power,
+        OnSyncedBlockEventArgs, PlacedArgs,
+        blocks::{piston::piston_head::PistonHeadProperties, redstone::is_emitting_redstone_power},
     },
     world::World,
 };
@@ -93,8 +94,19 @@ impl BlockBehaviour for PistonBlock {
             let pos = args
                 .position
                 .offset(props.facing.to_block_direction().to_offset());
-            let (block_to_check, _) = args.world.get_block_and_state_id(&pos).await;
+            let (block_to_check, block_to_check_state_id) =
+                args.world.get_block_and_state_id(&pos).await;
             if &Block::PISTON_HEAD == block_to_check || &Block::MOVING_PISTON == block_to_check {
+                let head_props =
+                    PistonHeadProperties::from_state_id(block_to_check_state_id, block_to_check);
+
+                if (head_props.facing.to_block_direction() != props.facing.to_block_direction())
+                    && &Block::PISTON_HEAD == block_to_check
+                {
+                    //Then this is a head of some other piston.
+                    return;
+                }
+
                 args.world
                     .break_block(&pos, None, BlockFlags::SKIP_DROPS)
                     .await;
@@ -313,7 +325,7 @@ async fn should_extend(world: &World, block_pos: &BlockPos, piston_dir: BlockDir
     false
 }
 
-async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
+pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
     let state = world.get_block_state(block_pos).await;
     let props = PistonProps::from_state_id(state.id, block);
     let dir = props.facing.to_block_direction();

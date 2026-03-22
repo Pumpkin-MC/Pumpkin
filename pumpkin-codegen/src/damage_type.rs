@@ -5,21 +5,31 @@ use serde::Deserialize;
 use std::{collections::BTreeMap, fs};
 use syn::{Ident, LitInt};
 
+/// Raw deserialization wrapper for a single damage type entry from `damage_type.json`.
 #[derive(Deserialize)]
 struct DamageTypeEntry {
+    /// Numeric registry ID for this damage type.
     id: u8,
+    /// Component data describing the behavior and messaging for this damage type.
     components: DamageTypeData,
 }
 
+/// Component data describing the behavior and messaging for a damage type.
 #[derive(Deserialize)]
 pub struct DamageTypeData {
+    /// Which death-message variant to display; defaults to `Default` when absent.
     death_message_type: Option<DeathMessageType>,
+    /// Exhaustion (hunger) cost applied to the player when taking this damage.
     exhaustion: f32,
+    /// Sound and visual effect triggered when this damage is received.
     effects: Option<DamageEffects>,
+    /// Translation key fragment used to look up the death message string.
     message_id: String,
+    /// Whether and when this damage type scales with game difficulty.
     scaling: DamageScaling,
 }
 
+/// Sound and visual effect applied when an entity takes this kind of damage.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum DamageEffects {
@@ -31,6 +41,7 @@ pub enum DamageEffects {
     Freezing,
 }
 
+/// Determines whether this damage type scales with difficulty.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum DamageScaling {
@@ -39,6 +50,7 @@ pub enum DamageScaling {
     Always,
 }
 
+/// Controls which death message variant is displayed for this damage type.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum DeathMessageType {
@@ -47,6 +59,7 @@ pub enum DeathMessageType {
     IntentionalGameDesign,
 }
 
+/// Generates the `TokenStream` for the `DamageType` struct, its associated enums, and constants.
 pub fn build() -> TokenStream {
     let damage_types: BTreeMap<String, DamageTypeEntry> =
         serde_json::from_str(&fs::read_to_string("../assets/damage_type.json").unwrap())

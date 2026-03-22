@@ -11,7 +11,7 @@ use pumpkin_world::{
 
 fn bench_terrain_gen(c: &mut Criterion) {
     let seed = 0;
-    let random_config = GlobalRandomConfig::new(seed, false);
+    let random_config = GlobalRandomConfig::new(seed);
     let base_router = ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
     let surface_config = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
     let terrain_cache = TerrainCache::from_random(&random_config);

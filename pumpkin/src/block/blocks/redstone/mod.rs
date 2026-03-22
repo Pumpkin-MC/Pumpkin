@@ -12,6 +12,7 @@ use crate::world::World;
 pub mod buttons;
 pub mod comparator;
 pub mod copper_bulb;
+pub mod daylight_detector;
 pub mod dropper;
 pub mod lever;
 pub mod observer;

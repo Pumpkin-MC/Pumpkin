@@ -4,8 +4,10 @@ use std::{collections::BTreeMap, fs};
 
 use crate::version::MinecraftVersion;
 
+/// The newest protocol version used as the fallback for unknown versions in `TrackedId::get`.
 const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
 
+/// Generates the `TokenStream` for `TrackedId`, `TrackedData`, and all per-entity tracking constants.
 pub(crate) fn build() -> TokenStream {
     let assets = [
         (MinecraftVersion::V_1_21, "1_21_tracked_data.json"),
@@ -47,6 +49,7 @@ pub(crate) fn build() -> TokenStream {
     }
 }
 
+/// Generates the `TrackedId` struct definition with one `u8` field per supported version.
 fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
     // Build struct fields
     let mut struct_fields = TokenStream::new();
@@ -90,6 +93,7 @@ fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
     }
 }
 
+/// Generates `TrackedId` constants for every tracked data key present in the latest version.
 fn generate_consts(versions: &BTreeMap<MinecraftVersion, BTreeMap<String, u8>>) -> TokenStream {
     let mut constants = TokenStream::new();
 

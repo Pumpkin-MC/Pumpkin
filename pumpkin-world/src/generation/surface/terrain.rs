@@ -1,7 +1,13 @@
-use pumpkin_data::{Block, BlockState, chunk::Biome};
+use pumpkin_data::{
+    Block, BlockState,
+    chunk::{Biome, DoublePerlinNoiseParameters},
+};
 use pumpkin_util::{
     math::vector3::Vector3,
-    random::{RandomDeriver, RandomDeriverImpl, RandomGenerator, RandomImpl},
+    random::{
+        RandomImpl,
+        xoroshiro128::{Xoroshiro, XoroshiroSplitter},
+    },
 };
 
 use crate::{
@@ -27,21 +33,39 @@ pub struct SurfaceTerrainBuilder {
 }
 
 impl SurfaceTerrainBuilder {
-    pub fn new(noise_builder: &DoublePerlinNoiseBuilder, random_deriver: &RandomDeriver) -> Self {
+    pub fn new(random_deriver: &XoroshiroSplitter) -> Self {
         Self {
             terracotta_bands: Self::create_terracotta_bands(
                 random_deriver.split_string("minecraft:clay_bands"),
             ),
-            terracotta_bands_offset_noise: noise_builder
-                .get_noise_sampler_for_id("clay_bands_offset"),
-            badlands_pillar_noise: noise_builder.get_noise_sampler_for_id("badlands_pillar"),
-            badlands_surface_noise: noise_builder.get_noise_sampler_for_id("badlands_surface"),
-            badlands_pillar_roof_noise: noise_builder
-                .get_noise_sampler_for_id("badlands_pillar_roof"),
-            iceberg_pillar_noise: noise_builder.get_noise_sampler_for_id("iceberg_pillar"),
-            iceberg_pillar_roof_noise: noise_builder
-                .get_noise_sampler_for_id("iceberg_pillar_roof"),
-            iceberg_surface_noise: noise_builder.get_noise_sampler_for_id("iceberg_surface"),
+            terracotta_bands_offset_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::CLAY_BANDS_OFFSET,
+            ),
+            badlands_pillar_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::BADLANDS_PILLAR,
+            ),
+            badlands_surface_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::BADLANDS_SURFACE,
+            ),
+            badlands_pillar_roof_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::BADLANDS_PILLAR_ROOF,
+            ),
+            iceberg_pillar_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::ICEBERG_PILLAR,
+            ),
+            iceberg_pillar_roof_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::ICEBERG_PILLAR_ROOF,
+            ),
+            iceberg_surface_noise: DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                random_deriver,
+                &DoublePerlinNoiseParameters::ICEBERG_SURFACE,
+            ),
         }
     }
 
@@ -56,7 +80,7 @@ impl SurfaceTerrainBuilder {
         RawBlockState(Block::LIGHT_GRAY_TERRACOTTA.default_state.id);
     const TERRACOTTA: RawBlockState = RawBlockState(Block::TERRACOTTA.default_state.id);
 
-    fn create_terracotta_bands(mut random: RandomGenerator) -> Box<[RawBlockState]> {
+    fn create_terracotta_bands(mut random: Xoroshiro) -> Box<[RawBlockState]> {
         let mut block_states = [Self::TERRACOTTA; 192];
 
         let mut i = 0;
@@ -96,7 +120,7 @@ impl SurfaceTerrainBuilder {
     }
 
     fn add_terracotta_bands(
-        random: &mut RandomGenerator,
+        random: &mut Xoroshiro,
         terracotta_bands: &mut [RawBlockState],
         min_band_size: i32,
         state: RawBlockState,
@@ -189,7 +213,7 @@ impl SurfaceTerrainBuilder {
         estimated_surface_y: i32,
         current_top_y: i32,
         sea_level: i32,
-        random_deriver: &RandomDeriver,
+        random_deriver: &XoroshiroSplitter,
     ) {
         let iceburg_surface_noise =
             (self.iceberg_surface_noise.sample(x as f64, 0.0, z as f64) * 8.25).abs();

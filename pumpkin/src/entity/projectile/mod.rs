@@ -11,7 +11,9 @@ use std::{
 };
 pub mod egg;
 pub mod firework_rocket;
+pub mod lingering_potion;
 pub mod snowball;
+pub mod splash_potion;
 pub mod wind_charge;
 
 #[must_use]
@@ -20,6 +22,8 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::SNOWBALL
         || *entity_type == EntityType::FIREWORK_ROCKET
         || *entity_type == EntityType::WIND_CHARGE
+        || *entity_type == EntityType::SPLASH_POTION
+        || *entity_type == EntityType::LINGERING_POTION
 }
 
 pub struct ThrownItemEntity {
@@ -142,7 +146,9 @@ impl ThrownItemEntity {
         let mut hit = None;
 
         // Block collisions
-        let (block_cols, block_positions) = world.get_block_collisions(search_box).await;
+        let (block_cols, block_positions) = world
+            .get_block_collisions(search_box, caller.as_ref())
+            .await;
         for (idx, bb) in block_cols.iter().enumerate() {
             if let Some(t) = calculate_ray_intersection(&start_pos, &delta, bb)
                 && t < closest_t
@@ -209,6 +215,11 @@ impl ThrownItemEntity {
 
         // Skip owner for initial frames
         if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+            return true;
+        }
+
+        // Projectiles should pass through lingering clouds
+        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD {
             return true;
         }
 

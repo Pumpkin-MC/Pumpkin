@@ -5,15 +5,22 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
+/// Raw deserialization shape for a single mob effect entry from `effect.json`.
 #[derive(Deserialize)]
 struct Effect {
+    /// Numeric registry ID for this mob effect.
     id: u8,
+    /// Category controlling UI presentation and general behavior.
     category: MobEffectCategory,
+    /// Particle and icon color for this effect as a packed RGB integer.
     color: i32,
+    /// Translation key used to display the effect name in the UI.
     translation_key: String,
+    /// Attribute modifiers applied to entities affected by this effect.
     attribute_modifiers: Vec<Modifiers>,
 }
 
+/// Classification of a mob effect determining its UI presentation and general purpose.
 #[expect(clippy::upper_case_acronyms)]
 #[derive(Deserialize)]
 pub enum MobEffectCategory {
@@ -22,16 +29,22 @@ pub enum MobEffectCategory {
     NEUTRAL,
 }
 
+/// A single attribute modifier applied by a mob effect, as defined in `effect.json`.
 #[derive(Deserialize)]
 pub struct Modifiers {
+    /// Namespaced attribute resource location (e.g. `"minecraft:generic.attack_damage"`).
     attribute: String,
+    /// Unique resource location ID for this modifier (used for stacking prevention).
     id: String,
+    /// The base numeric value applied by this modifier.
     #[serde(rename = "baseValue")]
     base_value: f64,
+    /// The operation used to combine this modifier with the base attribute value.
     operation: String,
 }
 
 impl Modifiers {
+    /// Converts this modifier entry into a `TokenStream` for use in generated code.
     pub fn get_tokens(self) -> TokenStream {
         let attribute = format_ident!("{}", self.attribute.to_uppercase());
         let id = self.id;
@@ -49,6 +62,7 @@ impl Modifiers {
 }
 
 impl MobEffectCategory {
+    /// Converts this category variant into a `TokenStream` for use in generated code.
     pub fn to_tokens(&self) -> TokenStream {
         match self {
             Self::BENEFICIAL => quote! { MobEffectCategory::Beneficial },
@@ -58,6 +72,8 @@ impl MobEffectCategory {
     }
 }
 
+/// Generates the `TokenStream` for the `StatusEffect` struct, `MobEffectCategory`, `Modifiers`,
+/// and the `from_name`/`from_minecraft_name` lookup methods.
 pub fn build() -> TokenStream {
     let effects: BTreeMap<String, Effect> =
         serde_json::from_str(&fs::read_to_string("../assets/effect.json").unwrap())

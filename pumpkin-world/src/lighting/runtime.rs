@@ -15,7 +15,8 @@ pub struct DynamicLightEngine {
 }
 
 impl DynamicLightEngine {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             decrease_block_light_queue: SegQueue::new(),
             increase_block_light_queue: SegQueue::new(),
@@ -395,7 +396,7 @@ impl DynamicLightEngine {
 
             if has_sky {
                 // Direct sunlight, reduced by opacity
-                15_u8.saturating_sub(opacity)
+                15u8.saturating_sub(opacity)
             } else {
                 // No direct sky, check neighbors for best light
                 let mut best_light = 0;

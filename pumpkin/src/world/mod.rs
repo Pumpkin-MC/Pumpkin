@@ -62,7 +62,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{
     CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_flag,
     entity_data_key,
 };
-use pumpkin_protocol::bedrock::client::start_game::CStartGame;
+use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
@@ -95,7 +95,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment},
+    java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment, CUpdateMobEffect},
 };
 use pumpkin_protocol::{
     codec::var_int::VarInt,
@@ -342,6 +342,33 @@ impl World {
         .await;
     }
 
+    pub async fn send_add_mob_effect(
+        &self,
+        entity: &Entity,
+        effect: &pumpkin_data::potion::Effect,
+    ) {
+        // TODO: only nearby
+        let mut flags: i8 = 0;
+        if effect.ambient {
+            flags |= 0x01;
+        }
+        if effect.show_particles {
+            flags |= 0x02;
+        }
+        if effect.show_icon {
+            flags |= 0x04;
+        }
+
+        self.broadcast_packet_all(&CUpdateMobEffect::new(
+            VarInt(entity.entity_id),
+            VarInt(i32::from(effect.effect_type.id)),
+            VarInt(i32::from(effect.amplifier)),
+            VarInt(effect.duration),
+            flags,
+        ))
+        .await;
+    }
+
     pub fn get_difficulty(&self, difficulty: Difficulty) {
         let current_info = self.level_info.load();
         let mut new_info = (**current_info).clone();
@@ -505,7 +532,7 @@ impl World {
                 Some(decorated_message.clone()),
                 FilterType::PassThrough,
                 (RAW + 1).into(), // Custom registry chat_type with no sender name
-                TextComponent::text(""), // Not needed since we're injecting the name in the message for custom formatting
+                TextComponent::empty(), // Not needed since we're injecting the name in the message for custom formatting
                 None,
             );
             recipient.client.enqueue_packet(packet).await;
@@ -819,14 +846,33 @@ impl World {
         }
 
         for scheduled_tick in tick_data.random_ticks {
-            let block = self.get_block(&scheduled_tick.position).await;
-            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
+            let (block, fluid) = match (scheduled_tick.tick_block, scheduled_tick.tick_fluid) {
+                (true, true) => {
+                    let (block, fluid) = self.get_block_and_fluid(&scheduled_tick.position).await;
+                    (Some(block), Some(fluid))
+                }
+                (true, false) => (Some(self.get_block(&scheduled_tick.position).await), None),
+                (false, true) => (None, Some(self.get_fluid(&scheduled_tick.position).await)),
+                (false, false) => (None, None),
+            };
+
+            if let Some(block) = block
+                && let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id)
+            {
                 pumpkin_block
                     .random_tick(RandomTickArgs {
                         world: self,
                         block,
                         position: &scheduled_tick.position,
                     })
+                    .await;
+            }
+
+            if let Some(fluid) = fluid
+                && let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id)
+            {
+                pumpkin_fluid
+                    .random_tick(fluid, self, &scheduled_tick.position)
                     .await;
             }
         }
@@ -1121,6 +1167,7 @@ impl World {
     pub async fn get_block_collisions(
         self: &Arc<Self>,
         bounding_box: BoundingBox,
+        entity: &dyn EntityBase,
     ) -> (Vec<BoundingBox>, Vec<(usize, BlockPos)>) {
         let mut collisions = Vec::new();
 
@@ -1137,15 +1184,29 @@ impl World {
                 continue;
             }
 
-            let collided = Self::check_collision(
-                &bounding_box,
-                pos,
-                state,
-                true,
-                |collision_shape: &BoundingBox| {
-                    collisions.push(*collision_shape);
-                },
-            );
+            let block = Block::from_state_id(state.id);
+            let mut collided = false;
+
+            if block == &Block::POWDER_SNOW {
+                if let Some(shape) =
+                    crate::block::blocks::powder_snow::collision_shape_for_entity(entity, &pos)
+                        .await
+                {
+                    let shape = shape.at_pos(pos);
+                    if shape.intersects(&bounding_box) {
+                        collided = true;
+                        collisions.push(shape);
+                    }
+                }
+            } else {
+                for shape in state.get_block_collision_shapes() {
+                    let shape = shape.at_pos(pos);
+                    if shape.intersects(&bounding_box) {
+                        collided = true;
+                        collisions.push(shape);
+                    }
+                }
+            }
 
             if collided {
                 positions.push((collisions.len(), pos));
@@ -1370,10 +1431,6 @@ impl World {
             override_force_experimental_gameplay_has_value: false,
             chat_restriction_level: 0,
             disable_player_interactions: false,
-            server_id: String::new(),
-            world_id: String::new(),
-            scenario_id: String::new(),
-            owner_id: String::new(),
         };
         drop(level_info);
         drop(weather);
@@ -1415,6 +1472,13 @@ impl World {
                 enable_clientside_generation: false,
                 blocknetwork_ids_are_hashed: false,
                 server_auth_sounds: false,
+                server_join_information: None,
+                telemetry: ServerTelemetryData {
+                    server_id: String::new(),
+                    scenario_id: String::new(),
+                    world_id: String::new(),
+                    owner_id: String::new(),
+                },
             })
             .await;
         chunker::update_position(&player).await;
@@ -1541,7 +1605,7 @@ impl World {
         &self,
         base_config: &BasicConfiguration,
         player: &Arc<Player>,
-        server: &Server,
+        server: &Arc<Server>,
     ) {
         let dimensions: Vec<ResourceLocation> = server
             .dimensions
@@ -3113,6 +3177,30 @@ impl World {
         Block::from_state_id(id)
     }
 
+    #[must_use]
+    pub fn get_block_state_id_if_loaded(&self, position: &BlockPos) -> Option<BlockStateId> {
+        if !self.is_in_build_limit(*position) {
+            return None;
+        }
+
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.level.try_get_chunk(&chunk_coordinate)?;
+        chunk
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+    }
+
+    #[must_use]
+    pub fn get_block_state_if_loaded(&self, position: &BlockPos) -> Option<&'static BlockState> {
+        self.get_block_state_id_if_loaded(position)
+            .map(BlockState::from_id)
+    }
+
+    #[must_use]
+    pub fn is_loaded(&self, position: &BlockPos) -> bool {
+        self.get_block_state_id_if_loaded(position).is_some()
+    }
+
     pub async fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
         let id = self.get_block_state_id(position).await;
         let fluid = Fluid::from_state_id(id).ok_or(&Fluid::EMPTY);
@@ -3667,6 +3755,21 @@ impl pumpkin_world::world::SimpleWorld for World {
             let level_time_guard = self.level_time.lock().await;
             level_time_guard.world_age
         })
+    }
+
+    fn get_time_of_day(&self) -> WorldFuture<'_, i64> {
+        Box::pin(async move {
+            let level_time_guard = self.level_time.lock().await;
+            level_time_guard.query_daytime()
+        })
+    }
+
+    fn get_level(&self) -> WorldFuture<'_, &Arc<Level>> {
+        Box::pin(async move { &self.level })
+    }
+
+    fn get_dimension(&self) -> WorldFuture<'_, &Dimension> {
+        Box::pin(async move { &self.dimension })
     }
 
     fn play_sound<'a>(

@@ -12,7 +12,9 @@ use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
 use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
@@ -53,7 +55,7 @@ use std::pin::Pin;
 use std::sync::{
     Arc,
     atomic::{
-        AtomicBool, AtomicI32, AtomicU32,
+        AtomicBool, AtomicI32, AtomicU8, AtomicU32,
         Ordering::{self, Relaxed},
     },
 };
@@ -61,6 +63,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub mod ai;
+pub mod area_effect_cloud;
 pub mod attributes;
 pub mod boss;
 pub mod breath;
@@ -82,6 +85,22 @@ pub mod vehicle;
 
 mod combat;
 pub mod predicate;
+
+/// Returns the [`EntityStatus`] that should be broadcast when the given
+/// equipment slot breaks.
+#[must_use]
+pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
+    match slot {
+        EquipmentSlot::MainHand(_) => EntityStatus::BreakMainhand,
+        EquipmentSlot::OffHand(_) => EntityStatus::BreakOffhand,
+        EquipmentSlot::Head(_) => EntityStatus::BreakHead,
+        EquipmentSlot::Chest(_) => EntityStatus::BreakChest,
+        EquipmentSlot::Legs(_) => EntityStatus::BreakLegs,
+        EquipmentSlot::Feet(_) => EntityStatus::BreakFeet,
+        EquipmentSlot::Body(_) => EntityStatus::BreakBody,
+        EquipmentSlot::Saddle(_) => EntityStatus::BreakSaddle,
+    }
+}
 
 pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -423,6 +442,10 @@ pub struct Entity {
     /// The number of ticks the entity has been frozen (in powder snow)
     /// Max is 140 ticks (7 seconds). Increases by 1/tick in powder snow, decreases by 2/tick outside.
     pub frozen_ticks: AtomicI32,
+    /// Set during block-collision processing when the entity is touching powder snow.
+    pub is_in_powder_snow: AtomicBool,
+    /// True if the entity was in powder snow during the previous tick.
+    pub was_in_powder_snow: AtomicBool,
     pub removal_reason: AtomicCell<Option<RemovalReason>>,
     // The passengers that entity has
     pub passengers: Mutex<Vec<Arc<dyn EntityBase>>>,
@@ -454,6 +477,14 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
+    /// The last sent yaw value (encoded as u8) for change detection
+    pub last_sent_yaw: AtomicU8,
+    /// The last sent pitch value (encoded as u8) for change detection
+    pub last_sent_pitch: AtomicU8,
+    /// Cache for the last sent position to optimize Entity Pos update packets
+    pub last_sent_pos: AtomicCell<Vector3<f64>>,
+    /// Cache for the last sent head yaw byte
+    pub last_sent_head_yaw: AtomicU8,
 }
 
 impl Entity {
@@ -528,6 +559,8 @@ impl Entity {
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
             frozen_ticks: AtomicI32::new(0),
+            is_in_powder_snow: AtomicBool::new(false),
+            was_in_powder_snow: AtomicBool::new(false),
             removal_reason: AtomicCell::new(None),
             passengers: Mutex::new(Vec::new()),
             vehicle: Mutex::new(None),
@@ -541,6 +574,10 @@ impl Entity {
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
+            last_sent_yaw: AtomicU8::new(0),
+            last_sent_pitch: AtomicU8::new(0),
+            last_sent_head_yaw: AtomicU8::new(0),
+            last_sent_pos: AtomicCell::new(position),
         }
     }
 
@@ -670,20 +707,22 @@ impl Entity {
 
         // Broadcast the update packet.
 
-        // TODO: Do caching to only send the packet when needed.
-
-        let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0);
-
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
-        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
+        if yaw == self.last_sent_yaw.load(Relaxed) && pitch == self.last_sent_pitch.load(Relaxed) {
+            return;
+        }
+
+        self.last_sent_yaw.store(yaw, Relaxed);
+        self.last_sent_pitch.store(pitch, Relaxed);
 
         self.world
             .load()
             .broadcast_packet_all(&CUpdateEntityRot::new(
                 self.entity_id.into(),
                 yaw,
-                pitch as u8,
+                pitch,
                 self.on_ground.load(Relaxed),
             ))
             .await;
@@ -692,6 +731,11 @@ impl Entity {
     }
 
     pub async fn send_head_rot(&self, head_yaw: u8) {
+        if head_yaw == self.last_sent_head_yaw.load(Relaxed) {
+            return;
+        }
+        self.last_sent_head_yaw.store(head_yaw, Relaxed);
+
         self.world
             .load()
             .broadcast_packet_all(&CHeadRot::new(self.entity_id.into(), head_yaw))
@@ -717,7 +761,11 @@ impl Entity {
     }
 
     #[expect(clippy::float_cmp)]
-    async fn adjust_movement_for_collisions(&self, movement: Vector3<f64>) -> Vector3<f64> {
+    async fn adjust_movement_for_collisions(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+    ) -> Vector3<f64> {
         self.on_ground.store(false, Ordering::SeqCst);
         self.supporting_block_pos.store(None);
         self.horizontal_collision.store(false, Ordering::SeqCst);
@@ -731,7 +779,7 @@ impl Entity {
         let (collisions, block_positions) = self
             .world
             .load()
-            .get_block_collisions(bounding_box.stretch(movement))
+            .get_block_collisions(bounding_box.stretch(movement), caller)
             .await;
 
         if collisions.is_empty() {
@@ -975,12 +1023,23 @@ impl Entity {
                 },
             );
 
-            let collision_shape = world
-                .block_registry
-                .get_inside_collision_shape(block, &world, state, &pos)
-                .await;
+            let collision_shape = if block == &Block::POWDER_SNOW {
+                crate::block::blocks::powder_snow::inside_collision_shape_for_entity(
+                    caller.as_ref(),
+                    &pos,
+                )
+                .await
+            } else {
+                world
+                    .block_registry
+                    .get_inside_collision_shape(block, &world, state, &pos)
+                    .await
+            };
 
             if bounding_box.intersects(&collision_shape.at_pos(pos)) {
+                if block == &Block::POWDER_SNOW {
+                    self.is_in_powder_snow.store(true, Relaxed);
+                }
                 world
                     .block_registry
                     .on_entity_collision(block, &world, caller.as_ref(), &pos, state, server)
@@ -992,8 +1051,7 @@ impl Entity {
     }
 
     pub async fn send_pos_rot(&self) {
-        let old = self.update_last_pos();
-
+        let old = self.last_sent_pos.load();
         let new = self.pos.load();
 
         let converted = Vector3::new(
@@ -1005,25 +1063,54 @@ impl Entity {
         let yaw = self.yaw.load();
 
         let pitch = self.pitch.load();
-
-        // Broadcast the update packet.
-
-        // TODO: Do caching to only send the packet when needed.
-
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
-        let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0);
+        // Only broadcast when position or rotation has actually changed.
+        let pos_changed = converted.x != 0 || converted.y != 0 || converted.z != 0;
+        let rot_changed =
+            yaw != self.last_sent_yaw.load(Relaxed) || pitch != self.last_sent_pitch.load(Relaxed);
 
-        self.world
-            .load()
-            .broadcast_packet_all(&CUpdateEntityPosRot::new(
-                self.entity_id.into(),
-                Vector3::new(converted.x, converted.y, converted.z),
-                yaw,
-                pitch as u8,
-                self.on_ground.load(Relaxed),
-            ))
-            .await;
+        if !pos_changed && !rot_changed {
+            return;
+        }
+
+        self.last_sent_pos.store(new);
+        self.last_sent_yaw.store(yaw, Relaxed);
+        self.last_sent_pitch.store(pitch, Relaxed);
+
+        // Dynamically pick the most efficient packet
+        if pos_changed && rot_changed {
+            self.world
+                .load()
+                .broadcast_packet_all(&CUpdateEntityPosRot::new(
+                    self.entity_id.into(),
+                    Vector3::new(converted.x, converted.y, converted.z),
+                    yaw,
+                    pitch,
+                    self.on_ground.load(Relaxed),
+                ))
+                .await;
+        } else if pos_changed {
+            self.world
+                .load()
+                .broadcast_packet_all(&CUpdateEntityPos::new(
+                    self.entity_id.into(),
+                    Vector3::new(converted.x, converted.y, converted.z),
+                    self.on_ground.load(Relaxed),
+                ))
+                .await;
+        } else if rot_changed {
+            self.world
+                .load()
+                .broadcast_packet_all(&CUpdateEntityRot::new(
+                    self.entity_id.into(),
+                    yaw,
+                    pitch,
+                    self.on_ground.load(Relaxed),
+                ))
+                .await;
+        }
         self.send_head_rot(yaw).await;
     }
 
@@ -1036,7 +1123,7 @@ impl Entity {
     }
 
     pub async fn send_pos(&self) {
-        let old = self.update_last_pos();
+        let old = self.last_sent_pos.load();
         let new = self.pos.load();
 
         let converted = Vector3::new(
@@ -1044,6 +1131,13 @@ impl Entity {
             new.y.mul_add(4096.0, -(old.y * 4096.0)) as i16,
             new.z.mul_add(4096.0, -(old.z * 4096.0)) as i16,
         );
+
+        // Only broadcast when position has actually changed.
+        if converted.x == 0 && converted.y == 0 && converted.z == 0 {
+            return;
+        }
+
+        self.last_sent_pos.store(new);
 
         self.world
             .load()
@@ -1367,7 +1461,9 @@ impl Entity {
             self.velocity.store(Vector3::default());
         }
 
-        let final_move = self.adjust_movement_for_collisions(motion).await;
+        let final_move = self
+            .adjust_movement_for_collisions(motion, caller.as_ref())
+            .await;
 
         self.move_pos(final_move);
 
@@ -1681,10 +1777,12 @@ impl Entity {
     /// Freeze damage is dealt every 40 ticks when fully frozen
     const FREEZE_DAMAGE_INTERVAL: i32 = 40;
 
-    /// Check if the entity is currently in powder snow
-    pub async fn is_in_powder_snow(&self) -> bool {
-        let block_pos = self.block_pos.load();
-        self.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
+    /// Check if the entity is currently in powder snow.
+    ///
+    /// The flag is reset at the start of each tick and set while processing
+    /// block collisions for the current tick.
+    pub fn is_in_powder_snow(&self) -> bool {
+        self.is_in_powder_snow.load(Ordering::Relaxed)
     }
 
     /// Check if this entity type is immune to freezing
@@ -1693,24 +1791,54 @@ impl Entity {
             .has_tag(&tag::EntityType::MINECRAFT_FREEZE_IMMUNE_ENTITY_TYPES)
     }
 
-    /// Ticks the frozen state of the entity.
-    /// In powder snow: `frozen_ticks` increases by 1 (up to `MAX_FROZEN_TICKS`)
-    /// Outside powder snow: `frozen_ticks` decreases by 2 (down to 0)
-    /// When fully frozen, deals 1 damage every 40 ticks
-    pub async fn tick_frozen(&self, caller: &dyn EntityBase) {
-        // Freeze-immune entities don't accumulate freeze ticks
-        if self.is_freeze_immune() {
-            return;
+    /// Mirrors vanilla `LivingEntity#canFreeze`: spectators and entities wearing
+    /// freeze-immune wearables (e.g. leather armor) cannot freeze.
+    async fn can_freeze(&self, caller: &dyn EntityBase) -> bool {
+        if caller.is_spectator() || self.is_freeze_immune() {
+            return false;
         }
 
-        let in_powder_snow = self.is_in_powder_snow().await;
+        let Some(living) = caller.get_living_entity() else {
+            return true;
+        };
+
+        let armor = {
+            let equipment = living.entity_equipment.lock().await;
+            [
+                equipment.get(&EquipmentSlot::HEAD),
+                equipment.get(&EquipmentSlot::CHEST),
+                equipment.get(&EquipmentSlot::LEGS),
+                equipment.get(&EquipmentSlot::FEET),
+            ]
+        };
+
+        for stack in armor {
+            let stack = stack.lock().await;
+            if stack
+                .get_item()
+                .has_tag(&tag::Item::MINECRAFT_FREEZE_IMMUNE_WEARABLES)
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Ticks the frozen state of the entity.
+    /// In powder snow and freezeable: `frozen_ticks` increases by 1 (up to `MAX_FROZEN_TICKS`)
+    /// Otherwise: `frozen_ticks` decreases by 2 (down to 0)
+    /// When fully frozen, deals 1 damage every 40 ticks
+    pub async fn tick_frozen(&self, caller: &dyn EntityBase) {
+        let can_freeze = self.can_freeze(caller).await;
+        let in_powder_snow = self.is_in_powder_snow();
         let old_frozen_ticks = self.frozen_ticks.load(Ordering::Relaxed);
 
-        let new_frozen_ticks = if in_powder_snow {
+        let new_frozen_ticks = if in_powder_snow && can_freeze {
             // Increase frozen ticks when in powder snow
             (old_frozen_ticks + 1).min(Self::MAX_FROZEN_TICKS)
         } else {
-            // Decrease frozen ticks when not in powder snow (2x faster thaw rate)
+            // Vanilla: thaw whenever not in powder snow OR when freezing is prevented
             (old_frozen_ticks - 2).max(0)
         };
 
@@ -1725,8 +1853,9 @@ impl Entity {
             .await;
         }
 
-        // Deal freeze damage when fully frozen (every 40 ticks)
-        if new_frozen_ticks >= Self::MAX_FROZEN_TICKS
+        // Vanilla parity: full-freeze damage is tick-phase based.
+        if can_freeze
+            && new_frozen_ticks >= Self::MAX_FROZEN_TICKS
             && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
         {
             caller.damage(caller, 1.0, DamageType::FREEZE).await;
@@ -2113,6 +2242,18 @@ impl Entity {
         if let Some(pitch) = pitch {
             self.set_pitch(pitch);
         }
+        // Update cache so we don't send rubberbanding deltas
+        self.last_sent_pos.store(position);
+        if let Some(yaw) = yaw {
+            self.last_sent_yaw
+                .store((yaw * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
+            self.last_sent_head_yaw
+                .store((yaw * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
+        }
+        if let Some(pitch) = pitch {
+            self.last_sent_pitch
+                .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
+        }
         self.world
             .load()
             .broadcast_packet_all(&CEntityPositionSync::new(
@@ -2383,10 +2524,10 @@ impl Entity {
                     return;
                 }
             }
-            v if v == EntityType::SPIDER.id || v == EntityType::CAVE_SPIDER.id => {
-                if Block::from_state_id(state.id).id == Block::COBWEB.id {
-                    return;
-                }
+            v if (v == EntityType::SPIDER.id || v == EntityType::CAVE_SPIDER.id)
+                && Block::from_state_id(state.id).id == Block::COBWEB.id =>
+            {
+                return;
             }
             v if v == EntityType::WITHER.id => {
                 return;
@@ -2492,6 +2633,11 @@ impl EntityBase for Entity {
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
+            // Recomputed during movement/block-collision handling in the same tick.
+            let was_in_powder_snow = self.is_in_powder_snow.load(Ordering::Relaxed);
+            self.was_in_powder_snow
+                .store(was_in_powder_snow, Ordering::Relaxed);
+            self.is_in_powder_snow.store(false, Ordering::Relaxed);
             self.update_last_pos();
             self.tick_portal(&caller).await;
             self.update_fluid_state(&caller).await;
@@ -2519,9 +2665,6 @@ impl EntityBase for Entity {
             // Check if visual fire should be sent
             let should_render_fire = self.fire_ticks.load(Ordering::Relaxed) > 0 && !is_immune;
             self.set_on_fire(should_render_fire).await;
-
-            // Tick freeze state (powder snow)
-            self.tick_frozen(&*caller).await;
 
             let riding_cooldown = self.riding_cooldown.load(Ordering::Relaxed);
             if riding_cooldown > 0 {
@@ -2611,4 +2754,32 @@ pub enum Flag {
     Glowing = 6,
     /// Indicates if the entity is flying due to a fall.
     FallFlying = 7,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equipment_break_status_maps_all_slots() {
+        // Status bytes from vanilla EntityEvent: mainhand=47, offhand=48,
+        // head=49, chest=50, legs=51, feet=52, body=65, saddle=68.
+        let cases: &[(&EquipmentSlot, u8)] = &[
+            (&EquipmentSlot::MAIN_HAND, EntityStatus::BreakMainhand as u8),
+            (&EquipmentSlot::OFF_HAND, EntityStatus::BreakOffhand as u8),
+            (&EquipmentSlot::HEAD, EntityStatus::BreakHead as u8),
+            (&EquipmentSlot::CHEST, EntityStatus::BreakChest as u8),
+            (&EquipmentSlot::LEGS, EntityStatus::BreakLegs as u8),
+            (&EquipmentSlot::FEET, EntityStatus::BreakFeet as u8),
+            (&EquipmentSlot::BODY, EntityStatus::BreakBody as u8),
+            (&EquipmentSlot::SADDLE, EntityStatus::BreakSaddle as u8),
+        ];
+        for (i, (slot, expected)) in cases.iter().enumerate() {
+            assert_eq!(
+                equipment_break_status(slot) as u8,
+                *expected,
+                "status mismatch at index {i}"
+            );
+        }
+    }
 }

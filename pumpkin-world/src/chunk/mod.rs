@@ -2,8 +2,8 @@ use crate::BlockStateId;
 use crate::block::entities::BlockEntity;
 use crate::chunk::format::LightContainer;
 use crate::tick::scheduler::ChunkTickScheduler;
-use palette::{BiomePalette, BlockPalette};
-use pumpkin_data::block_properties::{blocks_movement, is_air};
+use palette::{BiomePalette, BlockPalette, has_random_ticking_fluid};
+use pumpkin_data::block_properties::{blocks_movement, has_random_ticks, is_air};
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
@@ -106,35 +106,45 @@ pub struct ChunkEntityData {
 pub struct ChunkSections {
     pub count: usize,
     pub block_sections: RwLock<Box<[BlockPalette]>>,
+    pub random_tick_sections: RwLock<Box<[RandomTickSectionCache]>>,
     pub biome_sections: RwLock<Box<[BiomePalette]>>,
     pub min_y: i32,
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct RandomTickSectionCache {
+    pub random_ticking_block_count: u16,
+    pub random_ticking_fluid_count: u16,
+}
+
+impl RandomTickSectionCache {
+    #[must_use]
+    pub const fn is_randomly_ticking(&self) -> bool {
+        self.random_ticking_block_count > 0 || self.random_ticking_fluid_count > 0
+    }
 }
 
 impl ChunkSections {
     #[cfg(test)]
     #[must_use]
     pub fn dump_blocks(&self) -> Vec<u16> {
-        // TODO: this is not optimal, we could use rust iters
-        let mut dump = Vec::new();
-        for section in self.block_sections.read().unwrap().iter() {
-            section.for_each(|raw_id| {
-                dump.push(raw_id);
-            });
-        }
-        dump
+        self.block_sections
+            .read()
+            .unwrap()
+            .iter()
+            .flat_map(|section| section.iter().copied())
+            .collect()
     }
 
     #[cfg(test)]
     #[must_use]
     pub fn dump_biomes(&self) -> Vec<u8> {
-        // TODO: this is not optimal, we could use rust iters
-        let mut dump = Vec::new();
-        for section in self.biome_sections.read().unwrap().iter() {
-            section.for_each(|raw_id| {
-                dump.push(raw_id);
-            });
-        }
-        dump
+        self.biome_sections
+            .read()
+            .unwrap()
+            .iter()
+            .flat_map(|section| section.iter().copied())
+            .collect()
     }
 }
 
@@ -290,13 +300,33 @@ impl Default for ChunkHeightmaps {
 
 impl ChunkSections {
     #[must_use]
+    pub fn build_random_tick_sections_cache(
+        block_sections: &[BlockPalette],
+    ) -> Box<[RandomTickSectionCache]> {
+        block_sections
+            .iter()
+            .map(|section| {
+                let (random_ticking_block_count, random_ticking_fluid_count) =
+                    section.random_ticking_counts();
+                RandomTickSectionCache {
+                    random_ticking_block_count,
+                    random_ticking_fluid_count,
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice()
+    }
+
+    #[must_use]
     pub fn new(num_sections: usize, min_y: i32) -> Self {
         let block_sections = vec![BlockPalette::default(); num_sections].into_boxed_slice();
+        let random_tick_sections = Self::build_random_tick_sections_cache(&block_sections);
         let biome_sections = vec![BiomePalette::default(); num_sections].into_boxed_slice();
 
         Self {
             count: num_sections,
             block_sections: RwLock::new(block_sections),
+            random_tick_sections: RwLock::new(random_tick_sections),
             biome_sections: RwLock::new(biome_sections),
             min_y,
         }
@@ -405,8 +435,44 @@ impl ChunkSections {
 
         let section_index = relative_y / BlockPalette::SIZE;
         let relative_y = relative_y % BlockPalette::SIZE;
-        if let Some(section) = self.block_sections.write().unwrap().get_mut(section_index) {
-            return section.set(relative_x, relative_y, relative_z, block_state_id);
+
+        // Keep lock order consistent to avoid deadlocks: block sections first, then random-tick cache.
+        let mut sections = self.block_sections.write().unwrap();
+        let mut random_tick_sections = self.random_tick_sections.write().unwrap();
+
+        if let (Some(section), Some(random_tick_cache)) = (
+            sections.get_mut(section_index),
+            random_tick_sections.get_mut(section_index),
+        ) {
+            let replaced_block_state_id =
+                section.set(relative_x, relative_y, relative_z, block_state_id);
+            if replaced_block_state_id == block_state_id {
+                return replaced_block_state_id;
+            }
+
+            if has_random_ticks(replaced_block_state_id) {
+                random_tick_cache.random_ticking_block_count = random_tick_cache
+                    .random_ticking_block_count
+                    .saturating_sub(1);
+            }
+            if has_random_ticking_fluid(replaced_block_state_id) {
+                random_tick_cache.random_ticking_fluid_count = random_tick_cache
+                    .random_ticking_fluid_count
+                    .saturating_sub(1);
+            }
+
+            if has_random_ticks(block_state_id) {
+                random_tick_cache.random_ticking_block_count = random_tick_cache
+                    .random_ticking_block_count
+                    .saturating_add(1);
+            }
+            if has_random_ticking_fluid(block_state_id) {
+                random_tick_cache.random_ticking_fluid_count = random_tick_cache
+                    .random_ticking_fluid_count
+                    .saturating_add(1);
+            }
+
+            return replaced_block_state_id;
         }
         0
     }
@@ -610,4 +676,62 @@ pub enum ChunkParsingError {
 pub enum ChunkSerializingError {
     #[error("Error serializing chunk: {0}")]
     ErrorSerializingChunk(pumpkin_nbt::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ChunkSections;
+    use crate::chunk::palette::BlockPalette;
+    use pumpkin_data::{Block, block_properties::has_random_ticks};
+
+    #[test]
+    fn random_tick_cache_initializes_from_palette_contents() {
+        let mut sections = vec![BlockPalette::default(), BlockPalette::default()];
+        sections[1].set(0, 0, 0, Block::LAVA.default_state.id);
+
+        let cache = ChunkSections::build_random_tick_sections_cache(&sections);
+        assert!(!cache[0].is_randomly_ticking());
+        assert!(cache[1].random_ticking_fluid_count > 0);
+        assert!(cache[1].is_randomly_ticking());
+    }
+
+    #[test]
+    fn random_tick_cache_updates_on_block_mutation() {
+        let min_y = -64;
+        let sections = ChunkSections::new(1, min_y);
+
+        assert!(
+            !sections.random_tick_sections.read().unwrap()[0].is_randomly_ticking(),
+            "fresh sections should not be randomly ticking"
+        );
+
+        let random_block_state = Block::WHEAT.default_state.id;
+        assert!(
+            has_random_ticks(random_block_state),
+            "test requires a known randomly ticking block state"
+        );
+
+        sections.set_block_absolute_y(0, min_y, 0, random_block_state);
+        {
+            let cache = sections.random_tick_sections.read().unwrap();
+            assert_eq!(cache[0].random_ticking_block_count, 1);
+            assert_eq!(cache[0].random_ticking_fluid_count, 0);
+            assert!(cache[0].is_randomly_ticking());
+        }
+
+        sections.set_block_absolute_y(0, min_y, 0, Block::STONE.default_state.id);
+        {
+            let cache = sections.random_tick_sections.read().unwrap();
+            assert_eq!(cache[0].random_ticking_block_count, 0);
+            assert_eq!(cache[0].random_ticking_fluid_count, 0);
+            assert!(!cache[0].is_randomly_ticking());
+        }
+
+        sections.set_block_absolute_y(0, min_y, 0, Block::LAVA.default_state.id);
+        {
+            let cache = sections.random_tick_sections.read().unwrap();
+            assert!(cache[0].random_ticking_fluid_count > 0);
+            assert!(cache[0].is_randomly_ticking());
+        }
+    }
 }
