@@ -11,6 +11,7 @@ mod banip;
 mod banlist;
 mod bossbar;
 mod clear;
+mod clone;
 mod damage;
 mod data;
 pub mod defaultgamemode;
@@ -20,6 +21,7 @@ mod effect;
 mod enchant;
 mod experience;
 mod fill;
+mod fillbiome;
 mod gamemode;
 mod gamerule;
 mod give;
@@ -37,6 +39,7 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod random;
 mod rotate;
 mod say;
 mod seed;
@@ -44,6 +47,7 @@ mod setblock;
 mod setidletimeout;
 mod setworldspawn;
 mod spawnpoint;
+mod spreadplayers;
 mod stop;
 mod stopsound;
 mod summon;
@@ -75,6 +79,7 @@ pub async fn default_dispatcher(
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
+    dispatcher.register(random::init_command_tree(), "minecraft:command.random");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
@@ -135,6 +140,15 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(clone::init_command_tree(), "minecraft:command.clone");
+    dispatcher.register(
+        fillbiome::init_command_tree(),
+        "minecraft:command.fillbiome",
+    );
+    dispatcher.register(
+        spreadplayers::init_command_tree(),
+        "minecraft:command.spreadplayers",
+    );
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -210,6 +224,13 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.msg",
             "Sends a private message to another player",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.random",
+            "Draw a random value or control random sequences",
             PermissionDefault::Allow,
         ))
         .unwrap();
@@ -425,6 +446,27 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.tps",
             "Displays the server TPS and MSPT",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.clone",
+            "Copies blocks from one region to another",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.fillbiome",
+            "Fills a region with a specific biome",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spreadplayers",
+            "Teleports entities to random surface locations in an area",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
