@@ -4,13 +4,13 @@ use crate::plugin::{
         wit::v0_1_0::{
             events::{
                 ToFromV0_1_0WasmEvent, consume_player, consume_text_component, consume_world,
-                from_wasm_game_mode, from_wasm_hand, from_wasm_position, to_wasm_game_mode,
-                to_wasm_hand, to_wasm_position,
+                from_wasm_entity_type, from_wasm_game_mode, from_wasm_hand, from_wasm_position,
+                to_wasm_entity_type, to_wasm_game_mode, to_wasm_hand, to_wasm_position,
             },
             pumpkin::plugin::event::{
                 Event, PlayerChangeWorldEventData, PlayerChangedMainHandEventData,
                 PlayerChatEventData, PlayerCommandSendEventData, PlayerCustomPayloadEventData,
-                PlayerExpChangeEventData, PlayerFishEventData,
+                PlayerEggThrowEventData, PlayerExpChangeEventData, PlayerFishEventData,
                 PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
                 PlayerItemHeldEventData, PlayerJoinEventData, PlayerLeaveEventData,
                 PlayerLoginEventData, PlayerMoveEventData, PlayerPermissionCheckEventData,
@@ -20,6 +20,7 @@ use crate::plugin::{
     },
     player::{
         changed_main_hand::PlayerChangedMainHandEvent,
+        egg_throw::PlayerEggThrowEvent,
         exp_change::PlayerExpChangeEvent,
         fish::{PlayerFishEvent, PlayerFishState},
         item_held::PlayerItemHeldEvent,
@@ -485,6 +486,37 @@ impl ToFromV0_1_0WasmEvent for PlayerFishEvent {
                 state: from_wasm_fish_state(data.state),
                 hand: from_wasm_hand(data.hand),
                 exp_to_drop: data.exp_to_drop,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerEggThrowEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerEggThrowEvent(PlayerEggThrowEventData {
+            player,
+            egg_uuid: self.egg_uuid.to_string(),
+            hatching: self.hatching,
+            num_hatches: self.num_hatches,
+            hatching_type: to_wasm_entity_type(self.hatching_type),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerEggThrowEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                egg_uuid: uuid::Uuid::parse_str(&data.egg_uuid).expect("invalid egg UUID"),
+                hatching: data.hatching,
+                num_hatches: data.num_hatches,
+                hatching_type: from_wasm_entity_type(&data.hatching_type),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

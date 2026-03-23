@@ -45,8 +45,8 @@ async fn register_player_event(
     event_type: EventType,
 ) {
     use crate::plugin::player::{
-        changed_main_hand::PlayerChangedMainHandEvent, exp_change::PlayerExpChangeEvent,
-        fish::PlayerFishEvent, item_held::PlayerItemHeldEvent,
+        changed_main_hand::PlayerChangedMainHandEvent, egg_throw::PlayerEggThrowEvent,
+        exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent, item_held::PlayerItemHeldEvent,
         player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
@@ -116,6 +116,10 @@ async fn register_player_event(
         }
         EventType::PlayerFishEvent => {
             register_typed_event::<PlayerFishEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerEggThrowEvent => {
+            register_typed_event::<PlayerEggThrowEvent>(resource, handler, priority, blocking)
+                .await;
         }
         _ => unreachable!("non-player event should not be routed to register_player_event"),
     }
