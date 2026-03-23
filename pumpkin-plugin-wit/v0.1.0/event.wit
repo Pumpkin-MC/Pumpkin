@@ -156,6 +156,16 @@ interface event {
         cancelled: bool
     }
 
+    record block-grow-event-data {
+        target-world: %world,
+        old-block: string,
+        old-state-id: u16,
+        new-block: string,
+        new-state-id: u16,
+        block-position: block-position,
+        cancelled: bool
+    }
+
     record block-place-event-data {
         player: player,
         block-placed: string,
@@ -205,6 +215,7 @@ interface event {
         block-break-event,
         block-burn-event,
         block-can-build-event,
+        block-grow-event,
         block-place-event,
         server-command-event,
         spawn-change-event,
@@ -231,6 +242,7 @@ interface event {
         block-break-event(block-break-event-data),
         block-burn-event(block-burn-event-data),
         block-can-build-event(block-can-build-event-data),
+        block-grow-event(block-grow-event-data),
         block-place-event(block-place-event-data),
         server-command-event(server-command-event-data),
         spawn-change-event(spawn-change-event-data),
