@@ -76,10 +76,7 @@ pub async fn default_dispatcher(
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
-    dispatcher.register(
-        random::init_command_tree(),
-        "minecraft:command.random",
-    );
+    dispatcher.register(random::init_command_tree(), "minecraft:command.random");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
