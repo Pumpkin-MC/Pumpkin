@@ -556,7 +556,8 @@ impl<R> DataResult<R> {
                 Self::Success { result, .. },
                 DataResult::Error {
                     message: m2,
-                    partial_result, ..
+                    partial_result,
+                    ..
                 },
             ) => Self::new_option_error_with_lifecycle(
                 m2.clone(),
