@@ -11,10 +11,11 @@ use args::ConsumedArgs;
 use crate::command::context::command_source::CommandSource;
 use crate::entity::EntityBase;
 use dispatcher::CommandError;
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::CommandBlockLikeProperties;
-use pumpkin_data::block_properties::Facing;
-use pumpkin_data::dimension::Dimension;
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
+    dimension::Dimension,
+};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
@@ -176,6 +177,31 @@ impl CommandSender {
     }
 
     #[must_use]
+    pub fn rotation(&self) -> Option<(f32, f32)> {
+        match self {
+            Self::Console | Self::Rcon(..) | Self::Dummy => None,
+            Self::Player(player) => Some(player.rotation()),
+            Self::CommandBlock(command_block, world) => {
+                let pos = command_block.get_position();
+                let (chunk_coordinate, relative) = pos.chunk_and_chunk_relative_position();
+                let chunk = world.level.try_get_chunk(&chunk_coordinate)?;
+                let state_id = chunk.section.get_block_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                )?;
+                let block = Block::from_state_id(state_id);
+                if !CommandBlockLikeProperties::handles_block_id(block.id) {
+                    return None;
+                }
+
+                let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+                Some((0.0, command_block_y_rot(props.facing)))
+            }
+        }
+    }
+
+    #[must_use]
     pub fn world(&self) -> Option<Arc<World>> {
         match self {
             // TODO: maybe return first world when console
@@ -326,6 +352,15 @@ impl CommandSender {
         };
 
         (world, spawn_point.to_f64())
+    }
+}
+
+const fn command_block_y_rot(facing: Facing) -> f32 {
+    match facing {
+        Facing::North => 180.0,
+        Facing::South => 0.0,
+        Facing::West => 90.0,
+        Facing::East | Facing::Up | Facing::Down => 270.0,
     }
 }
 

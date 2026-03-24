@@ -37,7 +37,7 @@ pub fn build() -> TokenStream {
         }
 
         impl Sound {
-            const NAMES: &[&str] = &[ #(#names_list),* ];
+            pub const NAMES: &[&str] = &[ #(#names_list),* ];
 
             const LOOKUP: &[(&str, Sound)] = &[
                     #(#lookup_table),*

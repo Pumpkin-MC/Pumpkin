@@ -124,6 +124,56 @@ interface event {
         cancelled: bool
     }
 
+    record block-redstone-event-data {
+        target-world: %world,
+        state-id: u16,
+        block-position: block-position,
+        old-current: s32,
+        new-current: s32,
+        cancelled: bool
+    }
+
+    record block-break-event-data {
+        player: option<player>,
+        block: string,
+        block-position: block-position,
+        exp: u32,
+        should-drop: bool,
+        cancelled: bool
+    }
+
+    record block-burn-event-data {
+        igniting-block: string,
+        block: string,
+        cancelled: bool
+    }
+
+    record block-can-build-event-data {
+        block-to-build: string,
+        buildable: bool,
+        player: player,
+        block: string,
+        cancelled: bool
+    }
+
+    record block-grow-event-data {
+        target-world: %world,
+        old-block: string,
+        old-state-id: u16,
+        new-block: string,
+        new-state-id: u16,
+        block-position: block-position,
+        cancelled: bool
+    }
+
+    record block-place-event-data {
+        player: player,
+        block-placed: string,
+        block-placed-against: string,
+        block-position: block-position,
+        can-build: bool,
+        cancelled: bool
+    }
     record server-command-event-data {
         command: string,
         cancelled: bool
@@ -161,6 +211,12 @@ interface event {
         player-gamemode-change-event,
         player-custom-payload-event,
         player-fish-event,
+        block-redstone-event,
+        block-break-event,
+        block-burn-event,
+        block-can-build-event,
+        block-grow-event,
+        block-place-event,
         server-command-event,
         spawn-change-event,
         server-broadcast-event,
@@ -182,6 +238,12 @@ interface event {
         player-gamemode-change-event(player-gamemode-change-event-data),
         player-custom-payload-event(player-custom-payload-event-data),
         player-fish-event(player-fish-event-data),
+        block-redstone-event(block-redstone-event-data),
+        block-break-event(block-break-event-data),
+        block-burn-event(block-burn-event-data),
+        block-can-build-event(block-can-build-event-data),
+        block-grow-event(block-grow-event-data),
+        block-place-event(block-place-event-data),
         server-command-event(server-command-event-data),
         spawn-change-event(spawn-change-event-data),
         server-broadcast-event(server-broadcast-event-data),

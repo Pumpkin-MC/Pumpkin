@@ -138,6 +138,41 @@ async fn register_world_event(
     }
 }
 
+async fn register_block_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::block::{
+        block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
+        block_can_build::BlockCanBuildEvent, block_grow::BlockGrowEvent,
+        block_place::BlockPlaceEvent, block_redstone::BlockRedstoneEvent,
+    };
+
+    match event_type {
+        EventType::BlockRedstoneEvent => {
+            register_typed_event::<BlockRedstoneEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockBreakEvent => {
+            register_typed_event::<BlockBreakEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockBurnEvent => {
+            register_typed_event::<BlockBurnEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockCanBuildEvent => {
+            register_typed_event::<BlockCanBuildEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockGrowEvent => {
+            register_typed_event::<BlockGrowEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockPlaceEvent => {
+            register_typed_event::<BlockPlaceEvent>(resource, handler, priority, blocking).await;
+        }
+        _ => unreachable!("non-block event should not be routed to register_block_event"),
+    }
+}
 async fn register_server_event(
     resource: &ContextResource,
     handler: &Arc<WasmPluginV0_1_0EventHandler>,
@@ -223,6 +258,14 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             }
             event_type @ EventType::SpawnChangeEvent => {
                 register_world_event(resource, &handler, priority, blocking, event_type).await;
+            }
+            event_type @ (EventType::BlockRedstoneEvent
+            | EventType::BlockBreakEvent
+            | EventType::BlockBurnEvent
+            | EventType::BlockCanBuildEvent
+            | EventType::BlockGrowEvent
+            | EventType::BlockPlaceEvent) => {
+                register_block_event(resource, &handler, priority, blocking, event_type).await;
             }
             event_type => {
                 register_player_event(resource, &handler, priority, blocking, event_type).await;

@@ -1,3 +1,4 @@
+use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
@@ -14,7 +15,8 @@ pub mod portal;
 pub mod time;
 
 use crate::block::RandomTickArgs;
-use crate::world::loot::LootContextParameters;
+use crate::world::chunker::is_within_view_distance;
+use crate::world::{chunker::get_view_distance, loot::LootContextParameters};
 use crate::{
     block::BlockEvent, entity::experience_orb::ExperienceOrbEntity, entity::item::ItemEntity,
 };
@@ -323,10 +325,14 @@ impl World {
         }
     }
 
+    /// Sends an entity status update to all players tracking the specified entity.
     pub async fn send_entity_status(&self, entity: &Entity, status: EntityStatus) {
-        // TODO: only nearby
-        self.broadcast_packet_all(&CEntityStatus::new(entity.entity_id, status as i8))
-            .await;
+        let chunk_pos = entity.chunk_pos.load();
+        self.broadcast_to_chunk(
+            chunk_pos,
+            &CEntityStatus::new(entity.entity_id, status as i8),
+        )
+        .await;
     }
 
     pub async fn send_remove_mob_effect(
@@ -334,11 +340,11 @@ impl World {
         entity: &Entity,
         effect_type: &'static StatusEffect,
     ) {
-        // TODO: only nearby
-        self.broadcast_packet_all(&CRemoveMobEffect::new(
-            entity.entity_id.into(),
-            VarInt(i32::from(effect_type.id)),
-        ))
+        let chunk_pos = entity.chunk_pos.load();
+        self.broadcast_to_chunk(
+            chunk_pos,
+            &CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id))),
+        )
         .await;
     }
 
@@ -407,12 +413,16 @@ impl World {
             {
                 continue;
             }
-            self.broadcast_packet_all(&CBlockEvent::new(
-                event.pos,
-                event.r#type,
-                event.data,
-                VarInt(i32::from(block.id)),
-            ))
+            let chunk_pos = event.pos.chunk_position();
+            self.broadcast_to_chunk(
+                chunk_pos,
+                &CBlockEvent::new(
+                    event.pos,
+                    event.r#type,
+                    event.data,
+                    VarInt(i32::from(block.id)),
+                ),
+            )
             .await;
         }
     }
@@ -596,6 +606,26 @@ impl World {
             .await;
     }
 
+    pub async fn play_sound_event(
+        &self,
+        sound: pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+    ) {
+        let seed = rng().random::<f64>();
+        let packet = CSoundEffect::new(
+            data_to_proto_sound(&sound),
+            category,
+            position,
+            1.0,
+            1.0,
+            seed,
+        );
+        self.broadcast_packet_all(&packet).await;
+    }
+
     pub async fn play_sound_fine(
         &self,
         sound: Sound,
@@ -627,9 +657,22 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rand::rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
-        self.broadcast_packet_all(&packet).await;
+
+        // Calculate the number of chunks the sound can be heard from based on its volume.
+        let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
+        let chunk_pos = BlockPos::floored_v(*position).chunk_position();
+
+        let players = self.players.load();
+        let recipients = players.iter().filter(|p| {
+            let center = p.living_entity.entity.chunk_pos.load();
+            // If the sound reaches their chunk, send it!
+            is_within_view_distance(chunk_pos, center, audible_chunks)
+        });
+
+        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
+        Self::broadcast_java_grouped(&packet, recipients_by_version).await;
     }
 
     pub async fn play_sound_raw_expect(
@@ -641,10 +684,25 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rand::rng().random::<f64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
-        self.broadcast_packet_except(&[player.gameprofile.id], &packet)
-            .await;
+
+        let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
+        let chunk_pos = BlockPos::floored_v(*position).chunk_position();
+
+        let players = self.players.load();
+        let recipients = players.iter().filter(|p| {
+            // Skip the expected player
+            if p.gameprofile.id == player.gameprofile.id {
+                return false;
+            }
+
+            let center = p.living_entity.entity.chunk_pos.load();
+            is_within_view_distance(chunk_pos, center, audible_chunks)
+        });
+
+        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
+        Self::broadcast_java_grouped(&packet, recipients_by_version).await;
     }
 
     pub async fn play_block_sound(
@@ -752,19 +810,20 @@ impl World {
 
         // TODO: only send packet to players who have the chunks loaded
         // TODO: Send light updates to update the wire directly next to a broken block
-        for chunk_section in block_state_updates_by_chunk_section.values() {
-            if chunk_section.is_empty() {
+        for (chunk_section, updates) in block_state_updates_by_chunk_section {
+            if updates.is_empty() {
                 continue;
             }
-            if chunk_section.len() == 1 {
-                let (block_pos, block_state_id) = chunk_section[0];
-                self.broadcast_packet_all(&CBlockUpdate::new(
-                    block_pos,
-                    i32::from(block_state_id).into(),
-                ))
+            let chunk_pos = Vector2::new(chunk_section.x, chunk_section.z);
+            if updates.len() == 1 {
+                let (block_pos, block_state_id) = updates[0];
+                self.broadcast_to_chunk(
+                    chunk_pos,
+                    &CBlockUpdate::new(block_pos, i32::from(block_state_id).into()),
+                )
                 .await;
             } else {
-                self.broadcast_packet_all(&CMultiBlockUpdate::new(chunk_section))
+                self.broadcast_to_chunk(chunk_pos, &CMultiBlockUpdate::new(&updates))
                     .await;
             }
         }
@@ -846,14 +905,33 @@ impl World {
         }
 
         for scheduled_tick in tick_data.random_ticks {
-            let block = self.get_block(&scheduled_tick.position).await;
-            if let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id) {
+            let (block, fluid) = match (scheduled_tick.tick_block, scheduled_tick.tick_fluid) {
+                (true, true) => {
+                    let (block, fluid) = self.get_block_and_fluid(&scheduled_tick.position).await;
+                    (Some(block), Some(fluid))
+                }
+                (true, false) => (Some(self.get_block(&scheduled_tick.position).await), None),
+                (false, true) => (None, Some(self.get_fluid(&scheduled_tick.position).await)),
+                (false, false) => (None, None),
+            };
+
+            if let Some(block) = block
+                && let Some(pumpkin_block) = self.block_registry.get_pumpkin_block(block.id)
+            {
                 pumpkin_block
                     .random_tick(RandomTickArgs {
                         world: self,
                         block,
                         position: &scheduled_tick.position,
                     })
+                    .await;
+            }
+
+            if let Some(fluid) = fluid
+                && let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id)
+            {
+                pumpkin_fluid
+                    .random_tick(fluid, self, &scheduled_tick.position)
                     .await;
             }
         }
@@ -882,13 +960,21 @@ impl World {
             SpawnState::new(spawning_chunks_map.len() as i32, &self.entities, self).await; // TODO store it
 
         // TODO gamerule this.spawnEnemies || this.spawnFriendlies
+        let (spawn_mobs, spawn_monsters, peaceful) = {
+            let lock = self.level_info.load();
+            (
+                lock.game_rules.spawn_mobs,
+                lock.game_rules.spawn_monsters,
+                lock.difficulty == Difficulty::Peaceful,
+            )
+        };
         let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
         let spawn_list: Vec<&'static MobCategory> =
             natural_spawner::get_filtered_spawning_categories(
                 &spawn_state,
-                true,
-                true,
-                spawn_passives,
+                spawn_mobs,
+                peaceful && spawn_mobs && spawn_monsters,
+                peaceful && spawn_mobs && spawn_passives && spawn_monsters,
             );
 
         // log::debug!("spawning list size {}", spawn_list.len());
@@ -1949,7 +2035,9 @@ impl World {
             .iter()
             .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
             .collect();
-        self.broadcast_packet_except(
+        let chunk_pos = from.get_entity().chunk_pos.load();
+        self.broadcast_to_chunk_except(
+            chunk_pos,
             &[from.get_entity().entity_uuid],
             &CSetEquipment::new(from.entity_id().into(), equipment),
         )
@@ -2745,7 +2833,8 @@ impl World {
 
     pub async fn spawn_entity(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
-        self.broadcast_packet_all(&base_entity.create_spawn_packet())
+        let chunk_pos = base_entity.chunk_pos.load();
+        self.broadcast_to_chunk(chunk_pos, &base_entity.create_spawn_packet())
             .await;
         entity.init_data_tracker().await;
 
@@ -2772,14 +2861,17 @@ impl World {
             new_entities
         });
 
-        self.broadcast_packet_all(&CRemoveEntities::new(&[entity.entity_id.into()]))
+        let chunk_pos = entity.chunk_pos.load();
+        self.broadcast_to_chunk(chunk_pos, &CRemoveEntities::new(&[entity.entity_id.into()]))
             .await;
 
         self.remove_entity_data(entity).await;
     }
 
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {
-        self.broadcast_packet_except(
+        let chunk_pos = location.chunk_position(); // pumpkin's BlockPos already has this method
+        self.broadcast_to_chunk_except(
+            chunk_pos,
             &[from.entity_uuid],
             &CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8),
         )
@@ -3024,12 +3116,17 @@ impl World {
                     broken_state_id.into(),
                     false,
                 );
+                let chunk_pos = position.chunk_position();
                 match cause {
                     Some(player) => {
-                        self.broadcast_packet_except(&[player.gameprofile.id], &particles_packet)
-                            .await;
+                        self.broadcast_to_chunk_except(
+                            chunk_pos,
+                            &[player.living_entity.entity.entity_uuid],
+                            &particles_packet,
+                        )
+                        .await;
                     }
-                    None => self.broadcast_packet_all(&particles_packet).await,
+                    None => self.broadcast_to_chunk(chunk_pos, &particles_packet).await,
                 }
             }
 
@@ -3120,8 +3217,12 @@ impl World {
     /* End ItemScatterer.java */
 
     pub async fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
-        self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, false))
-            .await;
+        let chunk_pos = position.chunk_position();
+        self.broadcast_to_chunk(
+            chunk_pos,
+            &CWorldEvent::new(world_event as i32, position, data, false),
+        )
+        .await;
     }
     #[must_use]
     pub fn is_valid(dest: BlockPos) -> bool {
@@ -3156,6 +3257,30 @@ impl World {
     pub async fn get_block(&self, position: &BlockPos) -> &'static Block {
         let id = self.get_block_state_id(position).await;
         Block::from_state_id(id)
+    }
+
+    #[must_use]
+    pub fn get_block_state_id_if_loaded(&self, position: &BlockPos) -> Option<BlockStateId> {
+        if !self.is_in_build_limit(*position) {
+            return None;
+        }
+
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let chunk = self.level.try_get_chunk(&chunk_coordinate)?;
+        chunk
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+    }
+
+    #[must_use]
+    pub fn get_block_state_if_loaded(&self, position: &BlockPos) -> Option<&'static BlockState> {
+        self.get_block_state_id_if_loaded(position)
+            .map(BlockState::from_id)
+    }
+
+    #[must_use]
+    pub fn is_loaded(&self, position: &BlockPos) -> bool {
+        self.get_block_state_id_if_loaded(position).is_some()
     }
 
     pub async fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
@@ -3386,11 +3511,15 @@ impl World {
         if let Some(nbt) = &block_entity_nbt {
             let mut bytes = Vec::new();
             to_bytes_unnamed(nbt, &mut bytes).unwrap();
-            self.broadcast_packet_all(&CBlockEntityData::new(
-                block_entity.get_position(),
-                VarInt(block_entity.get_id() as i32),
-                bytes.into_boxed_slice(),
-            ))
+            let chunk_pos = block_pos.chunk_position();
+            self.broadcast_to_chunk(
+                chunk_pos,
+                &CBlockEntityData::new(
+                    block_entity.get_position(),
+                    VarInt(block_entity.get_id() as i32),
+                    bytes.into_boxed_slice(),
+                ),
+            )
             .await;
         }
 
@@ -3423,11 +3552,15 @@ impl World {
         if let Some(nbt) = &block_entity_nbt {
             let mut bytes = Vec::new();
             to_bytes_unnamed(nbt, &mut bytes).unwrap();
-            self.broadcast_packet_all(&CBlockEntityData::new(
-                block_entity.get_position(),
-                VarInt(block_entity.get_id() as i32),
-                bytes.into_boxed_slice(),
-            ))
+            let chunk_pos = block_pos.chunk_position();
+            self.broadcast_to_chunk(
+                chunk_pos,
+                &CBlockEntityData::new(
+                    block_entity.get_position(),
+                    VarInt(block_entity.get_id() as i32),
+                    bytes.into_boxed_slice(),
+                ),
+            )
             .await;
         }
         chunk.mark_dirty(true);
@@ -3628,6 +3761,46 @@ impl World {
         }
 
         None
+    }
+
+    /// Broadcasts a packet to all players who currently have the target chunk loaded.
+    /// This uses highly optimized Chebyshev distance math (Chunk Grid) instead of floating point distance checks.
+    pub async fn broadcast_to_chunk<P: ClientPacket>(&self, chunk_pos: Vector2<i32>, packet: &P) {
+        let players = self.players.load();
+
+        let recipients = players.iter().filter(|p| {
+            let center = p.living_entity.entity.chunk_pos.load();
+            let view_distance = get_view_distance(p).get() as i32;
+
+            // Chebyshev distance (Minecraft's chunk loading shape)
+            is_within_view_distance(chunk_pos, center, view_distance)
+        });
+
+        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
+    }
+
+    /// Broadcasts a packet to chunk watchers, excluding specific players.
+    pub async fn broadcast_to_chunk_except<P: ClientPacket>(
+        &self,
+        chunk_pos: Vector2<i32>,
+        except: &[uuid::Uuid],
+        packet: &P,
+    ) {
+        let players = self.players.load();
+
+        let recipients = players.iter().filter(|p| {
+            if except.contains(&p.living_entity.entity.entity_uuid) {
+                return false;
+            }
+            let center = p.living_entity.entity.chunk_pos.load();
+            let view_distance = get_view_distance(p).get() as i32;
+
+            is_within_view_distance(chunk_pos, center, view_distance)
+        });
+
+        let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
+        Self::broadcast_java_grouped(packet, recipients_by_version).await;
     }
 }
 

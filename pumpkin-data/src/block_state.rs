@@ -143,6 +143,15 @@ impl BlockState {
         })
     }
 
+    /// Produce a new state identical to `self` except the waterlogged property
+    /// is set to `true`.  If the block type does not support waterlogging or
+    /// the state was already waterlogged, `None` is returned.
+    #[must_use]
+    pub fn with_waterlogged(&self) -> Option<&'static BlockState> {
+        let block = Block::from_state_id(self.id);
+        block.with_waterlogged(self.id)
+    }
+
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {
         self.collision_shapes
             .iter()
