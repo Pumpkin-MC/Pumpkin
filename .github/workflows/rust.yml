@@ -72,25 +72,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
-        arch_variant: [standard, x86-64-v2, x86-64-v3]
+        arch_variant: [standard, x86-64-v3]
         toolchain: [stable]
         exclude:
           - os: ubuntu-24.04-arm
-            arch_variant: x86-64-v2
-          - os: ubuntu-24.04-arm
             arch_variant: x86-64-v3
           - os: windows-11-arm
-            arch_variant: x86-64-v2
-          - os: windows-11-arm
             arch_variant: x86-64-v3
-          - os: macos-latest
-            arch_variant: x86-64-v2
           - os: macos-latest
             arch_variant: x86-64-v3
           - os: macos-15-intel
             arch_variant: standard
-          - os: macos-15-intel
-            arch_variant: x86-64-v2
     steps:
       - uses: actions/checkout@v6
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
@@ -120,11 +112,6 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: x86_64
-            variant: x86-64-v2
-            bin: pumpkin
-          - os: ubuntu-latest
-            platform: linux
-            arch: x86_64
             variant: x86-64-v3
             bin: pumpkin
           - os: ubuntu-24.04-arm
@@ -136,11 +123,6 @@ jobs:
             platform: windows
             arch: x86_64
             variant: standard
-            bin: pumpkin.exe
-          - os: windows-latest
-            platform: windows
-            arch: x86_64
-            variant: x86-64-v2
             bin: pumpkin.exe
           - os: windows-latest
             platform: windows
@@ -232,3 +214,4 @@ jobs:
           body_path: dist/RELEASE.md
           files: |
             dist/pumpkin-*
+
