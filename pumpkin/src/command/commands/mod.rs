@@ -11,6 +11,7 @@ mod banip;
 mod banlist;
 mod bossbar;
 mod clear;
+mod clone;
 mod damage;
 mod data;
 pub mod defaultgamemode;
@@ -135,6 +136,10 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(
+        clone::init_command_tree(),
+        "minecraft:command.clone",
+    );
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -425,6 +430,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.tps",
             "Displays the server TPS and MSPT",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.clone",
+            "Copies blocks from one region to another",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
