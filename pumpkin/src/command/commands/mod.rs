@@ -143,7 +143,6 @@ pub async fn default_dispatcher(
     dispatcher.register(plugin::init_command_tree(), "pumpkin:command.plugin");
     dispatcher.register(plugins::init_command_tree(), "pumpkin:command.plugins");
     dispatcher.register(ban::init_command_tree(), "minecraft:command.ban");
-    dispatcher.register(advancement::init_command_tree(), "minecraft:command.advancement");
     dispatcher.register(banip::init_command_tree(), "minecraft:command.banip");
     dispatcher.register(banlist::init_command_tree(), "minecraft:command.banlist");
     dispatcher.register(pardon::init_command_tree(), "minecraft:command.pardon");
@@ -167,7 +166,7 @@ pub async fn default_dispatcher(
     };
 
     help::register(&mut dispatcher, registry);
-
+    advancement::register(&mut dispatcher, registry);
     dispatcher
 }
 

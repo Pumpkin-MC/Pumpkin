@@ -2,19 +2,24 @@ use crate::command::CommandResult;
 use crate::{
     command::{
         CommandError, CommandExecutor, CommandSender,
-        args::{Arg, ConsumedArgs, message::MsgArgConsumer, players::PlayersArgumentConsumer},
-        tree::{CommandTree, builder::argument},
-    },
-    data::{SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry},
-    entity::player::Player,
-    net::DisconnectReason,
+    }
 };
 use CommandError::InvalidConsumption;
+use pumpkin::entity::player::Player;
+use pumpkin_data::Advancement;
+use crate::command::argument_types::core::string::StringArgumentType;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::PermissionLvl;
+use crate::command::args::{Arg, ConsumedArgs};
+use crate::command::args::Arg::Players;
 use crate::command::args::resource::advancement::AdvancementArgumentConsumer;
-use crate::command::tree::builder::literal;
+use crate::command::argument_builder::{command,argument,literal, ArgumentBuilder};
+use crate::command::node::dispatcher::CommandDispatcher;
 
-const NAMES: [&str; 1] = ["advancement"];
+const NAME: &str = "advancement";
 const DESCRIPTION: &str = "manage advancement of the player";
+const PERMISSION: &str = "minecraft:command.help";
+
 
 const ARG_TARGET: &str = "player";
 
@@ -31,31 +36,33 @@ impl CommandExecutor for Executor {
             let Some(Arg::Players(targets)) = args.get(&ARG_TARGET) else {
                 return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
-
-            (sender, server, targets.as_slice(), None).await
+            Ok(1)
         })
     }
 }
 
-async fn grant_advancement(){
-
+async fn grant_advancement(advancement: &Advancement, sender: &Player) {
+    sender
 }
 
 async fn revoke_advancement(){
 
 }
 
-fn get_parameter()->Self{
-    argument(ARG_TARGET,PlayersArgumentConsumer)
-        .then(literal("only").then(
-            argument("advancement",AdvancementArgumentConsumer)
-                .then(argument("criterion",GreedyStringArgument)
-                )
-        ))
-}
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        literal("grant").execute(Executor),
-    )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+    registry
+        .register_permission(Permission::new(
+            PERMISSION,
+            DESCRIPTION,
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission should have registered successfully");
+
+    dispatcher.register(
+        command(NAME, DESCRIPTION)
+            .requires(PERMISSION)
+            .then(literal("grant"))
+            .then(literal("revoke"))
+    );
 }

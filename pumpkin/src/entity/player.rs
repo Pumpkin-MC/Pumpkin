@@ -1,3 +1,5 @@
+pub mod advancement;
+
 use core::f32;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
@@ -102,6 +104,8 @@ use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 use pumpkin_world::chunk_system::ChunkLoading;
+use advancement::PlayerAdvancement;
+
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
@@ -472,6 +476,7 @@ pub struct Player {
     pub screen_handler_sync_id: AtomicU8,
     pub screen_handler_listener: Arc<dyn ScreenHandlerListener>,
     pub screen_handler_sync_handler: Arc<SyncHandler>,
+    pub advancements : PlayerAdvancement,
 }
 
 impl Player {
@@ -593,6 +598,7 @@ impl Player {
             screen_handler_sync_id: AtomicU8::new(0),
             screen_handler_listener: Arc::new(ScreenListener {}),
             screen_handler_sync_handler: Arc::new(SyncHandler::new()),
+            advancements: PlayerAdvancement::new()
         }
     }
 

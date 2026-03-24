@@ -73,9 +73,3 @@ impl HoverEvent {
         }
     }
 }
-
-impl ToTokens for HoverEvent {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        todo!()
-    }
-}
