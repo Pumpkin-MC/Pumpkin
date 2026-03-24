@@ -6,6 +6,7 @@ use pumpkin_util::{
 };
 use tokio::sync::RwLock;
 
+mod attribute;
 mod ban;
 mod banip;
 mod banlist;
@@ -135,6 +136,10 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(
+        attribute::init_command_tree(),
+        "minecraft:command.attribute",
+    );
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -425,6 +430,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.tps",
             "Displays the server TPS and MSPT",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.attribute",
+            "Queries, adds, removes, or sets an entity attribute",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
