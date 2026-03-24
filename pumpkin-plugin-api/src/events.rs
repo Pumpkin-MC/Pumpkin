@@ -13,7 +13,6 @@ use crate::{
     Context, Result, Server,
     wit::pumpkin::plugin::event::{
         BlockBreakEventData,
-        // Player events
         BlockBurnEventData,
         BlockCanBuildEventData,
         BlockGrowEventData,
@@ -29,14 +28,12 @@ use crate::{
         PlayerFishEventData,
         PlayerGamemodeChangeEventData,
         PlayerItemHeldEventData,
-        // Block events
         PlayerJoinEventData,
         PlayerLeaveEventData,
         PlayerLoginEventData,
         PlayerMoveEventData,
         PlayerPermissionCheckEventData,
         PlayerTeleportEventData,
-        // Server events
         ServerBroadcastEventData,
         ServerCommandEventData,
         SpawnChangeEventData,
