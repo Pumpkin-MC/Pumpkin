@@ -55,6 +55,7 @@ mod time;
 mod title;
 mod tps;
 mod transfer;
+mod trigger;
 mod weather;
 mod whitelist;
 mod worldborder;
@@ -76,6 +77,7 @@ pub async fn default_dispatcher(
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
+    dispatcher.register(trigger::init_command_tree(), "minecraft:command.trigger");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
@@ -438,6 +440,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             "minecraft:command.scoreboard",
             "Manages scoreboard objectives and players",
             PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.trigger",
+            "Sets a trigger to be activated",
+            PermissionDefault::Allow,
         ))
         .unwrap();
 }
