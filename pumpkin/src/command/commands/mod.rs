@@ -20,6 +20,7 @@ mod effect;
 mod enchant;
 mod experience;
 mod fill;
+mod fillbiome;
 mod gamemode;
 mod gamerule;
 mod give;
@@ -135,6 +136,10 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(
+        fillbiome::init_command_tree(),
+        "minecraft:command.fillbiome",
+    );
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -425,6 +430,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.tps",
             "Displays the server TPS and MSPT",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.fillbiome",
+            "Fills a region with a specific biome",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
