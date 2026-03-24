@@ -48,6 +48,7 @@ mod stop;
 mod stopsound;
 mod summon;
 mod team;
+mod teammsg;
 mod teleport;
 mod tellraw;
 mod tick;
@@ -76,6 +77,7 @@ pub async fn default_dispatcher(
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
+    dispatcher.register(teammsg::init_command_tree(), "minecraft:command.teammsg");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
@@ -435,6 +437,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
             "minecraft:command.team",
             "Controls teams",
             PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.teammsg",
+            "Sends a message to all players on the sender's team",
+            PermissionDefault::Allow,
         ))
         .unwrap();
 }
