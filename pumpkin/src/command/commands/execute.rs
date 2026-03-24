@@ -38,7 +38,7 @@ impl CommandExecutor for RunExecutor {
             };
 
             let dispatcher = server.command_dispatcher.read().await;
-            dispatcher.dispatch(sender, server, &cmd).await?;
+            dispatcher.fallback_dispatcher.dispatch(sender, server, &cmd).await?;
             Ok(1)
         })
     }
@@ -75,7 +75,7 @@ impl CommandExecutor for AsExecutor {
                 let entity = target.get_entity();
                 if let Some(player) = entity.world.load().get_player_by_id(entity.entity_id) {
                     let new_sender = CommandSender::Player(player);
-                    if dispatcher.dispatch(&new_sender, server, &cmd).await.is_ok() {
+                    if dispatcher.fallback_dispatcher.dispatch(&new_sender, server, &cmd).await.is_ok() {
                         success += 1;
                     }
                 }
@@ -134,7 +134,7 @@ impl CommandExecutor for IfBlockExecutor {
                     format!("/{command}")
                 };
                 let dispatcher = server.command_dispatcher.read().await;
-                dispatcher.dispatch(sender, server, &cmd).await?;
+                dispatcher.fallback_dispatcher.dispatch(sender, server, &cmd).await?;
             } else {
                 sender
                     .send_message(TextComponent::translate(
