@@ -136,10 +136,7 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
-    dispatcher.register(
-        clone::init_command_tree(),
-        "minecraft:command.clone",
-    );
+    dispatcher.register(clone::init_command_tree(), "minecraft:command.clone");
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
