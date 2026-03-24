@@ -44,6 +44,7 @@ mod setblock;
 mod setidletimeout;
 mod setworldspawn;
 mod spawnpoint;
+mod spreadplayers;
 mod stop;
 mod stopsound;
 mod summon;
@@ -135,6 +136,10 @@ pub async fn default_dispatcher(
         "minecraft:command.spawnpoint",
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    dispatcher.register(
+        spreadplayers::init_command_tree(),
+        "minecraft:command.spreadplayers",
+    );
     // Three
     dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
@@ -425,6 +430,13 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.tps",
             "Displays the server TPS and MSPT",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spreadplayers",
+            "Teleports entities to random surface locations in an area",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
