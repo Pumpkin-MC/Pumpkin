@@ -1,6 +1,6 @@
 [package]
 name = "pumpkin-plugin-api"
-# This should be different then the pumpkin server verion
+# This should be different from the pumpkin server verion
 version = "0.1.0"
 edition.workspace = true
 
