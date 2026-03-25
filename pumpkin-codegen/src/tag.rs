@@ -179,7 +179,7 @@ pub(crate) fn build() -> TokenStream {
                     .filter_map(|v| match key.as_str() {
                         "worldgen/biome" => biomes.get(v).map(|b| u16::from(b.id)),
                         "fluid" => fluid_id_map.get(v).copied(),
-                        "item" => items.get(v).map(|i| i.id),
+                        "item_stack" => items.get(v).map(|i| i.id),
                         "block" => block_id_map.get(v).copied(),
                         "enchantment" => enchantments
                             .get(&format!("minecraft:{v}"))

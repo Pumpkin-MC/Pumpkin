@@ -11,7 +11,7 @@ use pumpkin_data::{Block, tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 pub struct AxeItem;
@@ -84,7 +84,7 @@ impl ItemBehaviour for AxeItem {
             };
 
             if changed && player.gamemode.load() != GameMode::Creative {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                // TODO: Handle DamageResult::Broken to broadcast item_stack break and update player slot.
                 let _ = item.damage_item(1);
             }
         })

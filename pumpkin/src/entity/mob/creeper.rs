@@ -14,7 +14,7 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
@@ -244,7 +244,7 @@ impl Mob for CreeperEntity {
                 .await;
 
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                // TODO: Handle DamageResult::Broken to broadcast item_stack break and update player slot.
                 let _ = item_stack.damage_item(1);
             }
 

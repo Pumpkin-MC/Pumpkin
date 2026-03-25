@@ -256,7 +256,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
     registry
         .register_permission(Permission::new(
             "minecraft:command.give",
-            "Gives an item to a player",
+            "Gives an item_stack to a player",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
@@ -410,7 +410,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
     registry
         .register_permission(Permission::new(
             "minecraft:command.enchant",
-            "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
+            "Adds an enchantment to a player's selected item_stack, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

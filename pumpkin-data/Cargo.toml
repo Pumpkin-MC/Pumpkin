@@ -96,6 +96,7 @@ pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 serde.workspace = true
 crc-fast.workspace = true
+rand.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

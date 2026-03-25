@@ -52,7 +52,7 @@ macro_rules! impl_apply {
         ///
         /// - If any of the given results is a non-result, the returned result will also be a non-result.
         /// - Any errors found in error results (non-result or partial result) will be added to the returned result.
-        /// - If all results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
+        /// - If all results are at least partial, `f` is called, which should return the final item_stack to be wrapped in the returned result.
         ///
         /// The returned result is a *success* **if and only if** all provided results are successes as well.
         pub fn $name<$($ty,)+ T>(
@@ -68,7 +68,7 @@ macro_rules! impl_apply {
         ///
         /// - If any of the given results is a non-result, the returned result will also be a non-result.
         /// - Any errors found in error results (non-result or partial result) will be added to the returned result.
-        /// - If all results are at least partial, `f` is called, which should return the final item to be wrapped in the returned result.
+        /// - If all results are at least partial, `f` is called, which should return the final item_stack to be wrapped in the returned result.
         ///
         /// The returned result is a *success* **if and only if** all provided results are successes as well.
         #[expect(clippy::too_many_arguments)]

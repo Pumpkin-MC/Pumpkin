@@ -7,7 +7,7 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::data_component_impl::CustomNameImpl;
 use pumpkin_data::item::Item;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 pub struct NameTagItem;
 

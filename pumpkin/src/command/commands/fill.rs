@@ -27,7 +27,7 @@ const ARG_FILTER: &str = "filter";
 
 #[derive(Clone, Copy, Default)]
 enum Mode {
-    /// Destroys blocks with particles and item drops
+    /// Destroys blocks with particles and item_stack drops
     Destroy,
     /// Leaves only the outer layer of blocks, removes the inner ones (creates a hollow space)
     Hollow,

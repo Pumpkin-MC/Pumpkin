@@ -4,7 +4,7 @@ use pumpkin_data::{
 };
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 use crate::command::{
     CommandSender,
@@ -47,7 +47,7 @@ impl ArgumentConsumer for ItemArgumentConsumer {
 
 impl DefaultNameArgConsumer for ItemArgumentConsumer {
     fn default_name(&self) -> &'static str {
-        "item"
+        "item_stack"
     }
 }
 
@@ -60,12 +60,12 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
                 || {
                     if name.starts_with("minecraft:") {
                         Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.item.id.invalid",
+                            "argument.item_stack.id.invalid",
                             [TextComponent::text((*name).to_string())],
                         )))
                     } else {
                         Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.item.id.invalid",
+                            "argument.item_stack.id.invalid",
                             [TextComponent::text("minecraft:".to_string() + *name)],
                         )))
                     }
@@ -123,7 +123,7 @@ impl ArgumentConsumer for ItemPredicateArgumentConsumer {
 
 impl DefaultNameArgConsumer for ItemPredicateArgumentConsumer {
     fn default_name(&self) -> &'static str {
-        "item"
+        "item_stack"
     }
 }
 
@@ -142,12 +142,12 @@ impl<'a> FindArg<'a> for ItemPredicateArgumentConsumer {
                             || {
                                 if name.starts_with("minecraft:") {
                                     Err(CommandError::CommandFailed(TextComponent::translate(
-                                        "argument.item.id.invalid",
+                                        "argument.item_stack.id.invalid",
                                         [TextComponent::text((*name).to_string())],
                                     )))
                                 } else {
                                     Err(CommandError::CommandFailed(TextComponent::translate(
-                                        "argument.item.id.invalid",
+                                        "argument.item_stack.id.invalid",
                                         [TextComponent::text("minecraft:".to_string() + *name)],
                                     )))
                                 }
@@ -159,7 +159,7 @@ impl<'a> FindArg<'a> for ItemPredicateArgumentConsumer {
                         get_tag_ids(RegistryKey::Item, tag).map_or_else(
                             || {
                                 Err(CommandError::CommandFailed(TextComponent::translate(
-                                    "arguments.item.tag.unknown",
+                                    "arguments.item_stack.tag.unknown",
                                     [TextComponent::text((*tag).to_string())],
                                 )))
                             },

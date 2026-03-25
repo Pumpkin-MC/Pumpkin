@@ -54,7 +54,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;
@@ -1533,12 +1533,12 @@ impl LivingEntity {
             let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
-                    (pumpkin_world::item::DamageResult::Untouched, None)
+                    (pumpkin_data::item_stack::DamageResult::Untouched, None)
                 } else {
                     // Items without `EquippableImpl` component take damage freely.
                     // Items with `damage_on_hurt: false` (e.g. elytra) are exempt from armor hit durability.
                     // PERF: Component lookup runs O(1) per armor slot (max 4 per hit). Caching
-                    // at the item type level could optimize, but belongs in a broader caching pass.
+                    // at the item_stack type level could optimize, but belongs in a broader caching pass.
                     let takes_damage = stack
                         .get_data_component::<EquippableImpl>()
                         .is_none_or(|equippable| equippable.damage_on_hurt);
@@ -1546,18 +1546,18 @@ impl LivingEntity {
                     if takes_damage {
                         // Base armor durability damage.
                         let result = stack.damage_item(armor_damage);
-                        let changed = result != pumpkin_world::item::DamageResult::Untouched;
+                        let changed = result != pumpkin_data::item_stack::DamageResult::Untouched;
                         (result, changed.then_some(stack.clone()))
                     } else {
                         // Equippable items can opt out of on-hurt durability loss (e.g. elytra).
-                        (pumpkin_world::item::DamageResult::Untouched, None)
+                        (pumpkin_data::item_stack::DamageResult::Untouched, None)
                     }
                 }
             };
 
             if let Some(updated_stack) = updated_stack_opt {
                 // Broadcast break status before clearing the slot.
-                if slot_result == pumpkin_world::item::DamageResult::Broken {
+                if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
                         .send_entity_status(&self.entity, super::equipment_break_status(slot))
@@ -2097,13 +2097,13 @@ impl EntityBase for LivingEntity {
 
             self.tick_effects().await;
 
-            // Current active item
+            // Current active item_stack
             {
                 let item_in_use = self.item_in_use.lock().await.clone();
                 if let Some(item) = item_in_use.as_ref()
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
-                    // Consume item
+                    // Consume item_stack
                     let mut is_potion = false;
                     if let Some(food) = item.get_data_component::<FoodImpl>()
                         && let Some(player) = caller.get_player()
@@ -2122,7 +2122,7 @@ impl EntityBase for LivingEntity {
                     }
 
                     if let Some(player) = caller.get_player() {
-                        // Prefer modifying the exact stack that matches the consumed item:
+                        // Prefer modifying the exact stack that matches the consumed item_stack:
                         // 1) selected hotbar (held_item)
                         // 2) off-hand
                         // 3) fallback to active_hand if the above didn't match

@@ -17,7 +17,7 @@ const ARG_BLOCK_POS: &str = "pos";
 
 #[derive(Clone, Copy)]
 enum Mode {
-    /// with particles + item drops
+    /// with particles + item_stack drops
     Destroy,
 
     /// only replaces air

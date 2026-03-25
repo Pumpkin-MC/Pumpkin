@@ -1,19 +1,19 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, item::Item};
+use pumpkin_data::{item::Item, Block};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::{GameMode, math::position::BlockPos};
+use pumpkin_util::{math::position::BlockPos, GameMode};
 use pumpkin_world::{
-    BlockStateId,
-    item::ItemStack,
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
+    BlockStateId,
 };
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
-        OnScheduledTickArgs, UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
+        blocks::cake::CakeBlock, registry::BlockActionResult, BlockBehaviour, BlockFuture,
+        GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs, UseWithItemArgs,
     },
     entity::player::Player,
     world::World,
@@ -44,7 +44,7 @@ pub fn cake_from_candle(item: &Item) -> &'static Block {
     CANDLE_MAP
         .binary_search_by_key(&item.id, |(key, _)| key.id)
         .map_or_else(
-            |_| panic!("Expected a candle item, got {}", item.id),
+            |_| panic!("Expected a candle item_stack, got {}", item.id),
             |index| CANDLE_MAP[index].1,
         )
 }

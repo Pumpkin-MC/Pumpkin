@@ -126,7 +126,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
 
                 for (index, item) in value.iter().take(128).enumerate() {
                     let item_display = snbt_colorful_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item.[{index}]: {string}"))?;
+                        .map_err(|string| format!("Error displaying item_stack.[{index}]: {string}"))?;
                     content = content.add_child(item_display);
 
                     if index < value.len() - 1 {
@@ -154,7 +154,7 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
 
                 for (index, (key, item)) in value.child_tags.iter().take(128).enumerate() {
                     let item_display = snbt_colorful_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item.{key}: {string}"))?;
+                        .map_err(|string| format!("Error displaying item_stack.{key}: {string}"))?;
                     content = content
                         .add_child(TextComponent::text(key.clone()).color_named(NamedColor::Aqua))
                         .add_child(TextComponent::text(": "))

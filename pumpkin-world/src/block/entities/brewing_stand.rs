@@ -9,7 +9,7 @@ use std::sync::{
 
 use crate::block::entities::PropertyDelegate;
 use crate::inventory::Inventory;
-use crate::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::data_component_impl::DataComponentImpl;
 use pumpkin_data::item::Item;
@@ -73,7 +73,7 @@ impl BrewingStandBlockEntity {
                 continue;
             }
 
-            // Check item recipes first (potion -> splash potion, splash -> lingering)
+            // Check item_stack recipes first (potion -> splash potion, splash -> lingering)
             for recipe in ITEM_RECIPES.iter() {
                 if slot.get_item().id == recipe.from().id
                     && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
@@ -113,7 +113,7 @@ impl BrewingStandBlockEntity {
 
             let mut new_stack_opt: Option<ItemStack> = None;
 
-            // Try item recipes first (potion -> splash/lingering)
+            // Try item_stack recipes first (potion -> splash/lingering)
             for recipe in ITEM_RECIPES.iter() {
                 if slot.get_item().id == recipe.from().id
                     && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
@@ -137,7 +137,7 @@ impl BrewingStandBlockEntity {
                 }
             }
 
-            // Try potion recipes (modify potion type) if item recipe didn't apply
+            // Try potion recipes (modify potion type) if item_stack recipe didn't apply
             if new_stack_opt.is_none()
                 && let Some(pc) = slot
                     .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
@@ -199,7 +199,7 @@ impl BrewingStandBlockEntity {
         self.mark_dirty();
 
         // Handle crafting remainder (like glass bottles from honey bottles)
-        // TODO: Implement remainder handling when item lookup by ID is available
+        // TODO: Implement remainder handling when item_stack lookup by ID is available
     }
 }
 
@@ -293,14 +293,14 @@ impl crate::inventory::Inventory for BrewingStandBlockEntity {
                 .is_some(),
             // Slot 3 - ingredient (must be tagged as brewable)
             3 => {
-                // Check if item is a valid brewing ingredient
+                // Check if item_stack is a valid brewing ingredient
                 if let Some(is_brewing_fuel) =
                     stack.get_item().is_tagged_with("minecraft:brewing_fuel")
                     && is_brewing_fuel
                 {
                     return false; // Fuel should not go in ingredient slot
                 }
-                // Allow any item that's not fuel (ingredient validation happens during brewing)
+                // Allow any item_stack that's not fuel (ingredient validation happens during brewing)
                 true
             }
             // Slot 4 - fuel
@@ -351,7 +351,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         // Load inventory items from NBT
         entity.read_data(nbt, &entity.items);
 
-        // If there's an ingredient in slot 3, remember its base item for matching
+        // If there's an ingredient in slot 3, remember its base item_stack for matching
         if let Ok(guard) = entity.items[3].try_lock()
             && !guard.is_empty()
         {
@@ -415,7 +415,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         world: &'a Arc<dyn crate::world::SimpleWorld>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            // Refill fuel counter from fuel item if needed
+            // Refill fuel counter from fuel item_stack if needed
             let fuel_refilled = if self.fuel.load(Ordering::Relaxed) <= 0 {
                 let fuel_stack_arc = self.items[4].clone();
                 let mut fuel_stack = fuel_stack_arc.lock().await;
@@ -473,7 +473,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             let mut current: [bool; 3] = [false; 3];
             for (i, slot_arc) in self.items.iter().take(3).enumerate() {
                 let slot = slot_arc.lock().await;
-                // Consider a potion slot "present" when it has an item and a PotionContents component or is a glass bottle
+                // Consider a potion slot "present" when it has an item_stack and a PotionContents component or is a glass bottle
                 current[i] = !slot.is_empty() && (slot.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() || slot.get_item().id == Item::GLASS_BOTTLE.id);
             }
 

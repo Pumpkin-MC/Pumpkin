@@ -9,7 +9,7 @@ use crate::{
     screen_handler::{ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture, ScreenProperty},
 };
 
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 pub struct BrewingScreenHandler {
     inventory: Arc<dyn Inventory>,
@@ -114,14 +114,14 @@ impl ScreenHandler for BrewingScreenHandler {
                     .await
             } else {
                 // Moving from player inventory to brewing stand
-                // Check item type to determine target slot
+                // Check item_stack type to determine target slot
 
-                // Check if item has potion contents (for slots 0-2)
+                // Check if item_stack has potion contents (for slots 0-2)
                 let has_potion_contents = stack
                     .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
                     .is_some();
 
-                // Check if item is brewing fuel (for slot 4)
+                // Check if item_stack is brewing fuel (for slot 4)
                 let is_fuel = stack
                     .get_item()
                     .is_tagged_with("minecraft:brewing_fuel")

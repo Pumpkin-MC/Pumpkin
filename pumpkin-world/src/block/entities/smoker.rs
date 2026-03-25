@@ -5,20 +5,20 @@ use std::{
     array::from_fn,
     collections::HashMap,
     sync::{
-        Arc, Mutex as StdMutex,
-        atomic::{AtomicBool, AtomicU16, Ordering},
+        atomic::{AtomicBool, AtomicU16, Ordering}, Arc,
+        Mutex as StdMutex,
     },
 };
 
 use pumpkin_data::recipes::CookingRecipeKind;
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
-
+use pumpkin_data::item_stack::ItemStack;
 use crate::{
     block::entities::furnace_like_block_entity::CookingBlockEntityBase,
     impl_block_entity_for_cooking, impl_clearable_for_cooking, impl_cooking_block_entity_base,
     impl_experience_container_for_cooking, impl_inventory_for_cooking,
-    impl_property_delegate_for_cooking, item::ItemStack,
+    impl_property_delegate_for_cooking,
 };
 
 pub struct SmokerBlockEntity {
@@ -33,7 +33,7 @@ pub struct SmokerBlockEntity {
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
 
     /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
-    /// Maps result item ID -> craft count
+    /// Maps result item_stack ID -> craft count
     pub recipes_used: StdMutex<HashMap<String, u32>>,
 }
 

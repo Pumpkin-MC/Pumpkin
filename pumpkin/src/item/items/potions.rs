@@ -69,7 +69,7 @@ impl ItemBehaviour for SplashPotionItem {
             let entity = Entity::new(world.clone(), position, &EntityType::SPLASH_POTION);
             let splash = SplashPotionEntity::new_shot(entity, &player.living_entity.entity).await;
 
-            // Copy the held item stack data into the projectile
+            // Copy the held item_stack stack data into the projectile
             let main = player.inventory.held_item();
             let mut used_main = true;
             let mut stack = main.lock().await.clone();
@@ -142,7 +142,7 @@ impl ItemBehaviour for LingeringPotionItem {
             let entity = Entity::new(world.clone(), position, &EntityType::LINGERING_POTION);
             let ling = LingeringPotionEntity::new_shot(entity, &player.living_entity.entity).await;
 
-            // Copy the held item stack data into the projectile
+            // Copy the held item_stack stack data into the projectile
             let main = player.inventory.held_item();
             let mut used_main = true;
             let mut stack = main.lock().await.clone();

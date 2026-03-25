@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use pumpkin_data::recipes::CookingRecipe;
 use tokio::sync::Mutex;
-
+use pumpkin_data::item_stack::ItemStack;
 use crate::{
     block::entities::{BlockEntity, PropertyDelegate},
     inventory::{Clearable, Inventory},
-    item::ItemStack,
 };
 
 /// Trait for extracting smelting experience from cooking block entities.
@@ -25,7 +24,7 @@ pub trait CookingBlockEntityBase:
     fn get_lit_total_time(&self) -> u16;
 
     /// Track that a recipe was used (for XP calculation on extraction)
-    /// Uses the result item ID as the recipe identifier
+    /// Uses the result item_stack ID as the recipe identifier
     fn add_recipe_used(&self, recipe: &CookingRecipe);
     /// Extract and reset accumulated experience, returning the total as an integer
     /// Calculates XP from tracked recipes and clears the `recipes_used` map

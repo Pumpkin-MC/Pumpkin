@@ -9,7 +9,7 @@ use pumpkin_protocol::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
     },
 };
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::screen_handler::{InventoryPlayer, ScreenHandlerBehaviour};

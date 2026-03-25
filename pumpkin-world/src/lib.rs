@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block, BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
+    chunk_gen_settings::GenerationSettings, dimension::Dimension, Block, BlockState,
 };
 use pumpkin_util::math::vector2::Vector2;
 
@@ -12,7 +12,6 @@ pub mod data;
 pub mod dimension;
 pub mod generation;
 pub mod inventory;
-pub mod item;
 pub mod level;
 pub mod lighting;
 pub mod lock;
@@ -45,15 +44,15 @@ macro_rules! global_path {
 
 // TODO: is there a way to do in-file benches?
 pub use generation::{
-    GlobalRandomConfig, noise::router::proto_noise_router::ProtoNoiseRouters,
-    proto_chunk::ProtoChunk,
+    noise::router::proto_noise_router::ProtoNoiseRouters, proto_chunk::ProtoChunk,
+    GlobalRandomConfig,
 };
 
 use crate::generation::{
     biome_coords,
     noise::{
-        CHUNK_DIM, ChunkNoiseGenerator,
-        aquifer_sampler::{FluidLevel, FluidLevelSampler},
+        aquifer_sampler::{FluidLevel, FluidLevelSampler}, ChunkNoiseGenerator,
+        CHUNK_DIM,
     },
     positions::chunk_pos,
     proto_chunk::TerrainCache,

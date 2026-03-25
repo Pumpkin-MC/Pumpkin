@@ -14,7 +14,7 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_util::math::{euler_angle::EulerAngle, vector3::Vector3};
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PackedRotation {

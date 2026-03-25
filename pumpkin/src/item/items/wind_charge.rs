@@ -31,7 +31,7 @@ impl ItemBehaviour for WindChargeItem {
             let world = player.world();
             let position = player.position();
 
-            // TODO: Implement Cooldown to throw the item
+            // TODO: Implement Cooldown to throw the item_stack
 
             world
                 .play_sound(

@@ -12,7 +12,7 @@ use crate::screen_handler::InventoryPlayer;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
 use pumpkin_world::inventory::Inventory;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use tokio::{sync::Mutex, time::timeout};
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -39,7 +39,7 @@ pub trait Slot: Send + Sync {
         Box::pin(async {}) // Default implementation
     }
 
-    /// Callback for when an item is taken from the slot.
+    /// Callback for when an item_stack is taken from the slot.
     ///
     /// Also see: `safe_take`
     fn on_take_item<'a>(

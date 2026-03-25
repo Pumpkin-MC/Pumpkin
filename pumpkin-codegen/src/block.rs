@@ -569,7 +569,7 @@ pub struct Block {
     pub hardness: f32,
     /// Blast resistance against explosions.
     pub blast_resistance: f32,
-    /// Numeric ID of the corresponding item, if any.
+    /// Numeric ID of the corresponding item_stack, if any.
     pub item_id: u16,
     /// Flammability data, present only if the block can catch fire.
     pub flammable: Option<FlammableStruct>,
@@ -1164,7 +1164,7 @@ pub fn build() -> TokenStream {
                 Self::from_id(raw_id)
             }
 
-            #[doc = r" Try to parse a block from an item id."]
+            #[doc = r" Try to parse a block from an item_stack id."]
             pub const fn from_item_id(id: u16) -> Option<&'static Self> {
                 #[allow(unreachable_patterns)]
                 match id {

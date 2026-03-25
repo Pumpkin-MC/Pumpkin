@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use crate::remap::{MappingNode, ParsedMappings, Remapper};
 use crate::version::MinecraftVersion;
 
-/// Computes the inverse of an item ID mapping table, mapping new IDs back to old IDs.
+/// Computes the inverse of an item_stack ID mapping table, mapping new IDs back to old IDs.
 ///
 /// # Arguments
 /// - `mapping` – Forward mapping slice where index is the old ID and value is the new ID.
@@ -20,7 +20,7 @@ fn reverse_mapping(mapping: &[u16], mapped_size: usize) -> Vec<u16> {
     result
 }
 
-/// Generates the `TokenStream` for per-version item ID remap tables and the
+/// Generates the `TokenStream` for per-version item_stack ID remap tables and the
 /// `remap_item_id_for_version`/`remap_item_id_from_version` functions.
 pub fn build() -> TokenStream {
     let node_1_21 = MappingNode {

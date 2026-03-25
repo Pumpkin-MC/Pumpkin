@@ -3084,7 +3084,7 @@ impl EntityType {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
-        resource_name: "item",
+        resource_name: "item_stack",
     };
     pub const ITEM_DISPLAY: EntityType = EntityType {
         id: 72,
@@ -7202,7 +7202,7 @@ impl EntityType {
             "illusioner" => Some(&Self::ILLUSIONER),
             "interaction" => Some(&Self::INTERACTION),
             "iron_golem" => Some(&Self::IRON_GOLEM),
-            "item" => Some(&Self::ITEM),
+            "item_stack" => Some(&Self::ITEM),
             "item_display" => Some(&Self::ITEM_DISPLAY),
             "item_frame" => Some(&Self::ITEM_FRAME),
             "jungle_boat" => Some(&Self::JUNGLE_BOAT),

@@ -2,7 +2,7 @@ use pumpkin_data::data_component::DataComponent::MaxStackSize;
 use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
 use crate::command::args::players::PlayersArgumentConsumer;
@@ -18,7 +18,7 @@ const NAMES: [&str; 1] = ["give"];
 
 const DESCRIPTION: &str = "Give items to player(s).";
 
-const ARG_ITEM: &str = "item";
+const ARG_ITEM: &str = "item_stack";
 
 const fn item_count_consumer() -> BoundedNumArgumentConsumer<i32> {
     BoundedNumArgumentConsumer::new()

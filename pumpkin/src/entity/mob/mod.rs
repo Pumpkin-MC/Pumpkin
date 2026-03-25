@@ -16,7 +16,7 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -569,7 +569,7 @@ pub trait SunSensitive: Mob + Send + Sync {
             if head_item.is_empty() {
                 entity.set_on_fire_for(8.0);
             } else {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                // TODO: Handle DamageResult::Broken to broadcast item_stack break and update player slot.
                 let _ = head_item.damage_item(damage_amount);
             }
         })

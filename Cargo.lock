@@ -2765,6 +2765,7 @@ dependencies = [
  "phf",
  "pumpkin-nbt",
  "pumpkin-util",
+ "rand 0.10.0",
  "serde",
 ]
 

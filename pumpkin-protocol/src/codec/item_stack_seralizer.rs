@@ -5,7 +5,7 @@ use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_util::version::MinecraftVersion;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use serde::ser::SerializeStruct;
 use serde::{
     Deserialize, Serialize, Serializer,
@@ -85,7 +85,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 
                 let item_id = seq
                     .next_element::<VarInt>()?
-                    .ok_or_else(|| de::Error::custom("No item id VarInt!"))?;
+                    .ok_or_else(|| de::Error::custom("No item_stack id VarInt!"))?;
 
                 let num_to_add = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
                 let num_to_remove = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
@@ -136,7 +136,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                 let item_id_u16: u16 = item_id
                     .0
                     .try_into()
-                    .map_err(|_| de::Error::custom("Invalid item id!"))?;
+                    .map_err(|_| de::Error::custom("Invalid item_stack id!"))?;
 
                 Ok(ItemStackSerializer(Cow::Owned(
                     ItemStack::new_with_component(
@@ -285,14 +285,14 @@ impl<'de> Deserialize<'de> for OptionalItemStackHash {
                 if is_some {
                     let item_id = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No item id VarInt!"))?;
+                        .ok_or(de::Error::custom("No item_stack id VarInt!"))?;
                     let count = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No item count VarInt!"))?;
+                        .ok_or(de::Error::custom("No item_stack count VarInt!"))?;
 
                     let hashed_components = seq
                         .next_element::<ItemComponentHash>()?
-                        .ok_or(de::Error::custom("No item component hash!"))?;
+                        .ok_or(de::Error::custom("No item_stack component hash!"))?;
 
                     let item_stack_hash = ItemStackHash {
                         item_id,

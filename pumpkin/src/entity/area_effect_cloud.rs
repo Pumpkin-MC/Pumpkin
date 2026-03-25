@@ -10,13 +10,13 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
 type EffectEntry = (&'static StatusEffect, i32, u8, bool, bool, bool);
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
 /// The effect cloud entity that is spawned where a lingering potion lands.
 pub struct AreaEffectCloudEntity {
     pub entity: Entity,
-    /// Stored potion item stack (may be empty) to read effects from.
+    /// Stored potion item_stack stack (may be empty) to read effects from.
     pub item_stack: Mutex<ItemStack>,
     /// Active potion effects as tuples: (`StatusEffect`, `duration_ticks`, `amplifier`, `ambient`, `show_particles`, `show_icon`)
     pub effects: Mutex<Vec<EffectEntry>>,

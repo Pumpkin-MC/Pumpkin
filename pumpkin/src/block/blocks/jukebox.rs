@@ -50,7 +50,7 @@ impl JukeboxBlock {
     }
 
     /// Drops the record from the jukebox - matches vanilla's `JukeboxBlockEntity.dropRecord()`
-    /// Spawns item at (pos + 0.5, pos + 1.01, pos + 0.5) with horizontal random offset
+    /// Spawns item_stack at (pos + 0.5, pos + 1.01, pos + 0.5) with horizontal random offset
     async fn drop_record(position: &BlockPos, world: &Arc<World>) {
         if let Some(block_entity) = world.get_block_entity(position).await
             && let Some(jukebox_entity) = block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
@@ -98,7 +98,7 @@ impl BlockBehaviour for JukeboxBlock {
         })
     }
 
-    /// Called when player right-clicks with empty hand or non-disc item
+    /// Called when player right-clicks with empty hand or non-disc item_stack
     /// Vanilla: `JukeboxBlock.onUse()` - drops record if present
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
@@ -117,7 +117,7 @@ impl BlockBehaviour for JukeboxBlock {
         })
     }
 
-    /// Called when player right-clicks with an item
+    /// Called when player right-clicks with an item_stack
     /// Vanilla: `JukeboxBlock.onUseWithItem()` -> `JukeboxPlayableComponent.tryPlayStack()`
     fn use_with_item<'a>(
         &'a self,

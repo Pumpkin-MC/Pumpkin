@@ -11,7 +11,7 @@ pub struct LootTable {
     pub r#type: LootTableType,
     /// Optional random sequence identifier for deterministic rolls.
     pub random_sequence: Option<&'static str>,
-    /// Optional array of loot pools that define item generation.
+    /// Optional array of loot pools that define item_stack generation.
     pub pools: Option<&'static [LootPool]>,
 }
 
@@ -30,10 +30,10 @@ pub struct LootPool {
     pub functions: Option<&'static [LootFunction]>,
 }
 
-/// Represents an individual item entry in a loot pool.
+/// Represents an individual item_stack entry in a loot pool.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ItemEntry {
-    /// Name of the item.
+    /// Name of the item_stack.
     pub name: &'static str,
 }
 
@@ -47,9 +47,9 @@ pub struct AlternativeEntry {
 /// Types of entries that can exist in a loot pool.
 #[derive(Clone, PartialEq, Debug)]
 pub enum LootPoolEntryTypes {
-    /// Empty entry; no item is generated.
+    /// Empty entry; no item_stack is generated.
     Empty,
-    /// Entry that generates a specific item.
+    /// Entry that generates a specific item_stack.
     Item(ItemEntry),
     /// Entry that references another loot table.
     LootTable,
@@ -76,7 +76,7 @@ pub enum LootCondition {
     AllOf,
     /// Passes based on a random chance.
     RandomChance,
-    /// Passes based on a random chance modified by item enchantments.
+    /// Passes based on a random chance modified by item_stack enchantments.
     RandomChanceWithEnchantedBonus,
     /// Checks properties of the entity (e.g. type, attributes).
     EntityProperties,
@@ -130,9 +130,9 @@ pub enum LootFunctionTypes {
         count: LootFunctionNumberProvider,
         add: bool,
     },
-    /// Increases the count of items based on the item's enchantments.
+    /// Increases the count of items based on the item_stack's enchantments.
     EnchantedCountIncrease,
-    /// Smelts the item as if it passed through a furnace.
+    /// Smelts the item_stack as if it passed through a furnace.
     FurnaceSmelt,
     /// Sets the potion type for potion items.
     SetPotion,
@@ -146,7 +146,7 @@ pub enum LootFunctionTypes {
         formula: &'static str,
         parameters: Option<LootFunctionBonusParameter>,
     },
-    /// Copies specified components from a source entity or item.
+    /// Copies specified components from a source entity or item_stack.
     CopyComponents {
         source: &'static str,
         include: &'static [&'static str],

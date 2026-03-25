@@ -11,7 +11,7 @@ use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender
 use pumpkin_data::data_component_impl::EnchantmentsImpl;
 
 const NAMES: [&str; 1] = ["enchant"];
-const DESCRIPTION: &str = "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.";
+const DESCRIPTION: &str = "Adds an enchantment to a player's selected item_stack, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.";
 
 struct Executor;
 

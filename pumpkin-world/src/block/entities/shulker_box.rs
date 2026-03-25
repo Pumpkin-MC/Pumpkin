@@ -2,24 +2,21 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
-use pumpkin_util::random::{RandomImpl, get_seed};
+use pumpkin_util::random::{get_seed, RandomImpl};
 use std::any::Any;
 use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::{
     array::from_fn,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{atomic::AtomicBool, Arc},
 };
 use tokio::sync::Mutex;
-
+use pumpkin_data::item_stack::ItemStack;
 use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture};
 use crate::inventory::InventoryFuture;
 use crate::world::SimpleWorld;
-use crate::{
-    inventory::{
-        split_stack, {Clearable, Inventory},
-    },
-    item::ItemStack,
+use crate::inventory::{
+    split_stack, {Clearable, Inventory},
 };
 
 use super::BlockEntity;

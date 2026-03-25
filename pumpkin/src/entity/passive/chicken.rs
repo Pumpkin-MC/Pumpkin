@@ -6,7 +6,7 @@ use std::sync::{
 use crate::entity::attributes::AttributeBuilder;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{entity::EntityType, item::Item};
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use rand::RngExt;
 
 use crate::entity::{

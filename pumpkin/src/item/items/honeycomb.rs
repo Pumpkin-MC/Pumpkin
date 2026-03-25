@@ -18,7 +18,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::block::entities::BlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 pub struct HoneyCombItem;

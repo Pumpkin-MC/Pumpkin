@@ -76,7 +76,7 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
 use crate::block;
@@ -412,7 +412,7 @@ pub struct Player {
     pub open_container: AtomicCell<Option<u64>>,
     /// The block position of the currently open container screen (if any).
     pub open_container_pos: AtomicCell<Option<BlockPos>>,
-    /// The item currently being held by the player.
+    /// The item_stack currently being held by the player.
     pub carried_item: Mutex<Option<ItemStack>>,
     /// The player's abilities and special powers.
     ///
@@ -679,7 +679,7 @@ impl Player {
         let mut add_damage = 0.0;
         let mut add_speed = 0.0;
 
-        // Get the attack damage from the held item
+        // Get the attack damage from the held item_stack
         // TODO: this should be cached in memory, we shouldn't just use default here either
         if let Some(modifiers) = item_stack
             .lock()
@@ -773,7 +773,7 @@ impl Player {
         // NOTE: TOCTOU race condition in single-player context.
         // The weapon cost is computed (cost = 1 or 2) with item_stack locked, then damage_held_item
         // re-acquires the lock. In async multi-task scenarios, another task could theoretically
-        // swap the held item between these operations, causing the cost to apply to the wrong item.
+        // swap the held item_stack between these operations, causing the cost to apply to the wrong item_stack.
         // Mitigation options (in priority order):
         // 1. Create damage_held_item_with_lock(&self, item_stack: MutexGuard, amount) variant
         //    to hold the lock across both computation and application.
@@ -789,7 +789,7 @@ impl Player {
         if config.swing {}
     }
 
-    /// Returns the durability cost for using the held item as a weapon in combat.
+    /// Returns the durability cost for using the held item_stack as a weapon in combat.
     /// Derived from the `Weapon` data component: items without it (e.g. shears, tools
     /// not designed for combat) take no durability damage on attack.
     /// Items with the component use its `item_damage_per_attack` value (default 1;
@@ -818,8 +818,8 @@ impl Player {
         }
     }
 
-    /// Applies `amount` durability damage to the item in `slot`.
-    /// Broadcasts an [`EntityStatus`] break event and syncs the slot if the item is destroyed.
+    /// Applies `amount` durability damage to the item_stack in `slot`.
+    /// Broadcasts an [`EntityStatus`] break event and syncs the slot if the item_stack is destroyed.
     pub async fn damage_item_in_slot(&self, slot: &EquipmentSlot, amount: i32) -> bool {
         if matches!(
             self.gamemode.load(),
@@ -846,14 +846,14 @@ impl Player {
         let updated = {
             let mut stack = stack_arc.lock().await;
             let result = stack.damage_item(amount);
-            (result != pumpkin_world::item::DamageResult::Untouched)
+            (result != pumpkin_data::item_stack::DamageResult::Untouched)
                 .then_some((result, stack.clone()))
         };
 
         if let Some((result, updated_stack)) = updated {
             // Send the break status before clearing the slot so the client can
-            // use the item texture for break particles.
-            if result == pumpkin_world::item::DamageResult::Broken {
+            // use the item_stack texture for break particles.
+            if result == pumpkin_data::item_stack::DamageResult::Broken {
                 self.world()
                     .send_entity_status(
                         &self.living_entity.entity,
@@ -878,7 +878,7 @@ impl Player {
         false
     }
 
-    /// Convenience wrapper – damages the currently held (main-hand) item.
+    /// Convenience wrapper – damages the currently held (main-hand) item_stack.
     pub async fn damage_held_item(&self, amount: i32) -> bool {
         self.damage_item_in_slot(&EquipmentSlot::MAIN_HAND, amount)
             .await
@@ -2372,7 +2372,7 @@ impl Player {
     }
 
     pub async fn drop_held_item(&self, drop_stack: bool) {
-        // Do not hold both item stack and screen handler locks at the same time.
+        // Do not hold both item_stack stack and screen handler locks at the same time.
         let (dropped_stack, updated_stack, selected_slot) = {
             let binding = self.inventory.held_item();
             let mut item_stack = binding.lock().await;
@@ -3188,7 +3188,7 @@ impl NBTStorageInit for PlayerInventory {}
 impl NBTStorage for EnderChestInventory {
     fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            // Create item list with the correct capacity (inventory size)
+            // Create item_stack list with the correct capacity (inventory size)
             let mut items: Vec<NbtTag> = Vec::with_capacity(Self::INVENTORY_SIZE);
             for (i, item) in self.items.iter().enumerate() {
                 let stack = item.lock().await;
@@ -3207,7 +3207,7 @@ impl NBTStorage for EnderChestInventory {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            // Process item list
+            // Process item_stack list
             if let Some(item_list) = nbt.get_list("EnderItems") {
                 for tag in item_list {
                     if let Some(item_compound) = tag.extract_compound()

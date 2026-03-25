@@ -38,7 +38,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.acacia_boat",
+                    name: "item_stack.minecraft.acacia_boat",
                 },
             ),
             (
@@ -76,7 +76,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.acacia_chest_boat",
+                    name: "item_stack.minecraft.acacia_chest_boat",
                 },
             ),
             (
@@ -418,7 +418,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.allay_spawn_egg",
+                    name: "item_stack.minecraft.allay_spawn_egg",
                 },
             ),
             (
@@ -494,7 +494,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.amethyst_shard",
+                    name: "item_stack.minecraft.amethyst_shard",
                 },
             ),
             (
@@ -614,7 +614,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.angler_pottery_sherd",
+                    name: "item_stack.minecraft.angler_pottery_sherd",
                 },
             ),
             (
@@ -652,7 +652,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.apple",
+                    name: "item_stack.minecraft.apple",
                 },
             ),
             (
@@ -689,7 +689,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.archer_pottery_sherd",
+                    name: "item_stack.minecraft.archer_pottery_sherd",
                 },
             ),
             (
@@ -708,7 +708,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.armadillo_scute",
+                    name: "item_stack.minecraft.armadillo_scute",
                 },
             ),
             (
@@ -727,7 +727,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.armadillo_spawn_egg",
+                    name: "item_stack.minecraft.armadillo_spawn_egg",
                 },
             ),
             (
@@ -746,7 +746,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.armor_stand",
+                    name: "item_stack.minecraft.armor_stand",
                 },
             ),
             (
@@ -765,7 +765,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.arms_up_pottery_sherd",
+                    name: "item_stack.minecraft.arms_up_pottery_sherd",
                 },
             ),
             (
@@ -784,7 +784,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.arrow",
+                    name: "item_stack.minecraft.arrow",
                 },
             ),
             (
@@ -803,7 +803,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.axolotl_bucket",
+                    name: "item_stack.minecraft.axolotl_bucket",
                 },
             ),
             (
@@ -822,7 +822,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.axolotl_spawn_egg",
+                    name: "item_stack.minecraft.axolotl_spawn_egg",
                 },
             ),
             (
@@ -898,7 +898,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.baked_potato",
+                    name: "item_stack.minecraft.baked_potato",
                 },
             ),
             (
@@ -992,7 +992,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bamboo_chest_raft",
+                    name: "item_stack.minecraft.bamboo_chest_raft",
                 },
             ),
             (
@@ -1182,7 +1182,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bamboo_raft",
+                    name: "item_stack.minecraft.bamboo_raft",
                 },
             ),
             (
@@ -1353,7 +1353,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bat_spawn_egg",
+                    name: "item_stack.minecraft.bat_spawn_egg",
                 },
             ),
             (
@@ -1429,7 +1429,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bee_spawn_egg",
+                    name: "item_stack.minecraft.bee_spawn_egg",
                 },
             ),
             (
@@ -1448,7 +1448,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.beef",
+                    name: "item_stack.minecraft.beef",
                 },
             ),
             (
@@ -1504,7 +1504,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.beetroot",
+                    name: "item_stack.minecraft.beetroot",
                 },
             ),
             (
@@ -1541,7 +1541,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.beetroot_seeds",
+                    name: "item_stack.minecraft.beetroot_seeds",
                 },
             ),
             (
@@ -1560,7 +1560,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.beetroot_soup",
+                    name: "item_stack.minecraft.beetroot_soup",
                 },
             ),
             (
@@ -1635,7 +1635,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.birch_boat",
+                    name: "item_stack.minecraft.birch_boat",
                 },
             ),
             (
@@ -1673,7 +1673,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.birch_chest_boat",
+                    name: "item_stack.minecraft.birch_chest_boat",
                 },
             ),
             (
@@ -2015,7 +2015,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.black_bundle",
+                    name: "item_stack.minecraft.black_bundle",
                 },
             ),
             (
@@ -2129,7 +2129,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.black_dye",
+                    name: "item_stack.minecraft.black_dye",
                 },
             ),
             (
@@ -2167,7 +2167,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.black_harness",
+                    name: "item_stack.minecraft.black_harness",
                 },
             ),
             (
@@ -2373,7 +2373,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.blade_pottery_sherd",
+                    name: "item_stack.minecraft.blade_pottery_sherd",
                 },
             ),
             (
@@ -2411,7 +2411,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.blaze_powder",
+                    name: "item_stack.minecraft.blaze_powder",
                 },
             ),
             (
@@ -2430,7 +2430,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.blaze_rod",
+                    name: "item_stack.minecraft.blaze_rod",
                 },
             ),
             (
@@ -2449,7 +2449,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.blaze_spawn_egg",
+                    name: "item_stack.minecraft.blaze_spawn_egg",
                 },
             ),
             (
@@ -2506,7 +2506,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.blue_bundle",
+                    name: "item_stack.minecraft.blue_bundle",
                 },
             ),
             (
@@ -2620,7 +2620,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.blue_dye",
+                    name: "item_stack.minecraft.blue_dye",
                 },
             ),
             (
@@ -2639,7 +2639,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.blue_egg",
+                    name: "item_stack.minecraft.blue_egg",
                 },
             ),
             (
@@ -2677,7 +2677,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.blue_harness",
+                    name: "item_stack.minecraft.blue_harness",
                 },
             ),
             (
@@ -2845,7 +2845,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bogged_spawn_egg",
+                    name: "item_stack.minecraft.bogged_spawn_egg",
                 },
             ),
             (
@@ -2864,7 +2864,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bolt_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.bolt_armor_trim_smithing_template",
                 },
             ),
             (
@@ -2883,7 +2883,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bone",
+                    name: "item_stack.minecraft.bone",
                 },
             ),
             (
@@ -2921,7 +2921,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bone_meal",
+                    name: "item_stack.minecraft.bone_meal",
                 },
             ),
             (
@@ -2940,7 +2940,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.book",
+                    name: "item_stack.minecraft.book",
                 },
             ),
             (
@@ -2978,7 +2978,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bordure_indented_banner_pattern",
+                    name: "item_stack.minecraft.bordure_indented_banner_pattern",
                 },
             ),
             (
@@ -2997,7 +2997,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bow",
+                    name: "item_stack.minecraft.bow",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -3018,7 +3018,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bowl",
+                    name: "item_stack.minecraft.bowl",
                 },
             ),
             (
@@ -3094,7 +3094,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bread",
+                    name: "item_stack.minecraft.bread",
                 },
             ),
             (
@@ -3131,7 +3131,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.breeze_rod",
+                    name: "item_stack.minecraft.breeze_rod",
                 },
             ),
             (
@@ -3150,7 +3150,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.breeze_spawn_egg",
+                    name: "item_stack.minecraft.breeze_spawn_egg",
                 },
             ),
             (
@@ -3169,7 +3169,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.brewer_pottery_sherd",
+                    name: "item_stack.minecraft.brewer_pottery_sherd",
                 },
             ),
             (
@@ -3207,7 +3207,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.brick",
+                    name: "item_stack.minecraft.brick",
                 },
             ),
             (
@@ -3340,7 +3340,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.brown_bundle",
+                    name: "item_stack.minecraft.brown_bundle",
                 },
             ),
             (
@@ -3454,7 +3454,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.brown_dye",
+                    name: "item_stack.minecraft.brown_dye",
                 },
             ),
             (
@@ -3473,7 +3473,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.brown_egg",
+                    name: "item_stack.minecraft.brown_egg",
                 },
             ),
             (
@@ -3511,7 +3511,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.brown_harness",
+                    name: "item_stack.minecraft.brown_harness",
                 },
             ),
             (
@@ -3679,7 +3679,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.brush",
+                    name: "item_stack.minecraft.brush",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -3757,7 +3757,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bucket",
+                    name: "item_stack.minecraft.bucket",
                 },
             ),
             (
@@ -3795,7 +3795,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.bundle",
+                    name: "item_stack.minecraft.bundle",
                 },
             ),
             (
@@ -3814,7 +3814,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.burn_pottery_sherd",
+                    name: "item_stack.minecraft.burn_pottery_sherd",
                 },
             ),
             (
@@ -3947,7 +3947,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.camel_husk_spawn_egg",
+                    name: "item_stack.minecraft.camel_husk_spawn_egg",
                 },
             ),
             (
@@ -3966,7 +3966,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.camel_spawn_egg",
+                    name: "item_stack.minecraft.camel_spawn_egg",
                 },
             ),
             (
@@ -4023,7 +4023,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.carrot",
+                    name: "item_stack.minecraft.carrot",
                 },
             ),
             (
@@ -4060,7 +4060,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.carrot_on_a_stick",
+                    name: "item_stack.minecraft.carrot_on_a_stick",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -4141,7 +4141,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cat_spawn_egg",
+                    name: "item_stack.minecraft.cat_spawn_egg",
                 },
             ),
             (
@@ -4179,7 +4179,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cave_spider_spawn_egg",
+                    name: "item_stack.minecraft.cave_spider_spawn_egg",
                 },
             ),
             (
@@ -4217,7 +4217,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.chainmail_boots",
+                    name: "item_stack.minecraft.chainmail_boots",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -4269,7 +4269,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.chainmail_chestplate",
+                    name: "item_stack.minecraft.chainmail_chestplate",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -4321,7 +4321,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.chainmail_helmet",
+                    name: "item_stack.minecraft.chainmail_helmet",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -4373,7 +4373,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.chainmail_leggings",
+                    name: "item_stack.minecraft.chainmail_leggings",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -4425,7 +4425,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.charcoal",
+                    name: "item_stack.minecraft.charcoal",
                 },
             ),
             (
@@ -4444,7 +4444,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cherry_boat",
+                    name: "item_stack.minecraft.cherry_boat",
                 },
             ),
             (
@@ -4482,7 +4482,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cherry_chest_boat",
+                    name: "item_stack.minecraft.cherry_chest_boat",
                 },
             ),
             (
@@ -4805,7 +4805,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.chest_minecart",
+                    name: "item_stack.minecraft.chest_minecart",
                 },
             ),
             (
@@ -4824,7 +4824,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.chicken",
+                    name: "item_stack.minecraft.chicken",
                 },
             ),
             (
@@ -4871,7 +4871,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.chicken_spawn_egg",
+                    name: "item_stack.minecraft.chicken_spawn_egg",
                 },
             ),
             (
@@ -5156,7 +5156,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.chorus_fruit",
+                    name: "item_stack.minecraft.chorus_fruit",
                 },
             ),
             (
@@ -5231,7 +5231,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.clay_ball",
+                    name: "item_stack.minecraft.clay_ball",
                 },
             ),
             (
@@ -5250,7 +5250,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.clock",
+                    name: "item_stack.minecraft.clock",
                 },
             ),
             (
@@ -5288,7 +5288,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.coal",
+                    name: "item_stack.minecraft.coal",
                 },
             ),
             (
@@ -5364,7 +5364,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.coast_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.coast_armor_trim_smithing_template",
                 },
             ),
             (
@@ -5554,7 +5554,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cocoa_beans",
+                    name: "item_stack.minecraft.cocoa_beans",
                 },
             ),
             (
@@ -5573,7 +5573,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cod",
+                    name: "item_stack.minecraft.cod",
                 },
             ),
             (
@@ -5610,7 +5610,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cod_bucket",
+                    name: "item_stack.minecraft.cod_bucket",
                 },
             ),
             (
@@ -5637,7 +5637,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cod_spawn_egg",
+                    name: "item_stack.minecraft.cod_spawn_egg",
                 },
             ),
             (
@@ -5675,7 +5675,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.command_block_minecart",
+                    name: "item_stack.minecraft.command_block_minecart",
                 },
             ),
             (
@@ -5713,7 +5713,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.compass",
+                    name: "item_stack.minecraft.compass",
                 },
             ),
             (
@@ -5770,7 +5770,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cooked_beef",
+                    name: "item_stack.minecraft.cooked_beef",
                 },
             ),
             (
@@ -5807,7 +5807,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cooked_chicken",
+                    name: "item_stack.minecraft.cooked_chicken",
                 },
             ),
             (
@@ -5844,7 +5844,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cooked_cod",
+                    name: "item_stack.minecraft.cooked_cod",
                 },
             ),
             (
@@ -5881,7 +5881,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cooked_mutton",
+                    name: "item_stack.minecraft.cooked_mutton",
                 },
             ),
             (
@@ -5918,7 +5918,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cooked_porkchop",
+                    name: "item_stack.minecraft.cooked_porkchop",
                 },
             ),
             (
@@ -5955,7 +5955,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cooked_rabbit",
+                    name: "item_stack.minecraft.cooked_rabbit",
                 },
             ),
             (
@@ -5992,7 +5992,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cooked_salmon",
+                    name: "item_stack.minecraft.cooked_salmon",
                 },
             ),
             (
@@ -6029,7 +6029,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cookie",
+                    name: "item_stack.minecraft.cookie",
                 },
             ),
             (
@@ -6066,7 +6066,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_axe",
+                    name: "item_stack.minecraft.copper_axe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6166,7 +6166,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_boots",
+                    name: "item_stack.minecraft.copper_boots",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6275,7 +6275,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_chestplate",
+                    name: "item_stack.minecraft.copper_chestplate",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6346,7 +6346,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_golem_spawn_egg",
+                    name: "item_stack.minecraft.copper_golem_spawn_egg",
                 },
             ),
             (
@@ -6403,7 +6403,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_helmet",
+                    name: "item_stack.minecraft.copper_helmet",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6455,7 +6455,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_hoe",
+                    name: "item_stack.minecraft.copper_hoe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6517,7 +6517,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_horse_armor",
+                    name: "item_stack.minecraft.copper_horse_armor",
                 },
             ),
             (
@@ -6567,7 +6567,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_ingot",
+                    name: "item_stack.minecraft.copper_ingot",
                 },
             ),
             (
@@ -6605,7 +6605,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_leggings",
+                    name: "item_stack.minecraft.copper_leggings",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6657,7 +6657,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_nautilus_armor",
+                    name: "item_stack.minecraft.copper_nautilus_armor",
                 },
             ),
             (
@@ -6707,7 +6707,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_nugget",
+                    name: "item_stack.minecraft.copper_nugget",
                 },
             ),
             (
@@ -6745,7 +6745,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_pickaxe",
+                    name: "item_stack.minecraft.copper_pickaxe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6807,7 +6807,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_shovel",
+                    name: "item_stack.minecraft.copper_shovel",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6869,7 +6869,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_spear",
+                    name: "item_stack.minecraft.copper_spear",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -6911,7 +6911,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.copper_sword",
+                    name: "item_stack.minecraft.copper_sword",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -7035,7 +7035,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cow_spawn_egg",
+                    name: "item_stack.minecraft.cow_spawn_egg",
                 },
             ),
             (
@@ -7206,7 +7206,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.creaking_spawn_egg",
+                    name: "item_stack.minecraft.creaking_spawn_egg",
                 },
             ),
             (
@@ -7225,7 +7225,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.creeper_banner_pattern",
+                    name: "item_stack.minecraft.creeper_banner_pattern",
                 },
             ),
             (
@@ -7285,7 +7285,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.creeper_spawn_egg",
+                    name: "item_stack.minecraft.creeper_spawn_egg",
                 },
             ),
             (
@@ -7627,7 +7627,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.crossbow",
+                    name: "item_stack.minecraft.crossbow",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -7838,7 +7838,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cyan_bundle",
+                    name: "item_stack.minecraft.cyan_bundle",
                 },
             ),
             (
@@ -7952,7 +7952,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cyan_dye",
+                    name: "item_stack.minecraft.cyan_dye",
                 },
             ),
             (
@@ -7990,7 +7990,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.cyan_harness",
+                    name: "item_stack.minecraft.cyan_harness",
                 },
             ),
             (
@@ -8158,7 +8158,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.danger_pottery_sherd",
+                    name: "item_stack.minecraft.danger_pottery_sherd",
                 },
             ),
             (
@@ -8177,7 +8177,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.dark_oak_boat",
+                    name: "item_stack.minecraft.dark_oak_boat",
                 },
             ),
             (
@@ -8215,7 +8215,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.dark_oak_chest_boat",
+                    name: "item_stack.minecraft.dark_oak_chest_boat",
                 },
             ),
             (
@@ -8899,7 +8899,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.debug_stick",
+                    name: "item_stack.minecraft.debug_stick",
                 },
             ),
             (
@@ -9279,7 +9279,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond",
+                    name: "item_stack.minecraft.diamond",
                 },
             ),
             (
@@ -9298,7 +9298,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_axe",
+                    name: "item_stack.minecraft.diamond_axe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9379,7 +9379,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_boots",
+                    name: "item_stack.minecraft.diamond_boots",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9431,7 +9431,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_chestplate",
+                    name: "item_stack.minecraft.diamond_chestplate",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9483,7 +9483,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_helmet",
+                    name: "item_stack.minecraft.diamond_helmet",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9535,7 +9535,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_hoe",
+                    name: "item_stack.minecraft.diamond_hoe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9597,7 +9597,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_horse_armor",
+                    name: "item_stack.minecraft.diamond_horse_armor",
                 },
             ),
             (
@@ -9647,7 +9647,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_leggings",
+                    name: "item_stack.minecraft.diamond_leggings",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9699,7 +9699,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_nautilus_armor",
+                    name: "item_stack.minecraft.diamond_nautilus_armor",
                 },
             ),
             (
@@ -9768,7 +9768,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_pickaxe",
+                    name: "item_stack.minecraft.diamond_pickaxe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9830,7 +9830,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_shovel",
+                    name: "item_stack.minecraft.diamond_shovel",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9892,7 +9892,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_spear",
+                    name: "item_stack.minecraft.diamond_spear",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -9934,7 +9934,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.diamond_sword",
+                    name: "item_stack.minecraft.diamond_sword",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -10115,7 +10115,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.disc_fragment_5",
+                    name: "item_stack.minecraft.disc_fragment_5",
                 },
             ),
             (
@@ -10153,7 +10153,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.dolphin_spawn_egg",
+                    name: "item_stack.minecraft.dolphin_spawn_egg",
                 },
             ),
             (
@@ -10172,7 +10172,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.donkey_spawn_egg",
+                    name: "item_stack.minecraft.donkey_spawn_egg",
                 },
             ),
             (
@@ -10191,7 +10191,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.dragon_breath",
+                    name: "item_stack.minecraft.dragon_breath",
                 },
             ),
             (
@@ -10289,7 +10289,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.dried_kelp",
+                    name: "item_stack.minecraft.dried_kelp",
                 },
             ),
             (
@@ -10383,7 +10383,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.drowned_spawn_egg",
+                    name: "item_stack.minecraft.drowned_spawn_egg",
                 },
             ),
             (
@@ -10402,7 +10402,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.dune_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.dune_armor_trim_smithing_template",
                 },
             ),
             (
@@ -10421,7 +10421,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.echo_shard",
+                    name: "item_stack.minecraft.echo_shard",
                 },
             ),
             (
@@ -10440,7 +10440,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.egg",
+                    name: "item_stack.minecraft.egg",
                 },
             ),
             (
@@ -10459,7 +10459,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.elder_guardian_spawn_egg",
+                    name: "item_stack.minecraft.elder_guardian_spawn_egg",
                 },
             ),
             (
@@ -10478,7 +10478,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.elytra",
+                    name: "item_stack.minecraft.elytra",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -10515,7 +10515,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.emerald",
+                    name: "item_stack.minecraft.emerald",
                 },
             ),
             (
@@ -10572,7 +10572,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.enchanted_book",
+                    name: "item_stack.minecraft.enchanted_book",
                 },
             ),
             (
@@ -10591,7 +10591,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.enchanted_golden_apple",
+                    name: "item_stack.minecraft.enchanted_golden_apple",
                 },
             ),
             (
@@ -10683,7 +10683,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.end_crystal",
+                    name: "item_stack.minecraft.end_crystal",
                 },
             ),
             (
@@ -10854,7 +10854,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ender_dragon_spawn_egg",
+                    name: "item_stack.minecraft.ender_dragon_spawn_egg",
                 },
             ),
             (
@@ -10873,7 +10873,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ender_eye",
+                    name: "item_stack.minecraft.ender_eye",
                 },
             ),
             (
@@ -10892,7 +10892,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ender_pearl",
+                    name: "item_stack.minecraft.ender_pearl",
                 },
             ),
             (
@@ -10911,7 +10911,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.enderman_spawn_egg",
+                    name: "item_stack.minecraft.enderman_spawn_egg",
                 },
             ),
             (
@@ -10930,7 +10930,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.endermite_spawn_egg",
+                    name: "item_stack.minecraft.endermite_spawn_egg",
                 },
             ),
             (
@@ -10949,7 +10949,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.evoker_spawn_egg",
+                    name: "item_stack.minecraft.evoker_spawn_egg",
                 },
             ),
             (
@@ -10968,7 +10968,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.experience_bottle",
+                    name: "item_stack.minecraft.experience_bottle",
                 },
             ),
             (
@@ -10987,7 +10987,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.explorer_pottery_sherd",
+                    name: "item_stack.minecraft.explorer_pottery_sherd",
                 },
             ),
             (
@@ -11291,7 +11291,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.eye_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.eye_armor_trim_smithing_template",
                 },
             ),
             (
@@ -11329,7 +11329,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.feather",
+                    name: "item_stack.minecraft.feather",
                 },
             ),
             (
@@ -11348,7 +11348,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.fermented_spider_eye",
+                    name: "item_stack.minecraft.fermented_spider_eye",
                 },
             ),
             (
@@ -11386,7 +11386,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.field_masoned_banner_pattern",
+                    name: "item_stack.minecraft.field_masoned_banner_pattern",
                 },
             ),
             (
@@ -11405,7 +11405,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.filled_map",
+                    name: "item_stack.minecraft.filled_map",
                 },
             ),
             (
@@ -11424,7 +11424,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.fire_charge",
+                    name: "item_stack.minecraft.fire_charge",
                 },
             ),
             (
@@ -11519,7 +11519,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.firework_rocket",
+                    name: "item_stack.minecraft.firework_rocket",
                 },
             ),
             (
@@ -11538,7 +11538,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.firework_star",
+                    name: "item_stack.minecraft.firework_star",
                 },
             ),
             (
@@ -11557,7 +11557,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.fishing_rod",
+                    name: "item_stack.minecraft.fishing_rod",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -11597,7 +11597,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.flint",
+                    name: "item_stack.minecraft.flint",
                 },
             ),
             (
@@ -11616,7 +11616,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.flint_and_steel",
+                    name: "item_stack.minecraft.flint_and_steel",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -11637,7 +11637,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.flow_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.flow_armor_trim_smithing_template",
                 },
             ),
             (
@@ -11656,7 +11656,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.flow_banner_pattern",
+                    name: "item_stack.minecraft.flow_banner_pattern",
                 },
             ),
             (
@@ -11675,7 +11675,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.flow_pottery_sherd",
+                    name: "item_stack.minecraft.flow_pottery_sherd",
                 },
             ),
             (
@@ -11694,7 +11694,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.flower_banner_pattern",
+                    name: "item_stack.minecraft.flower_banner_pattern",
                 },
             ),
             (
@@ -11770,7 +11770,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.fox_spawn_egg",
+                    name: "item_stack.minecraft.fox_spawn_egg",
                 },
             ),
             (
@@ -11789,7 +11789,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.friend_pottery_sherd",
+                    name: "item_stack.minecraft.friend_pottery_sherd",
                 },
             ),
             (
@@ -11808,7 +11808,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.frog_spawn_egg",
+                    name: "item_stack.minecraft.frog_spawn_egg",
                 },
             ),
             (
@@ -11865,7 +11865,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.furnace_minecart",
+                    name: "item_stack.minecraft.furnace_minecart",
                 },
             ),
             (
@@ -11884,7 +11884,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ghast_spawn_egg",
+                    name: "item_stack.minecraft.ghast_spawn_egg",
                 },
             ),
             (
@@ -11903,7 +11903,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ghast_tear",
+                    name: "item_stack.minecraft.ghast_tear",
                 },
             ),
             (
@@ -11960,7 +11960,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.glass_bottle",
+                    name: "item_stack.minecraft.glass_bottle",
                 },
             ),
             (
@@ -11998,7 +11998,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.glistering_melon_slice",
+                    name: "item_stack.minecraft.glistering_melon_slice",
                 },
             ),
             (
@@ -12017,7 +12017,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.globe_banner_pattern",
+                    name: "item_stack.minecraft.globe_banner_pattern",
                 },
             ),
             (
@@ -12036,7 +12036,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.glow_berries",
+                    name: "item_stack.minecraft.glow_berries",
                 },
             ),
             (
@@ -12073,7 +12073,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.glow_ink_sac",
+                    name: "item_stack.minecraft.glow_ink_sac",
                 },
             ),
             (
@@ -12092,7 +12092,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.glow_item_frame",
+                    name: "item_stack.minecraft.glow_item_frame",
                 },
             ),
             (
@@ -12130,7 +12130,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.glow_squid_spawn_egg",
+                    name: "item_stack.minecraft.glow_squid_spawn_egg",
                 },
             ),
             (
@@ -12168,7 +12168,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.glowstone_dust",
+                    name: "item_stack.minecraft.glowstone_dust",
                 },
             ),
             (
@@ -12187,7 +12187,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.goat_horn",
+                    name: "item_stack.minecraft.goat_horn",
                 },
             ),
             (
@@ -12206,7 +12206,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.goat_spawn_egg",
+                    name: "item_stack.minecraft.goat_spawn_egg",
                 },
             ),
             (
@@ -12244,7 +12244,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.gold_ingot",
+                    name: "item_stack.minecraft.gold_ingot",
                 },
             ),
             (
@@ -12263,7 +12263,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.gold_nugget",
+                    name: "item_stack.minecraft.gold_nugget",
                 },
             ),
             (
@@ -12301,7 +12301,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_apple",
+                    name: "item_stack.minecraft.golden_apple",
                 },
             ),
             (
@@ -12358,7 +12358,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_axe",
+                    name: "item_stack.minecraft.golden_axe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12420,7 +12420,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_boots",
+                    name: "item_stack.minecraft.golden_boots",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12472,7 +12472,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_carrot",
+                    name: "item_stack.minecraft.golden_carrot",
                 },
             ),
             (
@@ -12509,7 +12509,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_chestplate",
+                    name: "item_stack.minecraft.golden_chestplate",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12561,7 +12561,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_helmet",
+                    name: "item_stack.minecraft.golden_helmet",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12613,7 +12613,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_hoe",
+                    name: "item_stack.minecraft.golden_hoe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12675,7 +12675,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_horse_armor",
+                    name: "item_stack.minecraft.golden_horse_armor",
                 },
             ),
             (
@@ -12725,7 +12725,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_leggings",
+                    name: "item_stack.minecraft.golden_leggings",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12777,7 +12777,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_nautilus_armor",
+                    name: "item_stack.minecraft.golden_nautilus_armor",
                 },
             ),
             (
@@ -12827,7 +12827,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_pickaxe",
+                    name: "item_stack.minecraft.golden_pickaxe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12889,7 +12889,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_shovel",
+                    name: "item_stack.minecraft.golden_shovel",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12951,7 +12951,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_spear",
+                    name: "item_stack.minecraft.golden_spear",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -12993,7 +12993,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.golden_sword",
+                    name: "item_stack.minecraft.golden_sword",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -13212,7 +13212,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.gray_bundle",
+                    name: "item_stack.minecraft.gray_bundle",
                 },
             ),
             (
@@ -13326,7 +13326,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.gray_dye",
+                    name: "item_stack.minecraft.gray_dye",
                 },
             ),
             (
@@ -13364,7 +13364,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.gray_harness",
+                    name: "item_stack.minecraft.gray_harness",
                 },
             ),
             (
@@ -13532,7 +13532,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.green_bundle",
+                    name: "item_stack.minecraft.green_bundle",
                 },
             ),
             (
@@ -13646,7 +13646,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.green_dye",
+                    name: "item_stack.minecraft.green_dye",
                 },
             ),
             (
@@ -13684,7 +13684,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.green_harness",
+                    name: "item_stack.minecraft.green_harness",
                 },
             ),
             (
@@ -13833,7 +13833,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.guardian_spawn_egg",
+                    name: "item_stack.minecraft.guardian_spawn_egg",
                 },
             ),
             (
@@ -13852,7 +13852,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.gunpowder",
+                    name: "item_stack.minecraft.gunpowder",
                 },
             ),
             (
@@ -13871,7 +13871,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.guster_banner_pattern",
+                    name: "item_stack.minecraft.guster_banner_pattern",
                 },
             ),
             (
@@ -13890,7 +13890,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.guster_pottery_sherd",
+                    name: "item_stack.minecraft.guster_pottery_sherd",
                 },
             ),
             (
@@ -13928,7 +13928,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.happy_ghast_spawn_egg",
+                    name: "item_stack.minecraft.happy_ghast_spawn_egg",
                 },
             ),
             (
@@ -13966,7 +13966,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.heart_of_the_sea",
+                    name: "item_stack.minecraft.heart_of_the_sea",
                 },
             ),
             (
@@ -13985,7 +13985,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.heart_pottery_sherd",
+                    name: "item_stack.minecraft.heart_pottery_sherd",
                 },
             ),
             (
@@ -14004,7 +14004,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.heartbreak_pottery_sherd",
+                    name: "item_stack.minecraft.heartbreak_pottery_sherd",
                 },
             ),
             (
@@ -14061,7 +14061,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.hoglin_spawn_egg",
+                    name: "item_stack.minecraft.hoglin_spawn_egg",
                 },
             ),
             (
@@ -14099,7 +14099,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.honey_bottle",
+                    name: "item_stack.minecraft.honey_bottle",
                 },
             ),
             (
@@ -14138,7 +14138,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.honeycomb",
+                    name: "item_stack.minecraft.honeycomb",
                 },
             ),
             (
@@ -14195,7 +14195,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.hopper_minecart",
+                    name: "item_stack.minecraft.hopper_minecart",
                 },
             ),
             (
@@ -14271,7 +14271,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.horse_spawn_egg",
+                    name: "item_stack.minecraft.horse_spawn_egg",
                 },
             ),
             (
@@ -14290,7 +14290,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.host_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.host_armor_trim_smithing_template",
                 },
             ),
             (
@@ -14309,7 +14309,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.howl_pottery_sherd",
+                    name: "item_stack.minecraft.howl_pottery_sherd",
                 },
             ),
             (
@@ -14328,7 +14328,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.husk_spawn_egg",
+                    name: "item_stack.minecraft.husk_spawn_egg",
                 },
             ),
             (
@@ -14499,7 +14499,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ink_sac",
+                    name: "item_stack.minecraft.ink_sac",
                 },
             ),
             (
@@ -14518,7 +14518,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_axe",
+                    name: "item_stack.minecraft.iron_axe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -14618,7 +14618,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_boots",
+                    name: "item_stack.minecraft.iron_boots",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -14689,7 +14689,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_chestplate",
+                    name: "item_stack.minecraft.iron_chestplate",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -14760,7 +14760,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_golem_spawn_egg",
+                    name: "item_stack.minecraft.iron_golem_spawn_egg",
                 },
             ),
             (
@@ -14779,7 +14779,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_helmet",
+                    name: "item_stack.minecraft.iron_helmet",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -14831,7 +14831,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_hoe",
+                    name: "item_stack.minecraft.iron_hoe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -14893,7 +14893,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_horse_armor",
+                    name: "item_stack.minecraft.iron_horse_armor",
                 },
             ),
             (
@@ -14943,7 +14943,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_ingot",
+                    name: "item_stack.minecraft.iron_ingot",
                 },
             ),
             (
@@ -14962,7 +14962,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_leggings",
+                    name: "item_stack.minecraft.iron_leggings",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -15014,7 +15014,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_nautilus_armor",
+                    name: "item_stack.minecraft.iron_nautilus_armor",
                 },
             ),
             (
@@ -15064,7 +15064,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_nugget",
+                    name: "item_stack.minecraft.iron_nugget",
                 },
             ),
             (
@@ -15102,7 +15102,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_pickaxe",
+                    name: "item_stack.minecraft.iron_pickaxe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -15164,7 +15164,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_shovel",
+                    name: "item_stack.minecraft.iron_shovel",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -15226,7 +15226,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_spear",
+                    name: "item_stack.minecraft.iron_spear",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -15268,7 +15268,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.iron_sword",
+                    name: "item_stack.minecraft.iron_sword",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -15354,7 +15354,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.item_frame",
+                    name: "item_stack.minecraft.item_frame",
                 },
             ),
             (
@@ -15430,7 +15430,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.jungle_boat",
+                    name: "item_stack.minecraft.jungle_boat",
                 },
             ),
             (
@@ -15468,7 +15468,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.jungle_chest_boat",
+                    name: "item_stack.minecraft.jungle_chest_boat",
                 },
             ),
             (
@@ -15791,7 +15791,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.knowledge_book",
+                    name: "item_stack.minecraft.knowledge_book",
                 },
             ),
             (
@@ -15867,7 +15867,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.lapis_lazuli",
+                    name: "item_stack.minecraft.lapis_lazuli",
                 },
             ),
             (
@@ -15943,7 +15943,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.lava_bucket",
+                    name: "item_stack.minecraft.lava_bucket",
                 },
             ),
             (
@@ -15962,7 +15962,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.lead",
+                    name: "item_stack.minecraft.lead",
                 },
             ),
             (
@@ -16000,7 +16000,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.leather",
+                    name: "item_stack.minecraft.leather",
                 },
             ),
             (
@@ -16019,7 +16019,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.leather_boots",
+                    name: "item_stack.minecraft.leather_boots",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -16071,7 +16071,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.leather_chestplate",
+                    name: "item_stack.minecraft.leather_chestplate",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -16123,7 +16123,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.leather_helmet",
+                    name: "item_stack.minecraft.leather_helmet",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -16175,7 +16175,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.leather_horse_armor",
+                    name: "item_stack.minecraft.leather_horse_armor",
                 },
             ),
             (
@@ -16225,7 +16225,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.leather_leggings",
+                    name: "item_stack.minecraft.leather_leggings",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -16372,7 +16372,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.light_blue_bundle",
+                    name: "item_stack.minecraft.light_blue_bundle",
                 },
             ),
             (
@@ -16486,7 +16486,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.light_blue_dye",
+                    name: "item_stack.minecraft.light_blue_dye",
                 },
             ),
             (
@@ -16524,7 +16524,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.light_blue_harness",
+                    name: "item_stack.minecraft.light_blue_harness",
                 },
             ),
             (
@@ -16692,7 +16692,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.light_gray_bundle",
+                    name: "item_stack.minecraft.light_gray_bundle",
                 },
             ),
             (
@@ -16806,7 +16806,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.light_gray_dye",
+                    name: "item_stack.minecraft.light_gray_dye",
                 },
             ),
             (
@@ -16844,7 +16844,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.light_gray_harness",
+                    name: "item_stack.minecraft.light_gray_harness",
                 },
             ),
             (
@@ -17107,7 +17107,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.lime_bundle",
+                    name: "item_stack.minecraft.lime_bundle",
                 },
             ),
             (
@@ -17221,7 +17221,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.lime_dye",
+                    name: "item_stack.minecraft.lime_dye",
                 },
             ),
             (
@@ -17259,7 +17259,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.lime_harness",
+                    name: "item_stack.minecraft.lime_harness",
                 },
             ),
             (
@@ -17389,7 +17389,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.lingering_potion",
+                    name: "item_stack.minecraft.lingering_potion",
                 },
             ),
             (
@@ -17408,7 +17408,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.llama_spawn_egg",
+                    name: "item_stack.minecraft.llama_spawn_egg",
                 },
             ),
             (
@@ -17465,7 +17465,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mace",
+                    name: "item_stack.minecraft.mace",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -17554,7 +17554,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.magenta_bundle",
+                    name: "item_stack.minecraft.magenta_bundle",
                 },
             ),
             (
@@ -17668,7 +17668,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.magenta_dye",
+                    name: "item_stack.minecraft.magenta_dye",
                 },
             ),
             (
@@ -17706,7 +17706,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.magenta_harness",
+                    name: "item_stack.minecraft.magenta_harness",
                 },
             ),
             (
@@ -17855,7 +17855,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.magma_cream",
+                    name: "item_stack.minecraft.magma_cream",
                 },
             ),
             (
@@ -17874,7 +17874,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.magma_cube_spawn_egg",
+                    name: "item_stack.minecraft.magma_cube_spawn_egg",
                 },
             ),
             (
@@ -17893,7 +17893,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mangrove_boat",
+                    name: "item_stack.minecraft.mangrove_boat",
                 },
             ),
             (
@@ -17931,7 +17931,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mangrove_chest_boat",
+                    name: "item_stack.minecraft.mangrove_chest_boat",
                 },
             ),
             (
@@ -18254,7 +18254,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.map",
+                    name: "item_stack.minecraft.map",
                 },
             ),
             (
@@ -18311,7 +18311,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.melon_seeds",
+                    name: "item_stack.minecraft.melon_seeds",
                 },
             ),
             (
@@ -18330,7 +18330,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.melon_slice",
+                    name: "item_stack.minecraft.melon_slice",
                 },
             ),
             (
@@ -18367,7 +18367,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.milk_bucket",
+                    name: "item_stack.minecraft.milk_bucket",
                 },
             ),
             (
@@ -18396,7 +18396,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.minecart",
+                    name: "item_stack.minecraft.minecart",
                 },
             ),
             (
@@ -18415,7 +18415,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.miner_pottery_sherd",
+                    name: "item_stack.minecraft.miner_pottery_sherd",
                 },
             ),
             (
@@ -18434,7 +18434,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mojang_banner_pattern",
+                    name: "item_stack.minecraft.mojang_banner_pattern",
                 },
             ),
             (
@@ -18453,7 +18453,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mooshroom_spawn_egg",
+                    name: "item_stack.minecraft.mooshroom_spawn_egg",
                 },
             ),
             (
@@ -18662,7 +18662,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mourner_pottery_sherd",
+                    name: "item_stack.minecraft.mourner_pottery_sherd",
                 },
             ),
             (
@@ -18795,7 +18795,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mule_spawn_egg",
+                    name: "item_stack.minecraft.mule_spawn_egg",
                 },
             ),
             (
@@ -18833,7 +18833,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mushroom_stew",
+                    name: "item_stack.minecraft.mushroom_stew",
                 },
             ),
             (
@@ -18876,7 +18876,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_11",
+                    name: "item_stack.minecraft.music_disc_11",
                 },
             ),
             (
@@ -18901,7 +18901,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_13",
+                    name: "item_stack.minecraft.music_disc_13",
                 },
             ),
             (
@@ -18926,7 +18926,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_5",
+                    name: "item_stack.minecraft.music_disc_5",
                 },
             ),
             (
@@ -18951,7 +18951,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_blocks",
+                    name: "item_stack.minecraft.music_disc_blocks",
                 },
             ),
             (
@@ -18976,7 +18976,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_cat",
+                    name: "item_stack.minecraft.music_disc_cat",
                 },
             ),
             (
@@ -19001,7 +19001,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_chirp",
+                    name: "item_stack.minecraft.music_disc_chirp",
                 },
             ),
             (
@@ -19026,7 +19026,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_creator",
+                    name: "item_stack.minecraft.music_disc_creator",
                 },
             ),
             (
@@ -19051,7 +19051,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_creator_music_box",
+                    name: "item_stack.minecraft.music_disc_creator_music_box",
                 },
             ),
             (
@@ -19076,7 +19076,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_far",
+                    name: "item_stack.minecraft.music_disc_far",
                 },
             ),
             (
@@ -19101,7 +19101,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_lava_chicken",
+                    name: "item_stack.minecraft.music_disc_lava_chicken",
                 },
             ),
             (
@@ -19126,7 +19126,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_mall",
+                    name: "item_stack.minecraft.music_disc_mall",
                 },
             ),
             (
@@ -19151,7 +19151,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_mellohi",
+                    name: "item_stack.minecraft.music_disc_mellohi",
                 },
             ),
             (
@@ -19176,7 +19176,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_otherside",
+                    name: "item_stack.minecraft.music_disc_otherside",
                 },
             ),
             (
@@ -19201,7 +19201,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_pigstep",
+                    name: "item_stack.minecraft.music_disc_pigstep",
                 },
             ),
             (
@@ -19226,7 +19226,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_precipice",
+                    name: "item_stack.minecraft.music_disc_precipice",
                 },
             ),
             (
@@ -19251,7 +19251,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_relic",
+                    name: "item_stack.minecraft.music_disc_relic",
                 },
             ),
             (
@@ -19276,7 +19276,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_stal",
+                    name: "item_stack.minecraft.music_disc_stal",
                 },
             ),
             (
@@ -19301,7 +19301,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_strad",
+                    name: "item_stack.minecraft.music_disc_strad",
                 },
             ),
             (
@@ -19326,7 +19326,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_tears",
+                    name: "item_stack.minecraft.music_disc_tears",
                 },
             ),
             (
@@ -19351,7 +19351,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_wait",
+                    name: "item_stack.minecraft.music_disc_wait",
                 },
             ),
             (
@@ -19376,7 +19376,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.music_disc_ward",
+                    name: "item_stack.minecraft.music_disc_ward",
                 },
             ),
             (
@@ -19395,7 +19395,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.mutton",
+                    name: "item_stack.minecraft.mutton",
                 },
             ),
             (
@@ -19451,7 +19451,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.name_tag",
+                    name: "item_stack.minecraft.name_tag",
                 },
             ),
             (
@@ -19470,7 +19470,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.nautilus_shell",
+                    name: "item_stack.minecraft.nautilus_shell",
                 },
             ),
             (
@@ -19489,7 +19489,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.nautilus_spawn_egg",
+                    name: "item_stack.minecraft.nautilus_spawn_egg",
                 },
             ),
             (
@@ -19508,7 +19508,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.nether_brick",
+                    name: "item_stack.minecraft.nether_brick",
                 },
             ),
             (
@@ -19679,7 +19679,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.nether_star",
+                    name: "item_stack.minecraft.nether_star",
                 },
             ),
             (
@@ -19704,7 +19704,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.nether_wart",
+                    name: "item_stack.minecraft.nether_wart",
                 },
             ),
             (
@@ -19742,7 +19742,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_axe",
+                    name: "item_stack.minecraft.netherite_axe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -19835,7 +19835,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_boots",
+                    name: "item_stack.minecraft.netherite_boots",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -19900,7 +19900,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_chestplate",
+                    name: "item_stack.minecraft.netherite_chestplate",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -19965,7 +19965,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_helmet",
+                    name: "item_stack.minecraft.netherite_helmet",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -20030,7 +20030,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_hoe",
+                    name: "item_stack.minecraft.netherite_hoe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -20098,7 +20098,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_horse_armor",
+                    name: "item_stack.minecraft.netherite_horse_armor",
                 },
             ),
             (
@@ -20161,7 +20161,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_ingot",
+                    name: "item_stack.minecraft.netherite_ingot",
                 },
             ),
             (
@@ -20186,7 +20186,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_leggings",
+                    name: "item_stack.minecraft.netherite_leggings",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -20251,7 +20251,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_nautilus_armor",
+                    name: "item_stack.minecraft.netherite_nautilus_armor",
                 },
             ),
             (
@@ -20314,7 +20314,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_pickaxe",
+                    name: "item_stack.minecraft.netherite_pickaxe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -20382,7 +20382,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_scrap",
+                    name: "item_stack.minecraft.netherite_scrap",
                 },
             ),
             (
@@ -20407,7 +20407,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_shovel",
+                    name: "item_stack.minecraft.netherite_shovel",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -20475,7 +20475,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_spear",
+                    name: "item_stack.minecraft.netherite_spear",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -20523,7 +20523,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_sword",
+                    name: "item_stack.minecraft.netherite_sword",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -20596,7 +20596,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.netherite_upgrade_smithing_template",
+                    name: "item_stack.minecraft.netherite_upgrade_smithing_template",
                 },
             ),
             (
@@ -20653,7 +20653,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.oak_boat",
+                    name: "item_stack.minecraft.oak_boat",
                 },
             ),
             (
@@ -20691,7 +20691,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.oak_chest_boat",
+                    name: "item_stack.minecraft.oak_chest_boat",
                 },
             ),
             (
@@ -21033,7 +21033,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ocelot_spawn_egg",
+                    name: "item_stack.minecraft.ocelot_spawn_egg",
                 },
             ),
             (
@@ -21071,7 +21071,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ominous_bottle",
+                    name: "item_stack.minecraft.ominous_bottle",
                 },
             ),
             (
@@ -21102,7 +21102,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ominous_trial_key",
+                    name: "item_stack.minecraft.ominous_trial_key",
                 },
             ),
             (
@@ -21178,7 +21178,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.orange_bundle",
+                    name: "item_stack.minecraft.orange_bundle",
                 },
             ),
             (
@@ -21292,7 +21292,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.orange_dye",
+                    name: "item_stack.minecraft.orange_dye",
                 },
             ),
             (
@@ -21330,7 +21330,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.orange_harness",
+                    name: "item_stack.minecraft.orange_harness",
                 },
             ),
             (
@@ -21821,7 +21821,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.painting",
+                    name: "item_stack.minecraft.painting",
                 },
             ),
             (
@@ -21897,7 +21897,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pale_oak_boat",
+                    name: "item_stack.minecraft.pale_oak_boat",
                 },
             ),
             (
@@ -21935,7 +21935,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pale_oak_chest_boat",
+                    name: "item_stack.minecraft.pale_oak_chest_boat",
                 },
             ),
             (
@@ -22239,7 +22239,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.panda_spawn_egg",
+                    name: "item_stack.minecraft.panda_spawn_egg",
                 },
             ),
             (
@@ -22258,7 +22258,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.paper",
+                    name: "item_stack.minecraft.paper",
                 },
             ),
             (
@@ -22277,7 +22277,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.parched_spawn_egg",
+                    name: "item_stack.minecraft.parched_spawn_egg",
                 },
             ),
             (
@@ -22296,7 +22296,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.parrot_spawn_egg",
+                    name: "item_stack.minecraft.parrot_spawn_egg",
                 },
             ),
             (
@@ -22372,7 +22372,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.phantom_membrane",
+                    name: "item_stack.minecraft.phantom_membrane",
                 },
             ),
             (
@@ -22391,7 +22391,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.phantom_spawn_egg",
+                    name: "item_stack.minecraft.phantom_spawn_egg",
                 },
             ),
             (
@@ -22410,7 +22410,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pig_spawn_egg",
+                    name: "item_stack.minecraft.pig_spawn_egg",
                 },
             ),
             (
@@ -22429,7 +22429,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.piglin_banner_pattern",
+                    name: "item_stack.minecraft.piglin_banner_pattern",
                 },
             ),
             (
@@ -22448,7 +22448,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.piglin_brute_spawn_egg",
+                    name: "item_stack.minecraft.piglin_brute_spawn_egg",
                 },
             ),
             (
@@ -22508,7 +22508,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.piglin_spawn_egg",
+                    name: "item_stack.minecraft.piglin_spawn_egg",
                 },
             ),
             (
@@ -22527,7 +22527,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pillager_spawn_egg",
+                    name: "item_stack.minecraft.pillager_spawn_egg",
                 },
             ),
             (
@@ -22584,7 +22584,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pink_bundle",
+                    name: "item_stack.minecraft.pink_bundle",
                 },
             ),
             (
@@ -22698,7 +22698,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pink_dye",
+                    name: "item_stack.minecraft.pink_dye",
                 },
             ),
             (
@@ -22736,7 +22736,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pink_harness",
+                    name: "item_stack.minecraft.pink_harness",
                 },
             ),
             (
@@ -22942,7 +22942,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pitcher_pod",
+                    name: "item_stack.minecraft.pitcher_pod",
                 },
             ),
             (
@@ -23002,7 +23002,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.plenty_pottery_sherd",
+                    name: "item_stack.minecraft.plenty_pottery_sherd",
                 },
             ),
             (
@@ -23059,7 +23059,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.poisonous_potato",
+                    name: "item_stack.minecraft.poisonous_potato",
                 },
             ),
             (
@@ -23106,7 +23106,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.polar_bear_spawn_egg",
+                    name: "item_stack.minecraft.polar_bear_spawn_egg",
                 },
             ),
             (
@@ -23657,7 +23657,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.popped_chorus_fruit",
+                    name: "item_stack.minecraft.popped_chorus_fruit",
                 },
             ),
             (
@@ -23695,7 +23695,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.porkchop",
+                    name: "item_stack.minecraft.porkchop",
                 },
             ),
             (
@@ -23732,7 +23732,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.potato",
+                    name: "item_stack.minecraft.potato",
                 },
             ),
             (
@@ -23769,7 +23769,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.potion",
+                    name: "item_stack.minecraft.potion",
                 },
             ),
             (
@@ -23798,7 +23798,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.powder_snow_bucket",
+                    name: "item_stack.minecraft.powder_snow_bucket",
                 },
             ),
             (
@@ -23912,7 +23912,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.prismarine_crystals",
+                    name: "item_stack.minecraft.prismarine_crystals",
                 },
             ),
             (
@@ -23931,7 +23931,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.prismarine_shard",
+                    name: "item_stack.minecraft.prismarine_shard",
                 },
             ),
             (
@@ -24007,7 +24007,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.prize_pottery_sherd",
+                    name: "item_stack.minecraft.prize_pottery_sherd",
                 },
             ),
             (
@@ -24026,7 +24026,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pufferfish",
+                    name: "item_stack.minecraft.pufferfish",
                 },
             ),
             (
@@ -24091,7 +24091,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pufferfish_bucket",
+                    name: "item_stack.minecraft.pufferfish_bucket",
                 },
             ),
             (
@@ -24118,7 +24118,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pufferfish_spawn_egg",
+                    name: "item_stack.minecraft.pufferfish_spawn_egg",
                 },
             ),
             (
@@ -24156,7 +24156,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pumpkin_pie",
+                    name: "item_stack.minecraft.pumpkin_pie",
                 },
             ),
             (
@@ -24193,7 +24193,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.pumpkin_seeds",
+                    name: "item_stack.minecraft.pumpkin_seeds",
                 },
             ),
             (
@@ -24250,7 +24250,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.purple_bundle",
+                    name: "item_stack.minecraft.purple_bundle",
                 },
             ),
             (
@@ -24364,7 +24364,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.purple_dye",
+                    name: "item_stack.minecraft.purple_dye",
                 },
             ),
             (
@@ -24402,7 +24402,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.purple_harness",
+                    name: "item_stack.minecraft.purple_harness",
                 },
             ),
             (
@@ -24608,7 +24608,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.quartz",
+                    name: "item_stack.minecraft.quartz",
                 },
             ),
             (
@@ -24722,7 +24722,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.rabbit",
+                    name: "item_stack.minecraft.rabbit",
                 },
             ),
             (
@@ -24759,7 +24759,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.rabbit_foot",
+                    name: "item_stack.minecraft.rabbit_foot",
                 },
             ),
             (
@@ -24778,7 +24778,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.rabbit_hide",
+                    name: "item_stack.minecraft.rabbit_hide",
                 },
             ),
             (
@@ -24797,7 +24797,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.rabbit_spawn_egg",
+                    name: "item_stack.minecraft.rabbit_spawn_egg",
                 },
             ),
             (
@@ -24816,7 +24816,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.rabbit_stew",
+                    name: "item_stack.minecraft.rabbit_stew",
                 },
             ),
             (
@@ -24872,7 +24872,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.raiser_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.raiser_armor_trim_smithing_template",
                 },
             ),
             (
@@ -24891,7 +24891,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ravager_spawn_egg",
+                    name: "item_stack.minecraft.ravager_spawn_egg",
                 },
             ),
             (
@@ -24910,7 +24910,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.raw_copper",
+                    name: "item_stack.minecraft.raw_copper",
                 },
             ),
             (
@@ -24948,7 +24948,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.raw_gold",
+                    name: "item_stack.minecraft.raw_gold",
                 },
             ),
             (
@@ -24986,7 +24986,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.raw_iron",
+                    name: "item_stack.minecraft.raw_iron",
                 },
             ),
             (
@@ -25024,7 +25024,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.recovery_compass",
+                    name: "item_stack.minecraft.recovery_compass",
                 },
             ),
             (
@@ -25081,7 +25081,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.red_bundle",
+                    name: "item_stack.minecraft.red_bundle",
                 },
             ),
             (
@@ -25195,7 +25195,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.red_dye",
+                    name: "item_stack.minecraft.red_dye",
                 },
             ),
             (
@@ -25233,7 +25233,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.red_harness",
+                    name: "item_stack.minecraft.red_harness",
                 },
             ),
             (
@@ -25591,7 +25591,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.redstone",
+                    name: "item_stack.minecraft.redstone",
                 },
             ),
             (
@@ -25762,7 +25762,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.resin_brick",
+                    name: "item_stack.minecraft.resin_brick",
                 },
             ),
             (
@@ -25857,7 +25857,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.resin_clump",
+                    name: "item_stack.minecraft.resin_clump",
                 },
             ),
             (
@@ -25895,7 +25895,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.rib_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.rib_armor_trim_smithing_template",
                 },
             ),
             (
@@ -25952,7 +25952,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.rotten_flesh",
+                    name: "item_stack.minecraft.rotten_flesh",
                 },
             ),
             (
@@ -25999,7 +25999,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.saddle",
+                    name: "item_stack.minecraft.saddle",
                 },
             ),
             (
@@ -26034,7 +26034,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.salmon",
+                    name: "item_stack.minecraft.salmon",
                 },
             ),
             (
@@ -26071,7 +26071,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.salmon_bucket",
+                    name: "item_stack.minecraft.salmon_bucket",
                 },
             ),
             (
@@ -26098,7 +26098,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.salmon_spawn_egg",
+                    name: "item_stack.minecraft.salmon_spawn_egg",
                 },
             ),
             (
@@ -26231,7 +26231,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.scrape_pottery_sherd",
+                    name: "item_stack.minecraft.scrape_pottery_sherd",
                 },
             ),
             (
@@ -26402,7 +26402,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.sentry_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.sentry_armor_trim_smithing_template",
                 },
             ),
             (
@@ -26421,7 +26421,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.shaper_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.shaper_armor_trim_smithing_template",
                 },
             ),
             (
@@ -26440,7 +26440,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.sheaf_pottery_sherd",
+                    name: "item_stack.minecraft.sheaf_pottery_sherd",
                 },
             ),
             (
@@ -26459,7 +26459,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.shears",
+                    name: "item_stack.minecraft.shears",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -26510,7 +26510,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.sheep_spawn_egg",
+                    name: "item_stack.minecraft.sheep_spawn_egg",
                 },
             ),
             (
@@ -26529,7 +26529,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.shelter_pottery_sherd",
+                    name: "item_stack.minecraft.shelter_pottery_sherd",
                 },
             ),
             (
@@ -26548,7 +26548,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.shield",
+                    name: "item_stack.minecraft.shield",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -26662,7 +26662,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.shulker_shell",
+                    name: "item_stack.minecraft.shulker_shell",
                 },
             ),
             (
@@ -26681,7 +26681,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.shulker_spawn_egg",
+                    name: "item_stack.minecraft.shulker_spawn_egg",
                 },
             ),
             (
@@ -26700,7 +26700,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.silence_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.silence_armor_trim_smithing_template",
                 },
             ),
             (
@@ -26719,7 +26719,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.silverfish_spawn_egg",
+                    name: "item_stack.minecraft.silverfish_spawn_egg",
                 },
             ),
             (
@@ -26738,7 +26738,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.skeleton_horse_spawn_egg",
+                    name: "item_stack.minecraft.skeleton_horse_spawn_egg",
                 },
             ),
             (
@@ -26798,7 +26798,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.skeleton_spawn_egg",
+                    name: "item_stack.minecraft.skeleton_spawn_egg",
                 },
             ),
             (
@@ -26817,7 +26817,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.skull_banner_pattern",
+                    name: "item_stack.minecraft.skull_banner_pattern",
                 },
             ),
             (
@@ -26836,7 +26836,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.skull_pottery_sherd",
+                    name: "item_stack.minecraft.skull_pottery_sherd",
                 },
             ),
             (
@@ -26855,7 +26855,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.slime_ball",
+                    name: "item_stack.minecraft.slime_ball",
                 },
             ),
             (
@@ -26893,7 +26893,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.slime_spawn_egg",
+                    name: "item_stack.minecraft.slime_spawn_egg",
                 },
             ),
             (
@@ -27235,7 +27235,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.sniffer_spawn_egg",
+                    name: "item_stack.minecraft.sniffer_spawn_egg",
                 },
             ),
             (
@@ -27254,7 +27254,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.snort_pottery_sherd",
+                    name: "item_stack.minecraft.snort_pottery_sherd",
                 },
             ),
             (
@@ -27273,7 +27273,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.snout_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.snout_armor_trim_smithing_template",
                 },
             ),
             (
@@ -27330,7 +27330,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.snow_golem_spawn_egg",
+                    name: "item_stack.minecraft.snow_golem_spawn_egg",
                 },
             ),
             (
@@ -27349,7 +27349,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.snowball",
+                    name: "item_stack.minecraft.snowball",
                 },
             ),
             (
@@ -27482,7 +27482,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.spectral_arrow",
+                    name: "item_stack.minecraft.spectral_arrow",
                 },
             ),
             (
@@ -27501,7 +27501,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.spider_eye",
+                    name: "item_stack.minecraft.spider_eye",
                 },
             ),
             (
@@ -27548,7 +27548,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.spider_spawn_egg",
+                    name: "item_stack.minecraft.spider_spawn_egg",
                 },
             ),
             (
@@ -27567,7 +27567,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.spire_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.spire_armor_trim_smithing_template",
                 },
             ),
             (
@@ -27586,7 +27586,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.splash_potion",
+                    name: "item_stack.minecraft.splash_potion",
                 },
             ),
             (
@@ -27643,7 +27643,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.spruce_boat",
+                    name: "item_stack.minecraft.spruce_boat",
                 },
             ),
             (
@@ -27681,7 +27681,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.spruce_chest_boat",
+                    name: "item_stack.minecraft.spruce_chest_boat",
                 },
             ),
             (
@@ -27985,7 +27985,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.spyglass",
+                    name: "item_stack.minecraft.spyglass",
                 },
             ),
             (
@@ -28004,7 +28004,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.squid_spawn_egg",
+                    name: "item_stack.minecraft.squid_spawn_egg",
                 },
             ),
             (
@@ -28023,7 +28023,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.stick",
+                    name: "item_stack.minecraft.stick",
                 },
             ),
             (
@@ -28080,7 +28080,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.stone_axe",
+                    name: "item_stack.minecraft.stone_axe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -28237,7 +28237,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.stone_hoe",
+                    name: "item_stack.minecraft.stone_hoe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -28299,7 +28299,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.stone_pickaxe",
+                    name: "item_stack.minecraft.stone_pickaxe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -28380,7 +28380,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.stone_shovel",
+                    name: "item_stack.minecraft.stone_shovel",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -28461,7 +28461,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.stone_spear",
+                    name: "item_stack.minecraft.stone_spear",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -28522,7 +28522,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.stone_sword",
+                    name: "item_stack.minecraft.stone_sword",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -28608,7 +28608,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.stray_spawn_egg",
+                    name: "item_stack.minecraft.stray_spawn_egg",
                 },
             ),
             (
@@ -28627,7 +28627,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.strider_spawn_egg",
+                    name: "item_stack.minecraft.strider_spawn_egg",
                 },
             ),
             (
@@ -28646,7 +28646,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.string",
+                    name: "item_stack.minecraft.string",
                 },
             ),
             (
@@ -29140,7 +29140,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.sugar",
+                    name: "item_stack.minecraft.sugar",
                 },
             ),
             (
@@ -29235,7 +29235,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.suspicious_stew",
+                    name: "item_stack.minecraft.suspicious_stew",
                 },
             ),
             (
@@ -29272,7 +29272,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.sweet_berries",
+                    name: "item_stack.minecraft.sweet_berries",
                 },
             ),
             (
@@ -29309,7 +29309,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.tadpole_bucket",
+                    name: "item_stack.minecraft.tadpole_bucket",
                 },
             ),
             (
@@ -29328,7 +29328,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.tadpole_spawn_egg",
+                    name: "item_stack.minecraft.tadpole_spawn_egg",
                 },
             ),
             (
@@ -29461,7 +29461,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.tide_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.tide_armor_trim_smithing_template",
                 },
             ),
             (
@@ -29499,7 +29499,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.tipped_arrow",
+                    name: "item_stack.minecraft.tipped_arrow",
                 },
             ),
             (
@@ -29537,7 +29537,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.tnt_minecart",
+                    name: "item_stack.minecraft.tnt_minecart",
                 },
             ),
             (
@@ -29594,7 +29594,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.torchflower_seeds",
+                    name: "item_stack.minecraft.torchflower_seeds",
                 },
             ),
             (
@@ -29613,7 +29613,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.totem_of_undying",
+                    name: "item_stack.minecraft.totem_of_undying",
                 },
             ),
             (
@@ -29633,7 +29633,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.trader_llama_spawn_egg",
+                    name: "item_stack.minecraft.trader_llama_spawn_egg",
                 },
             ),
             (
@@ -29671,7 +29671,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.trial_key",
+                    name: "item_stack.minecraft.trial_key",
                 },
             ),
             (
@@ -29709,7 +29709,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.trident",
+                    name: "item_stack.minecraft.trident",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -29779,7 +29779,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.tropical_fish",
+                    name: "item_stack.minecraft.tropical_fish",
                 },
             ),
             (
@@ -29816,7 +29816,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.tropical_fish_bucket",
+                    name: "item_stack.minecraft.tropical_fish_bucket",
                 },
             ),
             (
@@ -29843,7 +29843,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.tropical_fish_spawn_egg",
+                    name: "item_stack.minecraft.tropical_fish_spawn_egg",
                 },
             ),
             (
@@ -30090,7 +30090,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.turtle_helmet",
+                    name: "item_stack.minecraft.turtle_helmet",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -30142,7 +30142,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.turtle_scute",
+                    name: "item_stack.minecraft.turtle_scute",
                 },
             ),
             (
@@ -30161,7 +30161,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.turtle_spawn_egg",
+                    name: "item_stack.minecraft.turtle_spawn_egg",
                 },
             ),
             (
@@ -30237,7 +30237,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.vex_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.vex_armor_trim_smithing_template",
                 },
             ),
             (
@@ -30256,7 +30256,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.vex_spawn_egg",
+                    name: "item_stack.minecraft.vex_spawn_egg",
                 },
             ),
             (
@@ -30275,7 +30275,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.villager_spawn_egg",
+                    name: "item_stack.minecraft.villager_spawn_egg",
                 },
             ),
             (
@@ -30294,7 +30294,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.vindicator_spawn_egg",
+                    name: "item_stack.minecraft.vindicator_spawn_egg",
                 },
             ),
             (
@@ -30332,7 +30332,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wandering_trader_spawn_egg",
+                    name: "item_stack.minecraft.wandering_trader_spawn_egg",
                 },
             ),
             (
@@ -30351,7 +30351,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.ward_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.ward_armor_trim_smithing_template",
                 },
             ),
             (
@@ -30370,7 +30370,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.warden_spawn_egg",
+                    name: "item_stack.minecraft.warden_spawn_egg",
                 },
             ),
             (
@@ -30484,7 +30484,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.warped_fungus_on_a_stick",
+                    name: "item_stack.minecraft.warped_fungus_on_a_stick",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -30752,7 +30752,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.water_bucket",
+                    name: "item_stack.minecraft.water_bucket",
                 },
             ),
             (
@@ -31911,7 +31911,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wayfinder_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.wayfinder_armor_trim_smithing_template",
                 },
             ),
             (
@@ -32253,7 +32253,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wheat",
+                    name: "item_stack.minecraft.wheat",
                 },
             ),
             (
@@ -32272,7 +32272,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wheat_seeds",
+                    name: "item_stack.minecraft.wheat_seeds",
                 },
             ),
             (
@@ -32329,7 +32329,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.white_bundle",
+                    name: "item_stack.minecraft.white_bundle",
                 },
             ),
             (
@@ -32443,7 +32443,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.white_dye",
+                    name: "item_stack.minecraft.white_dye",
                 },
             ),
             (
@@ -32481,7 +32481,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.white_harness",
+                    name: "item_stack.minecraft.white_harness",
                 },
             ),
             (
@@ -32630,7 +32630,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wild_armor_trim_smithing_template",
+                    name: "item_stack.minecraft.wild_armor_trim_smithing_template",
                 },
             ),
             (
@@ -32668,7 +32668,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wind_charge",
+                    name: "item_stack.minecraft.wind_charge",
                 },
             ),
             (
@@ -32687,7 +32687,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.witch_spawn_egg",
+                    name: "item_stack.minecraft.witch_spawn_egg",
                 },
             ),
             (
@@ -32766,7 +32766,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wither_skeleton_spawn_egg",
+                    name: "item_stack.minecraft.wither_skeleton_spawn_egg",
                 },
             ),
             (
@@ -32785,7 +32785,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wither_spawn_egg",
+                    name: "item_stack.minecraft.wither_spawn_egg",
                 },
             ),
             (
@@ -32804,7 +32804,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wolf_armor",
+                    name: "item_stack.minecraft.wolf_armor",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -32858,7 +32858,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wolf_spawn_egg",
+                    name: "item_stack.minecraft.wolf_spawn_egg",
                 },
             ),
             (
@@ -32877,7 +32877,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wooden_axe",
+                    name: "item_stack.minecraft.wooden_axe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -32939,7 +32939,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wooden_hoe",
+                    name: "item_stack.minecraft.wooden_hoe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -33001,7 +33001,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wooden_pickaxe",
+                    name: "item_stack.minecraft.wooden_pickaxe",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -33063,7 +33063,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wooden_shovel",
+                    name: "item_stack.minecraft.wooden_shovel",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -33125,7 +33125,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wooden_spear",
+                    name: "item_stack.minecraft.wooden_spear",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -33167,7 +33167,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.wooden_sword",
+                    name: "item_stack.minecraft.wooden_sword",
                 },
             ),
             (Damage, &DamageImpl { damage: 0 }),
@@ -33234,7 +33234,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.writable_book",
+                    name: "item_stack.minecraft.writable_book",
                 },
             ),
             (
@@ -33253,7 +33253,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.written_book",
+                    name: "item_stack.minecraft.written_book",
                 },
             ),
             (
@@ -33310,7 +33310,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.yellow_bundle",
+                    name: "item_stack.minecraft.yellow_bundle",
                 },
             ),
             (
@@ -33424,7 +33424,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.yellow_dye",
+                    name: "item_stack.minecraft.yellow_dye",
                 },
             ),
             (
@@ -33462,7 +33462,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.yellow_harness",
+                    name: "item_stack.minecraft.yellow_harness",
                 },
             ),
             (
@@ -33592,7 +33592,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.zoglin_spawn_egg",
+                    name: "item_stack.minecraft.zoglin_spawn_egg",
                 },
             ),
             (
@@ -33652,7 +33652,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.zombie_horse_spawn_egg",
+                    name: "item_stack.minecraft.zombie_horse_spawn_egg",
                 },
             ),
             (
@@ -33671,7 +33671,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.zombie_nautilus_spawn_egg",
+                    name: "item_stack.minecraft.zombie_nautilus_spawn_egg",
                 },
             ),
             (
@@ -33690,7 +33690,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.zombie_spawn_egg",
+                    name: "item_stack.minecraft.zombie_spawn_egg",
                 },
             ),
             (
@@ -33709,7 +33709,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.zombie_villager_spawn_egg",
+                    name: "item_stack.minecraft.zombie_villager_spawn_egg",
                 },
             ),
             (
@@ -33728,7 +33728,7 @@ impl Item {
             (
                 ItemName,
                 &ItemNameImpl {
-                    name: "item.minecraft.zombified_piglin_spawn_egg",
+                    name: "item_stack.minecraft.zombified_piglin_spawn_egg",
                 },
             ),
             (
@@ -33754,7 +33754,7 @@ impl Item {
             &[],
         )
     }
-    #[doc = "Try to parse an item from a resource location string."]
+    #[doc = "Try to parse an item_stack from a resource location string."]
     pub fn from_registry_key(name: &str) -> Option<&'static Self> {
         let name = name.strip_prefix("minecraft:").unwrap_or(name);
         match name {
@@ -35280,7 +35280,7 @@ impl Item {
             _ => None,
         }
     }
-    #[doc = "Try to parse an item from a raw id."]
+    #[doc = "Try to parse an item_stack from a raw id."]
     pub const fn from_id(id: u16) -> Option<&'static Self> {
         match id {
             871 => Some(&Self::ACACIA_BOAT),

@@ -93,7 +93,7 @@ pub fn main() {
         (message_type::build, "message_type.rs"),
         (spawn_egg::build, "spawn_egg.rs"),
         (block::build, "block.rs"),
-        (item::build, "item.rs"),
+        (item::build, "item_stack.rs"),
         (structures::build, "structures.rs"),
         (chunk_gen_settings::build, "chunk_gen_settings.rs"),
         (fluid::build, "fluid.rs"),

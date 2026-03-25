@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
@@ -20,7 +20,7 @@ const NAMES: [&str; 1] = ["clear"];
 const DESCRIPTION: &str = "Clear your inventory or that of target(s)";
 
 const ARG_TARGETS: &str = "targets";
-const ARG_ITEM: &str = "item";
+const ARG_ITEM: &str = "item_stack";
 const ARG_MAX_COUNT: &str = "max_count";
 
 const MAX_NO_UPPER_LIMIT: i32 = -1;

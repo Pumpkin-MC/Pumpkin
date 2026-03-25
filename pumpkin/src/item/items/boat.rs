@@ -18,7 +18,7 @@ use crate::world::World;
 pub struct BoatItem;
 
 impl BoatItem {
-    /// Maps boat item to corresponding entity type
+    /// Maps boat item_stack to corresponding entity type
     fn item_to_entity(item: &Item) -> &'static EntityType {
         match item.id {
             val if val == Item::OAK_BOAT.id => &EntityType::OAK_BOAT,
@@ -177,7 +177,7 @@ impl ItemBehaviour for BoatItem {
             let boat_entity = Arc::new(BoatEntity::new(entity));
             world.spawn_entity(boat_entity).await;
 
-            // Decrement item unless in creative mode
+            // Decrement item_stack unless in creative mode
             let held_item = player.inventory.held_item();
             let mut stack = held_item.lock().await;
             stack.decrement_unless_creative(player.gamemode.load(), 1);

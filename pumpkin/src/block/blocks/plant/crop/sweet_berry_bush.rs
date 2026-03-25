@@ -2,30 +2,30 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
-        OnEntityCollisionArgs, RandomTickArgs, UseWithItemArgs,
-        blocks::plant::{PlantBlockBase, crop::CropBlockBase},
-        registry::BlockActionResult,
+        blocks::plant::{crop::CropBlockBase, PlantBlockBase}, registry::BlockActionResult, BlockBehaviour, BlockFuture, CanPlaceAtArgs,
+        GetStateForNeighborUpdateArgs, NormalUseArgs, OnEntityCollisionArgs,
+        RandomTickArgs,
+        UseWithItemArgs,
     },
     world::World,
 };
 use pumpkin_data::{
-    Block,
     block_properties::{BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties},
     damage::DamageType,
     entity::EntityType,
     item::Item,
     tag::{self, Taggable},
+    Block,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{
-    BlockStateId,
-    item::ItemStack,
     world::{BlockAccessor, BlockFlags},
+    BlockStateId,
 };
 use rand::RngExt;
+use pumpkin_data::item_stack::ItemStack;
 
 #[pumpkin_block("minecraft:sweet_berry_bush")]
 pub struct SweetBerryBushBlock;

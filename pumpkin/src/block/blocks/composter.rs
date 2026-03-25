@@ -2,25 +2,26 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
-        UseWithItemArgs, registry::BlockActionResult,
+        registry::BlockActionResult, BlockBehaviour, BlockFuture, GetComparatorOutputArgs, NormalUseArgs,
+        OnScheduledTickArgs, UseWithItemArgs,
     },
-    entity::{Entity, item::ItemEntity},
+    entity::{item::ItemEntity, Entity},
     world::World,
 };
 use pumpkin_data::{
-    Block,
     block_properties::{BlockProperties, ComposterLikeProperties, EnumVariants, Integer0To8},
     composter_increase_chance::get_composter_increase_chance_from_item_id,
     entity::EntityType,
     item::Item,
     world::WorldEvent,
+    Block,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{tick::TickPriority, world::BlockFlags, BlockStateId};
 use rand::RngExt;
+use pumpkin_data::item_stack::ItemStack;
 
 #[pumpkin_block("minecraft:composter")]
 pub struct ComposterBlock;
@@ -58,12 +59,12 @@ impl BlockBehaviour for ComposterBlock {
             let mut item_stack = args.item_stack.lock().await;
             let item_id = item_stack.item.id;
 
-            // Check if the item is consumable by the composter
+            // Check if the item_stack is consumable by the composter
             let Some(chance) = get_composter_increase_chance_from_item_id(item_id) else {
                 return BlockActionResult::Pass;
             };
 
-            // Consume one item from the stack (if in survival mode)
+            // Consume one item_stack from the stack (if in survival mode)
             if !args.player.has_infinite_materials() {
                 item_stack.decrement(1);
             }
@@ -83,7 +84,7 @@ impl BlockBehaviour for ComposterBlock {
                     .await;
             }
 
-            // Consume the item
+            // Consume the item_stack
             BlockActionResult::Consume
         })
     }

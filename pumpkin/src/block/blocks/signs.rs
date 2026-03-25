@@ -471,7 +471,7 @@ impl BlockBehaviour for SignBlock {
         })
     }
 
-    /// Handles use with an item on the sign block.
+    /// Handles use with an item_stack on the sign block.
     fn use_with_item<'a>(
         &'a self,
         args: UseWithItemArgs<'a>,

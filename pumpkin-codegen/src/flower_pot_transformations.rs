@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{collections::BTreeMap, fs};
 use syn::LitInt;
-/// Generates the `TokenStream` for the `get_potted_item` function mapping item IDs to potted block IDs.
+/// Generates the `TokenStream` for the `get_potted_item` function mapping item_stack IDs to potted block IDs.
 pub fn build() -> TokenStream {
     let flower_pot_transformation: BTreeMap<u16, u16> = serde_json::from_str(
         &fs::read_to_string("../assets/flower_pot_transformations.json").unwrap(),

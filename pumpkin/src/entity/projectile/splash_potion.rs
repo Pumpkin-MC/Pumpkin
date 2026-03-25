@@ -10,7 +10,7 @@ use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::RwLock;
 
@@ -108,7 +108,7 @@ impl EntityBase for SplashPotionEntity {
             let entity = self.get_entity();
             let stack = self.item_stack.read().await;
 
-            // Sync the item stack
+            // Sync the item_stack stack
             entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::DATA_ITEM,

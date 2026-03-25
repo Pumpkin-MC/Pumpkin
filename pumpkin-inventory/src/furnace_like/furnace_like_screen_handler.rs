@@ -2,9 +2,8 @@ use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::{fuels::is_fuel, screen::WindowType};
 use pumpkin_world::{
-    block::entities::{PropertyDelegate, furnace_like_block_entity::ExperienceContainer},
+    block::entities::{furnace_like_block_entity::ExperienceContainer, PropertyDelegate},
     inventory::Inventory,
-    item::ItemStack,
 };
 
 use crate::{
@@ -15,7 +14,7 @@ use crate::{
     },
 };
 use tracing::debug;
-
+use pumpkin_data::item_stack::ItemStack;
 use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
 
 pub struct FurnaceLikeScreenHandler {
@@ -146,7 +145,7 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
                 // Try to move to the Furnace's Fuel slot (slot 1)
                 self.insert_item(&mut stack, FUEL_SLOT, 3, false).await
             } else {
-                // If clicked slot is in the player inventory (3+) and NOT fuel (must be a smeltable item):
+                // If clicked slot is in the player inventory (3+) and NOT fuel (must be a smeltable item_stack):
                 // Try to move to the Furnace's Input/Smelting slot (slot 0)
                 self.insert_item(&mut stack, 0, 3, false).await
             };

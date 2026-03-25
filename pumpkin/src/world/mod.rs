@@ -27,9 +27,9 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, player::Player, r#type::from_type},
+    entity::{player::Player, r#type::from_type, Entity, EntityBase},
     error::PumpkinError,
-    net::{ClientPlatform, java::JavaClient},
+    net::{java::JavaClient, ClientPlatform},
     plugin::{
         block::block_break::BlockBreakEvent,
         player::{player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent},
@@ -50,26 +50,25 @@ use pumpkin_data::fluid::{Falling, FluidProperties, FluidState};
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_data::{
-    Block,
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
     particle::Particle,
     sound::{Sound, SoundCategory},
-    world::{RAW, WorldEvent},
+    world::{WorldEvent, RAW},
+    Block,
 };
-use pumpkin_data::{BlockDirection, BlockState, translation};
+use pumpkin_data::{translation, BlockDirection, BlockState};
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::set_actor_data::{
-    CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_flag,
-    entity_data_key,
+    entity_data_flag, entity_data_key, CSetActorData, EntityMetadata, MetadataValue,
+    PropertySyncData,
 };
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::{
-    BClientPacket, ClientPacket, IdOr, SoundEvent,
     bedrock::{
         client::{
             creative_content::{CreativeContent, Group},
@@ -80,11 +79,9 @@ use pumpkin_protocol::{
         },
         network_item::NetworkItemDescriptor,
         server::text::SText,
-    },
-    codec::{
+    }, codec::{
         bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
-    },
-    java::{
+    }, java::{
         self,
         client::play::{
             CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
@@ -93,7 +90,10 @@ use pumpkin_protocol::{
             PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
-    },
+    }, BClientPacket,
+    ClientPacket,
+    IdOr,
+    SoundEvent,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -107,27 +107,27 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::resource_location::ResourceLocation;
-use pumpkin_util::text::{TextComponent, color::NamedColor};
+use pumpkin_util::text::{color::NamedColor, TextComponent};
 use pumpkin_util::version::MinecraftVersion;
 use pumpkin_util::{
-    Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
+    Difficulty,
 };
 use pumpkin_util::{
     math::{position::chunk_section_from_pos, vector2::Vector2},
-    random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
+    random::{get_seed, xoroshiro128::Xoroshiro, RandomImpl},
 };
 use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
-    BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
+    biome, block::entities::BlockEntity, chunk::io::Dirtiable, inventory::Inventory,
+    world::SimpleWorld, BlockStateId, CURRENT_BEDROCK_MC_VERSION,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_world::{world::BlockFlags, world_info::LevelData};
 use rand::seq::SliceRandom;
-use rand::{RngExt, rng};
+use rand::{rng, RngExt};
 use scoreboard::Scoreboard;
 use time::LevelTime;
 use tokio::sync::Mutex;
@@ -139,11 +139,12 @@ pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
 
-use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
+use crate::world::natural_spawner::{spawn_for_chunk, SpawnState};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
 use uuid::Uuid;
+use pumpkin_data::item_stack::ItemStack;
 use weather::Weather;
 
 type FlowingFluidProperties = pumpkin_data::fluid::FlowingWaterLikeFluidProperties;

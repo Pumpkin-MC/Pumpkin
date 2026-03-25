@@ -14,7 +14,7 @@ use crate::{
 /// This is the most versatile visual packet in the protocol. It allows for
 /// precise control over particle density, spread, and speed. It can also
 /// carry extra data for complex particles like redstone dust (color) or
-/// block/item breaking (textures).
+/// block/item_stack breaking (textures).
 #[java_packet(PLAY_LEVEL_PARTICLES)]
 pub struct CParticle<'a> {
     /// If true, the particle renders even if the client's "Particles"

@@ -6,7 +6,7 @@ use pumpkin_util::{
     },
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use rand::RngExt;
 
 #[derive(Default)]

@@ -5,7 +5,7 @@ use crate::{server::Server, world::portal::end::EndPortal};
 use pumpkin_data::{Block, BlockDirection, item::Item};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 use crate::item::{ItemBehaviour, ItemMetadata};

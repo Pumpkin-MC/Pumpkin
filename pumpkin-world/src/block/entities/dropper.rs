@@ -1,6 +1,6 @@
 use crate::block::entities::BlockEntity;
 use crate::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
-use crate::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use rand::{RngExt, rng};

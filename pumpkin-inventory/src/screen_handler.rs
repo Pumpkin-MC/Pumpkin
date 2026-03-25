@@ -19,7 +19,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::{
     block::entities::PropertyDelegate,
     inventory::{ComparableInventory, Inventory},
@@ -817,7 +817,7 @@ pub trait ScreenHandler: Send + Sync {
                     MouseClick::Right
                 };
 
-                // Drop item if outside inventory
+                // Drop item_stack if outside inventory
                 if slot_index == SLOT_INDEX_OUTSIDE {
                     let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
                     if !cursor_stack.is_empty() {

@@ -6,7 +6,7 @@ use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_util::Hand;
 use pumpkin_world::inventory::{Clearable, Inventory};
 use pumpkin_world::inventory::{InventoryFuture, split_stack};
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use std::any::Any;
 use std::array::from_fn;
 use std::collections::HashMap;
@@ -213,7 +213,7 @@ impl PlayerInventory {
         for i in 0..Self::HOTBAR_SIZE {
             let check_index = (i + selected_slot) % 9;
             if true
-            /*TODO: If item has an enchantment skip it */
+            /*TODO: If item_stack has an enchantment skip it */
             {
                 return check_index;
             }

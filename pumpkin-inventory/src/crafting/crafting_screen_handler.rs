@@ -18,7 +18,7 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_world::inventory::Inventory;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
 /// CraftingResultSlot.java

@@ -51,7 +51,7 @@ impl DragHandler {
         container_id: &u64,
         player: i32,
     ) -> Result<(), InventoryError> {
-        // The Minecraft client does still send dragging packets when not carrying an item!
+        // The Minecraft client does still send dragging packets when not carrying an item_stack!
         if maybe_carried_item.is_none() {
             return Ok(());
         }
@@ -79,20 +79,20 @@ impl DragHandler {
             }
             MouseDragType::Right => {
                 let changing_slots =
-                    drag.possibly_changing_slots(slots.as_ref(), carried_item.item.id);
+                    drag.possibly_changing_slots(slots.as_ref(), carried_item.item_stack.id);
                 changing_slots.into_iter().for_each(|slot| {
                     if carried_item.item_count != 0 {
                         carried_item.item_count -= 1;
                         if let Some(stack) = &mut slots[slot] {
                             // TODO: Check for stack max here
-                            if stack.item_count + 1 < stack.item.components.max_stack_size {
+                            if stack.item_count + 1 < stack.item_stack.components.max_stack_size {
                                 stack.item_count += 1;
                             } else {
                                 carried_item.item_count += 1;
                             }
                         } else {
                             *slots[slot] = Some(ItemStack {
-                                item: carried_item.item.clone(),
+                                item_stack: carried_item.item_stack.clone(),
                                 item_count: 1,
                             })
                         }
@@ -104,10 +104,10 @@ impl DragHandler {
                 }
             }
             MouseDragType::Left => {
-                // TODO: Handle dragging a stack with a greater amount than the item allows as max unstackable.
+                // TODO: Handle dragging a stack with a greater amount than the item_stack allows as max unstackable.
                 // In that specific case, follow `MouseDragType::Right` behaviours instead!
 
-                let changing_slots = drag.possibly_changing_slots(&slots, carried_item.item.id);
+                let changing_slots = drag.possibly_changing_slots(&slots, carried_item.item_stack.id);
                 let amount_of_slots = changing_slots.len();
                 let (amount_per_slot, remainder) = if amount_of_slots == 0 {
                     // TODO: please work lol
@@ -120,7 +120,7 @@ impl DragHandler {
                 };
                 changing_slots.into_iter().for_each(|slot| {
                     if let Some(stack) = slots[slot].as_mut() {
-                        debug_assert!(stack.item.id == carried_item.item.id);
+                        debug_assert!(stack.item_stack.id == carried_item.item_stack.id);
                         // TODO: Handle max stack size
                         stack.item_count += amount_per_slot;
                     }
@@ -156,7 +156,7 @@ impl Drag {
 
                 match slot {
                     Some(item_slot) => {
-                        if item_slot.item.id == carried_item_id {
+                        if item_slot.item_stack.id == carried_item_id {
                             Some(*slot_index)
                         } else {
                             None

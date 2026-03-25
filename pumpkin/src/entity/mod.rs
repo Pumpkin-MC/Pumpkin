@@ -50,7 +50,7 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::pin::Pin;
@@ -239,7 +239,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         })
     }
 
-    /// Called when a player right-clicks this entity with an item.
+    /// Called when a player right-clicks this entity with an item_stack.
     /// Returns true if the interaction was handled.
     fn interact<'a>(
         &'a self,
@@ -378,7 +378,7 @@ pub struct Entity {
     pub entity_id: i32,
     /// A persistent, unique identifier for the entity
     pub entity_uuid: uuid::Uuid,
-    /// The type of entity (e.g., player, zombie, item)
+    /// The type of entity (e.g., player, zombie, item_stack)
     pub entity_type: &'static EntityType,
     /// The world in which the entity exists.
     /// Uses `ArcSwap` to allow atomic updates when changing dimensions.

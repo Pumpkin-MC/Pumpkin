@@ -4,7 +4,7 @@ use crate::entity::player::Player;
 use pumpkin_data::Block;
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
 use super::PlayerEvent;
@@ -12,7 +12,7 @@ use super::PlayerEvent;
 /// Event that is triggered when a player interacts with a block or air.
 ///
 /// This event includes information about the player, the action performed,
-/// the item in the player's hand, the block interacted with, and the position clicked (if any).
+/// the item_stack in the player's hand, the block interacted with, and the position clicked (if any).
 /// It can be cancelled to prevent the default interaction behavior.
 #[cancellable]
 #[derive(Event, Clone)]
@@ -26,7 +26,7 @@ pub struct PlayerInteractEvent {
     /// The position of the block that was clicked, if any.
     pub clicked_pos: Option<BlockPos>,
 
-    /// The item in the player's hand at the time of interaction.
+    /// The item_stack in the player's hand at the time of interaction.
     pub item: Arc<Mutex<ItemStack>>,
 
     /// The block that was interacted with.
@@ -40,7 +40,7 @@ impl PlayerInteractEvent {
     ///
     /// - `player`: A reference-counted pointer to the player who triggered the event.
     /// - `action`: The type of interaction performed.
-    /// - `item`: A reference-counted, mutex-protected item stack used during the interaction.
+    /// - `item_stack`: A reference-counted, mutex-protected item_stack stack used during the interaction.
     /// - `block`: The block that was interacted with.
     /// - `clicked_pos`: The optional position of the block that was clicked.
     ///

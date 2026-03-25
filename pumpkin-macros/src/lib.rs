@@ -10,7 +10,7 @@ use syn::{Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
 /// Derives the `Payload` trait for an event struct, enabling it to be used in the plugin system.
 ///
 /// # Arguments
-/// - `item` – The input `TokenStream` representing the struct to derive `Event` for.
+/// - `item_stack` – The input `TokenStream` representing the struct to derive `Event` for.
 #[proc_macro_derive(Event)]
 pub fn event(item: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(item as DeriveInput);
@@ -175,7 +175,7 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
 ///
 /// # Arguments
 /// - `args` – The `TokenStream` representing the packet ID expression.
-/// - `item` – The input `TokenStream` representing the struct to implement `Packet` for.
+/// - `item_stack` – The input `TokenStream` representing the struct to implement `Packet` for.
 #[proc_macro_attribute]
 pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
     let packet_id_expr = parse_macro_input!(args as Expr);
@@ -197,7 +197,7 @@ pub fn packet(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Arguments
 /// - `args` – The `TokenStream` representing the packet ID expression.
-/// - `item` – The input `TokenStream` representing the struct to implement the trait for.
+/// - `item_stack` – The input `TokenStream` representing the struct to implement the trait for.
 #[proc_macro_attribute]
 pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
     let packet_id_expr = parse_macro_input!(args as Expr);
@@ -223,7 +223,7 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Arguments
 /// - `args` – The `TokenStream` representing the block name literal.
-/// - `item` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
+/// - `item_stack` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
 #[proc_macro_attribute]
 pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let input_item = item.clone();
@@ -251,7 +251,7 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    // Combine the original item and new impl.
+    // Combine the original item_stack and new impl.
     let mut output = input_item;
     output.extend(TokenStream::from(generated));
     output
@@ -261,7 +261,7 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Arguments
 /// - `args` – The `TokenStream` representing the block tag literal.
-/// - `item` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
+/// - `item_stack` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
 #[proc_macro_attribute]
 pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStream {
     let original_item = item.clone();
@@ -295,8 +295,8 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
 
 // #[proc_macro_error]
 // #[proc_macro_attribute]
-// pub fn block_property(input: TokenStream, item: TokenStream) -> TokenStream {
-//     let ast: syn::DeriveInput = syn::parse(item.clone()).unwrap();
+// pub fn block_property(input: TokenStream, item_stack: TokenStream) -> TokenStream {
+//     let ast: syn::DeriveInput = syn::parse(item_stack.clone()).unwrap();
 //     let name = &ast.ident;
 //     let (impl_generics, ty_generics, _) = ast.generics.split_for_impl();
 
@@ -312,7 +312,7 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
 //             .collect::<Vec<&str>>();
 //     }
 
-//     let item: proc_macro2::TokenStream = item.into();
+//     let item_stack: proc_macro2::TokenStream = item_stack.into();
 
 //     let (variants, is_enum): (Vec<proc_macro2::Ident>, bool) = match ast.data {
 //         syn::Data::Enum(enum_item) => (
@@ -418,7 +418,7 @@ pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStre
 //     };
 
 //     let code = quote! {
-//         #item
+//         #item_stack
 //         impl #impl_generics pumpkin_world::block::properties::BlockPropertyMetadata for #name #ty_generics {
 //             fn name(&self) -> &'static str {
 //                 #property_name

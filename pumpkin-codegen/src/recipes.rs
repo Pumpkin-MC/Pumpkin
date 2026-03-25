@@ -60,7 +60,7 @@ pub struct CookingRecipeStruct {
     cookingtime: i32,
     /// Experience points awarded when the result is extracted.
     experience: f32,
-    /// The item produced by this recipe.
+    /// The item_stack produced by this recipe.
     result: RecipeResultStruct,
 }
 
@@ -83,7 +83,7 @@ impl CookingRecipeStruct {
                 }
             }
             RecipeIngredientTypes::OneOf(items) => {
-                // Use first item for ID generation
+                // Use first item_stack for ID generation
                 items
                     .first()
                     .map_or("unknown", |s| s.strip_prefix("minecraft:").unwrap_or(s))
@@ -167,7 +167,7 @@ pub struct CraftingShapedRecipeStruct {
     key: BTreeMap<String, RecipeIngredientTypes>,
     /// Row strings defining the crafting grid layout.
     pattern: Vec<String>,
-    /// The item produced by this recipe.
+    /// The item_stack produced by this recipe.
     result: RecipeResultStruct,
 }
 
@@ -220,7 +220,7 @@ pub struct CraftingShapelessRecipeStruct {
     group: Option<String>,
     /// The unordered list of ingredients required.
     ingredients: Vec<RecipeIngredientTypes>,
-    /// The item produced by this recipe.
+    /// The item_stack produced by this recipe.
     result: RecipeResultStruct,
 }
 
@@ -260,11 +260,11 @@ pub struct CraftingTransmuteRecipeStruct {
     category: Option<RecipeCategoryTypes>,
     /// Optional recipe group used for advancement tracking.
     group: Option<String>,
-    /// The item whose data components are copied to the result.
+    /// The item_stack whose data components are copied to the result.
     input: RecipeIngredientTypes,
-    /// The material item consumed alongside `input`.
+    /// The material item_stack consumed alongside `input`.
     material: RecipeIngredientTypes,
-    /// The base item type of the result (inherits components from `input`).
+    /// The base item_stack type of the result (inherits components from `input`).
     result: RecipeResultStruct,
 }
 
@@ -317,10 +317,10 @@ impl ToTokens for CraftingDecoratedPotStruct {
     }
 }
 
-/// Deserialized recipe result specifying the output item and count.
+/// Deserialized recipe result specifying the output item_stack and count.
 #[derive(Deserialize)]
 pub struct RecipeResultStruct {
-    /// Registry key of the result item.
+    /// Registry key of the result item_stack.
     id: String,
     /// Number of result items produced (defaults to 1).
     count: Option<u8>,
@@ -341,13 +341,13 @@ impl ToTokens for RecipeResultStruct {
     }
 }
 
-/// Deserialized recipe ingredient, which is either a single item/tag or a list of alternatives.
+/// Deserialized recipe ingredient, which is either a single item_stack/tag or a list of alternatives.
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum RecipeIngredientTypes {
-    /// A single item registry key or tag (prefixed with `#`).
+    /// A single item_stack registry key or tag (prefixed with `#`).
     Simple(String),
-    /// A list of acceptable alternative item registry keys.
+    /// A list of acceptable alternative item_stack registry keys.
     OneOf(Vec<String>),
 }
 
@@ -389,7 +389,7 @@ pub enum RecipeCategoryTypes {
     /// Miscellaneous recipes that don't fit other categories.
     #[serde(rename = "misc")]
     Misc,
-    /// Food item recipes.
+    /// Food item_stack recipes.
     #[serde(rename = "food")]
     Food,
     /// Block recipes.

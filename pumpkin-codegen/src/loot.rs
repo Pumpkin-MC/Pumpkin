@@ -95,10 +95,10 @@ impl ToTokens for LootPoolStruct {
     }
 }
 
-/// Deserialized single-item loot entry holding the item's registry key.
+/// Deserialized single-item_stack loot entry holding the item_stack's registry key.
 #[derive(Deserialize, Clone, Debug)]
 pub struct ItemEntryStruct {
-    /// Namespaced item key (e.g., `"minecraft:diamond"`).
+    /// Namespaced item_stack key (e.g., `"minecraft:diamond"`).
     name: String,
 }
 
@@ -142,8 +142,8 @@ pub enum LootPoolEntryTypesStruct {
     /// Yields nothing.
     #[serde(rename = "minecraft:empty")]
     Empty,
-    /// Yields a specific item.
-    #[serde(rename = "minecraft:item")]
+    /// Yields a specific item_stack.
+    #[serde(rename = "minecraft:item_stack")]
     Item(ItemEntryStruct),
     /// References another loot table.
     #[serde(rename = "minecraft:loot_table")]
@@ -233,13 +233,13 @@ pub enum LootConditionStruct {
         /// Required block-state property key-value pairs.
         properties: BTreeMap<String, String>,
     },
-    /// Passes if the tool matches an item predicate.
+    /// Passes if the tool matches an item_stack predicate.
     #[serde(rename = "minecraft:match_tool")]
     MatchTool,
     /// Passes with probability based on an enchantment's level.
     #[serde(rename = "minecraft:table_bonus")]
     TableBonus,
-    /// Passes if the item survives an explosion.
+    /// Passes if the item_stack survives an explosion.
     #[serde(rename = "minecraft:survives_explosion")]
     SurvivesExplosion,
     /// Passes based on the damage source's properties.
@@ -352,13 +352,13 @@ pub enum LootFunctionTypesStruct {
     /// Increases count based on the level of a relevant enchantment.
     #[serde(rename = "minecraft:enchanted_count_increase")]
     EnchantedCountIncrease,
-    /// Smelts the item as if processed in a furnace.
+    /// Smelts the item_stack as if processed in a furnace.
     #[serde(rename = "minecraft:furnace_smelt")]
     FurnaceSmelt,
-    /// Sets the potion type on the item.
+    /// Sets the potion type on the item_stack.
     #[serde(rename = "minecraft:set_potion")]
     SetPotion,
-    /// Sets the amplifier on an ominous bottle item.
+    /// Sets the amplifier on an ominous bottle item_stack.
     #[serde(rename = "minecraft:set_ominous_bottle_amplifier")]
     SetOminousBottleAmplifier,
     /// Clamps the stack count to a min/max range.
@@ -377,7 +377,7 @@ pub enum LootFunctionTypesStruct {
         /// Optional numeric parameters for the chosen formula.
         parameters: Option<LootFunctionBonusParameterStruct>,
     },
-    /// Copies data components from the block entity source to the dropped item.
+    /// Copies data components from the block entity source to the dropped item_stack.
     #[serde(rename = "minecraft:copy_components")]
     CopyComponents {
         /// The source to copy components from (e.g., `"block_entity"`).
@@ -385,7 +385,7 @@ pub enum LootFunctionTypesStruct {
         /// List of component keys to copy.
         include: Vec<String>,
     },
-    /// Copies specified block-state properties onto the item's `block_state` component.
+    /// Copies specified block-state properties onto the item_stack's `block_state` component.
     #[serde(rename = "minecraft:copy_state")]
     CopyState {
         /// Namespaced block whose state properties are copied.
@@ -568,12 +568,12 @@ impl ToTokens for LootFunctionBonusParameterStruct {
 /// Deserialized loot pool entry combining an entry type with optional conditions and functions.
 #[derive(Deserialize, Clone, Debug)]
 pub struct LootPoolEntryStruct {
-    /// The concrete entry type (item, alternatives, etc.).
+    /// The concrete entry type (item_stack, alternatives, etc.).
     #[serde(flatten)]
     content: LootPoolEntryTypesStruct,
     /// Conditions that must all pass for this entry to be evaluated.
     conditions: Option<Vec<LootConditionStruct>>,
-    /// Functions applied to the item if this entry is selected.
+    /// Functions applied to the item_stack if this entry is selected.
     functions: Option<Vec<LootFunctionStruct>>,
 }
 

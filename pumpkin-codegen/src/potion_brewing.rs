@@ -9,18 +9,18 @@ struct PotionBrewing {
     //potion_types: Vec<Vec<String>>,
     /// Recipes that transform one potion into another using a brewing ingredient.
     potion_recipes: Vec<Recipes>,
-    /// Recipes that transform one item into another using a brewing ingredient.
+    /// Recipes that transform one item_stack into another using a brewing ingredient.
     item_recipes: Vec<Recipes>,
 }
 
-/// A single brewing recipe entry mapping a source item/potion and ingredient to an output.
+/// A single brewing recipe entry mapping a source item_stack/potion and ingredient to an output.
 #[derive(Deserialize)]
 pub struct Recipes {
-    /// Namespaced resource location of the input potion or item.
+    /// Namespaced resource location of the input potion or item_stack.
     from: String,
     /// List of namespaced resource locations for valid brewing ingredients.
     ingredient: Vec<String>,
-    /// Namespaced resource location of the output potion or item.
+    /// Namespaced resource location of the output potion or item_stack.
     to: String,
 }
 

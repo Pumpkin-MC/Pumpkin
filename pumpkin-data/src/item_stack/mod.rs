@@ -1,17 +1,18 @@
-use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component::DataComponent::Enchantments;
-use pumpkin_data::data_component_impl::{
+use crate::data_component::DataComponent;
+use crate::data_component::DataComponent::Enchantments;
+use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
     MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, get, get_mut, read_data,
 };
-use pumpkin_data::item::Item;
-use pumpkin_data::recipes::RecipeResultStruct;
-use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, Enchantment};
+use crate::item::Item;
+use crate::recipes::RecipeResultStruct;
+use crate::tag::Taggable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use std::borrow::Cow;
 use std::cmp::{max, min};
+use crate::{Block, Enchantment};
+use rand;
 
 mod categories;
 
@@ -21,10 +22,10 @@ pub enum DamageResult {
     /// No damage was applied (zero/negative amount, not damageable, unbreakable,
     /// or Unbreaking negated every point).
     Untouched,
-    /// Damage was applied and the item is still alive.
+    /// Damage was applied and the item_stack is still alive.
     Damaged,
-    /// The item broke: one item was consumed from the stack (durability reset to 0),
-    /// or the stack is now empty if it had only one item. Callers should always
+    /// The item_stack broke: one item_stack was consumed from the stack (durability reset to 0),
+    /// or the stack is now empty if it had only one item_stack. Callers should always
     /// broadcast the break status — the client handles both cases correctly.
     Broken,
 }
@@ -39,7 +40,7 @@ pub struct ItemStack {
 // impl Hash for ItemStack {
 //     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 //         self.item_count.hash(state);
-//         self.item.id.hash(state);
+//         self.item_stack.id.hash(state);
 //         self.patch.hash(state);
 //     }
 // }
@@ -47,7 +48,7 @@ pub struct ItemStack {
 /*
 impl PartialEq for ItemStack {
     fn eq(&self, other: &Self) -> bool {
-        self.item.id == other.item.id
+        self.item_stack.id == other.item_stack.id
     }
 } */
 
@@ -198,8 +199,8 @@ impl ItemStack {
         }
     }
 
-    /// Apply durability damage to this item and return the outcome.
-    /// Callers must check the return value to handle break broadcasts and item stack updates.
+    /// Apply durability damage to this item_stack and return the outcome.
+    /// Callers must check the return value to handle break broadcasts and item_stack stack updates.
     /// TODO: Restore #[must_use] once all callsites (esp. tool/mob block-hit/damage sites)
     /// implement proper DamageResult::Broken handling instead of suppressing with let _ =.
     /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
@@ -232,9 +233,9 @@ impl ItemStack {
 
         let new_damage = self.get_damage().saturating_add(applied);
         if new_damage >= max_damage {
-            // Vanilla behavior: breaking consumes one item from the stack and resets
-            // durability to 0. A single damage call never breaks more than one item,
-            // regardless of the damage amount. This matches vanilla item stack behavior.
+            // Vanilla behavior: breaking consumes one item_stack from the stack and resets
+            // durability to 0. A single damage call never breaks more than one item_stack,
+            // regardless of the damage amount. This matches vanilla item_stack stack behavior.
             if self.item_count > 1 {
                 self.item_count = self.item_count.saturating_sub(1);
                 self.set_damage(0);
@@ -479,12 +480,12 @@ impl ItemStack {
         // Remove the "minecraft:" prefix if present
         let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(full_id);
 
-        // Try to get item by registry key
+        // Try to get item_stack by registry key
         let item = Item::from_registry_key(registry_key)?;
 
         let count = compound.get_int("count")? as u8;
 
-        // Create the item stack
+        // Create the item_stack stack
         let mut item_stack = Self::new(count, item);
 
         // Process any additional data in the components compound
@@ -510,7 +511,7 @@ impl From<&RecipeResultStruct> for ItemStack {
         Self {
             item_count: value.count,
             item: Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
-                .expect("Crafting recipe gives invalid item"),
+                .expect("Crafting recipe gives invalid item_stack"),
             patch: Vec::new(),
         }
     }
@@ -519,8 +520,8 @@ impl From<&RecipeResultStruct> for ItemStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_data::data_component::DataComponent;
-    use pumpkin_data::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
+    use crate::data_component::DataComponent;
+    use crate::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {
@@ -758,7 +759,7 @@ mod tests {
         );
     }
 
-    // ── stacked item breaking ────────────────────────────────────────
+    // ── stacked item_stack breaking ────────────────────────────────────────
 
     #[test]
     fn damage_stacked_item_breaks_one_and_resets_durability() {

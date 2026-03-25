@@ -30,7 +30,7 @@ impl BlockBehaviour for FlowerPotBlock {
                 }
                 return BlockActionResult::Success;
             } else if potted_block_id != 0 {
-                //if the player have an item that can be potted in his hand, nothing happens
+                //if the player have an item_stack that can be potted in his hand, nothing happens
                 return BlockActionResult::Consume;
             }
 

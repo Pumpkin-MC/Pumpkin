@@ -698,7 +698,7 @@ pub const ADVANCEMENTS_STORY_DEFLECT_ARROW_DESCRIPTION: &str =
     "advancements.story.deflect_arrow.description";
 #[doc = "Not Today, Thank You"]
 pub const ADVANCEMENTS_STORY_DEFLECT_ARROW_TITLE: &str = "advancements.story.deflect_arrow.title";
-#[doc = "Enchant an item at an Enchanting Table"]
+#[doc = "Enchant an item_stack at an Enchanting Table"]
 pub const ADVANCEMENTS_STORY_ENCHANT_ITEM_DESCRIPTION: &str =
     "advancements.story.enchant_item.description";
 #[doc = "Enchanter"]
@@ -928,10 +928,10 @@ pub const ARGUMENT_ID_UNKNOWN: &str = "argument.id.unknown";
 pub const ARGUMENT_INTEGER_BIG: &str = "argument.integer.big";
 #[doc = "Integer must not be less than %s: found %s"]
 pub const ARGUMENT_INTEGER_LOW: &str = "argument.integer.low";
-#[doc = "Unknown item '%s'"]
-pub const ARGUMENT_ITEM_ID_INVALID: &str = "argument.item.id.invalid";
+#[doc = "Unknown item_stack '%s'"]
+pub const ARGUMENT_ITEM_ID_INVALID: &str = "argument.item_stack.id.invalid";
 #[doc = "Tags aren't allowed here; only actual items are"]
-pub const ARGUMENT_ITEM_TAG_DISALLOWED: &str = "argument.item.tag.disallowed";
+pub const ARGUMENT_ITEM_TAG_DISALLOWED: &str = "argument.item_stack.tag.disallowed";
 #[doc = "Expected literal %s"]
 pub const ARGUMENT_LITERAL_INCORRECT: &str = "argument.literal.incorrect";
 #[doc = "Long must not be more than %s: found %s"]
@@ -1022,24 +1022,24 @@ pub const ARGUMENTS_BLOCK_TAG_UNKNOWN: &str = "arguments.block.tag.unknown";
 pub const ARGUMENTS_FUNCTION_TAG_UNKNOWN: &str = "arguments.function.tag.unknown";
 #[doc = "Unknown function %s"]
 pub const ARGUMENTS_FUNCTION_UNKNOWN: &str = "arguments.function.unknown";
-#[doc = "Expected item component"]
-pub const ARGUMENTS_ITEM_COMPONENT_EXPECTED: &str = "arguments.item.component.expected";
+#[doc = "Expected item_stack component"]
+pub const ARGUMENTS_ITEM_COMPONENT_EXPECTED: &str = "arguments.item_stack.component.expected";
 #[doc = "Malformed '%s' component: '%s'"]
-pub const ARGUMENTS_ITEM_COMPONENT_MALFORMED: &str = "arguments.item.component.malformed";
+pub const ARGUMENTS_ITEM_COMPONENT_MALFORMED: &str = "arguments.item_stack.component.malformed";
 #[doc = "Item component '%s' was repeated, but only one value can be specified"]
-pub const ARGUMENTS_ITEM_COMPONENT_REPEATED: &str = "arguments.item.component.repeated";
-#[doc = "Unknown item component '%s'"]
-pub const ARGUMENTS_ITEM_COMPONENT_UNKNOWN: &str = "arguments.item.component.unknown";
-#[doc = "Malformed item: '%s'"]
-pub const ARGUMENTS_ITEM_MALFORMED: &str = "arguments.item.malformed";
+pub const ARGUMENTS_ITEM_COMPONENT_REPEATED: &str = "arguments.item_stack.component.repeated";
+#[doc = "Unknown item_stack component '%s'"]
+pub const ARGUMENTS_ITEM_COMPONENT_UNKNOWN: &str = "arguments.item_stack.component.unknown";
+#[doc = "Malformed item_stack: '%s'"]
+pub const ARGUMENTS_ITEM_MALFORMED: &str = "arguments.item_stack.malformed";
 #[doc = "%s can only stack up to %s"]
-pub const ARGUMENTS_ITEM_OVERSTACKED: &str = "arguments.item.overstacked";
+pub const ARGUMENTS_ITEM_OVERSTACKED: &str = "arguments.item_stack.overstacked";
 #[doc = "Malformed '%s' predicate: '%s'"]
-pub const ARGUMENTS_ITEM_PREDICATE_MALFORMED: &str = "arguments.item.predicate.malformed";
-#[doc = "Unknown item predicate '%s'"]
-pub const ARGUMENTS_ITEM_PREDICATE_UNKNOWN: &str = "arguments.item.predicate.unknown";
-#[doc = "Unknown item tag '%s'"]
-pub const ARGUMENTS_ITEM_TAG_UNKNOWN: &str = "arguments.item.tag.unknown";
+pub const ARGUMENTS_ITEM_PREDICATE_MALFORMED: &str = "arguments.item_stack.predicate.malformed";
+#[doc = "Unknown item_stack predicate '%s'"]
+pub const ARGUMENTS_ITEM_PREDICATE_UNKNOWN: &str = "arguments.item_stack.predicate.unknown";
+#[doc = "Unknown item_stack tag '%s'"]
+pub const ARGUMENTS_ITEM_TAG_UNKNOWN: &str = "arguments.item_stack.tag.unknown";
 #[doc = "Invalid NBT path element"]
 pub const ARGUMENTS_NBTPATH_NODE_INVALID: &str = "arguments.nbtpath.node.invalid";
 #[doc = "Found no elements matching %s"]
@@ -6007,13 +6007,13 @@ pub const COMMANDS_BOSSBAR_SET_VISIBLE_SUCCESS_VISIBLE: &str =
     "commands.bossbar.set.visible.success.visible";
 #[doc = "No bossbar exists with the ID '%s'"]
 pub const COMMANDS_BOSSBAR_UNKNOWN: &str = "commands.bossbar.unknown";
-#[doc = "Removed %s item(s) from %s players"]
+#[doc = "Removed %s item_stack(s) from %s players"]
 pub const COMMANDS_CLEAR_SUCCESS_MULTIPLE: &str = "commands.clear.success.multiple";
-#[doc = "Removed %s item(s) from player %s"]
+#[doc = "Removed %s item_stack(s) from player %s"]
 pub const COMMANDS_CLEAR_SUCCESS_SINGLE: &str = "commands.clear.success.single";
-#[doc = "Found %s matching item(s) on %s players"]
+#[doc = "Found %s matching item_stack(s) on %s players"]
 pub const COMMANDS_CLEAR_TEST_MULTIPLE: &str = "commands.clear.test.multiple";
-#[doc = "Found %s matching item(s) on player %s"]
+#[doc = "Found %s matching item_stack(s) on player %s"]
 pub const COMMANDS_CLEAR_TEST_SINGLE: &str = "commands.clear.test.single";
 #[doc = "No blocks were cloned"]
 pub const COMMANDS_CLONE_FAILED: &str = "commands.clone.failed";
@@ -6182,19 +6182,19 @@ pub const COMMANDS_EFFECT_GIVE_FAILED: &str = "commands.effect.give.failed";
 pub const COMMANDS_EFFECT_GIVE_SUCCESS_MULTIPLE: &str = "commands.effect.give.success.multiple";
 #[doc = "Applied effect %s to %s"]
 pub const COMMANDS_EFFECT_GIVE_SUCCESS_SINGLE: &str = "commands.effect.give.success.single";
-#[doc = "Nothing changed. Targets either have no item in their hands or the enchantment could not be applied"]
+#[doc = "Nothing changed. Targets either have no item_stack in their hands or the enchantment could not be applied"]
 pub const COMMANDS_ENCHANT_FAILED: &str = "commands.enchant.failed";
 #[doc = "%s is not a valid entity for this command"]
 pub const COMMANDS_ENCHANT_FAILED_ENTITY: &str = "commands.enchant.failed.entity";
 #[doc = "%s cannot support that enchantment"]
 pub const COMMANDS_ENCHANT_FAILED_INCOMPATIBLE: &str = "commands.enchant.failed.incompatible";
-#[doc = "%s is not holding any item"]
+#[doc = "%s is not holding any item_stack"]
 pub const COMMANDS_ENCHANT_FAILED_ITEMLESS: &str = "commands.enchant.failed.itemless";
 #[doc = "%s is higher than the maximum level of %s supported by that enchantment"]
 pub const COMMANDS_ENCHANT_FAILED_LEVEL: &str = "commands.enchant.failed.level";
 #[doc = "Applied enchantment %s to %s entities"]
 pub const COMMANDS_ENCHANT_SUCCESS_MULTIPLE: &str = "commands.enchant.success.multiple";
-#[doc = "Applied enchantment %s to %s's item"]
+#[doc = "Applied enchantment %s to %s's item_stack"]
 pub const COMMANDS_ENCHANT_SUCCESS_SINGLE: &str = "commands.enchant.success.single";
 #[doc = "Too many blocks in the specified area (maximum %s, but specified %s)"]
 pub const COMMANDS_EXECUTE_BLOCKS_TOOBIG: &str = "commands.execute.blocks.toobig";
@@ -6344,25 +6344,25 @@ pub const COMMANDS_GIVE_SUCCESS_SINGLE: &str = "commands.give.success.single";
 #[doc = "Unknown command or insufficient permissions"]
 pub const COMMANDS_HELP_FAILED: &str = "commands.help.failed";
 #[doc = "Replaced a slot at %s, %s, %s with %s"]
-pub const COMMANDS_ITEM_BLOCK_SET_SUCCESS: &str = "commands.item.block.set.success";
+pub const COMMANDS_ITEM_BLOCK_SET_SUCCESS: &str = "commands.item_stack.block.set.success";
 #[doc = "Replaced a slot on %s entities with %s"]
 pub const COMMANDS_ITEM_ENTITY_SET_SUCCESS_MULTIPLE: &str =
-    "commands.item.entity.set.success.multiple";
+    "commands.item_stack.entity.set.success.multiple";
 #[doc = "Replaced a slot on %s with %s"]
-pub const COMMANDS_ITEM_ENTITY_SET_SUCCESS_SINGLE: &str = "commands.item.entity.set.success.single";
+pub const COMMANDS_ITEM_ENTITY_SET_SUCCESS_SINGLE: &str = "commands.item_stack.entity.set.success.single";
 #[doc = "The source does not have slot %s"]
-pub const COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT: &str = "commands.item.source.no_such_slot";
+pub const COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT: &str = "commands.item_stack.source.no_such_slot";
 #[doc = "Source position %s, %s, %s is not a container"]
-pub const COMMANDS_ITEM_SOURCE_NOT_A_CONTAINER: &str = "commands.item.source.not_a_container";
-#[doc = "No targets accepted item %s into slot %s"]
+pub const COMMANDS_ITEM_SOURCE_NOT_A_CONTAINER: &str = "commands.item_stack.source.not_a_container";
+#[doc = "No targets accepted item_stack %s into slot %s"]
 pub const COMMANDS_ITEM_TARGET_NO_CHANGED_KNOWN_ITEM: &str =
-    "commands.item.target.no_changed.known_item";
-#[doc = "No targets accepted item into slot %s"]
-pub const COMMANDS_ITEM_TARGET_NO_CHANGES: &str = "commands.item.target.no_changes";
+    "commands.item_stack.target.no_changed.known_item";
+#[doc = "No targets accepted item_stack into slot %s"]
+pub const COMMANDS_ITEM_TARGET_NO_CHANGES: &str = "commands.item_stack.target.no_changes";
 #[doc = "The target does not have slot %s"]
-pub const COMMANDS_ITEM_TARGET_NO_SUCH_SLOT: &str = "commands.item.target.no_such_slot";
+pub const COMMANDS_ITEM_TARGET_NO_SUCH_SLOT: &str = "commands.item_stack.target.no_such_slot";
 #[doc = "Target position %s, %s, %s is not a container"]
-pub const COMMANDS_ITEM_TARGET_NOT_A_CONTAINER: &str = "commands.item.target.not_a_container";
+pub const COMMANDS_ITEM_TARGET_NOT_A_CONTAINER: &str = "commands.item_stack.target.not_a_container";
 #[doc = "Failed to dump JFR recording: %s"]
 pub const COMMANDS_JFR_DUMP_FAILED: &str = "commands.jfr.dump.failed";
 #[doc = "Failed to start JFR profiling"]
@@ -7301,7 +7301,7 @@ pub const CREDITS_AND_ATTRIBUTION_BUTTON_CREDITS: &str = "credits_and_attributio
 pub const CREDITS_AND_ATTRIBUTION_BUTTON_LICENSES: &str = "credits_and_attribution.button.licenses";
 #[doc = "Credits and Attribution"]
 pub const CREDITS_AND_ATTRIBUTION_SCREEN_TITLE: &str = "credits_and_attribution.screen.title";
-#[doc = "Enables experimental Bundle item"]
+#[doc = "Enables experimental Bundle item_stack"]
 pub const DATAPACK_BUNDLE_DESCRIPTION: &str = "dataPack.bundle.description";
 #[doc = "Bundles"]
 pub const DATAPACK_BUNDLE_NAME: &str = "dataPack.bundle.name";
@@ -7365,7 +7365,7 @@ pub const DEATH_ATTACK_ANVIL_PLAYER: &str = "death.attack.anvil.player";
 #[doc = "%1$s was shot by %2$s"]
 pub const DEATH_ATTACK_ARROW: &str = "death.attack.arrow";
 #[doc = "%1$s was shot by %2$s using %3$s"]
-pub const DEATH_ATTACK_ARROW_ITEM: &str = "death.attack.arrow.item";
+pub const DEATH_ATTACK_ARROW_ITEM: &str = "death.attack.arrow.item_stack";
 #[doc = "Intentional Game Design"]
 pub const DEATH_ATTACK_BADRESPAWNPOINT_LINK: &str = "death.attack.badRespawnPoint.link";
 #[doc = "%1$s was killed by %2$s"]
@@ -7397,7 +7397,7 @@ pub const DEATH_ATTACK_EXPLOSION: &str = "death.attack.explosion";
 #[doc = "%1$s was blown up by %2$s"]
 pub const DEATH_ATTACK_EXPLOSION_PLAYER: &str = "death.attack.explosion.player";
 #[doc = "%1$s was blown up by %2$s using %3$s"]
-pub const DEATH_ATTACK_EXPLOSION_PLAYER_ITEM: &str = "death.attack.explosion.player.item";
+pub const DEATH_ATTACK_EXPLOSION_PLAYER_ITEM: &str = "death.attack.explosion.player.item_stack";
 #[doc = "%1$s hit the ground too hard"]
 pub const DEATH_ATTACK_FALL: &str = "death.attack.fall";
 #[doc = "%1$s hit the ground too hard while trying to escape %2$s"]
@@ -7413,11 +7413,11 @@ pub const DEATH_ATTACK_FALLINGSTALACTITE_PLAYER: &str = "death.attack.fallingSta
 #[doc = "%1$s was fireballed by %2$s"]
 pub const DEATH_ATTACK_FIREBALL: &str = "death.attack.fireball";
 #[doc = "%1$s was fireballed by %2$s using %3$s"]
-pub const DEATH_ATTACK_FIREBALL_ITEM: &str = "death.attack.fireball.item";
+pub const DEATH_ATTACK_FIREBALL_ITEM: &str = "death.attack.fireball.item_stack";
 #[doc = "%1$s went off with a bang"]
 pub const DEATH_ATTACK_FIREWORKS: &str = "death.attack.fireworks";
 #[doc = "%1$s went off with a bang due to a firework fired from %3$s by %2$s"]
-pub const DEATH_ATTACK_FIREWORKS_ITEM: &str = "death.attack.fireworks.item";
+pub const DEATH_ATTACK_FIREWORKS_ITEM: &str = "death.attack.fireworks.item_stack";
 #[doc = "%1$s went off with a bang while fighting %2$s"]
 pub const DEATH_ATTACK_FIREWORKS_PLAYER: &str = "death.attack.fireworks.player";
 #[doc = "%1$s experienced kinetic energy"]
@@ -7451,7 +7451,7 @@ pub const DEATH_ATTACK_INWALL_PLAYER: &str = "death.attack.inWall.player";
 #[doc = "%1$s was killed by %2$s using magic"]
 pub const DEATH_ATTACK_INDIRECTMAGIC: &str = "death.attack.indirectMagic";
 #[doc = "%1$s was killed by %2$s using %3$s"]
-pub const DEATH_ATTACK_INDIRECTMAGIC_ITEM: &str = "death.attack.indirectMagic.item";
+pub const DEATH_ATTACK_INDIRECTMAGIC_ITEM: &str = "death.attack.indirectMagic.item_stack";
 #[doc = "%1$s tried to swim in lava"]
 pub const DEATH_ATTACK_LAVA: &str = "death.attack.lava";
 #[doc = "%1$s tried to swim in lava to escape %2$s"]
@@ -7463,7 +7463,7 @@ pub const DEATH_ATTACK_LIGHTNINGBOLT_PLAYER: &str = "death.attack.lightningBolt.
 #[doc = "%1$s was smashed by %2$s"]
 pub const DEATH_ATTACK_MACE_SMASH: &str = "death.attack.mace_smash";
 #[doc = "%1$s was smashed by %2$s with %3$s"]
-pub const DEATH_ATTACK_MACE_SMASH_ITEM: &str = "death.attack.mace_smash.item";
+pub const DEATH_ATTACK_MACE_SMASH_ITEM: &str = "death.attack.mace_smash.item_stack";
 #[doc = "%1$s was killed by magic"]
 pub const DEATH_ATTACK_MAGIC: &str = "death.attack.magic";
 #[doc = "%1$s was killed by magic while trying to escape %2$s"]
@@ -7473,11 +7473,11 @@ pub const DEATH_ATTACK_MESSAGE_TOO_LONG: &str = "death.attack.message_too_long";
 #[doc = "%1$s was slain by %2$s"]
 pub const DEATH_ATTACK_MOB: &str = "death.attack.mob";
 #[doc = "%1$s was slain by %2$s using %3$s"]
-pub const DEATH_ATTACK_MOB_ITEM: &str = "death.attack.mob.item";
+pub const DEATH_ATTACK_MOB_ITEM: &str = "death.attack.mob.item_stack";
 #[doc = "%1$s burned to death"]
 pub const DEATH_ATTACK_ONFIRE: &str = "death.attack.onFire";
 #[doc = "%1$s was burned to a crisp while fighting %2$s wielding %3$s"]
-pub const DEATH_ATTACK_ONFIRE_ITEM: &str = "death.attack.onFire.item";
+pub const DEATH_ATTACK_ONFIRE_ITEM: &str = "death.attack.onFire.item_stack";
 #[doc = "%1$s was burned to a crisp while fighting %2$s"]
 pub const DEATH_ATTACK_ONFIRE_PLAYER: &str = "death.attack.onFire.player";
 #[doc = "%1$s fell out of the world"]
@@ -7491,17 +7491,17 @@ pub const DEATH_ATTACK_OUTSIDEBORDER_PLAYER: &str = "death.attack.outsideBorder.
 #[doc = "%1$s was slain by %2$s"]
 pub const DEATH_ATTACK_PLAYER: &str = "death.attack.player";
 #[doc = "%1$s was slain by %2$s using %3$s"]
-pub const DEATH_ATTACK_PLAYER_ITEM: &str = "death.attack.player.item";
+pub const DEATH_ATTACK_PLAYER_ITEM: &str = "death.attack.player.item_stack";
 #[doc = "%1$s was obliterated by a sonically-charged shriek"]
 pub const DEATH_ATTACK_SONIC_BOOM: &str = "death.attack.sonic_boom";
 #[doc = "%1$s was obliterated by a sonically-charged shriek while trying to escape %2$s wielding %3$s"]
-pub const DEATH_ATTACK_SONIC_BOOM_ITEM: &str = "death.attack.sonic_boom.item";
+pub const DEATH_ATTACK_SONIC_BOOM_ITEM: &str = "death.attack.sonic_boom.item_stack";
 #[doc = "%1$s was obliterated by a sonically-charged shriek while trying to escape %2$s"]
 pub const DEATH_ATTACK_SONIC_BOOM_PLAYER: &str = "death.attack.sonic_boom.player";
 #[doc = "%1$s was speared by %2$s"]
 pub const DEATH_ATTACK_SPEAR: &str = "death.attack.spear";
 #[doc = "%1$s was speared by %2$s using %3$s"]
-pub const DEATH_ATTACK_SPEAR_ITEM: &str = "death.attack.spear.item";
+pub const DEATH_ATTACK_SPEAR_ITEM: &str = "death.attack.spear.item_stack";
 #[doc = "%1$s was impaled on a stalagmite"]
 pub const DEATH_ATTACK_STALAGMITE: &str = "death.attack.stalagmite";
 #[doc = "%1$s was impaled on a stalagmite while fighting %2$s"]
@@ -7513,7 +7513,7 @@ pub const DEATH_ATTACK_STARVE_PLAYER: &str = "death.attack.starve.player";
 #[doc = "%1$s was stung to death"]
 pub const DEATH_ATTACK_STING: &str = "death.attack.sting";
 #[doc = "%1$s was stung to death by %2$s using %3$s"]
-pub const DEATH_ATTACK_STING_ITEM: &str = "death.attack.sting.item";
+pub const DEATH_ATTACK_STING_ITEM: &str = "death.attack.sting.item_stack";
 #[doc = "%1$s was stung to death by %2$s"]
 pub const DEATH_ATTACK_STING_PLAYER: &str = "death.attack.sting.player";
 #[doc = "%1$s was poked to death by a sweet berry bush"]
@@ -7523,15 +7523,15 @@ pub const DEATH_ATTACK_SWEETBERRYBUSH_PLAYER: &str = "death.attack.sweetBerryBus
 #[doc = "%1$s was killed while trying to hurt %2$s"]
 pub const DEATH_ATTACK_THORNS: &str = "death.attack.thorns";
 #[doc = "%1$s was killed by %3$s while trying to hurt %2$s"]
-pub const DEATH_ATTACK_THORNS_ITEM: &str = "death.attack.thorns.item";
+pub const DEATH_ATTACK_THORNS_ITEM: &str = "death.attack.thorns.item_stack";
 #[doc = "%1$s was pummeled by %2$s"]
 pub const DEATH_ATTACK_THROWN: &str = "death.attack.thrown";
 #[doc = "%1$s was pummeled by %2$s using %3$s"]
-pub const DEATH_ATTACK_THROWN_ITEM: &str = "death.attack.thrown.item";
+pub const DEATH_ATTACK_THROWN_ITEM: &str = "death.attack.thrown.item_stack";
 #[doc = "%1$s was impaled by %2$s"]
 pub const DEATH_ATTACK_TRIDENT: &str = "death.attack.trident";
 #[doc = "%1$s was impaled by %2$s with %3$s"]
-pub const DEATH_ATTACK_TRIDENT_ITEM: &str = "death.attack.trident.item";
+pub const DEATH_ATTACK_TRIDENT_ITEM: &str = "death.attack.trident.item_stack";
 #[doc = "%1$s withered away"]
 pub const DEATH_ATTACK_WITHER: &str = "death.attack.wither";
 #[doc = "%1$s withered away while fighting %2$s"]
@@ -7539,7 +7539,7 @@ pub const DEATH_ATTACK_WITHER_PLAYER: &str = "death.attack.wither.player";
 #[doc = "%1$s was shot by a skull from %2$s"]
 pub const DEATH_ATTACK_WITHERSKULL: &str = "death.attack.witherSkull";
 #[doc = "%1$s was shot by a skull from %2$s using %3$s"]
-pub const DEATH_ATTACK_WITHERSKULL_ITEM: &str = "death.attack.witherSkull.item";
+pub const DEATH_ATTACK_WITHERSKULL_ITEM: &str = "death.attack.witherSkull.item_stack";
 #[doc = "%1$s fell from a high place"]
 pub const DEATH_FELL_ACCIDENT_GENERIC: &str = "death.fell.accident.generic";
 #[doc = "%1$s fell off a ladder"]
@@ -7557,11 +7557,11 @@ pub const DEATH_FELL_ACCIDENT_WEEPING_VINES: &str = "death.fell.accident.weeping
 #[doc = "%1$s was doomed to fall by %2$s"]
 pub const DEATH_FELL_ASSIST: &str = "death.fell.assist";
 #[doc = "%1$s was doomed to fall by %2$s using %3$s"]
-pub const DEATH_FELL_ASSIST_ITEM: &str = "death.fell.assist.item";
+pub const DEATH_FELL_ASSIST_ITEM: &str = "death.fell.assist.item_stack";
 #[doc = "%1$s fell too far and was finished by %2$s"]
 pub const DEATH_FELL_FINISH: &str = "death.fell.finish";
 #[doc = "%1$s fell too far and was finished by %2$s using %3$s"]
-pub const DEATH_FELL_FINISH_ITEM: &str = "death.fell.finish.item";
+pub const DEATH_FELL_FINISH_ITEM: &str = "death.fell.finish.item_stack";
 #[doc = "%1$s was doomed to fall"]
 pub const DEATH_FELL_KILLER: &str = "death.fell.killer";
 #[doc = "Are you sure you want to quit?"]
@@ -8136,7 +8136,7 @@ pub const ENTITY_MINECRAFT_INTERACTION: &str = "entity.minecraft.interaction";
 #[doc = "Iron Golem"]
 pub const ENTITY_MINECRAFT_IRON_GOLEM: &str = "entity.minecraft.iron_golem";
 #[doc = "Item"]
-pub const ENTITY_MINECRAFT_ITEM: &str = "entity.minecraft.item";
+pub const ENTITY_MINECRAFT_ITEM: &str = "entity.minecraft.item_stack";
 #[doc = "Item Display"]
 pub const ENTITY_MINECRAFT_ITEM_DISPLAY: &str = "entity.minecraft.item_display";
 #[doc = "Item Frame"]
@@ -8576,7 +8576,7 @@ pub const GAMERULE_DISABLERAIDS: &str = "gamerule.disableRaids";
 pub const GAMERULE_DODAYLIGHTCYCLE: &str = "gamerule.doDaylightCycle";
 #[doc = "Drop entity equipment"]
 pub const GAMERULE_DOENTITYDROPS: &str = "gamerule.doEntityDrops";
-#[doc = "Controls drops from minecarts (including inventories), item frames, boats, etc."]
+#[doc = "Controls drops from minecarts (including inventories), item_stack frames, boats, etc."]
 pub const GAMERULE_DOENTITYDROPS_DESCRIPTION: &str = "gamerule.doEntityDrops.description";
 #[doc = "Update fire"]
 pub const GAMERULE_DOFIRETICK: &str = "gamerule.doFireTick";
@@ -9269,1734 +9269,1734 @@ pub const INVENTORY_HOTBARINFO: &str = "inventory.hotbarInfo";
 #[doc = "Item hotbar saved (restore with %1$s + %2$s)"]
 pub const INVENTORY_HOTBARSAVED: &str = "inventory.hotbarSaved";
 #[doc = "Can break:"]
-pub const ITEM_CANBREAK: &str = "item.canBreak";
+pub const ITEM_CANBREAK: &str = "item_stack.canBreak";
 #[doc = "Can be placed on:"]
-pub const ITEM_CANPLACE: &str = "item.canPlace";
+pub const ITEM_CANPLACE: &str = "item_stack.canPlace";
 #[doc = "Unknown"]
-pub const ITEM_CANUSE_UNKNOWN: &str = "item.canUse.unknown";
+pub const ITEM_CANUSE_UNKNOWN: &str = "item_stack.canUse.unknown";
 #[doc = "Color: %s"]
-pub const ITEM_COLOR: &str = "item.color";
+pub const ITEM_COLOR: &str = "item_stack.color";
 #[doc = "%s component(s)"]
-pub const ITEM_COMPONENTS: &str = "item.components";
-#[doc = "Disabled item"]
-pub const ITEM_DISABLED: &str = "item.disabled";
+pub const ITEM_COMPONENTS: &str = "item_stack.components";
+#[doc = "Disabled item_stack"]
+pub const ITEM_DISABLED: &str = "item_stack.disabled";
 #[doc = "Durability: %s / %s"]
-pub const ITEM_DURABILITY: &str = "item.durability";
+pub const ITEM_DURABILITY: &str = "item_stack.durability";
 #[doc = "Dyed"]
-pub const ITEM_DYED: &str = "item.dyed";
+pub const ITEM_DYED: &str = "item_stack.dyed";
 #[doc = "Intangible"]
-pub const ITEM_INTANGIBLE: &str = "item.intangible";
+pub const ITEM_INTANGIBLE: &str = "item_stack.intangible";
 #[doc = "Acacia Boat"]
-pub const ITEM_MINECRAFT_ACACIA_BOAT: &str = "item.minecraft.acacia_boat";
+pub const ITEM_MINECRAFT_ACACIA_BOAT: &str = "item_stack.minecraft.acacia_boat";
 #[doc = "Acacia Boat with Chest"]
-pub const ITEM_MINECRAFT_ACACIA_CHEST_BOAT: &str = "item.minecraft.acacia_chest_boat";
+pub const ITEM_MINECRAFT_ACACIA_CHEST_BOAT: &str = "item_stack.minecraft.acacia_chest_boat";
 #[doc = "Allay Spawn Egg"]
-pub const ITEM_MINECRAFT_ALLAY_SPAWN_EGG: &str = "item.minecraft.allay_spawn_egg";
+pub const ITEM_MINECRAFT_ALLAY_SPAWN_EGG: &str = "item_stack.minecraft.allay_spawn_egg";
 #[doc = "Amethyst Shard"]
-pub const ITEM_MINECRAFT_AMETHYST_SHARD: &str = "item.minecraft.amethyst_shard";
+pub const ITEM_MINECRAFT_AMETHYST_SHARD: &str = "item_stack.minecraft.amethyst_shard";
 #[doc = "Angler Pottery Shard"]
-pub const ITEM_MINECRAFT_ANGLER_POTTERY_SHARD: &str = "item.minecraft.angler_pottery_shard";
+pub const ITEM_MINECRAFT_ANGLER_POTTERY_SHARD: &str = "item_stack.minecraft.angler_pottery_shard";
 #[doc = "Angler Pottery Sherd"]
-pub const ITEM_MINECRAFT_ANGLER_POTTERY_SHERD: &str = "item.minecraft.angler_pottery_sherd";
+pub const ITEM_MINECRAFT_ANGLER_POTTERY_SHERD: &str = "item_stack.minecraft.angler_pottery_sherd";
 #[doc = "Apple"]
-pub const ITEM_MINECRAFT_APPLE: &str = "item.minecraft.apple";
+pub const ITEM_MINECRAFT_APPLE: &str = "item_stack.minecraft.apple";
 #[doc = "Archer Pottery Shard"]
-pub const ITEM_MINECRAFT_ARCHER_POTTERY_SHARD: &str = "item.minecraft.archer_pottery_shard";
+pub const ITEM_MINECRAFT_ARCHER_POTTERY_SHARD: &str = "item_stack.minecraft.archer_pottery_shard";
 #[doc = "Archer Pottery Sherd"]
-pub const ITEM_MINECRAFT_ARCHER_POTTERY_SHERD: &str = "item.minecraft.archer_pottery_sherd";
+pub const ITEM_MINECRAFT_ARCHER_POTTERY_SHERD: &str = "item_stack.minecraft.archer_pottery_sherd";
 #[doc = "Armadillo Scute"]
-pub const ITEM_MINECRAFT_ARMADILLO_SCUTE: &str = "item.minecraft.armadillo_scute";
+pub const ITEM_MINECRAFT_ARMADILLO_SCUTE: &str = "item_stack.minecraft.armadillo_scute";
 #[doc = "Armadillo Spawn Egg"]
-pub const ITEM_MINECRAFT_ARMADILLO_SPAWN_EGG: &str = "item.minecraft.armadillo_spawn_egg";
+pub const ITEM_MINECRAFT_ARMADILLO_SPAWN_EGG: &str = "item_stack.minecraft.armadillo_spawn_egg";
 #[doc = "Armor Stand"]
-pub const ITEM_MINECRAFT_ARMOR_STAND: &str = "item.minecraft.armor_stand";
+pub const ITEM_MINECRAFT_ARMOR_STAND: &str = "item_stack.minecraft.armor_stand";
 #[doc = "Arms Up Pottery Shard"]
-pub const ITEM_MINECRAFT_ARMS_UP_POTTERY_SHARD: &str = "item.minecraft.arms_up_pottery_shard";
+pub const ITEM_MINECRAFT_ARMS_UP_POTTERY_SHARD: &str = "item_stack.minecraft.arms_up_pottery_shard";
 #[doc = "Arms Up Pottery Sherd"]
-pub const ITEM_MINECRAFT_ARMS_UP_POTTERY_SHERD: &str = "item.minecraft.arms_up_pottery_sherd";
+pub const ITEM_MINECRAFT_ARMS_UP_POTTERY_SHERD: &str = "item_stack.minecraft.arms_up_pottery_sherd";
 #[doc = "Arrow"]
-pub const ITEM_MINECRAFT_ARROW: &str = "item.minecraft.arrow";
+pub const ITEM_MINECRAFT_ARROW: &str = "item_stack.minecraft.arrow";
 #[doc = "Bucket of Axolotl"]
-pub const ITEM_MINECRAFT_AXOLOTL_BUCKET: &str = "item.minecraft.axolotl_bucket";
+pub const ITEM_MINECRAFT_AXOLOTL_BUCKET: &str = "item_stack.minecraft.axolotl_bucket";
 #[doc = "Axolotl Spawn Egg"]
-pub const ITEM_MINECRAFT_AXOLOTL_SPAWN_EGG: &str = "item.minecraft.axolotl_spawn_egg";
+pub const ITEM_MINECRAFT_AXOLOTL_SPAWN_EGG: &str = "item_stack.minecraft.axolotl_spawn_egg";
 #[doc = "Baked Potato"]
-pub const ITEM_MINECRAFT_BAKED_POTATO: &str = "item.minecraft.baked_potato";
+pub const ITEM_MINECRAFT_BAKED_POTATO: &str = "item_stack.minecraft.baked_potato";
 #[doc = "Bamboo Raft with Chest"]
-pub const ITEM_MINECRAFT_BAMBOO_CHEST_RAFT: &str = "item.minecraft.bamboo_chest_raft";
+pub const ITEM_MINECRAFT_BAMBOO_CHEST_RAFT: &str = "item_stack.minecraft.bamboo_chest_raft";
 #[doc = "Bamboo Raft"]
-pub const ITEM_MINECRAFT_BAMBOO_RAFT: &str = "item.minecraft.bamboo_raft";
+pub const ITEM_MINECRAFT_BAMBOO_RAFT: &str = "item_stack.minecraft.bamboo_raft";
 #[doc = "Bat Spawn Egg"]
-pub const ITEM_MINECRAFT_BAT_SPAWN_EGG: &str = "item.minecraft.bat_spawn_egg";
+pub const ITEM_MINECRAFT_BAT_SPAWN_EGG: &str = "item_stack.minecraft.bat_spawn_egg";
 #[doc = "Bee Spawn Egg"]
-pub const ITEM_MINECRAFT_BEE_SPAWN_EGG: &str = "item.minecraft.bee_spawn_egg";
+pub const ITEM_MINECRAFT_BEE_SPAWN_EGG: &str = "item_stack.minecraft.bee_spawn_egg";
 #[doc = "Raw Beef"]
-pub const ITEM_MINECRAFT_BEEF: &str = "item.minecraft.beef";
+pub const ITEM_MINECRAFT_BEEF: &str = "item_stack.minecraft.beef";
 #[doc = "Beetroot"]
-pub const ITEM_MINECRAFT_BEETROOT: &str = "item.minecraft.beetroot";
+pub const ITEM_MINECRAFT_BEETROOT: &str = "item_stack.minecraft.beetroot";
 #[doc = "Beetroot Seeds"]
-pub const ITEM_MINECRAFT_BEETROOT_SEEDS: &str = "item.minecraft.beetroot_seeds";
+pub const ITEM_MINECRAFT_BEETROOT_SEEDS: &str = "item_stack.minecraft.beetroot_seeds";
 #[doc = "Beetroot Soup"]
-pub const ITEM_MINECRAFT_BEETROOT_SOUP: &str = "item.minecraft.beetroot_soup";
+pub const ITEM_MINECRAFT_BEETROOT_SOUP: &str = "item_stack.minecraft.beetroot_soup";
 #[doc = "Birch Boat"]
-pub const ITEM_MINECRAFT_BIRCH_BOAT: &str = "item.minecraft.birch_boat";
+pub const ITEM_MINECRAFT_BIRCH_BOAT: &str = "item_stack.minecraft.birch_boat";
 #[doc = "Birch Boat with Chest"]
-pub const ITEM_MINECRAFT_BIRCH_CHEST_BOAT: &str = "item.minecraft.birch_chest_boat";
+pub const ITEM_MINECRAFT_BIRCH_CHEST_BOAT: &str = "item_stack.minecraft.birch_chest_boat";
 #[doc = "Black Bundle"]
-pub const ITEM_MINECRAFT_BLACK_BUNDLE: &str = "item.minecraft.black_bundle";
+pub const ITEM_MINECRAFT_BLACK_BUNDLE: &str = "item_stack.minecraft.black_bundle";
 #[doc = "Black Dye"]
-pub const ITEM_MINECRAFT_BLACK_DYE: &str = "item.minecraft.black_dye";
+pub const ITEM_MINECRAFT_BLACK_DYE: &str = "item_stack.minecraft.black_dye";
 #[doc = "Black Harness"]
-pub const ITEM_MINECRAFT_BLACK_HARNESS: &str = "item.minecraft.black_harness";
+pub const ITEM_MINECRAFT_BLACK_HARNESS: &str = "item_stack.minecraft.black_harness";
 #[doc = "Blade Pottery Shard"]
-pub const ITEM_MINECRAFT_BLADE_POTTERY_SHARD: &str = "item.minecraft.blade_pottery_shard";
+pub const ITEM_MINECRAFT_BLADE_POTTERY_SHARD: &str = "item_stack.minecraft.blade_pottery_shard";
 #[doc = "Blade Pottery Sherd"]
-pub const ITEM_MINECRAFT_BLADE_POTTERY_SHERD: &str = "item.minecraft.blade_pottery_sherd";
+pub const ITEM_MINECRAFT_BLADE_POTTERY_SHERD: &str = "item_stack.minecraft.blade_pottery_sherd";
 #[doc = "Blaze Powder"]
-pub const ITEM_MINECRAFT_BLAZE_POWDER: &str = "item.minecraft.blaze_powder";
+pub const ITEM_MINECRAFT_BLAZE_POWDER: &str = "item_stack.minecraft.blaze_powder";
 #[doc = "Blaze Rod"]
-pub const ITEM_MINECRAFT_BLAZE_ROD: &str = "item.minecraft.blaze_rod";
+pub const ITEM_MINECRAFT_BLAZE_ROD: &str = "item_stack.minecraft.blaze_rod";
 #[doc = "Blaze Spawn Egg"]
-pub const ITEM_MINECRAFT_BLAZE_SPAWN_EGG: &str = "item.minecraft.blaze_spawn_egg";
+pub const ITEM_MINECRAFT_BLAZE_SPAWN_EGG: &str = "item_stack.minecraft.blaze_spawn_egg";
 #[doc = "Blue Bundle"]
-pub const ITEM_MINECRAFT_BLUE_BUNDLE: &str = "item.minecraft.blue_bundle";
+pub const ITEM_MINECRAFT_BLUE_BUNDLE: &str = "item_stack.minecraft.blue_bundle";
 #[doc = "Blue Dye"]
-pub const ITEM_MINECRAFT_BLUE_DYE: &str = "item.minecraft.blue_dye";
+pub const ITEM_MINECRAFT_BLUE_DYE: &str = "item_stack.minecraft.blue_dye";
 #[doc = "Blue Egg"]
-pub const ITEM_MINECRAFT_BLUE_EGG: &str = "item.minecraft.blue_egg";
+pub const ITEM_MINECRAFT_BLUE_EGG: &str = "item_stack.minecraft.blue_egg";
 #[doc = "Blue Harness"]
-pub const ITEM_MINECRAFT_BLUE_HARNESS: &str = "item.minecraft.blue_harness";
+pub const ITEM_MINECRAFT_BLUE_HARNESS: &str = "item_stack.minecraft.blue_harness";
 #[doc = "Bogged Spawn Egg"]
-pub const ITEM_MINECRAFT_BOGGED_SPAWN_EGG: &str = "item.minecraft.bogged_spawn_egg";
+pub const ITEM_MINECRAFT_BOGGED_SPAWN_EGG: &str = "item_stack.minecraft.bogged_spawn_egg";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_BOLT_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.bolt_armor_trim_smithing_template";
+    "item_stack.minecraft.bolt_armor_trim_smithing_template";
 #[doc = "Bolt Armor Trim"]
 pub const ITEM_MINECRAFT_BOLT_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.bolt_armor_trim_smithing_template.new";
+    "item_stack.minecraft.bolt_armor_trim_smithing_template.new";
 #[doc = "Bone"]
-pub const ITEM_MINECRAFT_BONE: &str = "item.minecraft.bone";
+pub const ITEM_MINECRAFT_BONE: &str = "item_stack.minecraft.bone";
 #[doc = "Bone Meal"]
-pub const ITEM_MINECRAFT_BONE_MEAL: &str = "item.minecraft.bone_meal";
+pub const ITEM_MINECRAFT_BONE_MEAL: &str = "item_stack.minecraft.bone_meal";
 #[doc = "Book"]
-pub const ITEM_MINECRAFT_BOOK: &str = "item.minecraft.book";
+pub const ITEM_MINECRAFT_BOOK: &str = "item_stack.minecraft.book";
 #[doc = "Bordure Indented Banner Pattern"]
 pub const ITEM_MINECRAFT_BORDURE_INDENTED_BANNER_PATTERN: &str =
-    "item.minecraft.bordure_indented_banner_pattern";
+    "item_stack.minecraft.bordure_indented_banner_pattern";
 #[doc = "Bow"]
-pub const ITEM_MINECRAFT_BOW: &str = "item.minecraft.bow";
+pub const ITEM_MINECRAFT_BOW: &str = "item_stack.minecraft.bow";
 #[doc = "Bowl"]
-pub const ITEM_MINECRAFT_BOWL: &str = "item.minecraft.bowl";
+pub const ITEM_MINECRAFT_BOWL: &str = "item_stack.minecraft.bowl";
 #[doc = "Bread"]
-pub const ITEM_MINECRAFT_BREAD: &str = "item.minecraft.bread";
+pub const ITEM_MINECRAFT_BREAD: &str = "item_stack.minecraft.bread";
 #[doc = "Breeze Rod"]
-pub const ITEM_MINECRAFT_BREEZE_ROD: &str = "item.minecraft.breeze_rod";
+pub const ITEM_MINECRAFT_BREEZE_ROD: &str = "item_stack.minecraft.breeze_rod";
 #[doc = "Breeze Spawn Egg"]
-pub const ITEM_MINECRAFT_BREEZE_SPAWN_EGG: &str = "item.minecraft.breeze_spawn_egg";
+pub const ITEM_MINECRAFT_BREEZE_SPAWN_EGG: &str = "item_stack.minecraft.breeze_spawn_egg";
 #[doc = "Brewer Pottery Shard"]
-pub const ITEM_MINECRAFT_BREWER_POTTERY_SHARD: &str = "item.minecraft.brewer_pottery_shard";
+pub const ITEM_MINECRAFT_BREWER_POTTERY_SHARD: &str = "item_stack.minecraft.brewer_pottery_shard";
 #[doc = "Brewer Pottery Sherd"]
-pub const ITEM_MINECRAFT_BREWER_POTTERY_SHERD: &str = "item.minecraft.brewer_pottery_sherd";
+pub const ITEM_MINECRAFT_BREWER_POTTERY_SHERD: &str = "item_stack.minecraft.brewer_pottery_sherd";
 #[doc = "Brewing Stand"]
-pub const ITEM_MINECRAFT_BREWING_STAND: &str = "item.minecraft.brewing_stand";
+pub const ITEM_MINECRAFT_BREWING_STAND: &str = "item_stack.minecraft.brewing_stand";
 #[doc = "Brick"]
-pub const ITEM_MINECRAFT_BRICK: &str = "item.minecraft.brick";
+pub const ITEM_MINECRAFT_BRICK: &str = "item_stack.minecraft.brick";
 #[doc = "Brown Bundle"]
-pub const ITEM_MINECRAFT_BROWN_BUNDLE: &str = "item.minecraft.brown_bundle";
+pub const ITEM_MINECRAFT_BROWN_BUNDLE: &str = "item_stack.minecraft.brown_bundle";
 #[doc = "Brown Dye"]
-pub const ITEM_MINECRAFT_BROWN_DYE: &str = "item.minecraft.brown_dye";
+pub const ITEM_MINECRAFT_BROWN_DYE: &str = "item_stack.minecraft.brown_dye";
 #[doc = "Brown Egg"]
-pub const ITEM_MINECRAFT_BROWN_EGG: &str = "item.minecraft.brown_egg";
+pub const ITEM_MINECRAFT_BROWN_EGG: &str = "item_stack.minecraft.brown_egg";
 #[doc = "Brown Harness"]
-pub const ITEM_MINECRAFT_BROWN_HARNESS: &str = "item.minecraft.brown_harness";
+pub const ITEM_MINECRAFT_BROWN_HARNESS: &str = "item_stack.minecraft.brown_harness";
 #[doc = "Brush"]
-pub const ITEM_MINECRAFT_BRUSH: &str = "item.minecraft.brush";
+pub const ITEM_MINECRAFT_BRUSH: &str = "item_stack.minecraft.brush";
 #[doc = "Bucket"]
-pub const ITEM_MINECRAFT_BUCKET: &str = "item.minecraft.bucket";
+pub const ITEM_MINECRAFT_BUCKET: &str = "item_stack.minecraft.bucket";
 #[doc = "Bundle"]
-pub const ITEM_MINECRAFT_BUNDLE: &str = "item.minecraft.bundle";
+pub const ITEM_MINECRAFT_BUNDLE: &str = "item_stack.minecraft.bundle";
 #[doc = "Empty"]
-pub const ITEM_MINECRAFT_BUNDLE_EMPTY: &str = "item.minecraft.bundle.empty";
+pub const ITEM_MINECRAFT_BUNDLE_EMPTY: &str = "item_stack.minecraft.bundle.empty";
 #[doc = "Can hold a mixed stack of items"]
-pub const ITEM_MINECRAFT_BUNDLE_EMPTY_DESCRIPTION: &str = "item.minecraft.bundle.empty.description";
+pub const ITEM_MINECRAFT_BUNDLE_EMPTY_DESCRIPTION: &str = "item_stack.minecraft.bundle.empty.description";
 #[doc = "Full"]
-pub const ITEM_MINECRAFT_BUNDLE_FULL: &str = "item.minecraft.bundle.full";
+pub const ITEM_MINECRAFT_BUNDLE_FULL: &str = "item_stack.minecraft.bundle.full";
 #[doc = "%s/%s"]
-pub const ITEM_MINECRAFT_BUNDLE_FULLNESS: &str = "item.minecraft.bundle.fullness";
+pub const ITEM_MINECRAFT_BUNDLE_FULLNESS: &str = "item_stack.minecraft.bundle.fullness";
 #[doc = "Burn Pottery Shard"]
-pub const ITEM_MINECRAFT_BURN_POTTERY_SHARD: &str = "item.minecraft.burn_pottery_shard";
+pub const ITEM_MINECRAFT_BURN_POTTERY_SHARD: &str = "item_stack.minecraft.burn_pottery_shard";
 #[doc = "Burn Pottery Sherd"]
-pub const ITEM_MINECRAFT_BURN_POTTERY_SHERD: &str = "item.minecraft.burn_pottery_sherd";
+pub const ITEM_MINECRAFT_BURN_POTTERY_SHERD: &str = "item_stack.minecraft.burn_pottery_sherd";
 #[doc = "Camel Husk Spawn Egg"]
-pub const ITEM_MINECRAFT_CAMEL_HUSK_SPAWN_EGG: &str = "item.minecraft.camel_husk_spawn_egg";
+pub const ITEM_MINECRAFT_CAMEL_HUSK_SPAWN_EGG: &str = "item_stack.minecraft.camel_husk_spawn_egg";
 #[doc = "Camel Spawn Egg"]
-pub const ITEM_MINECRAFT_CAMEL_SPAWN_EGG: &str = "item.minecraft.camel_spawn_egg";
+pub const ITEM_MINECRAFT_CAMEL_SPAWN_EGG: &str = "item_stack.minecraft.camel_spawn_egg";
 #[doc = "Carrot"]
-pub const ITEM_MINECRAFT_CARROT: &str = "item.minecraft.carrot";
+pub const ITEM_MINECRAFT_CARROT: &str = "item_stack.minecraft.carrot";
 #[doc = "Carrot on a Stick"]
-pub const ITEM_MINECRAFT_CARROT_ON_A_STICK: &str = "item.minecraft.carrot_on_a_stick";
+pub const ITEM_MINECRAFT_CARROT_ON_A_STICK: &str = "item_stack.minecraft.carrot_on_a_stick";
 #[doc = "Cat Spawn Egg"]
-pub const ITEM_MINECRAFT_CAT_SPAWN_EGG: &str = "item.minecraft.cat_spawn_egg";
+pub const ITEM_MINECRAFT_CAT_SPAWN_EGG: &str = "item_stack.minecraft.cat_spawn_egg";
 #[doc = "Cauldron"]
-pub const ITEM_MINECRAFT_CAULDRON: &str = "item.minecraft.cauldron";
+pub const ITEM_MINECRAFT_CAULDRON: &str = "item_stack.minecraft.cauldron";
 #[doc = "Cave Spider Spawn Egg"]
-pub const ITEM_MINECRAFT_CAVE_SPIDER_SPAWN_EGG: &str = "item.minecraft.cave_spider_spawn_egg";
+pub const ITEM_MINECRAFT_CAVE_SPIDER_SPAWN_EGG: &str = "item_stack.minecraft.cave_spider_spawn_egg";
 #[doc = "Chainmail Boots"]
-pub const ITEM_MINECRAFT_CHAINMAIL_BOOTS: &str = "item.minecraft.chainmail_boots";
+pub const ITEM_MINECRAFT_CHAINMAIL_BOOTS: &str = "item_stack.minecraft.chainmail_boots";
 #[doc = "Chainmail Chestplate"]
-pub const ITEM_MINECRAFT_CHAINMAIL_CHESTPLATE: &str = "item.minecraft.chainmail_chestplate";
+pub const ITEM_MINECRAFT_CHAINMAIL_CHESTPLATE: &str = "item_stack.minecraft.chainmail_chestplate";
 #[doc = "Chainmail Helmet"]
-pub const ITEM_MINECRAFT_CHAINMAIL_HELMET: &str = "item.minecraft.chainmail_helmet";
+pub const ITEM_MINECRAFT_CHAINMAIL_HELMET: &str = "item_stack.minecraft.chainmail_helmet";
 #[doc = "Chainmail Leggings"]
-pub const ITEM_MINECRAFT_CHAINMAIL_LEGGINGS: &str = "item.minecraft.chainmail_leggings";
+pub const ITEM_MINECRAFT_CHAINMAIL_LEGGINGS: &str = "item_stack.minecraft.chainmail_leggings";
 #[doc = "Charcoal"]
-pub const ITEM_MINECRAFT_CHARCOAL: &str = "item.minecraft.charcoal";
+pub const ITEM_MINECRAFT_CHARCOAL: &str = "item_stack.minecraft.charcoal";
 #[doc = "Cherry Boat"]
-pub const ITEM_MINECRAFT_CHERRY_BOAT: &str = "item.minecraft.cherry_boat";
+pub const ITEM_MINECRAFT_CHERRY_BOAT: &str = "item_stack.minecraft.cherry_boat";
 #[doc = "Cherry Boat with Chest"]
-pub const ITEM_MINECRAFT_CHERRY_CHEST_BOAT: &str = "item.minecraft.cherry_chest_boat";
+pub const ITEM_MINECRAFT_CHERRY_CHEST_BOAT: &str = "item_stack.minecraft.cherry_chest_boat";
 #[doc = "Minecart with Chest"]
-pub const ITEM_MINECRAFT_CHEST_MINECART: &str = "item.minecraft.chest_minecart";
+pub const ITEM_MINECRAFT_CHEST_MINECART: &str = "item_stack.minecraft.chest_minecart";
 #[doc = "Raw Chicken"]
-pub const ITEM_MINECRAFT_CHICKEN: &str = "item.minecraft.chicken";
+pub const ITEM_MINECRAFT_CHICKEN: &str = "item_stack.minecraft.chicken";
 #[doc = "Chicken Spawn Egg"]
-pub const ITEM_MINECRAFT_CHICKEN_SPAWN_EGG: &str = "item.minecraft.chicken_spawn_egg";
+pub const ITEM_MINECRAFT_CHICKEN_SPAWN_EGG: &str = "item_stack.minecraft.chicken_spawn_egg";
 #[doc = "Chorus Fruit"]
-pub const ITEM_MINECRAFT_CHORUS_FRUIT: &str = "item.minecraft.chorus_fruit";
+pub const ITEM_MINECRAFT_CHORUS_FRUIT: &str = "item_stack.minecraft.chorus_fruit";
 #[doc = "Clay Ball"]
-pub const ITEM_MINECRAFT_CLAY_BALL: &str = "item.minecraft.clay_ball";
+pub const ITEM_MINECRAFT_CLAY_BALL: &str = "item_stack.minecraft.clay_ball";
 #[doc = "Clock"]
-pub const ITEM_MINECRAFT_CLOCK: &str = "item.minecraft.clock";
+pub const ITEM_MINECRAFT_CLOCK: &str = "item_stack.minecraft.clock";
 #[doc = "Coal"]
-pub const ITEM_MINECRAFT_COAL: &str = "item.minecraft.coal";
+pub const ITEM_MINECRAFT_COAL: &str = "item_stack.minecraft.coal";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_COAST_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.coast_armor_trim_smithing_template";
+    "item_stack.minecraft.coast_armor_trim_smithing_template";
 #[doc = "Coast Armor Trim"]
 pub const ITEM_MINECRAFT_COAST_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.coast_armor_trim_smithing_template.new";
+    "item_stack.minecraft.coast_armor_trim_smithing_template.new";
 #[doc = "Cocoa Beans"]
-pub const ITEM_MINECRAFT_COCOA_BEANS: &str = "item.minecraft.cocoa_beans";
+pub const ITEM_MINECRAFT_COCOA_BEANS: &str = "item_stack.minecraft.cocoa_beans";
 #[doc = "Raw Cod"]
-pub const ITEM_MINECRAFT_COD: &str = "item.minecraft.cod";
+pub const ITEM_MINECRAFT_COD: &str = "item_stack.minecraft.cod";
 #[doc = "Bucket of Cod"]
-pub const ITEM_MINECRAFT_COD_BUCKET: &str = "item.minecraft.cod_bucket";
+pub const ITEM_MINECRAFT_COD_BUCKET: &str = "item_stack.minecraft.cod_bucket";
 #[doc = "Cod Spawn Egg"]
-pub const ITEM_MINECRAFT_COD_SPAWN_EGG: &str = "item.minecraft.cod_spawn_egg";
+pub const ITEM_MINECRAFT_COD_SPAWN_EGG: &str = "item_stack.minecraft.cod_spawn_egg";
 #[doc = "Minecart with Command Block"]
-pub const ITEM_MINECRAFT_COMMAND_BLOCK_MINECART: &str = "item.minecraft.command_block_minecart";
+pub const ITEM_MINECRAFT_COMMAND_BLOCK_MINECART: &str = "item_stack.minecraft.command_block_minecart";
 #[doc = "Compass"]
-pub const ITEM_MINECRAFT_COMPASS: &str = "item.minecraft.compass";
+pub const ITEM_MINECRAFT_COMPASS: &str = "item_stack.minecraft.compass";
 #[doc = "Steak"]
-pub const ITEM_MINECRAFT_COOKED_BEEF: &str = "item.minecraft.cooked_beef";
+pub const ITEM_MINECRAFT_COOKED_BEEF: &str = "item_stack.minecraft.cooked_beef";
 #[doc = "Cooked Chicken"]
-pub const ITEM_MINECRAFT_COOKED_CHICKEN: &str = "item.minecraft.cooked_chicken";
+pub const ITEM_MINECRAFT_COOKED_CHICKEN: &str = "item_stack.minecraft.cooked_chicken";
 #[doc = "Cooked Cod"]
-pub const ITEM_MINECRAFT_COOKED_COD: &str = "item.minecraft.cooked_cod";
+pub const ITEM_MINECRAFT_COOKED_COD: &str = "item_stack.minecraft.cooked_cod";
 #[doc = "Cooked Mutton"]
-pub const ITEM_MINECRAFT_COOKED_MUTTON: &str = "item.minecraft.cooked_mutton";
+pub const ITEM_MINECRAFT_COOKED_MUTTON: &str = "item_stack.minecraft.cooked_mutton";
 #[doc = "Cooked Porkchop"]
-pub const ITEM_MINECRAFT_COOKED_PORKCHOP: &str = "item.minecraft.cooked_porkchop";
+pub const ITEM_MINECRAFT_COOKED_PORKCHOP: &str = "item_stack.minecraft.cooked_porkchop";
 #[doc = "Cooked Rabbit"]
-pub const ITEM_MINECRAFT_COOKED_RABBIT: &str = "item.minecraft.cooked_rabbit";
+pub const ITEM_MINECRAFT_COOKED_RABBIT: &str = "item_stack.minecraft.cooked_rabbit";
 #[doc = "Cooked Salmon"]
-pub const ITEM_MINECRAFT_COOKED_SALMON: &str = "item.minecraft.cooked_salmon";
+pub const ITEM_MINECRAFT_COOKED_SALMON: &str = "item_stack.minecraft.cooked_salmon";
 #[doc = "Cookie"]
-pub const ITEM_MINECRAFT_COOKIE: &str = "item.minecraft.cookie";
+pub const ITEM_MINECRAFT_COOKIE: &str = "item_stack.minecraft.cookie";
 #[doc = "Copper Axe"]
-pub const ITEM_MINECRAFT_COPPER_AXE: &str = "item.minecraft.copper_axe";
+pub const ITEM_MINECRAFT_COPPER_AXE: &str = "item_stack.minecraft.copper_axe";
 #[doc = "Copper Boots"]
-pub const ITEM_MINECRAFT_COPPER_BOOTS: &str = "item.minecraft.copper_boots";
+pub const ITEM_MINECRAFT_COPPER_BOOTS: &str = "item_stack.minecraft.copper_boots";
 #[doc = "Copper Chestplate"]
-pub const ITEM_MINECRAFT_COPPER_CHESTPLATE: &str = "item.minecraft.copper_chestplate";
+pub const ITEM_MINECRAFT_COPPER_CHESTPLATE: &str = "item_stack.minecraft.copper_chestplate";
 #[doc = "Copper Golem Spawn Egg"]
-pub const ITEM_MINECRAFT_COPPER_GOLEM_SPAWN_EGG: &str = "item.minecraft.copper_golem_spawn_egg";
+pub const ITEM_MINECRAFT_COPPER_GOLEM_SPAWN_EGG: &str = "item_stack.minecraft.copper_golem_spawn_egg";
 #[doc = "Copper Helmet"]
-pub const ITEM_MINECRAFT_COPPER_HELMET: &str = "item.minecraft.copper_helmet";
+pub const ITEM_MINECRAFT_COPPER_HELMET: &str = "item_stack.minecraft.copper_helmet";
 #[doc = "Copper Hoe"]
-pub const ITEM_MINECRAFT_COPPER_HOE: &str = "item.minecraft.copper_hoe";
+pub const ITEM_MINECRAFT_COPPER_HOE: &str = "item_stack.minecraft.copper_hoe";
 #[doc = "Copper Horse Armor"]
-pub const ITEM_MINECRAFT_COPPER_HORSE_ARMOR: &str = "item.minecraft.copper_horse_armor";
+pub const ITEM_MINECRAFT_COPPER_HORSE_ARMOR: &str = "item_stack.minecraft.copper_horse_armor";
 #[doc = "Copper Ingot"]
-pub const ITEM_MINECRAFT_COPPER_INGOT: &str = "item.minecraft.copper_ingot";
+pub const ITEM_MINECRAFT_COPPER_INGOT: &str = "item_stack.minecraft.copper_ingot";
 #[doc = "Copper Leggings"]
-pub const ITEM_MINECRAFT_COPPER_LEGGINGS: &str = "item.minecraft.copper_leggings";
+pub const ITEM_MINECRAFT_COPPER_LEGGINGS: &str = "item_stack.minecraft.copper_leggings";
 #[doc = "Copper Nautilus Armor"]
-pub const ITEM_MINECRAFT_COPPER_NAUTILUS_ARMOR: &str = "item.minecraft.copper_nautilus_armor";
+pub const ITEM_MINECRAFT_COPPER_NAUTILUS_ARMOR: &str = "item_stack.minecraft.copper_nautilus_armor";
 #[doc = "Copper Nugget"]
-pub const ITEM_MINECRAFT_COPPER_NUGGET: &str = "item.minecraft.copper_nugget";
+pub const ITEM_MINECRAFT_COPPER_NUGGET: &str = "item_stack.minecraft.copper_nugget";
 #[doc = "Copper Pickaxe"]
-pub const ITEM_MINECRAFT_COPPER_PICKAXE: &str = "item.minecraft.copper_pickaxe";
+pub const ITEM_MINECRAFT_COPPER_PICKAXE: &str = "item_stack.minecraft.copper_pickaxe";
 #[doc = "Copper Shovel"]
-pub const ITEM_MINECRAFT_COPPER_SHOVEL: &str = "item.minecraft.copper_shovel";
+pub const ITEM_MINECRAFT_COPPER_SHOVEL: &str = "item_stack.minecraft.copper_shovel";
 #[doc = "Copper Spear"]
-pub const ITEM_MINECRAFT_COPPER_SPEAR: &str = "item.minecraft.copper_spear";
+pub const ITEM_MINECRAFT_COPPER_SPEAR: &str = "item_stack.minecraft.copper_spear";
 #[doc = "Copper Sword"]
-pub const ITEM_MINECRAFT_COPPER_SWORD: &str = "item.minecraft.copper_sword";
+pub const ITEM_MINECRAFT_COPPER_SWORD: &str = "item_stack.minecraft.copper_sword";
 #[doc = "Cow Spawn Egg"]
-pub const ITEM_MINECRAFT_COW_SPAWN_EGG: &str = "item.minecraft.cow_spawn_egg";
+pub const ITEM_MINECRAFT_COW_SPAWN_EGG: &str = "item_stack.minecraft.cow_spawn_egg";
 #[doc = "Creaking Spawn Egg"]
-pub const ITEM_MINECRAFT_CREAKING_SPAWN_EGG: &str = "item.minecraft.creaking_spawn_egg";
+pub const ITEM_MINECRAFT_CREAKING_SPAWN_EGG: &str = "item_stack.minecraft.creaking_spawn_egg";
 #[doc = "Banner Pattern"]
-pub const ITEM_MINECRAFT_CREEPER_BANNER_PATTERN: &str = "item.minecraft.creeper_banner_pattern";
+pub const ITEM_MINECRAFT_CREEPER_BANNER_PATTERN: &str = "item_stack.minecraft.creeper_banner_pattern";
 #[doc = "Creeper Charge"]
 pub const ITEM_MINECRAFT_CREEPER_BANNER_PATTERN_DESC: &str =
-    "item.minecraft.creeper_banner_pattern.desc";
+    "item_stack.minecraft.creeper_banner_pattern.desc";
 #[doc = "Creeper Charge Banner Pattern"]
 pub const ITEM_MINECRAFT_CREEPER_BANNER_PATTERN_NEW: &str =
-    "item.minecraft.creeper_banner_pattern.new";
+    "item_stack.minecraft.creeper_banner_pattern.new";
 #[doc = "Creeper Spawn Egg"]
-pub const ITEM_MINECRAFT_CREEPER_SPAWN_EGG: &str = "item.minecraft.creeper_spawn_egg";
+pub const ITEM_MINECRAFT_CREEPER_SPAWN_EGG: &str = "item_stack.minecraft.creeper_spawn_egg";
 #[doc = "Crossbow"]
-pub const ITEM_MINECRAFT_CROSSBOW: &str = "item.minecraft.crossbow";
+pub const ITEM_MINECRAFT_CROSSBOW: &str = "item_stack.minecraft.crossbow";
 #[doc = "Projectile:"]
-pub const ITEM_MINECRAFT_CROSSBOW_PROJECTILE: &str = "item.minecraft.crossbow.projectile";
+pub const ITEM_MINECRAFT_CROSSBOW_PROJECTILE: &str = "item_stack.minecraft.crossbow.projectile";
 #[doc = "Projectile: %s x %s"]
 pub const ITEM_MINECRAFT_CROSSBOW_PROJECTILE_MULTIPLE: &str =
-    "item.minecraft.crossbow.projectile.multiple";
+    "item_stack.minecraft.crossbow.projectile.multiple";
 #[doc = "Projectile: %s"]
 pub const ITEM_MINECRAFT_CROSSBOW_PROJECTILE_SINGLE: &str =
-    "item.minecraft.crossbow.projectile.single";
+    "item_stack.minecraft.crossbow.projectile.single";
 #[doc = "Cyan Bundle"]
-pub const ITEM_MINECRAFT_CYAN_BUNDLE: &str = "item.minecraft.cyan_bundle";
+pub const ITEM_MINECRAFT_CYAN_BUNDLE: &str = "item_stack.minecraft.cyan_bundle";
 #[doc = "Cyan Dye"]
-pub const ITEM_MINECRAFT_CYAN_DYE: &str = "item.minecraft.cyan_dye";
+pub const ITEM_MINECRAFT_CYAN_DYE: &str = "item_stack.minecraft.cyan_dye";
 #[doc = "Cyan Harness"]
-pub const ITEM_MINECRAFT_CYAN_HARNESS: &str = "item.minecraft.cyan_harness";
+pub const ITEM_MINECRAFT_CYAN_HARNESS: &str = "item_stack.minecraft.cyan_harness";
 #[doc = "Danger Pottery Shard"]
-pub const ITEM_MINECRAFT_DANGER_POTTERY_SHARD: &str = "item.minecraft.danger_pottery_shard";
+pub const ITEM_MINECRAFT_DANGER_POTTERY_SHARD: &str = "item_stack.minecraft.danger_pottery_shard";
 #[doc = "Danger Pottery Sherd"]
-pub const ITEM_MINECRAFT_DANGER_POTTERY_SHERD: &str = "item.minecraft.danger_pottery_sherd";
+pub const ITEM_MINECRAFT_DANGER_POTTERY_SHERD: &str = "item_stack.minecraft.danger_pottery_sherd";
 #[doc = "Dark Oak Boat"]
-pub const ITEM_MINECRAFT_DARK_OAK_BOAT: &str = "item.minecraft.dark_oak_boat";
+pub const ITEM_MINECRAFT_DARK_OAK_BOAT: &str = "item_stack.minecraft.dark_oak_boat";
 #[doc = "Dark Oak Boat with Chest"]
-pub const ITEM_MINECRAFT_DARK_OAK_CHEST_BOAT: &str = "item.minecraft.dark_oak_chest_boat";
+pub const ITEM_MINECRAFT_DARK_OAK_CHEST_BOAT: &str = "item_stack.minecraft.dark_oak_chest_boat";
 #[doc = "Debug Stick"]
-pub const ITEM_MINECRAFT_DEBUG_STICK: &str = "item.minecraft.debug_stick";
+pub const ITEM_MINECRAFT_DEBUG_STICK: &str = "item_stack.minecraft.debug_stick";
 #[doc = "%s has no properties"]
-pub const ITEM_MINECRAFT_DEBUG_STICK_EMPTY: &str = "item.minecraft.debug_stick.empty";
+pub const ITEM_MINECRAFT_DEBUG_STICK_EMPTY: &str = "item_stack.minecraft.debug_stick.empty";
 #[doc = "selected \"%s\" (%s)"]
-pub const ITEM_MINECRAFT_DEBUG_STICK_SELECT: &str = "item.minecraft.debug_stick.select";
+pub const ITEM_MINECRAFT_DEBUG_STICK_SELECT: &str = "item_stack.minecraft.debug_stick.select";
 #[doc = "\"%s\" to %s"]
-pub const ITEM_MINECRAFT_DEBUG_STICK_UPDATE: &str = "item.minecraft.debug_stick.update";
+pub const ITEM_MINECRAFT_DEBUG_STICK_UPDATE: &str = "item_stack.minecraft.debug_stick.update";
 #[doc = "Diamond"]
-pub const ITEM_MINECRAFT_DIAMOND: &str = "item.minecraft.diamond";
+pub const ITEM_MINECRAFT_DIAMOND: &str = "item_stack.minecraft.diamond";
 #[doc = "Diamond Axe"]
-pub const ITEM_MINECRAFT_DIAMOND_AXE: &str = "item.minecraft.diamond_axe";
+pub const ITEM_MINECRAFT_DIAMOND_AXE: &str = "item_stack.minecraft.diamond_axe";
 #[doc = "Diamond Boots"]
-pub const ITEM_MINECRAFT_DIAMOND_BOOTS: &str = "item.minecraft.diamond_boots";
+pub const ITEM_MINECRAFT_DIAMOND_BOOTS: &str = "item_stack.minecraft.diamond_boots";
 #[doc = "Diamond Chestplate"]
-pub const ITEM_MINECRAFT_DIAMOND_CHESTPLATE: &str = "item.minecraft.diamond_chestplate";
+pub const ITEM_MINECRAFT_DIAMOND_CHESTPLATE: &str = "item_stack.minecraft.diamond_chestplate";
 #[doc = "Diamond Helmet"]
-pub const ITEM_MINECRAFT_DIAMOND_HELMET: &str = "item.minecraft.diamond_helmet";
+pub const ITEM_MINECRAFT_DIAMOND_HELMET: &str = "item_stack.minecraft.diamond_helmet";
 #[doc = "Diamond Hoe"]
-pub const ITEM_MINECRAFT_DIAMOND_HOE: &str = "item.minecraft.diamond_hoe";
+pub const ITEM_MINECRAFT_DIAMOND_HOE: &str = "item_stack.minecraft.diamond_hoe";
 #[doc = "Diamond Horse Armor"]
-pub const ITEM_MINECRAFT_DIAMOND_HORSE_ARMOR: &str = "item.minecraft.diamond_horse_armor";
+pub const ITEM_MINECRAFT_DIAMOND_HORSE_ARMOR: &str = "item_stack.minecraft.diamond_horse_armor";
 #[doc = "Diamond Leggings"]
-pub const ITEM_MINECRAFT_DIAMOND_LEGGINGS: &str = "item.minecraft.diamond_leggings";
+pub const ITEM_MINECRAFT_DIAMOND_LEGGINGS: &str = "item_stack.minecraft.diamond_leggings";
 #[doc = "Diamond Nautilus Armor"]
-pub const ITEM_MINECRAFT_DIAMOND_NAUTILUS_ARMOR: &str = "item.minecraft.diamond_nautilus_armor";
+pub const ITEM_MINECRAFT_DIAMOND_NAUTILUS_ARMOR: &str = "item_stack.minecraft.diamond_nautilus_armor";
 #[doc = "Diamond Pickaxe"]
-pub const ITEM_MINECRAFT_DIAMOND_PICKAXE: &str = "item.minecraft.diamond_pickaxe";
+pub const ITEM_MINECRAFT_DIAMOND_PICKAXE: &str = "item_stack.minecraft.diamond_pickaxe";
 #[doc = "Diamond Shovel"]
-pub const ITEM_MINECRAFT_DIAMOND_SHOVEL: &str = "item.minecraft.diamond_shovel";
+pub const ITEM_MINECRAFT_DIAMOND_SHOVEL: &str = "item_stack.minecraft.diamond_shovel";
 #[doc = "Diamond Spear"]
-pub const ITEM_MINECRAFT_DIAMOND_SPEAR: &str = "item.minecraft.diamond_spear";
+pub const ITEM_MINECRAFT_DIAMOND_SPEAR: &str = "item_stack.minecraft.diamond_spear";
 #[doc = "Diamond Sword"]
-pub const ITEM_MINECRAFT_DIAMOND_SWORD: &str = "item.minecraft.diamond_sword";
+pub const ITEM_MINECRAFT_DIAMOND_SWORD: &str = "item_stack.minecraft.diamond_sword";
 #[doc = "Disc Fragment"]
-pub const ITEM_MINECRAFT_DISC_FRAGMENT_5: &str = "item.minecraft.disc_fragment_5";
+pub const ITEM_MINECRAFT_DISC_FRAGMENT_5: &str = "item_stack.minecraft.disc_fragment_5";
 #[doc = "Music Disc - 5"]
-pub const ITEM_MINECRAFT_DISC_FRAGMENT_5_DESC: &str = "item.minecraft.disc_fragment_5.desc";
+pub const ITEM_MINECRAFT_DISC_FRAGMENT_5_DESC: &str = "item_stack.minecraft.disc_fragment_5.desc";
 #[doc = "Dolphin Spawn Egg"]
-pub const ITEM_MINECRAFT_DOLPHIN_SPAWN_EGG: &str = "item.minecraft.dolphin_spawn_egg";
+pub const ITEM_MINECRAFT_DOLPHIN_SPAWN_EGG: &str = "item_stack.minecraft.dolphin_spawn_egg";
 #[doc = "Donkey Spawn Egg"]
-pub const ITEM_MINECRAFT_DONKEY_SPAWN_EGG: &str = "item.minecraft.donkey_spawn_egg";
+pub const ITEM_MINECRAFT_DONKEY_SPAWN_EGG: &str = "item_stack.minecraft.donkey_spawn_egg";
 #[doc = "Dragon's Breath"]
-pub const ITEM_MINECRAFT_DRAGON_BREATH: &str = "item.minecraft.dragon_breath";
+pub const ITEM_MINECRAFT_DRAGON_BREATH: &str = "item_stack.minecraft.dragon_breath";
 #[doc = "Dried Kelp"]
-pub const ITEM_MINECRAFT_DRIED_KELP: &str = "item.minecraft.dried_kelp";
+pub const ITEM_MINECRAFT_DRIED_KELP: &str = "item_stack.minecraft.dried_kelp";
 #[doc = "Drowned Spawn Egg"]
-pub const ITEM_MINECRAFT_DROWNED_SPAWN_EGG: &str = "item.minecraft.drowned_spawn_egg";
+pub const ITEM_MINECRAFT_DROWNED_SPAWN_EGG: &str = "item_stack.minecraft.drowned_spawn_egg";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_DUNE_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.dune_armor_trim_smithing_template";
+    "item_stack.minecraft.dune_armor_trim_smithing_template";
 #[doc = "Dune Armor Trim"]
 pub const ITEM_MINECRAFT_DUNE_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.dune_armor_trim_smithing_template.new";
+    "item_stack.minecraft.dune_armor_trim_smithing_template.new";
 #[doc = "Echo Shard"]
-pub const ITEM_MINECRAFT_ECHO_SHARD: &str = "item.minecraft.echo_shard";
+pub const ITEM_MINECRAFT_ECHO_SHARD: &str = "item_stack.minecraft.echo_shard";
 #[doc = "Egg"]
-pub const ITEM_MINECRAFT_EGG: &str = "item.minecraft.egg";
+pub const ITEM_MINECRAFT_EGG: &str = "item_stack.minecraft.egg";
 #[doc = "Elder Guardian Spawn Egg"]
-pub const ITEM_MINECRAFT_ELDER_GUARDIAN_SPAWN_EGG: &str = "item.minecraft.elder_guardian_spawn_egg";
+pub const ITEM_MINECRAFT_ELDER_GUARDIAN_SPAWN_EGG: &str = "item_stack.minecraft.elder_guardian_spawn_egg";
 #[doc = "Elytra"]
-pub const ITEM_MINECRAFT_ELYTRA: &str = "item.minecraft.elytra";
+pub const ITEM_MINECRAFT_ELYTRA: &str = "item_stack.minecraft.elytra";
 #[doc = "Emerald"]
-pub const ITEM_MINECRAFT_EMERALD: &str = "item.minecraft.emerald";
+pub const ITEM_MINECRAFT_EMERALD: &str = "item_stack.minecraft.emerald";
 #[doc = "Enchanted Book"]
-pub const ITEM_MINECRAFT_ENCHANTED_BOOK: &str = "item.minecraft.enchanted_book";
+pub const ITEM_MINECRAFT_ENCHANTED_BOOK: &str = "item_stack.minecraft.enchanted_book";
 #[doc = "Enchanted Golden Apple"]
-pub const ITEM_MINECRAFT_ENCHANTED_GOLDEN_APPLE: &str = "item.minecraft.enchanted_golden_apple";
+pub const ITEM_MINECRAFT_ENCHANTED_GOLDEN_APPLE: &str = "item_stack.minecraft.enchanted_golden_apple";
 #[doc = "End Crystal"]
-pub const ITEM_MINECRAFT_END_CRYSTAL: &str = "item.minecraft.end_crystal";
+pub const ITEM_MINECRAFT_END_CRYSTAL: &str = "item_stack.minecraft.end_crystal";
 #[doc = "Ender Dragon Spawn Egg"]
-pub const ITEM_MINECRAFT_ENDER_DRAGON_SPAWN_EGG: &str = "item.minecraft.ender_dragon_spawn_egg";
+pub const ITEM_MINECRAFT_ENDER_DRAGON_SPAWN_EGG: &str = "item_stack.minecraft.ender_dragon_spawn_egg";
 #[doc = "Eye of Ender"]
-pub const ITEM_MINECRAFT_ENDER_EYE: &str = "item.minecraft.ender_eye";
+pub const ITEM_MINECRAFT_ENDER_EYE: &str = "item_stack.minecraft.ender_eye";
 #[doc = "Ender Pearl"]
-pub const ITEM_MINECRAFT_ENDER_PEARL: &str = "item.minecraft.ender_pearl";
+pub const ITEM_MINECRAFT_ENDER_PEARL: &str = "item_stack.minecraft.ender_pearl";
 #[doc = "Enderman Spawn Egg"]
-pub const ITEM_MINECRAFT_ENDERMAN_SPAWN_EGG: &str = "item.minecraft.enderman_spawn_egg";
+pub const ITEM_MINECRAFT_ENDERMAN_SPAWN_EGG: &str = "item_stack.minecraft.enderman_spawn_egg";
 #[doc = "Endermite Spawn Egg"]
-pub const ITEM_MINECRAFT_ENDERMITE_SPAWN_EGG: &str = "item.minecraft.endermite_spawn_egg";
+pub const ITEM_MINECRAFT_ENDERMITE_SPAWN_EGG: &str = "item_stack.minecraft.endermite_spawn_egg";
 #[doc = "Evoker Spawn Egg"]
-pub const ITEM_MINECRAFT_EVOKER_SPAWN_EGG: &str = "item.minecraft.evoker_spawn_egg";
+pub const ITEM_MINECRAFT_EVOKER_SPAWN_EGG: &str = "item_stack.minecraft.evoker_spawn_egg";
 #[doc = "Bottle o' Enchanting"]
-pub const ITEM_MINECRAFT_EXPERIENCE_BOTTLE: &str = "item.minecraft.experience_bottle";
+pub const ITEM_MINECRAFT_EXPERIENCE_BOTTLE: &str = "item_stack.minecraft.experience_bottle";
 #[doc = "Explorer Pottery Shard"]
-pub const ITEM_MINECRAFT_EXPLORER_POTTERY_SHARD: &str = "item.minecraft.explorer_pottery_shard";
+pub const ITEM_MINECRAFT_EXPLORER_POTTERY_SHARD: &str = "item_stack.minecraft.explorer_pottery_shard";
 #[doc = "Explorer Pottery Sherd"]
-pub const ITEM_MINECRAFT_EXPLORER_POTTERY_SHERD: &str = "item.minecraft.explorer_pottery_sherd";
+pub const ITEM_MINECRAFT_EXPLORER_POTTERY_SHERD: &str = "item_stack.minecraft.explorer_pottery_sherd";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_EYE_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.eye_armor_trim_smithing_template";
+    "item_stack.minecraft.eye_armor_trim_smithing_template";
 #[doc = "Eye Armor Trim"]
 pub const ITEM_MINECRAFT_EYE_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.eye_armor_trim_smithing_template.new";
+    "item_stack.minecraft.eye_armor_trim_smithing_template.new";
 #[doc = "Feather"]
-pub const ITEM_MINECRAFT_FEATHER: &str = "item.minecraft.feather";
+pub const ITEM_MINECRAFT_FEATHER: &str = "item_stack.minecraft.feather";
 #[doc = "Fermented Spider Eye"]
-pub const ITEM_MINECRAFT_FERMENTED_SPIDER_EYE: &str = "item.minecraft.fermented_spider_eye";
+pub const ITEM_MINECRAFT_FERMENTED_SPIDER_EYE: &str = "item_stack.minecraft.fermented_spider_eye";
 #[doc = "Field Masoned Banner Pattern"]
 pub const ITEM_MINECRAFT_FIELD_MASONED_BANNER_PATTERN: &str =
-    "item.minecraft.field_masoned_banner_pattern";
+    "item_stack.minecraft.field_masoned_banner_pattern";
 #[doc = "Map"]
-pub const ITEM_MINECRAFT_FILLED_MAP: &str = "item.minecraft.filled_map";
+pub const ITEM_MINECRAFT_FILLED_MAP: &str = "item_stack.minecraft.filled_map";
 #[doc = "Fire Charge"]
-pub const ITEM_MINECRAFT_FIRE_CHARGE: &str = "item.minecraft.fire_charge";
+pub const ITEM_MINECRAFT_FIRE_CHARGE: &str = "item_stack.minecraft.fire_charge";
 #[doc = "Firework Rocket"]
-pub const ITEM_MINECRAFT_FIREWORK_ROCKET: &str = "item.minecraft.firework_rocket";
+pub const ITEM_MINECRAFT_FIREWORK_ROCKET: &str = "item_stack.minecraft.firework_rocket";
 #[doc = "Flight Duration:"]
-pub const ITEM_MINECRAFT_FIREWORK_ROCKET_FLIGHT: &str = "item.minecraft.firework_rocket.flight";
+pub const ITEM_MINECRAFT_FIREWORK_ROCKET_FLIGHT: &str = "item_stack.minecraft.firework_rocket.flight";
 #[doc = "%s x %s"]
 pub const ITEM_MINECRAFT_FIREWORK_ROCKET_MULTIPLE_STARS: &str =
-    "item.minecraft.firework_rocket.multiple_stars";
+    "item_stack.minecraft.firework_rocket.multiple_stars";
 #[doc = "%s"]
 pub const ITEM_MINECRAFT_FIREWORK_ROCKET_SINGLE_STAR: &str =
-    "item.minecraft.firework_rocket.single_star";
+    "item_stack.minecraft.firework_rocket.single_star";
 #[doc = "Firework Star"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR: &str = "item.minecraft.firework_star";
+pub const ITEM_MINECRAFT_FIREWORK_STAR: &str = "item_stack.minecraft.firework_star";
 #[doc = "Black"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_BLACK: &str = "item.minecraft.firework_star.black";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_BLACK: &str = "item_stack.minecraft.firework_star.black";
 #[doc = "Blue"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_BLUE: &str = "item.minecraft.firework_star.blue";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_BLUE: &str = "item_stack.minecraft.firework_star.blue";
 #[doc = "Brown"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_BROWN: &str = "item.minecraft.firework_star.brown";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_BROWN: &str = "item_stack.minecraft.firework_star.brown";
 #[doc = "Custom"]
 pub const ITEM_MINECRAFT_FIREWORK_STAR_CUSTOM_COLOR: &str =
-    "item.minecraft.firework_star.custom_color";
+    "item_stack.minecraft.firework_star.custom_color";
 #[doc = "Cyan"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_CYAN: &str = "item.minecraft.firework_star.cyan";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_CYAN: &str = "item_stack.minecraft.firework_star.cyan";
 #[doc = "Fade to"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_FADE_TO: &str = "item.minecraft.firework_star.fade_to";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_FADE_TO: &str = "item_stack.minecraft.firework_star.fade_to";
 #[doc = "Twinkle"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_FLICKER: &str = "item.minecraft.firework_star.flicker";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_FLICKER: &str = "item_stack.minecraft.firework_star.flicker";
 #[doc = "Gray"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_GRAY: &str = "item.minecraft.firework_star.gray";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_GRAY: &str = "item_stack.minecraft.firework_star.gray";
 #[doc = "Green"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_GREEN: &str = "item.minecraft.firework_star.green";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_GREEN: &str = "item_stack.minecraft.firework_star.green";
 #[doc = "Light Blue"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_LIGHT_BLUE: &str = "item.minecraft.firework_star.light_blue";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_LIGHT_BLUE: &str = "item_stack.minecraft.firework_star.light_blue";
 #[doc = "Light Gray"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_LIGHT_GRAY: &str = "item.minecraft.firework_star.light_gray";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_LIGHT_GRAY: &str = "item_stack.minecraft.firework_star.light_gray";
 #[doc = "Lime"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_LIME: &str = "item.minecraft.firework_star.lime";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_LIME: &str = "item_stack.minecraft.firework_star.lime";
 #[doc = "Magenta"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_MAGENTA: &str = "item.minecraft.firework_star.magenta";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_MAGENTA: &str = "item_stack.minecraft.firework_star.magenta";
 #[doc = "Orange"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_ORANGE: &str = "item.minecraft.firework_star.orange";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_ORANGE: &str = "item_stack.minecraft.firework_star.orange";
 #[doc = "Pink"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_PINK: &str = "item.minecraft.firework_star.pink";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_PINK: &str = "item_stack.minecraft.firework_star.pink";
 #[doc = "Purple"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_PURPLE: &str = "item.minecraft.firework_star.purple";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_PURPLE: &str = "item_stack.minecraft.firework_star.purple";
 #[doc = "Red"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_RED: &str = "item.minecraft.firework_star.red";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_RED: &str = "item_stack.minecraft.firework_star.red";
 #[doc = "Unknown Shape"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_SHAPE: &str = "item.minecraft.firework_star.shape";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_SHAPE: &str = "item_stack.minecraft.firework_star.shape";
 #[doc = "Burst"]
 pub const ITEM_MINECRAFT_FIREWORK_STAR_SHAPE_BURST: &str =
-    "item.minecraft.firework_star.shape.burst";
+    "item_stack.minecraft.firework_star.shape.burst";
 #[doc = "Creeper-shaped"]
 pub const ITEM_MINECRAFT_FIREWORK_STAR_SHAPE_CREEPER: &str =
-    "item.minecraft.firework_star.shape.creeper";
+    "item_stack.minecraft.firework_star.shape.creeper";
 #[doc = "Large Ball"]
 pub const ITEM_MINECRAFT_FIREWORK_STAR_SHAPE_LARGE_BALL: &str =
-    "item.minecraft.firework_star.shape.large_ball";
+    "item_stack.minecraft.firework_star.shape.large_ball";
 #[doc = "Small Ball"]
 pub const ITEM_MINECRAFT_FIREWORK_STAR_SHAPE_SMALL_BALL: &str =
-    "item.minecraft.firework_star.shape.small_ball";
+    "item_stack.minecraft.firework_star.shape.small_ball";
 #[doc = "Star-shaped"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_SHAPE_STAR: &str = "item.minecraft.firework_star.shape.star";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_SHAPE_STAR: &str = "item_stack.minecraft.firework_star.shape.star";
 #[doc = "Trail"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_TRAIL: &str = "item.minecraft.firework_star.trail";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_TRAIL: &str = "item_stack.minecraft.firework_star.trail";
 #[doc = "White"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_WHITE: &str = "item.minecraft.firework_star.white";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_WHITE: &str = "item_stack.minecraft.firework_star.white";
 #[doc = "Yellow"]
-pub const ITEM_MINECRAFT_FIREWORK_STAR_YELLOW: &str = "item.minecraft.firework_star.yellow";
+pub const ITEM_MINECRAFT_FIREWORK_STAR_YELLOW: &str = "item_stack.minecraft.firework_star.yellow";
 #[doc = "Fishing Rod"]
-pub const ITEM_MINECRAFT_FISHING_ROD: &str = "item.minecraft.fishing_rod";
+pub const ITEM_MINECRAFT_FISHING_ROD: &str = "item_stack.minecraft.fishing_rod";
 #[doc = "Flint"]
-pub const ITEM_MINECRAFT_FLINT: &str = "item.minecraft.flint";
+pub const ITEM_MINECRAFT_FLINT: &str = "item_stack.minecraft.flint";
 #[doc = "Flint and Steel"]
-pub const ITEM_MINECRAFT_FLINT_AND_STEEL: &str = "item.minecraft.flint_and_steel";
+pub const ITEM_MINECRAFT_FLINT_AND_STEEL: &str = "item_stack.minecraft.flint_and_steel";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_FLOW_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.flow_armor_trim_smithing_template";
+    "item_stack.minecraft.flow_armor_trim_smithing_template";
 #[doc = "Flow Armor Trim"]
 pub const ITEM_MINECRAFT_FLOW_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.flow_armor_trim_smithing_template.new";
+    "item_stack.minecraft.flow_armor_trim_smithing_template.new";
 #[doc = "Banner Pattern"]
-pub const ITEM_MINECRAFT_FLOW_BANNER_PATTERN: &str = "item.minecraft.flow_banner_pattern";
+pub const ITEM_MINECRAFT_FLOW_BANNER_PATTERN: &str = "item_stack.minecraft.flow_banner_pattern";
 #[doc = "Flow"]
-pub const ITEM_MINECRAFT_FLOW_BANNER_PATTERN_DESC: &str = "item.minecraft.flow_banner_pattern.desc";
+pub const ITEM_MINECRAFT_FLOW_BANNER_PATTERN_DESC: &str = "item_stack.minecraft.flow_banner_pattern.desc";
 #[doc = "Flow Banner Pattern"]
-pub const ITEM_MINECRAFT_FLOW_BANNER_PATTERN_NEW: &str = "item.minecraft.flow_banner_pattern.new";
+pub const ITEM_MINECRAFT_FLOW_BANNER_PATTERN_NEW: &str = "item_stack.minecraft.flow_banner_pattern.new";
 #[doc = "Flow Pottery Sherd"]
-pub const ITEM_MINECRAFT_FLOW_POTTERY_SHERD: &str = "item.minecraft.flow_pottery_sherd";
+pub const ITEM_MINECRAFT_FLOW_POTTERY_SHERD: &str = "item_stack.minecraft.flow_pottery_sherd";
 #[doc = "Banner Pattern"]
-pub const ITEM_MINECRAFT_FLOWER_BANNER_PATTERN: &str = "item.minecraft.flower_banner_pattern";
+pub const ITEM_MINECRAFT_FLOWER_BANNER_PATTERN: &str = "item_stack.minecraft.flower_banner_pattern";
 #[doc = "Flower Charge"]
 pub const ITEM_MINECRAFT_FLOWER_BANNER_PATTERN_DESC: &str =
-    "item.minecraft.flower_banner_pattern.desc";
+    "item_stack.minecraft.flower_banner_pattern.desc";
 #[doc = "Flower Charge Banner Pattern"]
 pub const ITEM_MINECRAFT_FLOWER_BANNER_PATTERN_NEW: &str =
-    "item.minecraft.flower_banner_pattern.new";
+    "item_stack.minecraft.flower_banner_pattern.new";
 #[doc = "Flower Pot"]
-pub const ITEM_MINECRAFT_FLOWER_POT: &str = "item.minecraft.flower_pot";
+pub const ITEM_MINECRAFT_FLOWER_POT: &str = "item_stack.minecraft.flower_pot";
 #[doc = "Fox Spawn Egg"]
-pub const ITEM_MINECRAFT_FOX_SPAWN_EGG: &str = "item.minecraft.fox_spawn_egg";
+pub const ITEM_MINECRAFT_FOX_SPAWN_EGG: &str = "item_stack.minecraft.fox_spawn_egg";
 #[doc = "Friend Pottery Shard"]
-pub const ITEM_MINECRAFT_FRIEND_POTTERY_SHARD: &str = "item.minecraft.friend_pottery_shard";
+pub const ITEM_MINECRAFT_FRIEND_POTTERY_SHARD: &str = "item_stack.minecraft.friend_pottery_shard";
 #[doc = "Friend Pottery Sherd"]
-pub const ITEM_MINECRAFT_FRIEND_POTTERY_SHERD: &str = "item.minecraft.friend_pottery_sherd";
+pub const ITEM_MINECRAFT_FRIEND_POTTERY_SHERD: &str = "item_stack.minecraft.friend_pottery_sherd";
 #[doc = "Frog Spawn Egg"]
-pub const ITEM_MINECRAFT_FROG_SPAWN_EGG: &str = "item.minecraft.frog_spawn_egg";
+pub const ITEM_MINECRAFT_FROG_SPAWN_EGG: &str = "item_stack.minecraft.frog_spawn_egg";
 #[doc = "Minecart with Furnace"]
-pub const ITEM_MINECRAFT_FURNACE_MINECART: &str = "item.minecraft.furnace_minecart";
+pub const ITEM_MINECRAFT_FURNACE_MINECART: &str = "item_stack.minecraft.furnace_minecart";
 #[doc = "Ghast Spawn Egg"]
-pub const ITEM_MINECRAFT_GHAST_SPAWN_EGG: &str = "item.minecraft.ghast_spawn_egg";
+pub const ITEM_MINECRAFT_GHAST_SPAWN_EGG: &str = "item_stack.minecraft.ghast_spawn_egg";
 #[doc = "Ghast Tear"]
-pub const ITEM_MINECRAFT_GHAST_TEAR: &str = "item.minecraft.ghast_tear";
+pub const ITEM_MINECRAFT_GHAST_TEAR: &str = "item_stack.minecraft.ghast_tear";
 #[doc = "Glass Bottle"]
-pub const ITEM_MINECRAFT_GLASS_BOTTLE: &str = "item.minecraft.glass_bottle";
+pub const ITEM_MINECRAFT_GLASS_BOTTLE: &str = "item_stack.minecraft.glass_bottle";
 #[doc = "Glistering Melon Slice"]
-pub const ITEM_MINECRAFT_GLISTERING_MELON_SLICE: &str = "item.minecraft.glistering_melon_slice";
+pub const ITEM_MINECRAFT_GLISTERING_MELON_SLICE: &str = "item_stack.minecraft.glistering_melon_slice";
 #[doc = "Banner Pattern"]
-pub const ITEM_MINECRAFT_GLOBE_BANNER_PATTERN: &str = "item.minecraft.globe_banner_pattern";
+pub const ITEM_MINECRAFT_GLOBE_BANNER_PATTERN: &str = "item_stack.minecraft.globe_banner_pattern";
 #[doc = "Globe"]
 pub const ITEM_MINECRAFT_GLOBE_BANNER_PATTERN_DESC: &str =
-    "item.minecraft.globe_banner_pattern.desc";
+    "item_stack.minecraft.globe_banner_pattern.desc";
 #[doc = "Globe Banner Pattern"]
-pub const ITEM_MINECRAFT_GLOBE_BANNER_PATTERN_NEW: &str = "item.minecraft.globe_banner_pattern.new";
+pub const ITEM_MINECRAFT_GLOBE_BANNER_PATTERN_NEW: &str = "item_stack.minecraft.globe_banner_pattern.new";
 #[doc = "Glow Berries"]
-pub const ITEM_MINECRAFT_GLOW_BERRIES: &str = "item.minecraft.glow_berries";
+pub const ITEM_MINECRAFT_GLOW_BERRIES: &str = "item_stack.minecraft.glow_berries";
 #[doc = "Glow Ink Sac"]
-pub const ITEM_MINECRAFT_GLOW_INK_SAC: &str = "item.minecraft.glow_ink_sac";
+pub const ITEM_MINECRAFT_GLOW_INK_SAC: &str = "item_stack.minecraft.glow_ink_sac";
 #[doc = "Glow Item Frame"]
-pub const ITEM_MINECRAFT_GLOW_ITEM_FRAME: &str = "item.minecraft.glow_item_frame";
+pub const ITEM_MINECRAFT_GLOW_ITEM_FRAME: &str = "item_stack.minecraft.glow_item_frame";
 #[doc = "Glow Squid Spawn Egg"]
-pub const ITEM_MINECRAFT_GLOW_SQUID_SPAWN_EGG: &str = "item.minecraft.glow_squid_spawn_egg";
+pub const ITEM_MINECRAFT_GLOW_SQUID_SPAWN_EGG: &str = "item_stack.minecraft.glow_squid_spawn_egg";
 #[doc = "Glowstone Dust"]
-pub const ITEM_MINECRAFT_GLOWSTONE_DUST: &str = "item.minecraft.glowstone_dust";
+pub const ITEM_MINECRAFT_GLOWSTONE_DUST: &str = "item_stack.minecraft.glowstone_dust";
 #[doc = "Goat Horn"]
-pub const ITEM_MINECRAFT_GOAT_HORN: &str = "item.minecraft.goat_horn";
+pub const ITEM_MINECRAFT_GOAT_HORN: &str = "item_stack.minecraft.goat_horn";
 #[doc = "Goat Spawn Egg"]
-pub const ITEM_MINECRAFT_GOAT_SPAWN_EGG: &str = "item.minecraft.goat_spawn_egg";
+pub const ITEM_MINECRAFT_GOAT_SPAWN_EGG: &str = "item_stack.minecraft.goat_spawn_egg";
 #[doc = "Gold Ingot"]
-pub const ITEM_MINECRAFT_GOLD_INGOT: &str = "item.minecraft.gold_ingot";
+pub const ITEM_MINECRAFT_GOLD_INGOT: &str = "item_stack.minecraft.gold_ingot";
 #[doc = "Gold Nugget"]
-pub const ITEM_MINECRAFT_GOLD_NUGGET: &str = "item.minecraft.gold_nugget";
+pub const ITEM_MINECRAFT_GOLD_NUGGET: &str = "item_stack.minecraft.gold_nugget";
 #[doc = "Golden Apple"]
-pub const ITEM_MINECRAFT_GOLDEN_APPLE: &str = "item.minecraft.golden_apple";
+pub const ITEM_MINECRAFT_GOLDEN_APPLE: &str = "item_stack.minecraft.golden_apple";
 #[doc = "Golden Axe"]
-pub const ITEM_MINECRAFT_GOLDEN_AXE: &str = "item.minecraft.golden_axe";
+pub const ITEM_MINECRAFT_GOLDEN_AXE: &str = "item_stack.minecraft.golden_axe";
 #[doc = "Golden Boots"]
-pub const ITEM_MINECRAFT_GOLDEN_BOOTS: &str = "item.minecraft.golden_boots";
+pub const ITEM_MINECRAFT_GOLDEN_BOOTS: &str = "item_stack.minecraft.golden_boots";
 #[doc = "Golden Carrot"]
-pub const ITEM_MINECRAFT_GOLDEN_CARROT: &str = "item.minecraft.golden_carrot";
+pub const ITEM_MINECRAFT_GOLDEN_CARROT: &str = "item_stack.minecraft.golden_carrot";
 #[doc = "Golden Chestplate"]
-pub const ITEM_MINECRAFT_GOLDEN_CHESTPLATE: &str = "item.minecraft.golden_chestplate";
+pub const ITEM_MINECRAFT_GOLDEN_CHESTPLATE: &str = "item_stack.minecraft.golden_chestplate";
 #[doc = "Golden Helmet"]
-pub const ITEM_MINECRAFT_GOLDEN_HELMET: &str = "item.minecraft.golden_helmet";
+pub const ITEM_MINECRAFT_GOLDEN_HELMET: &str = "item_stack.minecraft.golden_helmet";
 #[doc = "Golden Hoe"]
-pub const ITEM_MINECRAFT_GOLDEN_HOE: &str = "item.minecraft.golden_hoe";
+pub const ITEM_MINECRAFT_GOLDEN_HOE: &str = "item_stack.minecraft.golden_hoe";
 #[doc = "Golden Horse Armor"]
-pub const ITEM_MINECRAFT_GOLDEN_HORSE_ARMOR: &str = "item.minecraft.golden_horse_armor";
+pub const ITEM_MINECRAFT_GOLDEN_HORSE_ARMOR: &str = "item_stack.minecraft.golden_horse_armor";
 #[doc = "Golden Leggings"]
-pub const ITEM_MINECRAFT_GOLDEN_LEGGINGS: &str = "item.minecraft.golden_leggings";
+pub const ITEM_MINECRAFT_GOLDEN_LEGGINGS: &str = "item_stack.minecraft.golden_leggings";
 #[doc = "Golden Nautilus Armor"]
-pub const ITEM_MINECRAFT_GOLDEN_NAUTILUS_ARMOR: &str = "item.minecraft.golden_nautilus_armor";
+pub const ITEM_MINECRAFT_GOLDEN_NAUTILUS_ARMOR: &str = "item_stack.minecraft.golden_nautilus_armor";
 #[doc = "Golden Pickaxe"]
-pub const ITEM_MINECRAFT_GOLDEN_PICKAXE: &str = "item.minecraft.golden_pickaxe";
+pub const ITEM_MINECRAFT_GOLDEN_PICKAXE: &str = "item_stack.minecraft.golden_pickaxe";
 #[doc = "Golden Shovel"]
-pub const ITEM_MINECRAFT_GOLDEN_SHOVEL: &str = "item.minecraft.golden_shovel";
+pub const ITEM_MINECRAFT_GOLDEN_SHOVEL: &str = "item_stack.minecraft.golden_shovel";
 #[doc = "Golden Spear"]
-pub const ITEM_MINECRAFT_GOLDEN_SPEAR: &str = "item.minecraft.golden_spear";
+pub const ITEM_MINECRAFT_GOLDEN_SPEAR: &str = "item_stack.minecraft.golden_spear";
 #[doc = "Golden Sword"]
-pub const ITEM_MINECRAFT_GOLDEN_SWORD: &str = "item.minecraft.golden_sword";
+pub const ITEM_MINECRAFT_GOLDEN_SWORD: &str = "item_stack.minecraft.golden_sword";
 #[doc = "Gray Bundle"]
-pub const ITEM_MINECRAFT_GRAY_BUNDLE: &str = "item.minecraft.gray_bundle";
+pub const ITEM_MINECRAFT_GRAY_BUNDLE: &str = "item_stack.minecraft.gray_bundle";
 #[doc = "Gray Dye"]
-pub const ITEM_MINECRAFT_GRAY_DYE: &str = "item.minecraft.gray_dye";
+pub const ITEM_MINECRAFT_GRAY_DYE: &str = "item_stack.minecraft.gray_dye";
 #[doc = "Gray Harness"]
-pub const ITEM_MINECRAFT_GRAY_HARNESS: &str = "item.minecraft.gray_harness";
+pub const ITEM_MINECRAFT_GRAY_HARNESS: &str = "item_stack.minecraft.gray_harness";
 #[doc = "Green Bundle"]
-pub const ITEM_MINECRAFT_GREEN_BUNDLE: &str = "item.minecraft.green_bundle";
+pub const ITEM_MINECRAFT_GREEN_BUNDLE: &str = "item_stack.minecraft.green_bundle";
 #[doc = "Green Dye"]
-pub const ITEM_MINECRAFT_GREEN_DYE: &str = "item.minecraft.green_dye";
+pub const ITEM_MINECRAFT_GREEN_DYE: &str = "item_stack.minecraft.green_dye";
 #[doc = "Green Harness"]
-pub const ITEM_MINECRAFT_GREEN_HARNESS: &str = "item.minecraft.green_harness";
+pub const ITEM_MINECRAFT_GREEN_HARNESS: &str = "item_stack.minecraft.green_harness";
 #[doc = "Guardian Spawn Egg"]
-pub const ITEM_MINECRAFT_GUARDIAN_SPAWN_EGG: &str = "item.minecraft.guardian_spawn_egg";
+pub const ITEM_MINECRAFT_GUARDIAN_SPAWN_EGG: &str = "item_stack.minecraft.guardian_spawn_egg";
 #[doc = "Gunpowder"]
-pub const ITEM_MINECRAFT_GUNPOWDER: &str = "item.minecraft.gunpowder";
+pub const ITEM_MINECRAFT_GUNPOWDER: &str = "item_stack.minecraft.gunpowder";
 #[doc = "Banner Pattern"]
-pub const ITEM_MINECRAFT_GUSTER_BANNER_PATTERN: &str = "item.minecraft.guster_banner_pattern";
+pub const ITEM_MINECRAFT_GUSTER_BANNER_PATTERN: &str = "item_stack.minecraft.guster_banner_pattern";
 #[doc = "Guster"]
 pub const ITEM_MINECRAFT_GUSTER_BANNER_PATTERN_DESC: &str =
-    "item.minecraft.guster_banner_pattern.desc";
+    "item_stack.minecraft.guster_banner_pattern.desc";
 #[doc = "Guster Banner Pattern"]
 pub const ITEM_MINECRAFT_GUSTER_BANNER_PATTERN_NEW: &str =
-    "item.minecraft.guster_banner_pattern.new";
+    "item_stack.minecraft.guster_banner_pattern.new";
 #[doc = "Guster Pottery Sherd"]
-pub const ITEM_MINECRAFT_GUSTER_POTTERY_SHERD: &str = "item.minecraft.guster_pottery_sherd";
+pub const ITEM_MINECRAFT_GUSTER_POTTERY_SHERD: &str = "item_stack.minecraft.guster_pottery_sherd";
 #[doc = "Happy Ghast Spawn Egg"]
-pub const ITEM_MINECRAFT_HAPPY_GHAST_SPAWN_EGG: &str = "item.minecraft.happy_ghast_spawn_egg";
+pub const ITEM_MINECRAFT_HAPPY_GHAST_SPAWN_EGG: &str = "item_stack.minecraft.happy_ghast_spawn_egg";
 #[doc = "Harness"]
-pub const ITEM_MINECRAFT_HARNESS: &str = "item.minecraft.harness";
+pub const ITEM_MINECRAFT_HARNESS: &str = "item_stack.minecraft.harness";
 #[doc = "Heart of the Sea"]
-pub const ITEM_MINECRAFT_HEART_OF_THE_SEA: &str = "item.minecraft.heart_of_the_sea";
+pub const ITEM_MINECRAFT_HEART_OF_THE_SEA: &str = "item_stack.minecraft.heart_of_the_sea";
 #[doc = "Heart Pottery Shard"]
-pub const ITEM_MINECRAFT_HEART_POTTERY_SHARD: &str = "item.minecraft.heart_pottery_shard";
+pub const ITEM_MINECRAFT_HEART_POTTERY_SHARD: &str = "item_stack.minecraft.heart_pottery_shard";
 #[doc = "Heart Pottery Sherd"]
-pub const ITEM_MINECRAFT_HEART_POTTERY_SHERD: &str = "item.minecraft.heart_pottery_sherd";
+pub const ITEM_MINECRAFT_HEART_POTTERY_SHERD: &str = "item_stack.minecraft.heart_pottery_sherd";
 #[doc = "Heartbreak Pottery Shard"]
-pub const ITEM_MINECRAFT_HEARTBREAK_POTTERY_SHARD: &str = "item.minecraft.heartbreak_pottery_shard";
+pub const ITEM_MINECRAFT_HEARTBREAK_POTTERY_SHARD: &str = "item_stack.minecraft.heartbreak_pottery_shard";
 #[doc = "Heartbreak Pottery Sherd"]
-pub const ITEM_MINECRAFT_HEARTBREAK_POTTERY_SHERD: &str = "item.minecraft.heartbreak_pottery_sherd";
+pub const ITEM_MINECRAFT_HEARTBREAK_POTTERY_SHERD: &str = "item_stack.minecraft.heartbreak_pottery_sherd";
 #[doc = "Hoglin Spawn Egg"]
-pub const ITEM_MINECRAFT_HOGLIN_SPAWN_EGG: &str = "item.minecraft.hoglin_spawn_egg";
+pub const ITEM_MINECRAFT_HOGLIN_SPAWN_EGG: &str = "item_stack.minecraft.hoglin_spawn_egg";
 #[doc = "Honey Bottle"]
-pub const ITEM_MINECRAFT_HONEY_BOTTLE: &str = "item.minecraft.honey_bottle";
+pub const ITEM_MINECRAFT_HONEY_BOTTLE: &str = "item_stack.minecraft.honey_bottle";
 #[doc = "Honeycomb"]
-pub const ITEM_MINECRAFT_HONEYCOMB: &str = "item.minecraft.honeycomb";
+pub const ITEM_MINECRAFT_HONEYCOMB: &str = "item_stack.minecraft.honeycomb";
 #[doc = "Minecart with Hopper"]
-pub const ITEM_MINECRAFT_HOPPER_MINECART: &str = "item.minecraft.hopper_minecart";
+pub const ITEM_MINECRAFT_HOPPER_MINECART: &str = "item_stack.minecraft.hopper_minecart";
 #[doc = "Horse Spawn Egg"]
-pub const ITEM_MINECRAFT_HORSE_SPAWN_EGG: &str = "item.minecraft.horse_spawn_egg";
+pub const ITEM_MINECRAFT_HORSE_SPAWN_EGG: &str = "item_stack.minecraft.horse_spawn_egg";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_HOST_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.host_armor_trim_smithing_template";
+    "item_stack.minecraft.host_armor_trim_smithing_template";
 #[doc = "Host Armor Trim"]
 pub const ITEM_MINECRAFT_HOST_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.host_armor_trim_smithing_template.new";
+    "item_stack.minecraft.host_armor_trim_smithing_template.new";
 #[doc = "Howl Pottery Shard"]
-pub const ITEM_MINECRAFT_HOWL_POTTERY_SHARD: &str = "item.minecraft.howl_pottery_shard";
+pub const ITEM_MINECRAFT_HOWL_POTTERY_SHARD: &str = "item_stack.minecraft.howl_pottery_shard";
 #[doc = "Howl Pottery Sherd"]
-pub const ITEM_MINECRAFT_HOWL_POTTERY_SHERD: &str = "item.minecraft.howl_pottery_sherd";
+pub const ITEM_MINECRAFT_HOWL_POTTERY_SHERD: &str = "item_stack.minecraft.howl_pottery_sherd";
 #[doc = "Husk Spawn Egg"]
-pub const ITEM_MINECRAFT_HUSK_SPAWN_EGG: &str = "item.minecraft.husk_spawn_egg";
+pub const ITEM_MINECRAFT_HUSK_SPAWN_EGG: &str = "item_stack.minecraft.husk_spawn_egg";
 #[doc = "Ink Sac"]
-pub const ITEM_MINECRAFT_INK_SAC: &str = "item.minecraft.ink_sac";
+pub const ITEM_MINECRAFT_INK_SAC: &str = "item_stack.minecraft.ink_sac";
 #[doc = "Iron Axe"]
-pub const ITEM_MINECRAFT_IRON_AXE: &str = "item.minecraft.iron_axe";
+pub const ITEM_MINECRAFT_IRON_AXE: &str = "item_stack.minecraft.iron_axe";
 #[doc = "Iron Boots"]
-pub const ITEM_MINECRAFT_IRON_BOOTS: &str = "item.minecraft.iron_boots";
+pub const ITEM_MINECRAFT_IRON_BOOTS: &str = "item_stack.minecraft.iron_boots";
 #[doc = "Iron Chestplate"]
-pub const ITEM_MINECRAFT_IRON_CHESTPLATE: &str = "item.minecraft.iron_chestplate";
+pub const ITEM_MINECRAFT_IRON_CHESTPLATE: &str = "item_stack.minecraft.iron_chestplate";
 #[doc = "Iron Golem Spawn Egg"]
-pub const ITEM_MINECRAFT_IRON_GOLEM_SPAWN_EGG: &str = "item.minecraft.iron_golem_spawn_egg";
+pub const ITEM_MINECRAFT_IRON_GOLEM_SPAWN_EGG: &str = "item_stack.minecraft.iron_golem_spawn_egg";
 #[doc = "Iron Helmet"]
-pub const ITEM_MINECRAFT_IRON_HELMET: &str = "item.minecraft.iron_helmet";
+pub const ITEM_MINECRAFT_IRON_HELMET: &str = "item_stack.minecraft.iron_helmet";
 #[doc = "Iron Hoe"]
-pub const ITEM_MINECRAFT_IRON_HOE: &str = "item.minecraft.iron_hoe";
+pub const ITEM_MINECRAFT_IRON_HOE: &str = "item_stack.minecraft.iron_hoe";
 #[doc = "Iron Horse Armor"]
-pub const ITEM_MINECRAFT_IRON_HORSE_ARMOR: &str = "item.minecraft.iron_horse_armor";
+pub const ITEM_MINECRAFT_IRON_HORSE_ARMOR: &str = "item_stack.minecraft.iron_horse_armor";
 #[doc = "Iron Ingot"]
-pub const ITEM_MINECRAFT_IRON_INGOT: &str = "item.minecraft.iron_ingot";
+pub const ITEM_MINECRAFT_IRON_INGOT: &str = "item_stack.minecraft.iron_ingot";
 #[doc = "Iron Leggings"]
-pub const ITEM_MINECRAFT_IRON_LEGGINGS: &str = "item.minecraft.iron_leggings";
+pub const ITEM_MINECRAFT_IRON_LEGGINGS: &str = "item_stack.minecraft.iron_leggings";
 #[doc = "Iron Nautilus Armor"]
-pub const ITEM_MINECRAFT_IRON_NAUTILUS_ARMOR: &str = "item.minecraft.iron_nautilus_armor";
+pub const ITEM_MINECRAFT_IRON_NAUTILUS_ARMOR: &str = "item_stack.minecraft.iron_nautilus_armor";
 #[doc = "Iron Nugget"]
-pub const ITEM_MINECRAFT_IRON_NUGGET: &str = "item.minecraft.iron_nugget";
+pub const ITEM_MINECRAFT_IRON_NUGGET: &str = "item_stack.minecraft.iron_nugget";
 #[doc = "Iron Pickaxe"]
-pub const ITEM_MINECRAFT_IRON_PICKAXE: &str = "item.minecraft.iron_pickaxe";
+pub const ITEM_MINECRAFT_IRON_PICKAXE: &str = "item_stack.minecraft.iron_pickaxe";
 #[doc = "Iron Shovel"]
-pub const ITEM_MINECRAFT_IRON_SHOVEL: &str = "item.minecraft.iron_shovel";
+pub const ITEM_MINECRAFT_IRON_SHOVEL: &str = "item_stack.minecraft.iron_shovel";
 #[doc = "Iron Spear"]
-pub const ITEM_MINECRAFT_IRON_SPEAR: &str = "item.minecraft.iron_spear";
+pub const ITEM_MINECRAFT_IRON_SPEAR: &str = "item_stack.minecraft.iron_spear";
 #[doc = "Iron Sword"]
-pub const ITEM_MINECRAFT_IRON_SWORD: &str = "item.minecraft.iron_sword";
+pub const ITEM_MINECRAFT_IRON_SWORD: &str = "item_stack.minecraft.iron_sword";
 #[doc = "Item Frame"]
-pub const ITEM_MINECRAFT_ITEM_FRAME: &str = "item.minecraft.item_frame";
+pub const ITEM_MINECRAFT_ITEM_FRAME: &str = "item_stack.minecraft.item_frame";
 #[doc = "Jungle Boat"]
-pub const ITEM_MINECRAFT_JUNGLE_BOAT: &str = "item.minecraft.jungle_boat";
+pub const ITEM_MINECRAFT_JUNGLE_BOAT: &str = "item_stack.minecraft.jungle_boat";
 #[doc = "Jungle Boat with Chest"]
-pub const ITEM_MINECRAFT_JUNGLE_CHEST_BOAT: &str = "item.minecraft.jungle_chest_boat";
+pub const ITEM_MINECRAFT_JUNGLE_CHEST_BOAT: &str = "item_stack.minecraft.jungle_chest_boat";
 #[doc = "Knowledge Book"]
-pub const ITEM_MINECRAFT_KNOWLEDGE_BOOK: &str = "item.minecraft.knowledge_book";
+pub const ITEM_MINECRAFT_KNOWLEDGE_BOOK: &str = "item_stack.minecraft.knowledge_book";
 #[doc = "Lapis Lazuli"]
-pub const ITEM_MINECRAFT_LAPIS_LAZULI: &str = "item.minecraft.lapis_lazuli";
+pub const ITEM_MINECRAFT_LAPIS_LAZULI: &str = "item_stack.minecraft.lapis_lazuli";
 #[doc = "Lava Bucket"]
-pub const ITEM_MINECRAFT_LAVA_BUCKET: &str = "item.minecraft.lava_bucket";
+pub const ITEM_MINECRAFT_LAVA_BUCKET: &str = "item_stack.minecraft.lava_bucket";
 #[doc = "Lead"]
-pub const ITEM_MINECRAFT_LEAD: &str = "item.minecraft.lead";
+pub const ITEM_MINECRAFT_LEAD: &str = "item_stack.minecraft.lead";
 #[doc = "Leather"]
-pub const ITEM_MINECRAFT_LEATHER: &str = "item.minecraft.leather";
+pub const ITEM_MINECRAFT_LEATHER: &str = "item_stack.minecraft.leather";
 #[doc = "Leather Boots"]
-pub const ITEM_MINECRAFT_LEATHER_BOOTS: &str = "item.minecraft.leather_boots";
+pub const ITEM_MINECRAFT_LEATHER_BOOTS: &str = "item_stack.minecraft.leather_boots";
 #[doc = "Leather Tunic"]
-pub const ITEM_MINECRAFT_LEATHER_CHESTPLATE: &str = "item.minecraft.leather_chestplate";
+pub const ITEM_MINECRAFT_LEATHER_CHESTPLATE: &str = "item_stack.minecraft.leather_chestplate";
 #[doc = "Leather Cap"]
-pub const ITEM_MINECRAFT_LEATHER_HELMET: &str = "item.minecraft.leather_helmet";
+pub const ITEM_MINECRAFT_LEATHER_HELMET: &str = "item_stack.minecraft.leather_helmet";
 #[doc = "Leather Horse Armor"]
-pub const ITEM_MINECRAFT_LEATHER_HORSE_ARMOR: &str = "item.minecraft.leather_horse_armor";
+pub const ITEM_MINECRAFT_LEATHER_HORSE_ARMOR: &str = "item_stack.minecraft.leather_horse_armor";
 #[doc = "Leather Pants"]
-pub const ITEM_MINECRAFT_LEATHER_LEGGINGS: &str = "item.minecraft.leather_leggings";
+pub const ITEM_MINECRAFT_LEATHER_LEGGINGS: &str = "item_stack.minecraft.leather_leggings";
 #[doc = "Light Blue Bundle"]
-pub const ITEM_MINECRAFT_LIGHT_BLUE_BUNDLE: &str = "item.minecraft.light_blue_bundle";
+pub const ITEM_MINECRAFT_LIGHT_BLUE_BUNDLE: &str = "item_stack.minecraft.light_blue_bundle";
 #[doc = "Light Blue Dye"]
-pub const ITEM_MINECRAFT_LIGHT_BLUE_DYE: &str = "item.minecraft.light_blue_dye";
+pub const ITEM_MINECRAFT_LIGHT_BLUE_DYE: &str = "item_stack.minecraft.light_blue_dye";
 #[doc = "Light Blue Harness"]
-pub const ITEM_MINECRAFT_LIGHT_BLUE_HARNESS: &str = "item.minecraft.light_blue_harness";
+pub const ITEM_MINECRAFT_LIGHT_BLUE_HARNESS: &str = "item_stack.minecraft.light_blue_harness";
 #[doc = "Light Gray Bundle"]
-pub const ITEM_MINECRAFT_LIGHT_GRAY_BUNDLE: &str = "item.minecraft.light_gray_bundle";
+pub const ITEM_MINECRAFT_LIGHT_GRAY_BUNDLE: &str = "item_stack.minecraft.light_gray_bundle";
 #[doc = "Light Gray Dye"]
-pub const ITEM_MINECRAFT_LIGHT_GRAY_DYE: &str = "item.minecraft.light_gray_dye";
+pub const ITEM_MINECRAFT_LIGHT_GRAY_DYE: &str = "item_stack.minecraft.light_gray_dye";
 #[doc = "Light Gray Harness"]
-pub const ITEM_MINECRAFT_LIGHT_GRAY_HARNESS: &str = "item.minecraft.light_gray_harness";
+pub const ITEM_MINECRAFT_LIGHT_GRAY_HARNESS: &str = "item_stack.minecraft.light_gray_harness";
 #[doc = "Lime Bundle"]
-pub const ITEM_MINECRAFT_LIME_BUNDLE: &str = "item.minecraft.lime_bundle";
+pub const ITEM_MINECRAFT_LIME_BUNDLE: &str = "item_stack.minecraft.lime_bundle";
 #[doc = "Lime Dye"]
-pub const ITEM_MINECRAFT_LIME_DYE: &str = "item.minecraft.lime_dye";
+pub const ITEM_MINECRAFT_LIME_DYE: &str = "item_stack.minecraft.lime_dye";
 #[doc = "Lime Harness"]
-pub const ITEM_MINECRAFT_LIME_HARNESS: &str = "item.minecraft.lime_harness";
+pub const ITEM_MINECRAFT_LIME_HARNESS: &str = "item_stack.minecraft.lime_harness";
 #[doc = "Lingering Potion"]
-pub const ITEM_MINECRAFT_LINGERING_POTION: &str = "item.minecraft.lingering_potion";
+pub const ITEM_MINECRAFT_LINGERING_POTION: &str = "item_stack.minecraft.lingering_potion";
 #[doc = "Awkward Lingering Potion"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_AWKWARD: &str =
-    "item.minecraft.lingering_potion.effect.awkward";
+    "item_stack.minecraft.lingering_potion.effect.awkward";
 #[doc = "Lingering Uncraftable Potion"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_EMPTY: &str =
-    "item.minecraft.lingering_potion.effect.empty";
+    "item_stack.minecraft.lingering_potion.effect.empty";
 #[doc = "Lingering Potion of Fire Resistance"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_FIRE_RESISTANCE: &str =
-    "item.minecraft.lingering_potion.effect.fire_resistance";
+    "item_stack.minecraft.lingering_potion.effect.fire_resistance";
 #[doc = "Lingering Potion of Harming"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_HARMING: &str =
-    "item.minecraft.lingering_potion.effect.harming";
+    "item_stack.minecraft.lingering_potion.effect.harming";
 #[doc = "Lingering Potion of Healing"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_HEALING: &str =
-    "item.minecraft.lingering_potion.effect.healing";
+    "item_stack.minecraft.lingering_potion.effect.healing";
 #[doc = "Lingering Potion of Infestation"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_INFESTED: &str =
-    "item.minecraft.lingering_potion.effect.infested";
+    "item_stack.minecraft.lingering_potion.effect.infested";
 #[doc = "Lingering Potion of Invisibility"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_INVISIBILITY: &str =
-    "item.minecraft.lingering_potion.effect.invisibility";
+    "item_stack.minecraft.lingering_potion.effect.invisibility";
 #[doc = "Lingering Potion of Leaping"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_LEAPING: &str =
-    "item.minecraft.lingering_potion.effect.leaping";
+    "item_stack.minecraft.lingering_potion.effect.leaping";
 #[doc = "Lingering Potion of Levitation"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_LEVITATION: &str =
-    "item.minecraft.lingering_potion.effect.levitation";
+    "item_stack.minecraft.lingering_potion.effect.levitation";
 #[doc = "Lingering Potion of Luck"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_LUCK: &str =
-    "item.minecraft.lingering_potion.effect.luck";
+    "item_stack.minecraft.lingering_potion.effect.luck";
 #[doc = "Mundane Lingering Potion"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_MUNDANE: &str =
-    "item.minecraft.lingering_potion.effect.mundane";
+    "item_stack.minecraft.lingering_potion.effect.mundane";
 #[doc = "Lingering Potion of Night Vision"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_NIGHT_VISION: &str =
-    "item.minecraft.lingering_potion.effect.night_vision";
+    "item_stack.minecraft.lingering_potion.effect.night_vision";
 #[doc = "Lingering Potion of Oozing"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_OOZING: &str =
-    "item.minecraft.lingering_potion.effect.oozing";
+    "item_stack.minecraft.lingering_potion.effect.oozing";
 #[doc = "Lingering Potion of Poison"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_POISON: &str =
-    "item.minecraft.lingering_potion.effect.poison";
+    "item_stack.minecraft.lingering_potion.effect.poison";
 #[doc = "Lingering Potion of Regeneration"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_REGENERATION: &str =
-    "item.minecraft.lingering_potion.effect.regeneration";
+    "item_stack.minecraft.lingering_potion.effect.regeneration";
 #[doc = "Lingering Potion of Slow Falling"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_SLOW_FALLING: &str =
-    "item.minecraft.lingering_potion.effect.slow_falling";
+    "item_stack.minecraft.lingering_potion.effect.slow_falling";
 #[doc = "Lingering Potion of Slowness"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_SLOWNESS: &str =
-    "item.minecraft.lingering_potion.effect.slowness";
+    "item_stack.minecraft.lingering_potion.effect.slowness";
 #[doc = "Lingering Potion of Strength"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_STRENGTH: &str =
-    "item.minecraft.lingering_potion.effect.strength";
+    "item_stack.minecraft.lingering_potion.effect.strength";
 #[doc = "Lingering Potion of Swiftness"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_SWIFTNESS: &str =
-    "item.minecraft.lingering_potion.effect.swiftness";
+    "item_stack.minecraft.lingering_potion.effect.swiftness";
 #[doc = "Thick Lingering Potion"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_THICK: &str =
-    "item.minecraft.lingering_potion.effect.thick";
+    "item_stack.minecraft.lingering_potion.effect.thick";
 #[doc = "Lingering Potion of the Turtle Master"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_TURTLE_MASTER: &str =
-    "item.minecraft.lingering_potion.effect.turtle_master";
+    "item_stack.minecraft.lingering_potion.effect.turtle_master";
 #[doc = "Lingering Water Bottle"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_WATER: &str =
-    "item.minecraft.lingering_potion.effect.water";
+    "item_stack.minecraft.lingering_potion.effect.water";
 #[doc = "Lingering Potion of Water Breathing"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_WATER_BREATHING: &str =
-    "item.minecraft.lingering_potion.effect.water_breathing";
+    "item_stack.minecraft.lingering_potion.effect.water_breathing";
 #[doc = "Lingering Potion of Weakness"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_WEAKNESS: &str =
-    "item.minecraft.lingering_potion.effect.weakness";
+    "item_stack.minecraft.lingering_potion.effect.weakness";
 #[doc = "Lingering Potion of Weaving"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_WEAVING: &str =
-    "item.minecraft.lingering_potion.effect.weaving";
+    "item_stack.minecraft.lingering_potion.effect.weaving";
 #[doc = "Lingering Potion of Wind Charging"]
 pub const ITEM_MINECRAFT_LINGERING_POTION_EFFECT_WIND_CHARGED: &str =
-    "item.minecraft.lingering_potion.effect.wind_charged";
+    "item_stack.minecraft.lingering_potion.effect.wind_charged";
 #[doc = "Llama Spawn Egg"]
-pub const ITEM_MINECRAFT_LLAMA_SPAWN_EGG: &str = "item.minecraft.llama_spawn_egg";
+pub const ITEM_MINECRAFT_LLAMA_SPAWN_EGG: &str = "item_stack.minecraft.llama_spawn_egg";
 #[doc = "Lodestone Compass"]
-pub const ITEM_MINECRAFT_LODESTONE_COMPASS: &str = "item.minecraft.lodestone_compass";
+pub const ITEM_MINECRAFT_LODESTONE_COMPASS: &str = "item_stack.minecraft.lodestone_compass";
 #[doc = "Mace"]
-pub const ITEM_MINECRAFT_MACE: &str = "item.minecraft.mace";
+pub const ITEM_MINECRAFT_MACE: &str = "item_stack.minecraft.mace";
 #[doc = "Magenta Bundle"]
-pub const ITEM_MINECRAFT_MAGENTA_BUNDLE: &str = "item.minecraft.magenta_bundle";
+pub const ITEM_MINECRAFT_MAGENTA_BUNDLE: &str = "item_stack.minecraft.magenta_bundle";
 #[doc = "Magenta Dye"]
-pub const ITEM_MINECRAFT_MAGENTA_DYE: &str = "item.minecraft.magenta_dye";
+pub const ITEM_MINECRAFT_MAGENTA_DYE: &str = "item_stack.minecraft.magenta_dye";
 #[doc = "Magenta Harness"]
-pub const ITEM_MINECRAFT_MAGENTA_HARNESS: &str = "item.minecraft.magenta_harness";
+pub const ITEM_MINECRAFT_MAGENTA_HARNESS: &str = "item_stack.minecraft.magenta_harness";
 #[doc = "Magma Cream"]
-pub const ITEM_MINECRAFT_MAGMA_CREAM: &str = "item.minecraft.magma_cream";
+pub const ITEM_MINECRAFT_MAGMA_CREAM: &str = "item_stack.minecraft.magma_cream";
 #[doc = "Magma Cube Spawn Egg"]
-pub const ITEM_MINECRAFT_MAGMA_CUBE_SPAWN_EGG: &str = "item.minecraft.magma_cube_spawn_egg";
+pub const ITEM_MINECRAFT_MAGMA_CUBE_SPAWN_EGG: &str = "item_stack.minecraft.magma_cube_spawn_egg";
 #[doc = "Mangrove Boat"]
-pub const ITEM_MINECRAFT_MANGROVE_BOAT: &str = "item.minecraft.mangrove_boat";
+pub const ITEM_MINECRAFT_MANGROVE_BOAT: &str = "item_stack.minecraft.mangrove_boat";
 #[doc = "Mangrove Boat with Chest"]
-pub const ITEM_MINECRAFT_MANGROVE_CHEST_BOAT: &str = "item.minecraft.mangrove_chest_boat";
+pub const ITEM_MINECRAFT_MANGROVE_CHEST_BOAT: &str = "item_stack.minecraft.mangrove_chest_boat";
 #[doc = "Empty Map"]
-pub const ITEM_MINECRAFT_MAP: &str = "item.minecraft.map";
+pub const ITEM_MINECRAFT_MAP: &str = "item_stack.minecraft.map";
 #[doc = "Melon Seeds"]
-pub const ITEM_MINECRAFT_MELON_SEEDS: &str = "item.minecraft.melon_seeds";
+pub const ITEM_MINECRAFT_MELON_SEEDS: &str = "item_stack.minecraft.melon_seeds";
 #[doc = "Melon Slice"]
-pub const ITEM_MINECRAFT_MELON_SLICE: &str = "item.minecraft.melon_slice";
+pub const ITEM_MINECRAFT_MELON_SLICE: &str = "item_stack.minecraft.melon_slice";
 #[doc = "Milk Bucket"]
-pub const ITEM_MINECRAFT_MILK_BUCKET: &str = "item.minecraft.milk_bucket";
+pub const ITEM_MINECRAFT_MILK_BUCKET: &str = "item_stack.minecraft.milk_bucket";
 #[doc = "Minecart"]
-pub const ITEM_MINECRAFT_MINECART: &str = "item.minecraft.minecart";
+pub const ITEM_MINECRAFT_MINECART: &str = "item_stack.minecraft.minecart";
 #[doc = "Miner Pottery Shard"]
-pub const ITEM_MINECRAFT_MINER_POTTERY_SHARD: &str = "item.minecraft.miner_pottery_shard";
+pub const ITEM_MINECRAFT_MINER_POTTERY_SHARD: &str = "item_stack.minecraft.miner_pottery_shard";
 #[doc = "Miner Pottery Sherd"]
-pub const ITEM_MINECRAFT_MINER_POTTERY_SHERD: &str = "item.minecraft.miner_pottery_sherd";
+pub const ITEM_MINECRAFT_MINER_POTTERY_SHERD: &str = "item_stack.minecraft.miner_pottery_sherd";
 #[doc = "Banner Pattern"]
-pub const ITEM_MINECRAFT_MOJANG_BANNER_PATTERN: &str = "item.minecraft.mojang_banner_pattern";
+pub const ITEM_MINECRAFT_MOJANG_BANNER_PATTERN: &str = "item_stack.minecraft.mojang_banner_pattern";
 #[doc = "Thing"]
 pub const ITEM_MINECRAFT_MOJANG_BANNER_PATTERN_DESC: &str =
-    "item.minecraft.mojang_banner_pattern.desc";
+    "item_stack.minecraft.mojang_banner_pattern.desc";
 #[doc = "Thing Banner Pattern"]
 pub const ITEM_MINECRAFT_MOJANG_BANNER_PATTERN_NEW: &str =
-    "item.minecraft.mojang_banner_pattern.new";
+    "item_stack.minecraft.mojang_banner_pattern.new";
 #[doc = "Mooshroom Spawn Egg"]
-pub const ITEM_MINECRAFT_MOOSHROOM_SPAWN_EGG: &str = "item.minecraft.mooshroom_spawn_egg";
+pub const ITEM_MINECRAFT_MOOSHROOM_SPAWN_EGG: &str = "item_stack.minecraft.mooshroom_spawn_egg";
 #[doc = "Mourner Pottery Shard"]
-pub const ITEM_MINECRAFT_MOURNER_POTTERY_SHARD: &str = "item.minecraft.mourner_pottery_shard";
+pub const ITEM_MINECRAFT_MOURNER_POTTERY_SHARD: &str = "item_stack.minecraft.mourner_pottery_shard";
 #[doc = "Mourner Pottery Sherd"]
-pub const ITEM_MINECRAFT_MOURNER_POTTERY_SHERD: &str = "item.minecraft.mourner_pottery_sherd";
+pub const ITEM_MINECRAFT_MOURNER_POTTERY_SHERD: &str = "item_stack.minecraft.mourner_pottery_sherd";
 #[doc = "Mule Spawn Egg"]
-pub const ITEM_MINECRAFT_MULE_SPAWN_EGG: &str = "item.minecraft.mule_spawn_egg";
+pub const ITEM_MINECRAFT_MULE_SPAWN_EGG: &str = "item_stack.minecraft.mule_spawn_egg";
 #[doc = "Mushroom Stew"]
-pub const ITEM_MINECRAFT_MUSHROOM_STEW: &str = "item.minecraft.mushroom_stew";
+pub const ITEM_MINECRAFT_MUSHROOM_STEW: &str = "item_stack.minecraft.mushroom_stew";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_11: &str = "item.minecraft.music_disc_11";
+pub const ITEM_MINECRAFT_MUSIC_DISC_11: &str = "item_stack.minecraft.music_disc_11";
 #[doc = "C418 - 11"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_11_DESC: &str = "item.minecraft.music_disc_11.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_11_DESC: &str = "item_stack.minecraft.music_disc_11.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_13: &str = "item.minecraft.music_disc_13";
+pub const ITEM_MINECRAFT_MUSIC_DISC_13: &str = "item_stack.minecraft.music_disc_13";
 #[doc = "C418 - 13"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_13_DESC: &str = "item.minecraft.music_disc_13.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_13_DESC: &str = "item_stack.minecraft.music_disc_13.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_5: &str = "item.minecraft.music_disc_5";
+pub const ITEM_MINECRAFT_MUSIC_DISC_5: &str = "item_stack.minecraft.music_disc_5";
 #[doc = "Samuel Åberg - 5"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_5_DESC: &str = "item.minecraft.music_disc_5.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_5_DESC: &str = "item_stack.minecraft.music_disc_5.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_BLOCKS: &str = "item.minecraft.music_disc_blocks";
+pub const ITEM_MINECRAFT_MUSIC_DISC_BLOCKS: &str = "item_stack.minecraft.music_disc_blocks";
 #[doc = "C418 - blocks"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_BLOCKS_DESC: &str = "item.minecraft.music_disc_blocks.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_BLOCKS_DESC: &str = "item_stack.minecraft.music_disc_blocks.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_CAT: &str = "item.minecraft.music_disc_cat";
+pub const ITEM_MINECRAFT_MUSIC_DISC_CAT: &str = "item_stack.minecraft.music_disc_cat";
 #[doc = "C418 - cat"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_CAT_DESC: &str = "item.minecraft.music_disc_cat.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_CAT_DESC: &str = "item_stack.minecraft.music_disc_cat.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_CHIRP: &str = "item.minecraft.music_disc_chirp";
+pub const ITEM_MINECRAFT_MUSIC_DISC_CHIRP: &str = "item_stack.minecraft.music_disc_chirp";
 #[doc = "C418 - chirp"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_CHIRP_DESC: &str = "item.minecraft.music_disc_chirp.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_CHIRP_DESC: &str = "item_stack.minecraft.music_disc_chirp.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_CREATOR: &str = "item.minecraft.music_disc_creator";
+pub const ITEM_MINECRAFT_MUSIC_DISC_CREATOR: &str = "item_stack.minecraft.music_disc_creator";
 #[doc = "Lena Raine - Creator"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_CREATOR_DESC: &str = "item.minecraft.music_disc_creator.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_CREATOR_DESC: &str = "item_stack.minecraft.music_disc_creator.desc";
 #[doc = "Music Disc"]
 pub const ITEM_MINECRAFT_MUSIC_DISC_CREATOR_MUSIC_BOX: &str =
-    "item.minecraft.music_disc_creator_music_box";
+    "item_stack.minecraft.music_disc_creator_music_box";
 #[doc = "Lena Raine - Creator (Music Box)"]
 pub const ITEM_MINECRAFT_MUSIC_DISC_CREATOR_MUSIC_BOX_DESC: &str =
-    "item.minecraft.music_disc_creator_music_box.desc";
+    "item_stack.minecraft.music_disc_creator_music_box.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_FAR: &str = "item.minecraft.music_disc_far";
+pub const ITEM_MINECRAFT_MUSIC_DISC_FAR: &str = "item_stack.minecraft.music_disc_far";
 #[doc = "C418 - far"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_FAR_DESC: &str = "item.minecraft.music_disc_far.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_FAR_DESC: &str = "item_stack.minecraft.music_disc_far.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_LAVA_CHICKEN: &str = "item.minecraft.music_disc_lava_chicken";
+pub const ITEM_MINECRAFT_MUSIC_DISC_LAVA_CHICKEN: &str = "item_stack.minecraft.music_disc_lava_chicken";
 #[doc = "Hyper Potions - Lava Chicken"]
 pub const ITEM_MINECRAFT_MUSIC_DISC_LAVA_CHICKEN_DESC: &str =
-    "item.minecraft.music_disc_lava_chicken.desc";
+    "item_stack.minecraft.music_disc_lava_chicken.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_MALL: &str = "item.minecraft.music_disc_mall";
+pub const ITEM_MINECRAFT_MUSIC_DISC_MALL: &str = "item_stack.minecraft.music_disc_mall";
 #[doc = "C418 - mall"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_MALL_DESC: &str = "item.minecraft.music_disc_mall.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_MALL_DESC: &str = "item_stack.minecraft.music_disc_mall.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_MELLOHI: &str = "item.minecraft.music_disc_mellohi";
+pub const ITEM_MINECRAFT_MUSIC_DISC_MELLOHI: &str = "item_stack.minecraft.music_disc_mellohi";
 #[doc = "C418 - mellohi"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_MELLOHI_DESC: &str = "item.minecraft.music_disc_mellohi.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_MELLOHI_DESC: &str = "item_stack.minecraft.music_disc_mellohi.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_OTHERSIDE: &str = "item.minecraft.music_disc_otherside";
+pub const ITEM_MINECRAFT_MUSIC_DISC_OTHERSIDE: &str = "item_stack.minecraft.music_disc_otherside";
 #[doc = "Lena Raine - otherside"]
 pub const ITEM_MINECRAFT_MUSIC_DISC_OTHERSIDE_DESC: &str =
-    "item.minecraft.music_disc_otherside.desc";
+    "item_stack.minecraft.music_disc_otherside.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_PIGSTEP: &str = "item.minecraft.music_disc_pigstep";
+pub const ITEM_MINECRAFT_MUSIC_DISC_PIGSTEP: &str = "item_stack.minecraft.music_disc_pigstep";
 #[doc = "Lena Raine - Pigstep"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_PIGSTEP_DESC: &str = "item.minecraft.music_disc_pigstep.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_PIGSTEP_DESC: &str = "item_stack.minecraft.music_disc_pigstep.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_PRECIPICE: &str = "item.minecraft.music_disc_precipice";
+pub const ITEM_MINECRAFT_MUSIC_DISC_PRECIPICE: &str = "item_stack.minecraft.music_disc_precipice";
 #[doc = "Aaron Cherof - Precipice"]
 pub const ITEM_MINECRAFT_MUSIC_DISC_PRECIPICE_DESC: &str =
-    "item.minecraft.music_disc_precipice.desc";
+    "item_stack.minecraft.music_disc_precipice.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_RELIC: &str = "item.minecraft.music_disc_relic";
+pub const ITEM_MINECRAFT_MUSIC_DISC_RELIC: &str = "item_stack.minecraft.music_disc_relic";
 #[doc = "Aaron Cherof - Relic"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_RELIC_DESC: &str = "item.minecraft.music_disc_relic.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_RELIC_DESC: &str = "item_stack.minecraft.music_disc_relic.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_STAL: &str = "item.minecraft.music_disc_stal";
+pub const ITEM_MINECRAFT_MUSIC_DISC_STAL: &str = "item_stack.minecraft.music_disc_stal";
 #[doc = "C418 - stal"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_STAL_DESC: &str = "item.minecraft.music_disc_stal.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_STAL_DESC: &str = "item_stack.minecraft.music_disc_stal.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_STRAD: &str = "item.minecraft.music_disc_strad";
+pub const ITEM_MINECRAFT_MUSIC_DISC_STRAD: &str = "item_stack.minecraft.music_disc_strad";
 #[doc = "C418 - strad"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_STRAD_DESC: &str = "item.minecraft.music_disc_strad.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_STRAD_DESC: &str = "item_stack.minecraft.music_disc_strad.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_TEARS: &str = "item.minecraft.music_disc_tears";
+pub const ITEM_MINECRAFT_MUSIC_DISC_TEARS: &str = "item_stack.minecraft.music_disc_tears";
 #[doc = "Amos Roddy - Tears"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_TEARS_DESC: &str = "item.minecraft.music_disc_tears.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_TEARS_DESC: &str = "item_stack.minecraft.music_disc_tears.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_WAIT: &str = "item.minecraft.music_disc_wait";
+pub const ITEM_MINECRAFT_MUSIC_DISC_WAIT: &str = "item_stack.minecraft.music_disc_wait";
 #[doc = "C418 - wait"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_WAIT_DESC: &str = "item.minecraft.music_disc_wait.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_WAIT_DESC: &str = "item_stack.minecraft.music_disc_wait.desc";
 #[doc = "Music Disc"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_WARD: &str = "item.minecraft.music_disc_ward";
+pub const ITEM_MINECRAFT_MUSIC_DISC_WARD: &str = "item_stack.minecraft.music_disc_ward";
 #[doc = "C418 - ward"]
-pub const ITEM_MINECRAFT_MUSIC_DISC_WARD_DESC: &str = "item.minecraft.music_disc_ward.desc";
+pub const ITEM_MINECRAFT_MUSIC_DISC_WARD_DESC: &str = "item_stack.minecraft.music_disc_ward.desc";
 #[doc = "Raw Mutton"]
-pub const ITEM_MINECRAFT_MUTTON: &str = "item.minecraft.mutton";
+pub const ITEM_MINECRAFT_MUTTON: &str = "item_stack.minecraft.mutton";
 #[doc = "Name Tag"]
-pub const ITEM_MINECRAFT_NAME_TAG: &str = "item.minecraft.name_tag";
+pub const ITEM_MINECRAFT_NAME_TAG: &str = "item_stack.minecraft.name_tag";
 #[doc = "Nautilus Shell"]
-pub const ITEM_MINECRAFT_NAUTILUS_SHELL: &str = "item.minecraft.nautilus_shell";
+pub const ITEM_MINECRAFT_NAUTILUS_SHELL: &str = "item_stack.minecraft.nautilus_shell";
 #[doc = "Nautilus Spawn Egg"]
-pub const ITEM_MINECRAFT_NAUTILUS_SPAWN_EGG: &str = "item.minecraft.nautilus_spawn_egg";
+pub const ITEM_MINECRAFT_NAUTILUS_SPAWN_EGG: &str = "item_stack.minecraft.nautilus_spawn_egg";
 #[doc = "Nether Brick"]
-pub const ITEM_MINECRAFT_NETHER_BRICK: &str = "item.minecraft.nether_brick";
+pub const ITEM_MINECRAFT_NETHER_BRICK: &str = "item_stack.minecraft.nether_brick";
 #[doc = "Nether Star"]
-pub const ITEM_MINECRAFT_NETHER_STAR: &str = "item.minecraft.nether_star";
+pub const ITEM_MINECRAFT_NETHER_STAR: &str = "item_stack.minecraft.nether_star";
 #[doc = "Nether Wart"]
-pub const ITEM_MINECRAFT_NETHER_WART: &str = "item.minecraft.nether_wart";
+pub const ITEM_MINECRAFT_NETHER_WART: &str = "item_stack.minecraft.nether_wart";
 #[doc = "Netherite Axe"]
-pub const ITEM_MINECRAFT_NETHERITE_AXE: &str = "item.minecraft.netherite_axe";
+pub const ITEM_MINECRAFT_NETHERITE_AXE: &str = "item_stack.minecraft.netherite_axe";
 #[doc = "Netherite Boots"]
-pub const ITEM_MINECRAFT_NETHERITE_BOOTS: &str = "item.minecraft.netherite_boots";
+pub const ITEM_MINECRAFT_NETHERITE_BOOTS: &str = "item_stack.minecraft.netherite_boots";
 #[doc = "Netherite Chestplate"]
-pub const ITEM_MINECRAFT_NETHERITE_CHESTPLATE: &str = "item.minecraft.netherite_chestplate";
+pub const ITEM_MINECRAFT_NETHERITE_CHESTPLATE: &str = "item_stack.minecraft.netherite_chestplate";
 #[doc = "Netherite Helmet"]
-pub const ITEM_MINECRAFT_NETHERITE_HELMET: &str = "item.minecraft.netherite_helmet";
+pub const ITEM_MINECRAFT_NETHERITE_HELMET: &str = "item_stack.minecraft.netherite_helmet";
 #[doc = "Netherite Hoe"]
-pub const ITEM_MINECRAFT_NETHERITE_HOE: &str = "item.minecraft.netherite_hoe";
+pub const ITEM_MINECRAFT_NETHERITE_HOE: &str = "item_stack.minecraft.netherite_hoe";
 #[doc = "Netherite Horse Armor"]
-pub const ITEM_MINECRAFT_NETHERITE_HORSE_ARMOR: &str = "item.minecraft.netherite_horse_armor";
+pub const ITEM_MINECRAFT_NETHERITE_HORSE_ARMOR: &str = "item_stack.minecraft.netherite_horse_armor";
 #[doc = "Netherite Ingot"]
-pub const ITEM_MINECRAFT_NETHERITE_INGOT: &str = "item.minecraft.netherite_ingot";
+pub const ITEM_MINECRAFT_NETHERITE_INGOT: &str = "item_stack.minecraft.netherite_ingot";
 #[doc = "Netherite Leggings"]
-pub const ITEM_MINECRAFT_NETHERITE_LEGGINGS: &str = "item.minecraft.netherite_leggings";
+pub const ITEM_MINECRAFT_NETHERITE_LEGGINGS: &str = "item_stack.minecraft.netherite_leggings";
 #[doc = "Netherite Nautilus Armor"]
-pub const ITEM_MINECRAFT_NETHERITE_NAUTILUS_ARMOR: &str = "item.minecraft.netherite_nautilus_armor";
+pub const ITEM_MINECRAFT_NETHERITE_NAUTILUS_ARMOR: &str = "item_stack.minecraft.netherite_nautilus_armor";
 #[doc = "Netherite Pickaxe"]
-pub const ITEM_MINECRAFT_NETHERITE_PICKAXE: &str = "item.minecraft.netherite_pickaxe";
+pub const ITEM_MINECRAFT_NETHERITE_PICKAXE: &str = "item_stack.minecraft.netherite_pickaxe";
 #[doc = "Netherite Scrap"]
-pub const ITEM_MINECRAFT_NETHERITE_SCRAP: &str = "item.minecraft.netherite_scrap";
+pub const ITEM_MINECRAFT_NETHERITE_SCRAP: &str = "item_stack.minecraft.netherite_scrap";
 #[doc = "Netherite Shovel"]
-pub const ITEM_MINECRAFT_NETHERITE_SHOVEL: &str = "item.minecraft.netherite_shovel";
+pub const ITEM_MINECRAFT_NETHERITE_SHOVEL: &str = "item_stack.minecraft.netherite_shovel";
 #[doc = "Netherite Spear"]
-pub const ITEM_MINECRAFT_NETHERITE_SPEAR: &str = "item.minecraft.netherite_spear";
+pub const ITEM_MINECRAFT_NETHERITE_SPEAR: &str = "item_stack.minecraft.netherite_spear";
 #[doc = "Netherite Sword"]
-pub const ITEM_MINECRAFT_NETHERITE_SWORD: &str = "item.minecraft.netherite_sword";
+pub const ITEM_MINECRAFT_NETHERITE_SWORD: &str = "item_stack.minecraft.netherite_sword";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_NETHERITE_UPGRADE_SMITHING_TEMPLATE: &str =
-    "item.minecraft.netherite_upgrade_smithing_template";
+    "item_stack.minecraft.netherite_upgrade_smithing_template";
 #[doc = "Netherite Upgrade"]
 pub const ITEM_MINECRAFT_NETHERITE_UPGRADE_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.netherite_upgrade_smithing_template.new";
+    "item_stack.minecraft.netherite_upgrade_smithing_template.new";
 #[doc = "Oak Boat"]
-pub const ITEM_MINECRAFT_OAK_BOAT: &str = "item.minecraft.oak_boat";
+pub const ITEM_MINECRAFT_OAK_BOAT: &str = "item_stack.minecraft.oak_boat";
 #[doc = "Oak Boat with Chest"]
-pub const ITEM_MINECRAFT_OAK_CHEST_BOAT: &str = "item.minecraft.oak_chest_boat";
+pub const ITEM_MINECRAFT_OAK_CHEST_BOAT: &str = "item_stack.minecraft.oak_chest_boat";
 #[doc = "Ocelot Spawn Egg"]
-pub const ITEM_MINECRAFT_OCELOT_SPAWN_EGG: &str = "item.minecraft.ocelot_spawn_egg";
+pub const ITEM_MINECRAFT_OCELOT_SPAWN_EGG: &str = "item_stack.minecraft.ocelot_spawn_egg";
 #[doc = "Ominous Bottle"]
-pub const ITEM_MINECRAFT_OMINOUS_BOTTLE: &str = "item.minecraft.ominous_bottle";
+pub const ITEM_MINECRAFT_OMINOUS_BOTTLE: &str = "item_stack.minecraft.ominous_bottle";
 #[doc = "Ominous Trial Key"]
-pub const ITEM_MINECRAFT_OMINOUS_TRIAL_KEY: &str = "item.minecraft.ominous_trial_key";
+pub const ITEM_MINECRAFT_OMINOUS_TRIAL_KEY: &str = "item_stack.minecraft.ominous_trial_key";
 #[doc = "Orange Bundle"]
-pub const ITEM_MINECRAFT_ORANGE_BUNDLE: &str = "item.minecraft.orange_bundle";
+pub const ITEM_MINECRAFT_ORANGE_BUNDLE: &str = "item_stack.minecraft.orange_bundle";
 #[doc = "Orange Dye"]
-pub const ITEM_MINECRAFT_ORANGE_DYE: &str = "item.minecraft.orange_dye";
+pub const ITEM_MINECRAFT_ORANGE_DYE: &str = "item_stack.minecraft.orange_dye";
 #[doc = "Orange Harness"]
-pub const ITEM_MINECRAFT_ORANGE_HARNESS: &str = "item.minecraft.orange_harness";
+pub const ITEM_MINECRAFT_ORANGE_HARNESS: &str = "item_stack.minecraft.orange_harness";
 #[doc = "Painting"]
-pub const ITEM_MINECRAFT_PAINTING: &str = "item.minecraft.painting";
+pub const ITEM_MINECRAFT_PAINTING: &str = "item_stack.minecraft.painting";
 #[doc = "Pale Oak Boat"]
-pub const ITEM_MINECRAFT_PALE_OAK_BOAT: &str = "item.minecraft.pale_oak_boat";
+pub const ITEM_MINECRAFT_PALE_OAK_BOAT: &str = "item_stack.minecraft.pale_oak_boat";
 #[doc = "Pale Oak Boat with Chest"]
-pub const ITEM_MINECRAFT_PALE_OAK_CHEST_BOAT: &str = "item.minecraft.pale_oak_chest_boat";
+pub const ITEM_MINECRAFT_PALE_OAK_CHEST_BOAT: &str = "item_stack.minecraft.pale_oak_chest_boat";
 #[doc = "Panda Spawn Egg"]
-pub const ITEM_MINECRAFT_PANDA_SPAWN_EGG: &str = "item.minecraft.panda_spawn_egg";
+pub const ITEM_MINECRAFT_PANDA_SPAWN_EGG: &str = "item_stack.minecraft.panda_spawn_egg";
 #[doc = "Paper"]
-pub const ITEM_MINECRAFT_PAPER: &str = "item.minecraft.paper";
+pub const ITEM_MINECRAFT_PAPER: &str = "item_stack.minecraft.paper";
 #[doc = "Parched Spawn Egg"]
-pub const ITEM_MINECRAFT_PARCHED_SPAWN_EGG: &str = "item.minecraft.parched_spawn_egg";
+pub const ITEM_MINECRAFT_PARCHED_SPAWN_EGG: &str = "item_stack.minecraft.parched_spawn_egg";
 #[doc = "Parrot Spawn Egg"]
-pub const ITEM_MINECRAFT_PARROT_SPAWN_EGG: &str = "item.minecraft.parrot_spawn_egg";
+pub const ITEM_MINECRAFT_PARROT_SPAWN_EGG: &str = "item_stack.minecraft.parrot_spawn_egg";
 #[doc = "Phantom Membrane"]
-pub const ITEM_MINECRAFT_PHANTOM_MEMBRANE: &str = "item.minecraft.phantom_membrane";
+pub const ITEM_MINECRAFT_PHANTOM_MEMBRANE: &str = "item_stack.minecraft.phantom_membrane";
 #[doc = "Phantom Spawn Egg"]
-pub const ITEM_MINECRAFT_PHANTOM_SPAWN_EGG: &str = "item.minecraft.phantom_spawn_egg";
+pub const ITEM_MINECRAFT_PHANTOM_SPAWN_EGG: &str = "item_stack.minecraft.phantom_spawn_egg";
 #[doc = "Pig Spawn Egg"]
-pub const ITEM_MINECRAFT_PIG_SPAWN_EGG: &str = "item.minecraft.pig_spawn_egg";
+pub const ITEM_MINECRAFT_PIG_SPAWN_EGG: &str = "item_stack.minecraft.pig_spawn_egg";
 #[doc = "Banner Pattern"]
-pub const ITEM_MINECRAFT_PIGLIN_BANNER_PATTERN: &str = "item.minecraft.piglin_banner_pattern";
+pub const ITEM_MINECRAFT_PIGLIN_BANNER_PATTERN: &str = "item_stack.minecraft.piglin_banner_pattern";
 #[doc = "Snout"]
 pub const ITEM_MINECRAFT_PIGLIN_BANNER_PATTERN_DESC: &str =
-    "item.minecraft.piglin_banner_pattern.desc";
+    "item_stack.minecraft.piglin_banner_pattern.desc";
 #[doc = "Snout Banner Pattern"]
 pub const ITEM_MINECRAFT_PIGLIN_BANNER_PATTERN_NEW: &str =
-    "item.minecraft.piglin_banner_pattern.new";
+    "item_stack.minecraft.piglin_banner_pattern.new";
 #[doc = "Piglin Brute Spawn Egg"]
-pub const ITEM_MINECRAFT_PIGLIN_BRUTE_SPAWN_EGG: &str = "item.minecraft.piglin_brute_spawn_egg";
+pub const ITEM_MINECRAFT_PIGLIN_BRUTE_SPAWN_EGG: &str = "item_stack.minecraft.piglin_brute_spawn_egg";
 #[doc = "Piglin Spawn Egg"]
-pub const ITEM_MINECRAFT_PIGLIN_SPAWN_EGG: &str = "item.minecraft.piglin_spawn_egg";
+pub const ITEM_MINECRAFT_PIGLIN_SPAWN_EGG: &str = "item_stack.minecraft.piglin_spawn_egg";
 #[doc = "Pillager Spawn Egg"]
-pub const ITEM_MINECRAFT_PILLAGER_SPAWN_EGG: &str = "item.minecraft.pillager_spawn_egg";
+pub const ITEM_MINECRAFT_PILLAGER_SPAWN_EGG: &str = "item_stack.minecraft.pillager_spawn_egg";
 #[doc = "Pink Bundle"]
-pub const ITEM_MINECRAFT_PINK_BUNDLE: &str = "item.minecraft.pink_bundle";
+pub const ITEM_MINECRAFT_PINK_BUNDLE: &str = "item_stack.minecraft.pink_bundle";
 #[doc = "Pink Dye"]
-pub const ITEM_MINECRAFT_PINK_DYE: &str = "item.minecraft.pink_dye";
+pub const ITEM_MINECRAFT_PINK_DYE: &str = "item_stack.minecraft.pink_dye";
 #[doc = "Pink Harness"]
-pub const ITEM_MINECRAFT_PINK_HARNESS: &str = "item.minecraft.pink_harness";
+pub const ITEM_MINECRAFT_PINK_HARNESS: &str = "item_stack.minecraft.pink_harness";
 #[doc = "Pitcher Plant"]
-pub const ITEM_MINECRAFT_PITCHER_PLANT: &str = "item.minecraft.pitcher_plant";
+pub const ITEM_MINECRAFT_PITCHER_PLANT: &str = "item_stack.minecraft.pitcher_plant";
 #[doc = "Pitcher Pod"]
-pub const ITEM_MINECRAFT_PITCHER_POD: &str = "item.minecraft.pitcher_pod";
+pub const ITEM_MINECRAFT_PITCHER_POD: &str = "item_stack.minecraft.pitcher_pod";
 #[doc = "Plenty Pottery Shard"]
-pub const ITEM_MINECRAFT_PLENTY_POTTERY_SHARD: &str = "item.minecraft.plenty_pottery_shard";
+pub const ITEM_MINECRAFT_PLENTY_POTTERY_SHARD: &str = "item_stack.minecraft.plenty_pottery_shard";
 #[doc = "Plenty Pottery Sherd"]
-pub const ITEM_MINECRAFT_PLENTY_POTTERY_SHERD: &str = "item.minecraft.plenty_pottery_sherd";
+pub const ITEM_MINECRAFT_PLENTY_POTTERY_SHERD: &str = "item_stack.minecraft.plenty_pottery_sherd";
 #[doc = "Poisonous Potato"]
-pub const ITEM_MINECRAFT_POISONOUS_POTATO: &str = "item.minecraft.poisonous_potato";
+pub const ITEM_MINECRAFT_POISONOUS_POTATO: &str = "item_stack.minecraft.poisonous_potato";
 #[doc = "Polar Bear Spawn Egg"]
-pub const ITEM_MINECRAFT_POLAR_BEAR_SPAWN_EGG: &str = "item.minecraft.polar_bear_spawn_egg";
+pub const ITEM_MINECRAFT_POLAR_BEAR_SPAWN_EGG: &str = "item_stack.minecraft.polar_bear_spawn_egg";
 #[doc = "Popped Chorus Fruit"]
-pub const ITEM_MINECRAFT_POPPED_CHORUS_FRUIT: &str = "item.minecraft.popped_chorus_fruit";
+pub const ITEM_MINECRAFT_POPPED_CHORUS_FRUIT: &str = "item_stack.minecraft.popped_chorus_fruit";
 #[doc = "Raw Porkchop"]
-pub const ITEM_MINECRAFT_PORKCHOP: &str = "item.minecraft.porkchop";
+pub const ITEM_MINECRAFT_PORKCHOP: &str = "item_stack.minecraft.porkchop";
 #[doc = "Potato"]
-pub const ITEM_MINECRAFT_POTATO: &str = "item.minecraft.potato";
+pub const ITEM_MINECRAFT_POTATO: &str = "item_stack.minecraft.potato";
 #[doc = "Potion"]
-pub const ITEM_MINECRAFT_POTION: &str = "item.minecraft.potion";
+pub const ITEM_MINECRAFT_POTION: &str = "item_stack.minecraft.potion";
 #[doc = "Awkward Potion"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_AWKWARD: &str = "item.minecraft.potion.effect.awkward";
+pub const ITEM_MINECRAFT_POTION_EFFECT_AWKWARD: &str = "item_stack.minecraft.potion.effect.awkward";
 #[doc = "Uncraftable Potion"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_EMPTY: &str = "item.minecraft.potion.effect.empty";
+pub const ITEM_MINECRAFT_POTION_EFFECT_EMPTY: &str = "item_stack.minecraft.potion.effect.empty";
 #[doc = "Potion of Fire Resistance"]
 pub const ITEM_MINECRAFT_POTION_EFFECT_FIRE_RESISTANCE: &str =
-    "item.minecraft.potion.effect.fire_resistance";
+    "item_stack.minecraft.potion.effect.fire_resistance";
 #[doc = "Potion of Harming"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_HARMING: &str = "item.minecraft.potion.effect.harming";
+pub const ITEM_MINECRAFT_POTION_EFFECT_HARMING: &str = "item_stack.minecraft.potion.effect.harming";
 #[doc = "Potion of Healing"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_HEALING: &str = "item.minecraft.potion.effect.healing";
+pub const ITEM_MINECRAFT_POTION_EFFECT_HEALING: &str = "item_stack.minecraft.potion.effect.healing";
 #[doc = "Potion of Infestation"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_INFESTED: &str = "item.minecraft.potion.effect.infested";
+pub const ITEM_MINECRAFT_POTION_EFFECT_INFESTED: &str = "item_stack.minecraft.potion.effect.infested";
 #[doc = "Potion of Invisibility"]
 pub const ITEM_MINECRAFT_POTION_EFFECT_INVISIBILITY: &str =
-    "item.minecraft.potion.effect.invisibility";
+    "item_stack.minecraft.potion.effect.invisibility";
 #[doc = "Potion of Leaping"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_LEAPING: &str = "item.minecraft.potion.effect.leaping";
+pub const ITEM_MINECRAFT_POTION_EFFECT_LEAPING: &str = "item_stack.minecraft.potion.effect.leaping";
 #[doc = "Potion of Levitation"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_LEVITATION: &str = "item.minecraft.potion.effect.levitation";
+pub const ITEM_MINECRAFT_POTION_EFFECT_LEVITATION: &str = "item_stack.minecraft.potion.effect.levitation";
 #[doc = "Potion of Luck"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_LUCK: &str = "item.minecraft.potion.effect.luck";
+pub const ITEM_MINECRAFT_POTION_EFFECT_LUCK: &str = "item_stack.minecraft.potion.effect.luck";
 #[doc = "Mundane Potion"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_MUNDANE: &str = "item.minecraft.potion.effect.mundane";
+pub const ITEM_MINECRAFT_POTION_EFFECT_MUNDANE: &str = "item_stack.minecraft.potion.effect.mundane";
 #[doc = "Potion of Night Vision"]
 pub const ITEM_MINECRAFT_POTION_EFFECT_NIGHT_VISION: &str =
-    "item.minecraft.potion.effect.night_vision";
+    "item_stack.minecraft.potion.effect.night_vision";
 #[doc = "Potion of Oozing"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_OOZING: &str = "item.minecraft.potion.effect.oozing";
+pub const ITEM_MINECRAFT_POTION_EFFECT_OOZING: &str = "item_stack.minecraft.potion.effect.oozing";
 #[doc = "Potion of Poison"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_POISON: &str = "item.minecraft.potion.effect.poison";
+pub const ITEM_MINECRAFT_POTION_EFFECT_POISON: &str = "item_stack.minecraft.potion.effect.poison";
 #[doc = "Potion of Regeneration"]
 pub const ITEM_MINECRAFT_POTION_EFFECT_REGENERATION: &str =
-    "item.minecraft.potion.effect.regeneration";
+    "item_stack.minecraft.potion.effect.regeneration";
 #[doc = "Potion of Slow Falling"]
 pub const ITEM_MINECRAFT_POTION_EFFECT_SLOW_FALLING: &str =
-    "item.minecraft.potion.effect.slow_falling";
+    "item_stack.minecraft.potion.effect.slow_falling";
 #[doc = "Potion of Slowness"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_SLOWNESS: &str = "item.minecraft.potion.effect.slowness";
+pub const ITEM_MINECRAFT_POTION_EFFECT_SLOWNESS: &str = "item_stack.minecraft.potion.effect.slowness";
 #[doc = "Potion of Strength"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_STRENGTH: &str = "item.minecraft.potion.effect.strength";
+pub const ITEM_MINECRAFT_POTION_EFFECT_STRENGTH: &str = "item_stack.minecraft.potion.effect.strength";
 #[doc = "Potion of Swiftness"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_SWIFTNESS: &str = "item.minecraft.potion.effect.swiftness";
+pub const ITEM_MINECRAFT_POTION_EFFECT_SWIFTNESS: &str = "item_stack.minecraft.potion.effect.swiftness";
 #[doc = "Thick Potion"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_THICK: &str = "item.minecraft.potion.effect.thick";
+pub const ITEM_MINECRAFT_POTION_EFFECT_THICK: &str = "item_stack.minecraft.potion.effect.thick";
 #[doc = "Potion of the Turtle Master"]
 pub const ITEM_MINECRAFT_POTION_EFFECT_TURTLE_MASTER: &str =
-    "item.minecraft.potion.effect.turtle_master";
+    "item_stack.minecraft.potion.effect.turtle_master";
 #[doc = "Water Bottle"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_WATER: &str = "item.minecraft.potion.effect.water";
+pub const ITEM_MINECRAFT_POTION_EFFECT_WATER: &str = "item_stack.minecraft.potion.effect.water";
 #[doc = "Potion of Water Breathing"]
 pub const ITEM_MINECRAFT_POTION_EFFECT_WATER_BREATHING: &str =
-    "item.minecraft.potion.effect.water_breathing";
+    "item_stack.minecraft.potion.effect.water_breathing";
 #[doc = "Potion of Weakness"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_WEAKNESS: &str = "item.minecraft.potion.effect.weakness";
+pub const ITEM_MINECRAFT_POTION_EFFECT_WEAKNESS: &str = "item_stack.minecraft.potion.effect.weakness";
 #[doc = "Potion of Weaving"]
-pub const ITEM_MINECRAFT_POTION_EFFECT_WEAVING: &str = "item.minecraft.potion.effect.weaving";
+pub const ITEM_MINECRAFT_POTION_EFFECT_WEAVING: &str = "item_stack.minecraft.potion.effect.weaving";
 #[doc = "Potion of Wind Charging"]
 pub const ITEM_MINECRAFT_POTION_EFFECT_WIND_CHARGED: &str =
-    "item.minecraft.potion.effect.wind_charged";
+    "item_stack.minecraft.potion.effect.wind_charged";
 #[doc = "Archer Pottery Shard"]
-pub const ITEM_MINECRAFT_POTTERY_SHARD_ARCHER: &str = "item.minecraft.pottery_shard_archer";
+pub const ITEM_MINECRAFT_POTTERY_SHARD_ARCHER: &str = "item_stack.minecraft.pottery_shard_archer";
 #[doc = "Arms Up Pottery Shard"]
-pub const ITEM_MINECRAFT_POTTERY_SHARD_ARMS_UP: &str = "item.minecraft.pottery_shard_arms_up";
+pub const ITEM_MINECRAFT_POTTERY_SHARD_ARMS_UP: &str = "item_stack.minecraft.pottery_shard_arms_up";
 #[doc = "Prize Pottery Shard"]
-pub const ITEM_MINECRAFT_POTTERY_SHARD_PRIZE: &str = "item.minecraft.pottery_shard_prize";
+pub const ITEM_MINECRAFT_POTTERY_SHARD_PRIZE: &str = "item_stack.minecraft.pottery_shard_prize";
 #[doc = "Skull Pottery Shard"]
-pub const ITEM_MINECRAFT_POTTERY_SHARD_SKULL: &str = "item.minecraft.pottery_shard_skull";
+pub const ITEM_MINECRAFT_POTTERY_SHARD_SKULL: &str = "item_stack.minecraft.pottery_shard_skull";
 #[doc = "Powder Snow Bucket"]
-pub const ITEM_MINECRAFT_POWDER_SNOW_BUCKET: &str = "item.minecraft.powder_snow_bucket";
+pub const ITEM_MINECRAFT_POWDER_SNOW_BUCKET: &str = "item_stack.minecraft.powder_snow_bucket";
 #[doc = "Prismarine Crystals"]
-pub const ITEM_MINECRAFT_PRISMARINE_CRYSTALS: &str = "item.minecraft.prismarine_crystals";
+pub const ITEM_MINECRAFT_PRISMARINE_CRYSTALS: &str = "item_stack.minecraft.prismarine_crystals";
 #[doc = "Prismarine Shard"]
-pub const ITEM_MINECRAFT_PRISMARINE_SHARD: &str = "item.minecraft.prismarine_shard";
+pub const ITEM_MINECRAFT_PRISMARINE_SHARD: &str = "item_stack.minecraft.prismarine_shard";
 #[doc = "Prize Pottery Shard"]
-pub const ITEM_MINECRAFT_PRIZE_POTTERY_SHARD: &str = "item.minecraft.prize_pottery_shard";
+pub const ITEM_MINECRAFT_PRIZE_POTTERY_SHARD: &str = "item_stack.minecraft.prize_pottery_shard";
 #[doc = "Prize Pottery Sherd"]
-pub const ITEM_MINECRAFT_PRIZE_POTTERY_SHERD: &str = "item.minecraft.prize_pottery_sherd";
+pub const ITEM_MINECRAFT_PRIZE_POTTERY_SHERD: &str = "item_stack.minecraft.prize_pottery_sherd";
 #[doc = "Pufferfish"]
-pub const ITEM_MINECRAFT_PUFFERFISH: &str = "item.minecraft.pufferfish";
+pub const ITEM_MINECRAFT_PUFFERFISH: &str = "item_stack.minecraft.pufferfish";
 #[doc = "Bucket of Pufferfish"]
-pub const ITEM_MINECRAFT_PUFFERFISH_BUCKET: &str = "item.minecraft.pufferfish_bucket";
+pub const ITEM_MINECRAFT_PUFFERFISH_BUCKET: &str = "item_stack.minecraft.pufferfish_bucket";
 #[doc = "Pufferfish Spawn Egg"]
-pub const ITEM_MINECRAFT_PUFFERFISH_SPAWN_EGG: &str = "item.minecraft.pufferfish_spawn_egg";
+pub const ITEM_MINECRAFT_PUFFERFISH_SPAWN_EGG: &str = "item_stack.minecraft.pufferfish_spawn_egg";
 #[doc = "Pumpkin Pie"]
-pub const ITEM_MINECRAFT_PUMPKIN_PIE: &str = "item.minecraft.pumpkin_pie";
+pub const ITEM_MINECRAFT_PUMPKIN_PIE: &str = "item_stack.minecraft.pumpkin_pie";
 #[doc = "Pumpkin Seeds"]
-pub const ITEM_MINECRAFT_PUMPKIN_SEEDS: &str = "item.minecraft.pumpkin_seeds";
+pub const ITEM_MINECRAFT_PUMPKIN_SEEDS: &str = "item_stack.minecraft.pumpkin_seeds";
 #[doc = "Purple Bundle"]
-pub const ITEM_MINECRAFT_PURPLE_BUNDLE: &str = "item.minecraft.purple_bundle";
+pub const ITEM_MINECRAFT_PURPLE_BUNDLE: &str = "item_stack.minecraft.purple_bundle";
 #[doc = "Purple Dye"]
-pub const ITEM_MINECRAFT_PURPLE_DYE: &str = "item.minecraft.purple_dye";
+pub const ITEM_MINECRAFT_PURPLE_DYE: &str = "item_stack.minecraft.purple_dye";
 #[doc = "Purple Harness"]
-pub const ITEM_MINECRAFT_PURPLE_HARNESS: &str = "item.minecraft.purple_harness";
+pub const ITEM_MINECRAFT_PURPLE_HARNESS: &str = "item_stack.minecraft.purple_harness";
 #[doc = "Nether Quartz"]
-pub const ITEM_MINECRAFT_QUARTZ: &str = "item.minecraft.quartz";
+pub const ITEM_MINECRAFT_QUARTZ: &str = "item_stack.minecraft.quartz";
 #[doc = "Raw Rabbit"]
-pub const ITEM_MINECRAFT_RABBIT: &str = "item.minecraft.rabbit";
+pub const ITEM_MINECRAFT_RABBIT: &str = "item_stack.minecraft.rabbit";
 #[doc = "Rabbit's Foot"]
-pub const ITEM_MINECRAFT_RABBIT_FOOT: &str = "item.minecraft.rabbit_foot";
+pub const ITEM_MINECRAFT_RABBIT_FOOT: &str = "item_stack.minecraft.rabbit_foot";
 #[doc = "Rabbit Hide"]
-pub const ITEM_MINECRAFT_RABBIT_HIDE: &str = "item.minecraft.rabbit_hide";
+pub const ITEM_MINECRAFT_RABBIT_HIDE: &str = "item_stack.minecraft.rabbit_hide";
 #[doc = "Rabbit Spawn Egg"]
-pub const ITEM_MINECRAFT_RABBIT_SPAWN_EGG: &str = "item.minecraft.rabbit_spawn_egg";
+pub const ITEM_MINECRAFT_RABBIT_SPAWN_EGG: &str = "item_stack.minecraft.rabbit_spawn_egg";
 #[doc = "Rabbit Stew"]
-pub const ITEM_MINECRAFT_RABBIT_STEW: &str = "item.minecraft.rabbit_stew";
+pub const ITEM_MINECRAFT_RABBIT_STEW: &str = "item_stack.minecraft.rabbit_stew";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_RAISER_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.raiser_armor_trim_smithing_template";
+    "item_stack.minecraft.raiser_armor_trim_smithing_template";
 #[doc = "Raiser Armor Trim"]
 pub const ITEM_MINECRAFT_RAISER_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.raiser_armor_trim_smithing_template.new";
+    "item_stack.minecraft.raiser_armor_trim_smithing_template.new";
 #[doc = "Ravager Spawn Egg"]
-pub const ITEM_MINECRAFT_RAVAGER_SPAWN_EGG: &str = "item.minecraft.ravager_spawn_egg";
+pub const ITEM_MINECRAFT_RAVAGER_SPAWN_EGG: &str = "item_stack.minecraft.ravager_spawn_egg";
 #[doc = "Raw Copper"]
-pub const ITEM_MINECRAFT_RAW_COPPER: &str = "item.minecraft.raw_copper";
+pub const ITEM_MINECRAFT_RAW_COPPER: &str = "item_stack.minecraft.raw_copper";
 #[doc = "Raw Gold"]
-pub const ITEM_MINECRAFT_RAW_GOLD: &str = "item.minecraft.raw_gold";
+pub const ITEM_MINECRAFT_RAW_GOLD: &str = "item_stack.minecraft.raw_gold";
 #[doc = "Raw Iron"]
-pub const ITEM_MINECRAFT_RAW_IRON: &str = "item.minecraft.raw_iron";
+pub const ITEM_MINECRAFT_RAW_IRON: &str = "item_stack.minecraft.raw_iron";
 #[doc = "Recovery Compass"]
-pub const ITEM_MINECRAFT_RECOVERY_COMPASS: &str = "item.minecraft.recovery_compass";
+pub const ITEM_MINECRAFT_RECOVERY_COMPASS: &str = "item_stack.minecraft.recovery_compass";
 #[doc = "Red Bundle"]
-pub const ITEM_MINECRAFT_RED_BUNDLE: &str = "item.minecraft.red_bundle";
+pub const ITEM_MINECRAFT_RED_BUNDLE: &str = "item_stack.minecraft.red_bundle";
 #[doc = "Red Dye"]
-pub const ITEM_MINECRAFT_RED_DYE: &str = "item.minecraft.red_dye";
+pub const ITEM_MINECRAFT_RED_DYE: &str = "item_stack.minecraft.red_dye";
 #[doc = "Red Harness"]
-pub const ITEM_MINECRAFT_RED_HARNESS: &str = "item.minecraft.red_harness";
+pub const ITEM_MINECRAFT_RED_HARNESS: &str = "item_stack.minecraft.red_harness";
 #[doc = "Redstone Dust"]
-pub const ITEM_MINECRAFT_REDSTONE: &str = "item.minecraft.redstone";
+pub const ITEM_MINECRAFT_REDSTONE: &str = "item_stack.minecraft.redstone";
 #[doc = "Resin Brick"]
-pub const ITEM_MINECRAFT_RESIN_BRICK: &str = "item.minecraft.resin_brick";
+pub const ITEM_MINECRAFT_RESIN_BRICK: &str = "item_stack.minecraft.resin_brick";
 #[doc = "Resin Clump"]
-pub const ITEM_MINECRAFT_RESIN_CLUMP: &str = "item.minecraft.resin_clump";
+pub const ITEM_MINECRAFT_RESIN_CLUMP: &str = "item_stack.minecraft.resin_clump";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_RIB_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.rib_armor_trim_smithing_template";
+    "item_stack.minecraft.rib_armor_trim_smithing_template";
 #[doc = "Rib Armor Trim"]
 pub const ITEM_MINECRAFT_RIB_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.rib_armor_trim_smithing_template.new";
+    "item_stack.minecraft.rib_armor_trim_smithing_template.new";
 #[doc = "Rotten Flesh"]
-pub const ITEM_MINECRAFT_ROTTEN_FLESH: &str = "item.minecraft.rotten_flesh";
+pub const ITEM_MINECRAFT_ROTTEN_FLESH: &str = "item_stack.minecraft.rotten_flesh";
 #[doc = "Saddle"]
-pub const ITEM_MINECRAFT_SADDLE: &str = "item.minecraft.saddle";
+pub const ITEM_MINECRAFT_SADDLE: &str = "item_stack.minecraft.saddle";
 #[doc = "Raw Salmon"]
-pub const ITEM_MINECRAFT_SALMON: &str = "item.minecraft.salmon";
+pub const ITEM_MINECRAFT_SALMON: &str = "item_stack.minecraft.salmon";
 #[doc = "Bucket of Salmon"]
-pub const ITEM_MINECRAFT_SALMON_BUCKET: &str = "item.minecraft.salmon_bucket";
+pub const ITEM_MINECRAFT_SALMON_BUCKET: &str = "item_stack.minecraft.salmon_bucket";
 #[doc = "Salmon Spawn Egg"]
-pub const ITEM_MINECRAFT_SALMON_SPAWN_EGG: &str = "item.minecraft.salmon_spawn_egg";
+pub const ITEM_MINECRAFT_SALMON_SPAWN_EGG: &str = "item_stack.minecraft.salmon_spawn_egg";
 #[doc = "Scrape Pottery Sherd"]
-pub const ITEM_MINECRAFT_SCRAPE_POTTERY_SHERD: &str = "item.minecraft.scrape_pottery_sherd";
+pub const ITEM_MINECRAFT_SCRAPE_POTTERY_SHERD: &str = "item_stack.minecraft.scrape_pottery_sherd";
 #[doc = "Scute"]
-pub const ITEM_MINECRAFT_SCUTE: &str = "item.minecraft.scute";
+pub const ITEM_MINECRAFT_SCUTE: &str = "item_stack.minecraft.scute";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.sentry_armor_trim_smithing_template";
+    "item_stack.minecraft.sentry_armor_trim_smithing_template";
 #[doc = "Sentry Armor Trim"]
 pub const ITEM_MINECRAFT_SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.sentry_armor_trim_smithing_template.new";
+    "item_stack.minecraft.sentry_armor_trim_smithing_template.new";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.shaper_armor_trim_smithing_template";
+    "item_stack.minecraft.shaper_armor_trim_smithing_template";
 #[doc = "Shaper Armor Trim"]
 pub const ITEM_MINECRAFT_SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.shaper_armor_trim_smithing_template.new";
+    "item_stack.minecraft.shaper_armor_trim_smithing_template.new";
 #[doc = "Sheaf Pottery Shard"]
-pub const ITEM_MINECRAFT_SHEAF_POTTERY_SHARD: &str = "item.minecraft.sheaf_pottery_shard";
+pub const ITEM_MINECRAFT_SHEAF_POTTERY_SHARD: &str = "item_stack.minecraft.sheaf_pottery_shard";
 #[doc = "Sheaf Pottery Sherd"]
-pub const ITEM_MINECRAFT_SHEAF_POTTERY_SHERD: &str = "item.minecraft.sheaf_pottery_sherd";
+pub const ITEM_MINECRAFT_SHEAF_POTTERY_SHERD: &str = "item_stack.minecraft.sheaf_pottery_sherd";
 #[doc = "Shears"]
-pub const ITEM_MINECRAFT_SHEARS: &str = "item.minecraft.shears";
+pub const ITEM_MINECRAFT_SHEARS: &str = "item_stack.minecraft.shears";
 #[doc = "Sheep Spawn Egg"]
-pub const ITEM_MINECRAFT_SHEEP_SPAWN_EGG: &str = "item.minecraft.sheep_spawn_egg";
+pub const ITEM_MINECRAFT_SHEEP_SPAWN_EGG: &str = "item_stack.minecraft.sheep_spawn_egg";
 #[doc = "Shelter Pottery Shard"]
-pub const ITEM_MINECRAFT_SHELTER_POTTERY_SHARD: &str = "item.minecraft.shelter_pottery_shard";
+pub const ITEM_MINECRAFT_SHELTER_POTTERY_SHARD: &str = "item_stack.minecraft.shelter_pottery_shard";
 #[doc = "Shelter Pottery Sherd"]
-pub const ITEM_MINECRAFT_SHELTER_POTTERY_SHERD: &str = "item.minecraft.shelter_pottery_sherd";
+pub const ITEM_MINECRAFT_SHELTER_POTTERY_SHERD: &str = "item_stack.minecraft.shelter_pottery_sherd";
 #[doc = "Shield"]
-pub const ITEM_MINECRAFT_SHIELD: &str = "item.minecraft.shield";
+pub const ITEM_MINECRAFT_SHIELD: &str = "item_stack.minecraft.shield";
 #[doc = "Black Shield"]
-pub const ITEM_MINECRAFT_SHIELD_BLACK: &str = "item.minecraft.shield.black";
+pub const ITEM_MINECRAFT_SHIELD_BLACK: &str = "item_stack.minecraft.shield.black";
 #[doc = "Blue Shield"]
-pub const ITEM_MINECRAFT_SHIELD_BLUE: &str = "item.minecraft.shield.blue";
+pub const ITEM_MINECRAFT_SHIELD_BLUE: &str = "item_stack.minecraft.shield.blue";
 #[doc = "Brown Shield"]
-pub const ITEM_MINECRAFT_SHIELD_BROWN: &str = "item.minecraft.shield.brown";
+pub const ITEM_MINECRAFT_SHIELD_BROWN: &str = "item_stack.minecraft.shield.brown";
 #[doc = "Cyan Shield"]
-pub const ITEM_MINECRAFT_SHIELD_CYAN: &str = "item.minecraft.shield.cyan";
+pub const ITEM_MINECRAFT_SHIELD_CYAN: &str = "item_stack.minecraft.shield.cyan";
 #[doc = "Gray Shield"]
-pub const ITEM_MINECRAFT_SHIELD_GRAY: &str = "item.minecraft.shield.gray";
+pub const ITEM_MINECRAFT_SHIELD_GRAY: &str = "item_stack.minecraft.shield.gray";
 #[doc = "Green Shield"]
-pub const ITEM_MINECRAFT_SHIELD_GREEN: &str = "item.minecraft.shield.green";
+pub const ITEM_MINECRAFT_SHIELD_GREEN: &str = "item_stack.minecraft.shield.green";
 #[doc = "Light Blue Shield"]
-pub const ITEM_MINECRAFT_SHIELD_LIGHT_BLUE: &str = "item.minecraft.shield.light_blue";
+pub const ITEM_MINECRAFT_SHIELD_LIGHT_BLUE: &str = "item_stack.minecraft.shield.light_blue";
 #[doc = "Light Gray Shield"]
-pub const ITEM_MINECRAFT_SHIELD_LIGHT_GRAY: &str = "item.minecraft.shield.light_gray";
+pub const ITEM_MINECRAFT_SHIELD_LIGHT_GRAY: &str = "item_stack.minecraft.shield.light_gray";
 #[doc = "Lime Shield"]
-pub const ITEM_MINECRAFT_SHIELD_LIME: &str = "item.minecraft.shield.lime";
+pub const ITEM_MINECRAFT_SHIELD_LIME: &str = "item_stack.minecraft.shield.lime";
 #[doc = "Magenta Shield"]
-pub const ITEM_MINECRAFT_SHIELD_MAGENTA: &str = "item.minecraft.shield.magenta";
+pub const ITEM_MINECRAFT_SHIELD_MAGENTA: &str = "item_stack.minecraft.shield.magenta";
 #[doc = "Orange Shield"]
-pub const ITEM_MINECRAFT_SHIELD_ORANGE: &str = "item.minecraft.shield.orange";
+pub const ITEM_MINECRAFT_SHIELD_ORANGE: &str = "item_stack.minecraft.shield.orange";
 #[doc = "Pink Shield"]
-pub const ITEM_MINECRAFT_SHIELD_PINK: &str = "item.minecraft.shield.pink";
+pub const ITEM_MINECRAFT_SHIELD_PINK: &str = "item_stack.minecraft.shield.pink";
 #[doc = "Purple Shield"]
-pub const ITEM_MINECRAFT_SHIELD_PURPLE: &str = "item.minecraft.shield.purple";
+pub const ITEM_MINECRAFT_SHIELD_PURPLE: &str = "item_stack.minecraft.shield.purple";
 #[doc = "Red Shield"]
-pub const ITEM_MINECRAFT_SHIELD_RED: &str = "item.minecraft.shield.red";
+pub const ITEM_MINECRAFT_SHIELD_RED: &str = "item_stack.minecraft.shield.red";
 #[doc = "White Shield"]
-pub const ITEM_MINECRAFT_SHIELD_WHITE: &str = "item.minecraft.shield.white";
+pub const ITEM_MINECRAFT_SHIELD_WHITE: &str = "item_stack.minecraft.shield.white";
 #[doc = "Yellow Shield"]
-pub const ITEM_MINECRAFT_SHIELD_YELLOW: &str = "item.minecraft.shield.yellow";
+pub const ITEM_MINECRAFT_SHIELD_YELLOW: &str = "item_stack.minecraft.shield.yellow";
 #[doc = "Shulker Shell"]
-pub const ITEM_MINECRAFT_SHULKER_SHELL: &str = "item.minecraft.shulker_shell";
+pub const ITEM_MINECRAFT_SHULKER_SHELL: &str = "item_stack.minecraft.shulker_shell";
 #[doc = "Shulker Spawn Egg"]
-pub const ITEM_MINECRAFT_SHULKER_SPAWN_EGG: &str = "item.minecraft.shulker_spawn_egg";
+pub const ITEM_MINECRAFT_SHULKER_SPAWN_EGG: &str = "item_stack.minecraft.shulker_spawn_egg";
 #[doc = "Sign"]
-pub const ITEM_MINECRAFT_SIGN: &str = "item.minecraft.sign";
+pub const ITEM_MINECRAFT_SIGN: &str = "item_stack.minecraft.sign";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.silence_armor_trim_smithing_template";
+    "item_stack.minecraft.silence_armor_trim_smithing_template";
 #[doc = "Silence Armor Trim"]
 pub const ITEM_MINECRAFT_SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.silence_armor_trim_smithing_template.new";
+    "item_stack.minecraft.silence_armor_trim_smithing_template.new";
 #[doc = "Silverfish Spawn Egg"]
-pub const ITEM_MINECRAFT_SILVERFISH_SPAWN_EGG: &str = "item.minecraft.silverfish_spawn_egg";
+pub const ITEM_MINECRAFT_SILVERFISH_SPAWN_EGG: &str = "item_stack.minecraft.silverfish_spawn_egg";
 #[doc = "Skeleton Horse Spawn Egg"]
-pub const ITEM_MINECRAFT_SKELETON_HORSE_SPAWN_EGG: &str = "item.minecraft.skeleton_horse_spawn_egg";
+pub const ITEM_MINECRAFT_SKELETON_HORSE_SPAWN_EGG: &str = "item_stack.minecraft.skeleton_horse_spawn_egg";
 #[doc = "Skeleton Spawn Egg"]
-pub const ITEM_MINECRAFT_SKELETON_SPAWN_EGG: &str = "item.minecraft.skeleton_spawn_egg";
+pub const ITEM_MINECRAFT_SKELETON_SPAWN_EGG: &str = "item_stack.minecraft.skeleton_spawn_egg";
 #[doc = "Banner Pattern"]
-pub const ITEM_MINECRAFT_SKULL_BANNER_PATTERN: &str = "item.minecraft.skull_banner_pattern";
+pub const ITEM_MINECRAFT_SKULL_BANNER_PATTERN: &str = "item_stack.minecraft.skull_banner_pattern";
 #[doc = "Skull Charge"]
 pub const ITEM_MINECRAFT_SKULL_BANNER_PATTERN_DESC: &str =
-    "item.minecraft.skull_banner_pattern.desc";
+    "item_stack.minecraft.skull_banner_pattern.desc";
 #[doc = "Skull Charge Banner Pattern"]
-pub const ITEM_MINECRAFT_SKULL_BANNER_PATTERN_NEW: &str = "item.minecraft.skull_banner_pattern.new";
+pub const ITEM_MINECRAFT_SKULL_BANNER_PATTERN_NEW: &str = "item_stack.minecraft.skull_banner_pattern.new";
 #[doc = "Skull Pottery Shard"]
-pub const ITEM_MINECRAFT_SKULL_POTTERY_SHARD: &str = "item.minecraft.skull_pottery_shard";
+pub const ITEM_MINECRAFT_SKULL_POTTERY_SHARD: &str = "item_stack.minecraft.skull_pottery_shard";
 #[doc = "Skull Pottery Sherd"]
-pub const ITEM_MINECRAFT_SKULL_POTTERY_SHERD: &str = "item.minecraft.skull_pottery_sherd";
+pub const ITEM_MINECRAFT_SKULL_POTTERY_SHERD: &str = "item_stack.minecraft.skull_pottery_sherd";
 #[doc = "Slimeball"]
-pub const ITEM_MINECRAFT_SLIME_BALL: &str = "item.minecraft.slime_ball";
+pub const ITEM_MINECRAFT_SLIME_BALL: &str = "item_stack.minecraft.slime_ball";
 #[doc = "Slime Spawn Egg"]
-pub const ITEM_MINECRAFT_SLIME_SPAWN_EGG: &str = "item.minecraft.slime_spawn_egg";
+pub const ITEM_MINECRAFT_SLIME_SPAWN_EGG: &str = "item_stack.minecraft.slime_spawn_egg";
 #[doc = "Smithing Template"]
-pub const ITEM_MINECRAFT_SMITHING_TEMPLATE: &str = "item.minecraft.smithing_template";
+pub const ITEM_MINECRAFT_SMITHING_TEMPLATE: &str = "item_stack.minecraft.smithing_template";
 #[doc = "Applies to:"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_APPLIES_TO: &str =
-    "item.minecraft.smithing_template.applies_to";
+    "item_stack.minecraft.smithing_template.applies_to";
 #[doc = "Add ingot or crystal"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_ARMOR_TRIM_ADDITIONS_SLOT_DESCRIPTION: &str =
-    "item.minecraft.smithing_template.armor_trim.additions_slot_description";
+    "item_stack.minecraft.smithing_template.armor_trim.additions_slot_description";
 #[doc = "Armor"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_ARMOR_TRIM_APPLIES_TO: &str =
-    "item.minecraft.smithing_template.armor_trim.applies_to";
+    "item_stack.minecraft.smithing_template.armor_trim.applies_to";
 #[doc = "Add a piece of armor"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_ARMOR_TRIM_BASE_SLOT_DESCRIPTION: &str =
-    "item.minecraft.smithing_template.armor_trim.base_slot_description";
+    "item_stack.minecraft.smithing_template.armor_trim.base_slot_description";
 #[doc = "Ingots & Crystals"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_ARMOR_TRIM_INGREDIENTS: &str =
-    "item.minecraft.smithing_template.armor_trim.ingredients";
+    "item_stack.minecraft.smithing_template.armor_trim.ingredients";
 #[doc = "Ingredients:"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_INGREDIENTS: &str =
-    "item.minecraft.smithing_template.ingredients";
+    "item_stack.minecraft.smithing_template.ingredients";
 #[doc = "Add Netherite Ingot"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_NETHERITE_UPGRADE_ADDITIONS_SLOT_DESCRIPTION: &str =
-    "item.minecraft.smithing_template.netherite_upgrade.additions_slot_description";
+    "item_stack.minecraft.smithing_template.netherite_upgrade.additions_slot_description";
 #[doc = "Diamond Equipment"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_NETHERITE_UPGRADE_APPLIES_TO: &str =
-    "item.minecraft.smithing_template.netherite_upgrade.applies_to";
+    "item_stack.minecraft.smithing_template.netherite_upgrade.applies_to";
 #[doc = "Add diamond armor, weapon, or tool"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_NETHERITE_UPGRADE_BASE_SLOT_DESCRIPTION: &str =
-    "item.minecraft.smithing_template.netherite_upgrade.base_slot_description";
+    "item_stack.minecraft.smithing_template.netherite_upgrade.base_slot_description";
 #[doc = "Netherite Ingot"]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_NETHERITE_UPGRADE_INGREDIENTS: &str =
-    "item.minecraft.smithing_template.netherite_upgrade.ingredients";
+    "item_stack.minecraft.smithing_template.netherite_upgrade.ingredients";
 #[doc = "Upgrade: "]
 pub const ITEM_MINECRAFT_SMITHING_TEMPLATE_UPGRADE: &str =
-    "item.minecraft.smithing_template.upgrade";
+    "item_stack.minecraft.smithing_template.upgrade";
 #[doc = "Sniffer Spawn Egg"]
-pub const ITEM_MINECRAFT_SNIFFER_SPAWN_EGG: &str = "item.minecraft.sniffer_spawn_egg";
+pub const ITEM_MINECRAFT_SNIFFER_SPAWN_EGG: &str = "item_stack.minecraft.sniffer_spawn_egg";
 #[doc = "Snort Pottery Shard"]
-pub const ITEM_MINECRAFT_SNORT_POTTERY_SHARD: &str = "item.minecraft.snort_pottery_shard";
+pub const ITEM_MINECRAFT_SNORT_POTTERY_SHARD: &str = "item_stack.minecraft.snort_pottery_shard";
 #[doc = "Snort Pottery Sherd"]
-pub const ITEM_MINECRAFT_SNORT_POTTERY_SHERD: &str = "item.minecraft.snort_pottery_sherd";
+pub const ITEM_MINECRAFT_SNORT_POTTERY_SHERD: &str = "item_stack.minecraft.snort_pottery_sherd";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.snout_armor_trim_smithing_template";
+    "item_stack.minecraft.snout_armor_trim_smithing_template";
 #[doc = "Snout Armor Trim"]
 pub const ITEM_MINECRAFT_SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.snout_armor_trim_smithing_template.new";
+    "item_stack.minecraft.snout_armor_trim_smithing_template.new";
 #[doc = "Snow Golem Spawn Egg"]
-pub const ITEM_MINECRAFT_SNOW_GOLEM_SPAWN_EGG: &str = "item.minecraft.snow_golem_spawn_egg";
+pub const ITEM_MINECRAFT_SNOW_GOLEM_SPAWN_EGG: &str = "item_stack.minecraft.snow_golem_spawn_egg";
 #[doc = "Snowball"]
-pub const ITEM_MINECRAFT_SNOWBALL: &str = "item.minecraft.snowball";
+pub const ITEM_MINECRAFT_SNOWBALL: &str = "item_stack.minecraft.snowball";
 #[doc = "Spectral Arrow"]
-pub const ITEM_MINECRAFT_SPECTRAL_ARROW: &str = "item.minecraft.spectral_arrow";
+pub const ITEM_MINECRAFT_SPECTRAL_ARROW: &str = "item_stack.minecraft.spectral_arrow";
 #[doc = "Spider Eye"]
-pub const ITEM_MINECRAFT_SPIDER_EYE: &str = "item.minecraft.spider_eye";
+pub const ITEM_MINECRAFT_SPIDER_EYE: &str = "item_stack.minecraft.spider_eye";
 #[doc = "Spider Spawn Egg"]
-pub const ITEM_MINECRAFT_SPIDER_SPAWN_EGG: &str = "item.minecraft.spider_spawn_egg";
+pub const ITEM_MINECRAFT_SPIDER_SPAWN_EGG: &str = "item_stack.minecraft.spider_spawn_egg";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.spire_armor_trim_smithing_template";
+    "item_stack.minecraft.spire_armor_trim_smithing_template";
 #[doc = "Spire Armor Trim"]
 pub const ITEM_MINECRAFT_SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.spire_armor_trim_smithing_template.new";
+    "item_stack.minecraft.spire_armor_trim_smithing_template.new";
 #[doc = "Splash Potion"]
-pub const ITEM_MINECRAFT_SPLASH_POTION: &str = "item.minecraft.splash_potion";
+pub const ITEM_MINECRAFT_SPLASH_POTION: &str = "item_stack.minecraft.splash_potion";
 #[doc = "Awkward Splash Potion"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_AWKWARD: &str =
-    "item.minecraft.splash_potion.effect.awkward";
+    "item_stack.minecraft.splash_potion.effect.awkward";
 #[doc = "Splash Uncraftable Potion"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_EMPTY: &str =
-    "item.minecraft.splash_potion.effect.empty";
+    "item_stack.minecraft.splash_potion.effect.empty";
 #[doc = "Splash Potion of Fire Resistance"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_FIRE_RESISTANCE: &str =
-    "item.minecraft.splash_potion.effect.fire_resistance";
+    "item_stack.minecraft.splash_potion.effect.fire_resistance";
 #[doc = "Splash Potion of Harming"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_HARMING: &str =
-    "item.minecraft.splash_potion.effect.harming";
+    "item_stack.minecraft.splash_potion.effect.harming";
 #[doc = "Splash Potion of Healing"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_HEALING: &str =
-    "item.minecraft.splash_potion.effect.healing";
+    "item_stack.minecraft.splash_potion.effect.healing";
 #[doc = "Splash Potion of Infestation"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_INFESTED: &str =
-    "item.minecraft.splash_potion.effect.infested";
+    "item_stack.minecraft.splash_potion.effect.infested";
 #[doc = "Splash Potion of Invisibility"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_INVISIBILITY: &str =
-    "item.minecraft.splash_potion.effect.invisibility";
+    "item_stack.minecraft.splash_potion.effect.invisibility";
 #[doc = "Splash Potion of Leaping"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_LEAPING: &str =
-    "item.minecraft.splash_potion.effect.leaping";
+    "item_stack.minecraft.splash_potion.effect.leaping";
 #[doc = "Splash Potion of Levitation"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_LEVITATION: &str =
-    "item.minecraft.splash_potion.effect.levitation";
+    "item_stack.minecraft.splash_potion.effect.levitation";
 #[doc = "Splash Potion of Luck"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_LUCK: &str =
-    "item.minecraft.splash_potion.effect.luck";
+    "item_stack.minecraft.splash_potion.effect.luck";
 #[doc = "Mundane Splash Potion"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_MUNDANE: &str =
-    "item.minecraft.splash_potion.effect.mundane";
+    "item_stack.minecraft.splash_potion.effect.mundane";
 #[doc = "Splash Potion of Night Vision"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_NIGHT_VISION: &str =
-    "item.minecraft.splash_potion.effect.night_vision";
+    "item_stack.minecraft.splash_potion.effect.night_vision";
 #[doc = "Splash Potion of Oozing"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_OOZING: &str =
-    "item.minecraft.splash_potion.effect.oozing";
+    "item_stack.minecraft.splash_potion.effect.oozing";
 #[doc = "Splash Potion of Poison"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_POISON: &str =
-    "item.minecraft.splash_potion.effect.poison";
+    "item_stack.minecraft.splash_potion.effect.poison";
 #[doc = "Splash Potion of Regeneration"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_REGENERATION: &str =
-    "item.minecraft.splash_potion.effect.regeneration";
+    "item_stack.minecraft.splash_potion.effect.regeneration";
 #[doc = "Splash Potion of Slow Falling"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_SLOW_FALLING: &str =
-    "item.minecraft.splash_potion.effect.slow_falling";
+    "item_stack.minecraft.splash_potion.effect.slow_falling";
 #[doc = "Splash Potion of Slowness"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_SLOWNESS: &str =
-    "item.minecraft.splash_potion.effect.slowness";
+    "item_stack.minecraft.splash_potion.effect.slowness";
 #[doc = "Splash Potion of Strength"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_STRENGTH: &str =
-    "item.minecraft.splash_potion.effect.strength";
+    "item_stack.minecraft.splash_potion.effect.strength";
 #[doc = "Splash Potion of Swiftness"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_SWIFTNESS: &str =
-    "item.minecraft.splash_potion.effect.swiftness";
+    "item_stack.minecraft.splash_potion.effect.swiftness";
 #[doc = "Thick Splash Potion"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_THICK: &str =
-    "item.minecraft.splash_potion.effect.thick";
+    "item_stack.minecraft.splash_potion.effect.thick";
 #[doc = "Splash Potion of the Turtle Master"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_TURTLE_MASTER: &str =
-    "item.minecraft.splash_potion.effect.turtle_master";
+    "item_stack.minecraft.splash_potion.effect.turtle_master";
 #[doc = "Splash Water Bottle"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_WATER: &str =
-    "item.minecraft.splash_potion.effect.water";
+    "item_stack.minecraft.splash_potion.effect.water";
 #[doc = "Splash Potion of Water Breathing"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_WATER_BREATHING: &str =
-    "item.minecraft.splash_potion.effect.water_breathing";
+    "item_stack.minecraft.splash_potion.effect.water_breathing";
 #[doc = "Splash Potion of Weakness"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_WEAKNESS: &str =
-    "item.minecraft.splash_potion.effect.weakness";
+    "item_stack.minecraft.splash_potion.effect.weakness";
 #[doc = "Splash Potion of Weaving"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_WEAVING: &str =
-    "item.minecraft.splash_potion.effect.weaving";
+    "item_stack.minecraft.splash_potion.effect.weaving";
 #[doc = "Splash Potion of Wind Charging"]
 pub const ITEM_MINECRAFT_SPLASH_POTION_EFFECT_WIND_CHARGED: &str =
-    "item.minecraft.splash_potion.effect.wind_charged";
+    "item_stack.minecraft.splash_potion.effect.wind_charged";
 #[doc = "Spruce Boat"]
-pub const ITEM_MINECRAFT_SPRUCE_BOAT: &str = "item.minecraft.spruce_boat";
+pub const ITEM_MINECRAFT_SPRUCE_BOAT: &str = "item_stack.minecraft.spruce_boat";
 #[doc = "Spruce Boat with Chest"]
-pub const ITEM_MINECRAFT_SPRUCE_CHEST_BOAT: &str = "item.minecraft.spruce_chest_boat";
+pub const ITEM_MINECRAFT_SPRUCE_CHEST_BOAT: &str = "item_stack.minecraft.spruce_chest_boat";
 #[doc = "Spyglass"]
-pub const ITEM_MINECRAFT_SPYGLASS: &str = "item.minecraft.spyglass";
+pub const ITEM_MINECRAFT_SPYGLASS: &str = "item_stack.minecraft.spyglass";
 #[doc = "Squid Spawn Egg"]
-pub const ITEM_MINECRAFT_SQUID_SPAWN_EGG: &str = "item.minecraft.squid_spawn_egg";
+pub const ITEM_MINECRAFT_SQUID_SPAWN_EGG: &str = "item_stack.minecraft.squid_spawn_egg";
 #[doc = "Stick"]
-pub const ITEM_MINECRAFT_STICK: &str = "item.minecraft.stick";
+pub const ITEM_MINECRAFT_STICK: &str = "item_stack.minecraft.stick";
 #[doc = "Stone Axe"]
-pub const ITEM_MINECRAFT_STONE_AXE: &str = "item.minecraft.stone_axe";
+pub const ITEM_MINECRAFT_STONE_AXE: &str = "item_stack.minecraft.stone_axe";
 #[doc = "Stone Hoe"]
-pub const ITEM_MINECRAFT_STONE_HOE: &str = "item.minecraft.stone_hoe";
+pub const ITEM_MINECRAFT_STONE_HOE: &str = "item_stack.minecraft.stone_hoe";
 #[doc = "Stone Pickaxe"]
-pub const ITEM_MINECRAFT_STONE_PICKAXE: &str = "item.minecraft.stone_pickaxe";
+pub const ITEM_MINECRAFT_STONE_PICKAXE: &str = "item_stack.minecraft.stone_pickaxe";
 #[doc = "Stone Shovel"]
-pub const ITEM_MINECRAFT_STONE_SHOVEL: &str = "item.minecraft.stone_shovel";
+pub const ITEM_MINECRAFT_STONE_SHOVEL: &str = "item_stack.minecraft.stone_shovel";
 #[doc = "Stone Spear"]
-pub const ITEM_MINECRAFT_STONE_SPEAR: &str = "item.minecraft.stone_spear";
+pub const ITEM_MINECRAFT_STONE_SPEAR: &str = "item_stack.minecraft.stone_spear";
 #[doc = "Stone Sword"]
-pub const ITEM_MINECRAFT_STONE_SWORD: &str = "item.minecraft.stone_sword";
+pub const ITEM_MINECRAFT_STONE_SWORD: &str = "item_stack.minecraft.stone_sword";
 #[doc = "Stray Spawn Egg"]
-pub const ITEM_MINECRAFT_STRAY_SPAWN_EGG: &str = "item.minecraft.stray_spawn_egg";
+pub const ITEM_MINECRAFT_STRAY_SPAWN_EGG: &str = "item_stack.minecraft.stray_spawn_egg";
 #[doc = "Strider Spawn Egg"]
-pub const ITEM_MINECRAFT_STRIDER_SPAWN_EGG: &str = "item.minecraft.strider_spawn_egg";
+pub const ITEM_MINECRAFT_STRIDER_SPAWN_EGG: &str = "item_stack.minecraft.strider_spawn_egg";
 #[doc = "String"]
-pub const ITEM_MINECRAFT_STRING: &str = "item.minecraft.string";
+pub const ITEM_MINECRAFT_STRING: &str = "item_stack.minecraft.string";
 #[doc = "Sugar"]
-pub const ITEM_MINECRAFT_SUGAR: &str = "item.minecraft.sugar";
+pub const ITEM_MINECRAFT_SUGAR: &str = "item_stack.minecraft.sugar";
 #[doc = "Suspicious Stew"]
-pub const ITEM_MINECRAFT_SUSPICIOUS_STEW: &str = "item.minecraft.suspicious_stew";
+pub const ITEM_MINECRAFT_SUSPICIOUS_STEW: &str = "item_stack.minecraft.suspicious_stew";
 #[doc = "Sweet Berries"]
-pub const ITEM_MINECRAFT_SWEET_BERRIES: &str = "item.minecraft.sweet_berries";
+pub const ITEM_MINECRAFT_SWEET_BERRIES: &str = "item_stack.minecraft.sweet_berries";
 #[doc = "Bucket of Tadpole"]
-pub const ITEM_MINECRAFT_TADPOLE_BUCKET: &str = "item.minecraft.tadpole_bucket";
+pub const ITEM_MINECRAFT_TADPOLE_BUCKET: &str = "item_stack.minecraft.tadpole_bucket";
 #[doc = "Tadpole Spawn Egg"]
-pub const ITEM_MINECRAFT_TADPOLE_SPAWN_EGG: &str = "item.minecraft.tadpole_spawn_egg";
+pub const ITEM_MINECRAFT_TADPOLE_SPAWN_EGG: &str = "item_stack.minecraft.tadpole_spawn_egg";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_TIDE_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.tide_armor_trim_smithing_template";
+    "item_stack.minecraft.tide_armor_trim_smithing_template";
 #[doc = "Tide Armor Trim"]
 pub const ITEM_MINECRAFT_TIDE_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.tide_armor_trim_smithing_template.new";
+    "item_stack.minecraft.tide_armor_trim_smithing_template.new";
 #[doc = "Tipped Arrow"]
-pub const ITEM_MINECRAFT_TIPPED_ARROW: &str = "item.minecraft.tipped_arrow";
+pub const ITEM_MINECRAFT_TIPPED_ARROW: &str = "item_stack.minecraft.tipped_arrow";
 #[doc = "Tipped Arrow"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_AWKWARD: &str =
-    "item.minecraft.tipped_arrow.effect.awkward";
+    "item_stack.minecraft.tipped_arrow.effect.awkward";
 #[doc = "Uncraftable Tipped Arrow"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_EMPTY: &str =
-    "item.minecraft.tipped_arrow.effect.empty";
+    "item_stack.minecraft.tipped_arrow.effect.empty";
 #[doc = "Arrow of Fire Resistance"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_FIRE_RESISTANCE: &str =
-    "item.minecraft.tipped_arrow.effect.fire_resistance";
+    "item_stack.minecraft.tipped_arrow.effect.fire_resistance";
 #[doc = "Arrow of Harming"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_HARMING: &str =
-    "item.minecraft.tipped_arrow.effect.harming";
+    "item_stack.minecraft.tipped_arrow.effect.harming";
 #[doc = "Arrow of Healing"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_HEALING: &str =
-    "item.minecraft.tipped_arrow.effect.healing";
+    "item_stack.minecraft.tipped_arrow.effect.healing";
 #[doc = "Arrow of Infestation"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_INFESTED: &str =
-    "item.minecraft.tipped_arrow.effect.infested";
+    "item_stack.minecraft.tipped_arrow.effect.infested";
 #[doc = "Arrow of Invisibility"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_INVISIBILITY: &str =
-    "item.minecraft.tipped_arrow.effect.invisibility";
+    "item_stack.minecraft.tipped_arrow.effect.invisibility";
 #[doc = "Arrow of Leaping"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_LEAPING: &str =
-    "item.minecraft.tipped_arrow.effect.leaping";
+    "item_stack.minecraft.tipped_arrow.effect.leaping";
 #[doc = "Arrow of Levitation"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_LEVITATION: &str =
-    "item.minecraft.tipped_arrow.effect.levitation";
+    "item_stack.minecraft.tipped_arrow.effect.levitation";
 #[doc = "Arrow of Luck"]
-pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_LUCK: &str = "item.minecraft.tipped_arrow.effect.luck";
+pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_LUCK: &str = "item_stack.minecraft.tipped_arrow.effect.luck";
 #[doc = "Tipped Arrow"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_MUNDANE: &str =
-    "item.minecraft.tipped_arrow.effect.mundane";
+    "item_stack.minecraft.tipped_arrow.effect.mundane";
 #[doc = "Arrow of Night Vision"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_NIGHT_VISION: &str =
-    "item.minecraft.tipped_arrow.effect.night_vision";
+    "item_stack.minecraft.tipped_arrow.effect.night_vision";
 #[doc = "Arrow of Oozing"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_OOZING: &str =
-    "item.minecraft.tipped_arrow.effect.oozing";
+    "item_stack.minecraft.tipped_arrow.effect.oozing";
 #[doc = "Arrow of Poison"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_POISON: &str =
-    "item.minecraft.tipped_arrow.effect.poison";
+    "item_stack.minecraft.tipped_arrow.effect.poison";
 #[doc = "Arrow of Regeneration"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_REGENERATION: &str =
-    "item.minecraft.tipped_arrow.effect.regeneration";
+    "item_stack.minecraft.tipped_arrow.effect.regeneration";
 #[doc = "Arrow of Slow Falling"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_SLOW_FALLING: &str =
-    "item.minecraft.tipped_arrow.effect.slow_falling";
+    "item_stack.minecraft.tipped_arrow.effect.slow_falling";
 #[doc = "Arrow of Slowness"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_SLOWNESS: &str =
-    "item.minecraft.tipped_arrow.effect.slowness";
+    "item_stack.minecraft.tipped_arrow.effect.slowness";
 #[doc = "Arrow of Strength"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_STRENGTH: &str =
-    "item.minecraft.tipped_arrow.effect.strength";
+    "item_stack.minecraft.tipped_arrow.effect.strength";
 #[doc = "Arrow of Swiftness"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_SWIFTNESS: &str =
-    "item.minecraft.tipped_arrow.effect.swiftness";
+    "item_stack.minecraft.tipped_arrow.effect.swiftness";
 #[doc = "Tipped Arrow"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_THICK: &str =
-    "item.minecraft.tipped_arrow.effect.thick";
+    "item_stack.minecraft.tipped_arrow.effect.thick";
 #[doc = "Arrow of the Turtle Master"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_TURTLE_MASTER: &str =
-    "item.minecraft.tipped_arrow.effect.turtle_master";
+    "item_stack.minecraft.tipped_arrow.effect.turtle_master";
 #[doc = "Arrow of Splashing"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_WATER: &str =
-    "item.minecraft.tipped_arrow.effect.water";
+    "item_stack.minecraft.tipped_arrow.effect.water";
 #[doc = "Arrow of Water Breathing"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_WATER_BREATHING: &str =
-    "item.minecraft.tipped_arrow.effect.water_breathing";
+    "item_stack.minecraft.tipped_arrow.effect.water_breathing";
 #[doc = "Arrow of Weakness"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_WEAKNESS: &str =
-    "item.minecraft.tipped_arrow.effect.weakness";
+    "item_stack.minecraft.tipped_arrow.effect.weakness";
 #[doc = "Arrow of Weaving"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_WEAVING: &str =
-    "item.minecraft.tipped_arrow.effect.weaving";
+    "item_stack.minecraft.tipped_arrow.effect.weaving";
 #[doc = "Arrow of Wind Charging"]
 pub const ITEM_MINECRAFT_TIPPED_ARROW_EFFECT_WIND_CHARGED: &str =
-    "item.minecraft.tipped_arrow.effect.wind_charged";
+    "item_stack.minecraft.tipped_arrow.effect.wind_charged";
 #[doc = "Minecart with TNT"]
-pub const ITEM_MINECRAFT_TNT_MINECART: &str = "item.minecraft.tnt_minecart";
+pub const ITEM_MINECRAFT_TNT_MINECART: &str = "item_stack.minecraft.tnt_minecart";
 #[doc = "Torchflower Seeds"]
-pub const ITEM_MINECRAFT_TORCHFLOWER_SEEDS: &str = "item.minecraft.torchflower_seeds";
+pub const ITEM_MINECRAFT_TORCHFLOWER_SEEDS: &str = "item_stack.minecraft.torchflower_seeds";
 #[doc = "Totem of Undying"]
-pub const ITEM_MINECRAFT_TOTEM_OF_UNDYING: &str = "item.minecraft.totem_of_undying";
+pub const ITEM_MINECRAFT_TOTEM_OF_UNDYING: &str = "item_stack.minecraft.totem_of_undying";
 #[doc = "Trader Llama Spawn Egg"]
-pub const ITEM_MINECRAFT_TRADER_LLAMA_SPAWN_EGG: &str = "item.minecraft.trader_llama_spawn_egg";
+pub const ITEM_MINECRAFT_TRADER_LLAMA_SPAWN_EGG: &str = "item_stack.minecraft.trader_llama_spawn_egg";
 #[doc = "Trial Key"]
-pub const ITEM_MINECRAFT_TRIAL_KEY: &str = "item.minecraft.trial_key";
+pub const ITEM_MINECRAFT_TRIAL_KEY: &str = "item_stack.minecraft.trial_key";
 #[doc = "Trident"]
-pub const ITEM_MINECRAFT_TRIDENT: &str = "item.minecraft.trident";
+pub const ITEM_MINECRAFT_TRIDENT: &str = "item_stack.minecraft.trident";
 #[doc = "Tropical Fish"]
-pub const ITEM_MINECRAFT_TROPICAL_FISH: &str = "item.minecraft.tropical_fish";
+pub const ITEM_MINECRAFT_TROPICAL_FISH: &str = "item_stack.minecraft.tropical_fish";
 #[doc = "Bucket of Tropical Fish"]
-pub const ITEM_MINECRAFT_TROPICAL_FISH_BUCKET: &str = "item.minecraft.tropical_fish_bucket";
+pub const ITEM_MINECRAFT_TROPICAL_FISH_BUCKET: &str = "item_stack.minecraft.tropical_fish_bucket";
 #[doc = "Tropical Fish Spawn Egg"]
-pub const ITEM_MINECRAFT_TROPICAL_FISH_SPAWN_EGG: &str = "item.minecraft.tropical_fish_spawn_egg";
+pub const ITEM_MINECRAFT_TROPICAL_FISH_SPAWN_EGG: &str = "item_stack.minecraft.tropical_fish_spawn_egg";
 #[doc = "Turtle Shell"]
-pub const ITEM_MINECRAFT_TURTLE_HELMET: &str = "item.minecraft.turtle_helmet";
+pub const ITEM_MINECRAFT_TURTLE_HELMET: &str = "item_stack.minecraft.turtle_helmet";
 #[doc = "Turtle Scute"]
-pub const ITEM_MINECRAFT_TURTLE_SCUTE: &str = "item.minecraft.turtle_scute";
+pub const ITEM_MINECRAFT_TURTLE_SCUTE: &str = "item_stack.minecraft.turtle_scute";
 #[doc = "Turtle Spawn Egg"]
-pub const ITEM_MINECRAFT_TURTLE_SPAWN_EGG: &str = "item.minecraft.turtle_spawn_egg";
+pub const ITEM_MINECRAFT_TURTLE_SPAWN_EGG: &str = "item_stack.minecraft.turtle_spawn_egg";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_VEX_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.vex_armor_trim_smithing_template";
+    "item_stack.minecraft.vex_armor_trim_smithing_template";
 #[doc = "Vex Armor Trim"]
 pub const ITEM_MINECRAFT_VEX_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.vex_armor_trim_smithing_template.new";
+    "item_stack.minecraft.vex_armor_trim_smithing_template.new";
 #[doc = "Vex Spawn Egg"]
-pub const ITEM_MINECRAFT_VEX_SPAWN_EGG: &str = "item.minecraft.vex_spawn_egg";
+pub const ITEM_MINECRAFT_VEX_SPAWN_EGG: &str = "item_stack.minecraft.vex_spawn_egg";
 #[doc = "Villager Spawn Egg"]
-pub const ITEM_MINECRAFT_VILLAGER_SPAWN_EGG: &str = "item.minecraft.villager_spawn_egg";
+pub const ITEM_MINECRAFT_VILLAGER_SPAWN_EGG: &str = "item_stack.minecraft.villager_spawn_egg";
 #[doc = "Vindicator Spawn Egg"]
-pub const ITEM_MINECRAFT_VINDICATOR_SPAWN_EGG: &str = "item.minecraft.vindicator_spawn_egg";
+pub const ITEM_MINECRAFT_VINDICATOR_SPAWN_EGG: &str = "item_stack.minecraft.vindicator_spawn_egg";
 #[doc = "Wandering Trader Spawn Egg"]
 pub const ITEM_MINECRAFT_WANDERING_TRADER_SPAWN_EGG: &str =
-    "item.minecraft.wandering_trader_spawn_egg";
+    "item_stack.minecraft.wandering_trader_spawn_egg";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_WARD_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.ward_armor_trim_smithing_template";
+    "item_stack.minecraft.ward_armor_trim_smithing_template";
 #[doc = "Ward Armor Trim"]
 pub const ITEM_MINECRAFT_WARD_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.ward_armor_trim_smithing_template.new";
+    "item_stack.minecraft.ward_armor_trim_smithing_template.new";
 #[doc = "Warden Spawn Egg"]
-pub const ITEM_MINECRAFT_WARDEN_SPAWN_EGG: &str = "item.minecraft.warden_spawn_egg";
+pub const ITEM_MINECRAFT_WARDEN_SPAWN_EGG: &str = "item_stack.minecraft.warden_spawn_egg";
 #[doc = "Warped Fungus on a Stick"]
-pub const ITEM_MINECRAFT_WARPED_FUNGUS_ON_A_STICK: &str = "item.minecraft.warped_fungus_on_a_stick";
+pub const ITEM_MINECRAFT_WARPED_FUNGUS_ON_A_STICK: &str = "item_stack.minecraft.warped_fungus_on_a_stick";
 #[doc = "Water Bucket"]
-pub const ITEM_MINECRAFT_WATER_BUCKET: &str = "item.minecraft.water_bucket";
+pub const ITEM_MINECRAFT_WATER_BUCKET: &str = "item_stack.minecraft.water_bucket";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.wayfinder_armor_trim_smithing_template";
+    "item_stack.minecraft.wayfinder_armor_trim_smithing_template";
 #[doc = "Wayfinder Armor Trim"]
 pub const ITEM_MINECRAFT_WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.wayfinder_armor_trim_smithing_template.new";
+    "item_stack.minecraft.wayfinder_armor_trim_smithing_template.new";
 #[doc = "Wheat"]
-pub const ITEM_MINECRAFT_WHEAT: &str = "item.minecraft.wheat";
+pub const ITEM_MINECRAFT_WHEAT: &str = "item_stack.minecraft.wheat";
 #[doc = "Wheat Seeds"]
-pub const ITEM_MINECRAFT_WHEAT_SEEDS: &str = "item.minecraft.wheat_seeds";
+pub const ITEM_MINECRAFT_WHEAT_SEEDS: &str = "item_stack.minecraft.wheat_seeds";
 #[doc = "White Bundle"]
-pub const ITEM_MINECRAFT_WHITE_BUNDLE: &str = "item.minecraft.white_bundle";
+pub const ITEM_MINECRAFT_WHITE_BUNDLE: &str = "item_stack.minecraft.white_bundle";
 #[doc = "White Dye"]
-pub const ITEM_MINECRAFT_WHITE_DYE: &str = "item.minecraft.white_dye";
+pub const ITEM_MINECRAFT_WHITE_DYE: &str = "item_stack.minecraft.white_dye";
 #[doc = "White Harness"]
-pub const ITEM_MINECRAFT_WHITE_HARNESS: &str = "item.minecraft.white_harness";
+pub const ITEM_MINECRAFT_WHITE_HARNESS: &str = "item_stack.minecraft.white_harness";
 #[doc = "Smithing Template"]
 pub const ITEM_MINECRAFT_WILD_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
-    "item.minecraft.wild_armor_trim_smithing_template";
+    "item_stack.minecraft.wild_armor_trim_smithing_template";
 #[doc = "Wild Armor Trim"]
 pub const ITEM_MINECRAFT_WILD_ARMOR_TRIM_SMITHING_TEMPLATE_NEW: &str =
-    "item.minecraft.wild_armor_trim_smithing_template.new";
+    "item_stack.minecraft.wild_armor_trim_smithing_template.new";
 #[doc = "Wind Charge"]
-pub const ITEM_MINECRAFT_WIND_CHARGE: &str = "item.minecraft.wind_charge";
+pub const ITEM_MINECRAFT_WIND_CHARGE: &str = "item_stack.minecraft.wind_charge";
 #[doc = "Witch Spawn Egg"]
-pub const ITEM_MINECRAFT_WITCH_SPAWN_EGG: &str = "item.minecraft.witch_spawn_egg";
+pub const ITEM_MINECRAFT_WITCH_SPAWN_EGG: &str = "item_stack.minecraft.witch_spawn_egg";
 #[doc = "Wither Skeleton Spawn Egg"]
 pub const ITEM_MINECRAFT_WITHER_SKELETON_SPAWN_EGG: &str =
-    "item.minecraft.wither_skeleton_spawn_egg";
+    "item_stack.minecraft.wither_skeleton_spawn_egg";
 #[doc = "Wither Spawn Egg"]
-pub const ITEM_MINECRAFT_WITHER_SPAWN_EGG: &str = "item.minecraft.wither_spawn_egg";
+pub const ITEM_MINECRAFT_WITHER_SPAWN_EGG: &str = "item_stack.minecraft.wither_spawn_egg";
 #[doc = "Wolf Armor"]
-pub const ITEM_MINECRAFT_WOLF_ARMOR: &str = "item.minecraft.wolf_armor";
+pub const ITEM_MINECRAFT_WOLF_ARMOR: &str = "item_stack.minecraft.wolf_armor";
 #[doc = "Wolf Spawn Egg"]
-pub const ITEM_MINECRAFT_WOLF_SPAWN_EGG: &str = "item.minecraft.wolf_spawn_egg";
+pub const ITEM_MINECRAFT_WOLF_SPAWN_EGG: &str = "item_stack.minecraft.wolf_spawn_egg";
 #[doc = "Wooden Axe"]
-pub const ITEM_MINECRAFT_WOODEN_AXE: &str = "item.minecraft.wooden_axe";
+pub const ITEM_MINECRAFT_WOODEN_AXE: &str = "item_stack.minecraft.wooden_axe";
 #[doc = "Wooden Hoe"]
-pub const ITEM_MINECRAFT_WOODEN_HOE: &str = "item.minecraft.wooden_hoe";
+pub const ITEM_MINECRAFT_WOODEN_HOE: &str = "item_stack.minecraft.wooden_hoe";
 #[doc = "Wooden Pickaxe"]
-pub const ITEM_MINECRAFT_WOODEN_PICKAXE: &str = "item.minecraft.wooden_pickaxe";
+pub const ITEM_MINECRAFT_WOODEN_PICKAXE: &str = "item_stack.minecraft.wooden_pickaxe";
 #[doc = "Wooden Shovel"]
-pub const ITEM_MINECRAFT_WOODEN_SHOVEL: &str = "item.minecraft.wooden_shovel";
+pub const ITEM_MINECRAFT_WOODEN_SHOVEL: &str = "item_stack.minecraft.wooden_shovel";
 #[doc = "Wooden Spear"]
-pub const ITEM_MINECRAFT_WOODEN_SPEAR: &str = "item.minecraft.wooden_spear";
+pub const ITEM_MINECRAFT_WOODEN_SPEAR: &str = "item_stack.minecraft.wooden_spear";
 #[doc = "Wooden Sword"]
-pub const ITEM_MINECRAFT_WOODEN_SWORD: &str = "item.minecraft.wooden_sword";
+pub const ITEM_MINECRAFT_WOODEN_SWORD: &str = "item_stack.minecraft.wooden_sword";
 #[doc = "Book and Quill"]
-pub const ITEM_MINECRAFT_WRITABLE_BOOK: &str = "item.minecraft.writable_book";
+pub const ITEM_MINECRAFT_WRITABLE_BOOK: &str = "item_stack.minecraft.writable_book";
 #[doc = "Written Book"]
-pub const ITEM_MINECRAFT_WRITTEN_BOOK: &str = "item.minecraft.written_book";
+pub const ITEM_MINECRAFT_WRITTEN_BOOK: &str = "item_stack.minecraft.written_book";
 #[doc = "Yellow Bundle"]
-pub const ITEM_MINECRAFT_YELLOW_BUNDLE: &str = "item.minecraft.yellow_bundle";
+pub const ITEM_MINECRAFT_YELLOW_BUNDLE: &str = "item_stack.minecraft.yellow_bundle";
 #[doc = "Yellow Dye"]
-pub const ITEM_MINECRAFT_YELLOW_DYE: &str = "item.minecraft.yellow_dye";
+pub const ITEM_MINECRAFT_YELLOW_DYE: &str = "item_stack.minecraft.yellow_dye";
 #[doc = "Yellow Harness"]
-pub const ITEM_MINECRAFT_YELLOW_HARNESS: &str = "item.minecraft.yellow_harness";
+pub const ITEM_MINECRAFT_YELLOW_HARNESS: &str = "item_stack.minecraft.yellow_harness";
 #[doc = "Zoglin Spawn Egg"]
-pub const ITEM_MINECRAFT_ZOGLIN_SPAWN_EGG: &str = "item.minecraft.zoglin_spawn_egg";
+pub const ITEM_MINECRAFT_ZOGLIN_SPAWN_EGG: &str = "item_stack.minecraft.zoglin_spawn_egg";
 #[doc = "Zombie Horse Spawn Egg"]
-pub const ITEM_MINECRAFT_ZOMBIE_HORSE_SPAWN_EGG: &str = "item.minecraft.zombie_horse_spawn_egg";
+pub const ITEM_MINECRAFT_ZOMBIE_HORSE_SPAWN_EGG: &str = "item_stack.minecraft.zombie_horse_spawn_egg";
 #[doc = "Zombie Nautilus Spawn Egg"]
 pub const ITEM_MINECRAFT_ZOMBIE_NAUTILUS_SPAWN_EGG: &str =
-    "item.minecraft.zombie_nautilus_spawn_egg";
+    "item_stack.minecraft.zombie_nautilus_spawn_egg";
 #[doc = "Zombie Spawn Egg"]
-pub const ITEM_MINECRAFT_ZOMBIE_SPAWN_EGG: &str = "item.minecraft.zombie_spawn_egg";
+pub const ITEM_MINECRAFT_ZOMBIE_SPAWN_EGG: &str = "item_stack.minecraft.zombie_spawn_egg";
 #[doc = "Zombie Villager Spawn Egg"]
 pub const ITEM_MINECRAFT_ZOMBIE_VILLAGER_SPAWN_EGG: &str =
-    "item.minecraft.zombie_villager_spawn_egg";
+    "item_stack.minecraft.zombie_villager_spawn_egg";
 #[doc = "Zombified Piglin Spawn Egg"]
 pub const ITEM_MINECRAFT_ZOMBIFIED_PIGLIN_SPAWN_EGG: &str =
-    "item.minecraft.zombified_piglin_spawn_egg";
+    "item_stack.minecraft.zombified_piglin_spawn_egg";
 #[doc = "When equipped:"]
-pub const ITEM_MODIFIERS_ANY: &str = "item.modifiers.any";
+pub const ITEM_MODIFIERS_ANY: &str = "item_stack.modifiers.any";
 #[doc = "When worn:"]
-pub const ITEM_MODIFIERS_ARMOR: &str = "item.modifiers.armor";
+pub const ITEM_MODIFIERS_ARMOR: &str = "item_stack.modifiers.armor";
 #[doc = "When equipped:"]
-pub const ITEM_MODIFIERS_BODY: &str = "item.modifiers.body";
+pub const ITEM_MODIFIERS_BODY: &str = "item_stack.modifiers.body";
 #[doc = "When on Chest:"]
-pub const ITEM_MODIFIERS_CHEST: &str = "item.modifiers.chest";
+pub const ITEM_MODIFIERS_CHEST: &str = "item_stack.modifiers.chest";
 #[doc = "When on Feet:"]
-pub const ITEM_MODIFIERS_FEET: &str = "item.modifiers.feet";
+pub const ITEM_MODIFIERS_FEET: &str = "item_stack.modifiers.feet";
 #[doc = "When held:"]
-pub const ITEM_MODIFIERS_HAND: &str = "item.modifiers.hand";
+pub const ITEM_MODIFIERS_HAND: &str = "item_stack.modifiers.hand";
 #[doc = "When on Head:"]
-pub const ITEM_MODIFIERS_HEAD: &str = "item.modifiers.head";
+pub const ITEM_MODIFIERS_HEAD: &str = "item_stack.modifiers.head";
 #[doc = "When on Legs:"]
-pub const ITEM_MODIFIERS_LEGS: &str = "item.modifiers.legs";
+pub const ITEM_MODIFIERS_LEGS: &str = "item_stack.modifiers.legs";
 #[doc = "When in Main Hand:"]
-pub const ITEM_MODIFIERS_MAINHAND: &str = "item.modifiers.mainhand";
+pub const ITEM_MODIFIERS_MAINHAND: &str = "item_stack.modifiers.mainhand";
 #[doc = "When in Off Hand:"]
-pub const ITEM_MODIFIERS_OFFHAND: &str = "item.modifiers.offhand";
+pub const ITEM_MODIFIERS_OFFHAND: &str = "item_stack.modifiers.offhand";
 #[doc = "When saddled:"]
-pub const ITEM_MODIFIERS_SADDLE: &str = "item.modifiers.saddle";
+pub const ITEM_MODIFIERS_SADDLE: &str = "item_stack.modifiers.saddle";
 #[doc = "NBT: %s tag(s)"]
-pub const ITEM_NBT_TAGS: &str = "item.nbt_tags";
+pub const ITEM_NBT_TAGS: &str = "item_stack.nbt_tags";
 #[doc = "Warning:"]
-pub const ITEM_OP_BLOCK_WARNING_LINE1: &str = "item.op_block_warning.line1";
-#[doc = "Use of this item might lead to command execution."]
-pub const ITEM_OP_BLOCK_WARNING_LINE2: &str = "item.op_block_warning.line2";
+pub const ITEM_OP_BLOCK_WARNING_LINE1: &str = "item_stack.op_block_warning.line1";
+#[doc = "Use of this item_stack might lead to command execution."]
+pub const ITEM_OP_BLOCK_WARNING_LINE2: &str = "item_stack.op_block_warning.line2";
 #[doc = "Do not use unless you know the exact contents!"]
-pub const ITEM_OP_BLOCK_WARNING_LINE3: &str = "item.op_block_warning.line3";
+pub const ITEM_OP_BLOCK_WARNING_LINE3: &str = "item_stack.op_block_warning.line3";
 #[doc = "Disabled in Peaceful"]
-pub const ITEM_SPAWN_EGG_PEACEFUL: &str = "item.spawn_egg.peaceful";
+pub const ITEM_SPAWN_EGG_PEACEFUL: &str = "item_stack.spawn_egg.peaceful";
 #[doc = "Unbreakable"]
-pub const ITEM_UNBREAKABLE: &str = "item.unbreakable";
+pub const ITEM_UNBREAKABLE: &str = "item_stack.unbreakable";
 #[doc = "Building Blocks"]
 pub const ITEMGROUP_BUILDINGBLOCKS: &str = "itemGroup.buildingBlocks";
 #[doc = "Colored Blocks"]
@@ -11029,7 +11029,7 @@ pub const ITEMGROUP_SEARCH: &str = "itemGroup.search";
 pub const ITEMGROUP_SPAWNEGGS: &str = "itemGroup.spawnEggs";
 #[doc = "Tools & Utilities"]
 pub const ITEMGROUP_TOOLS: &str = "itemGroup.tools";
-#[doc = "Unknown item modifier: %s"]
+#[doc = "Unknown item_stack modifier: %s"]
 pub const ITEM_MODIFIER_UNKNOWN: &str = "item_modifier.unknown";
 #[doc = "Turns into:"]
 pub const JIGSAW_BLOCK_FINAL_STATE: &str = "jigsaw_block.final_state";
@@ -12735,7 +12735,7 @@ pub const NARRATION_CYCLE_BUTTON_USAGE_HOVERED: &str = "narration.cycle_button.u
 #[doc = "Edit box: %s"]
 pub const NARRATION_EDIT_BOX: &str = "narration.edit_box";
 #[doc = "Item: %s"]
-pub const NARRATION_ITEM: &str = "narration.item";
+pub const NARRATION_ITEM: &str = "narration.item_stack";
 #[doc = "Recipe for %s"]
 pub const NARRATION_RECIPE: &str = "narration.recipe";
 #[doc = "Left click to select"]
@@ -14660,7 +14660,7 @@ pub const SUBTITLES_BLOCK_DECORATED_POT_INSERT_FAIL: &str =
     "subtitles.block.decorated_pot.insert_fail";
 #[doc = "Decorated Pot shatters"]
 pub const SUBTITLES_BLOCK_DECORATED_POT_SHATTER: &str = "subtitles.block.decorated_pot.shatter";
-#[doc = "Dispensed item"]
+#[doc = "Dispensed item_stack"]
 pub const SUBTITLES_BLOCK_DISPENSER_DISPENSE: &str = "subtitles.block.dispenser.dispense";
 #[doc = "Dispenser failed"]
 pub const SUBTITLES_BLOCK_DISPENSER_FAIL: &str = "subtitles.block.dispenser.fail";
@@ -14829,7 +14829,7 @@ pub const SUBTITLES_BLOCK_TRAPDOOR_CLOSE: &str = "subtitles.block.trapdoor.close
 pub const SUBTITLES_BLOCK_TRAPDOOR_OPEN: &str = "subtitles.block.trapdoor.open";
 #[doc = "Trapdoor creaks"]
 pub const SUBTITLES_BLOCK_TRAPDOOR_TOGGLE: &str = "subtitles.block.trapdoor.toggle";
-#[doc = "Ominous item prepares"]
+#[doc = "Ominous item_stack prepares"]
 pub const SUBTITLES_BLOCK_TRIAL_SPAWNER_ABOUT_TO_SPAWN_ITEM: &str =
     "subtitles.block.trial_spawner.about_to_spawn_item";
 #[doc = "Trial Spawner crackles"]
@@ -14858,10 +14858,10 @@ pub const SUBTITLES_BLOCK_TRIAL_SPAWNER_OMINOUS_ACTIVATE: &str =
 #[doc = "Trial Spawner opens"]
 pub const SUBTITLES_BLOCK_TRIAL_SPAWNER_OPEN_SHUTTER: &str =
     "subtitles.block.trial_spawner.open_shutter";
-#[doc = "Ominous item drops"]
+#[doc = "Ominous item_stack drops"]
 pub const SUBTITLES_BLOCK_TRIAL_SPAWNER_SPAWN_ITEM: &str =
     "subtitles.block.trial_spawner.spawn_item";
-#[doc = "Ominous item appears"]
+#[doc = "Ominous item_stack appears"]
 pub const SUBTITLES_BLOCK_TRIAL_SPAWNER_SPAWN_ITEM_BEGIN: &str =
     "subtitles.block.trial_spawner.spawn_item_begin";
 #[doc = "Trial Spawner spawns a mob"]
@@ -14880,11 +14880,11 @@ pub const SUBTITLES_BLOCK_VAULT_AMBIENT: &str = "subtitles.block.vault.ambient";
 pub const SUBTITLES_BLOCK_VAULT_CLOSE_SHUTTER: &str = "subtitles.block.vault.close_shutter";
 #[doc = "Vault extinguishes"]
 pub const SUBTITLES_BLOCK_VAULT_DEACTIVATE: &str = "subtitles.block.vault.deactivate";
-#[doc = "Vault ejects item"]
+#[doc = "Vault ejects item_stack"]
 pub const SUBTITLES_BLOCK_VAULT_EJECT_ITEM: &str = "subtitles.block.vault.eject_item";
 #[doc = "Vault unlocks"]
 pub const SUBTITLES_BLOCK_VAULT_INSERT_ITEM: &str = "subtitles.block.vault.insert_item";
-#[doc = "Vault rejects item"]
+#[doc = "Vault rejects item_stack"]
 pub const SUBTITLES_BLOCK_VAULT_INSERT_ITEM_FAIL: &str = "subtitles.block.vault.insert_item_fail";
 #[doc = "Vault opens"]
 pub const SUBTITLES_BLOCK_VAULT_OPEN_SHUTTER: &str = "subtitles.block.vault.open_shutter";
@@ -15129,15 +15129,15 @@ pub const SUBTITLES_ENTITY_COD_HURT: &str = "subtitles.entity.cod.hurt";
 pub const SUBTITLES_ENTITY_COPPER_GOLEM_DEATH: &str = "subtitles.entity.copper_golem.death";
 #[doc = "Copper Golem hurts"]
 pub const SUBTITLES_ENTITY_COPPER_GOLEM_HURT: &str = "subtitles.entity.copper_golem.hurt";
-#[doc = "Copper Golem is placing an item"]
+#[doc = "Copper Golem is placing an item_stack"]
 pub const SUBTITLES_ENTITY_COPPER_GOLEM_ITEM_DROP: &str = "subtitles.entity.copper_golem.item_drop";
-#[doc = "Copper Golem can't place item"]
+#[doc = "Copper Golem can't place item_stack"]
 pub const SUBTITLES_ENTITY_COPPER_GOLEM_ITEM_NO_DROP: &str =
     "subtitles.entity.copper_golem.item_no_drop";
-#[doc = "Copper Golem is picking up item"]
+#[doc = "Copper Golem is picking up item_stack"]
 pub const SUBTITLES_ENTITY_COPPER_GOLEM_NO_ITEM_GET: &str =
     "subtitles.entity.copper_golem.no_item_get";
-#[doc = "Copper Golem can't pick up item"]
+#[doc = "Copper Golem can't pick up item_stack"]
 pub const SUBTITLES_ENTITY_COPPER_GOLEM_NO_ITEM_NO_GET: &str =
     "subtitles.entity.copper_golem.no_item_no_get";
 #[doc = "Copper Golem appears"]
@@ -15553,9 +15553,9 @@ pub const SUBTITLES_ENTITY_IRON_GOLEM_HURT: &str = "subtitles.entity.iron_golem.
 #[doc = "Iron Golem repaired"]
 pub const SUBTITLES_ENTITY_IRON_GOLEM_REPAIR: &str = "subtitles.entity.iron_golem.repair";
 #[doc = "Item breaks"]
-pub const SUBTITLES_ENTITY_ITEM_BREAK: &str = "subtitles.entity.item.break";
+pub const SUBTITLES_ENTITY_ITEM_BREAK: &str = "subtitles.entity.item_stack.break";
 #[doc = "Item plops"]
-pub const SUBTITLES_ENTITY_ITEM_PICKUP: &str = "subtitles.entity.item.pickup";
+pub const SUBTITLES_ENTITY_ITEM_PICKUP: &str = "subtitles.entity.item_stack.pickup";
 #[doc = "Item Frame fills"]
 pub const SUBTITLES_ENTITY_ITEM_FRAME_ADD_ITEM: &str = "subtitles.entity.item_frame.add_item";
 #[doc = "Item Frame broken"]
@@ -15813,7 +15813,7 @@ pub const SUBTITLES_ENTITY_PIG_DEATH: &str = "subtitles.entity.pig.death";
 pub const SUBTITLES_ENTITY_PIG_HURT: &str = "subtitles.entity.pig.hurt";
 #[doc = "Saddle equips"]
 pub const SUBTITLES_ENTITY_PIG_SADDLE: &str = "subtitles.entity.pig.saddle";
-#[doc = "Piglin admires item"]
+#[doc = "Piglin admires item_stack"]
 pub const SUBTITLES_ENTITY_PIGLIN_ADMIRING_ITEM: &str = "subtitles.entity.piglin.admiring_item";
 #[doc = "Piglin snorts"]
 pub const SUBTITLES_ENTITY_PIGLIN_AMBIENT: &str = "subtitles.entity.piglin.ambient";
@@ -16385,188 +16385,188 @@ pub const SUBTITLES_EVENT_MOB_EFFECT_TRIAL_OMEN: &str = "subtitles.event.mob_eff
 #[doc = "Ominous horn blares"]
 pub const SUBTITLES_EVENT_RAID_HORN: &str = "subtitles.event.raid.horn";
 #[doc = "Gear equips"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP: &str = "subtitles.item.armor.equip";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP: &str = "subtitles.item_stack.armor.equip";
 #[doc = "Chain armor jingles"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_CHAIN: &str = "subtitles.item.armor.equip_chain";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_CHAIN: &str = "subtitles.item_stack.armor.equip_chain";
 #[doc = "Copper armor clonks"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_COPPER: &str = "subtitles.item.armor.equip_copper";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_COPPER: &str = "subtitles.item_stack.armor.equip_copper";
 #[doc = "Diamond armor clangs"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_DIAMOND: &str = "subtitles.item.armor.equip_diamond";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_DIAMOND: &str = "subtitles.item_stack.armor.equip_diamond";
 #[doc = "Elytra rustle"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_ELYTRA: &str = "subtitles.item.armor.equip_elytra";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_ELYTRA: &str = "subtitles.item_stack.armor.equip_elytra";
 #[doc = "Gold armor clinks"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_GOLD: &str = "subtitles.item.armor.equip_gold";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_GOLD: &str = "subtitles.item_stack.armor.equip_gold";
 #[doc = "Iron armor clanks"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_IRON: &str = "subtitles.item.armor.equip_iron";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_IRON: &str = "subtitles.item_stack.armor.equip_iron";
 #[doc = "Leather armor rustles"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_LEATHER: &str = "subtitles.item.armor.equip_leather";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_LEATHER: &str = "subtitles.item_stack.armor.equip_leather";
 #[doc = "Nautilus Armor equips"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_NAUTILUS: &str = "subtitles.item.armor.equip_nautilus";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_NAUTILUS: &str = "subtitles.item_stack.armor.equip_nautilus";
 #[doc = "Netherite armor clanks"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_NETHERITE: &str = "subtitles.item.armor.equip_netherite";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_NETHERITE: &str = "subtitles.item_stack.armor.equip_netherite";
 #[doc = "Turtle Shell thunks"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_TURTLE: &str = "subtitles.item.armor.equip_turtle";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_TURTLE: &str = "subtitles.item_stack.armor.equip_turtle";
 #[doc = "Wolf Armor is fastened"]
-pub const SUBTITLES_ITEM_ARMOR_EQUIP_WOLF: &str = "subtitles.item.armor.equip_wolf";
+pub const SUBTITLES_ITEM_ARMOR_EQUIP_WOLF: &str = "subtitles.item_stack.armor.equip_wolf";
 #[doc = "Nautilus Armor unequips"]
-pub const SUBTITLES_ITEM_ARMOR_UNEQUIP_NAUTILUS: &str = "subtitles.item.armor.unequip_nautilus";
+pub const SUBTITLES_ITEM_ARMOR_UNEQUIP_NAUTILUS: &str = "subtitles.item_stack.armor.unequip_nautilus";
 #[doc = "Wolf Armor snips away"]
-pub const SUBTITLES_ITEM_ARMOR_UNEQUIP_WOLF: &str = "subtitles.item.armor.unequip_wolf";
+pub const SUBTITLES_ITEM_ARMOR_UNEQUIP_WOLF: &str = "subtitles.item_stack.armor.unequip_wolf";
 #[doc = "Axe scrapes"]
-pub const SUBTITLES_ITEM_AXE_SCRAPE: &str = "subtitles.item.axe.scrape";
+pub const SUBTITLES_ITEM_AXE_SCRAPE: &str = "subtitles.item_stack.axe.scrape";
 #[doc = "Axe strips"]
-pub const SUBTITLES_ITEM_AXE_STRIP: &str = "subtitles.item.axe.strip";
+pub const SUBTITLES_ITEM_AXE_STRIP: &str = "subtitles.item_stack.axe.strip";
 #[doc = "Wax off"]
-pub const SUBTITLES_ITEM_AXE_WAX_OFF: &str = "subtitles.item.axe.wax_off";
+pub const SUBTITLES_ITEM_AXE_WAX_OFF: &str = "subtitles.item_stack.axe.wax_off";
 #[doc = "Bone Meal crinkles"]
-pub const SUBTITLES_ITEM_BONE_MEAL_USE: &str = "subtitles.item.bone_meal.use";
+pub const SUBTITLES_ITEM_BONE_MEAL_USE: &str = "subtitles.item_stack.bone_meal.use";
 #[doc = "Page rustles"]
-pub const SUBTITLES_ITEM_BOOK_PAGE_TURN: &str = "subtitles.item.book.page_turn";
+pub const SUBTITLES_ITEM_BOOK_PAGE_TURN: &str = "subtitles.item_stack.book.page_turn";
 #[doc = "Book thumps"]
-pub const SUBTITLES_ITEM_BOOK_PUT: &str = "subtitles.item.book.put";
+pub const SUBTITLES_ITEM_BOOK_PUT: &str = "subtitles.item_stack.book.put";
 #[doc = "Bottle empties"]
-pub const SUBTITLES_ITEM_BOTTLE_EMPTY: &str = "subtitles.item.bottle.empty";
+pub const SUBTITLES_ITEM_BOTTLE_EMPTY: &str = "subtitles.item_stack.bottle.empty";
 #[doc = "Bottle fills"]
-pub const SUBTITLES_ITEM_BOTTLE_FILL: &str = "subtitles.item.bottle.fill";
+pub const SUBTITLES_ITEM_BOTTLE_FILL: &str = "subtitles.item_stack.bottle.fill";
 #[doc = "Brushing"]
-pub const SUBTITLES_ITEM_BRUSH_BRUSHING_GENERIC: &str = "subtitles.item.brush.brushing.generic";
+pub const SUBTITLES_ITEM_BRUSH_BRUSHING_GENERIC: &str = "subtitles.item_stack.brush.brushing.generic";
 #[doc = "Brushing Gravel"]
-pub const SUBTITLES_ITEM_BRUSH_BRUSHING_GRAVEL: &str = "subtitles.item.brush.brushing.gravel";
+pub const SUBTITLES_ITEM_BRUSH_BRUSHING_GRAVEL: &str = "subtitles.item_stack.brush.brushing.gravel";
 #[doc = "Brushing Gravel completed"]
 pub const SUBTITLES_ITEM_BRUSH_BRUSHING_GRAVEL_COMPLETE: &str =
-    "subtitles.item.brush.brushing.gravel.complete";
+    "subtitles.item_stack.brush.brushing.gravel.complete";
 #[doc = "Brushing Sand"]
-pub const SUBTITLES_ITEM_BRUSH_BRUSHING_SAND: &str = "subtitles.item.brush.brushing.sand";
+pub const SUBTITLES_ITEM_BRUSH_BRUSHING_SAND: &str = "subtitles.item_stack.brush.brushing.sand";
 #[doc = "Brushing Sand completed"]
 pub const SUBTITLES_ITEM_BRUSH_BRUSHING_SAND_COMPLETE: &str =
-    "subtitles.item.brush.brushing.sand.complete";
+    "subtitles.item_stack.brush.brushing.sand.complete";
 #[doc = "Bucket empties"]
-pub const SUBTITLES_ITEM_BUCKET_EMPTY: &str = "subtitles.item.bucket.empty";
+pub const SUBTITLES_ITEM_BUCKET_EMPTY: &str = "subtitles.item_stack.bucket.empty";
 #[doc = "Bucket fills"]
-pub const SUBTITLES_ITEM_BUCKET_FILL: &str = "subtitles.item.bucket.fill";
+pub const SUBTITLES_ITEM_BUCKET_FILL: &str = "subtitles.item_stack.bucket.fill";
 #[doc = "Axolotl scooped"]
-pub const SUBTITLES_ITEM_BUCKET_FILL_AXOLOTL: &str = "subtitles.item.bucket.fill_axolotl";
+pub const SUBTITLES_ITEM_BUCKET_FILL_AXOLOTL: &str = "subtitles.item_stack.bucket.fill_axolotl";
 #[doc = "Fish captured"]
-pub const SUBTITLES_ITEM_BUCKET_FILL_FISH: &str = "subtitles.item.bucket.fill_fish";
+pub const SUBTITLES_ITEM_BUCKET_FILL_FISH: &str = "subtitles.item_stack.bucket.fill_fish";
 #[doc = "Tadpole captured"]
-pub const SUBTITLES_ITEM_BUCKET_FILL_TADPOLE: &str = "subtitles.item.bucket.fill_tadpole";
+pub const SUBTITLES_ITEM_BUCKET_FILL_TADPOLE: &str = "subtitles.item_stack.bucket.fill_tadpole";
 #[doc = "Bundle empties"]
-pub const SUBTITLES_ITEM_BUNDLE_DROP_CONTENTS: &str = "subtitles.item.bundle.drop_contents";
+pub const SUBTITLES_ITEM_BUNDLE_DROP_CONTENTS: &str = "subtitles.item_stack.bundle.drop_contents";
 #[doc = "Item packed"]
-pub const SUBTITLES_ITEM_BUNDLE_INSERT: &str = "subtitles.item.bundle.insert";
+pub const SUBTITLES_ITEM_BUNDLE_INSERT: &str = "subtitles.item_stack.bundle.insert";
 #[doc = "Bundle full"]
-pub const SUBTITLES_ITEM_BUNDLE_INSERT_FAIL: &str = "subtitles.item.bundle.insert_fail";
+pub const SUBTITLES_ITEM_BUNDLE_INSERT_FAIL: &str = "subtitles.item_stack.bundle.insert_fail";
 #[doc = "Item unpacked"]
-pub const SUBTITLES_ITEM_BUNDLE_REMOVE_ONE: &str = "subtitles.item.bundle.remove_one";
+pub const SUBTITLES_ITEM_BUNDLE_REMOVE_ONE: &str = "subtitles.item_stack.bundle.remove_one";
 #[doc = "Player teleports"]
-pub const SUBTITLES_ITEM_CHORUS_FRUIT_TELEPORT: &str = "subtitles.item.chorus_fruit.teleport";
+pub const SUBTITLES_ITEM_CHORUS_FRUIT_TELEPORT: &str = "subtitles.item_stack.chorus_fruit.teleport";
 #[doc = "Crop planted"]
-pub const SUBTITLES_ITEM_CROP_PLANT: &str = "subtitles.item.crop.plant";
+pub const SUBTITLES_ITEM_CROP_PLANT: &str = "subtitles.item_stack.crop.plant";
 #[doc = "Crossbow charges up"]
-pub const SUBTITLES_ITEM_CROSSBOW_CHARGE: &str = "subtitles.item.crossbow.charge";
+pub const SUBTITLES_ITEM_CROSSBOW_CHARGE: &str = "subtitles.item_stack.crossbow.charge";
 #[doc = "Arrow hits"]
-pub const SUBTITLES_ITEM_CROSSBOW_HIT: &str = "subtitles.item.crossbow.hit";
+pub const SUBTITLES_ITEM_CROSSBOW_HIT: &str = "subtitles.item_stack.crossbow.hit";
 #[doc = "Crossbow loads"]
-pub const SUBTITLES_ITEM_CROSSBOW_LOAD: &str = "subtitles.item.crossbow.load";
+pub const SUBTITLES_ITEM_CROSSBOW_LOAD: &str = "subtitles.item_stack.crossbow.load";
 #[doc = "Crossbow fires"]
-pub const SUBTITLES_ITEM_CROSSBOW_SHOOT: &str = "subtitles.item.crossbow.shoot";
+pub const SUBTITLES_ITEM_CROSSBOW_SHOOT: &str = "subtitles.item_stack.crossbow.shoot";
 #[doc = "Dye stains"]
-pub const SUBTITLES_ITEM_DYE_USE: &str = "subtitles.item.dye.use";
+pub const SUBTITLES_ITEM_DYE_USE: &str = "subtitles.item_stack.dye.use";
 #[doc = "Swoosh"]
-pub const SUBTITLES_ITEM_ELYTRA_FLYING: &str = "subtitles.item.elytra.flying";
+pub const SUBTITLES_ITEM_ELYTRA_FLYING: &str = "subtitles.item_stack.elytra.flying";
 #[doc = "Fireball whooshes"]
-pub const SUBTITLES_ITEM_FIRECHARGE_USE: &str = "subtitles.item.firecharge.use";
+pub const SUBTITLES_ITEM_FIRECHARGE_USE: &str = "subtitles.item_stack.firecharge.use";
 #[doc = "Flint and Steel click"]
-pub const SUBTITLES_ITEM_FLINTANDSTEEL_USE: &str = "subtitles.item.flintandsteel.use";
+pub const SUBTITLES_ITEM_FLINTANDSTEEL_USE: &str = "subtitles.item_stack.flintandsteel.use";
 #[doc = "Glow Ink Sac splotches"]
-pub const SUBTITLES_ITEM_GLOW_INK_SAC_USE: &str = "subtitles.item.glow_ink_sac.use";
+pub const SUBTITLES_ITEM_GLOW_INK_SAC_USE: &str = "subtitles.item_stack.glow_ink_sac.use";
 #[doc = "Goat Horn plays"]
-pub const SUBTITLES_ITEM_GOAT_HORN_PLAY: &str = "subtitles.item.goat_horn.play";
+pub const SUBTITLES_ITEM_GOAT_HORN_PLAY: &str = "subtitles.item_stack.goat_horn.play";
 #[doc = "Hoe tills"]
-pub const SUBTITLES_ITEM_HOE_TILL: &str = "subtitles.item.hoe.till";
+pub const SUBTITLES_ITEM_HOE_TILL: &str = "subtitles.item_stack.hoe.till";
 #[doc = "Gulping"]
-pub const SUBTITLES_ITEM_HONEY_BOTTLE_DRINK: &str = "subtitles.item.honey_bottle.drink";
+pub const SUBTITLES_ITEM_HONEY_BOTTLE_DRINK: &str = "subtitles.item_stack.honey_bottle.drink";
 #[doc = "Wax on"]
-pub const SUBTITLES_ITEM_HONEYCOMB_WAX_ON: &str = "subtitles.item.honeycomb.wax_on";
+pub const SUBTITLES_ITEM_HONEYCOMB_WAX_ON: &str = "subtitles.item_stack.honeycomb.wax_on";
 #[doc = "Horse Armor snips away"]
-pub const SUBTITLES_ITEM_HORSE_ARMOR_UNEQUIP: &str = "subtitles.item.horse_armor.unequip";
+pub const SUBTITLES_ITEM_HORSE_ARMOR_UNEQUIP: &str = "subtitles.item_stack.horse_armor.unequip";
 #[doc = "Ink Sac splotches"]
-pub const SUBTITLES_ITEM_INK_SAC_USE: &str = "subtitles.item.ink_sac.use";
+pub const SUBTITLES_ITEM_INK_SAC_USE: &str = "subtitles.item_stack.ink_sac.use";
 #[doc = "Lead snaps"]
-pub const SUBTITLES_ITEM_LEAD_BREAK: &str = "subtitles.item.lead.break";
+pub const SUBTITLES_ITEM_LEAD_BREAK: &str = "subtitles.item_stack.lead.break";
 #[doc = "Lead tied"]
-pub const SUBTITLES_ITEM_LEAD_TIED: &str = "subtitles.item.lead.tied";
+pub const SUBTITLES_ITEM_LEAD_TIED: &str = "subtitles.item_stack.lead.tied";
 #[doc = "Lead untied"]
-pub const SUBTITLES_ITEM_LEAD_UNTIED: &str = "subtitles.item.lead.untied";
+pub const SUBTITLES_ITEM_LEAD_UNTIED: &str = "subtitles.item_stack.lead.untied";
 #[doc = "Carpet snips away"]
-pub const SUBTITLES_ITEM_LLAMA_CARPET_UNEQUIP: &str = "subtitles.item.llama_carpet.unequip";
+pub const SUBTITLES_ITEM_LLAMA_CARPET_UNEQUIP: &str = "subtitles.item_stack.llama_carpet.unequip";
 #[doc = "Lodestone Compass locks onto Lodestone"]
-pub const SUBTITLES_ITEM_LODESTONE_COMPASS_LOCK: &str = "subtitles.item.lodestone_compass.lock";
+pub const SUBTITLES_ITEM_LODESTONE_COMPASS_LOCK: &str = "subtitles.item_stack.lodestone_compass.lock";
 #[doc = "Mace smashes"]
-pub const SUBTITLES_ITEM_MACE_SMASH_AIR: &str = "subtitles.item.mace.smash_air";
+pub const SUBTITLES_ITEM_MACE_SMASH_AIR: &str = "subtitles.item_stack.mace.smash_air";
 #[doc = "Mace smashes"]
-pub const SUBTITLES_ITEM_MACE_SMASH_GROUND: &str = "subtitles.item.mace.smash_ground";
+pub const SUBTITLES_ITEM_MACE_SMASH_GROUND: &str = "subtitles.item_stack.mace.smash_ground";
 #[doc = "Saddle equips"]
-pub const SUBTITLES_ITEM_NAUTILUS_SADDLE_EQUIP: &str = "subtitles.item.nautilus_saddle_equip";
+pub const SUBTITLES_ITEM_NAUTILUS_SADDLE_EQUIP: &str = "subtitles.item_stack.nautilus_saddle_equip";
 #[doc = "Saddle equips"]
 pub const SUBTITLES_ITEM_NAUTILUS_SADDLE_UNDERWATER_EQUIP: &str =
-    "subtitles.item.nautilus_saddle_underwater_equip";
+    "subtitles.item_stack.nautilus_saddle_underwater_equip";
 #[doc = "Crop planted"]
-pub const SUBTITLES_ITEM_NETHER_WART_PLANT: &str = "subtitles.item.nether_wart.plant";
+pub const SUBTITLES_ITEM_NETHER_WART_PLANT: &str = "subtitles.item_stack.nether_wart.plant";
 #[doc = "Bottle breaks"]
-pub const SUBTITLES_ITEM_OMINOUS_BOTTLE_DISPOSE: &str = "subtitles.item.ominous_bottle.dispose";
+pub const SUBTITLES_ITEM_OMINOUS_BOTTLE_DISPOSE: &str = "subtitles.item_stack.ominous_bottle.dispose";
 #[doc = "Saddle snips away"]
-pub const SUBTITLES_ITEM_SADDLE_UNEQUIP: &str = "subtitles.item.saddle.unequip";
+pub const SUBTITLES_ITEM_SADDLE_UNEQUIP: &str = "subtitles.item_stack.saddle.unequip";
 #[doc = "Shears click"]
-pub const SUBTITLES_ITEM_SHEARS_SHEAR: &str = "subtitles.item.shears.shear";
+pub const SUBTITLES_ITEM_SHEARS_SHEAR: &str = "subtitles.item_stack.shears.shear";
 #[doc = "Shears snip"]
-pub const SUBTITLES_ITEM_SHEARS_SNIP: &str = "subtitles.item.shears.snip";
+pub const SUBTITLES_ITEM_SHEARS_SNIP: &str = "subtitles.item_stack.shears.snip";
 #[doc = "Shield blocks"]
-pub const SUBTITLES_ITEM_SHIELD_BLOCK: &str = "subtitles.item.shield.block";
+pub const SUBTITLES_ITEM_SHIELD_BLOCK: &str = "subtitles.item_stack.shield.block";
 #[doc = "Shovel flattens"]
-pub const SUBTITLES_ITEM_SHOVEL_FLATTEN: &str = "subtitles.item.shovel.flatten";
+pub const SUBTITLES_ITEM_SHOVEL_FLATTEN: &str = "subtitles.item_stack.shovel.flatten";
 #[doc = "Spear jabs"]
-pub const SUBTITLES_ITEM_SPEAR_ATTACK: &str = "subtitles.item.spear.attack";
+pub const SUBTITLES_ITEM_SPEAR_ATTACK: &str = "subtitles.item_stack.spear.attack";
 #[doc = "Spear hits"]
-pub const SUBTITLES_ITEM_SPEAR_HIT: &str = "subtitles.item.spear.hit";
+pub const SUBTITLES_ITEM_SPEAR_HIT: &str = "subtitles.item_stack.spear.hit";
 #[doc = "Spear lunges"]
-pub const SUBTITLES_ITEM_SPEAR_LUNGE: &str = "subtitles.item.spear.lunge";
+pub const SUBTITLES_ITEM_SPEAR_LUNGE: &str = "subtitles.item_stack.spear.lunge";
 #[doc = "Charges with Spear"]
-pub const SUBTITLES_ITEM_SPEAR_USE: &str = "subtitles.item.spear.use";
+pub const SUBTITLES_ITEM_SPEAR_USE: &str = "subtitles.item_stack.spear.use";
 #[doc = "Spear jabs"]
-pub const SUBTITLES_ITEM_SPEAR_WOOD_ATTACK: &str = "subtitles.item.spear_wood.attack";
+pub const SUBTITLES_ITEM_SPEAR_WOOD_ATTACK: &str = "subtitles.item_stack.spear_wood.attack";
 #[doc = "Spear hits"]
-pub const SUBTITLES_ITEM_SPEAR_WOOD_HIT: &str = "subtitles.item.spear_wood.hit";
+pub const SUBTITLES_ITEM_SPEAR_WOOD_HIT: &str = "subtitles.item_stack.spear_wood.hit";
 #[doc = "Charges with Spear"]
-pub const SUBTITLES_ITEM_SPEAR_WOOD_USE: &str = "subtitles.item.spear_wood.use";
+pub const SUBTITLES_ITEM_SPEAR_WOOD_USE: &str = "subtitles.item_stack.spear_wood.use";
 #[doc = "Spyglass retracts"]
-pub const SUBTITLES_ITEM_SPYGLASS_STOP_USING: &str = "subtitles.item.spyglass.stop_using";
+pub const SUBTITLES_ITEM_SPYGLASS_STOP_USING: &str = "subtitles.item_stack.spyglass.stop_using";
 #[doc = "Spyglass expands"]
-pub const SUBTITLES_ITEM_SPYGLASS_USE: &str = "subtitles.item.spyglass.use";
+pub const SUBTITLES_ITEM_SPYGLASS_USE: &str = "subtitles.item_stack.spyglass.use";
 #[doc = "Totem activates"]
-pub const SUBTITLES_ITEM_TOTEM_USE: &str = "subtitles.item.totem.use";
+pub const SUBTITLES_ITEM_TOTEM_USE: &str = "subtitles.item_stack.totem.use";
 #[doc = "Trident stabs"]
-pub const SUBTITLES_ITEM_TRIDENT_HIT: &str = "subtitles.item.trident.hit";
+pub const SUBTITLES_ITEM_TRIDENT_HIT: &str = "subtitles.item_stack.trident.hit";
 #[doc = "Trident vibrates"]
-pub const SUBTITLES_ITEM_TRIDENT_HIT_GROUND: &str = "subtitles.item.trident.hit_ground";
+pub const SUBTITLES_ITEM_TRIDENT_HIT_GROUND: &str = "subtitles.item_stack.trident.hit_ground";
 #[doc = "Trident returns"]
-pub const SUBTITLES_ITEM_TRIDENT_RETURN: &str = "subtitles.item.trident.return";
+pub const SUBTITLES_ITEM_TRIDENT_RETURN: &str = "subtitles.item_stack.trident.return";
 #[doc = "Trident zooms"]
-pub const SUBTITLES_ITEM_TRIDENT_RIPTIDE: &str = "subtitles.item.trident.riptide";
+pub const SUBTITLES_ITEM_TRIDENT_RIPTIDE: &str = "subtitles.item_stack.trident.riptide";
 #[doc = "Trident clangs"]
-pub const SUBTITLES_ITEM_TRIDENT_THROW: &str = "subtitles.item.trident.throw";
+pub const SUBTITLES_ITEM_TRIDENT_THROW: &str = "subtitles.item_stack.trident.throw";
 #[doc = "Trident thunder cracks"]
-pub const SUBTITLES_ITEM_TRIDENT_THUNDER: &str = "subtitles.item.trident.thunder";
+pub const SUBTITLES_ITEM_TRIDENT_THUNDER: &str = "subtitles.item_stack.trident.thunder";
 #[doc = "Saddle equips"]
-pub const SUBTITLES_ITEM_UNDERWATER_SADDLE_EQUIP: &str = "subtitles.item.underwater_saddle.equip";
+pub const SUBTITLES_ITEM_UNDERWATER_SADDLE_EQUIP: &str = "subtitles.item_stack.underwater_saddle.equip";
 #[doc = "Wolf Armor breaks"]
-pub const SUBTITLES_ITEM_WOLF_ARMOR_BREAK: &str = "subtitles.item.wolf_armor.break";
+pub const SUBTITLES_ITEM_WOLF_ARMOR_BREAK: &str = "subtitles.item_stack.wolf_armor.break";
 #[doc = "Wolf Armor cracks"]
-pub const SUBTITLES_ITEM_WOLF_ARMOR_CRACK: &str = "subtitles.item.wolf_armor.crack";
+pub const SUBTITLES_ITEM_WOLF_ARMOR_CRACK: &str = "subtitles.item_stack.wolf_armor.crack";
 #[doc = "Wolf Armor takes damage"]
-pub const SUBTITLES_ITEM_WOLF_ARMOR_DAMAGE: &str = "subtitles.item.wolf_armor.damage";
+pub const SUBTITLES_ITEM_WOLF_ARMOR_DAMAGE: &str = "subtitles.item_stack.wolf_armor.damage";
 #[doc = "Wolf Armor is repaired"]
-pub const SUBTITLES_ITEM_WOLF_ARMOR_REPAIR: &str = "subtitles.item.wolf_armor.repair";
+pub const SUBTITLES_ITEM_WOLF_ARMOR_REPAIR: &str = "subtitles.item_stack.wolf_armor.repair";
 #[doc = "Soul escapes"]
 pub const SUBTITLES_PARTICLE_SOUL_ESCAPE: &str = "subtitles.particle.soul_escape";
 #[doc = "Map drawn"]
@@ -16788,7 +16788,7 @@ pub const TEST_ERROR_EXPECTED_ENTITY_IN_TEST: &str = "test.error.expected_entity
 pub const TEST_ERROR_EXPECTED_ENTITY_NOT_TOUCHING: &str = "test.error.expected_entity_not_touching";
 #[doc = "Expected %s touching %s, %s, %s (relative: %s, %s, %s)"]
 pub const TEST_ERROR_EXPECTED_ENTITY_TOUCHING: &str = "test.error.expected_entity_touching";
-#[doc = "Expected item of type %s"]
+#[doc = "Expected item_stack of type %s"]
 pub const TEST_ERROR_EXPECTED_ITEM: &str = "test.error.expected_item";
 #[doc = "Expected %s items of type %s: found %s"]
 pub const TEST_ERROR_EXPECTED_ITEMS_COUNT: &str = "test.error.expected_items_count";
@@ -16833,7 +16833,7 @@ pub const TEST_ERROR_TOO_MANY_ENTITIES: &str = "test.error.too_many_entities";
 pub const TEST_ERROR_UNEXPECTED_BLOCK: &str = "test.error.unexpected_block";
 #[doc = "Did not expect %s to exist"]
 pub const TEST_ERROR_UNEXPECTED_ENTITY: &str = "test.error.unexpected_entity";
-#[doc = "Did not expect item of type %s"]
+#[doc = "Did not expect item_stack of type %s"]
 pub const TEST_ERROR_UNEXPECTED_ITEM: &str = "test.error.unexpected_item";
 #[doc = "Unknown internal error: %s"]
 pub const TEST_ERROR_UNKNOWN: &str = "test.error.unknown";

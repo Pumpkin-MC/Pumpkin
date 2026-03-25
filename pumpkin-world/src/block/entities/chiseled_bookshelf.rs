@@ -7,18 +7,17 @@ use std::pin::Pin;
 use std::{
     array::from_fn,
     sync::{
-        Arc,
         atomic::{AtomicBool, AtomicI8, Ordering},
+        Arc,
     },
 };
 use tokio::sync::Mutex;
 use tracing::warn;
-
+use pumpkin_data::item_stack::ItemStack;
 use crate::inventory::InventoryFuture;
 use crate::{
     block::entities::BlockEntity,
-    inventory::{Clearable, Inventory, split_stack},
-    item::ItemStack,
+    inventory::{split_stack, Clearable, Inventory},
     world::{BlockFlags, SimpleWorld},
 };
 

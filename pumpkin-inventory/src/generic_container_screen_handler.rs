@@ -1,7 +1,7 @@
 use std::{any::Any, sync::Arc};
-
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
-use pumpkin_world::{inventory::Inventory, item::ItemStack};
+use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,

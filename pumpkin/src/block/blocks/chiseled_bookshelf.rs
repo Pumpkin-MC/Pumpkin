@@ -1,13 +1,13 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::{atomic::Ordering, Arc};
 
 use pumpkin_macros::pumpkin_block;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
-        OnPlaceArgs, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
+        registry::BlockActionResult, BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs,
+        NormalUseArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
     },
-    entity::{EntityBase, player::Player},
+    entity::{player::Player, EntityBase},
     world::World,
 };
 use pumpkin_data::{
@@ -20,10 +20,11 @@ use pumpkin_data::{
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::{
-    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    inventory::Inventory, item::ItemStack,
+    block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity, inventory::Inventory,
+    BlockStateId,
 };
 use tokio::sync::Mutex;
+use pumpkin_data::item_stack::ItemStack;
 
 #[pumpkin_block("minecraft:chiseled_bookshelf")]
 pub struct ChiseledBookshelfBlock;
@@ -191,7 +192,7 @@ impl ChiseledBookshelfBlock {
             .insert_stack_anywhere(&mut stack)
             .await
         {
-            // Drop the item on the ground if the player cannot hold it because of a full inventory
+            // Drop the item_stack on the ground if the player cannot hold it because of a full inventory
             player.drop_item(stack).await;
         }
         entity.update_state(properties, world.clone(), slot).await;

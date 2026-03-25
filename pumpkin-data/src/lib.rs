@@ -286,3 +286,6 @@ pub use blocks::Block;
 #[rustfmt::skip]
 #[path = "generated/chunk_gen_settings.rs"]
 pub mod chunk_gen_settings;
+
+#[cfg(feature = "item")]
+pub mod item_stack;

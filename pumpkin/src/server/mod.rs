@@ -525,7 +525,7 @@ impl Server {
     ///
     /// # Note
     ///
-    /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
+    /// This function does not handle the actual mob spawn options update, which is a TODO item_stack for future implementation.
     pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
         let current_info = self.level_info.load();
         if current_info.difficulty_locked && !force_update {

@@ -7,15 +7,15 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
-
+use pumpkin_data::item_stack::ItemStack;
 use crate::inventory::{Clearable, Inventory, InventoryFuture};
 use crate::world::SimpleWorld;
-use crate::{block::entities::BlockEntity, item::ItemStack};
+use crate::block::entities::BlockEntity;
 
 /// Matches vanilla's `JukeboxBlockEntity`
 pub struct JukeboxBlockEntity {
     position: BlockPos,
-    /// The record item stored in the jukebox (`RecordItem` in NBT)
+    /// The record item_stack stored in the jukebox (`RecordItem` in NBT)
     record_stack: Arc<Mutex<ItemStack>>,
     /// Ticks since the current song started playing
     ticks_since_song_started: AtomicU64,
@@ -202,7 +202,7 @@ impl Inventory for JukeboxBlockEntity {
     }
 
     fn remove_stack_specific(&self, _slot: usize, _amount: u8) -> InventoryFuture<'_, ItemStack> {
-        // Jukebox only holds one item, so remove the whole stack
+        // Jukebox only holds one item_stack, so remove the whole stack
         self.remove_stack(0)
     }
 
