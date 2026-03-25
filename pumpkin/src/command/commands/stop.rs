@@ -1,10 +1,10 @@
 use pumpkin_data::translation;
-use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
-use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::PermissionLvl;
 
-use crate::command::argument_builder::{ArgumentBuilder, command};
+use crate::command::argument_builder::{command, ArgumentBuilder};
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
