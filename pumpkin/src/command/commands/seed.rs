@@ -20,14 +20,14 @@ fn create_copy_on_click_text(content: String) -> TextComponent {
         COMMANDS_SEED_SUCCESS,
         [TextComponent::wrap_in_square_brackets(
             TextComponent::text(content.clone())
-            .hover_event(HoverEvent::show_text(TextComponent::translate(
-                CHAT_COPY_CLICK,
-                [],
-            )))
-            .click_event(ClickEvent::CopyToClipboard {
-                value: Cow::from(content),
-            })
-            .color_named(NamedColor::Green)
+                .hover_event(HoverEvent::show_text(TextComponent::translate(
+                    CHAT_COPY_CLICK,
+                    [],
+                )))
+                .click_event(ClickEvent::CopyToClipboard {
+                    value: Cow::from(content),
+                })
+                .color_named(NamedColor::Green),
         )],
     )
 }
@@ -40,7 +40,7 @@ impl CommandExecutor for SeedCommandExecutor {
 
             context
                 .source
-                .send_message(create_copy_on_click_text(seed_string))
+                .send_feedback(create_copy_on_click_text(seed_string), false)
                 .await;
 
             Ok(seed as i32)
