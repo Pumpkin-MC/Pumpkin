@@ -21,9 +21,10 @@ impl CommandExecutor for StopCommandExecutor {
         Box::pin(async move {
             context
                 .source
-                .send_message(
+                .send_feedback(
                     TextComponent::translate(translation::COMMANDS_STOP_STOPPING, [])
                         .color_named(NamedColor::Red),
+                    true
                 )
                 .await;
             stop_server();
