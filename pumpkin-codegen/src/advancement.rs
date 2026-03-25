@@ -4,9 +4,46 @@ use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use pumpkin_util::text::TextComponent;
 use quote::{format_ident, quote, ToTokens};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextContent::Translate;
+
+#[derive(Serialize)]
+pub struct AdvancementDisplay<'a> {
+    pub title: TextComponent,
+    pub description: TextComponent,
+    pub icon: ItemStack<'a>,
+    pub frame_type: FrameType,
+    pub flags: i32,
+    pub background_texture: Option<ResourceLocation>,
+    pub x: f32,
+    pub y: f32,
+}
+
+impl<'a> AdvancementDisplay<'a> {
+    #[must_use]
+    pub fn new(
+        title: TextComponent,
+        description: TextComponent,
+        icon: ItemStackSerializer<'a>,
+        frame_type: FrameType,
+        flags: i32,
+        background_texture: Option<ResourceLocation>,
+        x: f32,
+        y: f32,
+    ) -> Self {
+        Self {
+            title,
+            description,
+            icon,
+            frame_type,
+            flags,
+            background_texture,
+            x,
+            y,
+        }
+    }
+}
 
 #[derive(Deserialize,Default)]
 pub struct Advancement {
@@ -16,7 +53,7 @@ pub struct Advancement {
     // pub rewards : AdvancementRewards,
     #[serde(default)]
     pub send_telemetry : bool,
-    pub display_name : Option<TextComponent>
+    pub display_name : Option<TextComponent> // temporary replace the normal display
 }
 
 pub(crate) fn build() -> TokenStream {

@@ -1,8 +1,8 @@
 /* This file is generated. Do not edit manually. */
 use pumpkin_util::text::TextComponent;
-pub struct Advancement {
-    pub id: &'static str,
-    pub parent: Option<&'static str>,
+pub struct Advancement<'a> {
+    pub id: &'a str,
+    pub parent: Option<&'a str>,
     pub send_telemetry: bool,
     pub display_name: Option<TextComponent>,
 }

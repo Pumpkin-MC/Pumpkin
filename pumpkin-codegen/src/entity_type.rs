@@ -210,13 +210,14 @@ pub fn build() -> TokenStream {
         });
     }
     quote! {
+        use crate::data_component_impl::IDSetContent;
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
         use std::hash::Hash;
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct EntityType {
             pub id: u16,
             pub max_health: Option<f32>,
@@ -267,13 +268,13 @@ pub fn build() -> TokenStream {
         }
 
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct SpawnRestriction {
             pub location: SpawnLocation,
             pub heightmap: HeightMap,
         }
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub enum SpawnLocation {
             InLava,
             InWater,
@@ -382,6 +383,23 @@ pub fn build() -> TokenStream {
                     #type_from_name
                     _ => None
                 }
+            }
+        }
+        impl IDSetContent for EntityType {
+            fn registry_id(&self) -> u16 {
+                Taggable::registry_id(self)
+            }
+
+            fn to_string(&self) -> String {
+                Taggable::registry_key(self).to_string()
+            }
+
+            fn from_id(id: u16) -> Option<&'static Self> {
+                EntityType::from_raw(id)
+            }
+
+            fn from_str(name: &str) -> Option<&'static Self> {
+                EntityType::from_name(name)
             }
         }
     }

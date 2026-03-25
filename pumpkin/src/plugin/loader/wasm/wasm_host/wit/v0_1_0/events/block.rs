@@ -1,8 +1,8 @@
 use crate::plugin::{
     block::{
         block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
-        block_can_build::BlockCanBuildEvent, block_place::BlockPlaceEvent,
-        block_redstone::BlockRedstoneEvent,
+        block_can_build::BlockCanBuildEvent, block_grow::BlockGrowEvent,
+        block_place::BlockPlaceEvent, block_redstone::BlockRedstoneEvent,
     },
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -13,7 +13,7 @@ use crate::plugin::{
             },
             pumpkin::plugin::event::{
                 BlockBreakEventData, BlockBurnEventData, BlockCanBuildEventData,
-                BlockPlaceEventData, BlockRedstoneEventData, Event,
+                BlockGrowEventData, BlockPlaceEventData, BlockRedstoneEventData, Event,
             },
         },
     },
@@ -126,6 +126,39 @@ impl ToFromV0_1_0WasmEvent for BlockCanBuildEvent {
                 buildable: data.buildable,
                 player: consume_player(state, &data.player),
                 block: from_wasm_block_name(&data.block),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for BlockGrowEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let target_world = state
+            .add_world(self.world.clone())
+            .expect("failed to add world resource");
+
+        Event::BlockGrowEvent(BlockGrowEventData {
+            target_world,
+            old_block: to_wasm_block_name(self.old_block),
+            old_state_id: self.old_state_id,
+            new_block: to_wasm_block_name(self.new_block),
+            new_state_id: self.new_state_id,
+            block_position: to_wasm_block_position(self.block_pos),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::BlockGrowEvent(data) => Self {
+                world: consume_world(state, &data.target_world),
+                old_block: from_wasm_block_name(&data.old_block),
+                old_state_id: data.old_state_id,
+                new_block: from_wasm_block_name(&data.new_block),
+                new_state_id: data.new_state_id,
+                block_pos: from_wasm_block_position(data.block_position),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

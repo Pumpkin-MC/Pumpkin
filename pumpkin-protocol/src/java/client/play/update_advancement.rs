@@ -4,6 +4,7 @@ use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use serde::Serialize;
+use pumpkin_data::Advancement;
 
 #[derive(Serialize)]
 #[java_packet(PLAY_UPDATE_ADVANCEMENTS)]
@@ -52,68 +53,6 @@ impl<'a> AdvancementProgress<'a> {
     #[must_use]
     pub fn new(id: ResourceLocation, progress: &'a [Criteria]) -> Self {
         Self { id, progress }
-    }
-}
-
-#[derive(Serialize)]
-pub struct Advancement<'a> {
-    pub parent_id: Option<ResourceLocation>,
-    pub display: Option<AdvancementDisplay<'a>>,
-    pub requirements: &'a [&'a [String]],
-    pub send_telemetry_data: bool,
-}
-
-impl<'a> Advancement<'a> {
-    #[must_use]
-    pub fn new(
-        parent_id: Option<ResourceLocation>,
-        display: Option<AdvancementDisplay<'a>>,
-        requirements: &'a [&'a [String]],
-        send_telemetry_data: bool,
-    ) -> Self {
-        Self {
-            parent_id,
-            display,
-            requirements,
-            send_telemetry_data,
-        }
-    }
-}
-
-#[derive(Serialize)]
-pub struct AdvancementDisplay<'a> {
-    pub title: TextComponent,
-    pub description: TextComponent,
-    pub icon: ItemStackSerializer<'a>,
-    pub frame_type: FrameType,
-    pub flags: i32,
-    pub background_texture: Option<ResourceLocation>,
-    pub x: f32,
-    pub y: f32,
-}
-
-impl<'a> AdvancementDisplay<'a> {
-    #[must_use]
-    pub fn new(
-        title: TextComponent,
-        description: TextComponent,
-        icon: ItemStackSerializer<'a>,
-        frame_type: FrameType,
-        flags: i32,
-        background_texture: Option<ResourceLocation>,
-        x: f32,
-        y: f32,
-    ) -> Self {
-        Self {
-            title,
-            description,
-            icon,
-            frame_type,
-            flags,
-            background_texture,
-            x,
-            y,
-        }
     }
 }
 
