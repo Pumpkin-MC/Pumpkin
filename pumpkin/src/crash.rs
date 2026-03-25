@@ -11,8 +11,13 @@ use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
 };
+use pumpkin_world::CURRENT_MC_VERSION;
+use rustc_hash::FxHashMap;
+use sysinfo::{Cpu, System};
 use time::OffsetDateTime;
 use tracing::error;
+
+pub const BYES_PER_MEBIBYTE: u64 = 1024 * 1024;
 
 /// Writes to a string which cannot fail.
 macro_rules! writeln_output {
@@ -175,16 +180,111 @@ impl CrashReport {
         );
         writeln_output!(&mut output);
         writeln_output!(&mut output, "--- Panicking Thread ---");
-        writeln_output!(&mut output);
         writeln_output!(&mut output, "ID: {:?}", self.thread.id());
         if let Some(thread_name) = self.thread.name() {
             writeln_output!(&mut output, "Name: {}", thread_name);
         }
         writeln_output!(&mut output, "Backtrace:");
         writeln_output!(&mut output, "{}", self.full_backtrace());
-        writeln_output!(&mut output);
+
+        writeln_output!(&mut output, "--- Server Details ---");
+
+        writeln_output!(
+            &mut output,
+            "Pumpkin Version: {}",
+            Self::get_pumpkin_version()
+        );
+        writeln_output!(&mut output, "Minecraft Version: {}", CURRENT_MC_VERSION);
+        writeln_output!(
+            &mut output,
+            "Server compiled with Rust {}",
+            rustc_version_runtime::version()
+        );
+
+        if sysinfo::IS_SUPPORTED_SYSTEM {
+            writeln_output!(&mut output, "\n--- System Details ---");
+
+            let mut sys = System::new_all();
+            sys.refresh_all();
+
+            writeln_output!(
+                &mut output,
+                "Operating System: {}",
+                System::long_os_version().unwrap_or("Unknown".to_string())
+            );
+            writeln_output!(&mut output, "Kernel: {}", System::kernel_long_version());
+            writeln_output!(
+                &mut output,
+                "Physical Memory: {} MiB/{} MiB used, {} MiB free",
+                sys.used_memory() / BYES_PER_MEBIBYTE,
+                sys.total_memory() / BYES_PER_MEBIBYTE,
+                sys.free_memory() / BYES_PER_MEBIBYTE
+            );
+            writeln_output!(
+                &mut output,
+                "Swap Memory: {} MiB/{} MiB used, {} MiB free",
+                sys.used_swap() / BYES_PER_MEBIBYTE,
+                sys.total_swap() / BYES_PER_MEBIBYTE,
+                sys.free_swap() / BYES_PER_MEBIBYTE
+            );
+
+            Self::write_cpus(&mut output, &sys);
+        }
 
         output
+    }
+
+    fn write_cpus(output: &mut String, sys: &System) {
+        writeln_output!(output);
+        let cpus = sys.cpus();
+
+        writeln_output!(output, "Total cores: {}", cpus.len());
+        writeln_output!(output);
+
+        let mut different_brands: FxHashMap<(&str, &str), Vec<&Cpu>> = FxHashMap::default();
+
+        // `sysinfo` provides us a CPU for each core, so we try to group them.
+        for cpu in cpus {
+            different_brands
+                .entry((cpu.brand(), cpu.vendor_id()))
+                .or_default()
+                .push(cpu);
+        }
+
+        for (i, ((brand, vendor_id), cpus)) in different_brands.iter().enumerate() {
+            let prefix = format!(" CPU #{:<5}", i + 1);
+            let padded = " ".repeat(prefix.len());
+
+            let names = cpus
+                .iter()
+                .map(|cpu| cpu.name())
+                .collect::<Vec<&str>>()
+                .join(", ");
+
+            let avg_freq = cpus.iter().map(|cpu| cpu.frequency()).sum::<u64>() / cpus.len() as u64;
+
+            writeln_output!(output, "|{prefix} Cores: {}", cpus.len());
+            writeln_output!(output, "|{padded} Names: {}", names);
+            writeln_output!(output, "|{padded} Brand: {}", brand);
+            writeln_output!(output, "|{padded} Average Frequency: {} MHz", avg_freq);
+            writeln_output!(output, "|{padded} Vendor ID: {}", vendor_id);
+            writeln_output!(output);
+        }
+    }
+
+    #[must_use]
+    pub fn get_pumpkin_version() -> String {
+        let profile = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        };
+        format!(
+            "{} (Commit: {}/{})",
+            env!("CARGO_PKG_VERSION"),
+            env!("GIT_HASH"),
+            profile
+        )
     }
 
     /// Saves this report to the `crash-reports` directory.
