@@ -260,7 +260,7 @@ impl ItemStack {
     }
 
     #[must_use]
-    pub const fn get_item(&self) -> &Item {
+    pub const fn get_item(&self) -> &'static Item {
         if self.is_empty() {
             &Item::AIR
         } else {
@@ -310,6 +310,9 @@ impl ItemStack {
     pub fn decrement_unless_creative(&mut self, gamemode: GameMode, amount: u8) {
         if gamemode != GameMode::Creative {
             self.item_count = self.item_count.saturating_sub(amount);
+            if self.item_count == 0 {
+                self.clear();
+            }
         }
     }
 
@@ -355,7 +358,8 @@ impl ItemStack {
 
     #[must_use]
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
-        if self.item != other.item || self.patch.len() != other.patch.len() {
+        // Items must match
+        if self.item != other.item {
             return false;
         }
         for (id, data) in &self.patch {
@@ -379,6 +383,7 @@ impl ItemStack {
                 return false;
             }
         }
+
         true
     }
 
@@ -401,11 +406,11 @@ impl ItemStack {
                 };
                 match &rule.blocks {
                     IDSet::Tag(tag) => {
-                        if block.has_tag(tag) {
+                        if block.is_tagged_with(tag).unwrap_or(false) {
                             return speed;
                         }
                     }
-                    IDSet::Blocks(blocks) => {
+                    IDSet::IDs(blocks) => {
                         if blocks.contains(&block) {
                             return speed;
                         }
@@ -430,11 +435,11 @@ impl ItemStack {
                 };
                 match &rule.blocks {
                     IDSet::Tag(tag) => {
-                        if block.has_tag(tag) {
+                        if block.is_tagged_with(tag).unwrap_or(false) {
                             return correct;
                         }
                     }
-                    IDSet::Blocks(blocks) => {
+                    IDSet::IDs(blocks) => {
                         if blocks.contains(&block) {
                             return correct;
                         }

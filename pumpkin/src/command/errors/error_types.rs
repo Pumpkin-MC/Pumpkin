@@ -143,12 +143,16 @@ pub struct LiteralCommandErrorType {
 
 impl LiteralCommandErrorType {
     /// Creates an error type from a given literal string.
+    ///
+    /// Used during command parsing. (i.e. in `ArgumentType`s)
     #[must_use]
     pub const fn new(literal: &'static str) -> Self {
         Self { literal }
     }
 
     /// Creates an error without context from itself.
+    ///
+    /// Used during command execution.
     #[must_use]
     pub fn create_without_context(&'static self) -> CommandSyntaxError {
         CommandSyntaxError::create_without_context(self, TextComponent::text(self.literal))

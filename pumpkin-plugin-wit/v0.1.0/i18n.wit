@@ -1,0 +1,21 @@
+interface i18n {
+    use common.{locale};
+
+    /// Retrieves a translated string from the host.
+    ///
+    /// # Arguments
+    /// * `key`: The namespaced translation key (e.g. `pumpkin:my_key`).
+    /// * `locale`: The target locale.
+    ///
+    /// # Returns
+    /// The localized string, falling back to English or the key itself.
+    translate: func(key: string, locale: locale) -> string;
+
+    /// Loads custom translations from a JSON string.
+    ///
+    /// # Arguments
+    /// * `namespace`: The namespace to associate these keys with.
+    /// * `json`: A JSON string containing a flat map of translations.
+    /// * `locale`: The target locale for these translations.
+    load-translations: func(namespace: string, json: string, locale: locale);
+}
