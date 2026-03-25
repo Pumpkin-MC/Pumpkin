@@ -154,8 +154,6 @@ pub async fn default_dispatcher(
         setidletimeout::init_command_tree(),
         "minecraft:command.setidletimeout",
     );
-    // Four
-    dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
 
     let mut dispatcher = {
         let mut wrapper_dispatcher = CommandDispatcher::new();
@@ -165,6 +163,7 @@ pub async fn default_dispatcher(
 
     help::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
+    stop::register(&mut dispatcher, registry);
 
     dispatcher
 }
@@ -178,9 +177,6 @@ fn register_permissions(registry: &mut PermissionRegistry) {
 
     // Register level 3 permissions (OP level 3)
     register_level_3_permissions(registry);
-
-    // Register level 4 permissions (OP level 4)
-    register_level_4_permissions(registry);
 }
 
 fn register_level_0_permissions(registry: &mut PermissionRegistry) {
@@ -529,17 +525,6 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
             "minecraft:command.setidletimeout",
             "Sets the time before idle players are kicked",
             PermissionDefault::Op(PermissionLvl::Three),
-        ))
-        .unwrap();
-}
-
-fn register_level_4_permissions(registry: &mut PermissionRegistry) {
-    // Register permissions for commands with PermissionLvl::Four
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.stop",
-            "Stops the server",
-            PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();
 }
