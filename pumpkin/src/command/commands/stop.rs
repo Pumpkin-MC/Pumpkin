@@ -24,7 +24,7 @@ impl CommandExecutor for StopCommandExecutor {
                 .send_feedback(
                     TextComponent::translate(translation::COMMANDS_STOP_STOPPING, [])
                         .color_named(NamedColor::Red),
-                    true
+                    true,
                 )
                 .await;
             stop_server();
