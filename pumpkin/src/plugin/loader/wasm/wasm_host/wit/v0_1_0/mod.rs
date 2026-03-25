@@ -11,6 +11,7 @@ pub mod common;
 pub mod context;
 pub mod entity;
 pub mod events;
+pub mod item_stack;
 pub mod logging;
 pub mod permission;
 pub mod player;

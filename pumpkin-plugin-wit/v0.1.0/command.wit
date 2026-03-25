@@ -1,7 +1,7 @@
 interface command {
     use player.{player};
     use %world.{%world};
-    use entity.{command-block-entity, entity};
+    use entity.{command-block-entity, entity-base};
     use common.{position, block-position, locale};
     use server.{server, difficulty};
     use text.{text-component};
@@ -63,8 +63,8 @@ interface command {
     }
 
     variant arg {
-        entities(list<entity>),
-        entity(entity),
+        entities(list<entity-base>),
+        entity(entity-base),
         players(list<player>),
         block-pos(block-position),
         pos3d(position),
@@ -72,6 +72,7 @@ interface command {
         rotation(tuple<f32, bool, f32, bool>),
         game-mode(gamemode),
         difficulty(difficulty),
+        command-tree(command),
         item(string),
         item-predicate(string),
         resource-location(string),

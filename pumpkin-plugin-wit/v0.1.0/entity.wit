@@ -1,5 +1,28 @@
 interface entity {
-    use common.{block-position};
+    use common.{block-position, position, damage-type, block-direction};
+    use %world.{%world};
+    use player.{player};
+    use item-stack.{item-stack};
+    use server.{server};
+    use text.{text-component};
+
+    record projectile-hit-block {
+        position: block-position,
+        face: block-direction,
+        hit-position: position,
+        normal: position,
+    }
+
+    record projectile-hit-entity {
+        entity: entity-base,
+        hit-position: position,
+        normal: position,
+    }
+
+    variant projectile-hit {
+        projectile-hit-block(projectile-hit-block),
+        projectile-hit-entity(projectile-hit-entity),
+    }
 
     resource block-entity {
         resource-location: func() -> string;
@@ -7,12 +30,12 @@ interface entity {
         get-id: func() -> u32;
         // write-nbt: func(nbt: nbt-compound);
         // from-nbt: func(nbt: nbt-compound, position: block-position) -> entity;
-        // tick: func(world: simple-world);
+        // tick: func(%world: simple-world);
         // write-internal: func(nbt: nbt-compound);
         // chunk-data-nbt: func() -> option<nbt-compound;
         // get-inventory: func() -> option<inventory>;
         // set-block-state: func(block-state: block-state-id);
-        // on-block-replaced: func(world: simple-world, position: block-position);
+        // on-block-replaced: func(%world: simple-world, position: block-position);
         is-dirty: func() -> bool;
         clear-dirty: func();
         // to-property-delegate: func() -> option<property-delegate>;
@@ -30,7 +53,52 @@ interface entity {
         powered: func() -> bool;
     }
 
-    variant entity {
-        command-block-entity(command-block-entity),
+    resource entity-base {
+        // write-nbt: func(nbt: nbt-compound);
+        // read-nbt: func(nbt: nbt-compound);
+        tick: func(caller: entity-base, server: server);
+        init-data-tracker: func();
+        teleport: func(position: position, yaw: option<s32>, pitch: option<s32>, %world: %world);
+        is-pushed-by-fluids: func() -> bool;
+        is-immune-to-explosion: func() -> bool;
+        get-gravity: func() -> f64;
+        tick-in-void: func();
+        damage: func(caller: entity-base, amount: s32, damage-type: damage-type);
+        is-spectator: func() -> bool;
+        is-collidable: func() -> bool;
+        can-hit: func() -> bool;
+        is-flutterer: func() -> bool;
+        get-y-velocity-drag: func() -> option<f64>;
+        damage-with-context: func(caller: entity-base, amount: s32, damage-type: damage-type, position: option<position>, source: entity-base, cause: entity-base) -> bool;
+        interact: func(player: player, item-stack: borrow<item-stack>) -> bool;
+        on-player-collision: func(player: player);
+        on-hit: func(hit: projectile-hit);
+        set-paddle-state: func(left: bool, right: bool);
+        is-in-love: func() -> bool;
+        is-breeding-ready: func() -> bool;
+        reset-love: func();
+        set-breeding-cooldown: func(ticks: s32);
+        is-panicking: func() -> bool;
+        get-entity: func() -> entity;
+        get-living-entity: func() -> option<living-entity>;
+        get-item-entity: func() -> option<item-entity>;
+        get-player: func() -> option<player>;
+        get-name: func() -> text-component;
+        get-display-name: func() -> text-component;
+        kill: func(caller: entity-base);
+        // as-nbt-storage: func() -> nbt-storage
+    }
+
+    /// Represents a non-living entity
+    resource entity {
+        // todo
+    }
+
+    resource living-entity {
+        // todo
+    }
+
+    resource item-entity {
+        // todo
     }
 }
