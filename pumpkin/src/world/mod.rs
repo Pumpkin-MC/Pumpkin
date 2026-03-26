@@ -2601,6 +2601,26 @@ impl World {
             .cloned()
     }
 
+    /// Retrieves an entity by their unique UUID.
+    ///
+    /// This function searches the world's entities for one with the specified UUID.
+    /// If found, it returns an `Arc<dyn EntityBase>` reference to that entity. Otherwise, it returns `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `id`: The UUID of the entity to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
+    pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
+        self.entities
+            .load()
+            .iter()
+            .find(|p| p.get_entity().entity_uuid == id)
+            .cloned()
+    }
+
     /// Gets a list of players whose location equals the given position in the world.
     ///
     /// It iterates through the players in the world and checks their location. If the player's location matches the
@@ -2730,6 +2750,45 @@ impl World {
                     .unwrap()
             })
             .map(|p| p.1.clone())
+    }
+
+    /// Adds entities to the provided [`Vec`] that satisfy a particular condition and are
+    /// present in the provided [`BoundingBox`].
+    ///
+    /// # Arguments
+    ///
+    /// * `list`: The `Vec` to add to.
+    /// * `max_list_capacity`: The maximum capacity of `list` for adding entities. If this limit is reached, no more
+    ///   entities will be added to the list. If `list` already reaches this limit, nothing happens.
+    /// * `bounding_box`: The bounding box to filter any added entities.
+    /// * `predicate`: A predicate function, which has to be `true` for an entity to be added to the list.
+    pub fn get_entities_and_add(
+        &self,
+        list: &mut Vec<Arc<dyn EntityBase>>,
+        max_list_capacity: usize,
+        bounding_box: Option<BoundingBox>,
+        predicate: impl Fn(&dyn EntityBase) -> bool,
+    ) {
+        if list.len() >= max_list_capacity {
+            return;
+        }
+        for entity in self.entities.load().iter() {
+            if !bounding_box.is_some_and(|b| b.intersects(&entity.get_entity().bounding_box.load()))
+                || !predicate(entity.as_ref())
+            {
+                continue;
+            }
+
+            // We add the entity to the list.
+            list.push(entity.clone());
+
+            // Check if the list is too big.
+            if list.len() > max_list_capacity {
+                return;
+            }
+
+            // TODO: Implement ender dragon handling
+        }
     }
 
     /// Adds a player to the world and broadcasts a join message if enabled.
