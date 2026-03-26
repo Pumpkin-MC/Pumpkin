@@ -18,13 +18,14 @@ pub mod mushroom_plant;
 pub mod nether_sprouts;
 pub mod roots;
 pub mod sapling;
-pub mod sea_grass;
 pub mod sea_pickles;
+pub mod seagrass;
 pub mod segmented;
 pub mod short_plant;
 pub mod spore_blossom;
 pub mod sugar_cane;
 pub mod tall_plant;
+pub mod tall_seagrass;
 pub mod wither_rose;
 
 trait PlantBlockBase {
