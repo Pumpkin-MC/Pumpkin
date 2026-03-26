@@ -92,7 +92,6 @@ pub async fn default_dispatcher(
     dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
-    dispatcher.register(seed::init_command_tree(), "minecraft:command.seed");
     dispatcher.register(tps::init_command_tree(), "pumpkin:command.tps");
     dispatcher.register(fill::init_command_tree(), "minecraft:command.fill");
     dispatcher.register(
@@ -165,6 +164,7 @@ pub async fn default_dispatcher(
     };
 
     help::register(&mut dispatcher, registry);
+    seed::register(&mut dispatcher, registry);
 
     dispatcher
 }
@@ -271,13 +271,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.setblock",
             "Changes a block to another block",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.seed",
-            "Displays the world seed",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
