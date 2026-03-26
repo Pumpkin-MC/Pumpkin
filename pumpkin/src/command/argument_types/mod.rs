@@ -43,4 +43,6 @@ macro_rules! assert_parse_err_reset {
 
 pub mod argument_type;
 pub mod core;
+pub mod entity;
+pub mod selector;
 pub mod time;
