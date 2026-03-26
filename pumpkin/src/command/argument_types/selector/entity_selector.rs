@@ -4,8 +4,9 @@ use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::world::World;
-use pumpkin_data::data_component_impl::EntityTypeOrTag;
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::bounds::DoubleBounds;
 use pumpkin_util::math::vector3::Vector3;
 use rand::seq::SliceRandom;
 use std::sync::Arc;
@@ -20,33 +21,33 @@ const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
 /// selectors like *plain player names* and *bare UUIDs*.
 pub struct EntitySelector {
     /// The maximum number of possible entities that can be selected.
-    max_selected: i32,
+    pub max_selected: i32,
     /// Whether this selector includes all entities rather than just players.
-    includes_entities: bool,
+    pub includes_entities: bool,
     /// A list of predicates that must be satisfied by an entity to be part
     /// of this selector. Used for things like checking a game mode.
-    predicates: Vec<EntitySelectorPredicate>,
+    pub predicates: Vec<EntitySelectorPredicate>,
     /// The distance range that this selector allows.
-    range: Option<Range>,
+    pub distance: Option<DoubleBounds>,
     /// A function corresponding to how positions are provided for this selector, provided
     /// an initial [`Vector3<f64>`].
-    position_function: PositionFunction,
+    pub position_function: PositionFunction,
     /// The limiting bounding box for this selector.
-    bounding_box: Option<BoundingBox>,
+    pub bounding_box: Option<BoundingBox>,
     /// The sorting order of this selector.
-    order: Order,
+    pub order: Order,
     /// Whether the selector represents the currently executing entity. Only true if `@s` is used.
-    is_current_entity: bool,
+    pub is_current_entity: bool,
     /// The limiting player name of this selector.
-    player_name: Option<String>,
+    pub player_name: Option<String>,
     /// The limiting UUID of this selector.
-    entity_uuid: Option<Uuid>,
+    pub entity_uuid: Option<Uuid>,
     /// The limiting entity type or tag for this selector.
-    entity_type_or_tag: EntityTypeOrTag,
+    pub entity_type_or_tag: &'static EntityType,
     /// Whether this selector uses a selector variable (like `@p`).
-    uses_selector_variable: bool,
+    pub uses_selector_variable: bool,
     /// Whether this selector limits entities to a certain world.
-    is_world_limited: bool,
+    pub is_world_limited: bool,
 }
 
 impl EntitySelector {
@@ -250,7 +251,7 @@ impl EntitySelector {
         if let Some(bounding_box) = bounding_box {
             list.push(EntitySelectorPredicate::BoundingBox(bounding_box));
         }
-        if let Some(range) = self.range {
+        if let Some(range) = self.distance {
             list.push(EntitySelectorPredicate::Range(range, pos));
         }
 
@@ -270,36 +271,6 @@ impl EntitySelector {
             entities,
         )
     }
-}
-
-/// Represents a range of `f64`s, whose bounds' minima and maxima may be optional.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Range {
-    bounds: RangeBounds,
-    squared_bounds: RangeBounds,
-}
-
-impl Range {
-    /// Returns whether a number satisfies this range.
-    #[must_use]
-    pub fn matches(&self, number: f64) -> bool {
-        self.bounds.min.is_none_or(|min| min <= number)
-            && self.bounds.max.is_none_or(|max| max >= number)
-    }
-
-    /// Returns whether a number, in its squared form, satisfies this range.
-    #[must_use]
-    pub fn matches_square(&self, number: f64) -> bool {
-        self.squared_bounds.min.is_none_or(|min| min <= number)
-            && self.squared_bounds.max.is_none_or(|max| max >= number)
-    }
-}
-
-/// Represents a single range bound of `f64`s, whose bounds may be optional.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RangeBounds {
-    min: Option<f64>,
-    max: Option<f64>,
 }
 
 /// A function that may or may not manipulate a provided position to be used by a parser.
@@ -326,6 +297,7 @@ impl PositionFunction {
 }
 
 /// An order to choose entities that could be selected by an entity selector.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Order {
     Nearest,
     Furthest,
@@ -386,7 +358,7 @@ impl Order {
 pub enum EntitySelectorPredicate {
     // TODO: add the rest of the predicates
     BoundingBox(BoundingBox),
-    Range(Range, Vector3<f64>),
+    Range(DoubleBounds, Vector3<f64>),
 
     /// Used to combine sub-predicates.
     AllOf(Vec<Self>),
