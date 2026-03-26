@@ -1,6 +1,29 @@
 interface player {
+    use common.{position, game-mode};
+    use %world.{%world};
+    use text.{text-component};
+
     resource player {
         get-id: func () -> string;
         get-name: func () -> string;
+
+        // Basic state
+        get-position: func () -> position;
+        get-rotation: func () -> tuple<f32, f32>;
+        get-world: func () -> %world;
+        get-gamemode: func () -> game-mode;
+        set-gamemode: func (mode: game-mode) -> bool;
+
+        // Messaging & titles
+        send-system-message: func (text: text-component, overlay: bool);
+        show-title: func (text: text-component);
+        show-subtitle: func (text: text-component);
+        show-actionbar: func (text: text-component);
+        send-title-animation: func (fade-in: s32, stay: s32, fade-out: s32);
+
+        // Teleport & kick
+        teleport: func (position: position, yaw: f32, pitch: f32);
+        teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>);
+        kick: func (message: text-component);
     }
 }
