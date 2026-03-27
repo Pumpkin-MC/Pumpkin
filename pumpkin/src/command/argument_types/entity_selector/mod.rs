@@ -1,18 +1,21 @@
+mod options;
+pub mod parser;
+
 use crate::command::argument_types::entity;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::entity::{Entity, EntityBase};
 use crate::entity::player::Player;
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::wrap_degrees;
 use rand::seq::SliceRandom;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use uuid::Uuid;
-use pumpkin_util::math::wrap_degrees;
 
 /// A permission allowing a [`CommandSource`] to use entity selectors.
 const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
@@ -291,13 +294,11 @@ impl PositionFunction {
     fn apply(&self, pos: Vector3<f64>) -> Vector3<f64> {
         match self {
             Self::Identity => pos,
-            Self::OverrideWithParser(function_pos) => {
-                Vector3::new(
-                    function_pos.x.unwrap_or(pos.x),
-                    function_pos.y.unwrap_or(pos.y),
-                    function_pos.z.unwrap_or(pos.z)
-                )
-            }
+            Self::OverrideWithParser(function_pos) => Vector3::new(
+                function_pos.x.unwrap_or(pos.x),
+                function_pos.y.unwrap_or(pos.y),
+                function_pos.z.unwrap_or(pos.z),
+            ),
         }
     }
 }
@@ -386,10 +387,9 @@ impl EntitySelectorPredicate {
     pub fn test(&self, entity: &dyn EntityBase) -> bool {
         match self {
             Self::IsAlive => entity.get_entity().is_alive(),
-            Self::ExperienceLevel(bounds) => {
-                entity.get_player()
-                    .is_some_and(|p| bounds.matches(p.experience_level.load(Ordering::Relaxed)))
-            }
+            Self::ExperienceLevel(bounds) => entity
+                .get_player()
+                .is_some_and(|p| bounds.matches(p.experience_level.load(Ordering::Relaxed))),
             Self::Rotation(bounds, f) => {
                 let min = wrap_degrees(bounds.min().unwrap_or(0.0f32));
                 let max = wrap_degrees(bounds.min().unwrap_or(360.0f32));
