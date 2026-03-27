@@ -4,11 +4,11 @@ use std::sync::Arc;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::world::BlockFlags;
 
 use crate::entity::player::Player;

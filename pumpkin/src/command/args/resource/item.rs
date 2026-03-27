@@ -1,10 +1,10 @@
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     item::Item,
     tag::{RegistryKey, get_tag_ids},
 };
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
-use pumpkin_data::item_stack::ItemStack;
 
 use crate::command::{
     CommandSender,

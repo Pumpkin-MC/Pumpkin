@@ -1,28 +1,28 @@
+use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture};
+use crate::inventory::InventoryFuture;
+use crate::inventory::{
+    split_stack, {Clearable, Inventory},
+};
+use crate::world::{BlockFlags, SimpleWorld};
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
-use pumpkin_util::random::{get_seed, RandomImpl};
+use pumpkin_util::random::{RandomImpl, get_seed};
 use std::any::Any;
 use std::pin::Pin;
 use std::{
     array::from_fn,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 use tokio::sync::Mutex;
-use pumpkin_data::item_stack::ItemStack;
-use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture};
-use crate::inventory::InventoryFuture;
-use crate::world::{BlockFlags, SimpleWorld};
-use crate::inventory::{
-    split_stack, {Clearable, Inventory},
-};
 
 use super::BlockEntity;
 

@@ -2,10 +2,11 @@ use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::{fuels::is_fuel, screen::WindowType};
 use pumpkin_world::{
-    block::entities::{furnace_like_block_entity::ExperienceContainer, PropertyDelegate},
+    block::entities::{PropertyDelegate, furnace_like_block_entity::ExperienceContainer},
     inventory::Inventory,
 };
 
+use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
 use crate::{
     player::player_inventory::PlayerInventory,
     screen_handler::{
@@ -13,9 +14,8 @@ use crate::{
         ScreenHandlerFuture, ScreenHandlerListener, ScreenProperty,
     },
 };
-use tracing::debug;
 use pumpkin_data::item_stack::ItemStack;
-use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
+use tracing::debug;
 
 pub struct FurnaceLikeScreenHandler {
     pub inventory: Arc<dyn Inventory>,

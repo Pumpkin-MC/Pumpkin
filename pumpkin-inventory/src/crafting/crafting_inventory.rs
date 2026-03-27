@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::{any::Any, pin::Pin};
 
-use pumpkin_world::inventory::split_stack;
-use tokio::sync::Mutex;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_world::inventory::split_stack;
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
+use tokio::sync::Mutex;
 
 use super::recipes::RecipeInputInventory;
 

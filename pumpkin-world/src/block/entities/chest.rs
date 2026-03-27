@@ -1,14 +1,14 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_util::math::position::BlockPos;
 
-use tokio::sync::Mutex;
-use pumpkin_data::item_stack::ItemStack;
 use crate::{
     block::viewer::ViewerCountTracker, impl_block_entity_for_chest, impl_chest_helper_methods,
     impl_clearable_for_chest, impl_inventory_for_chest, impl_viewer_count_listener_for_chest,
 };
+use pumpkin_data::item_stack::ItemStack;
+use tokio::sync::Mutex;
 
 pub struct ChestBlockEntity {
     pub position: BlockPos,

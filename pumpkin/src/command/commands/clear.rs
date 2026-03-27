@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
-use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::command::args::bounded_num::BoundedNumArgumentConsumer;

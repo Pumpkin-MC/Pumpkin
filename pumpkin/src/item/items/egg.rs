@@ -7,8 +7,8 @@ use crate::entity::projectile::egg::EggEntity;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
-use pumpkin_data::sound::Sound;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::Sound;
 
 pub struct EggItem;
 

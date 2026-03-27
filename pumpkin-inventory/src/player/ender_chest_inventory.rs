@@ -1,11 +1,11 @@
 use std::{any::Any, array::from_fn, pin::Pin, sync::Arc};
 
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::{
     block::viewer::ViewerCountTracker,
-    inventory::{split_stack, Clearable, Inventory, InventoryFuture},
+    inventory::{Clearable, Inventory, InventoryFuture, split_stack},
 };
 use tokio::sync::Mutex;
-use pumpkin_data::item_stack::ItemStack;
 
 pub struct EnderChestInventory {
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],

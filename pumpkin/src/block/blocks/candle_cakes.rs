@@ -1,19 +1,19 @@
 use std::sync::Arc;
 
-use pumpkin_data::{item::Item, Block};
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::{Block, item::Item};
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::{math::position::BlockPos, GameMode};
+use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{
+    BlockStateId,
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
-    BlockStateId,
 };
 
 use crate::{
     block::{
-        blocks::cake::CakeBlock, registry::BlockActionResult, BlockBehaviour, BlockFuture,
-        GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs, UseWithItemArgs,
+        BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs,
+        OnScheduledTickArgs, UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
     },
     entity::player::Player,
     world::World,

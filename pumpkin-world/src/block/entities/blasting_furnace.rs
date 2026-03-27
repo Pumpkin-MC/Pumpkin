@@ -5,21 +5,21 @@ use std::{
     array::from_fn,
     collections::HashMap,
     sync::{
-        atomic::{AtomicBool, AtomicU16, Ordering}, Arc,
-        Mutex as StdMutex,
+        Arc, Mutex as StdMutex,
+        atomic::{AtomicBool, AtomicU16, Ordering},
     },
 };
 
-use pumpkin_data::recipes::CookingRecipeKind;
-use pumpkin_util::math::position::BlockPos;
-use tokio::sync::Mutex;
-use pumpkin_data::item_stack::ItemStack;
 use crate::{
     block::entities::furnace_like_block_entity::CookingBlockEntityBase,
     impl_block_entity_for_cooking, impl_clearable_for_cooking, impl_cooking_block_entity_base,
     impl_experience_container_for_cooking, impl_inventory_for_cooking,
     impl_property_delegate_for_cooking,
 };
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::recipes::CookingRecipeKind;
+use pumpkin_util::math::position::BlockPos;
+use tokio::sync::Mutex;
 
 pub struct BlastingFurnaceBlockEntity {
     pub position: BlockPos,

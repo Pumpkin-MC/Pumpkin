@@ -1,3 +1,4 @@
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockState, item::Item};
 use pumpkin_util::{
     loot_table::{
@@ -6,7 +7,6 @@ use pumpkin_util::{
     },
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use pumpkin_data::item_stack::ItemStack;
 use rand::RngExt;
 
 #[derive(Default)]

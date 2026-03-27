@@ -1,15 +1,16 @@
-use std::sync::{atomic::Ordering, Arc};
+use std::sync::{Arc, atomic::Ordering};
 
 use pumpkin_macros::pumpkin_block;
 
 use crate::{
     block::{
-        registry::BlockActionResult, BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs,
-        NormalUseArgs, OnPlaceArgs, PlacedArgs, UseWithItemArgs,
+        BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
+        OnPlaceArgs, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
     },
-    entity::{player::Player, EntityBase},
+    entity::{EntityBase, player::Player},
     world::World,
 };
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
     item::Item,
@@ -20,11 +21,10 @@ use pumpkin_data::{
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::{
-    block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity, inventory::Inventory,
-    BlockStateId,
+    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
+    inventory::Inventory,
 };
 use tokio::sync::Mutex;
-use pumpkin_data::item_stack::ItemStack;
 
 #[pumpkin_block("minecraft:chiseled_bookshelf")]
 pub struct ChiseledBookshelfBlock;

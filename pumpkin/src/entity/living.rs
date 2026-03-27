@@ -37,6 +37,7 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
@@ -54,7 +55,6 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_data::item_stack::ItemStack;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;

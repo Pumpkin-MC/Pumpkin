@@ -1,5 +1,12 @@
+use crate::inventory::InventoryFuture;
+use crate::{
+    block::entities::BlockEntity,
+    inventory::{Clearable, Inventory, split_stack},
+    world::{BlockFlags, SimpleWorld},
+};
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use std::any::Any;
@@ -7,19 +14,12 @@ use std::pin::Pin;
 use std::{
     array::from_fn,
     sync::{
-        atomic::{AtomicBool, AtomicI8, Ordering},
         Arc,
+        atomic::{AtomicBool, AtomicI8, Ordering},
     },
 };
 use tokio::sync::Mutex;
 use tracing::warn;
-use pumpkin_data::item_stack::ItemStack;
-use crate::inventory::InventoryFuture;
-use crate::{
-    block::entities::BlockEntity,
-    inventory::{split_stack, Clearable, Inventory},
-    world::{BlockFlags, SimpleWorld},
-};
 
 pub struct ChiseledBookshelfBlockEntity {
     pub position: BlockPos,

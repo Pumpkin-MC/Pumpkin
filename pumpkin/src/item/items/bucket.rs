@@ -4,17 +4,17 @@ use crate::{
     entity::player::Player,
     item::{ItemBehaviour, ItemMetadata},
 };
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
-    dimension::Dimension, fluid::Fluid,
+    Block, BlockDirection,
+    dimension::Dimension,
+    fluid::Fluid,
     item::Item,
     sound::{Sound, SoundCategory},
-    Block,
-    BlockDirection,
 };
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::{
-    math::{position::BlockPos, vector3::Vector3},
     GameMode,
+    math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{inventory::Inventory, tick::TickPriority, world::BlockFlags};
 

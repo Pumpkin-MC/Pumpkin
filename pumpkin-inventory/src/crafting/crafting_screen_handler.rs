@@ -13,12 +13,12 @@ use crate::screen_handler::{
 use crate::slot::{BoxFuture, NormalSlot, Slot};
 
 use crossbeam_utils::atomic::AtomicCell;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING, RecipeResultStruct};
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_world::inventory::Inventory;
-use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
 /// CraftingResultSlot.java

@@ -1,8 +1,8 @@
 use pumpkin_data::data_component::DataComponent::MaxStackSize;
 use pumpkin_data::data_component_impl::{MaxStackSizeImpl, get};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_data::item_stack::ItemStack;
 
 use crate::command::args::bounded_num::{BoundedNumArgumentConsumer, NotInBounds};
 use crate::command::args::players::PlayersArgumentConsumer;

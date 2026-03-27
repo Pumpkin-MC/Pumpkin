@@ -7,12 +7,12 @@ use crate::data_component_impl::{
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
 use crate::tag::Taggable;
+use crate::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
+use rand;
 use std::borrow::Cow;
 use std::cmp::{max, min};
-use crate::{Block, Enchantment};
-use rand;
 
 mod categories;
 

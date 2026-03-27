@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    chunk_gen_settings::GenerationSettings, dimension::Dimension, Block, BlockState,
+    Block, BlockState, chunk_gen_settings::GenerationSettings, dimension::Dimension,
 };
 use pumpkin_util::math::vector2::Vector2;
 
@@ -44,15 +44,15 @@ macro_rules! global_path {
 
 // TODO: is there a way to do in-file benches?
 pub use generation::{
-    noise::router::proto_noise_router::ProtoNoiseRouters, proto_chunk::ProtoChunk,
-    GlobalRandomConfig,
+    GlobalRandomConfig, noise::router::proto_noise_router::ProtoNoiseRouters,
+    proto_chunk::ProtoChunk,
 };
 
 use crate::generation::{
     biome_coords,
     noise::{
-        aquifer_sampler::{FluidLevel, FluidLevelSampler}, ChunkNoiseGenerator,
-        CHUNK_DIM,
+        CHUNK_DIM, ChunkNoiseGenerator,
+        aquifer_sampler::{FluidLevel, FluidLevelSampler},
     },
     positions::chunk_pos,
     proto_chunk::TerrainCache,

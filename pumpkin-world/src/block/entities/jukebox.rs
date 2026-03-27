@@ -4,13 +4,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+use crate::block::entities::BlockEntity;
+use crate::inventory::{Clearable, Inventory, InventoryFuture};
+use crate::world::SimpleWorld;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
-use pumpkin_data::item_stack::ItemStack;
-use crate::inventory::{Clearable, Inventory, InventoryFuture};
-use crate::world::SimpleWorld;
-use crate::block::entities::BlockEntity;
 
 /// Matches vanilla's `JukeboxBlockEntity`
 pub struct JukeboxBlockEntity {

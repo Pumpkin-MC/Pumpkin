@@ -125,8 +125,10 @@ pub fn snbt_colorful_display(tag: &NbtTag, depth: usize) -> Result<TextComponent
                 let mut content = TextComponent::text("[");
 
                 for (index, item) in value.iter().take(128).enumerate() {
-                    let item_display = snbt_colorful_display(item, depth + 1)
-                        .map_err(|string| format!("Error displaying item_stack.[{index}]: {string}"))?;
+                    let item_display =
+                        snbt_colorful_display(item, depth + 1).map_err(|string| {
+                            format!("Error displaying item_stack.[{index}]: {string}")
+                        })?;
                     content = content.add_child(item_display);
 
                     if index < value.len() - 1 {

@@ -4,6 +4,7 @@ use crate::{
     slot::{NormalSlot, Slot},
     sync_handler::{SyncHandler, TrackedStack},
 };
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
@@ -19,7 +20,6 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::{
     block::entities::PropertyDelegate,
     inventory::{ComparableInventory, Inventory},

@@ -5,12 +5,12 @@ use crate::entity::r#type::from_type;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::entity::entity_from_egg;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
 use pumpkin_world::block::entities::mob_spawner::MobSpawnerBlockEntity;
-use pumpkin_data::item_stack::ItemStack;
 use uuid::Uuid;
 
 pub struct SpawnEggItem;

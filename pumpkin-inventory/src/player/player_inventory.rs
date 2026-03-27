@@ -2,11 +2,11 @@ use crate::entity_equipment::EntityEquipment;
 use crate::screen_handler::InventoryPlayer;
 
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::client::play::CSetPlayerInventory;
 use pumpkin_util::Hand;
 use pumpkin_world::inventory::{Clearable, Inventory};
 use pumpkin_world::inventory::{InventoryFuture, split_stack};
-use pumpkin_data::item_stack::ItemStack;
 use std::any::Any;
 use std::array::from_fn;
 use std::collections::HashMap;

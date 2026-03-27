@@ -11,8 +11,8 @@ use crate::screen_handler::InventoryPlayer;
 
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_world::inventory::Inventory;
 use tokio::{sync::Mutex, time::timeout};
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

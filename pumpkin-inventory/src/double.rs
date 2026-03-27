@@ -1,8 +1,8 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 use tokio::sync::Mutex;
-use pumpkin_data::item_stack::ItemStack;
 
 pub struct DoubleInventory {
     first: Arc<dyn Inventory>,

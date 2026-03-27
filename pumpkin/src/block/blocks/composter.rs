@@ -2,26 +2,26 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        registry::BlockActionResult, BlockBehaviour, BlockFuture, GetComparatorOutputArgs, NormalUseArgs,
-        OnScheduledTickArgs, UseWithItemArgs,
+        BlockBehaviour, BlockFuture, GetComparatorOutputArgs, NormalUseArgs, OnScheduledTickArgs,
+        UseWithItemArgs, registry::BlockActionResult,
     },
-    entity::{item::ItemEntity, Entity},
+    entity::{Entity, item::ItemEntity},
     world::World,
 };
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
+    Block,
     block_properties::{BlockProperties, ComposterLikeProperties, EnumVariants, Integer0To8},
     composter_increase_chance::get_composter_increase_chance_from_item_id,
     entity::EntityType,
     item::Item,
     world::WorldEvent,
-    Block,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{tick::TickPriority, world::BlockFlags, BlockStateId};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 use rand::RngExt;
-use pumpkin_data::item_stack::ItemStack;
 
 #[pumpkin_block("minecraft:composter")]
 pub struct ComposterBlock;
