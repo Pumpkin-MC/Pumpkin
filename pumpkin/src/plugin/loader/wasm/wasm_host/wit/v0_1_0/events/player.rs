@@ -12,9 +12,10 @@ use crate::plugin::{
                 PlayerChatEventData, PlayerCommandSendEventData, PlayerCustomPayloadEventData,
                 PlayerEggThrowEventData, PlayerExpChangeEventData, PlayerFishEventData,
                 PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
-                PlayerItemHeldEventData, PlayerJoinEventData, PlayerLeaveEventData,
-                PlayerLoginEventData, PlayerMoveEventData, PlayerPermissionCheckEventData,
-                PlayerTeleportEventData,
+                PlayerInteractActionType as WasmPlayerInteractActionType,
+                PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData,
+                PlayerJoinEventData, PlayerLeaveEventData, PlayerLoginEventData,
+                PlayerMoveEventData, PlayerPermissionCheckEventData, PlayerTeleportEventData,
             },
         },
     },
@@ -29,6 +30,7 @@ use crate::plugin::{
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent,
         player_leave::PlayerLeaveEvent,
         player_login::PlayerLoginEvent,
@@ -38,6 +40,7 @@ use crate::plugin::{
     },
 };
 use bytes::Bytes;
+use pumpkin_protocol::java::server::play::ActionType;
 
 const fn to_wasm_fish_state(state: PlayerFishState) -> WasmPlayerFishState {
     match state {
@@ -60,6 +63,24 @@ const fn from_wasm_fish_state(state: WasmPlayerFishState) -> PlayerFishState {
         WasmPlayerFishState::FailedAttempt => PlayerFishState::FailedAttempt,
         WasmPlayerFishState::ReelIn => PlayerFishState::ReelIn,
         WasmPlayerFishState::Bite => PlayerFishState::Bite,
+    }
+}
+
+const fn to_wasm_player_interact_action_type(action: ActionType) -> WasmPlayerInteractActionType {
+    match action {
+        ActionType::Interact => WasmPlayerInteractActionType::Interact,
+        ActionType::Attack => WasmPlayerInteractActionType::Attack,
+        ActionType::InteractAt => WasmPlayerInteractActionType::InteractAt,
+    }
+}
+
+const fn from_wasm_player_interact_action_type(
+    action: WasmPlayerInteractActionType,
+) -> ActionType {
+    match action {
+        WasmPlayerInteractActionType::Interact => ActionType::Interact,
+        WasmPlayerInteractActionType::Attack => ActionType::Attack,
+        WasmPlayerInteractActionType::InteractAt => ActionType::InteractAt,
     }
 }
 
@@ -517,6 +538,33 @@ impl ToFromV0_1_0WasmEvent for PlayerEggThrowEvent {
                 hatching: data.hatching,
                 num_hatches: data.num_hatches,
                 hatching_type: from_wasm_entity_type(&data.hatching_type),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerInteractUnknownEntityEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerInteractUnknownEntityEvent(PlayerInteractUnknownEntityEventData {
+            player,
+            entity_id: self.entity_id,
+            action: to_wasm_player_interact_action_type(self.action.clone()),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerInteractUnknownEntityEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                entity_id: data.entity_id,
+                action: from_wasm_player_interact_action_type(data.action),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
