@@ -19,6 +19,52 @@ pub struct IntBounds {
     squared_bounds: Bounds<i64>,
 }
 
+macro_rules! impl_square_cached_bounds {
+    ($ty:ty, $normal_ty:ty, $squared_ty:ty) => {
+        /// Returns a pair of bounds with the provided minimum and maximum values.
+        #[must_use]
+        pub fn new(min: $normal_ty, max: $normal_ty) -> Self {
+            Self::new_with_bounds(Bounds::<$normal_ty>::new(Some(min), Some(max)))
+        }
+
+        /// Returns a pair of bounds with the provided minimum value.
+        #[must_use]
+        pub fn new_at_least(min: $normal_ty) -> Self {
+            Self::new_with_bounds(Bounds::<$normal_ty>::new(Some(min), None))
+        }
+
+        /// Returns a pair of bounds with the provided maximum value.
+        #[must_use]
+        pub fn new_at_most(max: $normal_ty) -> Self {
+            Self::new_with_bounds(Bounds::<$normal_ty>::new(None, Some(max)))
+        }
+
+        /// Returns whether a number satisfies these bounds.
+        #[must_use]
+        pub fn matches(&self, number: $normal_ty) -> bool {
+            self.bounds.min.is_none_or(|min| min <= number)
+                && self.bounds.max.is_none_or(|max| max >= number)
+        }
+
+        /// Returns whether a number satisfies these bounds' squared form.
+        #[must_use]
+        pub fn matches_square(&self, number: $squared_ty) -> bool {
+            self.squared_bounds.min.is_none_or(|min| min <= number)
+                && self.squared_bounds.max.is_none_or(|max| max >= number)
+        }
+
+        #[doc = concat!("Returns the maximum bound of this [`", stringify!($ty), "`].")]
+        pub fn min(&self) -> Option<$normal_ty> {
+            self.bounds.min
+        }
+
+        /// Returns the maximum bound of this [`IntBounds`].
+        pub fn max(&self) -> Option<$normal_ty> {
+            self.bounds.max
+        }
+    };
+}
+
 impl IntBounds {
     #[must_use]
     fn new_with_bounds(bounds: Bounds<i32>) -> Self {
@@ -31,37 +77,7 @@ impl IntBounds {
         }
     }
 
-    /// Returns a range with the provided minimum and maximum values.
-    #[must_use]
-    pub fn new(min: i32, max: i32) -> Self {
-        Self::new_with_bounds(Bounds::<i32>::new(Some(min), Some(max)))
-    }
-
-    /// Returns a range with the provided minimum value.
-    #[must_use]
-    pub fn new_at_least(min: i32) -> Self {
-        Self::new_with_bounds(Bounds::<i32>::new(Some(min), None))
-    }
-
-    /// Returns a range with the provided maximum value.
-    #[must_use]
-    pub fn new_at_most(max: i32) -> Self {
-        Self::new_with_bounds(Bounds::<i32>::new(None, Some(max)))
-    }
-
-    /// Returns whether a number satisfies this range.
-    #[must_use]
-    pub fn matches(&self, number: i32) -> bool {
-        self.bounds.min.is_none_or(|min| min <= number)
-            && self.bounds.max.is_none_or(|max| max >= number)
-    }
-
-    /// Returns whether a number satisfies this range's squared form.
-    #[must_use]
-    pub fn matches_square(&self, number: i64) -> bool {
-        self.squared_bounds.min.is_none_or(|min| min <= number)
-            && self.squared_bounds.max.is_none_or(|max| max >= number)
-    }
+    impl_square_cached_bounds!(IntBounds, i32, i64);
 }
 
 /// Represents a range of `f64`s.
@@ -84,42 +100,24 @@ impl DoubleBounds {
         }
     }
 
-    /// Returns a range with the provided minimum and maximum values.
-    #[must_use]
-    pub fn new(min: f64, max: f64) -> Self {
-        Self::new_with_bounds(Bounds::<f64>::new(Some(min), Some(max)))
-    }
-
-    /// Returns a range with the provided minimum value.
-    #[must_use]
-    pub fn new_at_least(min: f64) -> Self {
-        Self::new_with_bounds(Bounds::<f64>::new(Some(min), None))
-    }
-
-    /// Returns a range with the provided maximum value.
-    #[must_use]
-    pub fn new_at_most(max: f64) -> Self {
-        Self::new_with_bounds(Bounds::<f64>::new(None, Some(max)))
-    }
-
-    /// Returns whether a number satisfies this range.
-    #[must_use]
-    pub fn matches(&self, number: f64) -> bool {
-        self.bounds.min.is_none_or(|min| min <= number)
-            && self.bounds.max.is_none_or(|max| max >= number)
-    }
-
-    /// Returns whether a number satisfies this range's squared form.
-    #[must_use]
-    pub fn matches_square(&self, number: f64) -> bool {
-        self.squared_bounds.min.is_none_or(|min| min <= number)
-            && self.squared_bounds.max.is_none_or(|max| max >= number)
-    }
+    impl_square_cached_bounds!(DoubleBounds, f64, f64);
 }
 
 /// Represents a range of degrees, stored as `f32`s.
 /// This range only stores the minimum and maximum degree values.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FloatDegreeBounds {
-    bounds: Bounds<f64>,
+    bounds: Bounds<f32>
+}
+
+impl FloatDegreeBounds {
+    /// Returns the minimum degree amount of this [`FloatDegreeBounds`].
+    pub fn min(&self) -> Option<f32> {
+        self.bounds.min
+    }
+
+    /// Returns the maximum degree amount of this [`FloatDegreeBounds`].
+    pub fn max(&self) -> Option<f32> {
+        self.bounds.max
+    }
 }

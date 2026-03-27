@@ -1,16 +1,18 @@
 use crate::command::argument_types::entity;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::entity::EntityBase;
+use crate::entity::{Entity, EntityBase};
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::boundingbox::BoundingBox;
-use pumpkin_util::math::bounds::DoubleBounds;
+use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::math::vector3::Vector3;
 use rand::seq::SliceRandom;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use uuid::Uuid;
+use pumpkin_util::math::wrap_degrees;
 
 /// A permission allowing a [`CommandSource`] to use entity selectors.
 const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
@@ -43,7 +45,7 @@ pub struct EntitySelector {
     /// The limiting UUID of this selector.
     pub entity_uuid: Option<Uuid>,
     /// The limiting entity type or tag for this selector.
-    pub entity_type_or_tag: &'static EntityType,
+    pub entity_type: Option<&'static EntityType>,
     /// Whether this selector uses a selector variable (like `@p`).
     pub uses_selector_variable: bool,
     /// Whether this selector limits entities to a certain world.
@@ -251,8 +253,8 @@ impl EntitySelector {
         if let Some(bounding_box) = bounding_box {
             list.push(EntitySelectorPredicate::BoundingBox(bounding_box));
         }
-        if let Some(range) = self.distance {
-            list.push(EntitySelectorPredicate::Range(range, pos));
+        if let Some(distance_bounds) = self.distance {
+            list.push(EntitySelectorPredicate::Distance(distance_bounds, pos));
         }
 
         EntitySelectorPredicate::new_all_of(list)
@@ -282,15 +284,19 @@ pub enum PositionFunction {
     ///
     /// If a position coordinate of the parser is set, the provided position's
     /// corresponding coordinate is replaced, and the new position is returned.
-    OverrideWithParser(Option<f64>, Option<f64>, Option<f64>),
+    OverrideWithParser(Vector3<Option<f64>>),
 }
 
 impl PositionFunction {
     fn apply(&self, pos: Vector3<f64>) -> Vector3<f64> {
         match self {
             Self::Identity => pos,
-            Self::OverrideWithParser(x, y, z) => {
-                Vector3::new(x.unwrap_or(pos.x), y.unwrap_or(pos.y), z.unwrap_or(pos.z))
+            Self::OverrideWithParser(function_pos) => {
+                Vector3::new(
+                    function_pos.x.unwrap_or(pos.x),
+                    function_pos.y.unwrap_or(pos.y),
+                    function_pos.z.unwrap_or(pos.z)
+                )
             }
         }
     }
@@ -356,9 +362,16 @@ impl Order {
 /// A predicate for an entity selector.
 #[derive(Debug, Clone)]
 pub enum EntitySelectorPredicate {
-    // TODO: add the rest of the predicates
+    /// A predicate to check whether an entity is alive.
+    IsAlive,
+    /// A predicate to check the experience level of an entity, if any.
+    ExperienceLevel(IntBounds),
+    /// A predicate to check the rotation coordinate of an entity.
+    Rotation(FloatDegreeBounds, fn(&Entity) -> f32),
+    /// A predicate to check whether an entity intersects a bounding box.
     BoundingBox(BoundingBox),
-    Range(DoubleBounds, Vector3<f64>),
+    /// A predicate to check whether an entity is within a specified range from some position.
+    Distance(DoubleBounds, Vector3<f64>),
 
     /// Used to combine sub-predicates.
     AllOf(Vec<Self>),
@@ -372,13 +385,28 @@ impl EntitySelectorPredicate {
 
     pub fn test(&self, entity: &dyn EntityBase) -> bool {
         match self {
+            Self::IsAlive => entity.get_entity().is_alive(),
+            Self::ExperienceLevel(bounds) => {
+                entity.get_player()
+                    .is_some_and(|p| bounds.matches(p.experience_level.load(Ordering::Relaxed)))
+            }
+            Self::Rotation(bounds, f) => {
+                let min = wrap_degrees(bounds.min().unwrap_or(0.0f32));
+                let max = wrap_degrees(bounds.min().unwrap_or(360.0f32));
+                let degrees = wrap_degrees(f(entity.get_entity()));
+                if min > max {
+                    degrees >= min || degrees <= max
+                } else {
+                    degrees >= min && degrees <= max
+                }
+            }
             Self::BoundingBox(bounding_box) => entity
                 .get_entity()
                 .bounding_box
                 .load()
                 .intersects(bounding_box),
-            Self::Range(range, pos) => {
-                range.matches_square(entity.get_entity().pos.load().squared_distance_to_vec(pos))
+            Self::Distance(bounds, pos) => {
+                bounds.matches_square(entity.get_entity().pos.load().squared_distance_to_vec(pos))
             }
             Self::AllOf(predicates) => predicates.iter().all(|predicate| predicate.test(entity)),
         }
