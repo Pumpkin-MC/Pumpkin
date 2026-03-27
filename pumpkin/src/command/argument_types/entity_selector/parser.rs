@@ -1,3 +1,6 @@
+use crate::command::argument_types::entity_selector::option::{
+    EntitySelectorOption, INAPPLICABLE_OPTION_ERROR_TYPE, UNKNOWN_OPTION_ERROR_TYPE,
+};
 use crate::command::argument_types::entity_selector::{
     EntitySelector, EntitySelectorPredicate, Order, PositionFunction,
 };
@@ -32,9 +35,12 @@ pub const EXPECTED_OPTION_VALUE_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_VALUELESS);
 
 /// A struct to parse an [`EntitySelector`].
+///
+/// * `'b` is the lifetime of the mutable reference to the [`StringReader`].
+/// * `'a` is the lifetime of the [`StringReader`].
 #[derive(Debug)]
-pub struct EntitySelectorParser<'a> {
-    pub reader: &'a mut StringReader<'a>,
+pub struct EntitySelectorParser<'b, 'a> {
+    pub reader: &'b mut StringReader<'a>,
     allow_selectors: bool,
     max_selected: i32,
     includes_entities: bool,
@@ -66,14 +72,14 @@ pub struct EntitySelectorParser<'a> {
     start_position: usize,
 }
 
-impl<'a> EntitySelectorParser<'a> {
+impl<'b, 'a> EntitySelectorParser<'b, 'a> {
     /// Constructs a new [`EntitySelectorParser`].
     ///
     /// # Arguments
     ///
     /// * `reader`: The [`StringReader`] to use while parsing the entity selector.
     /// * `allow_selectors`: Whether to allow selector variables (like `@s` or `@p`).
-    pub fn new(reader: &'a mut StringReader<'a>, allow_selectors: bool) -> Self {
+    pub fn new(reader: &'b mut StringReader<'a>, allow_selectors: bool) -> Self {
         Self {
             reader,
             allow_selectors,
@@ -185,7 +191,6 @@ impl<'a> EntitySelectorParser<'a> {
     /// Tries to parse the selector from the provided [`StringReader`].
     pub fn parse(mut self) -> Result<EntitySelector, CommandSyntaxError> {
         self.start_position = self.reader.cursor();
-        // TODO: suggestions
         if self.reader.peek() == Some('@') {
             if self.allow_selectors {
                 let error = Err(SELECTORS_NOT_ALLOWED_ERROR_TYPE.create(self.reader));
@@ -200,7 +205,6 @@ impl<'a> EntitySelectorParser<'a> {
 
     fn parse_selector(&mut self) -> Result<(), CommandSyntaxError> {
         self.uses_selectors = true;
-        // TODO: suggestions
         if !self.reader.can_read_char() {
             return Err(MISSING_SELECTOR_TYPE_ERROR_TYPE.create(self.reader));
         }
@@ -254,7 +258,6 @@ impl<'a> EntitySelectorParser<'a> {
         if add_alive_predicate {
             self.predicates.push(EntitySelectorPredicate::IsAlive);
         }
-        // TODO: suggestions
         if self.reader.peek() == Some('[') {
             self.reader.skip();
             //
@@ -264,11 +267,71 @@ impl<'a> EntitySelectorParser<'a> {
     }
 
     fn parse_name_or_uuid(&mut self) -> Result<(), CommandSyntaxError> {
-        todo!()
+        let i = self.reader.cursor();
+        let string = self.reader.read_string()?;
+        if let Ok(uuid) = string.parse() {
+            // The string is a UUID.
+            self.entity_uuid = Some(uuid);
+            self.includes_entities = true;
+        } else {
+            // Check for a player name.
+            if string.is_empty() || string.len() > 16 {
+                self.reader.set_cursor(i);
+                return Err(INVALID_NAME_OR_UUID_ERROR_TYPE.create(self.reader));
+            }
+            self.includes_entities = false;
+            self.player_name = Some(string);
+        }
+        self.max_selected = 1;
+
+        Ok(())
     }
 
     fn parse_options(&mut self) -> Result<(), CommandSyntaxError> {
-        todo!()
+        self.reader.skip_whitespace();
+        while self.reader.peek().is_none_or(|c| c != ']') {
+            self.reader.skip_whitespace();
+            let i = self.reader.cursor();
+            let string = self.reader.read_string()?;
+            // Try to get the option.
+            let option = string.parse::<EntitySelectorOption>();
+            if let Ok(option) = option {
+                if !option.can_use(self) {
+                    return Err(INAPPLICABLE_OPTION_ERROR_TYPE
+                        .create(self.reader, TextComponent::text(string)));
+                }
+                // Now, we start parsing the option.
+                self.reader.skip_whitespace();
+                if self.reader.peek() != Some('=') {
+                    self.reader.set_cursor(i);
+                    return Err(EXPECTED_OPTION_VALUE_ERROR_TYPE
+                        .create(self.reader, TextComponent::text(string)));
+                }
+                self.reader.skip();
+                self.reader.skip_whitespace();
+                option.modify_parser(self)?;
+                self.reader.skip_whitespace();
+                if let Some(peeked) = self.reader.peek() {
+                    if peeked != ',' {
+                        if peeked != ']' {
+                            return Err(EXPECTED_END_OF_OPTIONS_ERROR_TYPE.create(self.reader));
+                        }
+                        break;
+                    }
+                    self.reader.skip();
+                }
+            } else {
+                return Err(
+                    UNKNOWN_OPTION_ERROR_TYPE.create(self.reader, TextComponent::text(string))
+                );
+            }
+        }
+        if self.reader.can_read_char() {
+            self.reader.skip();
+            Ok(())
+        } else {
+            Err(EXPECTED_END_OF_OPTIONS_ERROR_TYPE.create(self.reader))
+        }
     }
 
     /// Adds a single predicate to this parser.

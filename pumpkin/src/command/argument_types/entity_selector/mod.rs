@@ -1,7 +1,8 @@
-mod options;
+mod option;
 pub mod parser;
 
 use crate::command::argument_types::entity;
+use crate::command::argument_types::entity::ENTITY_SELECTOR_PERMISSION;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::entity::player::Player;
@@ -16,9 +17,6 @@ use rand::seq::SliceRandom;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use uuid::Uuid;
-
-/// A permission allowing a [`CommandSource`] to use entity selectors.
-const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
 
 /// Represents a structure that can target entities.
 ///

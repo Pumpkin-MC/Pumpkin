@@ -3,6 +3,7 @@ use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
+use std::str::FromStr;
 
 pub const UNKNOWN_OPTION_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_UNKNOWN);
@@ -25,7 +26,7 @@ pub const ENTITY_TYPE_INVALID_ERROR_TYPE: CommandErrorType<1> =
 ///
 /// These can be used in commands while specifying entity selectors.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-enum EntitySelectorOption {
+pub enum EntitySelectorOption {
     Name,
     Distance,
     Level,
@@ -47,6 +48,39 @@ enum EntitySelectorOption {
     Scores,
     Advancements,
     Predicate,
+}
+
+pub struct InvalidEntitySelectorOptionError;
+
+impl FromStr for EntitySelectorOption {
+    type Err = InvalidEntitySelectorOptionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "name" => Ok(Self::Name),
+            "distance" => Ok(Self::Distance),
+            "level" => Ok(Self::Level),
+            "x" => Ok(Self::X),
+            "y" => Ok(Self::Y),
+            "z" => Ok(Self::Z),
+            "dx" => Ok(Self::Dx),
+            "dy" => Ok(Self::Dy),
+            "dz" => Ok(Self::Dz),
+            "x_rotation" => Ok(Self::XRotation),
+            "y_rotation" => Ok(Self::YRotation),
+            "limit" => Ok(Self::Limit),
+            "sort" => Ok(Self::Sort),
+            "gamemode" => Ok(Self::Gamemode),
+            "team" => Ok(Self::Team),
+            "type" => Ok(Self::Type),
+            "tag" => Ok(Self::Tag),
+            "nbt" => Ok(Self::Nbt),
+            "scores" => Ok(Self::Scores),
+            "advancements" => Ok(Self::Advancements),
+            "predicate" => Ok(Self::Predicate),
+            _ => Err(InvalidEntitySelectorOptionError),
+        }
+    }
 }
 
 impl EntitySelectorOption {
