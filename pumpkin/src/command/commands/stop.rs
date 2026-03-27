@@ -1,30 +1,30 @@
 use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
-use crate::command::args::ConsumedArgs;
-use crate::command::tree::CommandTree;
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::command::argument_builder::{ArgumentBuilder, command};
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::stop_server;
-
-const NAMES: [&str; 1] = ["stop"];
 
 const DESCRIPTION: &str = "Stop the server.";
 
-struct Executor;
+const PERMISSION: &str = "minecraft:command.stop";
 
-impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
+struct StopCommandExecutor;
+
+impl CommandExecutor for StopCommandExecutor {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            sender
-                .send_message(
+            context
+                .source
+                .send_feedback(
                     TextComponent::translate(translation::COMMANDS_STOP_STOPPING, [])
                         .color_named(NamedColor::Red),
+                    true,
                 )
                 .await;
             stop_server();
@@ -33,6 +33,18 @@ impl CommandExecutor for Executor {
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+    registry
+        .register_permission(Permission::new(
+            PERMISSION,
+            DESCRIPTION,
+            PermissionDefault::Op(PermissionLvl::Four),
+        ))
+        .expect("Permission should have registered successfully");
+
+    dispatcher.register(
+        command("stop", DESCRIPTION)
+            .requires(PERMISSION)
+            .executes(StopCommandExecutor),
+    );
 }
