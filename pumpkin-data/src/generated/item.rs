@@ -33754,7 +33754,7 @@ impl Item {
             &[],
         )
     }
-    #[doc = "Try to parse an item_stack from a resource location string."]
+    #[doc = "Try to parse an item stack from a resource location string."]
     pub fn from_registry_key(name: &str) -> Option<&'static Self> {
         let name = name.strip_prefix("minecraft:").unwrap_or(name);
         match name {
@@ -35280,7 +35280,7 @@ impl Item {
             _ => None,
         }
     }
-    #[doc = "Try to parse an item_stack from a raw id."]
+    #[doc = "Try to parse an item stack from a raw id."]
     pub const fn from_id(id: u16) -> Option<&'static Self> {
         match id {
             871 => Some(&Self::ACACIA_BOAT),

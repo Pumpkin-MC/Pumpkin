@@ -213,7 +213,7 @@ impl PlayerInventory {
         for i in 0..Self::HOTBAR_SIZE {
             let check_index = (i + selected_slot) % 9;
             if true
-            /*TODO: If item_stack has an enchantment skip it */
+            /*TODO: If item stack has an enchantment skip it */
             {
                 return check_index;
             }

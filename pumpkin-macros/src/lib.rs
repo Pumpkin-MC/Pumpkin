@@ -251,7 +251,7 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    // Combine the original item_stack and new impl.
+    // Combine the original item stack and new impl.
     let mut output = input_item;
     output.extend(TokenStream::from(generated));
     output

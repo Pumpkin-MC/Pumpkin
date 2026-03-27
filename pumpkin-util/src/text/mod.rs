@@ -820,7 +820,7 @@ impl TextComponent {
 
     /// Sets a tooltip to be displayed when the player hovers over the text.
     ///
-    /// Can show plain text, item_stack information, or entity details.
+    /// Can show plain text, item information, or entity details.
     ///
     /// # Arguments
     /// - `event` – The hover event to display.

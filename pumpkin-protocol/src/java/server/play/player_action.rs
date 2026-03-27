@@ -26,9 +26,9 @@ pub enum Status {
     /// Triggered by using the Drop Item key (default: Q). Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.
     DropItem,
     /// I didn't make that up
-    /// Indicates that the currently held item_stack should have its state updated such as eating food, pulling back bows, using buckets, etc. Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.
+    /// Indicates that the currently held item stack should have its state updated such as eating food, pulling back bows, using buckets, etc. Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.
     ReleaseItemInUse,
-    /// Used to swap or assign an item_stack to the second hand. Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.
+    /// Used to swap or assign an item stack to the second hand. Location is always set to 0/0/0, Face is always set to -Y. Sequence is always set to 0.
     SwapItem,
     /// Sent when a player is holding a spear and performs a jab attack.
     SpearJab,

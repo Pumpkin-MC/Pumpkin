@@ -95,10 +95,10 @@ impl ToTokens for LootPoolStruct {
     }
 }
 
-/// Deserialized single-item_stack loot entry holding the item_stack's registry key.
+/// Deserialized single-item stack loot entry holding the item_stack's registry key.
 #[derive(Deserialize, Clone, Debug)]
 pub struct ItemEntryStruct {
-    /// Namespaced item_stack key (e.g., `"minecraft:diamond"`).
+    /// Namespaced item stack key (e.g., `"minecraft:diamond"`).
     name: String,
 }
 
@@ -233,13 +233,13 @@ pub enum LootConditionStruct {
         /// Required block-state property key-value pairs.
         properties: BTreeMap<String, String>,
     },
-    /// Passes if the tool matches an item_stack predicate.
+    /// Passes if the tool matches an item stack predicate.
     #[serde(rename = "minecraft:match_tool")]
     MatchTool,
     /// Passes with probability based on an enchantment's level.
     #[serde(rename = "minecraft:table_bonus")]
     TableBonus,
-    /// Passes if the item_stack survives an explosion.
+    /// Passes if the item stack survives an explosion.
     #[serde(rename = "minecraft:survives_explosion")]
     SurvivesExplosion,
     /// Passes based on the damage source's properties.
@@ -352,7 +352,7 @@ pub enum LootFunctionTypesStruct {
     /// Increases count based on the level of a relevant enchantment.
     #[serde(rename = "minecraft:enchanted_count_increase")]
     EnchantedCountIncrease,
-    /// Smelts the item_stack as if processed in a furnace.
+    /// Smelts the item stack as if processed in a furnace.
     #[serde(rename = "minecraft:furnace_smelt")]
     FurnaceSmelt,
     /// Sets the potion type on the item_stack.
@@ -573,7 +573,7 @@ pub struct LootPoolEntryStruct {
     content: LootPoolEntryTypesStruct,
     /// Conditions that must all pass for this entry to be evaluated.
     conditions: Option<Vec<LootConditionStruct>>,
-    /// Functions applied to the item_stack if this entry is selected.
+    /// Functions applied to the item stack if this entry is selected.
     functions: Option<Vec<LootFunctionStruct>>,
 }
 

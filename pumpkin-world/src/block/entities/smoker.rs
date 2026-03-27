@@ -33,7 +33,7 @@ pub struct SmokerBlockEntity {
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
 
     /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
-    /// Maps result item_stack ID -> craft count
+    /// Maps result item stack ID -> craft count
     pub recipes_used: StdMutex<HashMap<String, u32>>,
 }
 

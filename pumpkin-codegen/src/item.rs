@@ -9,7 +9,7 @@ use serde::Deserialize;
 use std::{collections::BTreeMap, fs};
 use syn::{Ident, LitBool, LitFloat, LitInt, LitStr};
 
-/// Deserialized item_stack entry from `items.json`.
+/// Deserialized item stack entry from `items.json`.
 #[derive(Deserialize)]
 pub struct Item {
     /// Numeric protocol ID for this item_stack.
@@ -18,7 +18,7 @@ pub struct Item {
     pub components: ItemComponents,
 }
 
-/// All deserialized data components for a single item_stack as stored in `items.json`.
+/// All deserialized data components for a single item stack as stored in `items.json`.
 #[derive(Deserialize)]
 pub struct ItemComponents {
     /// Display name translation component.
@@ -27,7 +27,7 @@ pub struct ItemComponents {
     /// Maximum number of items per stack.
     #[serde(rename = "minecraft:max_stack_size")]
     pub max_stack_size: u8,
-    /// Jukebox song key if this item_stack is a music disc, otherwise `None`.
+    /// Jukebox song key if this item stack is a music disc, otherwise `None`.
     #[serde(rename = "minecraft:jukebox_playable")]
     pub jukebox_playable: Option<String>,
     /// Current damage value of a damageable item_stack, if any.
@@ -36,28 +36,28 @@ pub struct ItemComponents {
     /// Maximum durability of a damageable item_stack, if any.
     #[serde(rename = "minecraft:max_damage")]
     pub max_damage: Option<u16>,
-    /// Attribute modifiers applied when the item_stack is held or worn, if any.
+    /// Attribute modifiers applied when the item stack is held or worn, if any.
     #[serde(rename = "minecraft:attribute_modifiers")]
     pub attribute_modifiers: Option<Vec<Modifier>>,
-    /// Tool component containing mining rules, if this item_stack is a tool.
+    /// Tool component containing mining rules, if this item stack is a tool.
     #[serde(rename = "minecraft:tool")]
     pub tool: Option<ToolComponent>,
-    /// Food component, present if this item_stack is edible.
+    /// Food component, present if this item stack is edible.
     #[serde(rename = "minecraft:food")]
     pub food: Option<FoodComponent>,
-    /// Equippable component, present if this item_stack can be worn in an armor slot.
+    /// Equippable component, present if this item stack can be worn in an armor slot.
     #[serde(rename = "minecraft:equippable")]
     pub equippable: Option<EquippableComponent>,
-    /// Consumable component, present if this item_stack has a custom use animation or duration.
+    /// Consumable component, present if this item stack has a custom use animation or duration.
     #[serde(rename = "minecraft:consumable")]
     pub consumable: Option<Consumable>,
-    /// Present if this item_stack can block attacks (e.g., shields).
+    /// Present if this item stack can block attacks (e.g., shields).
     #[serde(rename = "minecraft:blocks_attacks")]
     pub blocks_attacks: Option<BlocksAttacks>,
-    /// Present if this item_stack grants death protection (e.g., totem of undying).
+    /// Present if this item stack grants death protection (e.g., totem of undying).
     #[serde(rename = "minecraft:death_protection")]
     pub death_protection: Option<DeathProtection>,
-    /// Damage type resistance, if this item_stack is immune to specific damage types.
+    /// Damage type resistance, if this item stack is immune to specific damage types.
     #[serde(rename = "minecraft:damage_resistant")]
     pub damage_resistant: Option<DamageResistantComponent>,
     #[serde(rename = "minecraft:weapon")]
@@ -593,7 +593,7 @@ pub struct FoodComponent {
     nutrition: u8,
     /// Saturation modifier applied on eating.
     saturation: f32,
-    /// Whether the item_stack can be eaten even at full hunger, defaults to `false`.
+    /// Whether the item stack can be eaten even at full hunger, defaults to `false`.
     #[serde(default = "return_false")]
     can_always_eat: bool,
 }
@@ -609,7 +609,7 @@ pub struct ToolRule {
     correct_for_drops: Option<bool>,
 }
 
-/// A single attribute modifier applied when the item_stack is held or worn.
+/// A single attribute modifier applied when the item stack is held or worn.
 #[derive(Deserialize, Clone)]
 pub struct Modifier {
     /// Namespaced attribute key (e.g., `"minecraft:attack_damage"`).
@@ -683,10 +683,10 @@ pub struct BlocksAttacks {
     // TODO
 }
 
-/// Deserialized damage-resistance component indicating which damage types the item_stack resists.
+/// Deserialized damage-resistance component indicating which damage types the item stack resists.
 #[derive(Deserialize, Clone)]
 pub struct DamageResistantComponent {
-    /// Namespaced damage type tag the item_stack is immune to.
+    /// Namespaced damage type tag the item stack is immune to.
     pub types: String,
 }
 #[derive(Deserialize, Clone)]
@@ -696,12 +696,12 @@ pub enum StringOrList {
     List(Vec<String>)
 }
 
-/// Deserialized equippable component describing how an item_stack is worn or equipped.
+/// Deserialized equippable component describing how an item stack is worn or equipped.
 #[derive(Deserialize, Clone)]
 pub struct EquippableComponent {
-    /// Equipment slot the item_stack occupies (e.g., `"head"`, `"chest"`).
+    /// Equipment slot the item stack occupies (e.g., `"head"`, `"chest"`).
     pub slot: String,
-    /// Sound event played when the item_stack is equipped; uses a generic fallback if absent.
+    /// Sound event played when the item stack is equipped; uses a generic fallback if absent.
     pub equip_sound: Option<String>,
     /// Texture asset identifier for the equipped model, if any.
     pub asset_id: Option<String>,
@@ -710,16 +710,16 @@ pub struct EquippableComponent {
     pub allowed_entities: Option<StringOrList>,
     #[serde(default = "_true")]
     pub dispensable: bool,
-    /// Whether shift-clicking swaps the item_stack into the equipment slot, defaults to `true`.
+    /// Whether shift-clicking swaps the item stack into the equipment slot, defaults to `true`.
     #[serde(default = "_true")]
     pub swappable: bool,
-    /// Whether the item_stack takes damage when the wearer is hurt, defaults to `true`.
+    /// Whether the item stack takes damage when the wearer is hurt, defaults to `true`.
     #[serde(default = "_true")]
     pub damage_on_hurt: bool,
     /// Whether right-clicking an entity equips the item_stack, defaults to `false`.
     #[serde(default)]
     pub equip_on_interact: bool,
-    /// Whether shears can remove this item_stack from an entity, defaults to `false`.
+    /// Whether shears can remove this item stack from an entity, defaults to `false`.
     #[serde(default)]
     pub can_be_sheared: bool,
     /// Sound event played when sheared off, if any.
@@ -739,7 +739,7 @@ pub enum Operation {
     AddMultipliedTotal,
 }
 
-/// Reads `items.json` and generates the complete item_stack registry `TokenStream`.
+/// Reads `items.json` and generates the complete item stack registry `TokenStream`.
 pub fn build() -> TokenStream {
     let items: BTreeMap<String, Item> =
         serde_json::from_str(&fs::read_to_string("../assets/items.json").unwrap())
@@ -828,7 +828,7 @@ pub fn build() -> TokenStream {
                 )
             }
 
-            #[doc = "Try to parse an item_stack from a resource location string."]
+            #[doc = "Try to parse an item stack from a resource location string."]
             pub fn from_registry_key(name: &str) -> Option<&'static Self> {
                 let name = name.strip_prefix("minecraft:").unwrap_or(name);
                 match name {
@@ -837,7 +837,7 @@ pub fn build() -> TokenStream {
                 }
             }
 
-            #[doc = "Try to parse an item_stack from a raw id."]
+            #[doc = "Try to parse an item stack from a raw id."]
             pub const fn from_id(id: u16) -> Option<&'static Self> {
                 match id {
                     #type_from_raw_id_arms

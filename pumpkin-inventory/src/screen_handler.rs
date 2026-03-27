@@ -817,7 +817,7 @@ pub trait ScreenHandler: Send + Sync {
                     MouseClick::Right
                 };
 
-                // Drop item_stack if outside inventory
+                // Drop item stack if outside inventory
                 if slot_index == SLOT_INDEX_OUTSIDE {
                     let mut cursor_stack = self.get_behaviour().cursor_stack.lock().await;
                     if !cursor_stack.is_empty() {

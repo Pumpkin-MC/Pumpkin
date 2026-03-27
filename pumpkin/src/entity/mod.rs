@@ -239,7 +239,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         })
     }
 
-    /// Called when a player right-clicks this entity with an item_stack.
+    /// Called when a player right-clicks this entity with an item stack.
     /// Returns true if the interaction was handled.
     fn interact<'a>(
         &'a self,
@@ -249,7 +249,7 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async { false })
     }
 
-    /// Called when a player collides with a entity
+    /// Called when a player collides with an entity
     fn on_player_collision<'a>(&'a self, _player: &'a Arc<Player>) -> EntityBaseFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -378,7 +378,7 @@ pub struct Entity {
     pub entity_id: i32,
     /// A persistent, unique identifier for the entity
     pub entity_uuid: uuid::Uuid,
-    /// The type of entity (e.g., player, zombie, item_stack)
+    /// The type of entity (e.g., player, zombie, item)
     pub entity_type: &'static EntityType,
     /// The world in which the entity exists.
     /// Uses `ArcSwap` to allow atomic updates when changing dimensions.

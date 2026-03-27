@@ -37,13 +37,13 @@ impl ItemBehaviour for EggItem {
                 )
                 .await;
 
-            // Capture the held item_stack stack and pass it to the thrown egg entity
+            // Capture the held item stack and pass it to the thrown egg entity
             let item_stack: ItemStack = player.inventory.held_item().lock().await.clone();
 
             let entity = Entity::new(world.clone(), position, &EntityType::EGG);
             let egg = EggEntity::new_shot(entity, &player.living_entity.entity).await;
 
-            // Propagate the item_stack stack so clients show correct variant
+            // Propagate the item stack so clients show correct variant
             egg.set_item_stack(item_stack.clone()).await;
 
             let yaw = player.living_entity.entity.yaw.load();

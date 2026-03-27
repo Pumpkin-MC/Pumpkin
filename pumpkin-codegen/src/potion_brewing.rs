@@ -9,7 +9,7 @@ struct PotionBrewing {
     //potion_types: Vec<Vec<String>>,
     /// Recipes that transform one potion into another using a brewing ingredient.
     potion_recipes: Vec<Recipes>,
-    /// Recipes that transform one item_stack into another using a brewing ingredient.
+    /// Recipes that transform one item stack into another using a brewing ingredient.
     item_recipes: Vec<Recipes>,
 }
 

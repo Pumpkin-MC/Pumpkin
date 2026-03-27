@@ -10,9 +10,9 @@ use super::{TextComponent, TextComponentBase};
 pub enum HoverEvent {
     /// Displays a tooltip with the given text.
     ShowText { value: Vec<TextComponentBase> },
-    /// Shows an item_stack.
+    /// Shows an item.
     ShowItem {
-        /// Resource identifier of the item_stack.
+        /// Resource identifier of the item.
         id: Cow<'static, str>,
         /// Number of the items in the stack.
         #[serde(default, skip_serializing_if = "Option::is_none")]

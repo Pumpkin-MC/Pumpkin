@@ -256,7 +256,7 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
     registry
         .register_permission(Permission::new(
             "minecraft:command.give",
-            "Gives an item_stack to a player",
+            "Gives an item stack to a player",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();

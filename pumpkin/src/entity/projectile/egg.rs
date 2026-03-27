@@ -58,7 +58,7 @@ impl EggEntity {
         }
     }
 
-    /// Set the item_stack stack shown by this thrown egg
+    /// Set the item stack shown by this thrown egg
     pub async fn set_item_stack(&self, item_stack: ItemStack) {
         let mut write = self.item_stack.write().await;
         *write = item_stack;
@@ -73,7 +73,7 @@ impl EntityBase for EggEntity {
             let entity = self.get_entity();
             let stack = self.item_stack.read().await;
 
-            // Sync the item_stack stack so the client renders the correct color/variant
+            // Sync the item stack so the client renders the correct color/variant
             entity
                 .send_meta_data(&[Metadata::new(
                     TrackedData::DATA_ITEM,
@@ -159,7 +159,7 @@ impl EntityBase for EggEntity {
                 // Read the stack stored in set_item_stack
                 //let stack = self.item_stack.lock().await;
 
-                // TODO: Map the item_stack ID to the chicken variant
+                // TODO: Map the item stack ID to the chicken variant
                 // let variant = match stack.item_stack.id {
                 //     id if id == Item::BLUE_EGG.id => EntityVariant::Cold,
                 //     id if id == Item::BROWN_EGG.id => EntityVariant::Warm,

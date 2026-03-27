@@ -85,7 +85,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
 
                 let item_id = seq
                     .next_element::<VarInt>()?
-                    .ok_or_else(|| de::Error::custom("No item_stack id VarInt!"))?;
+                    .ok_or_else(|| de::Error::custom("No item stack id VarInt!"))?;
 
                 let num_to_add = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
                 let num_to_remove = seq.next_element::<VarInt>()?.map_or(0, |v| v.0);
@@ -136,7 +136,7 @@ impl<'de> Deserialize<'de> for ItemStackSerializer<'static> {
                 let item_id_u16: u16 = item_id
                     .0
                     .try_into()
-                    .map_err(|_| de::Error::custom("Invalid item_stack id!"))?;
+                    .map_err(|_| de::Error::custom("Invalid item stack id!"))?;
 
                 Ok(ItemStackSerializer(Cow::Owned(
                     ItemStack::new_with_component(
@@ -285,14 +285,14 @@ impl<'de> Deserialize<'de> for OptionalItemStackHash {
                 if is_some {
                     let item_id = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No item_stack id VarInt!"))?;
+                        .ok_or(de::Error::custom("No item stack id VarInt!"))?;
                     let count = seq
                         .next_element::<VarInt>()?
-                        .ok_or(de::Error::custom("No item_stack count VarInt!"))?;
+                        .ok_or(de::Error::custom("No item stack count VarInt!"))?;
 
                     let hashed_components = seq
                         .next_element::<ItemComponentHash>()?
-                        .ok_or(de::Error::custom("No item_stack component hash!"))?;
+                        .ok_or(de::Error::custom("No item stack component hash!"))?;
 
                     let item_stack_hash = ItemStackHash {
                         item_id,

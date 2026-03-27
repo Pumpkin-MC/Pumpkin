@@ -1164,7 +1164,7 @@ pub fn build() -> TokenStream {
                 Self::from_id(raw_id)
             }
 
-            #[doc = r" Try to parse a block from an item_stack id."]
+            #[doc = r" Try to parse a block from an item stack id."]
             pub const fn from_item_id(id: u16) -> Option<&'static Self> {
                 #[allow(unreachable_patterns)]
                 match id {

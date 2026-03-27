@@ -104,7 +104,7 @@ impl DragHandler {
                 }
             }
             MouseDragType::Left => {
-                // TODO: Handle dragging a stack with a greater amount than the item_stack allows as max unstackable.
+                // TODO: Handle dragging a stack with a greater amount than the item stack allows as max unstackable.
                 // In that specific case, follow `MouseDragType::Right` behaviours instead!
 
                 let changing_slots = drag.possibly_changing_slots(&slots, carried_item.item_stack.id);

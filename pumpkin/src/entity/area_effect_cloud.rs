@@ -16,7 +16,7 @@ use tokio::sync::Mutex;
 /// The effect cloud entity that is spawned where a lingering potion lands.
 pub struct AreaEffectCloudEntity {
     pub entity: Entity,
-    /// Stored potion item_stack stack (may be empty) to read effects from.
+    /// Stored potion item stack (may be empty) to read effects from.
     pub item_stack: Mutex<ItemStack>,
     /// Active potion effects as tuples: (`StatusEffect`, `duration_ticks`, `amplifier`, `ambient`, `show_particles`, `show_icon`)
     pub effects: Mutex<Vec<EffectEntry>>,

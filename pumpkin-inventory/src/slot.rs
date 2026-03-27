@@ -39,7 +39,7 @@ pub trait Slot: Send + Sync {
         Box::pin(async {}) // Default implementation
     }
 
-    /// Callback for when an item_stack is taken from the slot.
+    /// Callback for when an item is taken from the slot.
     ///
     /// Also see: `safe_take`
     fn on_take_item<'a>(

@@ -114,14 +114,14 @@ impl ScreenHandler for BrewingScreenHandler {
                     .await
             } else {
                 // Moving from player inventory to brewing stand
-                // Check item_stack type to determine target slot
+                // Check item stack type to determine target slot
 
-                // Check if item_stack has potion contents (for slots 0-2)
+                // Check if item stack has potion contents (for slots 0-2)
                 let has_potion_contents = stack
                     .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
                     .is_some();
 
-                // Check if item_stack is brewing fuel (for slot 4)
+                // Check if item stack is brewing fuel (for slot 4)
                 let is_fuel = stack
                     .get_item()
                     .is_tagged_with("minecraft:brewing_fuel")

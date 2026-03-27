@@ -40,7 +40,7 @@ impl ItemStack {
         self.item.has_tag(&tag::Item::MINECRAFT_FOOT_ARMOR)
     }
 
-    /// `true` if item_stack is in `#minecraft:enchantable/armor` (selects armor Unbreaking formula).
+    /// `true` if item stack is in `#minecraft:enchantable/armor` (selects armor Unbreaking formula).
     #[inline]
     #[must_use]
     pub fn is_armor(&self) -> bool {
@@ -49,7 +49,7 @@ impl ItemStack {
 
     /// Test-only predicates: identify 2-durability tools (axes/pickaxes/shovels/hoes).
     /// In production, durability cost is data-driven via the `Weapon` component.
-    /// These helpers exist only to validate item_stack categorization in tests.
+    /// These helpers exist only to validate item stack categorization in tests.
     #[cfg(test)]
     #[inline]
     #[must_use]

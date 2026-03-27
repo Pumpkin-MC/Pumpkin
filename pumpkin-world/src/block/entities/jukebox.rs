@@ -15,7 +15,7 @@ use crate::block::entities::BlockEntity;
 /// Matches vanilla's `JukeboxBlockEntity`
 pub struct JukeboxBlockEntity {
     position: BlockPos,
-    /// The record item_stack stored in the jukebox (`RecordItem` in NBT)
+    /// The record item stack stored in the jukebox (`RecordItem` in NBT)
     record_stack: Arc<Mutex<ItemStack>>,
     /// Ticks since the current song started playing
     ticks_since_song_started: AtomicU64,

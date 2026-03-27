@@ -1538,7 +1538,7 @@ impl LivingEntity {
                     // Items without `EquippableImpl` component take damage freely.
                     // Items with `damage_on_hurt: false` (e.g. elytra) are exempt from armor hit durability.
                     // PERF: Component lookup runs O(1) per armor slot (max 4 per hit). Caching
-                    // at the item_stack type level could optimize, but belongs in a broader caching pass.
+                    // at the item stack type level could optimize, but belongs in a broader caching pass.
                     let takes_damage = stack
                         .get_data_component::<EquippableImpl>()
                         .is_none_or(|equippable| equippable.damage_on_hurt);

@@ -55,13 +55,13 @@ impl<'de> Deserialize<'de> for SClickSlot {
                         .ok_or(de::Error::custom("Unable to parse slot"))?;
                     let slot = seq
                         .next_element::<OptionalItemStackHash>()?
-                        .ok_or(de::Error::custom("Unable to parse item_stack"))?;
+                        .ok_or(de::Error::custom("Unable to parse item"))?;
                     array_of_changed_slots.push((slot_number, slot));
                 }
 
                 let carried_item = seq
                     .next_element::<OptionalItemStackHash>()?
-                    .ok_or(de::Error::custom("Failed to decode carried item_stack"))?;
+                    .ok_or(de::Error::custom("Failed to decode carried item"))?;
 
                 let mode: SlotActionType = SlotActionType::try_from(mode.0)
                     .map_err(|_| de::Error::custom("Invalid slot action type"))?;
@@ -92,10 +92,10 @@ pub enum SlotActionType {
     /// Exchanges items between a slot and a hotbar slot. This is usually triggered by the player pressing a 1-9 number key while hovering over a slot.
     /// When the action type is swap, the click data is the hotbar slot to swap with (0-8).
     Swap,
-    /// Clones the item_stack in the slot. Usually triggered by middle clicking an item_stack in creative mode.
+    /// Clones the item in the slot. Usually triggered by middle clicking an item in creative mode.
     Clone,
-    /// Throws the item_stack out of the inventory. This is usually triggered by the player pressing Q while hovering over a slot, or clicking outside the window.
-    /// When the action type is throw, the click data determines whether to throw a whole stack (1) or a single item_stack from that stack (0).
+    /// Throws the item out of the inventory. This is usually triggered by the player pressing Q while hovering over a slot, or clicking outside the window.
+    /// When the action type is throw, the click data determines whether to throw a whole stack (1) or a single item from that stack (0).
     Throw,
     /// Drags items between multiple slots. This is usually triggered by the player clicking and dragging between slots.
     /// This action happens in 3 stages. Stage 0 signals that the drag has begun, and stage 2 signals that the drag has ended. In between multiple stage 1s signal which slots were dragged on.

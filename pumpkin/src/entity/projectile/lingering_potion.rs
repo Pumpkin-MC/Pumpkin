@@ -67,7 +67,7 @@ impl EntityBase for LingeringPotionEntity {
             let entity = self.get_entity();
             let stack = self.item_stack.read().await;
 
-            // Sync the item_stack stack so the client renders the correct potion type
+            // Sync the item stack so the client renders the correct potion type
             entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
                     pumpkin_data::tracked_data::TrackedData::DATA_ITEM,
@@ -117,7 +117,7 @@ impl EntityBase for LingeringPotionEntity {
                 )
                 .await;
 
-            // Read stored item_stack stack and compute potion effects
+            // Read stored item stack and compute potion effects
             let stack = self.item_stack.read().await.clone();
             let effects = crate::item::potion::PotionContents::read_potion_effects(&stack);
 

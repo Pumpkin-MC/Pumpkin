@@ -59,12 +59,12 @@ impl BlockBehaviour for ComposterBlock {
             let mut item_stack = args.item_stack.lock().await;
             let item_id = item_stack.item.id;
 
-            // Check if the item_stack is consumable by the composter
+            // Check if the item stack is consumable by the composter
             let Some(chance) = get_composter_increase_chance_from_item_id(item_id) else {
                 return BlockActionResult::Pass;
             };
 
-            // Consume one item_stack from the stack (if in survival mode)
+            // Consume one item stack from the stack (if in survival mode)
             if !args.player.has_infinite_materials() {
                 item_stack.decrement(1);
             }

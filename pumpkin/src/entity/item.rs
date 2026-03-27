@@ -144,7 +144,7 @@ impl ItemEntity {
                 (other, other_stack, self, self_stack)
             };
 
-        // Vanilla code adds a .min(64). Not needed with Vanilla item_stack data
+        // Vanilla code adds a .min(64). Not needed with Vanilla item stack data
 
         let max_size = stack1.get_max_stack_size();
 

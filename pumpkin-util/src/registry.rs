@@ -2,10 +2,10 @@ use serde::de::{Error, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt::Formatter;
 
-/// Represents either a single item_stack or a tag reference.
+/// Represents either a single item or a tag reference.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum TagType {
-    /// A single item_stack identified by its name.
+    /// A single item identified by its name.
     Item(String),
     /// A tag reference, usually prefixed with `#`.
     Tag(String),
@@ -15,7 +15,7 @@ impl TagType {
     /// Serializes the tag type into a string representation.
     ///
     /// # Returns
-    /// - For `Item`, returns the item_stack name.
+    /// - For `Item`, returns the item name.
     /// - For `Tag`, returns the tag prefixed with `#`.
     #[must_use]
     pub fn serialize(&self) -> String {

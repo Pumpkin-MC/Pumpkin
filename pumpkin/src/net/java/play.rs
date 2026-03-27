@@ -1683,7 +1683,7 @@ impl JavaClient {
         let mut stack = item.lock().await;
 
         if stack.is_empty() {
-            // TODO item_stack cool down
+            // TODO item stack cool down
             // If the hand is empty we stop here
             return Ok(());
         }
@@ -1697,7 +1697,7 @@ impl JavaClient {
             )
             .await;
 
-        // Check if the item_stack is a block, because not every item_stack can be placed :D
+        // Check if the item stack is a block, because not every item stack can be placed :D
         let item_id = stack.item.id;
         if let Some(block) = Block::from_item_id(item_id) {
             should_try_decrement = self
@@ -1717,7 +1717,7 @@ impl JavaClient {
         drop(stack);
 
         // Broadcast the break entity status before the slot sync; the client
-        // needs the old item_stack texture in the slot for break particles.
+        // needs the old item stack texture in the slot for break particles.
         if !before.is_empty() && after.is_empty() {
             let slot = if slot_index == player.inventory.get_selected_slot() as usize {
                 &EquipmentSlot::MAIN_HAND

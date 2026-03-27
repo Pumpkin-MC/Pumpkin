@@ -22,9 +22,9 @@ pub enum DamageResult {
     /// No damage was applied (zero/negative amount, not damageable, unbreakable,
     /// or Unbreaking negated every point).
     Untouched,
-    /// Damage was applied and the item_stack is still alive.
+    /// Damage was applied and the item stack is still alive.
     Damaged,
-    /// The item_stack broke: one item_stack was consumed from the stack (durability reset to 0),
+    /// The item stack broke: one item stack was consumed from the stack (durability reset to 0),
     /// or the stack is now empty if it had only one item_stack. Callers should always
     /// broadcast the break status — the client handles both cases correctly.
     Broken,
@@ -199,8 +199,8 @@ impl ItemStack {
         }
     }
 
-    /// Apply durability damage to this item_stack and return the outcome.
-    /// Callers must check the return value to handle break broadcasts and item_stack stack updates.
+    /// Apply durability damage to this item stack and return the outcome.
+    /// Callers must check the return value to handle break broadcasts and item stack updates.
     /// TODO: Restore #[must_use] once all callsites (esp. tool/mob block-hit/damage sites)
     /// implement proper DamageResult::Broken handling instead of suppressing with let _ =.
     /// Without this enforcement, the fix is incomplete vs vanilla break behavior.
@@ -233,9 +233,9 @@ impl ItemStack {
 
         let new_damage = self.get_damage().saturating_add(applied);
         if new_damage >= max_damage {
-            // Vanilla behavior: breaking consumes one item_stack from the stack and resets
+            // Vanilla behavior: breaking consumes one item stack from the stack and resets
             // durability to 0. A single damage call never breaks more than one item_stack,
-            // regardless of the damage amount. This matches vanilla item_stack stack behavior.
+            // regardless of the damage amount. This matches vanilla item stack behavior.
             if self.item_count > 1 {
                 self.item_count = self.item_count.saturating_sub(1);
                 self.set_damage(0);
@@ -480,12 +480,12 @@ impl ItemStack {
         // Remove the "minecraft:" prefix if present
         let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(full_id);
 
-        // Try to get item_stack by registry key
+        // Try to get item stack by registry key
         let item = Item::from_registry_key(registry_key)?;
 
         let count = compound.get_int("count")? as u8;
 
-        // Create the item_stack stack
+        // Create the item stack
         let mut item_stack = Self::new(count, item);
 
         // Process any additional data in the components compound
@@ -759,7 +759,7 @@ mod tests {
         );
     }
 
-    // ── stacked item_stack breaking ────────────────────────────────────────
+    // ── stacked item stack breaking ────────────────────────────────────────
 
     #[test]
     fn damage_stacked_item_breaks_one_and_resets_durability() {
