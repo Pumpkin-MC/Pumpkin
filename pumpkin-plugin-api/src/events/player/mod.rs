@@ -1,4 +1,5 @@
 pub mod changed_main_hand;
+pub mod egg_throw;
 pub mod exp_change;
 pub mod fish;
 pub mod item_held;
@@ -15,6 +16,7 @@ pub mod player_permission_check;
 pub mod player_teleport;
 
 pub use changed_main_hand::*;
+pub use egg_throw::*;
 pub use exp_change::*;
 pub use fish::*;
 pub use item_held::*;
