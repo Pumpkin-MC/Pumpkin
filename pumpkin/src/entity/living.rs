@@ -25,6 +25,7 @@ use crate::block::OnLandedUponArgs;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use crate::entity::attributes::{AttributeInstance, DEFAULT_ATTRIBUTE_REGISTRY};
+use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
@@ -1735,6 +1736,14 @@ impl LivingEntity {
     pub fn get_movement(&self) -> Vector3<f64> {
         self.entity.movement.load()
     }
+
+    fn hurt_sound(&self) -> Sound {
+        if self.entity.entity_type == &EntityType::SLIME {
+            SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
+        } else {
+            Sound::EntityGenericHurt
+        }
+    }
 }
 
 impl NBTStorage for LivingEntity {
@@ -1811,8 +1820,199 @@ impl NBTStorage for LivingEntity {
     }
 }
 
-impl EntityBase for LivingEntity {
+impl LivingEntity {
     #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_arguments)]
+    async fn damage_with_context_inner(
+        &self,
+        caller: &dyn EntityBase,
+        mut amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // Check invulnerability before applying damage
+        if self.entity.is_invulnerable_to(&damage_type) {
+            return false;
+        }
+
+        if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
+            return false; // Dying or dead
+        }
+
+        if amount < 0.0 {
+            return false;
+        }
+
+        let world = self.entity.world.load();
+        let is_fire_damage = damage_type == DamageType::IN_FIRE
+            || damage_type == DamageType::ON_FIRE
+            || damage_type == DamageType::LAVA
+            || damage_type == DamageType::HOT_FLOOR;
+
+        // Fire damage can be prevented by either game rules or fire resistance
+        if is_fire_damage {
+            // Check game rule for fire damage (only for players)
+            if self.entity.entity_type == &EntityType::PLAYER
+                && !world.level_info.load().game_rules.fire_damage
+            {
+                return false;
+            }
+
+            // Check for fire resistance effect
+            if self.has_effect(&StatusEffect::FIRE_RESISTANCE).await {
+                return false;
+            }
+        }
+
+        // Vanilla parity: entities in FREEZE_HURTS_EXTRA_TYPES take 5x freezing damage.
+        if damage_type == DamageType::FREEZE
+            && self
+                .entity
+                .entity_type
+                .has_tag(&tag::EntityType::MINECRAFT_FREEZE_HURTS_EXTRA_TYPES)
+        {
+            amount *= 5.0;
+        }
+
+        // These damage types bypass the hurt cooldown and death protection
+        let bypasses_cooldown_protection =
+            damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
+
+        // Apply Resistance effect reduction (20% per level), excluding bypasses_cooldown_protection and starvation damage
+        let resistance_reduction =
+            if !bypasses_cooldown_protection && damage_type != DamageType::STARVE {
+                self.get_effect(&pumpkin_data::effect::StatusEffect::RESISTANCE)
+                    .await
+                    .map_or(0.0, |e| 0.2 * (e.amplifier + 1) as f32)
+            } else {
+                0.0
+            };
+
+        // Total damage after reductions
+        let effective_amount = amount * (1.0 - resistance_reduction);
+
+        // Apply hurt cooldown logic
+        let last_damage = self.last_damage_taken.load();
+        let (damage_amount, play_sound) =
+            if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
+                if effective_amount <= last_damage {
+                    return false;
+                }
+                (effective_amount - last_damage, false)
+            } else {
+                self.hurt_cooldown.store(20, Relaxed);
+                (effective_amount, true)
+            };
+
+        // Finalize state
+        self.last_damage_taken.store(amount);
+        let damage_amount = damage_amount.max(0.0);
+
+        let config = &world.server.upgrade().unwrap().advanced_config.pvp;
+
+        if config.hurt_animation {
+            let entity_id = VarInt(self.entity.entity_id);
+            let hurt_yaw = source.map_or(0.0, |source| {
+                let src = source.get_entity().pos.load();
+                let tgt = self.entity.pos.load();
+                (src.z - tgt.z).atan2(src.x - tgt.x).to_degrees() as f32 - self.entity.yaw.load()
+            });
+            world
+                .broadcast_packet_all(&CHurtAnimation::new(entity_id, hurt_yaw))
+                .await;
+        }
+
+        world
+            .broadcast_packet_all(&CDamageEvent::new(
+                self.entity.entity_id.into(),
+                damage_type.id.into(),
+                source.map(|e| e.get_entity().entity_id.into()),
+                cause.map(|e| e.get_entity().entity_id.into()),
+                position,
+            ))
+            .await;
+
+        // Try to spawn infested silverfish
+        self.try_spawn_infested_silverfish().await;
+
+        if play_sound {
+            world
+                .play_sound(
+                    self.hurt_sound(),
+                    SoundCategory::Players,
+                    &self.entity.pos.load(),
+                )
+                .await;
+
+            if let Some(source) = source {
+                let source_pos = source.get_entity().pos.load();
+                let target_pos = self.entity.pos.load();
+                let dx = source_pos.x - target_pos.x;
+                let dz = source_pos.z - target_pos.z;
+                self.entity.apply_knockback(0.4, dx, dz);
+                self.entity.send_velocity().await;
+            }
+        }
+
+        // Consume absorption first, then apply remaining damage to health
+        let mut remaining = damage_amount;
+        let current_abs = self.absorption.load();
+        if current_abs > 0.0 {
+            if current_abs >= remaining {
+                let new_abs = current_abs - remaining;
+                self.set_absorption(new_abs).await;
+                remaining = 0.0;
+            } else {
+                remaining -= current_abs;
+                self.set_absorption(0.0).await;
+            }
+
+            // Track attacker for RevengeGoal (only after confirming damage)
+            if let Some(attacker) = cause.or(source) {
+                self.last_attacker_id
+                    .store(attacker.get_entity().entity_id, Relaxed);
+                self.last_attacked_time
+                    .store(self.entity.age.load(Relaxed), Relaxed);
+            }
+        }
+
+        // Apply remaining damage to health (clamped)
+        let max_h = self.get_max_health();
+        let new_health = self.health.load() - remaining;
+        let clamped_health = new_health.max(0.0).min(max_h);
+        if remaining > 0.0 {
+            self.set_health(clamped_health).await;
+
+            // Track attacker for RevengeGoal (only after confirming damage)
+            if let Some(attacker) = cause.or(source) {
+                self.last_attacker_id
+                    .store(attacker.get_entity().entity_id, Relaxed);
+                self.last_attacked_time
+                    .store(self.entity.age.load(Relaxed), Relaxed);
+            }
+        }
+
+        // Check if the entity died and isn't protected by a death protection mechanic (ex. totem of undying)
+        if clamped_health <= 0.0
+            && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
+        {
+            self.on_death(damage_type, source, cause).await;
+        }
+
+        // Armor durability is based on incoming raw damage, not post-absorption remaining.
+        // Armor loses floor(raw_damage / 4) durability, minimum 1.
+        // Not applied when the source is in `#minecraft:bypasses_armor`.
+        if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
+            self.damage_armor_items(caller, damage_amount).await;
+        }
+
+        true
+    }
+}
+
+impl EntityBase for LivingEntity {
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -1823,186 +2023,8 @@ impl EntityBase for LivingEntity {
         cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            let mut amount = amount;
-
-            // Check invulnerability before applying damage
-            if self.entity.is_invulnerable_to(&damage_type) {
-                return false;
-            }
-
-            if self.health.load() <= 0.0 || self.dead.load(Relaxed) {
-                return false; // Dying or dead
-            }
-
-            if amount < 0.0 {
-                return false;
-            }
-
-            let world = self.entity.world.load();
-            let is_fire_damage = damage_type == DamageType::IN_FIRE
-                || damage_type == DamageType::ON_FIRE
-                || damage_type == DamageType::LAVA
-                || damage_type == DamageType::HOT_FLOOR;
-
-            // Fire damage can be prevented by either game rules or fire resistance
-            if is_fire_damage {
-                // Check game rule for fire damage (only for players)
-                if self.entity.entity_type == &EntityType::PLAYER
-                    && !world.level_info.load().game_rules.fire_damage
-                {
-                    return false;
-                }
-
-                // Check for fire resistance effect
-                if self.has_effect(&StatusEffect::FIRE_RESISTANCE).await {
-                    return false;
-                }
-            }
-
-            // Vanilla parity: entities in FREEZE_HURTS_EXTRA_TYPES take 5x freezing damage.
-            if damage_type == DamageType::FREEZE
-                && self
-                    .entity
-                    .entity_type
-                    .has_tag(&tag::EntityType::MINECRAFT_FREEZE_HURTS_EXTRA_TYPES)
-            {
-                amount *= 5.0;
-            }
-
-            // These damage types bypass the hurt cooldown and death protection
-            let bypasses_cooldown_protection =
-                damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
-
-            // Apply Resistance effect reduction (20% per level), excluding bypasses_cooldown_protection and starvation damage
-            let resistance_reduction =
-                if !bypasses_cooldown_protection && damage_type != DamageType::STARVE {
-                    self.get_effect(&pumpkin_data::effect::StatusEffect::RESISTANCE)
-                        .await
-                        .map_or(0.0, |e| 0.2 * (e.amplifier + 1) as f32)
-                } else {
-                    0.0
-                };
-
-            // Total damage after reductions
-            let effective_amount = amount * (1.0 - resistance_reduction);
-
-            // Apply hurt cooldown logic
-            let last_damage = self.last_damage_taken.load();
-            let (damage_amount, play_sound) =
-                if self.hurt_cooldown.load(Relaxed) > 10 && !bypasses_cooldown_protection {
-                    if effective_amount <= last_damage {
-                        return false;
-                    }
-                    (effective_amount - last_damage, false)
-                } else {
-                    self.hurt_cooldown.store(20, Relaxed);
-                    (effective_amount, true)
-                };
-
-            // Finalize state
-            self.last_damage_taken.store(amount);
-            let damage_amount = damage_amount.max(0.0);
-
-            let config = &world.server.upgrade().unwrap().advanced_config.pvp;
-
-            if config.hurt_animation {
-                let entity_id = VarInt(self.entity.entity_id);
-                let hurt_yaw = source.map_or(0.0, |source| {
-                    let src = source.get_entity().pos.load();
-                    let tgt = self.entity.pos.load();
-                    (src.z - tgt.z).atan2(src.x - tgt.x).to_degrees() as f32
-                        - self.entity.yaw.load()
-                });
-                world
-                    .broadcast_packet_all(&CHurtAnimation::new(entity_id, hurt_yaw))
-                    .await;
-            }
-
-            world
-                .broadcast_packet_all(&CDamageEvent::new(
-                    self.entity.entity_id.into(),
-                    damage_type.id.into(),
-                    source.map(|e| e.get_entity().entity_id.into()),
-                    cause.map(|e| e.get_entity().entity_id.into()),
-                    position,
-                ))
-                .await;
-
-            // Try to spawn infested silverfish
-            self.try_spawn_infested_silverfish().await;
-
-            if play_sound {
-                world
-                    .play_sound(
-                        Sound::EntityGenericHurt,
-                        SoundCategory::Players,
-                        &self.entity.pos.load(),
-                    )
-                    .await;
-
-                if let Some(source) = source {
-                    let source_pos = source.get_entity().pos.load();
-                    let target_pos = self.entity.pos.load();
-                    let dx = source_pos.x - target_pos.x;
-                    let dz = source_pos.z - target_pos.z;
-                    self.entity.apply_knockback(0.4, dx, dz);
-                    self.entity.send_velocity().await;
-                }
-            }
-
-            // Consume absorption first, then apply remaining damage to health
-            let mut remaining = damage_amount;
-            let current_abs = self.absorption.load();
-            if current_abs > 0.0 {
-                if current_abs >= remaining {
-                    let new_abs = current_abs - remaining;
-                    self.set_absorption(new_abs).await;
-                    remaining = 0.0;
-                } else {
-                    remaining -= current_abs;
-                    self.set_absorption(0.0).await;
-                }
-
-                // Track attacker for RevengeGoal (only after confirming damage)
-                if let Some(attacker) = cause.or(source) {
-                    self.last_attacker_id
-                        .store(attacker.get_entity().entity_id, Relaxed);
-                    self.last_attacked_time
-                        .store(self.entity.age.load(Relaxed), Relaxed);
-                }
-            }
-
-            // Apply remaining damage to health (clamped)
-            let max_h = self.get_max_health();
-            let new_health = self.health.load() - remaining;
-            let clamped_health = new_health.max(0.0).min(max_h);
-            if remaining > 0.0 {
-                self.set_health(clamped_health).await;
-
-                // Track attacker for RevengeGoal (only after confirming damage)
-                if let Some(attacker) = cause.or(source) {
-                    self.last_attacker_id
-                        .store(attacker.get_entity().entity_id, Relaxed);
-                    self.last_attacked_time
-                        .store(self.entity.age.load(Relaxed), Relaxed);
-                }
-            }
-
-            // Check if the entity died and isn't protected by a death protection mechanic (ex. totem of undying)
-            if clamped_health <= 0.0
-                && (bypasses_cooldown_protection || !self.try_use_death_protector(caller).await)
-            {
-                self.on_death(damage_type, source, cause).await;
-            }
-
-            // Armor durability is based on incoming raw damage, not post-absorption remaining.
-            // Armor loses floor(raw_damage / 4) durability, minimum 1.
-            // Not applied when the source is in `#minecraft:bypasses_armor`.
-            if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
-                self.damage_armor_items(caller, damage_amount).await;
-            }
-
-            true
+            self.damage_with_context_inner(caller, amount, damage_type, position, source, cause)
+                .await
         })
     }
 
