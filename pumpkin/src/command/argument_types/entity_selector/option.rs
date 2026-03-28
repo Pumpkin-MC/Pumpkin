@@ -1,7 +1,12 @@
-use crate::command::argument_types::entity_selector::parser::EntitySelectorParser;
+use crate::command::argument_types::FromStringReader;
+use crate::command::argument_types::entity_selector::parser::{EntitySelectorParser, Flags};
+use crate::command::argument_types::entity_selector::{EntitySelectorPredicate, Order};
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
+use crate::command::string_reader::StringReader;
 use pumpkin_data::translation;
+use pumpkin_util::GameMode;
+use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;
 use std::str::FromStr;
 
@@ -19,8 +24,11 @@ pub const SORT_UNKNOWN_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_SORT_IRREVERSIBLE);
 pub const GAMEMODE_INVALID_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID);
-pub const ENTITY_TYPE_INVALID_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_TYPE_INVALID);
+
+/// Temporary command error for an unsupported option.
+/// TODO: Remove this when all entity selector options are implemented.
+pub const UNIMPLEMENTED_OPTION_ERROR_TYPE: CommandErrorType<1> =
+    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_UNKNOWN);
 
 /// Options to customize an [`EntitySelectorParser`].
 ///
@@ -48,6 +56,23 @@ pub enum EntitySelectorOption {
     Scores,
     Advancements,
     Predicate,
+}
+
+/// Implements parsing for a coordinate option.
+macro_rules! coordinate_option_impl {
+    ($parser:ident, $vector:ident, $axis:ident) => {{
+        $parser.set_flag(Flags::WORLD_LIMITED, true);
+        $parser.$vector.$axis = Some($parser.reader.read_double()?);
+        Ok(())
+    }};
+}
+
+/// Implements parsing for a rotation option.
+macro_rules! rotation_option_impl {
+    ($parser:ident, $axis:ident) => {{
+        $parser.rotation.$axis = Some(FloatDegreeBounds::from_reader($parser.reader)?);
+        Ok(())
+    }};
 }
 
 pub struct InvalidEntitySelectorOptionError;
@@ -111,34 +136,13 @@ impl EntitySelectorOption {
         }
     }
 
-    pub const fn description_translation_key(self) -> &'static str {
-        match self {
-            Self::Name => translation::ARGUMENT_ENTITY_OPTIONS_NAME_DESCRIPTION,
-            Self::Distance => translation::ARGUMENT_ENTITY_OPTIONS_DISTANCE_DESCRIPTION,
-            Self::Level => translation::ARGUMENT_ENTITY_OPTIONS_LEVEL_DESCRIPTION,
-            Self::X => translation::ARGUMENT_ENTITY_OPTIONS_X_DESCRIPTION,
-            Self::Y => translation::ARGUMENT_ENTITY_OPTIONS_Y_DESCRIPTION,
-            Self::Z => translation::ARGUMENT_ENTITY_OPTIONS_Z_DESCRIPTION,
-            Self::Dx => translation::ARGUMENT_ENTITY_OPTIONS_DX_DESCRIPTION,
-            Self::Dy => translation::ARGUMENT_ENTITY_OPTIONS_DY_DESCRIPTION,
-            Self::Dz => translation::ARGUMENT_ENTITY_OPTIONS_DZ_DESCRIPTION,
-            Self::XRotation => translation::ARGUMENT_ENTITY_OPTIONS_X_ROTATION_DESCRIPTION,
-            Self::YRotation => translation::ARGUMENT_ENTITY_OPTIONS_Y_ROTATION_DESCRIPTION,
-            Self::Limit => translation::ARGUMENT_ENTITY_OPTIONS_LIMIT_DESCRIPTION,
-            Self::Sort => translation::ARGUMENT_ENTITY_OPTIONS_SORT_DESCRIPTION,
-            Self::Gamemode => translation::ARGUMENT_ENTITY_OPTIONS_GAMEMODE_DESCRIPTION,
-            Self::Team => translation::ARGUMENT_ENTITY_OPTIONS_TEAM_DESCRIPTION,
-            Self::Type => translation::ARGUMENT_ENTITY_OPTIONS_TYPE_DESCRIPTION,
-            Self::Tag => translation::ARGUMENT_ENTITY_OPTIONS_TAG_DESCRIPTION,
-            Self::Nbt => translation::ARGUMENT_ENTITY_OPTIONS_NBT_DESCRIPTION,
-            Self::Scores => translation::ARGUMENT_ENTITY_OPTIONS_SCORES_DESCRIPTION,
-            Self::Advancements => translation::ARGUMENT_ENTITY_OPTIONS_ADVANCEMENTS_DESCRIPTION,
-            Self::Predicate => translation::ARGUMENT_ENTITY_OPTIONS_PREDICATE_DESCRIPTION,
-        }
+    /// Returns the name required to specify this option as a [`TextComponent`].
+    pub fn name_component(self) -> TextComponent {
+        TextComponent::text(self.name())
     }
 
-    pub fn description(self) -> TextComponent {
-        TextComponent::translate(self.description_translation_key(), [])
+    fn inapplicable_error(self, reader: &StringReader) -> CommandSyntaxError {
+        INAPPLICABLE_OPTION_ERROR_TYPE.create(reader, self.name_component())
     }
 
     /// Modifies the provided [`EntitySelectorParser`].
@@ -150,18 +154,99 @@ impl EntitySelectorOption {
         self,
         parser: &mut EntitySelectorParser,
     ) -> Result<(), CommandSyntaxError> {
+        let i = parser.reader.cursor();
         match self {
+            Self::Distance => {
+                let bounds = DoubleBounds::from_reader(parser.reader)?;
+                if bounds.min().is_none_or(|n| n < 0.0) && bounds.max().is_none_or(|n| n < 0.0) {
+                    parser.reader.set_cursor(i);
+                    Err(DISTANCE_NEGATIVE_ERROR_TYPE.create(parser.reader))
+                } else {
+                    parser.distance = Some(bounds);
+                    parser.set_flag(Flags::WORLD_LIMITED, true);
+                    Ok(())
+                }
+            }
+            Self::Level => {
+                let bounds = IntBounds::from_reader(parser.reader)?;
+                if bounds.min().is_none_or(|n| n < 0) && bounds.max().is_none_or(|n| n < 0) {
+                    parser.reader.set_cursor(i);
+                    Err(LEVEL_NEGATIVE_ERROR_TYPE.create(parser.reader))
+                } else {
+                    parser.experience_level = Some(bounds);
+                    parser.set_includes_entities(false);
+                    Ok(())
+                }
+            }
+            Self::X => coordinate_option_impl!(parser, pos, x),
+            Self::Y => coordinate_option_impl!(parser, pos, y),
+            Self::Z => coordinate_option_impl!(parser, pos, z),
+            Self::Dx => coordinate_option_impl!(parser, delta, x),
+            Self::Dy => coordinate_option_impl!(parser, delta, y),
+            Self::Dz => coordinate_option_impl!(parser, delta, z),
+            Self::XRotation => rotation_option_impl!(parser, x),
+            Self::YRotation => rotation_option_impl!(parser, y),
+            Self::Limit => {
+                let limit = parser.reader.read_int()?;
+                if limit < 1 {
+                    parser.reader.set_cursor(i);
+                    Err(LIMIT_TOO_SMALL_ERROR_TYPE.create(parser.reader))
+                } else {
+                    parser.max_selected = limit;
+                    parser.set_flag(Flags::LIMIT_SET, true);
+                    Ok(())
+                }
+            }
+            Self::Sort => {
+                let string = parser.reader.read_unquoted_string()?;
+                parser.order = match string.as_str() {
+                    "nearest" => Ok(Order::Nearest),
+                    "furthest" => Ok(Order::Furthest),
+                    "random" => Ok(Order::Random),
+                    "arbitrary" => Ok(Order::Arbitrary),
+                    _ => {
+                        parser.reader.set_cursor(i);
+                        Err(SORT_UNKNOWN_ERROR_TYPE
+                            .create(parser.reader, TextComponent::text(string)))
+                    }
+                }?;
+                parser.set_flag(Flags::SORT_SET, true);
+                Ok(())
+            }
+            Self::Gamemode => {
+                let invert = parser.consume_inverted_start();
+                if parser.has_flag(Flags::GAMEMODE_NOT_EQUALS_SET) && !invert {
+                    return Err(self.inapplicable_error(parser.reader));
+                }
+                let string = parser.reader.read_unquoted_string()?;
+                if let Ok(gamemode) = GameMode::from_str(&string) {
+                    parser.set_includes_entities(false);
+                    parser.add_predicate(EntitySelectorPredicate::GameMode(gamemode, invert));
+                    parser.set_flag(
+                        if invert {
+                            Flags::GAMEMODE_NOT_EQUALS_SET
+                        } else {
+                            Flags::GAMEMODE_EQUALS_SET
+                        },
+                        true,
+                    );
+                    Ok(())
+                } else {
+                    Err(GAMEMODE_INVALID_ERROR_TYPE
+                        .create(parser.reader, TextComponent::text(string)))
+                }
+            }
             _ => {
                 tracing::warn!("Unimplemented entity selector option: {:?}", self);
+                Err(UNIMPLEMENTED_OPTION_ERROR_TYPE.create_without_context(self.name_component()))
             }
         }
-        Ok(())
     }
 
     /// Returns whether this option can be used by the provided [`EntitySelectorParser`].
     pub const fn can_use(self, parser: &EntitySelectorParser) -> bool {
         match self {
-            Self::Name => !parser.has_name_equals,
+            Self::Name => !parser.has_flag(Flags::NAME_EQUALS_SET),
             Self::Distance => parser.distance.is_none(),
             Self::Level => parser.experience_level.is_none(),
             Self::X => parser.pos.x.is_none(),
@@ -172,13 +257,13 @@ impl EntitySelectorOption {
             Self::Dz => parser.delta.z.is_none(),
             Self::XRotation => parser.rotation.x.is_none(),
             Self::YRotation => parser.rotation.y.is_none(),
-            Self::Limit => !parser.is_current_entity && !parser.is_limited,
-            Self::Sort => !parser.is_current_entity && !parser.is_sorted,
-            Self::Gamemode => !parser.has_gamemode_equals,
-            Self::Team => !parser.has_team_equals,
+            Self::Limit => !parser.is_current_entity && !parser.has_flag(Flags::LIMIT_SET),
+            Self::Sort => !parser.is_current_entity && !parser.has_flag(Flags::SORT_SET),
+            Self::Gamemode => !parser.has_flag(Flags::GAMEMODE_EQUALS_SET),
+            Self::Team => !parser.has_flag(Flags::TEAM_EQUALS_SET),
             Self::Type => parser.entity_type.is_none(),
-            Self::Scores => !parser.has_scores,
-            Self::Advancements => !parser.has_advancements,
+            Self::Scores => !parser.has_flag(Flags::SCORES_SET),
+            Self::Advancements => !parser.has_flag(Flags::ADVANCEMENTS_SET),
             Self::Tag | Self::Nbt | Self::Predicate => true,
         }
     }

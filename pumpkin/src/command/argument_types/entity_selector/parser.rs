@@ -2,11 +2,12 @@ use crate::command::argument_types::entity_selector::option::{
     EntitySelectorOption, INAPPLICABLE_OPTION_ERROR_TYPE, UNKNOWN_OPTION_ERROR_TYPE,
 };
 use crate::command::argument_types::entity_selector::{
-    EntitySelector, EntitySelectorPredicate, Order, PositionFunction,
+    EntitySelector, EntitySelectorPredicate, Order, PositionFunction, RotationType,
 };
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use bitflags::bitflags;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -34,6 +35,38 @@ pub const EXPECTED_END_OF_OPTIONS_ERROR_TYPE: CommandErrorType<0> =
 pub const EXPECTED_OPTION_VALUE_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_VALUELESS);
 
+bitflags! {
+    /// A list of bit flags to set entity selector parser properties.
+    /// These are supposed to be set by entity selector options.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct Flags: u32 {
+        /// Whether the execution of the selector is limited to the current world (dimension).
+        const WORLD_LIMITED = 1 << 0;
+        /// Whether the `name` option has been set.
+        const NAME_EQUALS_SET = 1 << 1;
+        /// Whether the `!name` option has been set.
+        const NAME_NOT_EQUALS_SET = 1 << 2;
+        /// Whether the `gamemode` option has been set.
+        const GAMEMODE_EQUALS_SET = 1 << 3;
+        /// Whether the `!gamemode` option has been set.
+        const GAMEMODE_NOT_EQUALS_SET = 1 << 4;
+        /// Whether the `team` option has been set.
+        const TEAM_EQUALS_SET = 1 << 5;
+        /// Whether the `!team` option has been set.
+        const TEAM_NOT_EQUALS_SET = 1 << 6;
+        /// Whether the `limit` option has been set.
+        const LIMIT_SET = 1 << 7;
+        /// Whether the `sort` option has been set.
+        const SORT_SET = 1 << 8;
+        /// Whether the `type` (entity type) option is inverted.
+        const ENTITY_TYPE_INVERTED = 1 << 9;
+        /// Whether the `scores` option has been set.
+        const SCORES_SET = 1 << 10;
+        /// Whether the `advancements` option has been set.
+        const ADVANCEMENTS_SET = 1 << 11;
+    }
+}
+
 /// A struct to parse an [`EntitySelector`].
 ///
 /// * `'b` is the lifetime of the mutable reference to the [`StringReader`].
@@ -41,35 +74,25 @@ pub const EXPECTED_OPTION_VALUE_ERROR_TYPE: CommandErrorType<1> =
 #[derive(Debug)]
 pub struct EntitySelectorParser<'b, 'a> {
     pub reader: &'b mut StringReader<'a>,
-    allow_selectors: bool,
-    max_selected: i32,
-    includes_entities: bool,
-    is_world_limited: bool,
+    pub(crate) max_selected: i32,
     pub(crate) distance: Option<DoubleBounds>,
     pub(crate) experience_level: Option<IntBounds>,
     pub(crate) pos: Vector3<Option<f64>>,
     pub(crate) delta: Vector3<Option<f64>>,
     pub(crate) rotation: Vector2<Option<FloatDegreeBounds>>,
     predicates: Vec<EntitySelectorPredicate>,
-    order: Order,
-    pub(crate) is_current_entity: bool,
+    pub(crate) order: Order,
     player_name: Option<String>,
     entity_uuid: Option<Uuid>,
-
-    pub(crate) has_name_equals: bool,
-    pub(crate) has_name_not_equals: bool,
-    pub(crate) is_limited: bool,
-    pub(crate) is_sorted: bool,
-    pub(crate) has_gamemode_equals: bool,
-    pub(crate) has_gamemode_not_equals: bool,
-    pub(crate) has_team_equals: bool,
-    pub(crate) has_team_not_equals: bool,
     pub(crate) entity_type: Option<&'static EntityType>,
-    entity_type_is_inverse: bool,
-    pub(crate) has_scores: bool,
-    pub(crate) has_advancements: bool,
-    uses_selectors: bool,
     start_position: usize,
+
+    allows_selector_variable: bool,
+    uses_selector_variable: bool,
+    includes_entities: bool,
+    pub(crate) is_current_entity: bool,
+
+    flags: Flags,
 }
 
 impl<'b, 'a> EntitySelectorParser<'b, 'a> {
@@ -82,10 +105,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
     pub fn new(reader: &'b mut StringReader<'a>, allow_selectors: bool) -> Self {
         Self {
             reader,
-            allow_selectors,
             max_selected: 0,
-            includes_entities: false,
-            is_world_limited: false,
             distance: None,
             experience_level: None,
             pos: Vector3::default(),
@@ -93,23 +113,15 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
             rotation: Vector2::default(),
             predicates: vec![],
             order: Order::Arbitrary,
-            is_current_entity: false,
             player_name: None,
             entity_uuid: None,
-            has_name_equals: false,
-            has_name_not_equals: false,
-            is_limited: false,
-            is_sorted: false,
-            has_gamemode_equals: false,
-            has_gamemode_not_equals: false,
-            has_team_equals: false,
-            has_team_not_equals: false,
             entity_type: None,
-            entity_type_is_inverse: false,
-            has_scores: false,
-            has_advancements: false,
-            uses_selectors: false,
             start_position: 0,
+            allows_selector_variable: allow_selectors,
+            uses_selector_variable: false,
+            includes_entities: false,
+            is_current_entity: false,
+            flags: Flags::empty(),
         }
     }
 
@@ -117,11 +129,11 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
         // We finalize our predicates.
         if let Some(x) = self.rotation.x {
             self.predicates
-                .push(EntitySelectorPredicate::Rotation(x, |e| e.yaw.load()));
+                .push(EntitySelectorPredicate::Rotation(x, RotationType::Yaw));
         }
         if let Some(y) = self.rotation.y {
             self.predicates
-                .push(EntitySelectorPredicate::Rotation(y, |e| e.yaw.load()));
+                .push(EntitySelectorPredicate::Rotation(y, RotationType::Pitch));
         }
         if let Some(level) = self.experience_level {
             self.predicates
@@ -167,8 +179,8 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
             player_name: self.player_name,
             entity_uuid: self.entity_uuid,
             entity_type: self.entity_type,
-            uses_selector_variable: false,
-            is_world_limited: false,
+            uses_selector_variable: self.uses_selector_variable,
+            is_world_limited: self.flags.contains(Flags::WORLD_LIMITED),
         }
     }
 
@@ -192,19 +204,19 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
     pub fn parse(mut self) -> Result<EntitySelector, CommandSyntaxError> {
         self.start_position = self.reader.cursor();
         if self.reader.peek() == Some('@') {
-            if self.allow_selectors {
-                let error = Err(SELECTORS_NOT_ALLOWED_ERROR_TYPE.create(self.reader));
-                self.reader.skip();
-                self.parse_selector()?;
-                return error;
+            if !self.allows_selector_variable {
+                return Err(SELECTORS_NOT_ALLOWED_ERROR_TYPE.create(self.reader));
             }
+            self.reader.skip();
+            self.parse_selector()?;
+        } else {
             self.parse_name_or_uuid()?;
         }
         Ok(self.selector())
     }
 
     fn parse_selector(&mut self) -> Result<(), CommandSyntaxError> {
-        self.uses_selectors = true;
+        self.uses_selector_variable = true;
         if !self.reader.can_read_char() {
             return Err(MISSING_SELECTOR_TYPE_ERROR_TYPE.create(self.reader));
         }
@@ -220,13 +232,13 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
             }
             'e' => {
                 self.max_selected = i32::MAX;
-                self.includes_entities = false;
+                self.includes_entities = true;
                 self.order = Order::Arbitrary;
                 add_alive_predicate = true;
             }
             'n' => {
                 self.max_selected = 1;
-                self.includes_entities = false;
+                self.includes_entities = true;
                 self.order = Order::Nearest;
                 add_alive_predicate = true;
             }
@@ -289,7 +301,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
 
     fn parse_options(&mut self) -> Result<(), CommandSyntaxError> {
         self.reader.skip_whitespace();
-        while self.reader.peek().is_none_or(|c| c != ']') {
+        while self.reader.can_read_char() && self.reader.peek() != Some(']') {
             self.reader.skip_whitespace();
             let i = self.reader.cursor();
             let string = self.reader.read_string()?;
@@ -321,6 +333,7 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
                     self.reader.skip();
                 }
             } else {
+                self.reader.set_cursor(i);
                 return Err(
                     UNKNOWN_OPTION_ERROR_TYPE.create(self.reader, TextComponent::text(string))
                 );
@@ -367,5 +380,21 @@ impl<'b, 'a> EntitySelectorParser<'b, 'a> {
         } else {
             false
         }
+    }
+
+    /// Sets a flag of this parser for options.
+    pub fn set_flag(&mut self, flag: Flags, value: bool) {
+        self.flags.set(flag, value);
+    }
+
+    /// Returns whether a flag is set for this parser for options.
+    #[must_use]
+    pub const fn has_flag(&self, flag: Flags) -> bool {
+        self.flags.contains(flag)
+    }
+
+    /// Sets this parse to not include non-player entities.
+    pub const fn set_includes_entities(&mut self, value: bool) {
+        self.includes_entities = value;
     }
 }

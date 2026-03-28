@@ -69,22 +69,37 @@ fn bounds_from_reader<T: Copy + FromStr + PartialOrd>(
     error_type: &'static CommandErrorType<1>,
 ) -> Result<Bounds<T>, CommandSyntaxError> {
     if reader.can_read_char() {
+        let i = reader.cursor();
+        try_bounds_from_reader(reader, error_type).map_err(|e| {
+            // On catching any error, set the reader's cursor position to be at where the range starts.
+            if let Some(mut context) = e.context {
+                context.cursor = i;
+                CommandSyntaxError::create(e.error_type, e.message, &context)
+            } else {
+                CommandSyntaxError::create_without_context(e.error_type, e.message)
+            }
+        })
+    } else {
+        Err(EMPTY_BOUNDS_ERROR_TYPE.create(reader))
+    }
+}
+
+fn try_bounds_from_reader<T: Copy + FromStr + PartialOrd>(
+    reader: &mut StringReader,
+    error_type: &'static CommandErrorType<1>,
+) -> Result<Bounds<T>, CommandSyntaxError> {
+    let min = read_number_from_reader(reader, error_type)?;
+    let max = if reader.peek() == Some('.') && reader.peek_with_offset(1) == Some('.') {
+        reader.skip();
+        reader.skip();
+        read_number_from_reader(reader, error_type)?
+    } else {
+        min
+    };
+    if min.is_none() && max.is_none() {
         Err(EMPTY_BOUNDS_ERROR_TYPE.create(reader))
     } else {
-        let i = reader.cursor();
-        let min = read_number_from_reader(reader, error_type)?;
-        let max = if reader.peek() == Some('.') && reader.peek_with_offset(1) == Some('.') {
-            reader.skip();
-            reader.skip();
-            read_number_from_reader(reader, error_type)?
-        } else {
-            min
-        };
-        if min.is_none() && max.is_none() {
-            Err(EMPTY_BOUNDS_ERROR_TYPE.create(reader))
-        } else {
-            Ok(Bounds::<T>::new(min, max))
-        }
+        Ok(Bounds::<T>::new(min, max))
     }
 }
 

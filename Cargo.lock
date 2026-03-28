@@ -2698,6 +2698,7 @@ version = "0.1.0-dev+26.1"
 dependencies = [
  "arc-swap",
  "base64 0.22.1",
+ "bitflags",
  "bytes",
  "chrono",
  "console-subscriber",

@@ -6,10 +6,6 @@ use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use pumpkin_data::translation;
 
-/// A [`CommandErrorType`] to tell that using an entity selector variable is not allowed.
-pub const SELECTORS_NOT_ALLOWED_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_SELECTOR_NOT_ALLOWED);
-
 /// A [`CommandErrorType`] to tell that no entities could be found.
 pub const NO_ENTITIES_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::ARGUMENT_ENTITY_NOTFOUND_ENTITY);
@@ -43,11 +39,11 @@ pub enum EntityArgumentType {
 }
 
 impl EntityArgumentType {
-    const fn is_single(&self) -> bool {
+    const fn is_single(self) -> bool {
         matches!(self, Self::Entity | Self::Player)
     }
 
-    const fn is_players_only(&self) -> bool {
+    const fn is_players_only(self) -> bool {
         matches!(self, Self::Player | Self::Players)
     }
 }

@@ -2,13 +2,17 @@ mod option;
 pub mod parser;
 
 use crate::command::argument_types::entity;
-use crate::command::argument_types::entity::ENTITY_SELECTOR_PERMISSION;
+use crate::command::argument_types::entity::{
+    ENTITY_SELECTOR_PERMISSION, NO_ENTITIES_ERROR_TYPE, NO_PLAYERS_ERROR_TYPE,
+};
+use crate::command::argument_types::entity_selector::parser::SELECTORS_NOT_ALLOWED_ERROR_TYPE;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 use pumpkin_data::entity::EntityType;
+use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::math::vector3::Vector3;
@@ -61,7 +65,7 @@ impl EntitySelector {
         source: &CommandSource,
     ) -> Result<(), CommandSyntaxError> {
         if self.uses_selector_variable && !source.has_permission(ENTITY_SELECTOR_PERMISSION).await {
-            Err(entity::SELECTORS_NOT_ALLOWED_ERROR_TYPE.create_without_context())
+            Err(SELECTORS_NOT_ALLOWED_ERROR_TYPE.create_without_context())
         } else {
             Ok(())
         }
@@ -80,7 +84,7 @@ impl EntitySelector {
         &self,
         source: &CommandSource,
     ) -> Result<Arc<dyn EntityBase>, CommandSyntaxError> {
-        let list = self.find_entities(source).await?;
+        let list = self.find_optional_entities(source).await?;
         match list.as_slice() {
             [] => Err(entity::NO_ENTITIES_ERROR_TYPE.create_without_context()),
             [entity] => Ok(entity.clone()),
@@ -89,13 +93,27 @@ impl EntitySelector {
     }
 
     /// Tries to find any entities represented by this selector.
+    /// If none are found, an error is returned.
     pub async fn find_entities(
         &self,
         source: &CommandSource,
     ) -> Result<Vec<Arc<dyn EntityBase>>, CommandSyntaxError> {
+        let entities = self.find_optional_entities(source).await?;
+        if entities.is_empty() {
+            Err(NO_ENTITIES_ERROR_TYPE.create_without_context())
+        } else {
+            Ok(entities)
+        }
+    }
+
+    /// Tries to find any entities represented by this selector. If none are found, an empty `Vec` will still be returned.
+    pub async fn find_optional_entities(
+        &self,
+        source: &CommandSource,
+    ) -> Result<Vec<Arc<dyn EntityBase>>, CommandSyntaxError> {
         self.check_permissions(source).await?;
-        if self.includes_entities {
-            self.find_players(source)
+        if !self.includes_entities {
+            self.find_optional_players(source)
                 .await
                 .map(|v| v.into_iter().map(|p| p as Arc<dyn EntityBase>).collect())
         } else if let Some(name) = self.player_name.as_ref() {
@@ -146,15 +164,19 @@ impl EntitySelector {
         predicate: &EntitySelectorPredicate,
     ) {
         let limit = self.result_limit();
-        world.get_entities_and_add(list, limit, bounding_box, |e| predicate.test(e));
+        if let Some(b) = bounding_box {
+            world.extend_entities_in_box_where(list, limit, b, |e| predicate.test(e));
+        } else {
+            world.extend_entities_where(list, limit, |e| predicate.test(e));
+        }
     }
 
-    /// Tries to find a player represented by this selector.
-    pub async fn find_player(
+    /// Tries to find a single player represented by this selector.
+    pub async fn find_single_player(
         &self,
         source: &CommandSource,
     ) -> Result<Arc<Player>, CommandSyntaxError> {
-        let list = self.find_players(source).await?;
+        let list = self.find_optional_players(source).await?;
         if list.len() == 1 {
             Ok(list.first().unwrap().clone())
         } else {
@@ -163,7 +185,21 @@ impl EntitySelector {
     }
 
     /// Tries to find any players represented by this selector.
+    /// If none are found, an error is returned.
     pub async fn find_players(
+        &self,
+        source: &CommandSource,
+    ) -> Result<Vec<Arc<Player>>, CommandSyntaxError> {
+        let players = self.find_optional_players(source).await?;
+        if players.is_empty() {
+            Err(NO_PLAYERS_ERROR_TYPE.create_without_context())
+        } else {
+            Ok(players)
+        }
+    }
+
+    /// Tries to find any players represented by this selector. If none are found, an empty `Vec` will still be returned.
+    pub async fn find_optional_players(
         &self,
         source: &CommandSource,
     ) -> Result<Vec<Arc<Player>>, CommandSyntaxError> {
@@ -363,10 +399,12 @@ impl Order {
 pub enum EntitySelectorPredicate {
     /// A predicate to check whether an entity is alive.
     IsAlive,
+    /// A predicate to check the game mode of a player. This check can also be inverted.
+    GameMode(GameMode, bool),
     /// A predicate to check the experience level of an entity, if any.
     ExperienceLevel(IntBounds),
     /// A predicate to check the rotation coordinate of an entity.
-    Rotation(FloatDegreeBounds, fn(&Entity) -> f32),
+    Rotation(FloatDegreeBounds, RotationType),
     /// A predicate to check whether an entity intersects a bounding box.
     BoundingBox(BoundingBox),
     /// A predicate to check whether an entity is within a specified range from some position.
@@ -374,6 +412,23 @@ pub enum EntitySelectorPredicate {
 
     /// Used to combine sub-predicates.
     AllOf(Vec<Self>),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum RotationType {
+    Yaw,
+    Pitch,
+}
+
+impl RotationType {
+    /// Returns the rotation value corresponding to this rotation type
+    /// of the provided entity.
+    pub fn value_from_entity(self, entity: &dyn EntityBase) -> f32 {
+        match self {
+            Self::Yaw => entity.get_entity().yaw.load(),
+            Self::Pitch => entity.get_entity().pitch.load(),
+        }
+    }
 }
 
 impl EntitySelectorPredicate {
@@ -385,13 +440,16 @@ impl EntitySelectorPredicate {
     pub fn test(&self, entity: &dyn EntityBase) -> bool {
         match self {
             Self::IsAlive => entity.get_entity().is_alive(),
+            Self::GameMode(mode, invert) => entity
+                .get_player()
+                .is_some_and(|p| (p.gamemode.load() == *mode) ^ invert),
             Self::ExperienceLevel(bounds) => entity
                 .get_player()
                 .is_some_and(|p| bounds.matches(p.experience_level.load(Ordering::Relaxed))),
             Self::Rotation(bounds, f) => {
                 let min = wrap_degrees(bounds.min().unwrap_or(0.0f32));
-                let max = wrap_degrees(bounds.min().unwrap_or(360.0f32));
-                let degrees = wrap_degrees(f(entity.get_entity()));
+                let max = wrap_degrees(bounds.max().unwrap_or(360.0f32));
+                let degrees = wrap_degrees(f.value_from_entity(entity));
                 if min > max {
                     degrees >= min || degrees <= max
                 } else {

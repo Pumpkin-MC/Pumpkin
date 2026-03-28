@@ -2762,31 +2762,56 @@ impl World {
     ///   entities will be added to the list. If `list` already reaches this limit, nothing happens.
     /// * `bounding_box`: The bounding box to filter any added entities.
     /// * `predicate`: A predicate function, which has to be `true` for an entity to be added to the list.
-    pub fn get_entities_and_add(
+    pub fn extend_entities_in_box_where(
         &self,
         list: &mut Vec<Arc<dyn EntityBase>>,
         max_list_capacity: usize,
-        bounding_box: Option<BoundingBox>,
+        bounding_box: BoundingBox,
+        predicate: impl Fn(&dyn EntityBase) -> bool,
+    ) {
+        self.extend_entities_where(list, max_list_capacity, |e| {
+            bounding_box.intersects(&e.get_entity().bounding_box.load()) && predicate(e)
+        });
+    }
+
+    /// Adds entities to the provided [`Vec`] that satisfy a particular condition.
+    ///
+    /// # Arguments
+    ///
+    /// * `list`: The `Vec` to add to.
+    /// * `max_list_capacity`: The maximum capacity of `list` for adding entities. If this limit is reached, no more
+    ///   entities will be added to the list. If `list` already reaches this limit, nothing happens.
+    /// * `predicate`: A predicate function, which has to be `true` for an entity to be added to the list.
+    pub fn extend_entities_where(
+        &self,
+        list: &mut Vec<Arc<dyn EntityBase>>,
+        max_list_capacity: usize,
         predicate: impl Fn(&dyn EntityBase) -> bool,
     ) {
         if list.len() >= max_list_capacity {
             return;
         }
-        for entity in self.entities.load().iter() {
-            if !bounding_box.is_some_and(|b| b.intersects(&entity.get_entity().bounding_box.load()))
-                || !predicate(entity.as_ref())
-            {
+        // Loop the players.
+        for player in self.players.load().iter() {
+            if !predicate(player.as_ref()) {
                 continue;
             }
-
-            // We add the entity to the list.
-            list.push(entity.clone());
-
+            // We add the player to the list.
+            list.push(player.clone());
             // Check if the list is too big.
             if list.len() > max_list_capacity {
                 return;
             }
-
+        }
+        // Same with entities.
+        for entity in self.entities.load().iter() {
+            if !predicate(entity.as_ref()) {
+                continue;
+            }
+            list.push(entity.clone());
+            if list.len() > max_list_capacity {
+                return;
+            }
             // TODO: Implement ender dragon handling
         }
     }
