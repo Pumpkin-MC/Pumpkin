@@ -7,7 +7,7 @@ use std::{
 use heck::ToShoutySnakeCase;
 
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use serde::Deserialize;
 use syn::Ident;
 

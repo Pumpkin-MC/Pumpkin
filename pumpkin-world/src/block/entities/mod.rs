@@ -3,6 +3,7 @@ use std::{any::Any, sync::Arc};
 
 use barrel::BarrelBlockEntity;
 use bed::BedBlockEntity;
+use brewing_stand::BrewingStandBlockEntity;
 use chest::ChestBlockEntity;
 use comparator::ComparatorBlockEntity;
 use daylight_detector::DaylightDetectorBlockEntity;
@@ -32,6 +33,7 @@ use crate::{
 pub mod barrel;
 pub mod bed;
 pub mod blasting_furnace;
+pub mod brewing_stand;
 pub mod chest;
 pub mod chest_like_block_entity;
 pub mod chiseled_bookshelf;
@@ -182,6 +184,9 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
         DaylightDetectorBlockEntity::ID => Arc::new(block_entity_from_generic::<
             DaylightDetectorBlockEntity,
         >(nbt)),
+        BrewingStandBlockEntity::ID => {
+            Arc::new(block_entity_from_generic::<BrewingStandBlockEntity>(nbt))
+        }
         _ => return None,
     })
 }

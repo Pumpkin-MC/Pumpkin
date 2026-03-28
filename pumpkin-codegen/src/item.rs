@@ -262,7 +262,10 @@ impl ToTokens for ItemComponents {
         }
 
         if let Some(weapon) = &self.weapon {
-            let damage = LitInt::new(&weapon.item_damage_per_attack.to_string(), Span::call_site());
+            let damage = LitInt::new(
+                &weapon.item_damage_per_attack.to_string(),
+                Span::call_site(),
+            );
             tokens.extend(quote! { (Weapon, &WeaponImpl { item_damage_per_attack: #damage }), });
         }
 
