@@ -15,84 +15,126 @@ use crate::{
     },
 };
 
+fn player_from_resource(
+    state: &PluginHostState,
+    player: &Resource<Player>,
+) -> Result<std::sync::Arc<crate::entity::player::Player>, String> {
+    state
+        .resource_table
+        .get::<PlayerResource>(&Resource::new_own(player.rep()))
+        .map_err(|_| "invalid player resource handle".to_string())
+        .map(|resource| resource.provider.clone())
+}
+
+fn text_component_from_resource(
+    state: &PluginHostState,
+    text: &Resource<pumpkin::plugin::text::TextComponent>,
+) -> Result<pumpkin_util::text::TextComponent, String> {
+    state
+        .resource_table
+        .get::<TextComponentResource>(&Resource::new_own(text.rep()))
+        .map_err(|_| "invalid text-component resource handle".to_string())
+        .map(|resource| resource.provider.clone())
+}
+
+fn world_from_resource(
+    state: &PluginHostState,
+    world: &Resource<pumpkin::plugin::world::World>,
+) -> Result<std::sync::Arc<crate::world::World>, String> {
+    state
+        .resource_table
+        .get::<WorldResource>(&Resource::new_own(world.rep()))
+        .map_err(|_| "invalid world resource handle".to_string())
+        .map(|resource| resource.provider.clone())
+}
+
 impl DowncastResourceExt<PlayerResource> for Resource<Player> {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a PlayerResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid player resource handle")
+            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
+            .unwrap()
             .downcast_ref::<PlayerResource>()
-            .expect("resource type mismatch")
+            .ok_or("resource type mismatch")
+            .map_err(wasmtime::Error::msg)
+            .unwrap()
     }
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut PlayerResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid player resource handle")
+            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
+            .unwrap()
             .downcast_mut::<PlayerResource>()
-            .expect("resource type mismatch")
+            .ok_or("resource type mismatch")
+            .map_err(wasmtime::Error::msg)
+            .unwrap()
     }
 
     fn consume(self, state: &mut PluginHostState) -> PlayerResource {
         state
             .resource_table
             .delete::<PlayerResource>(Resource::new_own(self.rep()))
-            .expect("invalid player resource handle")
+            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
+            .unwrap()
     }
 }
 
 impl pumpkin::plugin::player::Host for PluginHostState {}
 impl pumpkin::plugin::player::HostPlayer for PluginHostState {
-    async fn get_id(&mut self, player: Resource<Player>) -> String {
-        player
-            .downcast_ref(self)
-            .provider
-            .gameprofile
-            .id
-            .to_string()
+    async fn get_id(&mut self, player: Resource<Player>) -> Result<String, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.gameprofile.id.to_string())
     }
 
-    async fn get_name(&mut self, player: Resource<Player>) -> String {
-        player.downcast_ref(self).provider.gameprofile.name.clone()
+    async fn get_name(&mut self, player: Resource<Player>) -> Result<String, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.gameprofile.name.clone())
     }
 
     async fn get_position(
         &mut self,
         player: Resource<Player>,
-    ) -> pumpkin::plugin::common::Position {
-        let position = player.downcast_ref(self).provider.position();
-        to_wasm_position(position)
+    ) -> Result<pumpkin::plugin::common::Position, String> {
+        let player = player_from_resource(self, &player)?;
+        let position = player.position();
+        Ok(to_wasm_position(position))
     }
 
-    async fn get_rotation(&mut self, player: Resource<Player>) -> (f32, f32) {
-        player.downcast_ref(self).provider.rotation()
+    async fn get_rotation(&mut self, player: Resource<Player>) -> Result<(f32, f32), String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.rotation())
     }
 
     async fn get_world(
         &mut self,
         player: Resource<Player>,
-    ) -> wasmtime::component::Resource<pumpkin::plugin::world::World> {
-        let world = player.downcast_ref(self).provider.world();
-        self.add_world(world).expect("failed to add world resource")
+    ) -> Result<wasmtime::component::Resource<pumpkin::plugin::world::World>, String> {
+        let player = player_from_resource(self, &player)?;
+        let world = player.world();
+        self.add_world(world)
+            .map_err(|_| "failed to add world resource".to_string())
     }
 
     async fn get_gamemode(
         &mut self,
         player: Resource<Player>,
-    ) -> pumpkin::plugin::common::GameMode {
-        let gamemode = player.downcast_ref(self).provider.gamemode.load();
-        to_wasm_game_mode(gamemode)
+    ) -> Result<pumpkin::plugin::common::GameMode, String> {
+        let player = player_from_resource(self, &player)?;
+        let gamemode = player.gamemode.load();
+        Ok(to_wasm_game_mode(gamemode))
     }
 
     async fn set_gamemode(
         &mut self,
         player: Resource<Player>,
         mode: pumpkin::plugin::common::GameMode,
-    ) -> bool {
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<bool, String> {
+        let player = player_from_resource(self, &player)?;
         let mode = from_wasm_game_mode(mode);
-        player.set_gamemode(mode).await
+        Ok(player.set_gamemode(mode).await)
     }
 
     async fn send_system_message(
@@ -100,60 +142,44 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player: Resource<Player>,
         text: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
         overlay: bool,
-    ) {
-        let text_resource = self
-            .resource_table
-            .get::<TextComponentResource>(&Resource::new_own(text.rep()))
-            .expect("invalid text-component resource handle");
-        let component = text_resource.provider.clone();
-
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<(), String> {
+        let component = text_component_from_resource(self, &text)?;
+        let player = player_from_resource(self, &player)?;
         player.send_system_message_raw(&component, overlay).await;
+        Ok(())
     }
 
     async fn show_title(
         &mut self,
         player: Resource<Player>,
         text: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
-    ) {
-        let text_resource = self
-            .resource_table
-            .get::<TextComponentResource>(&Resource::new_own(text.rep()))
-            .expect("invalid text-component resource handle");
-        let component = text_resource.provider.clone();
-
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<(), String> {
+        let component = text_component_from_resource(self, &text)?;
+        let player = player_from_resource(self, &player)?;
         player.show_title(&component, &TitleMode::Title).await;
+        Ok(())
     }
 
     async fn show_subtitle(
         &mut self,
         player: Resource<Player>,
         text: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
-    ) {
-        let text_resource = self
-            .resource_table
-            .get::<TextComponentResource>(&Resource::new_own(text.rep()))
-            .expect("invalid text-component resource handle");
-        let component = text_resource.provider.clone();
-
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<(), String> {
+        let component = text_component_from_resource(self, &text)?;
+        let player = player_from_resource(self, &player)?;
         player.show_title(&component, &TitleMode::SubTitle).await;
+        Ok(())
     }
 
     async fn show_actionbar(
         &mut self,
         player: Resource<Player>,
         text: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
-    ) {
-        let text_resource = self
-            .resource_table
-            .get::<TextComponentResource>(&Resource::new_own(text.rep()))
-            .expect("invalid text-component resource handle");
-        let component = text_resource.provider.clone();
-
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<(), String> {
+        let component = text_component_from_resource(self, &text)?;
+        let player = player_from_resource(self, &player)?;
         player.show_title(&component, &TitleMode::ActionBar).await;
+        Ok(())
     }
 
     async fn send_title_animation(
@@ -162,9 +188,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         fade_in: i32,
         stay: i32,
         fade_out: i32,
-    ) {
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
         player.send_title_animation(fade_in, stay, fade_out).await;
+        Ok(())
     }
 
     async fn teleport(
@@ -173,10 +200,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         position: pumpkin::plugin::common::Position,
         yaw: f32,
         pitch: f32,
-    ) {
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
         let position = from_wasm_position(position);
         player.request_teleport(position, yaw, pitch).await;
+        Ok(())
     }
 
     async fn teleport_world(
@@ -186,31 +214,23 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         position: pumpkin::plugin::common::Position,
         yaw: Option<f32>,
         pitch: Option<f32>,
-    ) {
-        let world_resource = self
-            .resource_table
-            .get::<WorldResource>(&Resource::new_own(world.rep()))
-            .expect("invalid world resource handle");
-        let world = world_resource.provider.clone();
-
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<(), String> {
+        let world = world_from_resource(self, &world)?;
+        let player = player_from_resource(self, &player)?;
         let position = from_wasm_position(position);
         player.teleport_world(world, position, yaw, pitch).await;
+        Ok(())
     }
 
     async fn kick(
         &mut self,
         player: Resource<Player>,
         message: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
-    ) {
-        let text_resource = self
-            .resource_table
-            .get::<TextComponentResource>(&Resource::new_own(message.rep()))
-            .expect("invalid text-component resource handle");
-        let component = text_resource.provider.clone();
-
-        let player = player.downcast_ref(self).provider.clone();
+    ) -> Result<(), String> {
+        let component = text_component_from_resource(self, &message)?;
+        let player = player_from_resource(self, &player)?;
         player.kick(DisconnectReason::Kicked, component).await;
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
