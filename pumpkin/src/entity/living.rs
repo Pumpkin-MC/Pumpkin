@@ -126,6 +126,20 @@ impl LivingEntity {
         &Block::SLIME_BLOCK,
     ];
 
+    const fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        match entity_type.id {
+            id if id == EntityType::ZOMBIE.id => Sound::EntityZombieHurt,
+            id if id == EntityType::DROWNED.id => Sound::EntityDrownedHurt,
+            id if id == EntityType::HUSK.id => Sound::EntityHuskHurt,
+            id if id == EntityType::ZOMBIE_VILLAGER.id => Sound::EntityZombieVillagerHurt,
+            _ => Sound::EntityGenericHurt,
+        }
+    }
+
+    const fn hurt_sound(&self) -> Sound {
+        Self::hurt_sound_for_entity(self.entity.entity_type)
+    }
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -1934,7 +1948,7 @@ impl EntityBase for LivingEntity {
             if play_sound {
                 world
                     .play_sound(
-                        Sound::EntityGenericHurt,
+                        self.hurt_sound(),
                         SoundCategory::Players,
                         &self.entity.pos.load(),
                     )
@@ -2338,5 +2352,30 @@ mod tests {
                 "{dt:?} should NOT bypass armor durability"
             );
         }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_zombie_family_sounds() {
+        let cases = [
+            (&EntityType::ZOMBIE, Sound::EntityZombieHurt),
+            (&EntityType::DROWNED, Sound::EntityDrownedHurt),
+            (&EntityType::HUSK, Sound::EntityHuskHurt),
+            (
+                &EntityType::ZOMBIE_VILLAGER,
+                Sound::EntityZombieVillagerHurt,
+            ),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_defaults_to_generic_hurt() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            Sound::EntityGenericHurt
+        );
     }
 }
