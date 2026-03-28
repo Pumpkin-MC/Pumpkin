@@ -1735,6 +1735,18 @@ impl LivingEntity {
     pub fn get_movement(&self) -> Vector3<f64> {
         self.entity.movement.load()
     }
+
+    fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        if entity_type == &EntityType::ENDERMAN {
+            Sound::EntityEndermanHurt
+        } else {
+            Sound::EntityGenericHurt
+        }
+    }
+
+    fn hurt_sound(&self) -> Sound {
+        Self::hurt_sound_for_entity(self.entity.entity_type)
+    }
 }
 
 impl NBTStorage for LivingEntity {
@@ -1934,7 +1946,7 @@ impl EntityBase for LivingEntity {
             if play_sound {
                 world
                     .play_sound(
-                        Sound::EntityGenericHurt,
+                        self.hurt_sound(),
                         SoundCategory::Players,
                         &self.entity.pos.load(),
                     )
@@ -2338,5 +2350,21 @@ mod tests {
                 "{dt:?} should NOT bypass armor durability"
             );
         }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_enderman_hurt_sound() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::ENDERMAN),
+            Sound::EntityEndermanHurt
+        );
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_defaults_to_generic_hurt() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            Sound::EntityGenericHurt
+        );
     }
 }
