@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering;
 use wasmtime::component::Resource;
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
         },
     },
 };
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
 
 fn player_from_resource(
     state: &PluginHostState,
@@ -46,6 +48,19 @@ fn world_from_resource(
         .get::<WorldResource>(&Resource::new_own(world.rep()))
         .map_err(|_| "invalid world resource handle".to_string())
         .map(|resource| resource.provider.clone())
+}
+
+fn to_wit_item_stack(
+    stack: &pumpkin_world::item::ItemStack,
+) -> Option<pumpkin::plugin::common::ItemStack> {
+    if stack.item_count == 0 {
+        return None;
+    }
+
+    Some(pumpkin::plugin::common::ItemStack {
+        registry_key: stack.item.registry_key.to_string(),
+        count: stack.item_count,
+    })
 }
 
 impl DowncastResourceExt<PlayerResource> for Resource<Player> {
@@ -135,6 +150,17 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let mode = from_wasm_game_mode(mode);
         Ok(player.set_gamemode(mode).await)
+    }
+
+    async fn get_locale(&mut self, player: Resource<Player>) -> Result<String, String> {
+        let player = player_from_resource(self, &player)?;
+        let config = player.config.load();
+        Ok(config.locale.clone())
+    }
+
+    async fn get_ping(&mut self, player: Resource<Player>) -> Result<u32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.ping.load(Ordering::Relaxed))
     }
 
     async fn send_system_message(
@@ -231,6 +257,76 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         player.kick(DisconnectReason::Kicked, component).await;
         Ok(())
+    }
+
+    async fn get_selected_slot(&mut self, player: Resource<Player>) -> Result<u8, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.inventory.get_selected_slot())
+    }
+
+    async fn get_item_in_hand(
+        &mut self,
+        player: Resource<Player>,
+        hand: pumpkin::plugin::common::Hand,
+    ) -> Result<Option<pumpkin::plugin::common::ItemStack>, String> {
+        let player = player_from_resource(self, &player)?;
+        let inventory = player.inventory();
+        let item_stack = match hand {
+            pumpkin::plugin::common::Hand::Left => inventory.off_hand_item().await,
+            pumpkin::plugin::common::Hand::Right => inventory.held_item(),
+        };
+        let item_stack = item_stack.lock().await.clone();
+        Ok(to_wit_item_stack(&item_stack))
+    }
+
+    async fn get_inventory_item(
+        &mut self,
+        player: Resource<Player>,
+        slot: u8,
+    ) -> Result<Option<pumpkin::plugin::common::ItemStack>, String> {
+        let player = player_from_resource(self, &player)?;
+        let slot = slot as usize;
+        if slot >= PlayerInventory::MAIN_SIZE {
+            return Err("invalid inventory slot".to_string());
+        }
+
+        let item_stack = player.inventory.main_inventory[slot].lock().await.clone();
+        Ok(to_wit_item_stack(&item_stack))
+    }
+
+    async fn get_health(&mut self, player: Resource<Player>) -> Result<f32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.living_entity.health.load())
+    }
+
+    async fn get_max_health(&mut self, player: Resource<Player>) -> Result<f32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.living_entity.get_max_health())
+    }
+
+    async fn get_food_level(&mut self, player: Resource<Player>) -> Result<u8, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.hunger_manager.level.load())
+    }
+
+    async fn get_saturation(&mut self, player: Resource<Player>) -> Result<f32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.hunger_manager.saturation.load())
+    }
+
+    async fn get_experience_level(&mut self, player: Resource<Player>) -> Result<i32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.experience_level.load(Ordering::Relaxed))
+    }
+
+    async fn get_experience_progress(&mut self, player: Resource<Player>) -> Result<f32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.experience_progress.load())
+    }
+
+    async fn get_experience_points(&mut self, player: Resource<Player>) -> Result<i32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.experience_points.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
