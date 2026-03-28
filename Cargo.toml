@@ -74,6 +74,7 @@ struct_excessive_bools = "allow"
 version = "0.1.0-dev+1.21.11"
 edition = "2024"
 rust-version = "1.94"
+license = "GPL-3.0"
 
 [profile.release]
 lto = true

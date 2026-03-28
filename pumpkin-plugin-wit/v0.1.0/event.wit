@@ -124,6 +124,15 @@ interface event {
         cancelled: bool
     }
 
+    record player-egg-throw-event-data {
+        player: player,
+        egg-uuid: string,
+        hatching: bool,
+        num-hatches: u8,
+        hatching-type: string,
+        cancelled: bool
+    }
+
     record block-redstone-event-data {
         target-world: %world,
         state-id: u16,
@@ -211,6 +220,7 @@ interface event {
         player-gamemode-change-event,
         player-custom-payload-event,
         player-fish-event,
+        player-egg-throw-event,
         block-redstone-event,
         block-break-event,
         block-burn-event,
@@ -238,6 +248,7 @@ interface event {
         player-gamemode-change-event(player-gamemode-change-event-data),
         player-custom-payload-event(player-custom-payload-event-data),
         player-fish-event(player-fish-event-data),
+        player-egg-throw-event(player-egg-throw-event-data),
         block-redstone-event(block-redstone-event-data),
         block-break-event(block-break-event-data),
         block-burn-event(block-burn-event-data),
