@@ -126,6 +126,21 @@ impl LivingEntity {
         &Block::SLIME_BLOCK,
     ];
 
+    const fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        match entity_type.id {
+            id if id == EntityType::SKELETON.id => Sound::EntitySkeletonHurt,
+            id if id == EntityType::BOGGED.id => Sound::EntityBoggedHurt,
+            id if id == EntityType::PARCHED.id => Sound::EntityParchedHurt,
+            id if id == EntityType::WITHER_SKELETON.id => Sound::EntityWitherSkeletonHurt,
+            id if id == EntityType::STRAY.id => Sound::EntityStrayHurt,
+            _ => Sound::EntityGenericHurt,
+        }
+    }
+
+    const fn hurt_sound(&self) -> Sound {
+        Self::hurt_sound_for_entity(self.entity.entity_type)
+    }
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -1934,7 +1949,7 @@ impl EntityBase for LivingEntity {
             if play_sound {
                 world
                     .play_sound(
-                        Sound::EntityGenericHurt,
+                        self.hurt_sound(),
                         SoundCategory::Players,
                         &self.entity.pos.load(),
                     )
@@ -2338,5 +2353,31 @@ mod tests {
                 "{dt:?} should NOT bypass armor durability"
             );
         }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_skeleton_family_sounds() {
+        let cases = [
+            (&EntityType::SKELETON, Sound::EntitySkeletonHurt),
+            (&EntityType::BOGGED, Sound::EntityBoggedHurt),
+            (&EntityType::PARCHED, Sound::EntityParchedHurt),
+            (
+                &EntityType::WITHER_SKELETON,
+                Sound::EntityWitherSkeletonHurt,
+            ),
+            (&EntityType::STRAY, Sound::EntityStrayHurt),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_defaults_to_generic_hurt() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            Sound::EntityGenericHurt
+        );
     }
 }
