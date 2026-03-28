@@ -61,7 +61,6 @@ impl BlockBehaviour for CandleBlock {
                 id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id)
                     && item.id == args.block.id =>
                 {
-                    
                     let was_lit = properties.lit;
 
                     if properties.candles.to_index() < 3 {
