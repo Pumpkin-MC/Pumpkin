@@ -3,6 +3,7 @@ name = "pumpkin-codecs"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
 serde_json.workspace = true
