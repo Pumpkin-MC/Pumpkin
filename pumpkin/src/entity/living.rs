@@ -128,6 +128,7 @@ impl LivingEntity {
 
     const fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
         match entity_type.id {
+            id if id == EntityType::ENDERMAN.id => Sound::EntityEndermanHurt,
             id if id == EntityType::ZOMBIE.id => Sound::EntityZombieHurt,
             id if id == EntityType::DROWNED.id => Sound::EntityDrownedHurt,
             id if id == EntityType::HUSK.id => Sound::EntityHuskHurt,
@@ -2374,6 +2375,14 @@ mod tests {
         for (entity_type, expected) in cases {
             assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
         }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_enderman_hurt_sound() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::ENDERMAN),
+            Sound::EntityEndermanHurt
+        );
     }
 
     #[test]
