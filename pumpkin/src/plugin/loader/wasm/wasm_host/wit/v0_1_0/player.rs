@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 use wasmtime::component::Resource;
 
 use crate::{
-    entity::player::TitleMode,
+    entity::{EntityBase, player::TitleMode},
     net::DisconnectReason,
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt,
@@ -16,6 +16,7 @@ use crate::{
     },
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_util::permission::PermissionLvl;
 
 fn player_from_resource(
     state: &PluginHostState,
@@ -61,6 +62,30 @@ fn to_wit_item_stack(
         registry_key: stack.item.registry_key.to_string(),
         count: stack.item_count,
     })
+}
+
+const fn to_wit_permission_level(
+    level: PermissionLvl,
+) -> pumpkin::plugin::permission::PermissionLevel {
+    match level {
+        PermissionLvl::Zero => pumpkin::plugin::permission::PermissionLevel::Zero,
+        PermissionLvl::One => pumpkin::plugin::permission::PermissionLevel::One,
+        PermissionLvl::Two => pumpkin::plugin::permission::PermissionLevel::Two,
+        PermissionLvl::Three => pumpkin::plugin::permission::PermissionLevel::Three,
+        PermissionLvl::Four => pumpkin::plugin::permission::PermissionLevel::Four,
+    }
+}
+
+const fn from_wit_permission_level(
+    level: pumpkin::plugin::permission::PermissionLevel,
+) -> PermissionLvl {
+    match level {
+        pumpkin::plugin::permission::PermissionLevel::Zero => PermissionLvl::Zero,
+        pumpkin::plugin::permission::PermissionLevel::One => PermissionLvl::One,
+        pumpkin::plugin::permission::PermissionLevel::Two => PermissionLvl::Two,
+        pumpkin::plugin::permission::PermissionLevel::Three => PermissionLvl::Three,
+        pumpkin::plugin::permission::PermissionLevel::Four => PermissionLvl::Four,
+    }
 }
 
 impl DowncastResourceExt<PlayerResource> for Resource<Player> {
@@ -161,6 +186,53 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn get_ping(&mut self, player: Resource<Player>) -> Result<u32, String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.ping.load(Ordering::Relaxed))
+    }
+
+    async fn get_permission_level(
+        &mut self,
+        player: Resource<Player>,
+    ) -> Result<pumpkin::plugin::permission::PermissionLevel, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(to_wit_permission_level(player.permission_lvl.load()))
+    }
+
+    async fn set_permission_level(
+        &mut self,
+        player: Resource<Player>,
+        level: pumpkin::plugin::permission::PermissionLevel,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        let Some(server) = self.server.as_ref() else {
+            return Err("server not available".to_string());
+        };
+        let level = from_wit_permission_level(level);
+        let command_dispatcher = server.command_dispatcher.read().await;
+        player
+            .set_permission_lvl(server, level, &command_dispatcher)
+            .await;
+        Ok(())
+    }
+
+    async fn has_permission(
+        &mut self,
+        player: Resource<Player>,
+        node: String,
+    ) -> Result<bool, String> {
+        let player = player_from_resource(self, &player)?;
+        let Some(server) = self.server.as_ref() else {
+            return Err("server not available".to_string());
+        };
+        Ok(player.has_permission(server, &node).await)
+    }
+
+    async fn get_display_name(
+        &mut self,
+        player: Resource<Player>,
+    ) -> Result<Resource<pumpkin::plugin::text::TextComponent>, String> {
+        let player = player_from_resource(self, &player)?;
+        let display_name = player.get_display_name().await;
+        self.add_text_component(display_name)
+            .map_err(|_| "failed to add text-component resource".to_string())
     }
 
     async fn send_system_message(
