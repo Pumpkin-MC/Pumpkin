@@ -389,7 +389,9 @@ impl ChunkLoading {
             Entry::Vacant(_) => {
                 // This can happen transiently if the level map is updated by other ticket removals
                 // while we're processing a queued removal. Treat as a no-op.
-                warn!("remove_ticket: pos_level missing entry for {pos:?} (level {level}); ignoring");
+                warn!(
+                    "remove_ticket: pos_level missing entry for {pos:?} (level {level}); ignoring"
+                );
                 return;
             }
         }

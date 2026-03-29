@@ -199,7 +199,9 @@ impl BlockBehaviour for PistonBlock {
                 if let Some(piston) = block_entity.as_any().downcast_ref::<PistonBlockEntity>() {
                     piston.finish(world.clone()).await;
                 } else {
-                    warn!("Piston expected PistonBlockEntity at {extended_pos:?} but found different entity");
+                    warn!(
+                        "Piston expected PistonBlockEntity at {extended_pos:?} but found different entity"
+                    );
                 }
             }
 
@@ -250,7 +252,9 @@ impl BlockBehaviour for PistonBlock {
                             bl2 = true;
                         }
                     } else {
-                        warn!("Moving piston expected PistonBlockEntity at {pull_pos:?} but found different entity");
+                        warn!(
+                            "Moving piston expected PistonBlockEntity at {pull_pos:?} but found different entity"
+                        );
                     }
                 }
                 if !bl2 {
@@ -362,7 +366,9 @@ pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
                         r#type = 2;
                     }
                 } else {
-                    warn!("Moving piston expected PistonBlockEntity at {new_pos:?} but found different entity");
+                    warn!(
+                        "Moving piston expected PistonBlockEntity at {new_pos:?} but found different entity"
+                    );
                 }
             }
         }

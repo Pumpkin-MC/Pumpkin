@@ -213,9 +213,9 @@ impl JavaClient {
             .info
             .clone();
         // We want to wait until we have sent the compression packet to the client
-        self.send_packet_now(&CSetCompression::new(
-            VarInt(i32::try_from(compression.threshold).unwrap_or(i32::MAX)),
-        ))
+        self.send_packet_now(&CSetCompression::new(VarInt(
+            i32::try_from(compression.threshold).unwrap_or(i32::MAX),
+        )))
         .await;
         self.set_compression(compression).await;
     }

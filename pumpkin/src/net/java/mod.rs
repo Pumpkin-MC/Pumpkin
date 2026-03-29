@@ -39,6 +39,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::MinecraftVersion;
+use tokio::time::{Duration, timeout};
 use tokio::{
     io::{BufReader, BufWriter},
     net::{
@@ -51,7 +52,6 @@ use tokio::{
     sync::mpsc::{Receiver, Sender, error::TryRecvError},
     task::JoinHandle,
 };
-use tokio::time::{Duration, timeout};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};

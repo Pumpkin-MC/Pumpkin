@@ -667,9 +667,17 @@ mod tests {
 
     #[test]
     fn disabled_plugin_suffix_is_skipped() {
-        assert!(PluginManager::is_disabled_plugin_path(Path::new("foo.jar.deactivated")));
-        assert!(PluginManager::is_disabled_plugin_path(Path::new("Foo.Jar.DeAcTiVaTeD")));
-        assert!(!PluginManager::is_disabled_plugin_path(Path::new("foo.jar")));
-        assert!(!PluginManager::is_disabled_plugin_path(Path::new("foo.deactivated.jar")));
+        assert!(PluginManager::is_disabled_plugin_path(Path::new(
+            "foo.jar.deactivated"
+        )));
+        assert!(PluginManager::is_disabled_plugin_path(Path::new(
+            "Foo.Jar.DeAcTiVaTeD"
+        )));
+        assert!(!PluginManager::is_disabled_plugin_path(Path::new(
+            "foo.jar"
+        )));
+        assert!(!PluginManager::is_disabled_plugin_path(Path::new(
+            "foo.deactivated.jar"
+        )));
     }
 }

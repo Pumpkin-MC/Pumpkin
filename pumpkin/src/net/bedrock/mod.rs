@@ -448,7 +448,8 @@ impl BedrockClient {
         for frame in frame_set.frames {
             if let Err(err) = self.handle_frame(server, frame).await {
                 warn!("Failed to handle bedrock frame: {err}");
-                self.kick(DisconnectReason::BadPacket, err.to_string()).await;
+                self.kick(DisconnectReason::BadPacket, err.to_string())
+                    .await;
                 return;
             }
         }
@@ -552,46 +553,34 @@ impl BedrockClient {
                     self.player_pos_update(player, input_packet).await;
                 }
             }
-            SLoadingScreen::PACKET_ID => {
-                match SLoadingScreen::read(reader) {
-                    Ok(pkt) => {
-                        if pkt.is_loading_done() {
-                            player.set_client_loaded(true);
-                        }
+            SLoadingScreen::PACKET_ID => match SLoadingScreen::read(reader) {
+                Ok(pkt) => {
+                    if pkt.is_loading_done() {
+                        player.set_client_loaded(true);
                     }
-                    Err(err) => warn!("Bedrock: failed to read loading screen packet: {err}"),
                 }
-            }
-            SRequestChunkRadius::PACKET_ID => {
-                match SRequestChunkRadius::read(reader) {
-                    Ok(pkt) => self.handle_request_chunk_radius(player, pkt).await,
-                    Err(err) => warn!("Bedrock: failed to read chunk radius packet: {err}"),
-                }
-            }
-            SInteraction::PACKET_ID => {
-                match SInteraction::read(reader) {
-                    Ok(pkt) => self.handle_interaction(player, pkt).await,
-                    Err(err) => warn!("Bedrock: failed to read interaction packet: {err}"),
-                }
-            }
-            SContainerClose::PACKET_ID => {
-                match SContainerClose::read(reader) {
-                    Ok(pkt) => self.handle_container_close(player, pkt).await,
-                    Err(err) => warn!("Bedrock: failed to read container close packet: {err}"),
-                }
-            }
-            SText::PACKET_ID => {
-                match SText::read(reader) {
-                    Ok(pkt) => self.handle_chat_message(server, player, pkt).await,
-                    Err(err) => warn!("Bedrock: failed to read text packet: {err}"),
-                }
-            }
-            SCommandRequest::PACKET_ID => {
-                match SCommandRequest::read(reader) {
-                    Ok(pkt) => self.handle_chat_command(player, server, pkt).await,
-                    Err(err) => warn!("Bedrock: failed to read command request packet: {err}"),
-                }
-            }
+                Err(err) => warn!("Bedrock: failed to read loading screen packet: {err}"),
+            },
+            SRequestChunkRadius::PACKET_ID => match SRequestChunkRadius::read(reader) {
+                Ok(pkt) => self.handle_request_chunk_radius(player, pkt).await,
+                Err(err) => warn!("Bedrock: failed to read chunk radius packet: {err}"),
+            },
+            SInteraction::PACKET_ID => match SInteraction::read(reader) {
+                Ok(pkt) => self.handle_interaction(player, pkt).await,
+                Err(err) => warn!("Bedrock: failed to read interaction packet: {err}"),
+            },
+            SContainerClose::PACKET_ID => match SContainerClose::read(reader) {
+                Ok(pkt) => self.handle_container_close(player, pkt).await,
+                Err(err) => warn!("Bedrock: failed to read container close packet: {err}"),
+            },
+            SText::PACKET_ID => match SText::read(reader) {
+                Ok(pkt) => self.handle_chat_message(server, player, pkt).await,
+                Err(err) => warn!("Bedrock: failed to read text packet: {err}"),
+            },
+            SCommandRequest::PACKET_ID => match SCommandRequest::read(reader) {
+                Ok(pkt) => self.handle_chat_command(player, server, pkt).await,
+                Err(err) => warn!("Bedrock: failed to read command request packet: {err}"),
+            },
             _ => {
                 warn!("Bedrock: Received Unknown Game packet: {}", packet.id);
             }
