@@ -223,6 +223,11 @@ impl Default for PluginManager {
 }
 
 impl PluginManager {
+    fn is_disabled_plugin_path(path: &Path) -> bool {
+        path.extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("deactivated"))
+    }
+
     /// Create a new plugin manager with default loaders
     #[must_use]
     pub fn new() -> Self {
@@ -308,6 +313,11 @@ impl PluginManager {
             let path = entry.path();
 
             if path.is_dir() {
+                continue;
+            }
+
+            // Common convention: disabled plugins are renamed with a `.deactivated` suffix.
+            if Self::is_disabled_plugin_path(&path) {
                 continue;
             }
 
@@ -647,5 +657,19 @@ impl PluginManager {
             }
         }
         event
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PluginManager;
+    use std::path::Path;
+
+    #[test]
+    fn disabled_plugin_suffix_is_skipped() {
+        assert!(PluginManager::is_disabled_plugin_path(Path::new("foo.jar.deactivated")));
+        assert!(PluginManager::is_disabled_plugin_path(Path::new("Foo.Jar.DeAcTiVaTeD")));
+        assert!(!PluginManager::is_disabled_plugin_path(Path::new("foo.jar")));
+        assert!(!PluginManager::is_disabled_plugin_path(Path::new("foo.deactivated.jar")));
     }
 }

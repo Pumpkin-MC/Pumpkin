@@ -16,6 +16,7 @@ use pumpkin_world::{
 };
 use rand::RngExt;
 use rustc_hash::FxHashMap;
+use tracing::warn;
 
 use crate::{
     block::{
@@ -195,11 +196,11 @@ impl BlockBehaviour for PistonBlock {
             let extended_pos = pos.offset(dir.to_offset());
 
             if let Some(block_entity) = world.get_block_entity(&extended_pos).await {
-                let piston = block_entity
-                    .as_any()
-                    .downcast_ref::<PistonBlockEntity>()
-                    .unwrap();
-                piston.finish(world.clone()).await;
+                if let Some(piston) = block_entity.as_any().downcast_ref::<PistonBlockEntity>() {
+                    piston.finish(world.clone()).await;
+                } else {
+                    warn!("Piston expected PistonBlockEntity at {extended_pos:?} but found different entity");
+                }
             }
 
             let mut props = MovingPistonLikeProperties::default(&Block::MOVING_PISTON);
@@ -243,10 +244,13 @@ impl BlockBehaviour for PistonBlock {
                 if block == &Block::MOVING_PISTON
                     && let Some(entity) = world.get_block_entity(&pull_pos).await
                 {
-                    let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
-                    if piston.facing == dir && piston.extending {
-                        piston.finish(world.clone()).await;
-                        bl2 = true;
+                    if let Some(piston) = entity.as_any().downcast_ref::<PistonBlockEntity>() {
+                        if piston.facing == dir && piston.extending {
+                            piston.finish(world.clone()).await;
+                            bl2 = true;
+                        }
+                    } else {
+                        warn!("Moving piston expected PistonBlockEntity at {pull_pos:?} but found different entity");
                     }
                 }
                 if !bl2 {
@@ -350,12 +354,15 @@ pub async fn try_move(world: &Arc<World>, block: &Block, block_pos: &BlockPos) {
             if new_props.facing == props.facing
                 && let Some(entity) = world.get_block_entity(&new_pos).await
             {
-                let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
-                if piston.extending && piston.current_progress.load() < 0.5
-                // TODO: more stuff...
-                {
-                    // Piston reduced too quickly, if its a stick piston no blocks will be dragged
-                    r#type = 2;
+                if let Some(piston) = entity.as_any().downcast_ref::<PistonBlockEntity>() {
+                    if piston.extending && piston.current_progress.load() < 0.5
+                    // TODO: more stuff...
+                    {
+                        // Piston reduced too quickly, if its a stick piston no blocks will be dragged
+                        r#type = 2;
+                    }
+                } else {
+                    warn!("Moving piston expected PistonBlockEntity at {new_pos:?} but found different entity");
                 }
             }
         }

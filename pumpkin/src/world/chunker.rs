@@ -13,10 +13,17 @@ use crate::{
 };
 
 pub fn get_view_distance(player: &Player) -> NonZeroU8 {
-    let server = player.world().server.upgrade().unwrap();
+    let server_view_distance = player
+        .world()
+        .server
+        .upgrade()
+        .map_or_else(
+            || NonZeroU8::new(8).expect("8 is non-zero"),
+            |s| s.basic_config.view_distance,
+        );
     player.config.load().view_distance.clamp(
         NonZeroU8::new(2).unwrap(),
-        server.basic_config.view_distance,
+        server_view_distance,
     )
 }
 

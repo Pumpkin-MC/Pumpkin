@@ -6,7 +6,7 @@ use std::collections::BinaryHeap;
 use std::collections::hash_map::Entry;
 use std::mem::swap;
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub struct HeapNode(i8, ChunkPos);
 impl PartialEq for HeapNode {
@@ -386,7 +386,12 @@ impl ChunkLoading {
                     self.cache.write(&mut self.pos_level, &mut self.change);
                 }
             }
-            Entry::Vacant(_) => panic!(),
+            Entry::Vacant(_) => {
+                // This can happen transiently if the level map is updated by other ticket removals
+                // while we're processing a queued removal. Treat as a no-op.
+                warn!("remove_ticket: pos_level missing entry for {pos:?} (level {level}); ignoring");
+                return;
+            }
         }
         debug_assert!(self.debug_check_error());
     }

@@ -51,6 +51,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender, error::TryRecvError},
     task::JoinHandle,
 };
+use tokio::time::{Duration, timeout};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
@@ -193,7 +194,19 @@ impl JavaClient {
     ///
     /// * `server`: A reference to the `Server` instance.
     pub async fn handle_login_sequence(&self, server: &Arc<Server>) -> PacketHandlerResult {
-        while let Some(packet) = self.get_packet().await {
+        // Prevent clients from getting stuck forever in the login sequence.
+        const LOGIN_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+        loop {
+            let Ok(packet) = timeout(LOGIN_READ_TIMEOUT, self.get_packet()).await else {
+                self.kick(TextComponent::text("Login timed out")).await;
+                return PacketHandlerResult::Stop;
+            };
+
+            let Some(packet) = packet else {
+                break;
+            };
+
             match self.handle_packet(server, &packet).await {
                 Ok(result) => {
                     if let Some(result) = result {
@@ -259,8 +272,18 @@ impl JavaClient {
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         let mut buf = Vec::new();
         let writer = &mut buf;
-        self.write_packet(packet, writer).unwrap();
-        self.enqueue_packet_data(buf.into()).await;
+        match self.write_packet(packet, writer) {
+            Ok(()) => self.enqueue_packet_data(buf.into()).await,
+            Err(err) => {
+                // Serialization failure means we can't trust the connection state anymore.
+                // Close to prevent further inconsistent writes.
+                warn!(
+                    "Failed to serialize outgoing packet for client {}: {}",
+                    self.id, err
+                );
+                self.close();
+            }
+        }
     }
 
     /// Queues a clientbound packet to be sent to the connected client. Queued chunks are sent
@@ -335,8 +358,16 @@ impl JavaClient {
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
         let writer = &mut packet_buf;
-        self.write_packet(packet, writer).unwrap();
-        self.send_packet_now_data(packet_buf.into()).await;
+        match self.write_packet(packet, writer) {
+            Ok(()) => self.send_packet_now_data(packet_buf.into()).await,
+            Err(err) => {
+                warn!(
+                    "Failed to serialize high-priority packet for client {}: {}",
+                    self.id, err
+                );
+                self.close();
+            }
+        }
     }
 
     pub async fn send_packet_now_data(&self, packet: Bytes) {

@@ -124,7 +124,10 @@ impl BedrockClient {
     }
 
     pub fn start_outgoing_packet_task(&mut self) {
-        let mut packet_receiver = self.outgoing_packet_queue_recv.take().unwrap();
+        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
+            warn!("Bedrock outgoing packet task already started (receiver missing)");
+            return;
+        };
         let close_token = self.close_token.clone();
         let writer = self.network_writer.clone();
         let addr = self.address;
@@ -241,16 +244,21 @@ impl BedrockClient {
     ) {
         let mut data = Vec::new();
         let writer = &mut data;
-        Self::write_raw_packet(packet, writer).unwrap();
+        if let Err(err) = Self::write_raw_packet(packet, writer) {
+            warn!("Failed to serialize bedrock offline packet: {err}");
+            return;
+        }
         // We dont care if it works, if not the client will try again!
         let _ = socket.send_to(&data, addr).await;
     }
 
     pub async fn send_game_packet<P: BClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
-        self.write_game_packet(packet, &mut packet_buf)
-            .await
-            .unwrap();
+        if let Err(err) = self.write_game_packet(packet, &mut packet_buf).await {
+            warn!("Failed to serialize bedrock game packet: {err}");
+            self.close_token.cancel();
+            return;
+        }
         self.send_framed_packet_data(packet_buf, RakReliability::Unreliable)
             .await;
     }
@@ -261,7 +269,11 @@ impl BedrockClient {
         frame_set: &mut FrameSet,
     ) {
         let mut payload = Vec::new();
-        self.write_game_packet(packet, &mut payload).await.unwrap();
+        if let Err(err) = self.write_game_packet(packet, &mut payload).await {
+            warn!("Failed to serialize bedrock game packet for set: {err}");
+            self.close_token.cancel();
+            return;
+        }
 
         frame_set.frames.push(Frame::new_unreliable(payload));
     }
@@ -272,7 +284,10 @@ impl BedrockClient {
         reliability: RakReliability,
     ) {
         let mut packet_buf = Vec::new();
-        Self::write_raw_packet(packet, &mut packet_buf).unwrap();
+        if let Err(err) = Self::write_raw_packet(packet, &mut packet_buf) {
+            warn!("Failed to serialize bedrock framed packet: {err}");
+            return;
+        }
         self.send_framed_packet_data(packet_buf, reliability).await;
     }
 
@@ -341,7 +356,11 @@ impl BedrockClient {
     pub async fn send_frame_set(&self, mut frame_set: FrameSet, id: u8) {
         frame_set.sequence = u24(self.output_sequence_number.fetch_add(1, Ordering::Relaxed));
         let mut frame_set_buf = Vec::new();
-        frame_set.write_packet_data(&mut frame_set_buf, id).unwrap();
+        if let Err(err) = frame_set.write_packet_data(&mut frame_set_buf, id) {
+            warn!("Failed to serialize bedrock frame set: {err}");
+            self.close_token.cancel();
+            return;
+        }
 
         // I dont know if thats the right place to make encryption & decoding
         if let Err(err) = self
@@ -378,7 +397,11 @@ impl BedrockClient {
 
     pub async fn send_ack(&self, ack: &Ack) {
         let mut packet_buf = Vec::new();
-        ack.write(&mut packet_buf).unwrap();
+        if let Err(err) = ack.write(&mut packet_buf) {
+            warn!("Failed to serialize bedrock ack: {err}");
+            self.close_token.cancel();
+            return;
+        }
 
         if let Err(err) = self
             .network_writer
@@ -423,7 +446,11 @@ impl BedrockClient {
         self.send_ack(&Ack::new(vec![frame_set.sequence.0])).await;
         // TODO
         for frame in frame_set.frames {
-            self.handle_frame(server, frame).await.unwrap();
+            if let Err(err) = self.handle_frame(server, frame).await {
+                warn!("Failed to handle bedrock frame: {err}");
+                self.kick(DisconnectReason::BadPacket, err.to_string()).await;
+                return;
+            }
         }
     }
 
@@ -450,24 +477,29 @@ impl BedrockClient {
                 return Ok(());
             }
 
-            let mut frames = compounds.remove(&compound_id).unwrap();
+            let Some(mut frames) = compounds.remove(&compound_id) else {
+                return Ok(());
+            };
 
-            // Safety: We already checked that all frames are Some at this point
-            let len = frames
-                .iter()
-                .map(|frame| unsafe { frame.as_ref().unwrap_unchecked().payload.len() })
-                .sum();
-
-            let mut merged = Vec::with_capacity(len);
-
-            for frame in &frames {
-                merged.extend_from_slice(unsafe { &frame.as_ref().unwrap_unchecked().payload });
+            // We already checked `any(None)` above; assemble safely without `unsafe`.
+            let mut merged = Vec::new();
+            for f in &frames {
+                let Some(f) = f.as_ref() else {
+                    return Ok(());
+                };
+                merged.extend_from_slice(&f.payload);
             }
 
-            frame = unsafe { frames[0].take().unwrap_unchecked() };
+            let Some(first) = frames.get_mut(0) else {
+                return Ok(());
+            };
+            let Some(mut first_frame) = first.take() else {
+                return Ok(());
+            };
 
-            frame.payload = merged;
-            frame.split_size = 0;
+            first_frame.payload = merged;
+            first_frame.split_size = 0;
+            frame = first_frame;
         }
 
         let mut payload = Cursor::new(frame.payload);
@@ -498,8 +530,10 @@ impl BedrockClient {
                     .await;
             }
             _ => {
-                self.handle_play_packet(self.player.lock().await.as_ref().unwrap(), server, packet)
-                    .await;
+                let Some(player) = self.player.lock().await.clone() else {
+                    return Ok(());
+                };
+                self.handle_play_packet(&player, server, packet).await;
             }
         }
         Ok(())
@@ -519,32 +553,44 @@ impl BedrockClient {
                 }
             }
             SLoadingScreen::PACKET_ID => {
-                if SLoadingScreen::read(reader).unwrap().is_loading_done() {
-                    player.set_client_loaded(true);
+                match SLoadingScreen::read(reader) {
+                    Ok(pkt) => {
+                        if pkt.is_loading_done() {
+                            player.set_client_loaded(true);
+                        }
+                    }
+                    Err(err) => warn!("Bedrock: failed to read loading screen packet: {err}"),
                 }
             }
             SRequestChunkRadius::PACKET_ID => {
-                self.handle_request_chunk_radius(
-                    player,
-                    SRequestChunkRadius::read(reader).unwrap(),
-                )
-                .await;
+                match SRequestChunkRadius::read(reader) {
+                    Ok(pkt) => self.handle_request_chunk_radius(player, pkt).await,
+                    Err(err) => warn!("Bedrock: failed to read chunk radius packet: {err}"),
+                }
             }
             SInteraction::PACKET_ID => {
-                self.handle_interaction(player, SInteraction::read(reader).unwrap())
-                    .await;
+                match SInteraction::read(reader) {
+                    Ok(pkt) => self.handle_interaction(player, pkt).await,
+                    Err(err) => warn!("Bedrock: failed to read interaction packet: {err}"),
+                }
             }
             SContainerClose::PACKET_ID => {
-                self.handle_container_close(player, SContainerClose::read(reader).unwrap())
-                    .await;
+                match SContainerClose::read(reader) {
+                    Ok(pkt) => self.handle_container_close(player, pkt).await,
+                    Err(err) => warn!("Bedrock: failed to read container close packet: {err}"),
+                }
             }
             SText::PACKET_ID => {
-                self.handle_chat_message(server, player, SText::read(reader).unwrap())
-                    .await;
+                match SText::read(reader) {
+                    Ok(pkt) => self.handle_chat_message(server, player, pkt).await,
+                    Err(err) => warn!("Bedrock: failed to read text packet: {err}"),
+                }
             }
             SCommandRequest::PACKET_ID => {
-                self.handle_chat_command(player, server, SCommandRequest::read(reader).unwrap())
-                    .await;
+                match SCommandRequest::read(reader) {
+                    Ok(pkt) => self.handle_chat_command(player, server, pkt).await,
+                    Err(err) => warn!("Bedrock: failed to read command request packet: {err}"),
+                }
             }
             _ => {
                 warn!("Bedrock: Received Unknown Game packet: {}", packet.id);

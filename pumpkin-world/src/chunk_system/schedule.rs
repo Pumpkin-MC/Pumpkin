@@ -1004,27 +1004,27 @@ impl GenerationSchedule {
                             StagedChunkEnum::None,
                         ));
 
+                        // Temporarily hold chunk ownership until we're sure the whole write area is ready.
+                        // This allows safe rollback without requiring `Chunk: Clone`.
+                        let mut swapped_chunks: Vec<(ChunkPos, Chunk)> = Vec::new();
+                        let mut aborted_for_missing = false;
                         for dx in -write_radius..=write_radius {
                             for dy in -write_radius..=write_radius {
                                 let new_pos = node.pos.add_raw(dx, dy);
                                 let holder = self.chunk_map.get_mut(&new_pos).unwrap();
                                 let mut tmp = None;
                                 swap(&mut tmp, &mut holder.chunk);
-                                let tmp = match tmp {
-                                    Some(v) => v,
-                                    None => panic!(
-                                        "Missing chunk for position {:?} while processing generation task for {:?} stage {:?}",
+                                let Some(tmp) = tmp else {
+                                    warn!(
+                                        "schedule: missing chunk for {:?} while processing {:?} stage {:?}; parking task",
                                         new_pos, node.pos, node.stage
-                                    ),
+                                    );
+                                    // Put the holder back to a stable state (it was already None).
+                                    holder.occupied = NodeKey::null();
+                                    aborted_for_missing = true;
+                                    break;
                                 };
-                                match tmp {
-                                    Chunk::Level(chunk) => {
-                                        cache.chunks.push(Chunk::Level(chunk));
-                                    }
-                                    Chunk::Proto(chunk) => {
-                                        cache.chunks.push(Chunk::Proto(chunk));
-                                    }
-                                }
+                                swapped_chunks.push((new_pos, tmp));
 
                                 debug_assert!(holder.occupied.is_null());
 
@@ -1055,6 +1055,35 @@ impl GenerationSchedule {
 
                                 holder.occupied = occupy;
                             }
+                            if aborted_for_missing {
+                                break;
+                            }
+                        }
+
+                        if aborted_for_missing {
+                            // Roll back: restore swapped chunks into their holders and remove the occupy node.
+                            for (pos, chunk) in swapped_chunks {
+                                if let Some(holder) = self.chunk_map.get_mut(&pos) {
+                                    if holder.chunk.is_none() {
+                                        holder.chunk = Some(chunk);
+                                    }
+                                    if holder.occupied == occupy {
+                                        holder.occupied = NodeKey::null();
+                                    }
+                                }
+                            }
+                            self.drop_node(occupy);
+                            if let Some(n) = self.graph.nodes.get_mut(task.1) {
+                                n.in_queue = false;
+                            }
+                            self.waiting_for_chunks.insert(task.1);
+                            self.check_waiting_tasks();
+                            continue;
+                        }
+
+                        // All chunks are present; move them into the generation cache in scan order.
+                        for (_pos, chunk) in swapped_chunks {
+                            cache.chunks.push(chunk);
                         }
 
                         self.running_task_count += 1;
@@ -1163,7 +1192,7 @@ impl GenerationSchedule {
             for (key, value) in &self.graph.nodes {
                 error!("unrelease node {key:?}: {value:?}");
             }
-            panic!("nodes count error");
+            return false;
         }
         for (pos, holder) in &self.chunk_map {
             for i in &holder.tasks {

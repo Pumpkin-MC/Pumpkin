@@ -1,6 +1,7 @@
 use pumpkin_data::translation;
 use pumpkin_protocol::{
     ConnectionState, KnownPack, Label, Link, LinkType,
+    codec::var_int::VarInt,
     java::client::{
         config::{CConfigAddResourcePack, CConfigServerLinks, CKnownPacks},
         login::{CLoginSuccess, CSetCompression},
@@ -74,7 +75,18 @@ impl JavaClient {
             let id = if server.basic_config.online_mode {
                 login_start.uuid
             } else {
-                offline_uuid(&login_start.name).expect("This is very not safe and bad")
+                // Offline UUID generation should never fail for validated player names,
+                // but treat unexpected errors as a clean disconnect instead of crashing.
+                match offline_uuid(&login_start.name) {
+                    Ok(id) => id,
+                    Err(err) => {
+                        self.kick(TextComponent::text(format!(
+                            "Failed to generate offline UUID: {err}"
+                        )))
+                        .await;
+                        return;
+                    }
+                }
             };
 
             let profile = GameProfile {
@@ -111,10 +123,14 @@ impl JavaClient {
         encryption_response: SEncryptionResponse,
     ) {
         debug!("Handling encryption");
-        let shared_secret = server
-            .decrypt(&encryption_response.shared_secret)
-            .await
-            .unwrap();
+        let shared_secret = match server.decrypt(&encryption_response.shared_secret).await {
+            Ok(secret) => secret,
+            Err(err) => {
+                self.kick(TextComponent::text(format!("Encryption failed: {err}")))
+                    .await;
+                return;
+            }
+        };
 
         if let Err(error) = self.set_encryption(&shared_secret).await {
             self.kick(TextComponent::text(error.to_string())).await;
@@ -198,7 +214,7 @@ impl JavaClient {
             .clone();
         // We want to wait until we have sent the compression packet to the client
         self.send_packet_now(&CSetCompression::new(
-            compression.threshold.try_into().unwrap(),
+            VarInt(i32::try_from(compression.threshold).unwrap_or(i32::MAX)),
         ))
         .await;
         self.set_compression(compression).await;

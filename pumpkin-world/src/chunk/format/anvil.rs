@@ -142,7 +142,7 @@ impl Compression {
                 initial_capacity,
             )
             .map_err(CompressionError::LZ4Error),
-            Self::Custom => todo!(),
+            Self::Custom => Err(CompressionError::UnknownCompression),
         }
     }
 
@@ -190,7 +190,7 @@ impl Compression {
                 drop(encoder);
                 Ok(compressed_data)
             }
-            Self::Custom => todo!(),
+            Self::Custom => Err(CompressionError::UnknownCompression),
         }
     }
 
@@ -809,6 +809,19 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for AnvilChunkFile<S> {
                 return;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Compression, CompressionError};
+
+    #[test]
+    fn custom_compression_is_rejected_cleanly() {
+        let err = Compression::Custom
+            .decompress_data(&[0u8; 4])
+            .expect_err("custom compression should not be accepted yet");
+        assert!(matches!(err, CompressionError::UnknownCompression));
     }
 }
 
