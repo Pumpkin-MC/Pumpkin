@@ -25,11 +25,6 @@ pub const SORT_UNKNOWN_ERROR_TYPE: CommandErrorType<1> =
 pub const GAMEMODE_INVALID_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID);
 
-/// Temporary command error for an unsupported option.
-/// TODO: Remove this when all entity selector options are implemented.
-pub const UNIMPLEMENTED_OPTION_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_UNKNOWN);
-
 /// Options to customize an [`EntitySelectorParser`].
 ///
 /// These can be used in commands while specifying entity selectors.
@@ -238,7 +233,7 @@ impl EntitySelectorOption {
             }
             _ => {
                 tracing::warn!("Unimplemented entity selector option: {:?}", self);
-                Err(UNIMPLEMENTED_OPTION_ERROR_TYPE.create_without_context(self.name_component()))
+                Err(UNKNOWN_OPTION_ERROR_TYPE.create_without_context(self.name_component()))
             }
         }
     }
