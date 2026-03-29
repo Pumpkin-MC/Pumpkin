@@ -3,10 +3,11 @@ use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use pumpkin_data::translation;
+use pumpkin_util::text::TextComponent;
 
 pub const INVALID_UNIT_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::ARGUMENT_TIME_INVALID_UNIT);
-pub const TICK_COUNT_TOO_LOW_ERROR_TYPE: CommandErrorType<0> =
+pub const TICK_COUNT_TOO_LOW_ERROR_TYPE: CommandErrorType<2> =
     CommandErrorType::new(translation::ARGUMENT_TIME_TICK_COUNT_TOO_LOW);
 
 /// Represents an argument type parsing a time value, which can
@@ -51,7 +52,11 @@ impl ArgumentType for TimeArgumentType {
         };
         let ticks = (ticks_per_unit as f32 * value).round() as i32;
         if ticks < self.min {
-            Err(TICK_COUNT_TOO_LOW_ERROR_TYPE.create(reader))
+            Err(TICK_COUNT_TOO_LOW_ERROR_TYPE.create(
+                reader,
+                TextComponent::text(self.min.to_string()),
+                TextComponent::text(ticks.to_string()),
+            ))
         } else {
             Ok(ticks)
         }
