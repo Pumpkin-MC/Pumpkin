@@ -20,8 +20,6 @@ pub struct Block {
     pub id: u16,
     /// The unique namespaced ID (e.g., "`diamond_ore`").
     pub name: &'static str,
-    /// The key used for client-side localization (e.g., "`block.minecraft.diamond_ore`").
-    pub translation_key: &'static str,
     /// How hard the block is to break. A value of -1.0 indicates an unbreakable block (e.g., Bedrock).
     pub hardness: f32,
     /// The block's resistance to explosions.

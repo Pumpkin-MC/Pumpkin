@@ -76,7 +76,7 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                                 .await;
                             world
                                 .sync_world_event(
-                                    WorldEvent::BlockBroken,
+                                    WorldEvent::ParticlesDestroyBlock,
                                     p,
                                     Block::SOUL_SAND.default_state.id.into(),
                                 )

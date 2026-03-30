@@ -79,7 +79,7 @@ impl BlockBehaviour for ComposterBlock {
                 )
                 .await;
                 args.world
-                    .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
+                    .sync_world_event(WorldEvent::ComposterFill, *args.position, 1)
                     .await;
             }
 
