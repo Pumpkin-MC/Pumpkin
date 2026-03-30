@@ -1,8 +1,14 @@
+use pumpkin_data::translation;
 use crate::command::context::command_source::CommandSource;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::{Axis, Vector3};
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::{CommandErrorType, READER_EXPECTED_DOUBLE, READER_EXPECTED_INT};
+use crate::command::string_reader::StringReader;
 
 pub mod vec3;
+
+pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(translation::ARGUMENT_POS_MIXED);
 
 /// Represents a single world coordinate.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -12,6 +18,16 @@ pub enum WorldCoordinate {
 }
 
 impl WorldCoordinate {
+
+    /// Creates a new `WorldCoordinate`.
+    pub const fn new(is_relative: bool, value: f64) -> Self {
+        if is_relative {
+            WorldCoordinate::Relative(value)
+        } else {
+            WorldCoordinate::Absolute(value)
+        }
+    }
+
     /// Returns whether this coordinate is relative.
     #[must_use]
     pub const fn is_relative(&self) -> bool {
@@ -25,6 +41,92 @@ impl WorldCoordinate {
         match self {
             Self::Absolute(absolute) => *absolute,
             Self::Relative(relative) => origin + *relative,
+        }
+    }
+
+    /// Checks if a `StringReader` is about to describle a relative coordinate.
+    ///
+    /// # Arguments
+    /// * `reader` - The `StringReader` to check.
+    ///
+    /// # Returns
+    /// - `true` if a `~` (tilde) can be found. It is also skipped by this method.
+    /// - `false` if no `~` can be found.
+    pub fn consume_relative_start(reader: &mut StringReader) -> bool {
+        if reader.peek() == Some('~') {
+            reader.skip();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Tries to parse a [`WorldCoordinate`] from a single number, expecting an `f64`.
+    ///
+    /// # Arguments
+    /// * `reader` - The `StringReader` to parse the coordinate from.
+    /// * `correct_center` - Whether to correct integral coordinates by adding `+0.5` to them
+    ///   (as mentioned by [`Vec3ArgumentType::Default`]).
+    ///
+    /// # Returns
+    /// - The `WorldCoordinate` if it was correctly parsed, wrapped in an `Ok`.
+    /// - A [`CommandSyntaxError`] describing an error if it could not be correctly parsed,
+    ///   wrapped in an `Err`.
+    ///
+    /// [`Vec3ArgumentType::Default`]: vec3::Vec3ArgumentType::Default
+    pub fn parse_world_f64(&self, reader: &mut StringReader, correct_center: bool) -> Result<WorldCoordinate, CommandSyntaxError> {
+        if reader.peek() == Some('^') {
+            Err(MIXED_TYPE_ERROR_TYPE.create(reader))
+        } else if !reader.can_read_char() {
+            Err(READER_EXPECTED_DOUBLE.create(reader))
+        } else {
+            let is_relative = Self::consume_relative_start(reader);
+            let i = reader.cursor();
+            let mut value = if reader.can_read_char() && reader.peek() != Some(' ') {
+                reader.read_double()?
+            } else {
+                0.0
+            };
+            let slice = &reader.string()[i..reader.cursor()];
+            if is_relative && slice.is_empty() {
+                Ok(Self::Relative(0.0))
+            } else {
+                if !slice.contains('.') && !is_relative && correct_center {
+                    value += 0.5;
+                }
+                Ok(Self::new(is_relative, value))
+            }
+        }
+    }
+
+    /// Tries to parse a [`WorldCoordinate`] from a single number, expecting an integral position.
+    ///
+    /// # Arguments
+    /// * `reader` - The `StringReader` to parse the coordinate from.
+    ///
+    /// # Returns
+    /// - The `WorldCoordinate` if it was correctly parsed, wrapped in an `Ok`.
+    /// - A [`CommandSyntaxError`] describing an error if it could not be correctly parsed,
+    ///   wrapped in an `Err`.
+    ///
+    /// [`Vec3ArgumentType::Default`]: vec3::Vec3ArgumentType::Default
+    pub fn parse_world_i32(&self, reader: &mut StringReader) -> Result<WorldCoordinate, CommandSyntaxError> {
+        if reader.peek() == Some('^') {
+            Err(MIXED_TYPE_ERROR_TYPE.create(reader))
+        } else if !reader.can_read_char() {
+            Err(READER_EXPECTED_INT.create(reader))
+        } else {
+            let is_relative = Self::consume_relative_start(reader);
+            let value = if reader.can_read_char() && reader.peek() != Some(' ') {
+                if is_relative {
+                    reader.read_double()?
+                } else {
+                    reader.read_int()? as f64
+                }
+            } else {
+                0.0
+            };
+            Ok(Self::new(is_relative, value))
         }
     }
 }
