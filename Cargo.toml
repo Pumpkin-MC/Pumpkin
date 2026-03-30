@@ -102,6 +102,7 @@ bytes = "1.11"
 futures = { version = "0.3", default-features = false, features = ["executor"] }
 rayon = "1.11"
 crossbeam = "0.8"
+chrono = "0.4"
 
 uuid = { version = "1.23", features = ["serde", "v3", "v4"] }
 serde = { version = "1.0", features = ["derive"] }
