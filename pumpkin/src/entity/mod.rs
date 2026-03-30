@@ -1599,7 +1599,26 @@ impl Entity {
                 let source_axis = source_portal.as_ref().map(|p| p.axis);
                 drop(portal_manager);
 
-                let (teleport_pos, new_yaw) = if let Some(dest_result) =
+                let is_end_portal = dest_world.dimension == Dimension::THE_END
+                    || self.world.load().dimension == Dimension::THE_END;
+
+                let (teleport_pos, new_yaw) = if is_end_portal {
+                    if dest_world.dimension == Dimension::THE_END {
+                        // Entering the End: spawn on the obsidian platform at (100, 50, 0)
+                        (Vector3::new(100.5_f64, 50.0_f64, 0.5_f64), None)
+                    } else {
+                        // Leaving the End through the exit portal: return to overworld spawn
+                        let info = dest_world.level_info.load();
+                        (
+                            Vector3::new(
+                                f64::from(info.spawn_x) + 0.5,
+                                f64::from(info.spawn_y),
+                                f64::from(info.spawn_z) + 0.5,
+                            ),
+                            None,
+                        )
+                    }
+                } else if let Some(dest_result) =
                     NetherPortal::search_for_portal(&dest_world, target_pos).await
                 {
                     let base_pos = source_portal.as_ref().map_or_else(
