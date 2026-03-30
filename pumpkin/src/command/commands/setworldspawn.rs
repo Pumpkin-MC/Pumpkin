@@ -151,7 +151,7 @@ async fn setworldspawn(
 
     sender
         .send_message(TextComponent::translate(
-            translation::COMMANDS_SETWORLDSPAWN_SUCCESS,
+            translation::COMMANDS_SETWORLDSPAWN_SUCCESS_NEW,
             [
                 TextComponent::text(new_position.0.x.to_string()),
                 TextComponent::text(new_position.0.y.to_string()),

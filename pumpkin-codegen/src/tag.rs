@@ -66,17 +66,12 @@ impl ToTokens for EnumCreator {
 }
 
 /// The newest protocol version whose tag data is served as the latest-version fallback.
-const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
+const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
 
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
 /// modules, and the `Taggable` trait with its lookup helpers.
 pub(crate) fn build() -> TokenStream {
     // --- Rerun Triggers ---
-    println!("cargo:rerun-if-changed=../assets/blocks.json");
-    println!("cargo:rerun-if-changed=../assets/items.json");
-    println!("cargo:rerun-if-changed=../assets/biome.json");
-    println!("cargo:rerun-if-changed=../assets/fluids.json");
-    println!("cargo:rerun-if-changed=../assets/entities.json");
 
     // Watch specific tag versions
     let assets = [
@@ -89,6 +84,7 @@ pub(crate) fn build() -> TokenStream {
         (MinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
         (MinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
         (MinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
+        (MinecraftVersion::V_26_1, "26_1_tags.json"),
     ];
 
     // --- Load Global Assets ---
@@ -151,7 +147,6 @@ pub(crate) fn build() -> TokenStream {
 
     for (ver, file) in assets {
         let file_path = format!("../assets/tags/{file}");
-        println!("cargo:rerun-if-changed={file_path}");
 
         let tags: BTreeMap<String, BTreeMap<String, Vec<String>>> =
             serde_json::from_str(&fs::read_to_string(&file_path).unwrap()).unwrap();

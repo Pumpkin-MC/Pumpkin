@@ -51,6 +51,7 @@ use pumpkin_macros::send_cancellable;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::IdOr;
+use pumpkin_protocol::SoundEvent;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
@@ -105,7 +106,7 @@ use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
-pub const DATA_VERSION: i32 = 4671; // 1.21.11
+pub const DATA_VERSION: i32 = 4786; // 26.1
 
 enum BatchState {
     Initial,
@@ -1248,7 +1249,7 @@ impl Player {
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity()
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_SLEEPING_POSITION,
+                TrackedData::SLEEPING_POS_ID,
                 MetaDataType::OPTIONAL_BLOCK_POS,
                 Some(bed_head_pos),
             )])
@@ -1372,17 +1373,18 @@ impl Player {
         self.living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_SLEEPING_POSITION,
+                TrackedData::SLEEPING_POS_ID,
                 MetaDataType::OPTIONAL_BLOCK_POS,
                 None::<BlockPos>,
             )])
             .await;
 
+        let chunk_pos = self.living_entity.entity.chunk_pos.load();
         world
-            .broadcast_packet_all(&CEntityAnimation::new(
-                self.entity_id().into(),
-                Animation::LeaveBed,
-            ))
+            .broadcast_to_chunk(
+                chunk_pos,
+                &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
+            )
             .await;
 
         self.sleeping_since.store(None);
@@ -1436,6 +1438,27 @@ impl Player {
         self.client
             .enqueue_packet(&CSoundEffect::new(
                 IdOr::Id(sound_id),
+                category,
+                position,
+                volume,
+                pitch,
+                seed,
+            ))
+            .await;
+    }
+
+    pub async fn play_sound_event(
+        &self,
+        sound: SoundEvent,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+        seed: f64,
+    ) {
+        self.client
+            .enqueue_packet(&CSoundEffect::new(
+                IdOr::Value(sound),
                 category,
                 position,
                 volume,
@@ -1817,11 +1840,11 @@ impl Player {
     /// Updates the client of the player's current permission level.
     pub async fn send_permission_lvl_update(&self) {
         let status = match self.permission_lvl.load() {
-            PermissionLvl::Zero => EntityStatus::SetOpLevel0,
-            PermissionLvl::One => EntityStatus::SetOpLevel1,
-            PermissionLvl::Two => EntityStatus::SetOpLevel2,
-            PermissionLvl::Three => EntityStatus::SetOpLevel3,
-            PermissionLvl::Four => EntityStatus::SetOpLevel4,
+            PermissionLvl::Zero => EntityStatus::PermissionLevelAll,
+            PermissionLvl::One => EntityStatus::PermissionLevelModerators,
+            PermissionLvl::Two => EntityStatus::PermissionLevelGamemasters,
+            PermissionLvl::Three => EntityStatus::PermissionLevelAdmins,
+            PermissionLvl::Four => EntityStatus::PermissionLevelOwners,
         };
         self.world()
             .send_entity_status(&self.living_entity.entity, status)
@@ -2225,7 +2248,7 @@ impl Player {
             .entity
             .send_meta_data(&[
                 Metadata::new(
-                    TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
+                    TrackedData::PLAYER_MODE_CUSTOMISATION,
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),
@@ -2857,6 +2880,7 @@ impl Player {
     pub async fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world();
         let entity_id = VarInt(self.entity_id());
+        let chunk_pos = self.living_entity.entity.chunk_pos.load();
 
         let animation = match hand {
             Hand::Left => Animation::SwingMainArm,
@@ -2865,10 +2889,10 @@ impl Player {
 
         let packet = CEntityAnimation::new(entity_id, animation);
         if all {
-            world.broadcast_packet_all(&packet).await;
+            world.broadcast_to_chunk(chunk_pos, &packet).await;
         } else {
             world
-                .broadcast_packet_except(&[self.gameprofile.id], &packet)
+                .broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet)
                 .await;
         }
     }
@@ -3261,17 +3285,22 @@ impl EntityBase for Player {
                         let position = event.to;
                         let entity = self.get_entity();
                         self.request_teleport(position, yaw, pitch).await;
+                        let chunk_pos = entity.chunk_pos.load();
                         entity
                             .world
                             .load()
-                            .broadcast_packet_except(&[self.gameprofile.id], &CEntityPositionSync::new(
-                                self.living_entity.entity.entity_id.into(),
-                                position,
-                                Vector3::new(0.0, 0.0, 0.0),
-                                yaw,
-                                pitch,
-                                entity.on_ground.load(Ordering::SeqCst),
-                            ))
+                            .broadcast_to_chunk_except(
+                                chunk_pos,
+                                &[self.living_entity.entity.entity_uuid],
+                                &CEntityPositionSync::new(
+                                    self.living_entity.entity.entity_id.into(),
+                                    position,
+                                    Vector3::new(0.0, 0.0, 0.0),
+                                    yaw,
+                                    pitch,
+                                    entity.on_ground.load(Ordering::SeqCst),
+                                )
+                            )
                             .await;
                     }
                 }}
@@ -3673,8 +3702,10 @@ impl InventoryPlayer for Player {
         stack: &'a ItemStack,
     ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
+            let chunk_pos = self.living_entity.entity.chunk_pos.load();
             self.world()
-                .broadcast_packet_except(
+                .broadcast_to_chunk_except(
+                    chunk_pos,
                     &[self.get_entity().entity_uuid],
                     &CSetEquipment::new(
                         self.entity_id().into(),
@@ -3686,16 +3717,13 @@ impl InventoryPlayer for Player {
                 )
                 .await;
 
-            if let Some(equippable) = stack.get_data_component::<EquippableImpl>()
-                && let Some(sound) = Sound::from_name(
-                    equippable
-                        .equip_sound
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(equippable.equip_sound),
-                )
-            {
+            if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
                 self.world()
-                    .play_sound(sound, SoundCategory::Players, &self.position())
+                    .play_sound_event(
+                        equippable.equip_sound.clone(),
+                        SoundCategory::Players,
+                        &self.position(),
+                    )
                     .await;
             }
         })

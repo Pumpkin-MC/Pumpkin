@@ -82,7 +82,6 @@ pub enum MaterialRule {
     Sequence(SequenceMaterialRule),
     Condition(ConditionMaterialRule),
     Badlands(BadLandsMaterialRule),
-    Unsupported,
 }
 pub struct BiomeMaterialCondition {
     pub biome_is: &'static [&'static Biome],

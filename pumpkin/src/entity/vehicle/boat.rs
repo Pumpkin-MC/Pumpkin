@@ -45,16 +45,8 @@ impl BoatEntity {
 
         self.entity
             .send_meta_data(&[
-                Metadata::new(
-                    TrackedData::DATA_LEFT_PADDLE_MOVING,
-                    MetaDataType::BOOLEAN,
-                    left,
-                ),
-                Metadata::new(
-                    TrackedData::DATA_RIGHT_PADDLE_MOVING,
-                    MetaDataType::BOOLEAN,
-                    right,
-                ),
+                Metadata::new(TrackedData::ID_PADDLE_LEFT, MetaDataType::BOOLEAN, left),
+                Metadata::new(TrackedData::ID_PADDLE_RIGHT, MetaDataType::BOOLEAN, right),
             ])
             .await;
     }
@@ -63,12 +55,12 @@ impl BoatEntity {
         self.entity
             .send_meta_data(&[
                 Metadata::new(
-                    TrackedData::DATA_DAMAGE_WOBBLE_TICKS,
+                    TrackedData::ID_HURT,
                     MetaDataType::INTEGER,
                     VarInt(self.damage_wobble_ticks.load(Ordering::Relaxed)),
                 ),
                 Metadata::new(
-                    TrackedData::DATA_DAMAGE_WOBBLE_SIDE,
+                    TrackedData::ID_HURTDIR,
                     MetaDataType::INTEGER,
                     VarInt(self.damage_wobble_side.load(Ordering::Relaxed)),
                 ),
@@ -76,7 +68,7 @@ impl BoatEntity {
             .await;
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_DAMAGE_WOBBLE_STRENGTH,
+                TrackedData::ID_DAMAGE,
                 MetaDataType::FLOAT,
                 self.damage_wobble_strength.load(),
             )])

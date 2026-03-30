@@ -16,6 +16,7 @@ pub fn build() -> TokenStream {
         (MinecraftVersion::V_1_21_7, "1_21_7_meta_data_type.json"),
         (MinecraftVersion::V_1_21_9, "1_21_9_meta_data_type.json"),
         (MinecraftVersion::V_1_21_11, "1_21_11_meta_data_type.json"),
+        (MinecraftVersion::V_26_1, "26_1_meta_data_type.json"),
     ];
 
     let mut handlers_map: BTreeMap<String, BTreeMap<MinecraftVersion, i32>> = BTreeMap::new();

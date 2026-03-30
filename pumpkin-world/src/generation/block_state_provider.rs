@@ -13,9 +13,8 @@ use pumpkin_util::{
 use crate::block::BlockStateCodec;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
-
 use super::noise::perlin::DoublePerlinNoiseSampler;
+use crate::world::BlockRegistryExt;
 
 pub enum BlockStateProvider {
     Simple(SimpleStateProvider),
@@ -100,13 +99,13 @@ impl RandomizedIntBlockStateProvider {
 }
 
 pub struct PillarBlockStateProvider {
-    pub state: BlockStateCodec,
+    pub state: &'static BlockState,
 }
 
 impl PillarBlockStateProvider {
     pub fn get(&self, _pos: BlockPos) -> &'static BlockState {
         // TODO: random axis
-        self.state.get_state()
+        self.state
     }
 }
 
@@ -140,7 +139,7 @@ impl DualNoiseBlockStateProvider {
             list.push(self.base.get_state_by_value(&self.base.states, value));
         }
         let value = self.base.base.get_noise(pos);
-        self.base.get_state_by_value_2(&list, value).get_state()
+        self.base.get_state_by_value(&list, value)
     }
 
     fn get_slow_noise(&self, x: f64, y: f64, z: f64, sampler: &DoublePerlinNoiseSampler) -> f64 {
@@ -153,22 +152,22 @@ impl DualNoiseBlockStateProvider {
 }
 
 pub struct WeightedBlockStateProvider {
-    pub entries: Vec<Weighted<BlockStateCodec>>,
+    pub entries: Vec<Weighted<&'static BlockState>>,
 }
 
 impl WeightedBlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator) -> &'static BlockState {
-        Pool::get(&self.entries, random).unwrap().get_state()
+        Pool::get(&self.entries, random).unwrap()
     }
 }
 
 pub struct SimpleStateProvider {
-    pub state: BlockStateCodec,
+    pub state: &'static BlockState,
 }
 
 impl SimpleStateProvider {
     pub fn get(&self, _pos: BlockPos) -> &'static BlockState {
-        self.state.get_state()
+        self.state
     }
 }
 
@@ -196,29 +195,20 @@ impl NoiseBlockStateProviderBase {
 
 pub struct NoiseBlockStateProvider {
     pub base: NoiseBlockStateProviderBase,
-    pub states: Vec<BlockStateCodec>,
+    pub states: Vec<&'static BlockState>,
 }
 
 impl NoiseBlockStateProvider {
     pub fn get(&self, pos: BlockPos) -> &'static BlockState {
         let value = self.base.get_noise(pos);
-        self.get_state_by_value(&self.states, value).get_state()
+        self.get_state_by_value(&self.states, value)
     }
 
-    fn get_state_by_value<'a>(
+    fn get_state_by_value(
         &self,
-        states: &'a [BlockStateCodec],
+        states: &[&'static BlockState],
         value: f64,
-    ) -> &'a BlockStateCodec {
-        let val = f64::midpoint(1.0, value).clamp(0.0, 0.9999);
-        &states[(val * states.len() as f64) as usize]
-    }
-
-    fn get_state_by_value_2<'a>(
-        &self,
-        states: &'a [&BlockStateCodec],
-        value: f64,
-    ) -> &'a BlockStateCodec {
+    ) -> &'static BlockState {
         let val = f64::midpoint(1.0, value).clamp(0.0, 0.9999);
         states[(val * states.len() as f64) as usize]
     }
@@ -228,23 +218,21 @@ pub struct NoiseThresholdBlockStateProvider {
     pub base: NoiseBlockStateProviderBase,
     pub threshold: f32,
     pub high_chance: f32,
-    pub default_state: BlockStateCodec,
-    pub low_states: Vec<BlockStateCodec>,
-    pub high_states: Vec<BlockStateCodec>,
+    pub default_state: &'static BlockState,
+    pub low_states: Vec<&'static BlockState>,
+    pub high_states: Vec<&'static BlockState>,
 }
 
 impl NoiseThresholdBlockStateProvider {
     pub fn get(&self, random: &mut RandomGenerator, pos: BlockPos) -> &'static BlockState {
         let value = self.base.get_noise(pos);
         if value < self.threshold as f64 {
-            return self.low_states[random.next_bounded_i32(self.low_states.len() as i32) as usize]
-                .get_state();
+            return self.low_states[random.next_bounded_i32(self.low_states.len() as i32) as usize];
         }
         if random.next_f32() < self.high_chance {
             return self.high_states
-                [random.next_bounded_i32(self.high_states.len() as i32) as usize]
-                .get_state();
+                [random.next_bounded_i32(self.high_states.len() as i32) as usize];
         }
-        self.default_state.get_state()
+        self.default_state
     }
 }

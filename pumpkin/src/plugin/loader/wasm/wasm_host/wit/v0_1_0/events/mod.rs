@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::{Block, entity::EntityType};
 use pumpkin_util::{
     GameMode, Hand,
     math::{position::BlockPos, vector3::Vector3},
@@ -20,6 +21,7 @@ use crate::{
     world::World,
 };
 
+pub mod block;
 pub mod player;
 pub mod server;
 pub mod world;
@@ -63,6 +65,23 @@ pub(super) const fn from_wasm_block_position(
     position: pumpkin::plugin::common::BlockPosition,
 ) -> BlockPos {
     BlockPos::new(position.0, position.1, position.2)
+}
+
+pub(super) fn to_wasm_block_name(block: &'static Block) -> String {
+    format!("minecraft:{}", block.name)
+}
+
+pub(super) fn from_wasm_block_name(block_name: &str) -> &'static Block {
+    Block::from_registry_key(block_name.strip_prefix("minecraft:").unwrap_or(block_name))
+        .expect("invalid block name")
+}
+
+pub(super) fn to_wasm_entity_type(entity_type: &'static EntityType) -> String {
+    format!("minecraft:{}", entity_type.resource_name)
+}
+
+pub(super) fn from_wasm_entity_type(entity_type: &str) -> &'static EntityType {
+    EntityType::from_name(entity_type).expect("invalid entity type")
 }
 
 pub(super) const fn to_wasm_hand(hand: Hand) -> pumpkin::plugin::common::Hand {

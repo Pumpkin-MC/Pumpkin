@@ -96,7 +96,7 @@ impl HoneyCombItem {
 
         args.world.update_block_entity(block_entity).await;
         args.world
-            .sync_world_event(WorldEvent::BlockWaxed, *args.position, 0)
+            .sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, *args.position, 0)
             .await;
 
         BlockActionResult::Success

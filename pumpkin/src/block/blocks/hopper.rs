@@ -8,7 +8,7 @@ use crate::block::{
 };
 use crate::world::World;
 
-use pumpkin_data::block_properties::{BlockProperties, HopperFacing};
+use pumpkin_data::block_properties::{BlockProperties, FacingHopper};
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_hopper;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -71,11 +71,11 @@ impl BlockBehaviour for HopperBlock {
         Box::pin(async move {
             let mut props = HopperLikeProperties::default(args.block);
             props.facing = match args.direction {
-                BlockDirection::North => HopperFacing::North,
-                BlockDirection::East => HopperFacing::East,
-                BlockDirection::South => HopperFacing::South,
-                BlockDirection::West => HopperFacing::West,
-                BlockDirection::Up | BlockDirection::Down => HopperFacing::Down,
+                BlockDirection::North => FacingHopper::North,
+                BlockDirection::East => FacingHopper::East,
+                BlockDirection::South => FacingHopper::South,
+                BlockDirection::West => FacingHopper::West,
+                BlockDirection::Up | BlockDirection::Down => FacingHopper::Down,
             };
             props.enabled = true;
             props.to_state_id(args.block)

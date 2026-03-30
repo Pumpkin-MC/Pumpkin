@@ -54,7 +54,7 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                         .await;
                     args.world
                         .sync_world_event(
-                            WorldEvent::BlockBroken,
+                            WorldEvent::ParticlesDestroyBlock,
                             pos,
                             Block::SNOW_BLOCK.default_state.id.into(),
                         )
@@ -91,7 +91,7 @@ impl BlockBehaviour for CarvedPumpkinBlock {
                                 .await;
                             args.world
                                 .sync_world_event(
-                                    WorldEvent::BlockBroken,
+                                    WorldEvent::ParticlesDestroyBlock,
                                     p,
                                     Block::IRON_BLOCK.default_state.id.into(),
                                 )
