@@ -1,7 +1,7 @@
-use pumpkin_data::tag;
-use pumpkin_data::tag::Taggable;
+use crate::tag;
+use crate::tag::Taggable;
 
-use crate::item::ItemStack;
+use crate::item_stack::ItemStack;
 
 impl ItemStack {
     #[inline]

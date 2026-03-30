@@ -9,10 +9,10 @@ use std::sync::{
 
 use crate::block::entities::PropertyDelegate;
 use crate::inventory::Inventory;
-use crate::item::ItemStack;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::data_component_impl::DataComponentImpl;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;

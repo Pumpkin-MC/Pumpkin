@@ -52,7 +52,7 @@ fn world_from_resource(
 }
 
 fn to_wit_item_stack(
-    stack: &pumpkin_world::item::ItemStack,
+    stack: &pumpkin_data::item_stack::ItemStack,
 ) -> Option<pumpkin::plugin::common::ItemStack> {
     if stack.item_count == 0 {
         return None;

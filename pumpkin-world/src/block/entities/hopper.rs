@@ -1,9 +1,9 @@
 use crate::BlockStateId;
 use crate::block::entities::BlockEntity;
 use crate::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
-use crate::item::ItemStack;
 use crate::world::SimpleWorld;
 use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_nbt::compound::NbtCompound;

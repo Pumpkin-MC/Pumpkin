@@ -1,6 +1,6 @@
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{Block, FacingExt};
+use pumpkin_data::{Block, FacingExt, item_stack::ItemStack};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -19,13 +19,10 @@ use tokio::sync::Mutex;
 
 use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture};
 use crate::inventory::InventoryFuture;
-use crate::world::{BlockFlags, SimpleWorld};
-use crate::{
-    inventory::{
-        split_stack, {Clearable, Inventory},
-    },
-    item::ItemStack,
+use crate::inventory::{
+    split_stack, {Clearable, Inventory},
 };
+use crate::world::{BlockFlags, SimpleWorld};
 
 use super::BlockEntity;
 
