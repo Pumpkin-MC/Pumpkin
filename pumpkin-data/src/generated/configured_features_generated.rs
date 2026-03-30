@@ -2562,10 +2562,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
             state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
                 fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::CLAY,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::CLAY.default_state,
                 })),
                 rules: vec![],
             }),
@@ -2588,10 +2585,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
             state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
                 fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DIRT,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DIRT.default_state,
                 })),
                 rules: vec![BlockStateRule {
                     if_true: BlockPredicate::Not(NotBlockPredicate {
@@ -2620,7 +2614,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                             BlockStateCodec {
                                 name: &pumpkin_data::Block::GRASS_BLOCK,
                                 properties: Some(props),
-                            }
+                            }.get_state()
                         },
                     }),
                 }],
@@ -2644,10 +2638,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
             state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
                 fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::GRAVEL,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::GRAVEL.default_state,
                 })),
                 rules: vec![],
             }),
@@ -2670,10 +2661,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
             state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
                 fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::SAND,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::SAND.default_state,
                 })),
                 rules: vec![BlockStateRule {
                     if_true: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
@@ -2683,10 +2671,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
                     }),
                     then: BlockStateProvider::Simple(SimpleStateProvider {
-                        state: BlockStateCodec {
-                            name: &pumpkin_data::Block::SANDSTONE,
-                            properties: None,
-                        },
+                        state: pumpkin_data::Block::SANDSTONE.default_state,
                     }),
                 }],
             }),
@@ -5018,10 +5003,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
             state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
                 fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::PACKED_ICE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::PACKED_ICE.default_state,
                 })),
                 rules: vec![],
             }),

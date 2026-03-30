@@ -10,10 +10,9 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand},
 };
 
-use crate::block::BlockStateCodec;
+use super::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::proto_chunk::GenerationCache;
-use super::noise::perlin::DoublePerlinNoiseSampler;
 use crate::world::BlockRegistryExt;
 
 pub enum BlockStateProvider {
