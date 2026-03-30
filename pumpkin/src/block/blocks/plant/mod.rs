@@ -26,6 +26,7 @@ pub mod spore_blossom;
 pub mod sugar_cane;
 pub mod tall_plant;
 pub mod tall_seagrass;
+pub mod weeping_vines;
 pub mod wither_rose;
 
 trait PlantBlockBase {
