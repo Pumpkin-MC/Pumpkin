@@ -42,4 +42,5 @@ macro_rules! assert_parse_err_reset {
 }
 
 pub mod argument_type;
+mod coordinates;
 pub mod core;
