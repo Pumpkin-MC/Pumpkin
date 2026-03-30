@@ -106,7 +106,7 @@ use pumpkin_world::chunk_system::ChunkLoading;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
-pub const DATA_VERSION: i32 = 4671; // 1.21.11
+pub const DATA_VERSION: i32 = 4786; // 26.1
 
 enum BatchState {
     Initial,
@@ -1249,7 +1249,7 @@ impl Player {
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         self.get_entity()
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_SLEEPING_POSITION,
+                TrackedData::SLEEPING_POS_ID,
                 MetaDataType::OPTIONAL_BLOCK_POS,
                 Some(bed_head_pos),
             )])
@@ -1373,7 +1373,7 @@ impl Player {
         self.living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_SLEEPING_POSITION,
+                TrackedData::SLEEPING_POS_ID,
                 MetaDataType::OPTIONAL_BLOCK_POS,
                 None::<BlockPos>,
             )])
@@ -1840,11 +1840,11 @@ impl Player {
     /// Updates the client of the player's current permission level.
     pub async fn send_permission_lvl_update(&self) {
         let status = match self.permission_lvl.load() {
-            PermissionLvl::Zero => EntityStatus::SetOpLevel0,
-            PermissionLvl::One => EntityStatus::SetOpLevel1,
-            PermissionLvl::Two => EntityStatus::SetOpLevel2,
-            PermissionLvl::Three => EntityStatus::SetOpLevel3,
-            PermissionLvl::Four => EntityStatus::SetOpLevel4,
+            PermissionLvl::Zero => EntityStatus::PermissionLevelAll,
+            PermissionLvl::One => EntityStatus::PermissionLevelModerators,
+            PermissionLvl::Two => EntityStatus::PermissionLevelGamemasters,
+            PermissionLvl::Three => EntityStatus::PermissionLevelAdmins,
+            PermissionLvl::Four => EntityStatus::PermissionLevelOwners,
         };
         self.world()
             .send_entity_status(&self.living_entity.entity, status)
@@ -2248,7 +2248,7 @@ impl Player {
             .entity
             .send_meta_data(&[
                 Metadata::new(
-                    TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
+                    TrackedData::PLAYER_MODE_CUSTOMISATION,
                     MetaDataType::BYTE,
                     config.skin_parts,
                 ),

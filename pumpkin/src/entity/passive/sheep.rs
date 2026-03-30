@@ -77,7 +77,7 @@ impl SheepEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_COLOR,
+                TrackedData::COLOR_ID,
                 MetaDataType::BYTE,
                 byte as i8,
             )])

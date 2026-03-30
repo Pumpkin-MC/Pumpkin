@@ -70,7 +70,7 @@ impl EntityBase for LingeringPotionEntity {
             // Sync the item stack so the client renders the correct potion type
             entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::DATA_ITEM,
+                    pumpkin_data::tracked_data::TrackedData::ITEM_STACK,
                     pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
                     &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
                         stack.clone(),
@@ -111,10 +111,7 @@ impl EntityBase for LingeringPotionEntity {
 
             // Play impact particles
             world
-                .send_entity_status(
-                    self.get_entity(),
-                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-                )
+                .send_entity_status(self.get_entity(), EntityStatus::Death)
                 .await;
 
             // Read stored item stack and compute potion effects

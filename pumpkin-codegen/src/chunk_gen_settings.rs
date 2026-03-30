@@ -80,9 +80,6 @@ pub enum MaterialRuleStruct {
     /// Special Badlands terrain coloring rule.
     #[serde(rename = "minecraft:bandlands")]
     Badlands,
-    /// Any material rule type not handled by this codegen.
-    #[serde(other)]
-    Unsupported,
 }
 
 /// Deserialized surface material condition that gates a material rule.
@@ -431,9 +428,6 @@ impl ToTokens for MaterialRuleStruct {
             Self::Badlands => {
                 tokens.extend(quote!(MaterialRule::Badlands(BadLandsMaterialRule)));
             }
-            Self::Unsupported => {
-                tokens.extend(quote!(MaterialRule::Unsupported));
-            }
         }
     }
 }
@@ -549,7 +543,6 @@ pub fn build() -> TokenStream {
             Sequence(SequenceMaterialRule),
             Condition(ConditionMaterialRule),
             Badlands(BadLandsMaterialRule),
-            Unsupported,
         }
 
 

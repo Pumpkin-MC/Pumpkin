@@ -175,7 +175,7 @@ impl EntityBase for AreaEffectCloudEntity {
             // Send initial particle and radius
             self.entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::DATA_PARTICLE,
+                    pumpkin_data::tracked_data::TrackedData::PARTICLE,
                     pumpkin_data::meta_data_type::MetaDataType::PARTICLE,
                     &meta,
                 )])
@@ -183,7 +183,7 @@ impl EntityBase for AreaEffectCloudEntity {
 
             self.entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::DATA_RADIUS,
+                    pumpkin_data::tracked_data::TrackedData::RADIUS,
                     pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                     radius,
                 )])
@@ -194,7 +194,7 @@ impl EntityBase for AreaEffectCloudEntity {
             let is_waiting = 0 < wait_time;
             self.entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::DATA_WAITING,
+                    pumpkin_data::tracked_data::TrackedData::WAITING,
                     pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
                     is_waiting,
                 )])
@@ -230,7 +230,7 @@ impl EntityBase for AreaEffectCloudEntity {
             if age == wait_time && wait_time > 0 {
                 self.entity
                     .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                        pumpkin_data::tracked_data::TrackedData::DATA_WAITING,
+                        pumpkin_data::tracked_data::TrackedData::WAITING,
                         pumpkin_data::meta_data_type::MetaDataType::BOOLEAN,
                         false,
                     )])
@@ -257,7 +257,7 @@ impl EntityBase for AreaEffectCloudEntity {
                 drop(radius);
                 self.entity
                     .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                        pumpkin_data::tracked_data::TrackedData::DATA_RADIUS,
+                        pumpkin_data::tracked_data::TrackedData::RADIUS,
                         pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                         current_radius,
                     )])
@@ -387,7 +387,7 @@ impl EntityBase for AreaEffectCloudEntity {
                     // Send updated radius to clients
                     self.entity
                         .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                            pumpkin_data::tracked_data::TrackedData::DATA_RADIUS,
+                            pumpkin_data::tracked_data::TrackedData::RADIUS,
                             pumpkin_data::meta_data_type::MetaDataType::FLOAT,
                             current_radius,
                         )])

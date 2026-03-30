@@ -54,7 +54,7 @@ impl BegGoal {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_BEGGING,
+                TrackedData::INTERESTED_ID,
                 MetaDataType::BOOLEAN,
                 begging,
             )])

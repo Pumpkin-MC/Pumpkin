@@ -236,7 +236,7 @@ impl LivingEntity {
         self.livings_flags.store(b, Ordering::Relaxed);
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_LIVING_FLAGS,
+                TrackedData::LIVING_ENTITY_FLAGS,
                 MetaDataType::BYTE,
                 b,
             )])
@@ -265,7 +265,7 @@ impl LivingEntity {
         // tell everyone entities health changed
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_HEALTH,
+                TrackedData::HEALTH_ID,
                 MetaDataType::FLOAT,
                 clamped,
             )])
@@ -337,6 +337,7 @@ impl LivingEntity {
             v1_21_7: 17u8,
             v1_21_9: 17u8,
             v1_21_11: 17u8,
+            v26_1: 17u8, // ?
         })
     }
 
@@ -1280,10 +1281,7 @@ impl LivingEntity {
 
             // Plays the death sound
             world
-                .send_entity_status(
-                    &self.entity,
-                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-                )
+                .send_entity_status(&self.entity, EntityStatus::Death)
                 .await;
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
@@ -1474,7 +1472,7 @@ impl LivingEntity {
                 self.entity
                     .world
                     .load()
-                    .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
+                    .send_entity_status(&self.entity, EntityStatus::ProtectedFromDeath)
                     .await;
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
@@ -1631,7 +1629,7 @@ impl LivingEntity {
         // Send health metadata
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_HEALTH,
+                TrackedData::HEALTH_ID,
                 MetaDataType::FLOAT,
                 max_health,
             )])
@@ -2204,7 +2202,7 @@ impl EntityBase for LivingEntity {
                     self.entity
                         .world
                         .load()
-                        .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
+                        .send_entity_status(&self.entity, EntityStatus::Death)
                         .await;
                     self.entity.remove().await;
                 }

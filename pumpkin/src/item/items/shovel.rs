@@ -64,7 +64,7 @@ impl ItemBehaviour for ShovelItem {
                 );
                 if campfire_props.lit {
                     world
-                        .sync_world_event(WorldEvent::FireExtinguished, location, 0)
+                        .sync_world_event(WorldEvent::SoundExtinguishFire, location, 0)
                         .await;
 
                     campfire_props.lit = false;

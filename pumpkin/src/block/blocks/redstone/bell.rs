@@ -7,11 +7,9 @@ use crate::block::{
     OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
 };
 use crate::world::World;
-use pumpkin_data::block_properties::Attachment;
-use pumpkin_data::block_properties::BellLikeProperties;
-use pumpkin_data::block_properties::BlockFace;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::block_properties::{AttachFace, BellAttachment, BellLikeProperties};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
@@ -54,7 +52,7 @@ async fn ring_bell(
 
 fn is_point_on_bell(
     hit: &BlockHitResult,
-    attachment: Attachment,
+    attachment: BellAttachment,
     block_face: HorizontalFacing,
 ) -> bool {
     if hit.face == &BlockDirection::Up || hit.face == &BlockDirection::Down {
@@ -62,11 +60,13 @@ fn is_point_on_bell(
     }
     if hit.cursor_pos.y <= 0.8124f32 {
         match attachment {
-            Attachment::Floor => hit.face.to_axis() == block_face.to_block_direction().to_axis(),
-            Attachment::SingleWall | Attachment::DoubleWall => {
+            BellAttachment::Floor => {
+                hit.face.to_axis() == block_face.to_block_direction().to_axis()
+            }
+            BellAttachment::SingleWall | BellAttachment::DoubleWall => {
                 hit.face.to_axis() != block_face.to_block_direction().to_axis()
             }
-            Attachment::Ceiling => true,
+            BellAttachment::Ceiling => true,
         }
     } else {
         false
@@ -87,9 +87,9 @@ impl WallMountedBlock for BellBlock {
     fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
         let props = BellLikeProperties::from_state_id(state_id, block);
         match props.attachment {
-            Attachment::Ceiling => BlockDirection::Down,
-            Attachment::Floor => BlockDirection::Up,
-            Attachment::SingleWall | Attachment::DoubleWall => {
+            BellAttachment::Ceiling => BlockDirection::Down,
+            BellAttachment::Floor => BlockDirection::Up,
+            BellAttachment::SingleWall | BellAttachment::DoubleWall => {
                 props.facing.opposite().to_block_direction()
             }
         }
@@ -164,20 +164,20 @@ impl BlockBehaviour for BellBlock {
                 WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
             props.facing = match block_face {
-                BlockFace::Floor | BlockFace::Ceiling => facing,
-                BlockFace::Wall => facing.opposite(),
+                AttachFace::Floor | AttachFace::Ceiling => facing,
+                AttachFace::Wall => facing.opposite(),
             };
 
             props.attachment = match block_face {
-                BlockFace::Wall => {
+                AttachFace::Wall => {
                     if is_single_wall(*args.position, props.facing.opposite(), args.world).await {
-                        Attachment::SingleWall
+                        BellAttachment::SingleWall
                     } else {
-                        Attachment::DoubleWall
+                        BellAttachment::DoubleWall
                     }
                 }
-                BlockFace::Floor => Attachment::Floor,
-                BlockFace::Ceiling => Attachment::Ceiling,
+                AttachFace::Floor => BellAttachment::Floor,
+                AttachFace::Ceiling => BellAttachment::Ceiling,
             };
 
             props.to_state_id(args.block)

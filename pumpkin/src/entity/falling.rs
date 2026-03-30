@@ -92,7 +92,7 @@ impl EntityBase for FallingEntity {
         Box::pin(async move {
             self.entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_BLOCK_POS,
+                    TrackedData::START_POS,
                     MetaDataType::BLOCK_POS,
                     self.entity.block_pos.load(),
                 )])

@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, fs};
 use crate::version::MinecraftVersion;
 
 /// The newest protocol version used as the fallback for unknown versions in `PacketId::to_id`.
-const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
+const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
 
 /// Raw deserialization shape for a single versioned packet mapping file.
 #[derive(Deserialize)]
@@ -32,13 +32,13 @@ pub(crate) fn build() -> TokenStream {
         (MinecraftVersion::V_1_21_7, "1_21_7_packets.json"),
         (MinecraftVersion::V_1_21_9, "1_21_9_packets.json"),
         (MinecraftVersion::V_1_21_11, "1_21_11_packets.json"),
+        (MinecraftVersion::V_26_1, "26_1_packets.json"),
     ];
 
     // Parse available packet files into a BTreeMap keyed by MinecraftVersion
     let mut versions = BTreeMap::new();
     for (ver, file) in assets {
         let path = format!("../assets/packet/{file}");
-        println!("cargo:rerun-if-changed={path}");
 
         let content = fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("Failed to read packet JSON file: {path}"));

@@ -69,10 +69,7 @@ impl EntityBase for SnowballEntity {
 
             // Always send particle status regardless of what was hit
             world
-                .send_entity_status(
-                    self.get_entity(),
-                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-                )
+                .send_entity_status(self.get_entity(), EntityStatus::Death)
                 .await;
 
             // Handle entity-specific damage

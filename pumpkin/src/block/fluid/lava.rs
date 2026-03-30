@@ -125,7 +125,7 @@ impl FlowingLava {
                     )
                     .await;
                 world
-                    .sync_world_event(WorldEvent::LavaExtinguished, *block_pos, 0)
+                    .sync_world_event(WorldEvent::LavaFizz, *block_pos, 0)
                     .await;
                 return false;
             }
@@ -138,7 +138,7 @@ impl FlowingLava {
                     )
                     .await;
                 world
-                    .sync_world_event(WorldEvent::LavaExtinguished, *block_pos, 0)
+                    .sync_world_event(WorldEvent::LavaFizz, *block_pos, 0)
                     .await;
                 return false;
             }
@@ -335,9 +335,7 @@ impl FlowingFluid for FlowingLava {
                 world
                     .set_block_state(pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL)
                     .await;
-                world
-                    .sync_world_event(WorldEvent::LavaExtinguished, *pos, 0)
-                    .await;
+                world.sync_world_event(WorldEvent::LavaFizz, *pos, 0).await;
                 return;
             }
         }
