@@ -1887,7 +1887,7 @@ impl World {
                 let mut buf = Vec::new();
                 {
                     let meta = Metadata::new(
-                        TrackedData::DATA_PLAYER_MODE_CUSTOMIZATION_ID,
+                        TrackedData::PLAYER_MODE_CUSTOMISATION,
                         MetaDataType::BYTE,
                         config.skin_parts,
                     );
@@ -3111,7 +3111,7 @@ impl World {
 
             if Block::from_state_id(broken_state_id) != &Block::FIRE {
                 let particles_packet = CWorldEvent::new(
-                    WorldEvent::BlockBroken as i32,
+                    WorldEvent::ParticlesDestroyBlock as i32,
                     *position,
                     broken_state_id.into(),
                     false,

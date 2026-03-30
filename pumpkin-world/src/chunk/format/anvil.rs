@@ -38,8 +38,8 @@ pub const CHUNK_COUNT: usize = REGION_SIZE * REGION_SIZE;
 /// The number of bytes in a sector (4 KiB)
 const SECTOR_BYTES: usize = 4096;
 
-// 1.21.11
-pub const WORLD_DATA_VERSION: i32 = 4671;
+// 26.1
+pub const WORLD_DATA_VERSION: i32 = 4786;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

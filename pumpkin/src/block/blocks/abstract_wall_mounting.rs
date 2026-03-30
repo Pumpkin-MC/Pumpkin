@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection, HorizontalFacingExt,
-    block_properties::{BlockFace, HorizontalFacing},
+    block_properties::{AttachFace, HorizontalFacing},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{BlockStateId, world::BlockAccessor};
@@ -17,11 +17,11 @@ pub trait WallMountedBlock: Send + Sync {
         &self,
         player: &Player,
         direction: BlockDirection,
-    ) -> (BlockFace, HorizontalFacing) {
+    ) -> (AttachFace, HorizontalFacing) {
         let face = match direction {
-            BlockDirection::Up => BlockFace::Ceiling,
-            BlockDirection::Down => BlockFace::Floor,
-            _ => BlockFace::Wall,
+            BlockDirection::Up => AttachFace::Ceiling,
+            BlockDirection::Down => AttachFace::Floor,
+            _ => AttachFace::Wall,
         };
 
         let facing = if direction == BlockDirection::Up || direction == BlockDirection::Down {
@@ -42,9 +42,9 @@ pub trait WallMountedBlock: Send + Sync {
     ) -> BlockDirection {
         let (face, facing) = self.get_placement_face(player, direction);
         match face {
-            BlockFace::Floor => BlockDirection::Up,
-            BlockFace::Ceiling => BlockDirection::Down,
-            BlockFace::Wall => facing.to_block_direction(),
+            AttachFace::Floor => BlockDirection::Up,
+            AttachFace::Ceiling => BlockDirection::Down,
+            AttachFace::Wall => facing.to_block_direction(),
         }
     }
 

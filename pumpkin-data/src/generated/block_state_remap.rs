@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21: &[u16] = &[
+pub static BLOCK_STATE_REMAP_V_26_1_TO_V_1_21: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 43, 44, 39, 40, 41, 42, 43,
     44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67,
@@ -2101,7 +2101,7 @@ pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21: &[u16] = &[
     27304, 27305, 27306, 27307, 27308, 27309, 27310, 27311, 27312, 27313, 27314, 27315, 27316,
     27317, 0, 0, 0, 0, 0,
 ];
-pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_2: &[u16] = &[
+pub static BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_2: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -4207,7 +4207,7 @@ pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_2: &[u16] = &[
     27301, 27302, 27303, 27304, 27305, 27306, 27307, 27308, 27309, 27310, 27311, 27312, 27313,
     27314, 27315, 27316, 27317, 27862, 27863, 27864, 27865, 0,
 ];
-pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_4: &[u16] = &[
+pub static BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_4: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -6321,7 +6321,7 @@ pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_4: &[u16] = &[
     27847, 27848, 27849, 27850, 27851, 27852, 27853, 27854, 27855, 27856, 27857, 27858, 27859,
     27860, 27861, 27862, 27863, 27864, 27865, 27913,
 ];
-pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_5: &[u16] = &[
+pub static BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_5: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -8435,7 +8435,7 @@ pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_5: &[u16] = &[
     27893, 27894, 27895, 27896, 27897, 27898, 27899, 27900, 27901, 27902, 27903, 27904, 27905,
     27906, 27907, 27908, 27909, 27910, 27911, 27912, 27913,
 ];
-pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_6: &[u16] = &[
+pub static BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_6: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -10549,7 +10549,7 @@ pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_6: &[u16] = &[
     27925, 27926, 27927, 27928, 27929, 27930, 27931, 27932, 27933, 27934, 27935, 27936, 27937,
     27938, 27939, 27940, 27941, 27942, 27943, 27944, 27945,
 ];
-pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_7: &[u16] = &[
+pub static BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_7: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -12663,7 +12663,7 @@ pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_7: &[u16] = &[
     27925, 27926, 27927, 27928, 27929, 27930, 27931, 27932, 27933, 27934, 27935, 27936, 27937,
     27938, 27939, 27940, 27941, 27942, 27943, 27944, 27945,
 ];
-pub static BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_9: &[u16] = &[
+pub static BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_9: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -14799,46 +14799,34 @@ pub fn remap_block_state_for_version(
     version: pumpkin_util::version::MinecraftVersion,
 ) -> u16 {
     match version {
-        pumpkin_util::version::MinecraftVersion::V_1_21 => BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21
+        pumpkin_util::version::MinecraftVersion::V_1_21 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21
             .get(usize::from(state_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_2 => {
-            BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_2
-                .get(usize::from(state_id))
-                .copied()
-                .unwrap_or(0)
-        }
-        pumpkin_util::version::MinecraftVersion::V_1_21_4 => {
-            BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_4
-                .get(usize::from(state_id))
-                .copied()
-                .unwrap_or(0)
-        }
-        pumpkin_util::version::MinecraftVersion::V_1_21_5 => {
-            BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_5
-                .get(usize::from(state_id))
-                .copied()
-                .unwrap_or(0)
-        }
-        pumpkin_util::version::MinecraftVersion::V_1_21_6 => {
-            BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_6
-                .get(usize::from(state_id))
-                .copied()
-                .unwrap_or(0)
-        }
-        pumpkin_util::version::MinecraftVersion::V_1_21_7 => {
-            BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_7
-                .get(usize::from(state_id))
-                .copied()
-                .unwrap_or(0)
-        }
-        pumpkin_util::version::MinecraftVersion::V_1_21_9 => {
-            BLOCK_STATE_REMAP_V_1_21_11_TO_V_1_21_9
-                .get(usize::from(state_id))
-                .copied()
-                .unwrap_or(0)
-        }
+        pumpkin_util::version::MinecraftVersion::V_1_21_2 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_2
+            .get(usize::from(state_id))
+            .copied()
+            .unwrap_or(0),
+        pumpkin_util::version::MinecraftVersion::V_1_21_4 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_4
+            .get(usize::from(state_id))
+            .copied()
+            .unwrap_or(0),
+        pumpkin_util::version::MinecraftVersion::V_1_21_5 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_5
+            .get(usize::from(state_id))
+            .copied()
+            .unwrap_or(0),
+        pumpkin_util::version::MinecraftVersion::V_1_21_6 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_6
+            .get(usize::from(state_id))
+            .copied()
+            .unwrap_or(0),
+        pumpkin_util::version::MinecraftVersion::V_1_21_7 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_7
+            .get(usize::from(state_id))
+            .copied()
+            .unwrap_or(0),
+        pumpkin_util::version::MinecraftVersion::V_1_21_9 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_9
+            .get(usize::from(state_id))
+            .copied()
+            .unwrap_or(0),
         _ => state_id,
     }
 }

@@ -154,23 +154,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:acacia_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -190,23 +174,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:acacia_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -362,23 +330,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:bamboo_chest_raft",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -398,23 +350,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:bamboo_raft",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -482,23 +418,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:birch_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -518,23 +438,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:birch_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -1010,23 +914,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:cherry_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -1046,23 +934,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:cherry_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -1475,23 +1347,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:dark_oak_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -1511,23 +1367,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:dark_oak_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -3137,23 +2977,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:jungle_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -3173,23 +2997,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:jungle_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -3435,23 +3243,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:mangrove_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -3471,23 +3263,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:mangrove_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -3746,23 +3522,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:oak_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -3782,23 +3542,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:oak_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -3882,23 +3626,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:pale_oak_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -3918,23 +3646,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:pale_oak_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -4605,8 +4317,8 @@ impl EntityType {
                 },
             ]),
         }),
-        dimension: [0.4f32, 0.5f32],
-        eye_height: 0.425f32,
+        dimension: [0.49f32, 0.6f32],
+        eye_height: 0.59f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5399,23 +5111,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:spruce_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {
@@ -5435,23 +5131,7 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: None,
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:spruce_chest_boat",
-                    }),
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: 0f32,
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        loot_table: None,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
         spawn_restriction: SpawnRestriction {

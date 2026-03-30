@@ -111,7 +111,7 @@ impl EntityBase for SplashPotionEntity {
             // Sync the item stack
             entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::DATA_ITEM,
+                    pumpkin_data::tracked_data::TrackedData::ITEM_STACK,
                     pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
                     &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
                         stack.clone(),

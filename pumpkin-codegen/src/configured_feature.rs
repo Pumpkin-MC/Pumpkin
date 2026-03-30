@@ -4,8 +4,8 @@ use serde_json::Value;
 use std::fs;
 
 use crate::placed_feature::{
-    value_to_block_direction, value_to_block_predicate, value_to_block_state_codec,
-    value_to_height_provider, value_to_int_provider,
+    value_to_block_direction, value_to_block_predicate, value_to_block_state,
+    value_to_block_state_codec, value_to_height_provider, value_to_int_provider,
 };
 
 /// Reads `configured_features.json` and emits a `build_configured_features()` function `TokenStream`.
@@ -178,8 +178,8 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             }
         }
         "minecraft:netherrack_replace_blobs" => {
-            let target = value_to_block_state_codec(&config["target"]);
-            let state = value_to_block_state_codec(&config["state"]);
+            let target = value_to_block_state(&config["target"]);
+            let state = value_to_block_state(&config["state"]);
             let radius = value_to_int_provider(&config["radius"]);
             quote! {
                 ConfiguredFeature::NetherrackReplaceBlobs(ReplaceBlobsFeature {
@@ -215,7 +215,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                     arr.iter()
                         .map(|t| {
                             let rule = value_to_rule_test(&t["target"]);
-                            let state = value_to_block_state_codec(&t["state"]);
+                            let state = value_to_block_state(&t["state"]);
                             quote! { OreTarget { target: #rule, state: #state } }
                         })
                         .collect()
@@ -238,7 +238,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             }
         }
         "minecraft:spring_feature" => {
-            let state = value_to_block_state_codec(&config["state"]);
+            let state = value_to_block_state(&config["state"]);
             let req = config["requires_block_below"].as_bool().unwrap_or(true);
             let rock = config["rock_count"].as_i64().unwrap_or(4) as i32;
             let hole = config["hole_count"].as_i64().unwrap_or(1) as i32;
@@ -494,8 +494,12 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             let ground_state = value_to_block_state_provider(&config["ground_state"]);
             let vegetation_feature = value_to_inline_placed_feature(&config["vegetation_feature"]);
             let surface = match config["surface"].as_str().unwrap_or("floor") {
-                "ceiling" => quote! { pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Ceiling },
-                _ => quote! { pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor },
+                "ceiling" => {
+                    quote! { pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Ceiling }
+                }
+                _ => {
+                    quote! { pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor }
+                }
             };
             let depth = value_to_int_provider(&config["depth"]);
             let extra_bottom = config["extra_bottom_block_chance"].as_f64().unwrap_or(0.0) as f32;
@@ -669,7 +673,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
         "minecraft:simple_state_provider" => {
-            let state = value_to_block_state_codec(&v["state"]);
+            let state = value_to_block_state(&v["state"]);
             quote! { BlockStateProvider::Simple(SimpleStateProvider { state: #state }) }
         }
         "minecraft:weighted_state_provider" => {
@@ -678,7 +682,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
                 .map(|arr| {
                     arr.iter()
                         .map(|e| {
-                            let data = value_to_block_state_codec(&e["data"]);
+                            let data = value_to_block_state(&e["data"]);
                             let weight = e["weight"].as_i64().unwrap_or(1) as i32;
                             quote! { Weighted { data: #data, weight: #weight } }
                         })
@@ -692,14 +696,14 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             }
         }
         "minecraft:rotated_block_provider" => {
-            let state = value_to_block_state_codec(&v["state"]);
+            let state = value_to_block_state(&v["state"]);
             quote! { BlockStateProvider::Pillar(PillarBlockStateProvider { state: #state }) }
         }
         "minecraft:noise_provider" => {
             let base = value_to_noise_base(v);
             let states: Vec<TokenStream> = v["states"]
                 .as_array()
-                .map(|arr| arr.iter().map(value_to_block_state_codec).collect())
+                .map(|arr| arr.iter().map(value_to_block_state).collect())
                 .unwrap_or_default();
             quote! {
                 BlockStateProvider::NoiseProvider(NoiseBlockStateProvider {
@@ -712,7 +716,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             let base_provider = value_to_noise_base(v);
             let states: Vec<TokenStream> = v["states"]
                 .as_array()
-                .map(|arr| arr.iter().map(value_to_block_state_codec).collect())
+                .map(|arr| arr.iter().map(value_to_block_state).collect())
                 .unwrap_or_default();
             let base_noise_provider = quote! {
                 NoiseBlockStateProvider { base: #base_provider, states: vec![#(#states),*] }
@@ -734,14 +738,14 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             let base = value_to_noise_base(v);
             let threshold = v["threshold"].as_f64().unwrap_or(0.0) as f32;
             let high_chance = v["high_chance"].as_f64().unwrap_or(0.0) as f32;
-            let default = value_to_block_state_codec(&v["default_state"]);
+            let default = value_to_block_state(&v["default_state"]);
             let low: Vec<TokenStream> = v["low_states"]
                 .as_array()
-                .map(|a| a.iter().map(value_to_block_state_codec).collect())
+                .map(|a| a.iter().map(value_to_block_state).collect())
                 .unwrap_or_default();
             let high: Vec<TokenStream> = v["high_states"]
                 .as_array()
-                .map(|a| a.iter().map(value_to_block_state_codec).collect())
+                .map(|a| a.iter().map(value_to_block_state).collect())
                 .unwrap_or_default();
             quote! {
                 BlockStateProvider::NoiseThreshold(NoiseThresholdBlockStateProvider {
@@ -770,7 +774,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             // Default to air
             quote! {
                 BlockStateProvider::Simple(SimpleStateProvider {
-                    state: BlockStateCodec { name: &pumpkin_data::Block::AIR, properties: None },
+                    state: pumpkin_data::Block::AIR.default_state,
                 })
             }
         }
@@ -824,7 +828,7 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
             quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: #block.to_string() }) }
         }
         "minecraft:blockstate_match" => {
-            let state = value_to_block_state_codec(&v["block_state"]);
+            let state = value_to_block_state(&v["block_state"]);
             quote! { RuleTest::BlockStateMatch(BlockStateMatchRuleTest { block_state: #state }) }
         }
         "minecraft:tag_match" => {
@@ -837,7 +841,7 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
             quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: #block.to_string(), probability: #prob }) }
         }
         "minecraft:random_blockstate_match" => {
-            let state = value_to_block_state_codec(&v["block_state"]);
+            let state = value_to_block_state(&v["block_state"]);
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
             quote! { RuleTest::RandomBlockStateMatch(RandomBlockStateMatchRuleTest { block_state: #state, probability: #prob }) }
         }

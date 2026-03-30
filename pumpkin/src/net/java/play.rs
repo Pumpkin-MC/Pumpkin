@@ -337,7 +337,11 @@ impl JavaClient {
                     player.jump().await;
                 }
 
-                entity.on_ground.store(packet.collision & FLAG_ON_GROUND != 0, Ordering::Relaxed);
+                let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
+                entity.on_ground.store(new_on_ground, Ordering::Relaxed);
+                if new_on_ground && entity.fall_flying.load(Ordering::Relaxed) {
+                    entity.set_fall_flying(false).await;
+                }
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
