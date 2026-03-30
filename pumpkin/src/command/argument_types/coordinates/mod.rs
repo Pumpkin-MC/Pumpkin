@@ -1,14 +1,17 @@
-use pumpkin_data::translation;
 use crate::command::context::command_source::CommandSource;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::{
+    CommandErrorType, READER_EXPECTED_DOUBLE, READER_EXPECTED_INT,
+};
+use crate::command::string_reader::StringReader;
+use pumpkin_data::translation;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::{Axis, Vector3};
-use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::{CommandErrorType, READER_EXPECTED_DOUBLE, READER_EXPECTED_INT};
-use crate::command::string_reader::StringReader;
 
 pub mod vec3;
 
-pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(translation::ARGUMENT_POS_MIXED);
+pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> =
+    CommandErrorType::new(translation::ARGUMENT_POS_MIXED);
 
 /// Represents a single world coordinate.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,13 +21,13 @@ pub enum WorldCoordinate {
 }
 
 impl WorldCoordinate {
-
     /// Creates a new `WorldCoordinate`.
+    #[must_use]
     pub const fn new(is_relative: bool, value: f64) -> Self {
         if is_relative {
-            WorldCoordinate::Relative(value)
+            Self::Relative(value)
         } else {
-            WorldCoordinate::Absolute(value)
+            Self::Absolute(value)
         }
     }
 
@@ -61,11 +64,11 @@ impl WorldCoordinate {
         }
     }
 
-    /// Tries to parse a [`WorldCoordinate`] from a single number, expecting an `f64`.
+    /// Tries to parse a [`WorldCoordinate`] from a single number.
     ///
     /// # Arguments
     /// * `reader` - The `StringReader` to parse the coordinate from.
-    /// * `correct_center` - Whether to correct integral coordinates by adding `+0.5` to them
+    /// * `center_integers` - Whether to correct integral coordinates by adding `+0.5` to them
     ///   (as mentioned by [`Vec3ArgumentType::Default`]).
     ///
     /// # Returns
@@ -73,8 +76,11 @@ impl WorldCoordinate {
     /// - A [`CommandSyntaxError`] describing an error if it could not be correctly parsed,
     ///   wrapped in an `Err`.
     ///
-    /// [`Vec3ArgumentType::Default`]: vec3::Vec3ArgumentType::Default
-    pub fn parse_world_f64(&self, reader: &mut StringReader, correct_center: bool) -> Result<WorldCoordinate, CommandSyntaxError> {
+    /// [`Vec3ArgumentType::Default`]: Vec3ArgumentType::Default
+    pub fn parse(
+        reader: &mut StringReader,
+        center_integers: bool,
+    ) -> Result<Self, CommandSyntaxError> {
         if reader.peek() == Some('^') {
             Err(MIXED_TYPE_ERROR_TYPE.create(reader))
         } else if !reader.can_read_char() {
@@ -91,7 +97,7 @@ impl WorldCoordinate {
             if is_relative && slice.is_empty() {
                 Ok(Self::Relative(0.0))
             } else {
-                if !slice.contains('.') && !is_relative && correct_center {
+                if !slice.contains('.') && !is_relative && center_integers {
                     value += 0.5;
                 }
                 Ok(Self::new(is_relative, value))
@@ -99,7 +105,8 @@ impl WorldCoordinate {
         }
     }
 
-    /// Tries to parse a [`WorldCoordinate`] from a single number, expecting an integral position.
+    /// Tries to parse a [`WorldCoordinate`] from a single number, expecting an integral non-relative coordinate
+    /// or any relative coordinate.
     ///
     /// # Arguments
     /// * `reader` - The `StringReader` to parse the coordinate from.
@@ -108,9 +115,7 @@ impl WorldCoordinate {
     /// - The `WorldCoordinate` if it was correctly parsed, wrapped in an `Ok`.
     /// - A [`CommandSyntaxError`] describing an error if it could not be correctly parsed,
     ///   wrapped in an `Err`.
-    ///
-    /// [`Vec3ArgumentType::Default`]: vec3::Vec3ArgumentType::Default
-    pub fn parse_world_i32(&self, reader: &mut StringReader) -> Result<WorldCoordinate, CommandSyntaxError> {
+    pub fn parse_integer(reader: &mut StringReader) -> Result<Self, CommandSyntaxError> {
         if reader.peek() == Some('^') {
             Err(MIXED_TYPE_ERROR_TYPE.create(reader))
         } else if !reader.can_read_char() {
@@ -131,7 +136,9 @@ impl WorldCoordinate {
     }
 }
 
-/// An object represents some command coordinates.
+/// An object representing some command coordinates.
+///
+/// A set of [`Coordinates`] can be *resolved* via the [`Coordinates::resolve`] method.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Coordinates {
     /// Normal coordinates (each coordinate can be *absolute* or *relative*.)
@@ -140,19 +147,33 @@ pub enum Coordinates {
     Local { left: f64, up: f64, forward: f64 },
 }
 
+macro_rules! check_for_space_char {
+    ($reader:ident, $i:ident, $value:ident) => {
+        if $reader.peek() == Some(' ') {
+            $reader.skip();
+            Ok($value)
+        } else {
+            $reader.set_cursor($i);
+            Err(vec3::INCOMPLETE_ERROR_TYPE.create($reader))
+        }
+    };
+}
+
 impl Coordinates {
-    /// Returns whether a coordinate of these [`Coordinates`] is relative.
+    /// Returns whether a coordinate (of the given [`Axis`]) of these [`Coordinates`] is relative.
+    ///
+    /// This also returns `true` for a *local coordinate*.
     #[must_use]
     pub const fn is_relative(&self, axis: Axis) -> bool {
         match self {
             Self::World(vector) => vector.get_axis(axis).is_relative(),
-            Self::Local { .. } => false,
+            Self::Local { .. } => true,
         }
     }
 
     /// Returns the physical position that these [`Coordinates`] represent.
     #[must_use]
-    pub fn position(&self, source: &CommandSource) -> Vector3<f64> {
+    pub fn resolve(&self, source: &CommandSource) -> Vector3<f64> {
         match self {
             Self::World(vector) => {
                 let pos = source.position;
@@ -165,6 +186,113 @@ impl Coordinates {
             Self::Local { left, up, forward } => {
                 convert_local_coordinates(*left, *up, *forward, source.rotation)
             }
+        }
+    }
+
+    /// Tries to parse a set of world [`Coordinates`], expecting coordinates, each either being
+    /// an integral non-relative coordinate or any relative coordinate.
+    ///
+    /// # Arguments
+    /// * `reader` - The `StringReader` to parse the coordinates from.
+    /// * `center_integers` - Whether to correct integral coordinates by adding `+0.5` to them
+    ///   (as mentioned by [`Vec3ArgumentType::Default`]).
+    ///
+    /// # Returns
+    /// - The world `Coordinates` if they were correctly parsed, wrapped in an `Ok`.
+    /// - A [`CommandSyntaxError`] describing an error if they could not be correctly parsed,
+    ///   wrapped in an `Err`.
+    ///
+    /// [`Vec3ArgumentType::Default`]: Vec3ArgumentType::Default
+    pub fn parse_world(
+        reader: &mut StringReader,
+        center_integers: bool,
+    ) -> Result<Self, CommandSyntaxError> {
+        let i = reader.cursor();
+        let coordinate_1 = Self::parse_world_single(i, reader, center_integers)?;
+        // The Y coordinate is never centered.
+        let coordinate_2 = Self::parse_world_single(i, reader, false)?;
+        let coordinate_3 = WorldCoordinate::parse(reader, center_integers)?;
+        Ok(Self::World(Vector3::new(
+            coordinate_1,
+            coordinate_2,
+            coordinate_3,
+        )))
+    }
+
+    fn parse_world_single(
+        i: usize,
+        reader: &mut StringReader,
+        center_integers: bool,
+    ) -> Result<WorldCoordinate, CommandSyntaxError> {
+        let coordinate = WorldCoordinate::parse(reader, center_integers)?;
+        check_for_space_char!(reader, i, coordinate)
+    }
+
+    /// Tries to parse a set of world [`Coordinates`].
+    ///
+    /// # Arguments
+    /// * `reader` - The `StringReader` to parse the coordinate from.
+    ///
+    /// # Returns
+    /// - The world `Coordinates` if they were correctly parsed, wrapped in an `Ok`.
+    /// - A [`CommandSyntaxError`] describing an error if they could not be correctly parsed,
+    ///   wrapped in an `Err`.
+    pub fn parse_world_integers(reader: &mut StringReader) -> Result<Self, CommandSyntaxError> {
+        let i = reader.cursor();
+        let coordinate_1 = Self::parse_world_single_integer(i, reader)?;
+        let coordinate_2 = Self::parse_world_single_integer(i, reader)?;
+        let coordinate_3 = WorldCoordinate::parse_integer(reader)?;
+        Ok(Self::World(Vector3::new(
+            coordinate_1,
+            coordinate_2,
+            coordinate_3,
+        )))
+    }
+
+    fn parse_world_single_integer(
+        i: usize,
+        reader: &mut StringReader,
+    ) -> Result<WorldCoordinate, CommandSyntaxError> {
+        let coordinate = WorldCoordinate::parse_integer(reader)?;
+        check_for_space_char!(reader, i, coordinate)
+    }
+
+    /// Tries to parse a set of local [`Coordinates`].
+    ///
+    /// # Arguments
+    /// * `reader` - The `StringReader` to parse the coordinate from.
+    ///
+    /// # Returns
+    /// - The local `Coordinates` if they were correctly parsed, wrapped in an `Ok`.
+    /// - A [`CommandSyntaxError`] describing an error if they could not be correctly parsed,
+    ///   wrapped in an `Err`.
+    pub fn parse_local(reader: &mut StringReader) -> Result<Self, CommandSyntaxError> {
+        let i = reader.cursor();
+        let left = Self::parse_local_single(i, reader)?;
+        let up = Self::parse_local_single(i, reader)?;
+        let forward = Self::parse_local_number(i, reader)?;
+        Ok(Self::Local { left, up, forward })
+    }
+
+    fn parse_local_single(i: usize, reader: &mut StringReader) -> Result<f64, CommandSyntaxError> {
+        let number = Self::parse_local_number(i, reader)?;
+        check_for_space_char!(reader, i, number)
+    }
+
+    fn parse_local_number(i: usize, reader: &mut StringReader) -> Result<f64, CommandSyntaxError> {
+        if !reader.can_read_char() {
+            Err(READER_EXPECTED_DOUBLE.create(reader))
+        } else if reader.peek() != Some('^') {
+            reader.set_cursor(i);
+            Err(MIXED_TYPE_ERROR_TYPE.create(reader))
+        } else {
+            reader.skip();
+            let number = if reader.can_read_char() && reader.peek() != Some(' ') {
+                reader.read_double()?
+            } else {
+                0.0
+            };
+            Ok(number)
         }
     }
 }
@@ -181,7 +309,7 @@ impl Coordinates {
 /// # Returns
 /// The physical position represented by the local coordinates.
 #[must_use]
-pub(super) fn convert_local_coordinates(
+fn convert_local_coordinates(
     left: f64,
     up: f64,
     forward: f64,

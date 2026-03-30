@@ -90,7 +90,7 @@ impl<T: Copy> Vector3<T> {
     }
 }
 
-impl<T: Math + PartialOrd + Copy> Vector3<T> {
+impl<T> Vector3<T> {
     /// Creates a new `Vector3` with the given components.
     ///
     /// # Arguments
@@ -104,7 +104,9 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Self { x, y, z }
     }
+}
 
+impl<T: Math + PartialOrd + Copy> Vector3<T> {
     /// Calculates the squared length (magnitude) of the vector.
     ///
     /// # Returns
