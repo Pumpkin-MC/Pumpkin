@@ -114,10 +114,6 @@ pub async fn default_dispatcher(
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
     dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
     dispatcher.register(
-        difficulty::init_command_tree(),
-        "minecraft:command.difficulty",
-    );
-    dispatcher.register(
         stopsound::init_command_tree(),
         "minecraft:command.stopsound",
     );
@@ -161,6 +157,7 @@ pub async fn default_dispatcher(
         wrapper_dispatcher
     };
 
+    difficulty::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
@@ -379,13 +376,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.defaultgamemode",
             "Sets the default game mode for new players",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.difficulty",
-            "Sets the difficulty of the world",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
