@@ -1,3 +1,4 @@
+pub mod either;
 pub mod lazy;
 pub mod list;
 pub mod map_codec;
