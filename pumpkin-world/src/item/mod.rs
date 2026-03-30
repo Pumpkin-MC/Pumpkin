@@ -788,7 +788,7 @@ mod tests {
 
     // ── weapon category predicates ───────────────────────────────────
 
-    /// 2-durability combat weapons (axes/pickaxes/shovels/hoes) must match their category predicate.
+    // /// 2-durability combat weapons (axes/pickaxes/shovels/hoes) must match their category predicate.
     // #[test]
     // fn weapon_categories_identify_2_cost_items() {
     //     // Items that should have is_axe / is_pickaxe / is_shovel / is_hoe = true.
