@@ -2,14 +2,13 @@ use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs, PlacedArgs,
 };
-use crate::world::World;
 use pumpkin_data::{
     Block, BlockDirection,
-    block_properties::{BlockProperties, Integer0To7, ScaffoldingLikeProperties},
+    block_properties::{BlockProperties, Integer0To7, ScaffoldingLikeProperties, EnumVariants},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::{BlockAccessor, BlockFlags}};
 
 #[pumpkin_block("minecraft:scaffolding")]
 pub struct ScaffoldingBlock;
@@ -35,7 +34,7 @@ impl BlockBehaviour for ScaffoldingBlock {
                 let above_block = args.world.get_block(&above).await;
 
                 if above_block == &Block::AIR {
-                    let height = get_scaffolding_height(args.world, args.position).await;
+                    let height = get_scaffolding_height(&*args.world, args.position).await;
                     if height < 7 {
                         return props.to_state_id(args.block);
                     }
@@ -65,11 +64,11 @@ impl BlockBehaviour for ScaffoldingBlock {
         Box::pin(async move {
             let mut props = ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
 
-            let distance = compute_distance(args.block_accessor, args.position).await;
+            let distance = compute_distance(&*args.world, args.position).await;
             let clamped = distance.min(Integer0To7::variant_count() as u8 - 1);
             props.distance = Integer0To7::from_index(clamped as u16);
 
-            props.bottom = is_bottom(args.block_accessor, args.position).await;
+            props.bottom = is_bottom(&*args.world, args.position).await;
 
             props.to_state_id(args.block)
         })
@@ -77,10 +76,10 @@ impl BlockBehaviour for ScaffoldingBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let world = args.world;
+            let world = &*args.world;
 
             if !can_survive(world, args.position).await {
-                world
+                args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
                 return;
@@ -88,7 +87,7 @@ impl BlockBehaviour for ScaffoldingBlock {
 
             let distance = compute_distance(world, args.position).await;
             if distance == 7 {
-                world
+                args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
             }
@@ -96,7 +95,7 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 }
 
-async fn can_survive(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> bool {
+async fn can_survive(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
@@ -108,10 +107,7 @@ async fn can_survive(world: &dyn pumpkin_world::world::BlockAccessor, pos: &Bloc
     below_state.is_full_cube() && below_state.is_solid_block()
 }
 
-async fn get_scaffolding_height(
-    world: &dyn pumpkin_world::world::BlockAccessor,
-    pos: &BlockPos,
-) -> u8 {
+async fn get_scaffolding_height(world: &dyn BlockAccessor, pos: &BlockPos) -> u8 {
     let mut height = 0;
     let mut current = pos.down();
 
@@ -127,7 +123,7 @@ async fn get_scaffolding_height(
     height
 }
 
-async fn compute_distance(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> u8 {
+async fn compute_distance(world: &dyn BlockAccessor, pos: &BlockPos) -> u8 {
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
@@ -158,7 +154,7 @@ async fn compute_distance(world: &dyn pumpkin_world::world::BlockAccessor, pos: 
     best
 }
 
-async fn is_bottom(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> bool {
+async fn is_bottom(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
     let above = pos.up();
     let above_block = world.get_block(&above).await;
     above_block != &Block::SCAFFOLDING
