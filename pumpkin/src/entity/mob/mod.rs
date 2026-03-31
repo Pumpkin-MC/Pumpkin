@@ -104,7 +104,7 @@ impl MobEntity {
             self.living_entity
                 .entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_MOB_FLAGS,
+                    TrackedData::MOB_FLAGS_ID,
                     MetaDataType::BYTE,
                     new_b,
                 )])

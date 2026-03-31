@@ -76,7 +76,7 @@ impl EntityBase for EggEntity {
             // Sync the item stack so the client renders the correct color/variant
             entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_ITEM,
+                    TrackedData::ITEM_STACK,
                     MetaDataType::ITEM_STACK,
                     &ItemStackSerializer::from(stack.clone()),
                 )])
@@ -115,10 +115,7 @@ impl EntityBase for EggEntity {
 
             // Play egg break particles
             world
-                .send_entity_status(
-                    self.get_entity(),
-                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-                )
+                .send_entity_status(self.get_entity(), EntityStatus::Death)
                 .await;
 
             // Decide spawn count per probabilities:

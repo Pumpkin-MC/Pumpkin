@@ -41,6 +41,8 @@ impl DoublePerlinNoiseParameters {
             "iceberg_surface" => &Self::ICEBERG_SURFACE,
             "jagged" => &Self::JAGGED,
             "nether_state_selector" => &Self::NETHER_STATE_SELECTOR,
+            "nether_temperature" => &Self::NETHER_TEMPERATURE,
+            "nether_vegetation" => &Self::NETHER_VEGETATION,
             "nether_wart" => &Self::NETHER_WART,
             "netherrack" => &Self::NETHERRACK,
             "noodle" => &Self::NOODLE,
@@ -172,6 +174,10 @@ impl DoublePerlinNoiseParameters {
     );
     pub const NETHER_STATE_SELECTOR: DoublePerlinNoiseParameters =
         DoublePerlinNoiseParameters::new(-4i32, &[1f64], "minecraft:nether_state_selector");
+    pub const NETHER_TEMPERATURE: DoublePerlinNoiseParameters =
+        DoublePerlinNoiseParameters::new(-7i32, &[1f64, 1f64], "minecraft:nether_temperature");
+    pub const NETHER_VEGETATION: DoublePerlinNoiseParameters =
+        DoublePerlinNoiseParameters::new(-7i32, &[1f64, 1f64], "minecraft:nether_vegetation");
     pub const NETHER_WART: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
         -3i32,
         &[1f64, 0f64, 0f64, 0.9f64],

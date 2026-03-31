@@ -12,7 +12,9 @@ use std::{
 pub mod arrow;
 pub mod egg;
 pub mod firework_rocket;
+pub mod lingering_potion;
 pub mod snowball;
+pub mod splash_potion;
 pub mod wind_charge;
 
 #[must_use]
@@ -22,6 +24,8 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::SNOWBALL
         || *entity_type == EntityType::FIREWORK_ROCKET
         || *entity_type == EntityType::WIND_CHARGE
+        || *entity_type == EntityType::SPLASH_POTION
+        || *entity_type == EntityType::LINGERING_POTION
 }
 
 pub struct ThrownItemEntity {
@@ -213,6 +217,11 @@ impl ThrownItemEntity {
 
         // Skip owner for initial frames
         if Some(other_ent.entity_id) == self.owner_id && self_ent.age.load(Ordering::Relaxed) < 5 {
+            return true;
+        }
+
+        // Projectiles should pass through lingering clouds
+        if *other_ent.entity_type == EntityType::AREA_EFFECT_CLOUD {
             return true;
         }
 

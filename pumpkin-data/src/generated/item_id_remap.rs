@@ -1,6 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use pumpkin_util::version::MinecraftVersion;
-const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21: &[u16] = &[
+const ITEM_ID_REMAP_V_26_1_TO_V_1_21: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 43, 44, 45, 46, 47, 48,
     49, 50, 51, 52, 53, 54, 56, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
@@ -84,7 +84,7 @@ const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21: &[u16] = &[
     1319, 1320, 1321, 1322, 1323, 1324, 1325, 1326, 1467, 1468, 1469, 1470, 1471, 1472, 1473, 1474,
     1475, 1476, 1477, 1478, 1479, 1480, 1481, 1482, 1327, 1328, 1329, 1330, 1331,
 ];
-const ITEM_ID_REMAP_V_1_21_TO_V_1_21_11: &[u16] = &[
+const ITEM_ID_REMAP_V_1_21_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 45, 46, 47, 48, 49, 50,
     51, 52, 53, 54, 55, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75,
@@ -166,7 +166,7 @@ const ITEM_ID_REMAP_V_1_21_TO_V_1_21_11: &[u16] = &[
     1492, 1493, 1494, 1495, 1496, 1497, 1498, 1499, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0,
 ];
-const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_2: &[u16] = &[
+const ITEM_ID_REMAP_V_26_1_TO_V_1_21_2: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -251,7 +251,7 @@ const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_2: &[u16] = &[
     1468, 1469, 1470, 1471, 1472, 1473, 1474, 1475, 1476, 1477, 1478, 1479, 1480, 1481, 1482, 1370,
     1371, 1372, 1373, 1374,
 ];
-const ITEM_ID_REMAP_V_1_21_2_TO_V_1_21_11: &[u16] = &[
+const ITEM_ID_REMAP_V_1_21_2_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -334,7 +334,7 @@ const ITEM_ID_REMAP_V_1_21_2_TO_V_1_21_11: &[u16] = &[
     1490, 1491, 1492, 1493, 1494, 1495, 1496, 1497, 1498, 1499, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
-const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_4: &[u16] = &[
+const ITEM_ID_REMAP_V_26_1_TO_V_1_21_4: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -419,7 +419,7 @@ const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_4: &[u16] = &[
     1467, 1468, 1469, 1470, 1471, 1472, 1473, 1474, 1475, 1476, 1477, 1478, 1479, 1480, 1481, 1482,
     1380, 1381, 1382, 1383, 1384,
 ];
-const ITEM_ID_REMAP_V_1_21_4_TO_V_1_21_11: &[u16] = &[
+const ITEM_ID_REMAP_V_1_21_4_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -502,7 +502,7 @@ const ITEM_ID_REMAP_V_1_21_4_TO_V_1_21_11: &[u16] = &[
     1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1497, 1498, 1499, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
-const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_5: &[u16] = &[
+const ITEM_ID_REMAP_V_26_1_TO_V_1_21_5: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -587,7 +587,7 @@ const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_5: &[u16] = &[
     1389, 1390, 1467, 1468, 1469, 1470, 1471, 1472, 1473, 1474, 1475, 1476, 1477, 1478, 1479, 1480,
     1481, 1482, 1391, 1392, 1393, 1394, 1395,
 ];
-const ITEM_ID_REMAP_V_1_21_5_TO_V_1_21_11: &[u16] = &[
+const ITEM_ID_REMAP_V_1_21_5_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -670,7 +670,7 @@ const ITEM_ID_REMAP_V_1_21_5_TO_V_1_21_11: &[u16] = &[
     0, 0, 0, 1484, 1485, 1486, 1487, 1488, 1489, 1490, 1491, 1492, 1493, 1494, 1495, 1496, 1497,
     1498, 1499, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
-const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_6: &[u16] = &[
+const ITEM_ID_REMAP_V_26_1_TO_V_1_21_6: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -755,7 +755,7 @@ const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_6: &[u16] = &[
     1405, 1406, 1407, 1408, 1409, 1467, 1468, 1469, 1470, 1471, 1472, 1473, 1474, 1475, 1476, 1477,
     1478, 1479, 1480, 1481, 1482, 1410, 1411, 1412, 1413, 1414,
 ];
-const ITEM_ID_REMAP_V_1_21_6_TO_V_1_21_11: &[u16] = &[
+const ITEM_ID_REMAP_V_1_21_6_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -839,7 +839,7 @@ const ITEM_ID_REMAP_V_1_21_6_TO_V_1_21_11: &[u16] = &[
     1492, 1493, 1494, 1495, 1496, 1497, 1498, 1499, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0,
 ];
-const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_7: &[u16] = &[
+const ITEM_ID_REMAP_V_26_1_TO_V_1_21_7: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -924,7 +924,7 @@ const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_7: &[u16] = &[
     1406, 1407, 1408, 1409, 1410, 1467, 1468, 1469, 1470, 1471, 1472, 1473, 1474, 1475, 1476, 1477,
     1478, 1479, 1480, 1481, 1482, 1411, 1412, 1413, 1414, 1415,
 ];
-const ITEM_ID_REMAP_V_1_21_7_TO_V_1_21_11: &[u16] = &[
+const ITEM_ID_REMAP_V_1_21_7_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -1008,7 +1008,7 @@ const ITEM_ID_REMAP_V_1_21_7_TO_V_1_21_11: &[u16] = &[
     1491, 1492, 1493, 1494, 1495, 1496, 1497, 1498, 1499, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
 ];
-const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_9: &[u16] = &[
+const ITEM_ID_REMAP_V_26_1_TO_V_1_21_9: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -1094,7 +1094,7 @@ const ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_9: &[u16] = &[
     1471, 1472, 1473, 1474, 1475, 1476, 1477, 1478, 1479, 1480, 1481, 1482, 1483, 1484, 1485, 1486,
     1487,
 ];
-const ITEM_ID_REMAP_V_1_21_9_TO_V_1_21_11: &[u16] = &[
+const ITEM_ID_REMAP_V_1_21_9_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -1182,31 +1182,31 @@ const ITEM_ID_REMAP_V_1_21_9_TO_V_1_21_11: &[u16] = &[
 #[must_use]
 pub fn remap_item_id_for_version(item_id: u16, version: MinecraftVersion) -> u16 {
     match version {
-        pumpkin_util::version::MinecraftVersion::V_1_21 => ITEM_ID_REMAP_V_1_21_11_TO_V_1_21
+        pumpkin_util::version::MinecraftVersion::V_1_21 => ITEM_ID_REMAP_V_26_1_TO_V_1_21
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_2 => ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_2
+        pumpkin_util::version::MinecraftVersion::V_1_21_2 => ITEM_ID_REMAP_V_26_1_TO_V_1_21_2
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_4 => ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_4
+        pumpkin_util::version::MinecraftVersion::V_1_21_4 => ITEM_ID_REMAP_V_26_1_TO_V_1_21_4
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_5 => ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_5
+        pumpkin_util::version::MinecraftVersion::V_1_21_5 => ITEM_ID_REMAP_V_26_1_TO_V_1_21_5
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_6 => ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_6
+        pumpkin_util::version::MinecraftVersion::V_1_21_6 => ITEM_ID_REMAP_V_26_1_TO_V_1_21_6
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_7 => ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_7
+        pumpkin_util::version::MinecraftVersion::V_1_21_7 => ITEM_ID_REMAP_V_26_1_TO_V_1_21_7
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_9 => ITEM_ID_REMAP_V_1_21_11_TO_V_1_21_9
+        pumpkin_util::version::MinecraftVersion::V_1_21_9 => ITEM_ID_REMAP_V_26_1_TO_V_1_21_9
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
@@ -1216,31 +1216,31 @@ pub fn remap_item_id_for_version(item_id: u16, version: MinecraftVersion) -> u16
 #[must_use]
 pub fn remap_item_id_from_version(item_id: u16, version: MinecraftVersion) -> u16 {
     match version {
-        pumpkin_util::version::MinecraftVersion::V_1_21 => ITEM_ID_REMAP_V_1_21_TO_V_1_21_11
+        pumpkin_util::version::MinecraftVersion::V_1_21 => ITEM_ID_REMAP_V_1_21_TO_V_26_1
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_2 => ITEM_ID_REMAP_V_1_21_2_TO_V_1_21_11
+        pumpkin_util::version::MinecraftVersion::V_1_21_2 => ITEM_ID_REMAP_V_1_21_2_TO_V_26_1
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_4 => ITEM_ID_REMAP_V_1_21_4_TO_V_1_21_11
+        pumpkin_util::version::MinecraftVersion::V_1_21_4 => ITEM_ID_REMAP_V_1_21_4_TO_V_26_1
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_5 => ITEM_ID_REMAP_V_1_21_5_TO_V_1_21_11
+        pumpkin_util::version::MinecraftVersion::V_1_21_5 => ITEM_ID_REMAP_V_1_21_5_TO_V_26_1
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_6 => ITEM_ID_REMAP_V_1_21_6_TO_V_1_21_11
+        pumpkin_util::version::MinecraftVersion::V_1_21_6 => ITEM_ID_REMAP_V_1_21_6_TO_V_26_1
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_7 => ITEM_ID_REMAP_V_1_21_7_TO_V_1_21_11
+        pumpkin_util::version::MinecraftVersion::V_1_21_7 => ITEM_ID_REMAP_V_1_21_7_TO_V_26_1
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),
-        pumpkin_util::version::MinecraftVersion::V_1_21_9 => ITEM_ID_REMAP_V_1_21_9_TO_V_1_21_11
+        pumpkin_util::version::MinecraftVersion::V_1_21_9 => ITEM_ID_REMAP_V_1_21_9_TO_V_26_1
             .get(usize::from(item_id))
             .copied()
             .unwrap_or(item_id),

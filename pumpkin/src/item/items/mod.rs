@@ -17,6 +17,7 @@ pub mod ink_sac;
 pub mod mace;
 pub mod minecart;
 pub mod name_tag;
+pub mod potions;
 pub mod shovel;
 pub mod snowball;
 pub mod spawn_egg;
@@ -34,6 +35,7 @@ use crate::item::items::spawn_egg::SpawnEggItem;
 use crate::item::items::wind_charge::WindChargeItem;
 
 use super::registry::ItemRegistry;
+use crate::item::items::potions::{LingeringPotionItem, PotionItem, SplashPotionItem};
 use arrow::ArrowItem;
 use axe::AxeItem;
 use bow::BowItem;
@@ -88,6 +90,9 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(ArmorStandItem);
     manager.register(WindChargeItem);
     manager.register(BoatItem);
+    manager.register(PotionItem);
+    manager.register(SplashPotionItem);
+    manager.register(LingeringPotionItem);
 
     Arc::new(manager)
 }

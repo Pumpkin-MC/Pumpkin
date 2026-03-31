@@ -11,6 +11,7 @@ use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender
 use crate::world::World;
 
 use pumpkin_data::Block;
+use pumpkin_data::translation;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
@@ -286,7 +287,7 @@ impl CommandExecutor for Executor {
 
             if !context.world.is_in_build_limit(from) || !context.world.is_in_build_limit(to) {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
+                    translation::ARGUMENT_POS_OUTOFBOUNDS,
                     [],
                 )));
             }
@@ -302,7 +303,7 @@ impl CommandExecutor for Executor {
 
             if total_blocks > max_block_modifications {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "commands.fill.toobig",
+                    translation::COMMANDS_FILL_TOOBIG,
                     [
                         TextComponent::text(max_block_modifications.to_string()),
                         TextComponent::text(total_blocks.to_string()),
@@ -325,14 +326,14 @@ impl CommandExecutor for Executor {
 
             if context.placed_blocks == 0 {
                 return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "commands.fill.failed",
+                    translation::COMMANDS_FILL_FAILED,
                     [],
                 )));
             }
 
             sender
                 .send_message(TextComponent::translate(
-                    "commands.fill.success",
+                    translation::COMMANDS_FILL_SUCCESS,
                     [TextComponent::text(context.placed_blocks.to_string())],
                 ))
                 .await;

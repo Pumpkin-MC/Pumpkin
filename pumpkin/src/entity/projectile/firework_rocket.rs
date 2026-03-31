@@ -77,7 +77,7 @@ impl FireworkRocketEntity {
             .entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_SHOOTER_ENTITY_ID,
+                TrackedData::ATTACHED_TO_TARGET,
                 MetaDataType::OPTIONAL_INT,
                 OptionalInt(Some(shooter.entity_id)),
             )])
@@ -89,7 +89,7 @@ impl FireworkRocketEntity {
     pub async fn explode_and_remove(&self, world: &World) {
         let entity = self.get_entity();
         world
-            .send_entity_status(entity, EntityStatus::ExplodeFireworkClient)
+            .send_entity_status(entity, EntityStatus::FireworksExplode)
             .await;
 
         // TODO: Explode/colors

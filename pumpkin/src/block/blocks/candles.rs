@@ -56,14 +56,19 @@ impl BlockBehaviour for CandleBlock {
             let item_lock = args.item_stack.lock().await;
             let item = item_lock.item;
             drop(item_lock);
+
             match item.id {
                 id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id)
                     && item.id == args.block.id =>
                 {
+                    let was_lit = properties.lit;
+
                     if properties.candles.to_index() < 3 {
                         properties.candles =
                             Integer1To4::from_index(properties.candles.to_index() + 1);
                     }
+
+                    properties.lit = was_lit;
 
                     args.world
                         .set_block_state(
@@ -72,6 +77,7 @@ impl BlockBehaviour for CandleBlock {
                             BlockFlags::NOTIFY_ALL,
                         )
                         .await;
+
                     BlockActionResult::Consume
                 }
                 _ => {
@@ -88,6 +94,7 @@ impl BlockBehaviour for CandleBlock {
                             BlockFlags::NOTIFY_ALL,
                         )
                         .await;
+
                     BlockActionResult::Consume
                 }
             }
@@ -125,7 +132,7 @@ impl BlockBehaviour for CandleBlock {
             args.player.get_entity().pose.load() != EntityPose::Crouching
                 && CandleLikeProperties::from_state_id(args.state_id, args.block).candles
                     != Integer1To4::L4
-                && args.block.id == b.id // only the same color can update
+                && args.block.id == b.id
         })
     }
 

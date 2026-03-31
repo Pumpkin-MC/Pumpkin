@@ -5,6 +5,18 @@ interface common {
     type block-position = tuple<s32, s32, s32>;
     type position = tuple<f64, f64, f64>;
 
+    enum hand {
+        left,
+        right,
+    }
+
+    enum game-mode {
+        survival,
+        creative,
+        adventure,
+        spectator,
+    }
+
     enum named-color {
         black,
         dark-blue,
@@ -35,6 +47,11 @@ interface common {
         r: u8,
         g: u8,
         b: u8,
+    }
+
+    record item-stack {
+        registry-key: string,
+        count: u8,
     }
 
     enum locale {

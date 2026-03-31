@@ -409,7 +409,7 @@ impl EntityBase for ArmorStandEntity {
 
             if time - self.last_hit_time.load(Ordering::Relaxed) > 5 && !always_kills {
                 world
-                    .send_entity_status(entity, EntityStatus::HitArmorStand)
+                    .send_entity_status(entity, EntityStatus::ArmorstandWobble)
                     .await;
                 world
                     .play_sound(

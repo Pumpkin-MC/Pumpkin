@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
-    BlockProperties, EastWireConnection, EnumVariants, Integer0To15, NorthWireConnection,
-    ObserverLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties,
-    SouthWireConnection, WestWireConnection,
+    BlockProperties, EastRedstone, EnumVariants, Integer0To15, NorthRedstone,
+    ObserverLikeProperties, RedstoneWireLikeProperties, RepeaterLikeProperties, SouthRedstone,
+    WestRedstone,
 };
 use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
@@ -257,10 +257,10 @@ async fn on_use(wire: RedstoneWireProperties, world: &Arc<World>, block_pos: &Bl
 #[must_use]
 pub const fn make_cross(power: Integer0To15) -> RedstoneWireProperties {
     RedstoneWireProperties {
-        north: NorthWireConnection::Side,
-        south: SouthWireConnection::Side,
-        east: EastWireConnection::Side,
-        west: WestWireConnection::Side,
+        north: NorthRedstone::Side,
+        south: SouthRedstone::Side,
+        east: EastRedstone::Side,
+        west: WestRedstone::Side,
         power,
     }
 }
@@ -342,18 +342,18 @@ async fn get_all_sides(
 
 #[must_use]
 pub fn is_dot(wire: RedstoneWireProperties) -> bool {
-    wire.north == NorthWireConnection::None
-        && wire.south == SouthWireConnection::None
-        && wire.east == EastWireConnection::None
-        && wire.west == WestWireConnection::None
+    wire.north == NorthRedstone::None
+        && wire.south == SouthRedstone::None
+        && wire.east == EastRedstone::None
+        && wire.west == WestRedstone::None
 }
 
 #[must_use]
 pub fn is_cross(wire: RedstoneWireProperties) -> bool {
-    wire.north == NorthWireConnection::Side
-        && wire.south == SouthWireConnection::Side
-        && wire.east == EastWireConnection::Side
-        && wire.west == WestWireConnection::Side
+    wire.north == NorthRedstone::Side
+        && wire.south == SouthRedstone::Side
+        && wire.east == EastRedstone::Side
+        && wire.west == WestRedstone::Side
 }
 
 pub async fn get_regulated_sides(
@@ -365,23 +365,23 @@ pub async fn get_regulated_sides(
     if is_dot(wire) && is_dot(state) {
         return state;
     }
-    let north_none = state.north.is_none();
-    let south_none = state.south.is_none();
-    let east_none = state.east.is_none();
-    let west_none = state.west.is_none();
+    let north_none = state.north == NorthRedstone::None;
+    let south_none = state.south == SouthRedstone::None;
+    let east_none = state.east == EastRedstone::None;
+    let west_none = state.west == WestRedstone::None;
     let north_south_none = north_none && south_none;
     let east_west_none = east_none && west_none;
     if north_none && east_west_none {
-        state.north = NorthWireConnection::Side;
+        state.north = NorthRedstone::Side;
     }
     if south_none && east_west_none {
-        state.south = SouthWireConnection::Side;
+        state.south = SouthRedstone::Side;
     }
     if east_none && north_south_none {
-        state.east = EastWireConnection::Side;
+        state.east = EastRedstone::Side;
     }
     if west_none && north_south_none {
-        state.west = WestWireConnection::Side;
+        state.west = WestRedstone::Side;
     }
     state
 }
@@ -431,44 +431,43 @@ impl WireConnection {
         self == Self::None
     }
 
-    const fn to_north(self) -> NorthWireConnection {
+    const fn to_north(self) -> NorthRedstone {
         match self {
-            Self::Up => NorthWireConnection::Up,
-            Self::Side => NorthWireConnection::Side,
-            Self::None => NorthWireConnection::None,
+            Self::Up => NorthRedstone::Up,
+            Self::Side => NorthRedstone::Side,
+            Self::None => NorthRedstone::None,
         }
     }
 
-    const fn to_south(self) -> SouthWireConnection {
+    const fn to_south(self) -> SouthRedstone {
         match self {
-            Self::Up => SouthWireConnection::Up,
-            Self::Side => SouthWireConnection::Side,
-            Self::None => SouthWireConnection::None,
+            Self::Up => SouthRedstone::Up,
+            Self::Side => SouthRedstone::Side,
+            Self::None => SouthRedstone::None,
         }
     }
 
-    const fn to_east(self) -> EastWireConnection {
+    const fn to_east(self) -> EastRedstone {
         match self {
-            Self::Up => EastWireConnection::Up,
-            Self::Side => EastWireConnection::Side,
-            Self::None => EastWireConnection::None,
+            Self::Up => EastRedstone::Up,
+            Self::Side => EastRedstone::Side,
+            Self::None => EastRedstone::None,
         }
     }
 
-    const fn to_west(self) -> WestWireConnection {
+    const fn to_west(self) -> WestRedstone {
         match self {
-            Self::Up => WestWireConnection::Up,
-            Self::Side => WestWireConnection::Side,
-            Self::None => WestWireConnection::None,
+            Self::Up => WestRedstone::Up,
+            Self::Side => WestRedstone::Side,
+            Self::None => WestRedstone::None,
         }
     }
 }
 trait CardinalWireConnectionExt {
     fn to_wire_connection(&self) -> WireConnection;
-    fn is_none(&self) -> bool;
 }
 
-impl CardinalWireConnectionExt for NorthWireConnection {
+impl CardinalWireConnectionExt for NorthRedstone {
     fn to_wire_connection(&self) -> WireConnection {
         match self {
             Self::Side => WireConnection::Side,
@@ -476,13 +475,9 @@ impl CardinalWireConnectionExt for NorthWireConnection {
             Self::None => WireConnection::None,
         }
     }
-
-    fn is_none(&self) -> bool {
-        *self == Self::None
-    }
 }
 
-impl CardinalWireConnectionExt for SouthWireConnection {
+impl CardinalWireConnectionExt for SouthRedstone {
     fn to_wire_connection(&self) -> WireConnection {
         match self {
             Self::Side => WireConnection::Side,
@@ -490,13 +485,9 @@ impl CardinalWireConnectionExt for SouthWireConnection {
             Self::None => WireConnection::None,
         }
     }
-
-    fn is_none(&self) -> bool {
-        *self == Self::None
-    }
 }
 
-impl CardinalWireConnectionExt for EastWireConnection {
+impl CardinalWireConnectionExt for EastRedstone {
     fn to_wire_connection(&self) -> WireConnection {
         match self {
             Self::Side => WireConnection::Side,
@@ -504,23 +495,15 @@ impl CardinalWireConnectionExt for EastWireConnection {
             Self::None => WireConnection::None,
         }
     }
-
-    fn is_none(&self) -> bool {
-        *self == Self::None
-    }
 }
 
-impl CardinalWireConnectionExt for WestWireConnection {
+impl CardinalWireConnectionExt for WestRedstone {
     fn to_wire_connection(&self) -> WireConnection {
         match self {
             Self::Side => WireConnection::Side,
             Self::Up => WireConnection::Up,
             Self::None => WireConnection::None,
         }
-    }
-
-    fn is_none(&self) -> bool {
-        *self == Self::None
     }
 }
 

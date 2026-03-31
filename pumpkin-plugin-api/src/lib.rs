@@ -1,3 +1,31 @@
+//! Pumpkin plugin API.
+//!
+//! This crate provides everything needed to write a Pumpkin server plugin compiled
+//! to WebAssembly. A plugin consists of a type that implements [`Plugin`], registered
+//! with the [`register_plugin!`] macro.
+//!
+//! # Quick start
+//!
+//! ```rust,ignore
+//! use pumpkin_plugin_api::{Plugin, PluginMetadata, Context, register_plugin};
+//!
+//! struct MyPlugin;
+//!
+//! impl Plugin for MyPlugin {
+//!     fn new() -> Self { MyPlugin }
+//!     fn metadata(&self) -> PluginMetadata {
+//!         PluginMetadata {
+//!             name: "my-plugin".into(),
+//!             version: "0.1.0".into(),
+//!             authors: vec!["you".into()],
+//!             description: "An example plugin.".into(),
+//!         }
+//!     }
+//! }
+//!
+//! register_plugin!(MyPlugin);
+//! ```
+
 use crate::{
     commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber, text::TextComponent,
 };
@@ -18,6 +46,7 @@ pub use wit::pumpkin::plugin::{
 
 pub mod logging;
 
+#[allow(clippy::too_many_arguments)]
 mod wit {
     wit_bindgen::generate!({
         skip: ["init-plugin"],
@@ -35,14 +64,21 @@ mod wit {
 static API_VERSION: [u8; 5] = *b"0.1.0";
 
 struct Component;
+
+/// Metadata that describes a plugin to the server.
 pub struct PluginMetadata {
+    /// The human-readable name of the plugin.
     pub name: String,
+    /// The plugin's version string (e.g. `"1.0.0"`).
     pub version: String,
+    /// The list of plugin authors.
     pub authors: Vec<String>,
+    /// A short description of what the plugin does.
     pub description: String,
 }
 
 impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
+    /// Returns the plugin metadata to the host.
     fn get_metadata() -> wit::exports::pumpkin::plugin::metadata::PluginMetadata {
         let metadata = plugin().metadata();
         wit::exports::pumpkin::plugin::metadata::PluginMetadata {
@@ -55,14 +91,19 @@ impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
 }
 
 impl wit::Guest for Component {
+    /// WIT entry point — delegates to [`Plugin::on_load`].
     fn on_load(context: Context) -> Result<(), String> {
         plugin().on_load(context)
     }
 
+    /// WIT entry point — delegates to [`Plugin::on_unload`].
     fn on_unload(context: Context) -> Result<(), String> {
         plugin().on_unload(context)
     }
 
+    /// WIT entry point — dispatches an incoming event to the registered handler for `event_id`.
+    ///
+    /// Returns the event unchanged if no handler is registered for the given id.
     fn handle_event(event_id: u32, server: Server, event: events::Event) -> events::Event {
         let handlers = EVENT_HANDLERS.lock().unwrap();
         if let Some(handler) = handlers.get(&event_id) {
@@ -72,6 +113,9 @@ impl wit::Guest for Component {
         }
     }
 
+    /// WIT entry point — dispatches an incoming command invocation to the registered handler for `command_id`.
+    ///
+    /// Returns a [`CommandError`](command::CommandError) if no handler is registered for the given id.
     fn handle_command(
         command_id: u32,
         sender: command::CommandSender,
@@ -89,24 +133,33 @@ impl wit::Guest for Component {
     }
 }
 
+/// Convenience alias for `core::result::Result<T, String>` used throughout the plugin API.
 pub type Result<T, E = String> = core::result::Result<T, E>;
 
 /// The trait that every Pumpkin plugin must implement.
+///
+/// Use the [`register_plugin!`] macro to register your implementation with the runtime.
 pub trait Plugin: Send + Sync {
-    /// Create a new instance of the plugin.
+    /// Creates a new instance of the plugin.
+    ///
+    /// Called once by the runtime before [`on_load`](Plugin::on_load).
     fn new() -> Self
     where
         Self: Sized;
 
-    /// Define the metadata for the plugin.
+    /// Returns the metadata for this plugin.
     fn metadata(&self) -> PluginMetadata;
 
     /// Called when the plugin is loaded by the server.
+    ///
+    /// Use this to register event handlers, commands, and perform any setup work.
     fn on_load(&mut self, _context: Context) -> Result<()> {
         Ok(())
     }
 
     /// Called when the plugin is unloaded by the server.
+    ///
+    /// Use this to clean up any resources acquired during [`on_load`](Plugin::on_load).
     fn on_unload(&mut self, _context: Context) -> Result<()> {
         Ok(())
     }
@@ -115,9 +168,13 @@ pub trait Plugin: Send + Sync {
 #[doc(hidden)]
 pub fn register_plugin(build_plugin: fn() -> Box<dyn Plugin>) {
     let _ = tracing::subscriber::set_global_default(WitSubscriber::new());
-    unsafe { PLUGIN = Some((build_plugin)()) }
+    unsafe { PLUGIN = Some(build_plugin()) }
 }
 
+/// Returns a mutable reference to the currently loaded plugin instance.
+///
+/// # Panics
+/// If called before [`register_plugin`] has initialized `PLUGIN`.
 fn plugin() -> &'static mut dyn Plugin {
     #[expect(static_mut_refs)]
     unsafe {
@@ -125,11 +182,18 @@ fn plugin() -> &'static mut dyn Plugin {
     }
 }
 
+/// The singleton plugin instance, initialised by [`register_plugin`].
 static mut PLUGIN: Option<Box<dyn Plugin>> = None;
 
 /// Registers the provided type as a Pumpkin plugin.
 ///
-/// The type must implement the [`Plugin`] trait.
+/// This macro generates the WebAssembly export entry point that the server uses to
+/// instantiate the plugin. The type must implement the [`Plugin`] trait.
+///
+/// # Example
+/// ```rust,ignore
+/// register_plugin!(MyPlugin);
+/// ```
 #[macro_export]
 macro_rules! register_plugin {
     ($plugin_type:ty) => {

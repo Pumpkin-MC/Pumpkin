@@ -60,7 +60,7 @@ impl BatEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_BAT_FLAGS,
+                TrackedData::ID_FLAGS,
                 MetaDataType::BYTE,
                 flags,
             )])
