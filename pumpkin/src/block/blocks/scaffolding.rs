@@ -80,7 +80,7 @@ impl BlockBehaviour for ScaffoldingBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let world = &*args.world;
+            let world: &dyn BlockAccessor = &*args.world;
 
             if !can_survive(world, args.position).await {
                 args.world
