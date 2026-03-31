@@ -4,14 +4,14 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::{
-    block_properties::{BlockProperties, ScaffoldingLikeProperties},
     Block,
     BlockDirection,
+    block_properties::{BlockProperties, ScaffoldingLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{tick::TickPriority, world::BlockFlags, BlockStateId};
 use pumpkin_world::world::BlockAccessor;
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 #[pumpkin_block("minecraft:scaffolding")]
 pub struct ScaffoldingBlock;
@@ -63,8 +63,7 @@ impl BlockBehaviour for ScaffoldingBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let mut props =
-                ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
+            let mut props = ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
 
             let distance = compute_distance(args.world, args.position).await;
             props.distance = distance;
