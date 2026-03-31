@@ -9,7 +9,8 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
-    BlockStateId, tick::TickPriority,
+    BlockStateId,
+    tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
 
@@ -18,7 +19,6 @@ pub struct ScaffoldingBlock;
 
 impl BlockBehaviour for ScaffoldingBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        // Pre-coerce world reference before async move
         let world_accessor: &dyn BlockAccessor = &*args.world;
 
         Box::pin(async move {
@@ -67,7 +67,6 @@ impl BlockBehaviour for ScaffoldingBlock {
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
-        // Pre-coerce world reference before async move
         let world_accessor: &dyn BlockAccessor = &*args.world;
 
         Box::pin(async move {
@@ -84,7 +83,6 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        // Pre-coerce world reference before async move
         let world_accessor: &dyn BlockAccessor = &*args.world;
 
         Box::pin(async move {
