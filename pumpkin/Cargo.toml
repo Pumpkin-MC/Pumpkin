@@ -4,6 +4,7 @@ version.workspace = true
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 
 [package.metadata.tauri-winres]
 # FileDescription is handled as the Program name by Windows!
@@ -75,7 +76,7 @@ base64.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
-# Remove time in favor of chrono?
+chrono.workspace = true
 time = { workspace = true, features = ["parsing", "macros"] }
 
 # plugins

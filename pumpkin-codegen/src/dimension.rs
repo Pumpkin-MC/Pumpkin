@@ -72,7 +72,7 @@ pub fn build() -> TokenStream {
     let dimensions: BTreeMap<String, Dimension> = serde_json::from_str(
         &fs::read_to_string("../assets/dimension.json").expect("Missing dimension.json"),
     )
-        .expect("Failed to parse dimension.json");
+    .expect("Failed to parse dimension.json");
 
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();

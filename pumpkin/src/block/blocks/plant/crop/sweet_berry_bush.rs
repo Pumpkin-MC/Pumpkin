@@ -15,6 +15,7 @@ use pumpkin_data::{
     damage::DamageType,
     entity::EntityType,
     item::Item,
+    item_stack::ItemStack,
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
@@ -22,7 +23,6 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{
     BlockStateId,
-    item::ItemStack,
     world::{BlockAccessor, BlockFlags},
 };
 use rand::RngExt;

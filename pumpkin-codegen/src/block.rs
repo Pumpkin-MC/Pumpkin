@@ -373,7 +373,7 @@ impl ToTokens for BlockPropertyStruct {
                     for (key, value) in props {
                         match *key {
                             #(#from_props_values),*,
-                            _ => panic!("Invalid key: {key}"),
+                            _ => {}, // 
                         }
                     }
                     block_props
@@ -542,7 +542,7 @@ impl BlockState {
                 id: #id,
                 state_flags: #state_flags,
                 side_flags: #side_flags,
-                instrument: Instrument::#instrument,
+                instrument: NoteblockInstrument::#instrument,
                 luminance: #luminance,
                 piston_behavior: #piston_behavior,
                 hardness: #hardness,
@@ -595,7 +595,7 @@ impl ToTokens for Block {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let id = LitInt::new(&self.id.to_string(), Span::call_site());
         let name = LitStr::new(&self.name, Span::call_site());
-        let translation_key = LitStr::new(&self.translation_key, Span::call_site());
+        //let translation_key = LitStr::new(&self.translation_key, Span::call_site());
         let hardness = &self.hardness;
         let blast_resistance = &self.blast_resistance;
         let item_id = LitInt::new(&self.item_id.to_string(), Span::call_site());
@@ -635,7 +635,6 @@ impl ToTokens for Block {
             Block {
                 id: #id,
                 name: #name,
-                translation_key: #translation_key,
                 hardness: #hardness,
                 blast_resistance: #blast_resistance,
                 slipperiness: #slipperiness,
@@ -1263,7 +1262,7 @@ pub fn build() -> TokenStream {
             }
         }
 
-        impl StraightRailShape {
+        impl RailShapeStraight {
             pub fn is_ascending(&self) -> bool {
                 matches!(self, Self::AscendingEast | Self::AscendingWest | Self::AscendingNorth | Self::AscendingSouth)
             }

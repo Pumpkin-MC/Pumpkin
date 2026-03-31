@@ -731,9 +731,8 @@ impl ProtoChunk {
         let v_count = noise_sampler.vertical_cell_block_count() as i32;
         let horizontal_cells = CHUNK_DIM as i32 / h_count;
 
-        let min_y = self.bottom_y();
-        let minimum_cell_y = min_y / v_count as i8;
-        let cell_height = self.height() / v_count as u16;
+        let minimum_cell_y = noise_sampler.min_y() / v_count as i8;
+        let cell_height = noise_sampler.height() / v_count as u16;
 
         let delta_y_step = 1.0 / v_count as f64;
         let delta_x_z_step = 1.0 / h_count as f64;

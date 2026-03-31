@@ -51,8 +51,8 @@ impl ArgumentConsumer for RotationArgumentConsumer {
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let yaw_str_opt = args.pop();
-        let pitch_str_opt = args.pop();
+        let yaw_str_opt = args.pop().map(|arg| arg.value);
+        let pitch_str_opt = args.pop().map(|arg| arg.value);
 
         let (Some(yaw_str), Some(pitch_str)) = (yaw_str_opt, pitch_str_opt) else {
             return Box::pin(async move { None });

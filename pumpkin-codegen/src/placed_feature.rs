@@ -108,7 +108,21 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
     match type_str {
         "minecraft:biome" => quote! { PlacementModifier::Biome(BiomePlacementModifier) },
         "minecraft:in_square" => quote! { PlacementModifier::InSquare(SquarePlacementModifier) },
-        "minecraft:fixed_placement" => quote! { PlacementModifier::FixedPlacement },
+        "minecraft:fixed_placement" => {
+            let positions = v["positions"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter().map(|p| {
+                        let coords = p.as_array().unwrap();
+                        let x = coords[0].as_i64().unwrap_or(0) as i32;
+                        let y = coords[1].as_i64().unwrap_or(0) as i32;
+                        let z = coords[2].as_i64().unwrap_or(0) as i32;
+                        quote! { BlockPos::new(#x, #y, #z) }
+                    }).collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            quote! { PlacementModifier::FixedPlacement(vec![#(#positions),*]) }
+        },
         "minecraft:heightmap" => {
             let heightmap =
                 value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
@@ -253,6 +267,20 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
 /// # Returns
 /// A `BlockPredicate` variant token stream, or `compile_error!` for unknown types.
 pub fn value_to_block_predicate(v: &Value) -> TokenStream {
+    // Handle bare string values: "#minecraft:some_tag" is a block-tag predicate,
+    // "true" (or any non-# string) is AlwaysTrue.
+    if let Some(s) = v.as_str() {
+        if let Some(tag) = s.strip_prefix('#') {
+            return quote! {
+                BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                    offset: OffsetBlocksBlockPredicate { offset: None },
+                    tag: #tag.to_string(),
+                })
+            };
+        }
+        return quote! { BlockPredicate::AlwaysTrue };
+    }
+
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
         "minecraft:true" | "" => quote! { BlockPredicate::AlwaysTrue },
@@ -640,6 +668,31 @@ pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
                 name: &pumpkin_data::Block::#block_ident,
                 properties: None,
             }
+        }
+    }
+}
+
+pub fn value_to_block_state(v: &Value) -> TokenStream {
+    let name = v["Name"].as_str().unwrap_or("minecraft:air");
+    let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
+    let block_ident =
+        quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
+    if let Some(props) = v["Properties"].as_object() {
+        let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
+        let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();
+        quote! {
+            {
+                let mut props = std::collections::HashMap::new();
+                #(props.insert(#keys.to_string(), #vals.to_string());)*
+                BlockStateCodec {
+                    name: &pumpkin_data::Block::#block_ident,
+                    properties: Some(props),
+                }.get_state()
+            }
+        }
+    } else {
+        quote! {
+            pumpkin_data::Block::#block_ident.default_state
         }
     }
 }

@@ -237,7 +237,6 @@ impl SurfaceMaterialCondition {
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> bool {
-        // TODO
         context.block_pos_y >= estimate_surface_height(context, surface_height_estimate_sampler)
     }
 }

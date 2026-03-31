@@ -1,10 +1,9 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
-use pumpkin_data::{fuels::is_fuel, screen::WindowType};
+use pumpkin_data::{fuels::is_fuel, item_stack::ItemStack, screen::WindowType};
 use pumpkin_world::{
     block::entities::{PropertyDelegate, furnace_like_block_entity::ExperienceContainer},
     inventory::Inventory,
-    item::ItemStack,
 };
 
 use crate::{

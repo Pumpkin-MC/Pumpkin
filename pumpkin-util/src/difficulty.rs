@@ -25,6 +25,32 @@ pub enum Difficulty {
     Hard = 3,
 }
 
+impl Difficulty {
+    /// Gets the lowercase name of this difficulty.
+    /// For example, [`Difficulty::Peaceful`] will yield `"peaceful"`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Peaceful => "peaceful",
+            Self::Easy => "easy",
+            Self::Normal => "normal",
+            Self::Hard => "hard",
+        }
+    }
+
+    /// Gets the translation key of this difficulty.
+    /// For example, [`Difficulty::Peaceful`] will yield `"options.difficulty.peaceful"`.
+    #[must_use]
+    pub const fn translation_key(self) -> &'static str {
+        match self {
+            Self::Peaceful => "options.difficulty.peaceful",
+            Self::Easy => "options.difficulty.easy",
+            Self::Normal => "options.difficulty.normal",
+            Self::Hard => "options.difficulty.hard",
+        }
+    }
+}
+
 impl FromStr for Difficulty {
     type Err = ParseDifficultyError;
 

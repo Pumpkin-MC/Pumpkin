@@ -147,7 +147,7 @@ impl BreathManager {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_AIR,
+                TrackedData::AIR_SUPPLY_ID,
                 MetaDataType::INTEGER,
                 VarInt(air),
             )])
