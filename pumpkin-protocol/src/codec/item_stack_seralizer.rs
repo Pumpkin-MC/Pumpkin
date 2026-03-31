@@ -4,8 +4,8 @@ use crate::ser::{WritingError, serializer};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::version::MinecraftVersion;
-use pumpkin_world::item::ItemStack;
 use serde::ser::SerializeStruct;
 use serde::{
     Deserialize, Serialize, Serializer,

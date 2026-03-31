@@ -1,15 +1,16 @@
-use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component::DataComponent::Enchantments;
-use pumpkin_data::data_component_impl::{
+use crate::data_component::DataComponent;
+use crate::data_component::DataComponent::Enchantments;
+use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
     MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, get, get_mut, read_data,
 };
-use pumpkin_data::item::Item;
-use pumpkin_data::recipes::RecipeResultStruct;
-use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, Enchantment};
+use crate::item::Item;
+use crate::recipes::RecipeResultStruct;
+use crate::tag::Taggable;
+use crate::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
+use rand;
 use std::borrow::Cow;
 use std::cmp::{max, min};
 
@@ -519,8 +520,8 @@ impl From<&RecipeResultStruct> for ItemStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_data::data_component::DataComponent;
-    use pumpkin_data::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
+    use crate::data_component::DataComponent;
+    use crate::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {

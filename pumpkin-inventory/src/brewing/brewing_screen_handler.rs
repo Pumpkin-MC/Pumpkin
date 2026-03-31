@@ -9,7 +9,7 @@ use crate::{
     screen_handler::{ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture, ScreenProperty},
 };
 
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 pub struct BrewingScreenHandler {
     inventory: Arc<dyn Inventory>,

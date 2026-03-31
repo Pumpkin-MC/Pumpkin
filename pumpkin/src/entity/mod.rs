@@ -19,6 +19,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
@@ -50,7 +51,6 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::item::ItemStack;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::pin::Pin;
