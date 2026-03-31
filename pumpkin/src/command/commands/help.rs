@@ -282,12 +282,11 @@ impl CommandExecutor for HelpCommandExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry
-        .register_permission_or_panic(Permission::new(
-            PERMISSION,
-            DESCRIPTION,
-            PermissionDefault::Allow,
-        ));
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Allow,
+    ));
 
     dispatcher.register_with_aliases(
         command("help", DESCRIPTION)

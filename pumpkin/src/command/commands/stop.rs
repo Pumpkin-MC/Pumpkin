@@ -34,12 +34,11 @@ impl CommandExecutor for StopCommandExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry
-        .register_permission_or_panic(Permission::new(
-            PERMISSION,
-            DESCRIPTION,
-            PermissionDefault::Op(PermissionLvl::Four),
-        ));
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Four),
+    ));
 
     dispatcher.register(
         command("stop", DESCRIPTION)

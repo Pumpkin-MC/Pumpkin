@@ -49,15 +49,14 @@ impl CommandExecutor for SeedCommandExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry
-        .register_permission_or_panic(Permission::new(
-            PERMISSION,
-            DESCRIPTION,
-            // For integrated servers, the permission level is 0,
-            // but Pumpkin is always a dedicated server. For dedicated servers,
-            // /seed is limited to level 2.
-            PermissionDefault::Op(PermissionLvl::Two),
-        ));
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        // For integrated servers, the permission level is 0,
+        // but Pumpkin is always a dedicated server. For dedicated servers,
+        // /seed is limited to level 2.
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
 
     dispatcher.register(
         command("seed", DESCRIPTION)
