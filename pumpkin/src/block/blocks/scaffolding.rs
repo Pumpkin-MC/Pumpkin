@@ -38,7 +38,7 @@ impl BlockBehaviour for ScaffoldingBlock {
                 let above_block = args.world.get_block(&above).await;
 
                 if above_block == &Block::AIR {
-                    let height = get_scaffolding_height(args.world, args.position).await;
+                    let height = get_scaffolding_height(&*args.world, args.position).await;
                     if height < 7 {
                         return props.to_state_id(args.block);
                     }
@@ -68,11 +68,11 @@ impl BlockBehaviour for ScaffoldingBlock {
         Box::pin(async move {
             let mut props = ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
 
-            let distance = compute_distance(args.world, args.position).await;
+            let distance = compute_distance(&*args.world, args.position).await;
             let clamped = distance.min(Integer0To7::variant_count() as u8 - 1);
             props.distance = Integer0To7::from_index(clamped as u16);
 
-            props.bottom = is_bottom(args.world, args.position).await;
+            props.bottom = is_bottom(&*args.world, args.position).await;
 
             props.to_state_id(args.block)
         })
@@ -80,14 +80,14 @@ impl BlockBehaviour for ScaffoldingBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_survive(args.world, args.position).await {
+            if !can_survive(&*args.world, args.position).await {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
                 return;
             }
 
-            let distance = compute_distance(args.world, args.position).await;
+            let distance = compute_distance(&*args.world, args.position).await;
             if distance == 7 {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
