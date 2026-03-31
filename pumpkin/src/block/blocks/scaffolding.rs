@@ -1,6 +1,6 @@
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PlacedArgs,
 };
 use crate::world::World;
 use pumpkin_data::{
@@ -23,6 +23,8 @@ impl BlockBehaviour for ScaffoldingBlock {
 
             if args
                 .player
+                .living_entity
+                .entity
                 .sneaking
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
@@ -46,7 +48,7 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_survive(args.block_accessor, args.position).await })
+        Box::pin(async move { can_survive(args.world, args.position).await })
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
@@ -65,7 +67,7 @@ impl BlockBehaviour for ScaffoldingBlock {
             let mut props = ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
 
             let distance = compute_distance(args.world, args.position).await;
-            props.distance = distance;
+            props.distance = distance.into();
 
             props.bottom = is_bottom(args.world, args.position).await;
 
@@ -92,7 +94,7 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 }
 
-async fn can_survive(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+async fn can_survive(world: &World, pos: &BlockPos) -> bool {
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
@@ -127,7 +129,7 @@ async fn compute_distance(world: &World, pos: &BlockPos) -> u8 {
     if below_block == &Block::SCAFFOLDING {
         let below_state = world.get_block_state_id(&below).await;
         let props = ScaffoldingLikeProperties::from_state_id(below_state, &Block::SCAFFOLDING);
-        return props.distance;
+        return props.distance.into();
     }
 
     let below_state = world.get_block_state(&below).await;
@@ -144,7 +146,7 @@ async fn compute_distance(world: &World, pos: &BlockPos) -> u8 {
         if block == &Block::SCAFFOLDING {
             let state = world.get_block_state_id(&neighbor).await;
             let props = ScaffoldingLikeProperties::from_state_id(state, &Block::SCAFFOLDING);
-            best = best.min(props.distance + 1);
+            best = best.min(u8::from(props.distance) + 1);
         }
     }
 
