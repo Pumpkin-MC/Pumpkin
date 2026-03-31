@@ -108,7 +108,10 @@ async fn can_survive(world: &dyn pumpkin_world::world::BlockAccessor, pos: &Bloc
     below_state.is_full_cube() && below_state.is_solid_block()
 }
 
-async fn get_scaffolding_height(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> u8 {
+async fn get_scaffolding_height(
+    world: &dyn pumpkin_world::world::BlockAccessor,
+    pos: &BlockPos,
+) -> u8 {
     let mut height = 0;
     let mut current = pos.down();
 
