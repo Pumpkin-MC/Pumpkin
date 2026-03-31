@@ -10,9 +10,10 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         WouldSurviveBlockPredicate,
     };
     use crate::generation::block_state_provider::{
-        BlockStateProvider, DualNoiseBlockStateProvider, NoiseBlockStateProvider,
+        BlockStateProvider, BlockStateRule, DualNoiseBlockStateProvider, NoiseBlockStateProvider,
         NoiseBlockStateProviderBase, NoiseThresholdBlockStateProvider, PillarBlockStateProvider,
-        RandomizedIntBlockStateProvider, SimpleStateProvider, WeightedBlockStateProvider,
+        RandomizedIntBlockStateProvider, RuleBasedBlockStateProvider, SimpleStateProvider,
+        WeightedBlockStateProvider,
     };
     use crate::generation::feature::features::drip_stone::small::SmallDripstoneFeature;
     use crate::generation::feature::features::{
@@ -2558,19 +2559,135 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     );
     map.insert(
         "disk_clay".to_string(),
-        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}),
+        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
+            state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
+                    state: pumpkin_data::Block::CLAY.default_state,
+                })),
+                rules: vec![],
+            }),
+            target: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                blocks: MatchingBlocksWrapper::Multiple(vec![
+                    "minecraft:dirt".to_string(),
+                    "minecraft:clay".to_string(),
+                ]),
+            }),
+            radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 2i32,
+                max_inclusive: 3i32,
+            })),
+            half_height: 1i32,
+        }),
     );
     map.insert(
         "disk_grass".to_string(),
-        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}),
+        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
+            state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
+                    state: pumpkin_data::Block::DIRT.default_state,
+                })),
+                rules: vec![BlockStateRule {
+                    if_true: BlockPredicate::Not(NotBlockPredicate {
+                        predicate: Box::new(BlockPredicate::AnyOf(AnyOfBlockPredicate {
+                            predicates: vec![
+                                BlockPredicate::Solid(SolidBlockPredicate {
+                                    offset: OffsetBlocksBlockPredicate {
+                                        offset: Some(Vector3::new(0i32, 1i32, 0i32)),
+                                    },
+                                }),
+                                BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                    offset: OffsetBlocksBlockPredicate {
+                                        offset: Some(Vector3::new(0i32, 1i32, 0i32)),
+                                    },
+                                    fluids: MatchingBlocksWrapper::Single(
+                                        "minecraft:water".to_string(),
+                                    ),
+                                }),
+                            ],
+                        })),
+                    }),
+                    then: BlockStateProvider::Simple(SimpleStateProvider {
+                        state: {
+                            let mut props = std::collections::HashMap::new();
+                            props.insert("snowy".to_string(), "false".to_string());
+                            BlockStateCodec {
+                                name: &pumpkin_data::Block::GRASS_BLOCK,
+                                properties: Some(props),
+                            }.get_state()
+                        },
+                    }),
+                }],
+            }),
+            target: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                blocks: MatchingBlocksWrapper::Multiple(vec![
+                    "minecraft:dirt".to_string(),
+                    "minecraft:mud".to_string(),
+                ]),
+            }),
+            radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 2i32,
+                max_inclusive: 6i32,
+            })),
+            half_height: 2i32,
+        }),
     );
     map.insert(
         "disk_gravel".to_string(),
-        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}),
+        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
+            state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
+                    state: pumpkin_data::Block::GRAVEL.default_state,
+                })),
+                rules: vec![],
+            }),
+            target: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                blocks: MatchingBlocksWrapper::Multiple(vec![
+                    "minecraft:dirt".to_string(),
+                    "minecraft:grass_block".to_string(),
+                ]),
+            }),
+            radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 2i32,
+                max_inclusive: 5i32,
+            })),
+            half_height: 2i32,
+        }),
     );
     map.insert(
         "disk_sand".to_string(),
-        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}),
+        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
+            state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
+                    state: pumpkin_data::Block::SAND.default_state,
+                })),
+                rules: vec![BlockStateRule {
+                    if_true: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                        offset: OffsetBlocksBlockPredicate {
+                            offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                        },
+                        blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                    }),
+                    then: BlockStateProvider::Simple(SimpleStateProvider {
+                        state: pumpkin_data::Block::SANDSTONE.default_state,
+                    }),
+                }],
+            }),
+            target: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                blocks: MatchingBlocksWrapper::Multiple(vec![
+                    "minecraft:dirt".to_string(),
+                    "minecraft:grass_block".to_string(),
+                ]),
+            }),
+            radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 2i32,
+                max_inclusive: 6i32,
+            })),
+            half_height: 2i32,
+        }),
     );
     map.insert(
         "dripleaf".to_string(),
@@ -4883,7 +5000,31 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     );
     map.insert(
         "ice_patch".to_string(),
-        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}),
+        ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
+            state_provider: BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                fallback: Box::new(BlockStateProvider::Simple(SimpleStateProvider {
+                    state: pumpkin_data::Block::PACKED_ICE.default_state,
+                })),
+                rules: vec![],
+            }),
+            target: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                offset: OffsetBlocksBlockPredicate { offset: None },
+                blocks: MatchingBlocksWrapper::Multiple(vec![
+                    "minecraft:dirt".to_string(),
+                    "minecraft:grass_block".to_string(),
+                    "minecraft:podzol".to_string(),
+                    "minecraft:coarse_dirt".to_string(),
+                    "minecraft:mycelium".to_string(),
+                    "minecraft:snow_block".to_string(),
+                    "minecraft:ice".to_string(),
+                ]),
+            }),
+            radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 2i32,
+                max_inclusive: 3i32,
+            })),
+            half_height: 1i32,
+        }),
     );
     map.insert(
         "ice_spike".to_string(),

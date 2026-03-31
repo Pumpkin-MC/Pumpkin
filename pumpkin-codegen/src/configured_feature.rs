@@ -49,9 +49,11 @@ pub fn build() -> TokenStream {
             };
             use crate::block::BlockStateCodec;
             use crate::generation::block_state_provider::{
-                BlockStateProvider, DualNoiseBlockStateProvider, NoiseBlockStateProvider,
-                NoiseBlockStateProviderBase, NoiseThresholdBlockStateProvider, PillarBlockStateProvider,
-                RandomizedIntBlockStateProvider, SimpleStateProvider, WeightedBlockStateProvider,
+                BlockStateProvider, BlockStateRule, DualNoiseBlockStateProvider,
+                NoiseBlockStateProvider, NoiseBlockStateProviderBase,
+                NoiseThresholdBlockStateProvider, PillarBlockStateProvider,
+                RandomizedIntBlockStateProvider, RuleBasedBlockStateProvider, SimpleStateProvider,
+                WeightedBlockStateProvider,
             };
             use pumpkin_util::math::pool::Weighted;
             use pumpkin_util::DoublePerlinNoiseParametersCodec;
@@ -545,6 +547,20 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:glowstone_blob" => {
             quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) }
         }
+        "minecraft:disk" => {
+            let state_provider = value_to_block_state_provider(&config["state_provider"]);
+            let target = value_to_block_predicate(&config["target"]);
+            let radius = value_to_int_provider(&config["radius"]);
+            let half_height = config["half_height"].as_i64().unwrap_or(1) as i32;
+            quote! {
+                ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
+                    state_provider: #state_provider,
+                    target: #target,
+                    radius: #radius,
+                    half_height: #half_height,
+                })
+            }
+        }
 
         // All TODO/empty features
         "minecraft:fossil" => {
@@ -552,9 +568,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:lake" => {
             quote! { ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {}) }
-        }
-        "minecraft:disk" => {
-            quote! { ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}) }
         }
         "minecraft:huge_brown_mushroom" => {
             quote! { ConfiguredFeature::HugeBrownMushroom(crate::generation::feature::features::huge_brown_mushroom::HugeBrownMushroomFeature {}) }
@@ -767,6 +780,27 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
                     source: Box::new(#src),
                     property: #prop.to_string(),
                     values: #vals,
+                })
+            }
+        }
+        _ if !v["fallback"].is_null() => {
+            let fallback = value_to_block_state_provider(&v["fallback"]);
+            let rules: Vec<TokenStream> = v["rules"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .map(|rule| {
+                            let if_true = value_to_block_predicate(&rule["if_true"]);
+                            let then = value_to_block_state_provider(&rule["then"]);
+                            quote! { BlockStateRule { if_true: #if_true, then: #then } }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            quote! {
+                BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                    fallback: Box::new(#fallback),
+                    rules: vec![#(#rules),*],
                 })
             }
         }
