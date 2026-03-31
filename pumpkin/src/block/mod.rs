@@ -2,7 +2,7 @@ use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::random::{get_seed, xoroshiro128::Xoroshiro, RandomGenerator};
+use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use pumpkin_world::BlockStateId;
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
@@ -10,8 +10,8 @@ use crate::entity::player::Player;
 use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use std::pin::Pin;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 pub mod blocks;
 pub mod fluid;
@@ -20,15 +20,14 @@ pub mod registry;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::server::Server;
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use tokio::sync::Mutex;
 
-// Scaffolding import
 use crate::block::blocks::scaffolding::ScaffoldingBlock;
 
 pub trait BlockMetadata {
