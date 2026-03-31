@@ -66,8 +66,7 @@ impl BlockBehaviour for ScaffoldingBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let mut props =
-                ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
+            let mut props = ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
 
             let distance = compute_distance(&*args.world, args.position).await;
             let clamped = distance.min(Integer0To7::variant_count() as u8 - 1);
@@ -79,10 +78,7 @@ impl BlockBehaviour for ScaffoldingBlock {
         })
     }
 
-    fn on_scheduled_tick<'a>(
-        &'a self,
-        args: OnScheduledTickArgs<'a>,
-    ) -> BlockFuture<'a, ()> {
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let world = &*args.world;
 
@@ -115,10 +111,7 @@ async fn can_survive(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
     below_state.is_full_cube() && below_state.is_solid_block()
 }
 
-async fn get_scaffolding_height(
-    world: &dyn BlockAccessor,
-    pos: &BlockPos,
-) -> u8 {
+async fn get_scaffolding_height(world: &dyn BlockAccessor, pos: &BlockPos) -> u8 {
     let mut height = 0;
     let mut current = pos.down();
 
@@ -134,17 +127,13 @@ async fn get_scaffolding_height(
     height
 }
 
-async fn compute_distance(
-    world: &dyn BlockAccessor,
-    pos: &BlockPos,
-) -> u8 {
+async fn compute_distance(world: &dyn BlockAccessor, pos: &BlockPos) -> u8 {
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
     if below_block == &Block::SCAFFOLDING {
         let below_state = world.get_block_state_id(&below).await;
-        let props =
-            ScaffoldingLikeProperties::from_state_id(below_state, &Block::SCAFFOLDING);
+        let props = ScaffoldingLikeProperties::from_state_id(below_state, &Block::SCAFFOLDING);
         return props.distance.to_index() as u8;
     }
 
@@ -161,8 +150,7 @@ async fn compute_distance(
 
         if block == &Block::SCAFFOLDING {
             let state = world.get_block_state_id(&neighbor).await;
-            let props =
-                ScaffoldingLikeProperties::from_state_id(state, &Block::SCAFFOLDING);
+            let props = ScaffoldingLikeProperties::from_state_id(state, &Block::SCAFFOLDING);
             best = best.min(props.distance.to_index() as u8 + 1);
         }
     }
