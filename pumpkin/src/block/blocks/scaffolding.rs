@@ -5,7 +5,7 @@ use crate::block::{
 use crate::world::World;
 use pumpkin_data::{
     Block, BlockDirection,
-    block_properties::{BlockProperties, ScaffoldingLikeProperties, Integer0To7},
+    block_properties::{BlockProperties, Integer0To7, ScaffoldingLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -35,7 +35,8 @@ impl BlockBehaviour for ScaffoldingBlock {
                 let above_block = args.world.expect("world").get_block(&above).await;
 
                 if above_block == &Block::AIR {
-                    let height = get_scaffolding_height(args.world.expect("world"), args.position).await;
+                    let height =
+                        get_scaffolding_height(args.world.expect("world"), args.position).await;
                     if height < 7 {
                         return props.to_state_id(args.block);
                     }
@@ -47,9 +48,7 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            can_survive(args.world.expect("world"), args.position).await
-        })
+        Box::pin(async move { can_survive(args.world.expect("world"), args.position).await })
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
