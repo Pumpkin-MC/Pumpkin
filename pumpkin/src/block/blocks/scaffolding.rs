@@ -4,8 +4,7 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::{
-    Block,
-    BlockDirection,
+    Block, BlockDirection,
     block_properties::{BlockProperties, ScaffoldingLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
