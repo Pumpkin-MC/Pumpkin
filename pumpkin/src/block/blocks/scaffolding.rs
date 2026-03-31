@@ -38,8 +38,7 @@ impl BlockBehaviour for ScaffoldingBlock {
                 let above_block = args.world.level.get_block(&above).await;
 
                 if above_block == &Block::AIR {
-                    let height =
-                        get_scaffolding_height(&*args.world.level, args.position).await;
+                    let height = get_scaffolding_height(&*args.world.level, args.position).await;
                     if height < 7 {
                         return props.to_state_id(args.block);
                     }
