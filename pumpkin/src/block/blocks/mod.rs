@@ -40,6 +40,7 @@ pub mod iron_bars;
 pub mod slabs;
 pub mod stairs;
 pub mod walls;
+pub mod scaffolding;
 
 // Decorative & furnishings
 pub mod banners;
