@@ -289,8 +289,9 @@ impl GenerationCache for Cache {
     fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let dx = (x >> 4) - self.x;
         let dy = (z >> 4) - self.z;
-        debug_assert!(dx < self.size && dy < self.size);
-        debug_assert!(dx >= 0 && dy >= 0);
+        if dx < 0 || dy < 0 || dx >= self.size || dy >= self.size {
+            return 0;
+        }
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(_data) => {
                 0 // todo missing
@@ -302,8 +303,13 @@ impl GenerationCache for Cache {
     fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
         let dx = (x >> 4) - self.x;
         let dy = (z >> 4) - self.z;
-        debug_assert!(dx < self.size && dy < self.size);
-        debug_assert!(dx >= 0 && dy >= 0);
+        let (dx, dy) = if dx < 0 || dy < 0 || dx >= self.size || dy >= self.size {
+            // Position is outside the cache — fall back to the centre chunk's biome
+            let mid = self.size / 2;
+            (mid, mid)
+        } else {
+            (dx, dy)
+        };
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
                 // Could this happen?

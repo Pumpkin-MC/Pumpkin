@@ -841,7 +841,7 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
         PlacedFeature {
             feature: Feature::Named("end_platform".to_string()),
             placement: vec![
-                PlacementModifier::FixedPlacement,
+                PlacementModifier::FixedPlacement(vec![BlockPos::new(100, 50, 0)]),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
         },
