@@ -29,8 +29,7 @@ impl EndPlatformFeature {
                     } else {
                         Block::AIR.default_state
                     };
-                    let target =
-                        Vector3::new(pos.0.x + dx, pos.0.y + dy, pos.0.z + dz);
+                    let target = Vector3::new(pos.0.x + dx, pos.0.y + dy, pos.0.z + dz);
                     chunk.set_block_state(&target, state);
                 }
             }

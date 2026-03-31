@@ -1605,7 +1605,7 @@ impl Entity {
                 let (teleport_pos, new_yaw) = if is_end_portal {
                     if dest_world.dimension == Dimension::THE_END {
                         // Entering the End: spawn on the obsidian platform at (100, 50, 0)
-                        (Vector3::new(100.5_f64, 50.0_f64, 0.5_f64), None)
+                        (Vector3::new(100.5f64, 50.0f64, 0.5f64), None)
                     } else {
                         // Leaving the End through the exit portal: return to overworld spawn
                         let info = dest_world.level_info.load();
