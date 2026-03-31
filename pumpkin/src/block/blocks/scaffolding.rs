@@ -20,6 +20,7 @@ impl BlockBehaviour for ScaffoldingBlock {
             let mut props = ScaffoldingLikeProperties::default(args.block);
             props.waterlogged = args.replacing.water_source();
 
+            // Sneak-place: do not extend
             if args
                 .player
                 .living_entity
@@ -30,13 +31,13 @@ impl BlockBehaviour for ScaffoldingBlock {
                 return props.to_state_id(args.block);
             }
 
+            // Upward placement logic
             if args.direction == BlockDirection::Up {
                 let above = args.position.up();
-                let above_block = args.world.expect("world").get_block(&above).await;
+                let above_block = args.world.get_block(&above).await;
 
                 if above_block == &Block::AIR {
-                    let height =
-                        get_scaffolding_height(args.world.expect("world"), args.position).await;
+                    let height = get_scaffolding_height(args.world, args.position).await;
                     if height < 7 {
                         return props.to_state_id(args.block);
                     }
@@ -48,13 +49,12 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_survive(args.world.expect("world"), args.position).await })
+        Box::pin(async move { can_survive(args.block_accessor, args.position).await })
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.world
-                .expect("world")
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                 .await;
         })
@@ -67,10 +67,11 @@ impl BlockBehaviour for ScaffoldingBlock {
         Box::pin(async move {
             let mut props = ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
 
-            let distance = compute_distance(args.world.expect("world"), args.position).await;
-            props.distance = Integer0To7::new(distance);
+            let distance = compute_distance(args.block_accessor, args.position).await;
+            let clamped = distance.min(Integer0To7::variant_count() as u8 - 1);
+            props.distance = Integer0To7::from_index(clamped as u16);
 
-            props.bottom = is_bottom(args.world.expect("world"), args.position).await;
+            props.bottom = is_bottom(args.block_accessor, args.position).await;
 
             props.to_state_id(args.block)
         })
@@ -78,8 +79,9 @@ impl BlockBehaviour for ScaffoldingBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let world = args.world.expect("world");
+            let world = args.world;
 
+            // Use inherent World methods here (Arc<World> does NOT implement BlockAccessor)
             if !can_survive(world, args.position).await {
                 world
                     .break_block(args.position, None, BlockFlags::empty())
@@ -97,7 +99,7 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 }
 
-async fn can_survive(world: &World, pos: &BlockPos) -> bool {
+async fn can_survive(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> bool {
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
@@ -109,7 +111,7 @@ async fn can_survive(world: &World, pos: &BlockPos) -> bool {
     below_state.is_full_cube() && below_state.is_solid_block()
 }
 
-async fn get_scaffolding_height(world: &World, pos: &BlockPos) -> u8 {
+async fn get_scaffolding_height(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> u8 {
     let mut height = 0;
     let mut current = pos.down();
 
@@ -125,21 +127,24 @@ async fn get_scaffolding_height(world: &World, pos: &BlockPos) -> u8 {
     height
 }
 
-async fn compute_distance(world: &World, pos: &BlockPos) -> u8 {
+async fn compute_distance(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> u8 {
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
+    // Directly stacked scaffolding
     if below_block == &Block::SCAFFOLDING {
         let below_state = world.get_block_state_id(&below).await;
         let props = ScaffoldingLikeProperties::from_state_id(below_state, &Block::SCAFFOLDING);
-        return props.distance.get();
+        return props.distance.to_index() as u8;
     }
 
+    // Solid block below
     let below_state = world.get_block_state(&below).await;
     if below_state.is_full_cube() && below_state.is_solid_block() {
         return 0;
     }
 
+    // Horizontal search
     let mut best = 7;
 
     for dir in BlockDirection::horizontal() {
@@ -149,14 +154,14 @@ async fn compute_distance(world: &World, pos: &BlockPos) -> u8 {
         if block == &Block::SCAFFOLDING {
             let state = world.get_block_state_id(&neighbor).await;
             let props = ScaffoldingLikeProperties::from_state_id(state, &Block::SCAFFOLDING);
-            best = best.min(props.distance.get() + 1);
+            best = best.min(props.distance.to_index() as u8 + 1);
         }
     }
 
     best
 }
 
-async fn is_bottom(world: &World, pos: &BlockPos) -> bool {
+async fn is_bottom(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> bool {
     let above = pos.up();
     let above_block = world.get_block(&above).await;
     above_block != &Block::SCAFFOLDING
