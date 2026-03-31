@@ -6,9 +6,9 @@ use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -49,7 +49,8 @@ impl ItemBehaviour for FlintAndSteelItem {
             .await;
 
             if ignited && player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                item.damage_item_with_context(1, false);
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                let _ = item.damage_item(1);
             }
         })
     }

@@ -5,13 +5,13 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::{BlockProperties, CampfireLikeProperties};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use rand::{RngExt, rng};
 
@@ -64,7 +64,7 @@ impl ItemBehaviour for ShovelItem {
                 );
                 if campfire_props.lit {
                     world
-                        .sync_world_event(WorldEvent::FireExtinguished, location, 0)
+                        .sync_world_event(WorldEvent::SoundExtinguishFire, location, 0)
                         .await;
 
                     campfire_props.lit = false;
@@ -91,7 +91,8 @@ impl ItemBehaviour for ShovelItem {
             }
 
             if changed && player.gamemode.load() != GameMode::Creative {
-                item.damage_item_with_context(1, false);
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                let _ = item.damage_item(1);
             }
         })
     }

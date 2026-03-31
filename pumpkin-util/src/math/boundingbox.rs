@@ -259,13 +259,13 @@ impl BoundingBox {
 
     /// Returns the minimum block position covered by this bounding box.
     #[must_use]
-    pub fn min_block_pos(&self) -> BlockPos {
+    pub const fn min_block_pos(&self) -> BlockPos {
         BlockPos::floored_v(self.min)
     }
 
     /// Returns the maximum block position covered by this bounding box.
     #[must_use]
-    pub fn max_block_pos(&self) -> BlockPos {
+    pub const fn max_block_pos(&self) -> BlockPos {
         // Use a tiny epsilon and floor the max coordinates so that a box whose
         // max is exactly on a block boundary does not include the adjacent
         // block. This mirrors vanilla behaviour where max block is inclusive
@@ -295,7 +295,7 @@ impl BoundingBox {
     /// # Arguments
     /// * `other` – Vector specifying how much to stretch along each axis.
     #[must_use]
-    pub fn stretch(&self, other: Vector3<f64>) -> Self {
+    pub const fn stretch(&self, other: Vector3<f64>) -> Self {
         let mut new = *self;
 
         if other.x < 0.0 {

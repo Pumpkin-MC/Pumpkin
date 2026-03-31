@@ -7,9 +7,9 @@ use crate::screen_handler::{
 };
 use crate::slot::{ArmorSlot, NormalSlot, Slot};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
 use pumpkin_world::inventory::Inventory;
-use pumpkin_world::item::ItemStack;
 use std::any::Any;
 use std::sync::Arc;
 

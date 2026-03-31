@@ -137,7 +137,7 @@ impl PerlinNoiseSampler {
     /// # Returns
     /// The dot product of the selected gradient with (x, y, z).
     #[inline]
-    fn grad(hash: i32, x: f64, y: f64, z: f64) -> f64 {
+    const fn grad(hash: i32, x: f64, y: f64, z: f64) -> f64 {
         GRADIENTS[(hash & 15) as usize].dot(x, y, z)
     }
 
@@ -152,8 +152,7 @@ impl PerlinNoiseSampler {
     /// # Returns
     /// The faded value.
     #[inline]
-    #[expect(clippy::suboptimal_flops)]
-    fn perlin_fade(value: f64) -> f64 {
+    const fn perlin_fade(value: f64) -> f64 {
         value * value * value * (value * (value * 6.0 - 15.0) + 10.0)
     }
 
@@ -297,8 +296,7 @@ impl OctavePerlinNoiseSampler {
     /// The wrapped value.
     #[inline]
     #[must_use]
-    #[expect(clippy::suboptimal_flops)]
-    pub fn maintain_precision(value: f64) -> f64 {
+    pub const fn maintain_precision(value: f64) -> f64 {
         value - (value / 3.355_443_2E7 + 0.5).floor() * 3.355_443_2E7
     }
 
@@ -479,7 +477,7 @@ mod tests {
     use crate::{
         assert_eq_delta,
         noise::perlin::{OctavePerlinNoiseSampler, PerlinNoiseSampler},
-        random::{RandomDeriverImpl, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro},
+        random::{RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro},
         read_data_from_file,
     };
 

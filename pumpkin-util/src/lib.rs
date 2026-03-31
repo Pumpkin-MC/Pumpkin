@@ -7,7 +7,7 @@ pub use difficulty::Difficulty;
 pub use gamemode::GameMode;
 pub use permission::PermissionLvl;
 
-use crate::math::vector3::Axis;
+use crate::{math::vector3::Axis, random::RandomImpl};
 
 pub mod biome;
 pub mod difficulty;
@@ -129,6 +129,15 @@ impl BlockDirection {
             Self::Up | Self::Down => Axis::Y,
             Self::North | Self::South => Axis::Z,
             Self::East | Self::West => Axis::X,
+        }
+    }
+
+    pub fn get_random_horizontal_direction(random: &mut impl RandomImpl) -> Self {
+        match random.next_bounded_i32(4) {
+            0 => Self::North,
+            1 => Self::East,
+            2 => Self::South,
+            _ => Self::West,
         }
     }
 }

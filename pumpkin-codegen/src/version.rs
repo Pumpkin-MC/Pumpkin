@@ -73,9 +73,14 @@ pub enum MinecraftVersion {
     V_1_21_7,
     V_1_21_9,
     V_1_21_11,
+    V_26_1,
 }
 
 impl MinecraftVersion {
+    /// Converts this version to a snake_case `Ident` suitable for use as a struct field name.
+    ///
+    /// # Returns
+    /// A `syn::Ident` like `v1_21_4` for `MinecraftVersion::V_1_21_4`.
     pub fn to_field_ident(self) -> Ident {
         match self {
             Self::V_1_7_2 => format_ident!("v1_7_2"),
@@ -127,11 +132,13 @@ impl MinecraftVersion {
             Self::V_1_21_7 => format_ident!("v1_21_7"),
             Self::V_1_21_9 => format_ident!("v1_21_9"),
             Self::V_1_21_11 => format_ident!("v1_21_11"),
+            Self::V_26_1 => format_ident!("v26_1"),
         }
     }
 }
 
 impl ToTokens for MinecraftVersion {
+    /// Emits a fully-qualified `pumpkin_util::version::MinecraftVersion::V_x_y_z` token stream.
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         tokens.extend(match self {
             Self::V_1_7_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_7_2 },
@@ -183,6 +190,7 @@ impl ToTokens for MinecraftVersion {
             Self::V_1_21_7 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_7 },
             Self::V_1_21_9 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_9 },
             Self::V_1_21_11 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_11 },
+            Self::V_26_1 => quote! { pumpkin_util::version::MinecraftVersion::V_26_1 },
         });
     }
 }

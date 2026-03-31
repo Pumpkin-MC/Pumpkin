@@ -8,7 +8,7 @@ use pumpkin_data::{
 };
 use pumpkin_util::{
     math::{lerp2, vertical_surface_type::VerticalSurfaceType},
-    random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
+    random::{RandomImpl, xoroshiro128::XoroshiroSplitter},
 };
 
 use terrain::SurfaceTerrainBuilder;
@@ -32,7 +32,7 @@ pub mod terrain;
 pub struct MaterialRuleContext<'a> {
     pub min_y: i8,
     pub height: u16,
-    pub random_deriver: &'a RandomDeriver,
+    pub random_deriver: &'a XoroshiroSplitter,
     fluid_height: i32,
     pub block_pos_x: i32,
     pub block_pos_y: i32,
@@ -40,7 +40,6 @@ pub struct MaterialRuleContext<'a> {
     pub biome: &'a Biome,
     pub run_depth: i32,
     pub secondary_depth: f64,
-    noise_builder: DoublePerlinNoiseBuilder<'a>,
     packed_chunk_pos: i64,
     estimated_surface_heights: [i32; 4],
     last_unique_horizontal_pos_value: i64,
@@ -56,12 +55,10 @@ pub struct MaterialRuleContext<'a> {
 }
 
 impl<'a> MaterialRuleContext<'a> {
-    #[expect(clippy::too_many_arguments)]
     pub const fn new(
         min_y: i8,
         height: u16,
-        noise_builder: DoublePerlinNoiseBuilder<'a>,
-        random_deriver: &'a RandomDeriver,
+        random_deriver: &'a XoroshiroSplitter,
         terrain_builder: &'a SurfaceTerrainBuilder,
         surface_noise: &'a DoublePerlinNoiseSampler,
         secondary_noise: &'a DoublePerlinNoiseSampler,
@@ -88,7 +85,6 @@ impl<'a> MaterialRuleContext<'a> {
             secondary_depth: 0.0,
             surface_noise,
             secondary_noise,
-            noise_builder,
             stone_depth_below: 0,
             stone_depth_above: 0,
             sea_level,
@@ -241,7 +237,6 @@ impl SurfaceMaterialCondition {
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> bool {
-        // TODO
         context.block_pos_y >= estimate_surface_height(context, surface_height_estimate_sampler)
     }
 }
@@ -301,9 +296,10 @@ pub fn test_noise_threshold(
     context: &mut MaterialRuleContext,
 ) -> bool {
     // TODO: we want to cache these
-    let sampler = context
-        .noise_builder
-        .get_noise_sampler_for_id(condition.noise.strip_prefix("minecraft:").unwrap());
+    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+        context.random_deriver,
+        &condition.noise,
+    );
     let value = sampler.sample(context.block_pos_x as f64, 0.0, context.block_pos_z as f64);
     value >= condition.min_threshold && value <= condition.max_threshold
 }

@@ -1,7 +1,7 @@
-/// Implements the BlockEntity trait for chest-like block entities.
+/// Implements the `BlockEntity` trait for chest-like block entities.
 /// Parameters:
-/// - $struct_name: The type of the chest struct (e.g., ChestBlockEntity)
-/// - $resource_id: The resource location string (e.g., "minecraft:chest")
+/// - $`struct_name`: The type of the chest struct (e.g., `ChestBlockEntity`)
+/// - $`resource_id`: The resource location string (e.g., "minecraft:chest")
 #[macro_export]
 macro_rules! impl_block_entity_for_chest {
     ($struct_name:ty) => {
@@ -179,9 +179,10 @@ macro_rules! impl_clearable_for_chest {
     };
 }
 
-/// Implements the ViewerCountListener trait for chest-like block entities.
-/// The behavior is controlled by the EMITS_REDSTONE constant on the struct.
-/// When EMITS_REDSTONE is true, updates neighbors for redstone signals when viewer count changes.
+/// Implements the `ViewerCountListener` trait for chest-like block entities.
+///
+/// The behavior is controlled by the `EMITS_REDSTONE` constant on the struct.
+/// When `EMITS_REDSTONE` is true, updates neighbors for redstone signals when viewer count changes.
 #[macro_export]
 macro_rules! impl_viewer_count_listener_for_chest {
     ($struct_name:ty) => {
@@ -243,8 +244,9 @@ macro_rules! impl_viewer_count_listener_for_chest {
 }
 
 /// Implements helper methods for chest-like block entities.
-/// Includes the play_sound method which handles sound positioning for single and double chests,
-/// as well as new() and get_viewer_count() methods.
+///
+/// Includes the `play_sound` method which handles sound positioning for single and double chests,
+/// as well as `new()` and `get_viewer_count()` methods.
 #[macro_export]
 macro_rules! impl_chest_helper_methods {
     ($struct_name:ty) => {

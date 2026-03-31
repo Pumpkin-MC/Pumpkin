@@ -3,7 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::HorizontalFacingExt;
-use pumpkin_data::block_properties::BlockFace;
+use pumpkin_data::block_properties::AttachFace;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -158,9 +158,9 @@ impl WallMountedBlock for ButtonBlock {
     fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
         let props = ButtonLikeProperties::from_state_id(state_id, block);
         match props.face {
-            BlockFace::Floor => BlockDirection::Up,
-            BlockFace::Ceiling => BlockDirection::Down,
-            BlockFace::Wall => props.facing.to_block_direction(),
+            AttachFace::Floor => BlockDirection::Up,
+            AttachFace::Ceiling => BlockDirection::Down,
+            AttachFace::Wall => props.facing.to_block_direction(),
         }
     }
 }

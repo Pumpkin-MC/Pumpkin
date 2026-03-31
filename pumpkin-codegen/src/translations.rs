@@ -2,6 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{collections::BTreeMap, fs};
 
+/// Generates the `TokenStream` for translation key constants sourced from `en_us.json`.
 pub fn build() -> TokenStream {
     let en_us: BTreeMap<String, String> = serde_json::from_str(
         &fs::read_to_string("../assets/en_us.json").expect("en_us is missing"),

@@ -3,6 +3,7 @@ use crate::block::RawBlockState;
 use crate::chunk::ChunkHeightmapType;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
+use crate::generation::structure::placement::GlobalStructureCache;
 use crate::world::{BlockAccessor, BlockRegistryExt};
 use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -12,6 +13,7 @@ use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -90,8 +92,14 @@ impl GenerationCache for Cache {
         let dx = chunk_x - self.x;
         let dz = chunk_z - self.z;
 
-        (dx >= 0 && dx < self.size && dz >= 0 && dz < self.size)
-            .then(|| self.chunks[(dx * self.size + dz) as usize].get_proto_chunk())
+        if dx < 0 || dx >= self.size || dz < 0 || dz >= self.size {
+            return None;
+        }
+
+        match &self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(chunk) => Some(chunk),
+            Chunk::Level(_) => None,
+        }
     }
 
     fn try_get_proto_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk> {
@@ -199,6 +207,27 @@ impl GenerationCache for Cache {
         }
     }
 
+    fn add_block_entity(&mut self, pos: &Vector3<i32>, nbt: NbtCompound) {
+        let dx = (pos.x >> 4) - self.x;
+        let dz = (pos.z >> 4) - self.z;
+        if !(dx < self.size && dz < self.size && dx >= 0 && dz >= 0) {
+            debug!(
+                "illegal add_block_entity {pos:?} cache pos ({}, {}) size {}",
+                self.x, self.z, self.size
+            );
+            return;
+        }
+
+        match &mut self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Level(_) => {
+                debug!("add_block_entity on non-proto chunk at {pos:?}");
+            }
+            Chunk::Proto(data) => {
+                data.add_block_entity(nbt);
+            }
+        }
+    }
+
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
             HeightMap::WorldSurfaceWg => self.top_block_height_exclusive(x, z),
@@ -261,8 +290,9 @@ impl GenerationCache for Cache {
     fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let dx = (x >> 4) - self.x;
         let dy = (z >> 4) - self.z;
-        debug_assert!(dx < self.size && dy < self.size);
-        debug_assert!(dx >= 0 && dy >= 0);
+        if dx < 0 || dy < 0 || dx >= self.size || dy >= self.size {
+            return 0;
+        }
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(_data) => {
                 0 // todo missing
@@ -274,8 +304,13 @@ impl GenerationCache for Cache {
     fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome {
         let dx = (x >> 4) - self.x;
         let dy = (z >> 4) - self.z;
-        debug_assert!(dx < self.size && dy < self.size);
-        debug_assert!(dx >= 0 && dy >= 0);
+        let (dx, dy) = if dx < 0 || dy < 0 || dx >= self.size || dy >= self.size {
+            // Position is outside the cache — fall back to the centre chunk's biome
+            let mid = self.size / 2;
+            (mid, mid)
+        } else {
+            (dx, dy)
+        };
         match &self.chunks[(dx * self.size + dy) as usize] {
             Chunk::Level(data) => {
                 // Could this happen?
@@ -296,6 +331,7 @@ impl GenerationCache for Cache {
 }
 
 impl Cache {
+    #[must_use]
     pub fn new(x: i32, z: i32, size: i32) -> Self {
         Self {
             x,
@@ -315,14 +351,29 @@ impl Cache {
         terrain_cache: &TerrainCache,
         noise_router: &ProtoNoiseRouters,
         dimension: Dimension,
+        global_structure_cache: &GlobalStructureCache, // <--- NEW PARAMETER HERE
     ) {
         let mid = ((self.size * self.size) >> 1) as usize;
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
-            StagedChunkEnum::StructureStart => self.chunks[mid]
+            StagedChunkEnum::StructureStart => {
+                self.chunks[mid].get_proto_chunk_mut().set_structure_starts(
+                    random_config,
+                    settings,
+                    &dimension,
+                    noise_router,
+                    global_structure_cache,
+                )
+            }
+            StagedChunkEnum::StructureReferences => self.chunks[mid]
                 .get_proto_chunk_mut()
-                .set_structure_starts(random_config, settings),
-            StagedChunkEnum::StructureReferences => ProtoChunk::set_structure_references(self),
+                .set_structure_references(
+                    random_config,
+                    settings,
+                    &dimension,
+                    noise_router,
+                    global_structure_cache,
+                ), // <--- PASSED HERE
             StagedChunkEnum::Biomes => self.chunks[mid]
                 .get_proto_chunk_mut()
                 .step_to_biomes(dimension, noise_router),

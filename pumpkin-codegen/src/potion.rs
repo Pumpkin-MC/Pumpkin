@@ -5,23 +5,34 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
+/// Raw deserialization shape for a single potion entry from `potion.json`.
 #[derive(Deserialize)]
 struct Potion {
+    /// Numeric registry ID for this potion.
     id: u8,
+    /// Status effects granted when this potion is consumed or applied.
     effects: Vec<Effect>,
 }
 
+/// A single status effect instance applied by a potion, as defined in `potion.json`.
 #[derive(Deserialize)]
 pub struct Effect {
+    /// Namespaced effect resource location (e.g. `"minecraft:speed"`).
     effect_type: String,
+    /// Duration of the effect in ticks.
     duration: i32,
+    /// Amplifier level (0 = level I, 1 = level II, …).
     amplifier: u8,
+    /// Whether this effect is ambient (produced by beacon, reducing particle density).
     ambient: bool,
+    /// Whether particles should be displayed while the effect is active.
     show_particles: bool,
+    /// Whether the effect icon should appear in the HUD.
     show_icon: bool,
 }
 
 impl Effect {
+    /// Converts this effect entry into a `TokenStream` for use in generated code.
     pub fn to_tokens(&self) -> TokenStream {
         let effect_type = format_ident!(
             "{}",
@@ -49,6 +60,7 @@ impl Effect {
     }
 }
 
+/// Generates the `TokenStream` for the `Potion` struct, `Effect` struct, and `from_name` lookup.
 pub fn build() -> TokenStream {
     let potions: BTreeMap<String, Potion> =
         serde_json::from_str(&fs::read_to_string("../assets/potion.json").unwrap())

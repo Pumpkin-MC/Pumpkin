@@ -1,0 +1,15 @@
+[package]
+name = "pumpkin-plugin-api"
+# This should be different from the pumpkin server version.
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wit-bindgen = { workspace = true }
+tracing = { workspace = true }
+postcard = { workspace = true }
+tracing-serde-structured = { workspace = true }
+
+[package.metadata.component]
+target = { path = "../pumpkin-plugin-wit" }

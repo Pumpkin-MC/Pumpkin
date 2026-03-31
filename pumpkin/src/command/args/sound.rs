@@ -34,7 +34,7 @@ impl ArgumentConsumer for SoundArgumentConsumer {
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop();
+        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
         Box::pin(async move { s_opt.map(Arg::Block) })
     }

@@ -3,21 +3,29 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::fs;
 
+/// Raw deserialization shape for the brewing recipe data from `potion_brewing.json`.
 #[derive(Deserialize)]
 struct PotionBrewing {
     //potion_types: Vec<Vec<String>>,
+    /// Recipes that transform one potion into another using a brewing ingredient.
     potion_recipes: Vec<Recipes>,
+    /// Recipes that transform one item into another using a brewing ingredient.
     item_recipes: Vec<Recipes>,
 }
 
+/// A single brewing recipe entry mapping a source item/potion and ingredient to an output.
 #[derive(Deserialize)]
 pub struct Recipes {
+    /// Namespaced resource location of the input potion or item.
     from: String,
+    /// List of namespaced resource locations for valid brewing ingredients.
     ingredient: Vec<String>,
+    /// Namespaced resource location of the output potion or item.
     to: String,
 }
 
 impl Recipes {
+    /// Converts this recipe into a `TokenStream` for a `PotionRecipe` struct literal.
     pub fn get_tokens_potion(self) -> TokenStream {
         let from = format_ident!(
             "{}",
@@ -44,6 +52,7 @@ impl Recipes {
         }
     }
 
+    /// Converts this recipe into a `TokenStream` for an `ItemRecipe` struct literal.
     pub fn get_tokens_item(self) -> TokenStream {
         let from = format_ident!(
             "{}",
@@ -71,6 +80,7 @@ impl Recipes {
     }
 }
 
+/// Generates the `TokenStream` for `POTION_RECIPES` and `ITEM_RECIPES` constant arrays.
 pub fn build() -> TokenStream {
     let json: PotionBrewing =
         serde_json::from_str(&fs::read_to_string("../assets/potion_brewing.json").unwrap())
@@ -106,6 +116,18 @@ pub fn build() -> TokenStream {
             from: &'static Item,
             ingredient: &'static [&'static Item],
             to: &'static Item,
+        }
+
+        impl PotionRecipe {
+            pub fn from(&self) -> &'static Potion { self.from }
+            pub fn ingredient(&self) -> &'static [&'static Item] { self.ingredient }
+            pub fn to(&self) -> &'static Potion { self.to }
+        }
+
+        impl ItemRecipe {
+            pub fn from(&self) -> &'static Item { self.from }
+            pub fn ingredient(&self) -> &'static [&'static Item] { self.ingredient }
+            pub fn to(&self) -> &'static Item { self.to }
         }
 
         pub const ITEM_RECIPES: [ItemRecipe; #item_len] = [#(#item_recipes_tokens)*];

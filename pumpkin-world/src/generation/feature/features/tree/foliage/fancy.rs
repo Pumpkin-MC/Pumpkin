@@ -1,5 +1,6 @@
 use pumpkin_data::BlockState;
-use pumpkin_util::{math::square, random::RandomGenerator};
+use pumpkin_util::math::square_f32;
+use pumpkin_util::random::RandomGenerator;
 
 use super::{FoliagePlacer, LeaveValidator};
 use crate::generation::feature::features::tree::TreeNode;
@@ -51,6 +52,6 @@ impl LeaveValidator for LargeOakFoliagePlacer {
         radius: i32,
         _giant_trunk: bool,
     ) -> bool {
-        square(dx as f32 + 0.5) + square(dz as f32 + 0.5) > (radius * radius) as f32
+        square_f32(dx as f32 + 0.5) + square_f32(dz as f32 + 0.5) > (radius * radius) as f32
     }
 }

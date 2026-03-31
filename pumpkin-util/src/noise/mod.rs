@@ -107,7 +107,7 @@ impl Gradient {
     /// The dot product `self.x * x + self.y * y + self.z * z`.
     #[inline]
     #[must_use]
-    pub fn dot(&self, x: f64, y: f64, z: f64) -> f64 {
+    pub const fn dot(&self, x: f64, y: f64, z: f64) -> f64 {
         self.z.mul_add(z, self.x.mul_add(x, self.y * y))
     }
 }

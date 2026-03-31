@@ -1,0 +1,52 @@
+interface player {
+    use common.{hand, item-stack, position, game-mode};
+    use %world.{%world};
+    use permission.{permission-level};
+    use text.{text-component};
+
+    resource player {
+        get-id: func () -> result<string, string>;
+        get-name: func () -> result<string, string>;
+
+        // Basic state
+        get-position: func () -> result<position, string>;
+        get-rotation: func () -> result<tuple<f32, f32>, string>;
+        get-world: func () -> result<%world, string>;
+        get-gamemode: func () -> result<game-mode, string>;
+        set-gamemode: func (mode: game-mode) -> result<bool, string>;
+        get-locale: func () -> result<string, string>;
+        get-ping: func () -> result<u32, string>;
+
+        // Permissions & metadata
+        get-permission-level: func () -> result<permission-level, string>;
+        set-permission-level: func (level: permission-level) -> result<_, string>;
+        has-permission: func (node: string) -> result<bool, string>;
+        get-display-name: func () -> result<text-component, string>;
+
+        // Messaging & titles
+        send-system-message: func (text: text-component, overlay: bool) -> result<_, string>;
+        show-title: func (text: text-component) -> result<_, string>;
+        show-subtitle: func (text: text-component) -> result<_, string>;
+        show-actionbar: func (text: text-component) -> result<_, string>;
+        send-title-animation: func (fade-in: s32, stay: s32, fade-out: s32) -> result<_, string>;
+
+        // Teleport & kick
+        teleport: func (position: position, yaw: f32, pitch: f32) -> result<_, string>;
+        teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>) -> result<_, string>;
+        kick: func (message: text-component) -> result<_, string>;
+
+        // Inventory
+        get-selected-slot: func () -> result<u8, string>;
+        get-item-in-hand: func (hand: hand) -> result<option<item-stack>, string>;
+        get-inventory-item: func (slot: u8) -> result<option<item-stack>, string>;
+
+        // Status
+        get-health: func () -> result<f32, string>;
+        get-max-health: func () -> result<f32, string>;
+        get-food-level: func () -> result<u8, string>;
+        get-saturation: func () -> result<f32, string>;
+        get-experience-level: func () -> result<s32, string>;
+        get-experience-progress: func () -> result<f32, string>;
+        get-experience-points: func () -> result<s32, string>;
+    }
+}

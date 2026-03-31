@@ -6,7 +6,7 @@ use pumpkin_data::{
         UnaryOperation,
     },
 };
-use pumpkin_util::random::RandomDeriverImpl;
+use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
 
 use crate::{GlobalRandomConfig, generation::noise::perlin::DoublePerlinNoiseSampler};
 
@@ -58,28 +58,15 @@ pub enum ProtoNoiseFunctionComponent {
     PassThrough(PassThrough),
 }
 
-pub struct DoublePerlinNoiseBuilder<'a> {
-    random_config: &'a GlobalRandomConfig,
-}
+pub struct DoublePerlinNoiseBuilder;
 
-impl<'a> DoublePerlinNoiseBuilder<'a> {
+impl DoublePerlinNoiseBuilder {
     #[must_use]
-    pub const fn new(rand: &'a GlobalRandomConfig) -> Self {
-        Self {
-            random_config: rand,
-        }
-    }
-
-    #[must_use]
-    pub fn get_noise_sampler_for_id(&self, id: &str) -> DoublePerlinNoiseSampler {
-        let parameters = DoublePerlinNoiseParameters::id_to_parameters(id)
-            .unwrap_or_else(|| panic!("Unknown noise id: {id}"));
-
-        // Note that the parameters' id is different than `id`
-        let mut random = self
-            .random_config
-            .base_random_deriver
-            .split_string(parameters.id());
+    pub fn get_noise_sampler_for_id(
+        base_random_deriver: &XoroshiroSplitter,
+        parameters: &DoublePerlinNoiseParameters,
+    ) -> DoublePerlinNoiseSampler {
+        let mut random = base_random_deriver.split_string(parameters.id());
         DoublePerlinNoiseSampler::from_params(&mut random, parameters, false)
     }
 }
@@ -144,7 +131,7 @@ impl ProtoNoiseRouters {
         base_stack: &[BaseNoiseFunctionComponent],
         random_config: &GlobalRandomConfig,
     ) -> Box<[ProtoNoiseFunctionComponent]> {
-        let perlin_noise_builder = DoublePerlinNoiseBuilder::new(random_config);
+        let base_random_deriver = &random_config.base_random_deriver;
 
         // Contiguous memory for our function components
         let mut stack = Vec::<ProtoNoiseFunctionComponent>::with_capacity(base_stack.len());
@@ -170,19 +157,28 @@ impl ProtoNoiseRouters {
                     )),
                 ),
                 BaseNoiseFunctionComponent::Noise { data } => {
-                    let sampler = perlin_noise_builder.get_noise_sampler_for_id(data.noise_id);
+                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                        base_random_deriver,
+                        &data.noise_id,
+                    );
                     ProtoNoiseFunctionComponent::Independent(
                         IndependentProtoNoiseFunctionComponent::Noise(Noise::new(sampler, data)),
                     )
                 }
                 BaseNoiseFunctionComponent::ShiftA { noise_id } => {
-                    let sampler = perlin_noise_builder.get_noise_sampler_for_id(noise_id);
+                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                        base_random_deriver,
+                        noise_id,
+                    );
                     ProtoNoiseFunctionComponent::Independent(
                         IndependentProtoNoiseFunctionComponent::ShiftA(ShiftA::new(sampler)),
                     )
                 }
                 BaseNoiseFunctionComponent::ShiftB { noise_id } => {
-                    let sampler = perlin_noise_builder.get_noise_sampler_for_id(noise_id);
+                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                        base_random_deriver,
+                        noise_id,
+                    );
                     ProtoNoiseFunctionComponent::Independent(
                         IndependentProtoNoiseFunctionComponent::ShiftB(ShiftB::new(sampler)),
                     )
@@ -222,7 +218,10 @@ impl ProtoNoiseRouters {
                     shift_z_index,
                     data,
                 } => {
-                    let sampler = perlin_noise_builder.get_noise_sampler_for_id(data.noise_id);
+                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                        base_random_deriver,
+                        &data.noise_id,
+                    );
                     ProtoNoiseFunctionComponent::Dependent(
                         DependentProtoNoiseFunctionComponent::ShiftedNoise(ShiftedNoise::new(
                             *shift_x_index,
@@ -400,7 +399,10 @@ impl ProtoNoiseRouters {
                     )
                 }
                 BaseNoiseFunctionComponent::WeirdScaled { input_index, data } => {
-                    let sampler = perlin_noise_builder.get_noise_sampler_for_id(data.noise_id);
+                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                        base_random_deriver,
+                        &data.noise_id,
+                    );
                     ProtoNoiseFunctionComponent::Dependent(
                         DependentProtoNoiseFunctionComponent::WeirdScaled(WeirdScaled::new(
                             *input_index,

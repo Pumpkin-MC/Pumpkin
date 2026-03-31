@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, item::Item};
+use pumpkin_data::{Block, item::Item, item_stack::ItemStack};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{
     BlockStateId,
-    item::ItemStack,
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };

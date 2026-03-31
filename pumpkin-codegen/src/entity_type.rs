@@ -8,30 +8,49 @@ use syn::LitInt;
 
 use crate::loot::LootTableStruct;
 
+/// Raw deserialization shape for a single entity type entry from `entities.json`.
 #[derive(Deserialize)]
 pub struct EntityType {
+    /// Numeric registry ID for this entity type.
     pub id: u16,
+    /// Base maximum health points, if defined.
     pub max_health: Option<f32>,
+    /// Whether this entity can be attacked by players or other entities.
     pub attackable: Option<bool>,
+    /// Whether this entity is classified as a mob (affects spawning mechanics).
     pub mob: Option<bool>,
+    /// Maximum number of this entity type allowed per chunk, if capped.
     pub limit_per_chunk: Option<i32>,
+    /// Loot table dropped by this entity on death, if any.
     pub loot_table: Option<LootTableStruct>,
+    /// Whether this entity can be summoned by the `/summon` command.
     pub summonable: bool,
+    /// Whether this entity is immune to fire damage.
     pub fire_immune: bool,
+    /// Whether this entity is saved to the world file.
     pub saveable: bool,
+    /// Mob category controlling this entity's spawn cap and persistence.
     pub category: MobCategory,
+    /// Whether this entity can spawn far from the player (beyond normal spawn range).
     pub can_spawn_far_from_player: bool,
+    /// Bounding box dimensions as `[width, height]` in blocks.
     pub dimension: [f32; 2],
+    /// Eye height in blocks, used for line-of-sight calculations.
     pub eye_height: f32,
+    /// Spawn location restrictions for natural spawning.
     pub spawn_restriction: SpawnRestriction,
 }
 
+/// Spawn restrictions controlling where an entity is allowed to naturally spawn.
 #[derive(Deserialize)]
 pub struct SpawnRestriction {
+    /// Surface or fluid condition that must be satisfied at the spawn location.
     location: SpawnLocation,
+    /// Height map used to determine the valid Y-range for spawning.
     heightmap: HeightMap,
 }
 
+/// Surface or fluid condition that must be present at an entity's spawn location.
 #[derive(Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SpawnLocation {
@@ -41,6 +60,7 @@ pub enum SpawnLocation {
     Unrestricted,
 }
 
+/// Broad classification of a mob controlling its spawn cap and persistence rules.
 #[derive(Deserialize)]
 #[expect(non_camel_case_types)]
 #[expect(clippy::upper_case_acronyms)]
@@ -55,9 +75,11 @@ pub enum MobCategory {
     MISC,
 }
 
+/// Pairs a raw entity name string with its deserialized [`EntityType`] data for token generation.
 pub struct NamedEntityType<'a>(&'a str, &'a EntityType);
 
 impl ToTokens for NamedEntityType<'_> {
+    /// Emits an `EntityType { … }` struct literal token stream for the wrapped entity.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = self.0;
         let entity = self.1;
@@ -157,6 +179,8 @@ impl ToTokens for NamedEntityType<'_> {
     }
 }
 
+/// Generates the `TokenStream` for the `EntityType` struct, `MobCategory`, `SpawnRestriction`,
+/// and the `from_raw`/`from_name` lookup methods.
 pub fn build() -> TokenStream {
     let json: BTreeMap<String, EntityType> =
         serde_json::from_str(&fs::read_to_string("../assets/entities.json").unwrap())
@@ -186,13 +210,14 @@ pub fn build() -> TokenStream {
         });
     }
     quote! {
+        use crate::data_component_impl::IDSetContent;
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
         use std::hash::Hash;
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct EntityType {
             pub id: u16,
             pub max_health: Option<f32>,
@@ -243,13 +268,13 @@ pub fn build() -> TokenStream {
         }
 
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct SpawnRestriction {
             pub location: SpawnLocation,
             pub heightmap: HeightMap,
         }
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub enum SpawnLocation {
             InLava,
             InWater,
@@ -358,6 +383,23 @@ pub fn build() -> TokenStream {
                     #type_from_name
                     _ => None
                 }
+            }
+        }
+        impl IDSetContent for EntityType {
+            fn registry_id(&self) -> u16 {
+                Taggable::registry_id(self)
+            }
+
+            fn to_string(&self) -> String {
+                Taggable::registry_key(self).to_string()
+            }
+
+            fn from_id(id: u16) -> Option<&'static Self> {
+                EntityType::from_raw(id)
+            }
+
+            fn from_str(name: &str) -> Option<&'static Self> {
+                EntityType::from_name(name)
             }
         }
     }

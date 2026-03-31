@@ -89,12 +89,12 @@ impl EntityBase for TNTEntity {
             self.entity
                 .send_meta_data(&[
                     Metadata::new(
-                        TrackedData::DATA_FUSE,
+                        TrackedData::FUSE_ID,
                         MetaDataType::INTEGER,
                         VarInt(self.fuse.load(Relaxed) as i32),
                     ),
                     Metadata::new(
-                        TrackedData::DATA_BLOCK_STATE,
+                        TrackedData::BLOCK_STATE_ID,
                         MetaDataType::BLOCK_STATE,
                         VarInt(i32::from(Block::TNT.default_state.id)),
                     ),

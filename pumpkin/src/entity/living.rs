@@ -1,3 +1,4 @@
+use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
@@ -5,6 +6,7 @@ use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use std::mem;
@@ -30,9 +32,12 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
-use pumpkin_data::data_component_impl::{DeathProtectionImpl, EquipmentSlot, FoodImpl};
+use pumpkin_data::data_component_impl::{
+    DeathProtectionImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
@@ -50,7 +55,6 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;
@@ -72,6 +76,7 @@ pub struct LivingEntity {
     pub absorption: AtomicCell<f32>,
     pub item_use_time: AtomicI32,
     pub item_in_use: Mutex<Option<ItemStack>>,
+    pub active_hand: Mutex<Option<Hand>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -157,6 +162,7 @@ impl LivingEntity {
             dead: AtomicBool::new(false),
             item_use_time: AtomicI32::new(0),
             item_in_use: Mutex::new(None),
+            active_hand: Mutex::new(None),
             livings_flags: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
@@ -213,6 +219,7 @@ impl LivingEntity {
         self.item_use_time
             .store(stack.get_max_use_time(), Ordering::Relaxed);
         *self.item_in_use.lock().await = Some(stack);
+        *self.active_hand.lock().await = Some(hand);
         self.set_living_flag(Self::USING_ITEM_FLAG, true).await;
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left)
             .await;
@@ -229,7 +236,7 @@ impl LivingEntity {
         self.livings_flags.store(b, Ordering::Relaxed);
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_LIVING_FLAGS,
+                TrackedData::LIVING_ENTITY_FLAGS,
                 MetaDataType::BYTE,
                 b,
             )])
@@ -238,6 +245,7 @@ impl LivingEntity {
 
     pub async fn clear_active_hand(&self) {
         *self.item_in_use.lock().await = None;
+        *self.active_hand.lock().await = None;
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
@@ -257,7 +265,7 @@ impl LivingEntity {
         // tell everyone entities health changed
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_HEALTH,
+                TrackedData::HEALTH_ID,
                 MetaDataType::FLOAT,
                 clamped,
             )])
@@ -329,6 +337,7 @@ impl LivingEntity {
             v1_21_7: 17u8,
             v1_21_9: 17u8,
             v1_21_11: 17u8,
+            v26_1: 17u8, // ?
         })
     }
 
@@ -787,6 +796,7 @@ impl LivingEntity {
             self.travel_in_air(caller.clone()).await;
         }
 
+        // TODO: Apply Soul Speed boot durability when tick_block_underneath is implemented.
         //self.entity.tick_block_underneath(&caller);
 
         let suffocating = self.entity.tick_block_collisions(&caller, server).await;
@@ -880,7 +890,7 @@ impl LivingEntity {
 
     async fn travel_in_fluid(&self, caller: Arc<dyn EntityBase>, water: bool) {
         let movement_input = self.movement_input.load();
-        let y0 = self.entity.pos.load().y;
+
         let falling = self.entity.velocity.load().y <= 0.0;
         let gravity = self.get_effective_gravity(&caller).await;
         let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
@@ -950,8 +960,6 @@ impl LivingEntity {
         }
 
         let mut velo = self.entity.velocity.load();
-
-        velo.y += 0.6 - self.entity.pos.load().y + y0;
 
         if self.entity.horizontal_collision.load(SeqCst)
             && !self
@@ -1273,10 +1281,7 @@ impl LivingEntity {
 
             // Plays the death sound
             world
-                .send_entity_status(
-                    &self.entity,
-                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-                )
+                .send_entity_status(&self.entity, EntityStatus::Death)
                 .await;
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
@@ -1467,7 +1472,7 @@ impl LivingEntity {
                 self.entity
                     .world
                     .load()
-                    .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
+                    .send_entity_status(&self.entity, EntityStatus::ProtectedFromDeath)
                     .await;
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
@@ -1510,8 +1515,12 @@ impl LivingEntity {
     }
 
     async fn damage_armor_items(&self, caller: &dyn EntityBase, damage_amount: f32) {
+        // Formula: armor loses floor(incoming_damage / 4) durability, minimum 1.
         let armor_damage = (damage_amount / 4.0).floor().max(1.0) as i32;
         let mut equipment_updates = Vec::new();
+
+        // TODO: Falling anvil/stalactite should only damage the helmet slot.
+        // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
 
         for (slot_index, slot) in self.equipment_slots.iter() {
             if !slot.is_armor_slot() {
@@ -1519,18 +1528,39 @@ impl LivingEntity {
             }
 
             let equipment = self.entity_equipment.lock().await.get(slot);
-            let updated_stack = {
+            let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
-                    None
-                } else if stack.damage_item_with_context(armor_damage, true) {
-                    Some(stack.clone())
+                    (pumpkin_data::item_stack::DamageResult::Untouched, None)
                 } else {
-                    None
+                    // Items without `EquippableImpl` component take damage freely.
+                    // Items with `damage_on_hurt: false` (e.g. elytra) are exempt from armor hit durability.
+                    // PERF: Component lookup runs O(1) per armor slot (max 4 per hit). Caching
+                    // at the item type level could optimize, but belongs in a broader caching pass.
+                    let takes_damage = stack
+                        .get_data_component::<EquippableImpl>()
+                        .is_none_or(|equippable| equippable.damage_on_hurt);
+
+                    if takes_damage {
+                        // Base armor durability damage.
+                        let result = stack.damage_item(armor_damage);
+                        let changed = result != pumpkin_data::item_stack::DamageResult::Untouched;
+                        (result, changed.then_some(stack.clone()))
+                    } else {
+                        // Equippable items can opt out of on-hurt durability loss (e.g. elytra).
+                        (pumpkin_data::item_stack::DamageResult::Untouched, None)
+                    }
                 }
             };
 
-            if let Some(updated_stack) = updated_stack {
+            if let Some(updated_stack) = updated_stack_opt {
+                // Broadcast break status before clearing the slot.
+                if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
+                    let world = self.entity.world.load();
+                    world
+                        .send_entity_status(&self.entity, super::equipment_break_status(slot))
+                        .await;
+                }
                 equipment_updates.push((slot.clone(), updated_stack.clone()));
                 if let Some(player) = caller.get_player() {
                     player
@@ -1599,7 +1629,7 @@ impl LivingEntity {
         // Send health metadata
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_HEALTH,
+                TrackedData::HEALTH_ID,
                 MetaDataType::FLOAT,
                 max_health,
             )])
@@ -1963,8 +1993,11 @@ impl EntityBase for LivingEntity {
                 self.on_death(damage_type, source, cause).await;
             }
 
-            if remaining > 0.0 {
-                self.damage_armor_items(caller, remaining).await;
+            // Armor durability is based on incoming raw damage, not post-absorption remaining.
+            // Armor loses floor(raw_damage / 4) durability, minimum 1.
+            // Not applied when the source is in `#minecraft:bypasses_armor`.
+            if damage_amount > 0.0 && !bypasses_armor_durability(&damage_type) {
+                self.damage_armor_items(caller, damage_amount).await;
             }
 
             true
@@ -1984,6 +2017,7 @@ impl EntityBase for LivingEntity {
         GRAVITY
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
         caller: Arc<dyn EntityBase>,
@@ -1994,7 +2028,11 @@ impl EntityBase for LivingEntity {
 
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).
-            if !self.dead.load(Relaxed) && self.health.load() > 0.0 {
+            // We allow movement during death animation (20 ticks) so knockback is applied.
+            let is_alive = !self.dead.load(Relaxed) && self.health.load() > 0.0;
+            let in_death_animation =
+                self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
+            if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
                 self.tick_movement(server, caller.clone()).await;
                 // Vanilla-like order: freeze logic runs after movement/collisions.
                 self.entity.tick_frozen(caller.as_ref()).await;
@@ -2064,6 +2102,7 @@ impl EntityBase for LivingEntity {
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
                     // Consume item
+                    let mut is_potion = false;
                     if let Some(food) = item.get_data_component::<FoodImpl>()
                         && let Some(player) = caller.get_player()
                     {
@@ -2072,13 +2111,80 @@ impl EntityBase for LivingEntity {
                             .eat(player, food.nutrition as u8, food.saturation)
                             .await;
                     }
+
+                    // Handle potion consumption
+                    if item.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() {
+                        let effects = crate::item::potion::PotionContents::read_potion_effects(item);
+                        crate::item::potion::PotionContents::apply_effects_to(self, effects, 1.0, crate::item::potion::PotionApplicationSource::Normal).await;
+                        is_potion = true;
+                    }
+
                     if let Some(player) = caller.get_player() {
-                        player
-                            .inventory
-                            .held_item()
-                            .lock()
-                            .await
-                            .decrement_unless_creative(player.gamemode.load(), 1);
+                        // Prefer modifying the exact stack that matches the consumed item:
+                        // 1) selected hotbar (held_item)
+                        // 2) off-hand
+                        // 3) fallback to active_hand if the above didn't match
+                        let mut handled = false;
+
+                        // Check main hand (hotbar selected)
+                        let held_arc = player.inventory.held_item();
+                        {
+                            let mut held_lock = held_arc.lock().await;
+                            if held_lock.are_items_and_components_equal(item) {
+                                if is_potion {
+                                    if player.gamemode.load() != GameMode::Creative {
+                                        held_lock.decrement(1);
+                                        if held_lock.is_empty() {
+                                            *held_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                        }
+                                    }
+                                } else {
+                                    held_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                                }
+                                handled = true;
+                            }
+                        }
+
+                        if !handled {
+                            // Check off-hand
+                            let off_arc = player.inventory.off_hand_item().await;
+                            let mut off_lock = off_arc.lock().await;
+                            if off_lock.are_items_and_components_equal(item) {
+                                if is_potion {
+                                    if player.gamemode.load() != GameMode::Creative {
+                                        off_lock.decrement(1);
+                                        if off_lock.is_empty() {
+                                            *off_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                        }
+                                    }
+                                } else {
+                                    off_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                                }
+
+                                handled = true;
+                            }
+                        }
+
+                        if !handled {
+                            // Use stored active_hand (as a fallback)
+                            let active_hand = *self.active_hand.lock().await;
+                            let hand_to_modify = active_hand.unwrap_or(Hand::Right);
+                            let item_stack = self
+                                .get_stack_in_hand(caller.as_ref(), hand_to_modify)
+                                .await;
+                            let mut item_lock = item_stack.lock().await;
+
+                            if is_potion {
+                                if player.gamemode.load() != GameMode::Creative {
+                                    item_lock.decrement(1);
+                                    if item_lock.is_empty() {
+                                        *item_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                    }
+                                }
+                            } else {
+                                item_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                            }
+                        }
                     }
 
                     self.clear_active_hand().await;
@@ -2090,12 +2196,13 @@ impl EntityBase for LivingEntity {
             }
             if self.health.load() <= 0.0 {
                 let time = self.death_time.fetch_add(1, Relaxed);
-                if time >= 20 && self.entity.is_alive() {
-                    // Spawn Death particles
+                // Only send death particles once (on the exact tick death_time reaches 20)
+                // and then remove the entity, preventing entity_event spam.
+                if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
                     self.entity
                         .world
                         .load()
-                        .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
+                        .send_entity_status(&self.entity, EntityStatus::Death)
                         .await;
                     self.entity.remove().await;
                 }
@@ -2113,5 +2220,121 @@ impl EntityBase for LivingEntity {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+}
+
+/// Returns `true` if `damage_type` is in `#minecraft:bypasses_armor` (1.21.11).
+/// These sources bypass armor entirely (fall, drown, freeze, etc.).
+pub(crate) const fn bypasses_armor_durability(damage_type: &DamageType) -> bool {
+    // Bitmask lookup: O(1) with two instructions (shift + AND), no array scan.
+    // DamageType IDs can exceed 31; use u64 for sufficient range.
+    // TODO: Make data-driven once the data pack system can handle it without performance regressions.
+    // Compile-time assertions: ensure all bypassing types fit in u64 bitmask.
+    const _: () = assert!(
+        DamageType::FALL.id < 64
+            && DamageType::FLY_INTO_WALL.id < 64
+            && DamageType::ON_FIRE.id < 64
+            && DamageType::IN_WALL.id < 64
+            && DamageType::CRAMMING.id < 64
+            && DamageType::DROWN.id < 64
+            && DamageType::GENERIC.id < 64
+            && DamageType::WITHER.id < 64
+            && DamageType::DRAGON_BREATH.id < 64
+            && DamageType::STARVE.id < 64
+            && DamageType::ENDER_PEARL.id < 64
+            && DamageType::FREEZE.id < 64
+            && DamageType::STALAGMITE.id < 64
+            && DamageType::MAGIC.id < 64
+            && DamageType::INDIRECT_MAGIC.id < 64
+            && DamageType::OUT_OF_WORLD.id < 64
+            && DamageType::GENERIC_KILL.id < 64
+            && DamageType::SONIC_BOOM.id < 64
+            && DamageType::OUTSIDE_BORDER.id < 64,
+        "One or more bypass DamageType IDs exceed u64 bitmask width (>= 64)"
+    );
+    const BYPASS_MASK: u64 = (1u64 << DamageType::FALL.id)
+        | (1u64 << DamageType::FLY_INTO_WALL.id)
+        | (1u64 << DamageType::ON_FIRE.id)
+        | (1u64 << DamageType::IN_WALL.id)
+        | (1u64 << DamageType::CRAMMING.id)
+        | (1u64 << DamageType::DROWN.id)
+        | (1u64 << DamageType::GENERIC.id)
+        | (1u64 << DamageType::WITHER.id)
+        | (1u64 << DamageType::DRAGON_BREATH.id)
+        | (1u64 << DamageType::STARVE.id)
+        | (1u64 << DamageType::ENDER_PEARL.id)
+        | (1u64 << DamageType::FREEZE.id)
+        | (1u64 << DamageType::STALAGMITE.id)
+        | (1u64 << DamageType::MAGIC.id)
+        | (1u64 << DamageType::INDIRECT_MAGIC.id)
+        | (1u64 << DamageType::OUT_OF_WORLD.id)
+        | (1u64 << DamageType::GENERIC_KILL.id)
+        | (1u64 << DamageType::SONIC_BOOM.id)
+        | (1u64 << DamageType::OUTSIDE_BORDER.id);
+    (damage_type.id < 64) && ((BYPASS_MASK >> damage_type.id) & 1 == 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── bypasses_armor_durability ─────────────────────────────────────
+
+    /// Every member of `minecraft:bypasses_armor` (1.21.11) must return `true`.
+    #[test]
+    fn bypasses_armor_durability_returns_true_for_tag_members() {
+        // Exact contents of the minecraft:bypasses_armor tag in 1.21.11.
+        let bypassing: &[DamageType] = &[
+            DamageType::ON_FIRE,
+            DamageType::IN_WALL,
+            DamageType::CRAMMING,
+            DamageType::DROWN,
+            DamageType::FLY_INTO_WALL,
+            DamageType::GENERIC,
+            DamageType::WITHER,
+            DamageType::DRAGON_BREATH,
+            DamageType::STARVE,
+            DamageType::FALL,
+            DamageType::ENDER_PEARL,
+            DamageType::FREEZE,
+            DamageType::STALAGMITE,
+            DamageType::MAGIC,
+            DamageType::INDIRECT_MAGIC,
+            DamageType::OUT_OF_WORLD,
+            DamageType::GENERIC_KILL,
+            DamageType::SONIC_BOOM,
+            DamageType::OUTSIDE_BORDER,
+        ];
+        for dt in bypassing {
+            assert!(
+                bypasses_armor_durability(dt),
+                "{dt:?} should bypass armor durability"
+            );
+        }
+    }
+
+    /// Physical/combat damage types must NOT bypass armor durability.
+    #[test]
+    fn bypasses_armor_durability_returns_false_for_physical_sources() {
+        let physical: &[DamageType] = &[
+            DamageType::MOB_ATTACK,
+            DamageType::PLAYER_ATTACK,
+            DamageType::ARROW,
+            DamageType::CACTUS,
+            DamageType::SWEET_BERRY_BUSH,
+            DamageType::LAVA,
+            DamageType::EXPLOSION,
+            DamageType::PLAYER_EXPLOSION,
+            DamageType::LIGHTNING_BOLT,
+            DamageType::FIREBALL,
+            DamageType::THORNS,
+            DamageType::TRIDENT,
+        ];
+        for dt in physical {
+            assert!(
+                !bypasses_armor_durability(dt),
+                "{dt:?} should NOT bypass armor durability"
+            );
+        }
     }
 }

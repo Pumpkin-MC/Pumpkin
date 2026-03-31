@@ -5,6 +5,7 @@ use std::sync::{
 
 use crate::entity::attributes::AttributeBuilder;
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     entity::EntityType,
     item::Item,
@@ -14,7 +15,6 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
-use pumpkin_world::item::ItemStack;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
@@ -92,7 +92,7 @@ impl CreeperEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_FUSE_SPEED,
+                TrackedData::FUSE_ID,
                 MetaDataType::INTEGER,
                 VarInt(speed),
             )])
@@ -237,14 +237,15 @@ impl Mob for CreeperEntity {
             self.ignited.store(true, Ordering::Relaxed);
             entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_IGNITED,
+                    TrackedData::IS_IGNITED,
                     MetaDataType::BOOLEAN,
                     true,
                 )])
                 .await;
 
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                item_stack.damage_item_with_context(1, false);
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                let _ = item_stack.damage_item(1);
             }
 
             true

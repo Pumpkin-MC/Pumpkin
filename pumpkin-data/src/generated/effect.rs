@@ -1,7 +1,10 @@
 /* This file is generated. Do not edit manually. */
-use crate::attributes::Attributes;
-use crate::data_component_impl::Operation;
+use crate::{
+    attributes::Attributes,
+    data_component_impl::{IDSetContent, Operation},
+};
 use std::hash::{Hash, Hasher};
+#[derive(Clone, Debug)]
 pub struct StatusEffect {
     pub minecraft_name: &'static str,
     pub id: u8,
@@ -62,6 +65,14 @@ impl StatusEffect {
         category: MobEffectCategory::Harmful,
         color: 2039587i32,
         translation_key: "effect.minecraft.blindness",
+        attribute_modifiers: &[],
+    };
+    pub const BREATH_OF_THE_NAUTILUS: Self = Self {
+        minecraft_name: "minecraft:breath_of_the_nautilus",
+        id: 39u8,
+        category: MobEffectCategory::Beneficial,
+        color: 65518i32,
+        translation_key: "effect.minecraft.breath_of_the_nautilus",
         attribute_modifiers: &[],
     };
     pub const CONDUIT_POWER: Self = Self {
@@ -412,6 +423,7 @@ impl StatusEffect {
             "absorption" => Some(&Self::ABSORPTION),
             "bad_omen" => Some(&Self::BAD_OMEN),
             "blindness" => Some(&Self::BLINDNESS),
+            "breath_of_the_nautilus" => Some(&Self::BREATH_OF_THE_NAUTILUS),
             "conduit_power" => Some(&Self::CONDUIT_POWER),
             "darkness" => Some(&Self::DARKNESS),
             "dolphins_grace" => Some(&Self::DOLPHINS_GRACE),
@@ -453,46 +465,103 @@ impl StatusEffect {
     }
     pub fn from_minecraft_name(name: &str) -> Option<&'static Self> {
         match name {
-            "absorption" => Some(&Self::ABSORPTION),
-            "bad_omen" => Some(&Self::BAD_OMEN),
-            "blindness" => Some(&Self::BLINDNESS),
-            "conduit_power" => Some(&Self::CONDUIT_POWER),
-            "darkness" => Some(&Self::DARKNESS),
-            "dolphins_grace" => Some(&Self::DOLPHINS_GRACE),
-            "fire_resistance" => Some(&Self::FIRE_RESISTANCE),
-            "glowing" => Some(&Self::GLOWING),
-            "haste" => Some(&Self::HASTE),
-            "health_boost" => Some(&Self::HEALTH_BOOST),
-            "hero_of_the_village" => Some(&Self::HERO_OF_THE_VILLAGE),
-            "hunger" => Some(&Self::HUNGER),
-            "infested" => Some(&Self::INFESTED),
-            "instant_damage" => Some(&Self::INSTANT_DAMAGE),
-            "instant_health" => Some(&Self::INSTANT_HEALTH),
-            "invisibility" => Some(&Self::INVISIBILITY),
-            "jump_boost" => Some(&Self::JUMP_BOOST),
-            "levitation" => Some(&Self::LEVITATION),
-            "luck" => Some(&Self::LUCK),
-            "mining_fatigue" => Some(&Self::MINING_FATIGUE),
-            "nausea" => Some(&Self::NAUSEA),
-            "night_vision" => Some(&Self::NIGHT_VISION),
-            "oozing" => Some(&Self::OOZING),
-            "poison" => Some(&Self::POISON),
-            "raid_omen" => Some(&Self::RAID_OMEN),
-            "regeneration" => Some(&Self::REGENERATION),
-            "resistance" => Some(&Self::RESISTANCE),
-            "saturation" => Some(&Self::SATURATION),
-            "slow_falling" => Some(&Self::SLOW_FALLING),
-            "slowness" => Some(&Self::SLOWNESS),
-            "speed" => Some(&Self::SPEED),
-            "strength" => Some(&Self::STRENGTH),
-            "trial_omen" => Some(&Self::TRIAL_OMEN),
-            "unluck" => Some(&Self::UNLUCK),
-            "water_breathing" => Some(&Self::WATER_BREATHING),
-            "weakness" => Some(&Self::WEAKNESS),
-            "weaving" => Some(&Self::WEAVING),
-            "wind_charged" => Some(&Self::WIND_CHARGED),
-            "wither" => Some(&Self::WITHER),
+            "minecraft:absorption" => Some(&Self::ABSORPTION),
+            "minecraft:bad_omen" => Some(&Self::BAD_OMEN),
+            "minecraft:blindness" => Some(&Self::BLINDNESS),
+            "minecraft:breath_of_the_nautilus" => Some(&Self::BREATH_OF_THE_NAUTILUS),
+            "minecraft:conduit_power" => Some(&Self::CONDUIT_POWER),
+            "minecraft:darkness" => Some(&Self::DARKNESS),
+            "minecraft:dolphins_grace" => Some(&Self::DOLPHINS_GRACE),
+            "minecraft:fire_resistance" => Some(&Self::FIRE_RESISTANCE),
+            "minecraft:glowing" => Some(&Self::GLOWING),
+            "minecraft:haste" => Some(&Self::HASTE),
+            "minecraft:health_boost" => Some(&Self::HEALTH_BOOST),
+            "minecraft:hero_of_the_village" => Some(&Self::HERO_OF_THE_VILLAGE),
+            "minecraft:hunger" => Some(&Self::HUNGER),
+            "minecraft:infested" => Some(&Self::INFESTED),
+            "minecraft:instant_damage" => Some(&Self::INSTANT_DAMAGE),
+            "minecraft:instant_health" => Some(&Self::INSTANT_HEALTH),
+            "minecraft:invisibility" => Some(&Self::INVISIBILITY),
+            "minecraft:jump_boost" => Some(&Self::JUMP_BOOST),
+            "minecraft:levitation" => Some(&Self::LEVITATION),
+            "minecraft:luck" => Some(&Self::LUCK),
+            "minecraft:mining_fatigue" => Some(&Self::MINING_FATIGUE),
+            "minecraft:nausea" => Some(&Self::NAUSEA),
+            "minecraft:night_vision" => Some(&Self::NIGHT_VISION),
+            "minecraft:oozing" => Some(&Self::OOZING),
+            "minecraft:poison" => Some(&Self::POISON),
+            "minecraft:raid_omen" => Some(&Self::RAID_OMEN),
+            "minecraft:regeneration" => Some(&Self::REGENERATION),
+            "minecraft:resistance" => Some(&Self::RESISTANCE),
+            "minecraft:saturation" => Some(&Self::SATURATION),
+            "minecraft:slow_falling" => Some(&Self::SLOW_FALLING),
+            "minecraft:slowness" => Some(&Self::SLOWNESS),
+            "minecraft:speed" => Some(&Self::SPEED),
+            "minecraft:strength" => Some(&Self::STRENGTH),
+            "minecraft:trial_omen" => Some(&Self::TRIAL_OMEN),
+            "minecraft:unluck" => Some(&Self::UNLUCK),
+            "minecraft:water_breathing" => Some(&Self::WATER_BREATHING),
+            "minecraft:weakness" => Some(&Self::WEAKNESS),
+            "minecraft:weaving" => Some(&Self::WEAVING),
+            "minecraft:wind_charged" => Some(&Self::WIND_CHARGED),
+            "minecraft:wither" => Some(&Self::WITHER),
             _ => None,
         }
+    }
+}
+impl IDSetContent for StatusEffect {
+    fn registry_id(&self) -> u16 {
+        self.id as u16
+    }
+    fn from_id(id: u16) -> Option<&'static Self> {
+        match id {
+            21u16 => Some(&Self::ABSORPTION),
+            30u16 => Some(&Self::BAD_OMEN),
+            14u16 => Some(&Self::BLINDNESS),
+            39u16 => Some(&Self::BREATH_OF_THE_NAUTILUS),
+            28u16 => Some(&Self::CONDUIT_POWER),
+            32u16 => Some(&Self::DARKNESS),
+            29u16 => Some(&Self::DOLPHINS_GRACE),
+            11u16 => Some(&Self::FIRE_RESISTANCE),
+            23u16 => Some(&Self::GLOWING),
+            2u16 => Some(&Self::HASTE),
+            20u16 => Some(&Self::HEALTH_BOOST),
+            31u16 => Some(&Self::HERO_OF_THE_VILLAGE),
+            16u16 => Some(&Self::HUNGER),
+            38u16 => Some(&Self::INFESTED),
+            6u16 => Some(&Self::INSTANT_DAMAGE),
+            5u16 => Some(&Self::INSTANT_HEALTH),
+            13u16 => Some(&Self::INVISIBILITY),
+            7u16 => Some(&Self::JUMP_BOOST),
+            24u16 => Some(&Self::LEVITATION),
+            25u16 => Some(&Self::LUCK),
+            3u16 => Some(&Self::MINING_FATIGUE),
+            8u16 => Some(&Self::NAUSEA),
+            15u16 => Some(&Self::NIGHT_VISION),
+            37u16 => Some(&Self::OOZING),
+            18u16 => Some(&Self::POISON),
+            34u16 => Some(&Self::RAID_OMEN),
+            9u16 => Some(&Self::REGENERATION),
+            10u16 => Some(&Self::RESISTANCE),
+            22u16 => Some(&Self::SATURATION),
+            27u16 => Some(&Self::SLOW_FALLING),
+            1u16 => Some(&Self::SLOWNESS),
+            0u16 => Some(&Self::SPEED),
+            4u16 => Some(&Self::STRENGTH),
+            33u16 => Some(&Self::TRIAL_OMEN),
+            26u16 => Some(&Self::UNLUCK),
+            12u16 => Some(&Self::WATER_BREATHING),
+            17u16 => Some(&Self::WEAKNESS),
+            36u16 => Some(&Self::WEAVING),
+            35u16 => Some(&Self::WIND_CHARGED),
+            19u16 => Some(&Self::WITHER),
+            _ => None,
+        }
+    }
+    fn from_str(name: &str) -> Option<&'static Self> {
+        StatusEffect::from_minecraft_name(name)
+    }
+    fn to_string(&self) -> String {
+        self.minecraft_name.to_string()
     }
 }

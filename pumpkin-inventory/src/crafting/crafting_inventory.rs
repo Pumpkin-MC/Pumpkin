@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::{any::Any, pin::Pin};
 
-use pumpkin_world::{inventory::split_stack, item::ItemStack};
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_world::inventory::split_stack;
 use tokio::sync::Mutex;
 
 use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};

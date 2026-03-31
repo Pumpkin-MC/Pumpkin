@@ -29,7 +29,7 @@ impl LightProvider for BlockLightProvider {
     }
     #[inline(always)]
     fn set_light(cache: &mut Cache, pos: BlockPos, level: u8) {
-        set_block_light(cache, pos, level)
+        set_block_light(cache, pos, level);
     }
     #[inline(always)]
     fn propagate_level(current_level: u8, opacity: u8, _dir: BlockDirection) -> u8 {
@@ -45,7 +45,7 @@ impl LightProvider for SkyLightProvider {
     }
     #[inline(always)]
     fn set_light(cache: &mut Cache, pos: BlockPos, level: u8) {
-        set_sky_light(cache, pos, level)
+        set_sky_light(cache, pos, level);
     }
     #[inline(always)]
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8 {
@@ -75,6 +75,7 @@ pub struct LightPropagator<P: LightProvider> {
 }
 
 impl<P: LightProvider> LightPropagator<P> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             queue: VecDeque::with_capacity(4096),
@@ -447,10 +448,7 @@ impl SkyLightPropagator {
                         if y <= top_y {
                             break;
                         }
-                        // Safe to break if we're under our own roof
-                        else {
-                            continue;
-                        }
+                        continue;
                     }
 
                     let is_at_surface = y == top_y;
@@ -458,11 +456,7 @@ impl SkyLightPropagator {
                         y < north_top || y < south_top || y < west_top || y < east_top;
 
                     if (is_at_surface || below_neighbor) && self.visited.insert(pos) {
-                        let skip_dir = if y >= top_y {
-                            Some(BlockDirection::Up)
-                        } else {
-                            None
-                        };
+                        let skip_dir = (y >= top_y).then_some(BlockDirection::Up);
 
                         self.queue.push_back(PropagationEntry {
                             pos,
@@ -489,6 +483,7 @@ pub struct LightEngine {
 }
 
 impl LightEngine {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             block_light: BlockLightPropagator::new(),
