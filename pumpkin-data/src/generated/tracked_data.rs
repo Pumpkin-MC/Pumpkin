@@ -1024,6 +1024,17 @@ impl TrackedData {
         v1_21_11: 255u8,
         v26_1: 16u8,
     };
+    pub const PLAYER_ABSORPTION_ID: TrackedId = TrackedId {
+        v1_21: 17u8,
+        v1_21_2: 17u8,
+        v1_21_4: 17u8,
+        v1_21_5: 17u8,
+        v1_21_6: 17u8,
+        v1_21_7: 17u8,
+        v1_21_9: 17u8,
+        v1_21_11: 17u8,
+        v26_1: 17u8,
+    };
     pub const PLAYER_MAIN_HAND: TrackedId = TrackedId {
         v1_21: 255u8,
         v1_21_2: 255u8,

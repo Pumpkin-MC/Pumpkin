@@ -2,7 +2,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::tracked_data::{TrackedData, TrackedId};
+use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
@@ -318,27 +318,15 @@ impl LivingEntity {
         .await;
 
         // Send absorption metadata for players (visual yellow hearts)
-        if let Some(tracked_id) = self.player_absorption_id() {
+        if self.entity.entity_type == &EntityType::PLAYER {
             self.entity
-                .send_meta_data(&[Metadata::new(tracked_id, MetaDataType::FLOAT, new_abs)])
+                .send_meta_data(&[Metadata::new(
+                    TrackedData::PLAYER_ABSORPTION_ID,
+                    MetaDataType::FLOAT,
+                    new_abs,
+                )])
                 .await;
         }
-    }
-
-    /// Returns the absorption ID for this (player) entity
-    /// TODO: don't hardcode these here?
-    fn player_absorption_id(&self) -> Option<TrackedId> {
-        (self.entity.entity_type == &EntityType::PLAYER).then_some(TrackedId {
-            v1_21: 17u8,
-            v1_21_2: 17u8,
-            v1_21_4: 17u8,
-            v1_21_5: 17u8,
-            v1_21_6: 17u8,
-            v1_21_7: 17u8,
-            v1_21_9: 17u8,
-            v1_21_11: 17u8,
-            v26_1: 17u8, // ?
-        })
     }
 
     /// Convenience helper to mutate an attribute instance. Automatically inserts
