@@ -28,8 +28,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use tokio::sync::Mutex;
 
-use crate::block::blocks::scaffolding::ScaffoldingBlock;
-
 pub trait BlockMetadata {
     fn ids() -> Box<[u16]>;
 }
