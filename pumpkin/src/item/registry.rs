@@ -33,6 +33,21 @@ impl ItemRegistry {
         }
     }
 
+    pub async fn on_stopped_using(&self, stack: &ItemStack, player: &Player) {
+        if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
+            behaviour.on_stopped_using(stack, player).await;
+        }
+    }
+
+    /// Returns the item's use duration in ticks, as defined by its registered behaviour.
+    /// Returns `None` if the item has no registered behaviour or its duration is 0.
+    #[must_use]
+    pub fn get_use_duration(&self, item_id: u16) -> Option<i32> {
+        self.get_pumpkin_item(item_id)
+            .map(|b| b.get_use_duration())
+            .filter(|&d| d > 0)
+    }
+
     #[expect(clippy::too_many_arguments)]
     pub async fn use_on_block(
         &self,

@@ -215,9 +215,8 @@ impl LivingEntity {
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
-    pub async fn set_active_hand(&self, hand: Hand, stack: ItemStack) {
-        self.item_use_time
-            .store(stack.get_max_use_time(), Ordering::Relaxed);
+    pub async fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
+        self.item_use_time.store(duration, Ordering::Relaxed);
         *self.item_in_use.lock().await = Some(stack);
         *self.active_hand.lock().await = Some(hand);
         self.set_living_flag(Self::USING_ITEM_FLAG, true).await;

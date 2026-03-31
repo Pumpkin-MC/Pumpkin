@@ -14,6 +14,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
 use pumpkin_protocol::java::client::play::CSoundEffect;
 use pumpkin_util::GameMode;
+use pumpkin_world::item::ItemStack;
 
 pub struct BowItem;
 
@@ -46,9 +47,23 @@ impl ItemBehaviour for BowItem {
             // Start the bow drawing animation
             player
                 .living_entity
-                .set_active_hand(pumpkin_util::Hand::Right, stack)
+                .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION)
                 .await;
         })
+    }
+
+    fn on_stopped_using<'a>(
+        &'a self,
+        _stack: &'a ItemStack,
+        player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            Self::release_bow(player).await;
+        })
+    }
+
+    fn get_use_duration(&self) -> i32 {
+        Self::USE_DURATION
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -57,6 +72,8 @@ impl ItemBehaviour for BowItem {
 }
 
 impl BowItem {
+    /// The maximum number of ticks a bow can be drawn for
+    pub const USE_DURATION: i32 = 72000;
     const MAX_DRAW_DURATION: f32 = 20.0;
     const ARROW_SPEED_MULTIPLIER: f32 = 3.0;
 
@@ -64,7 +81,7 @@ impl BowItem {
     pub async fn release_bow(player: &Player) {
         // Get the used ticks
         let use_ticks = player.living_entity.item_use_time.load(Ordering::Relaxed);
-        let use_ticks = 72000 - use_ticks;
+        let use_ticks = Self::USE_DURATION - use_ticks;
 
         // Check minimum draw time
         if use_ticks < 3 {

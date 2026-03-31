@@ -1532,16 +1532,9 @@ impl JavaClient {
                     player.drop_held_item(true).await;
                 }
                 Status::ReleaseItemInUse => {
-                    // Check what item was being used
                     let item_in_use = player.living_entity.item_in_use.lock().await.clone();
                     if let Some(stack) = item_in_use {
-                        let item_id = stack.item.id;
-
-                        // Handle bow release
-                        if item_id == Item::BOW.id {
-                            use crate::item::items::bow::BowItem;
-                            BowItem::release_bow(player).await;
-                        }
+                        server.item_registry.on_stopped_using(&stack, player).await;
                     }
 
                     player.living_entity.clear_active_hand().await;
@@ -1930,13 +1923,13 @@ impl JavaClient {
                 {
                     player
                         .living_entity
-                        .set_active_hand(hand, held.clone())
+                        .set_active_hand(hand, held.clone(), held.get_max_use_time())
                         .await;
                 }
             } else {
                 player
                     .living_entity
-                    .set_active_hand(hand, held.clone())
+                    .set_active_hand(hand, held.clone(), held.get_max_use_time())
                     .await;
             }
         }
