@@ -2,7 +2,7 @@ use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
+use pumpkin_util::random::{get_seed, xoroshiro128::Xoroshiro, RandomGenerator};
 use pumpkin_world::BlockStateId;
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
@@ -10,8 +10,8 @@ use crate::entity::player::Player;
 use crate::world::World;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 pub mod blocks;
 pub mod fluid;
@@ -20,13 +20,16 @@ pub mod registry;
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::server::Server;
-use pumpkin_data::BlockDirection;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::BlockDirection;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use tokio::sync::Mutex;
+
+// Scaffolding import
+use crate::block::blocks::scaffolding::ScaffoldingBlock;
 
 pub trait BlockMetadata {
     fn ids() -> Box<[u16]>;
@@ -75,7 +78,6 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
-    /// Called when an entity is standing on / walking over the top face of this block.
     fn on_entity_step<'a>(&'a self, _args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -88,9 +90,6 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
-    /// Handles the block event, which is an event specific to a block with an integer ID and data.
-    ///
-    /// returns whether the event was handled successfully
     fn on_synced_block_event<'a>(
         &'a self,
         _args: OnSyncedBlockEventArgs<'a>,
@@ -98,7 +97,6 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async move { false })
     }
 
-    /// getPlacementState in source code
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move { args.block.default_state.id })
     }
@@ -115,7 +113,6 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async move { false })
     }
 
-    /// onBlockAdded in source code
     fn placed<'a>(&'a self, _args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -151,7 +148,6 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
-    /// Called if a block state is replaced or it replaces another state
     fn prepare<'a>(&'a self, _args: PrepareArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -171,9 +167,6 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
-    // --- Redstone/Comparator Methods ---
-
-    /// Sides where redstone connects to
     fn emits_redstone_power<'a>(
         &'a self,
         _args: EmitsRedstonePowerArgs<'a>,
@@ -181,7 +174,6 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async move { false })
     }
 
-    /// Weak redstone power, aka. block that should be powered needs to be directly next to the source block
     fn get_weak_redstone_power<'a>(
         &'a self,
         _args: GetRedstonePowerArgs<'a>,
@@ -189,7 +181,6 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async move { 0 })
     }
 
-    /// Strong redstone power. this can power a block that then gives power
     fn get_strong_redstone_power<'a>(
         &'a self,
         _args: GetRedstonePowerArgs<'a>,
@@ -435,7 +426,6 @@ pub async fn drop_loot(
     if experience && let Some(experience) = &block.experience {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         let amount = experience.experience.get(&mut random);
-        // TODO: Silk touch gives no exp
         if amount > 0 {
             ExperienceOrbEntity::spawn(world, pos.to_f64(), amount as u32).await;
         }
@@ -450,7 +440,6 @@ pub async fn calc_block_breaking(
     let hardness = state.hardness;
     #[expect(clippy::float_cmp)]
     if hardness == -1.0 {
-        // unbreakable
         return 0.0;
     }
     let i = if player.can_harvest(state, block).await {
@@ -471,11 +460,8 @@ pub enum BlockIsReplacing {
 }
 
 impl BlockIsReplacing {
-    #[must_use]
-    /// Returns true if the block was a water source block.
     pub fn water_source(&self) -> bool {
         match self {
-            // Level 0 means the water is a source block
             Self::Water(level) => *level == Integer0To15::L0,
             _ => false,
         }
