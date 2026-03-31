@@ -4,8 +4,8 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::{
-    block_properties::{BlockProperties, ScaffoldingLikeProperties},
     Block, BlockDirection,
+    block_properties::{BlockProperties, ScaffoldingLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -27,18 +27,19 @@ impl BlockBehaviour for ScaffoldingBlock {
             let mut props = ScaffoldingLikeProperties::default(args.block);
             props.waterlogged = args.replacing.water_source();
 
-            // Sneaking forces normal placement
-            if args.player.sneaking.load(std::sync::atomic::Ordering::Relaxed) {
+            if args
+                .player
+                .sneaking
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
                 return props.to_state_id(args.block);
             }
 
-            // If clicking top of scaffolding → attempt upward placement
             if args.direction == BlockDirection::Up {
                 let above = args.position.up();
                 let above_block = args.world.get_block(&above).await;
 
                 if above_block == &Block::AIR {
-                    // Check height limit (max 7)
                     let height = get_scaffolding_height(args.world, args.position).await;
                     if height < 7 {
                         return props.to_state_id(args.block);
@@ -46,15 +47,12 @@ impl BlockBehaviour for ScaffoldingBlock {
                 }
             }
 
-            // Otherwise place sideways in the clicked direction
             props.to_state_id(args.block)
         })
     }
 
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            can_survive(args.block_accessor, args.position).await
-        })
+        Box::pin(async move { can_survive(args.block_accessor, args.position).await })
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
@@ -70,8 +68,7 @@ impl BlockBehaviour for ScaffoldingBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let mut props =
-                ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
+            let mut props = ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
 
             let distance = compute_distance(args.world, args.position).await;
             props.distance = distance;
@@ -130,7 +127,6 @@ async fn get_scaffolding_height(world: &World, pos: &BlockPos) -> u8 {
 }
 
 async fn compute_distance(world: &World, pos: &BlockPos) -> u8 {
-    // Distance 0 if directly supported
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
@@ -145,7 +141,6 @@ async fn compute_distance(world: &World, pos: &BlockPos) -> u8 {
         return 0;
     }
 
-    // Otherwise search horizontally (max 4 blocks)
     let mut best = 7;
 
     for dir in BlockDirection::horizontal() {
