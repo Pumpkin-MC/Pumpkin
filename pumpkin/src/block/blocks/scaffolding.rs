@@ -4,12 +4,12 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::{
-    block_properties::{BlockProperties, Integer0To7, ScaffoldingLikeProperties},
     Block, BlockDirection,
+    block_properties::{BlockProperties, Integer0To7, ScaffoldingLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{tick::TickPriority, world::BlockFlags, BlockStateId};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 
 #[pumpkin_block("minecraft:scaffolding")]
 pub struct ScaffoldingBlock;
@@ -96,10 +96,7 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 }
 
-async fn can_survive(
-    world: &dyn pumpkin_world::world::BlockAccessor,
-    pos: &BlockPos,
-) -> bool {
+async fn can_survive(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> bool {
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
@@ -111,10 +108,7 @@ async fn can_survive(
     below_state.is_full_cube() && below_state.is_solid_block()
 }
 
-async fn get_scaffolding_height(
-    world: &dyn pumpkin_world::world::BlockAccessor,
-    pos: &BlockPos,
-) -> u8 {
+async fn get_scaffolding_height(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> u8 {
     let mut height = 0;
     let mut current = pos.down();
 
@@ -130,10 +124,7 @@ async fn get_scaffolding_height(
     height
 }
 
-async fn compute_distance(
-    world: &dyn pumpkin_world::world::BlockAccessor,
-    pos: &BlockPos,
-) -> u8 {
+async fn compute_distance(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> u8 {
     let below = pos.down();
     let below_block = world.get_block(&below).await;
 
@@ -164,10 +155,7 @@ async fn compute_distance(
     best
 }
 
-async fn is_bottom(
-    world: &dyn pumpkin_world::world::BlockAccessor,
-    pos: &BlockPos,
-) -> bool {
+async fn is_bottom(world: &dyn pumpkin_world::world::BlockAccessor, pos: &BlockPos) -> bool {
     let above = pos.up();
     let above_block = world.get_block(&above).await;
     above_block != &Block::SCAFFOLDING
