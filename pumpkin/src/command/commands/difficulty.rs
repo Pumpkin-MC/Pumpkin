@@ -74,12 +74,11 @@ impl CommandExecutor for DifficultySetExecutor {
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
     registry
-        .register_permission(Permission::new(
+        .register_permission_or_panic(Permission::new(
             PERMISSION,
             DESCRIPTION,
             PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .expect("Permission should have registered successfully");
+        ));
 
     dispatcher.register(
         command("difficulty", DESCRIPTION)
