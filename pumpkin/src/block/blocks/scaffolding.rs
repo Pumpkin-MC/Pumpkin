@@ -3,15 +3,14 @@ use crate::block::{
     OnScheduledTickArgs, PlacedArgs,
 };
 use pumpkin_data::{
-    block_properties::{BlockProperties, EnumVariants, Integer0To7, ScaffoldingLikeProperties},
     Block, BlockDirection,
+    block_properties::{BlockProperties, EnumVariants, Integer0To7, ScaffoldingLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
-    tick::TickPriority,
+    BlockStateId, tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
-    BlockStateId,
 };
 
 #[pumpkin_block("minecraft:scaffolding")]
