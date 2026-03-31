@@ -34,13 +34,13 @@ pub mod trapdoor;
 // Building & structural blocks
 pub mod barrier;
 pub mod chain;
+pub mod scaffolding;
 pub mod glass_panes;
 pub mod glazed_terracotta;
 pub mod iron_bars;
 pub mod slabs;
 pub mod stairs;
 pub mod walls;
-pub mod scaffolding;
 
 // Decorative & furnishings
 pub mod banners;
