@@ -178,6 +178,6 @@ impl AsBlockAccessor for crate::world::World {
 
 impl AsBlockAccessor for std::sync::Arc<crate::world::World> {
     fn accessor(&self) -> &dyn BlockAccessor {
-        (&**self)
+        &**self
     }
 }
