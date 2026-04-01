@@ -19,8 +19,8 @@ pub struct ScaffoldingBlock;
 
 impl BlockBehaviour for ScaffoldingBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        // Use block_accessor if OnPlaceArgs provides it, otherwise use the stable deref
-        let world = args.block_accessor; 
+        // Use the provided block_accessor to avoid Arc/World type identity issues
+        let world = args.block_accessor;
         Box::pin(async move {
             let mut props = ScaffoldingLikeProperties::default(args.block);
             props.waterlogged = args.replacing.water_source();
