@@ -106,9 +106,14 @@ impl StagedChunkEnum {
 
     /// Total number of state values (0 = None … 9 = Full).
     pub const COUNT: usize = Self::Full as usize + 1;
-    pub const FULL_DEPENDENCIES: &'static [Self] =
-        &[Self::Full, Self::Lighting, Self::Features, Self::Surface];
-    pub const FULL_RADIUS: i32 = 3;
+    pub const FULL_DEPENDENCIES: &'static [Self] = &[
+        Self::Full,
+        Self::Lighting,
+        Self::Features,
+        Self::Surface,
+        Self::Noise,
+    ];
+    pub const FULL_RADIUS: i32 = 4;
     #[must_use]
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
@@ -118,7 +123,7 @@ impl StagedChunkEnum {
             Self::StructureReferences => 0,
             Self::Biomes => 0,
             Self::Noise => 0,
-            Self::Surface => 0,
+            Self::Surface => 1,
             Self::Features => 1,
             Self::Lighting => 1,
             Self::Full => 1,
@@ -134,7 +139,7 @@ impl StagedChunkEnum {
             Self::StructureReferences => 0,
             Self::Biomes => 0,
             Self::Noise => 0,
-            Self::Surface => 0,
+            Self::Surface => 1,
             Self::Features => 1,
             Self::Lighting => 1,
             Self::Full => 0,
@@ -160,7 +165,7 @@ impl StagedChunkEnum {
                 Self::StructureStart,
             ],
             Self::Noise => &[Self::StructureReferences],
-            Self::Surface => &[Self::Noise],
+            Self::Surface => &[Self::Noise, Self::Noise],
             Self::Features => &[Self::Surface, Self::Surface],
             Self::Lighting => &[Self::Features, Self::Features],
             Self::Full => &[Self::Lighting, Self::Lighting],

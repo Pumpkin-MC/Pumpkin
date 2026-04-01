@@ -382,12 +382,22 @@ impl Cache {
                 random_config,
                 noise_router,
             ),
-            StagedChunkEnum::Surface => self.chunks[mid].get_proto_chunk_mut().step_to_surface(
-                settings,
-                random_config,
-                terrain_cache,
-                noise_router,
-            ),
+            StagedChunkEnum::Surface => {
+                for chunk in &mut self.chunks {
+                    let Chunk::Proto(proto_chunk) = chunk else {
+                        continue;
+                    };
+
+                    if proto_chunk.stage == StagedChunkEnum::Noise {
+                        proto_chunk.step_to_surface(
+                            settings,
+                            random_config,
+                            terrain_cache,
+                            noise_router,
+                        );
+                    }
+                }
+            }
             StagedChunkEnum::Features => {
                 ProtoChunk::generate_features_and_structure(self, block_registry, random_config);
             }
