@@ -37,6 +37,7 @@ mod playsound;
 mod plugin;
 mod plugins;
 mod pumpkin;
+mod random;
 mod rotate;
 mod say;
 mod seed;
@@ -74,6 +75,7 @@ pub async fn default_dispatcher(
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
+    dispatcher.register(random::init_command_tree(), "minecraft:command.random");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
@@ -202,6 +204,13 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.msg",
             "Sends a private message to another player",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.random",
+            "Generates a random value or rolls it publicly",
             PermissionDefault::Allow,
         ))
         .unwrap();
