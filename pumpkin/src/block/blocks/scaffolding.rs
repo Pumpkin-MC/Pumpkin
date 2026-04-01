@@ -19,8 +19,7 @@ pub struct ScaffoldingBlock;
 
 impl BlockBehaviour for ScaffoldingBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        // Step 1: Create the reference outside the async block
-        let world = &*args.world;
+        let world: &dyn BlockAccessor = &*args.world;
         Box::pin(async move {
             let mut props = ScaffoldingLikeProperties::default(args.block);
             props.waterlogged = args.replacing.water_source();
@@ -67,8 +66,7 @@ impl BlockBehaviour for ScaffoldingBlock {
         &'a self,
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
-        // Step 2: Same fix here
-        let world = &*args.world;
+        let world: &dyn BlockAccessor = &*args.world;
         Box::pin(async move {
             let mut props = ScaffoldingLikeProperties::from_state_id(args.state_id, args.block);
 
@@ -83,8 +81,7 @@ impl BlockBehaviour for ScaffoldingBlock {
     }
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
-        // Step 3: Same fix here
-        let world = &*args.world;
+        let world: &dyn BlockAccessor = &*args.world;
         Box::pin(async move {
             if !can_survive(world, args.position).await {
                 args.world
