@@ -2614,7 +2614,8 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                             BlockStateCodec {
                                 name: &pumpkin_data::Block::GRASS_BLOCK,
                                 properties: Some(props),
-                            }.get_state()
+                            }
+                            .get_state()
                         },
                     }),
                 }],
@@ -6746,7 +6747,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: "minecraft:netherrack".to_string(),
+                    block: pumpkin_data::Block::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::BLACKSTONE.default_state,
             }],
@@ -7055,7 +7056,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: "minecraft:netherrack".to_string(),
+                    block: pumpkin_data::Block::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::GRAVEL.default_state,
             }],
@@ -7181,7 +7182,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: "minecraft:netherrack".to_string(),
+                    block: pumpkin_data::Block::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::MAGMA_BLOCK.default_state,
             }],
@@ -7194,7 +7195,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: "minecraft:netherrack".to_string(),
+                    block: pumpkin_data::Block::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::NETHER_GOLD_ORE.default_state,
             }],
@@ -7207,7 +7208,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: "minecraft:netherrack".to_string(),
+                    block: pumpkin_data::Block::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::NETHER_QUARTZ_ORE.default_state,
             }],
@@ -7257,7 +7258,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             discard_chance_on_air_exposure: 0f32,
             targets: vec![OreTarget {
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
-                    block: "minecraft:netherrack".to_string(),
+                    block: pumpkin_data::Block::NETHERRACK,
                 }),
                 state: pumpkin_data::Block::SOUL_SAND.default_state,
             }],

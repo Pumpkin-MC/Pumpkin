@@ -859,7 +859,10 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
         "minecraft:always_true" | "" => quote! { RuleTest::AlwaysTrue },
         "minecraft:block_match" => {
             let block = v["block"].as_str().unwrap_or("minecraft:stone");
-            quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: #block.to_string() }) }
+    let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
+            let block_ident =
+                quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
+            quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: pumpkin_data::Block::#block_ident }) }
         }
         "minecraft:blockstate_match" => {
             let state = value_to_block_state(&v["block_state"]);
@@ -872,7 +875,10 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
         "minecraft:random_block_match" => {
             let block = v["block"].as_str().unwrap_or("minecraft:stone");
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
-            quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: #block.to_string(), probability: #prob }) }
+    let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
+            let block_ident =
+                quote::format_ident!("{}", block.to_uppercase().replace([':', '-'], "_"));
+            quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: pumpkin_data::Block::#block_ident, probability: #prob }) }
         }
         "minecraft:random_blockstate_match" => {
             let state = value_to_block_state(&v["block_state"]);
@@ -1271,17 +1277,19 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
             let positions = v["positions"]
                 .as_array()
                 .map(|arr| {
-                    arr.iter().map(|p| {
-                        let coords = p.as_array().unwrap();
-                        let x = coords[0].as_i64().unwrap_or(0) as i32;
-                        let y = coords[1].as_i64().unwrap_or(0) as i32;
-                        let z = coords[2].as_i64().unwrap_or(0) as i32;
-                        quote! { BlockPos::new(#x, #y, #z) }
-                    }).collect::<Vec<_>>()
+                    arr.iter()
+                        .map(|p| {
+                            let coords = p.as_array().unwrap();
+                            let x = coords[0].as_i64().unwrap_or(0) as i32;
+                            let y = coords[1].as_i64().unwrap_or(0) as i32;
+                            let z = coords[2].as_i64().unwrap_or(0) as i32;
+                            quote! { BlockPos::new(#x, #y, #z) }
+                        })
+                        .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
             quote! { PlacementModifier::FixedPlacement(vec![#(#positions),*]) }
-        },
+        }
         "minecraft:heightmap" => {
             let hm = crate::placed_feature::value_to_height_map(
                 v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"),

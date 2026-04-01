@@ -112,17 +112,19 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
             let positions = v["positions"]
                 .as_array()
                 .map(|arr| {
-                    arr.iter().map(|p| {
-                        let coords = p.as_array().unwrap();
-                        let x = coords[0].as_i64().unwrap_or(0) as i32;
-                        let y = coords[1].as_i64().unwrap_or(0) as i32;
-                        let z = coords[2].as_i64().unwrap_or(0) as i32;
-                        quote! { BlockPos::new(#x, #y, #z) }
-                    }).collect::<Vec<_>>()
+                    arr.iter()
+                        .map(|p| {
+                            let coords = p.as_array().unwrap();
+                            let x = coords[0].as_i64().unwrap_or(0) as i32;
+                            let y = coords[1].as_i64().unwrap_or(0) as i32;
+                            let z = coords[2].as_i64().unwrap_or(0) as i32;
+                            quote! { BlockPos::new(#x, #y, #z) }
+                        })
+                        .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
             quote! { PlacementModifier::FixedPlacement(vec![#(#positions),*]) }
-        },
+        }
         "minecraft:heightmap" => {
             let heightmap =
                 value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
