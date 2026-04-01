@@ -56,7 +56,7 @@ impl GetClientSideArgParser for SequenceArgumentConsumer {
     }
 }
 
-fn is_valid_namespaced_id_char(c: char) -> bool {
+const fn is_valid_namespaced_id_char(c: char) -> bool {
     matches!(c, 'a'..='z' | '0'..='9' | '_' | '-' | '.' | '/' | ':')
 }
 
