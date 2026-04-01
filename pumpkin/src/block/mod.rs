@@ -457,6 +457,7 @@ pub enum BlockIsReplacing {
 }
 
 impl BlockIsReplacing {
+    #[must_use]
     pub fn water_source(&self) -> bool {
         match self {
             Self::Water(level) => *level == Integer0To15::L0,
