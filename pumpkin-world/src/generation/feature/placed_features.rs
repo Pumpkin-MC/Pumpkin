@@ -84,7 +84,7 @@ impl PlacedFeature {
         let feature = match &self.feature {
             Feature::Named(name) => CONFIGURED_FEATURES
                 .get(name.strip_prefix("minecraft:").unwrap_or(name))
-                .unwrap(),
+                .expect("Name: {name} not found"),
             Feature::Inlined(feature) => feature,
         };
 

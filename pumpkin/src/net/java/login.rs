@@ -389,7 +389,7 @@ impl JavaClient {
         self.send_packet_now(&CKnownPacks::new(&[KnownPack {
             namespace: "minecraft",
             id: "core",
-            version: "1.21.11",
+            version: "26.1",
         }]))
         .await;
     }

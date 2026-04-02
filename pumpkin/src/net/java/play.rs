@@ -13,7 +13,6 @@ use tracing::{Level, debug, error, info, trace, warn};
 use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
-use crate::command::CommandSender;
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
 use crate::entity::player::{ChatMode, ChatSession, Player};
@@ -338,7 +337,11 @@ impl JavaClient {
                     player.jump().await;
                 }
 
-                entity.on_ground.store(packet.collision & FLAG_ON_GROUND != 0, Ordering::Relaxed);
+                let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
+                entity.on_ground.store(new_on_ground, Ordering::Relaxed);
+                if new_on_ground && entity.fall_flying.load(Ordering::Relaxed) {
+                    entity.set_fall_flying(false).await;
+                }
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
@@ -606,13 +609,11 @@ impl JavaClient {
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
-                    server_clone.command_dispatcher.read().await
-                        .handle_command(
-                            &CommandSender::Player(player_clone),
-                            &server_clone,
-                            &command_clone,
-                        )
-                        .await;
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher.handle_command(
+                        &player_clone.get_command_source(&server_clone).await,
+                        &command_clone
+                    ).await;
                 });
 
                 if server.advanced_config.commands.log_console {
@@ -1640,6 +1641,7 @@ impl JavaClient {
         let off_hand_item = inventory.off_hand_item().await;
         let held_item_empty = held_item.lock().await.is_empty();
         let off_hand_item_empty = off_hand_item.lock().await.is_empty();
+
         let item = if matches!(hand, Hand::Left) {
             held_item
         } else {
@@ -1675,6 +1677,7 @@ impl JavaClient {
                 return Ok(());
             }
         }
+
         let slot_index = if matches!(hand, Hand::Left) {
             inventory.get_selected_slot() as usize
         } else {
@@ -1835,6 +1838,7 @@ impl JavaClient {
             return;
         };
         self.update_sequence(player, use_item.sequence.0);
+
         let item_in_hand = if hand == Hand::Left {
             inventory.held_item()
         } else {
@@ -2092,7 +2096,6 @@ impl JavaClient {
         packet: SCommandSuggestion,
         server: &Arc<Server>,
     ) {
-        let src = CommandSender::Player(player.clone());
         let Some(cmd) = &packet.command.get(1..) else {
             return;
         };
@@ -2106,7 +2109,7 @@ impl JavaClient {
             .command_dispatcher
             .read()
             .await
-            .find_suggestions(&src, server, cmd)
+            .suggest(cmd, &player.get_command_source(server).await)
             .await;
 
         let response = CCommandSuggestions::new(

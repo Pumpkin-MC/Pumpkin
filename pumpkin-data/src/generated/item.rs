@@ -3,8 +3,10 @@ use crate::Block;
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::*;
-use crate::data_component_impl::IDSet::{Blocks, Tag};
+use crate::data_component_impl::IDSet::{IDs, Tag};
 use crate::data_component_impl::*;
+use crate::effect::StatusEffect;
+use crate::sound::Sound;
 use crate::tag::{RegistryKey, Taggable};
 use crate::{AttributeModifierSlot, tag};
 use pumpkin_util::text::TextComponent;
@@ -29,7 +31,7 @@ impl Hash for Item {
 }
 impl Item {
     pub const ACACIA_BOAT: Item = Item {
-        id: 871,
+        id: 872,
         registry_key: "acacia_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -48,7 +50,7 @@ impl Item {
         ],
     };
     pub const ACACIA_BUTTON: Item = Item {
-        id: 755,
+        id: 756,
         registry_key: "acacia_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -67,7 +69,7 @@ impl Item {
         ],
     };
     pub const ACACIA_CHEST_BOAT: Item = Item {
-        id: 872,
+        id: 873,
         registry_key: "acacia_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -86,7 +88,7 @@ impl Item {
         ],
     };
     pub const ACACIA_DOOR: Item = Item {
-        id: 784,
+        id: 785,
         registry_key: "acacia_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -105,7 +107,7 @@ impl Item {
         ],
     };
     pub const ACACIA_FENCE: Item = Item {
-        id: 348,
+        id: 349,
         registry_key: "acacia_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -124,7 +126,7 @@ impl Item {
         ],
     };
     pub const ACACIA_FENCE_GATE: Item = Item {
-        id: 825,
+        id: 826,
         registry_key: "acacia_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -143,7 +145,7 @@ impl Item {
         ],
     };
     pub const ACACIA_HANGING_SIGN: Item = Item {
-        id: 1004,
+        id: 1005,
         registry_key: "acacia_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -219,7 +221,7 @@ impl Item {
         ],
     };
     pub const ACACIA_PRESSURE_PLATE: Item = Item {
-        id: 771,
+        id: 772,
         registry_key: "acacia_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -257,7 +259,7 @@ impl Item {
         ],
     };
     pub const ACACIA_SHELF: Item = Item {
-        id: 305,
+        id: 306,
         registry_key: "acacia_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -276,7 +278,7 @@ impl Item {
         ],
     };
     pub const ACACIA_SIGN: Item = Item {
-        id: 992,
+        id: 993,
         registry_key: "acacia_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -295,7 +297,7 @@ impl Item {
         ],
     };
     pub const ACACIA_SLAB: Item = Item {
-        id: 274,
+        id: 275,
         registry_key: "acacia_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -314,7 +316,7 @@ impl Item {
         ],
     };
     pub const ACACIA_STAIRS: Item = Item {
-        id: 445,
+        id: 446,
         registry_key: "acacia_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -333,7 +335,7 @@ impl Item {
         ],
     };
     pub const ACACIA_TRAPDOOR: Item = Item {
-        id: 805,
+        id: 806,
         registry_key: "acacia_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -371,7 +373,7 @@ impl Item {
         ],
     };
     pub const ACTIVATOR_RAIL: Item = Item {
-        id: 836,
+        id: 837,
         registry_key: "activator_rail",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -409,7 +411,7 @@ impl Item {
         ],
     };
     pub const ALLAY_SPAWN_EGG: Item = Item {
-        id: 1163,
+        id: 1164,
         registry_key: "allay_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -428,7 +430,7 @@ impl Item {
         ],
     };
     pub const ALLIUM: Item = Item {
-        id: 234,
+        id: 235,
         registry_key: "allium",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -466,7 +468,7 @@ impl Item {
         ],
     };
     pub const AMETHYST_CLUSTER: Item = Item {
-        id: 1418,
+        id: 1419,
         registry_key: "amethyst_cluster",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -485,7 +487,7 @@ impl Item {
         ],
     };
     pub const AMETHYST_SHARD: Item = Item {
-        id: 902,
+        id: 903,
         registry_key: "amethyst_shard",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -548,7 +550,7 @@ impl Item {
         ],
     };
     pub const ANDESITE_SLAB: Item = Item {
-        id: 708,
+        id: 709,
         registry_key: "andesite_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -567,7 +569,7 @@ impl Item {
         ],
     };
     pub const ANDESITE_STAIRS: Item = Item {
-        id: 691,
+        id: 692,
         registry_key: "andesite_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -586,7 +588,7 @@ impl Item {
         ],
     };
     pub const ANDESITE_WALL: Item = Item {
-        id: 466,
+        id: 467,
         registry_key: "andesite_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -605,7 +607,7 @@ impl Item {
         ],
     };
     pub const ANGLER_POTTERY_SHERD: Item = Item {
-        id: 1445,
+        id: 1446,
         registry_key: "angler_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -624,7 +626,7 @@ impl Item {
         ],
     };
     pub const ANVIL: Item = Item {
-        id: 478,
+        id: 479,
         registry_key: "anvil",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -643,7 +645,7 @@ impl Item {
         ],
     };
     pub const APPLE: Item = Item {
-        id: 893,
+        id: 894,
         registry_key: "apple",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -671,12 +673,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const ARCHER_POTTERY_SHERD: Item = Item {
-        id: 1446,
+        id: 1447,
         registry_key: "archer_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -695,7 +701,7 @@ impl Item {
         ],
     };
     pub const ARMADILLO_SCUTE: Item = Item {
-        id: 889,
+        id: 890,
         registry_key: "armadillo_scute",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -714,7 +720,7 @@ impl Item {
         ],
     };
     pub const ARMADILLO_SPAWN_EGG: Item = Item {
-        id: 1141,
+        id: 1142,
         registry_key: "armadillo_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -733,7 +739,7 @@ impl Item {
         ],
     };
     pub const ARMOR_STAND: Item = Item {
-        id: 1254,
+        id: 1255,
         registry_key: "armor_stand",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -752,7 +758,7 @@ impl Item {
         ],
     };
     pub const ARMS_UP_POTTERY_SHERD: Item = Item {
-        id: 1447,
+        id: 1448,
         registry_key: "arms_up_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -771,7 +777,7 @@ impl Item {
         ],
     };
     pub const ARROW: Item = Item {
-        id: 895,
+        id: 896,
         registry_key: "arrow",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -790,7 +796,7 @@ impl Item {
         ],
     };
     pub const AXOLOTL_BUCKET: Item = Item {
-        id: 1023,
+        id: 1024,
         registry_key: "axolotl_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -809,7 +815,7 @@ impl Item {
         ],
     };
     pub const AXOLOTL_SPAWN_EGG: Item = Item {
-        id: 1151,
+        id: 1152,
         registry_key: "axolotl_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -866,7 +872,7 @@ impl Item {
         ],
     };
     pub const AZURE_BLUET: Item = Item {
-        id: 235,
+        id: 236,
         registry_key: "azure_bluet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -885,7 +891,7 @@ impl Item {
         ],
     };
     pub const BAKED_POTATO: Item = Item {
-        id: 1229,
+        id: 1230,
         registry_key: "baked_potato",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -913,12 +919,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const BAMBOO: Item = Item {
-        id: 269,
+        id: 270,
         registry_key: "bamboo",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -956,7 +966,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_BUTTON: Item = Item {
-        id: 760,
+        id: 761,
         registry_key: "bamboo_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -975,7 +985,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_CHEST_RAFT: Item = Item {
-        id: 882,
+        id: 883,
         registry_key: "bamboo_chest_raft",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -994,7 +1004,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_DOOR: Item = Item {
-        id: 789,
+        id: 790,
         registry_key: "bamboo_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1013,7 +1023,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_FENCE: Item = Item {
-        id: 353,
+        id: 354,
         registry_key: "bamboo_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1032,7 +1042,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_FENCE_GATE: Item = Item {
-        id: 830,
+        id: 831,
         registry_key: "bamboo_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1051,7 +1061,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_HANGING_SIGN: Item = Item {
-        id: 1009,
+        id: 1010,
         registry_key: "bamboo_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -1089,7 +1099,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_MOSAIC_SLAB: Item = Item {
-        id: 280,
+        id: 281,
         registry_key: "bamboo_mosaic_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1108,7 +1118,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_MOSAIC_STAIRS: Item = Item {
-        id: 451,
+        id: 452,
         registry_key: "bamboo_mosaic_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1146,7 +1156,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_PRESSURE_PLATE: Item = Item {
-        id: 776,
+        id: 777,
         registry_key: "bamboo_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1165,7 +1175,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_RAFT: Item = Item {
-        id: 881,
+        id: 882,
         registry_key: "bamboo_raft",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -1184,7 +1194,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_SHELF: Item = Item {
-        id: 306,
+        id: 307,
         registry_key: "bamboo_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1203,7 +1213,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_SIGN: Item = Item {
-        id: 997,
+        id: 998,
         registry_key: "bamboo_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -1222,7 +1232,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_SLAB: Item = Item {
-        id: 279,
+        id: 280,
         registry_key: "bamboo_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1241,7 +1251,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_STAIRS: Item = Item {
-        id: 450,
+        id: 451,
         registry_key: "bamboo_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1260,7 +1270,7 @@ impl Item {
         ],
     };
     pub const BAMBOO_TRAPDOOR: Item = Item {
-        id: 810,
+        id: 811,
         registry_key: "bamboo_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1279,7 +1289,7 @@ impl Item {
         ],
     };
     pub const BARREL: Item = Item {
-        id: 1354,
+        id: 1355,
         registry_key: "barrel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1298,7 +1308,7 @@ impl Item {
         ],
     };
     pub const BARRIER: Item = Item {
-        id: 502,
+        id: 503,
         registry_key: "barrier",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1317,7 +1327,7 @@ impl Item {
         ],
     };
     pub const BASALT: Item = Item {
-        id: 362,
+        id: 363,
         registry_key: "basalt",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1336,7 +1346,7 @@ impl Item {
         ],
     };
     pub const BAT_SPAWN_EGG: Item = Item {
-        id: 1142,
+        id: 1143,
         registry_key: "bat_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1355,7 +1365,7 @@ impl Item {
         ],
     };
     pub const BEACON: Item = Item {
-        id: 455,
+        id: 456,
         registry_key: "beacon",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1393,7 +1403,7 @@ impl Item {
         ],
     };
     pub const BEE_NEST: Item = Item {
-        id: 1379,
+        id: 1380,
         registry_key: "bee_nest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1412,7 +1422,7 @@ impl Item {
         ],
     };
     pub const BEE_SPAWN_EGG: Item = Item {
-        id: 1143,
+        id: 1144,
         registry_key: "bee_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1431,7 +1441,7 @@ impl Item {
         ],
     };
     pub const BEEF: Item = Item {
-        id: 1110,
+        id: 1111,
         registry_key: "beef",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1459,12 +1469,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const BEEHIVE: Item = Item {
-        id: 1380,
+        id: 1381,
         registry_key: "beehive",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1483,7 +1497,7 @@ impl Item {
         ],
     };
     pub const BEETROOT: Item = Item {
-        id: 1287,
+        id: 1288,
         registry_key: "beetroot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1511,12 +1525,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const BEETROOT_SEEDS: Item = Item {
-        id: 1288,
+        id: 1289,
         registry_key: "beetroot_seeds",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1535,7 +1553,7 @@ impl Item {
         ],
     };
     pub const BEETROOT_SOUP: Item = Item {
-        id: 1289,
+        id: 1290,
         registry_key: "beetroot_soup",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -1563,12 +1581,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const BELL: Item = Item {
-        id: 1362,
+        id: 1363,
         registry_key: "bell",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1587,7 +1609,7 @@ impl Item {
         ],
     };
     pub const BIG_DRIPLEAF: Item = Item {
-        id: 267,
+        id: 268,
         registry_key: "big_dripleaf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1606,7 +1628,7 @@ impl Item {
         ],
     };
     pub const BIRCH_BOAT: Item = Item {
-        id: 867,
+        id: 868,
         registry_key: "birch_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -1625,7 +1647,7 @@ impl Item {
         ],
     };
     pub const BIRCH_BUTTON: Item = Item {
-        id: 753,
+        id: 754,
         registry_key: "birch_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1644,7 +1666,7 @@ impl Item {
         ],
     };
     pub const BIRCH_CHEST_BOAT: Item = Item {
-        id: 868,
+        id: 869,
         registry_key: "birch_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -1663,7 +1685,7 @@ impl Item {
         ],
     };
     pub const BIRCH_DOOR: Item = Item {
-        id: 782,
+        id: 783,
         registry_key: "birch_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1682,7 +1704,7 @@ impl Item {
         ],
     };
     pub const BIRCH_FENCE: Item = Item {
-        id: 346,
+        id: 347,
         registry_key: "birch_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1701,7 +1723,7 @@ impl Item {
         ],
     };
     pub const BIRCH_FENCE_GATE: Item = Item {
-        id: 823,
+        id: 824,
         registry_key: "birch_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1720,7 +1742,7 @@ impl Item {
         ],
     };
     pub const BIRCH_HANGING_SIGN: Item = Item {
-        id: 1002,
+        id: 1003,
         registry_key: "birch_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -1796,7 +1818,7 @@ impl Item {
         ],
     };
     pub const BIRCH_PRESSURE_PLATE: Item = Item {
-        id: 769,
+        id: 770,
         registry_key: "birch_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1834,7 +1856,7 @@ impl Item {
         ],
     };
     pub const BIRCH_SHELF: Item = Item {
-        id: 307,
+        id: 308,
         registry_key: "birch_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1853,7 +1875,7 @@ impl Item {
         ],
     };
     pub const BIRCH_SIGN: Item = Item {
-        id: 990,
+        id: 991,
         registry_key: "birch_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -1872,7 +1894,7 @@ impl Item {
         ],
     };
     pub const BIRCH_SLAB: Item = Item {
-        id: 272,
+        id: 273,
         registry_key: "birch_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1891,7 +1913,7 @@ impl Item {
         ],
     };
     pub const BIRCH_STAIRS: Item = Item {
-        id: 443,
+        id: 444,
         registry_key: "birch_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1910,7 +1932,7 @@ impl Item {
         ],
     };
     pub const BIRCH_TRAPDOOR: Item = Item {
-        id: 803,
+        id: 804,
         registry_key: "birch_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -1948,7 +1970,7 @@ impl Item {
         ],
     };
     pub const BLACK_BANNER: Item = Item {
-        id: 1281,
+        id: 1282,
         registry_key: "black_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -1967,7 +1989,7 @@ impl Item {
         ],
     };
     pub const BLACK_BED: Item = Item {
-        id: 1101,
+        id: 1102,
         registry_key: "black_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -1986,7 +2008,7 @@ impl Item {
         ],
     };
     pub const BLACK_BUNDLE: Item = Item {
-        id: 1052,
+        id: 1053,
         registry_key: "black_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2005,7 +2027,7 @@ impl Item {
         ],
     };
     pub const BLACK_CANDLE: Item = Item {
-        id: 1414,
+        id: 1415,
         registry_key: "black_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2024,7 +2046,7 @@ impl Item {
         ],
     };
     pub const BLACK_CARPET: Item = Item {
-        id: 520,
+        id: 521,
         registry_key: "black_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2044,25 +2066,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:black_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:black_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const BLACK_CONCRETE: Item = Item {
-        id: 629,
+        id: 630,
         registry_key: "black_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2081,7 +2103,7 @@ impl Item {
         ],
     };
     pub const BLACK_CONCRETE_POWDER: Item = Item {
-        id: 645,
+        id: 646,
         registry_key: "black_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2100,7 +2122,7 @@ impl Item {
         ],
     };
     pub const BLACK_DYE: Item = Item {
-        id: 1081,
+        id: 1082,
         registry_key: "black_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2119,7 +2141,7 @@ impl Item {
         ],
     };
     pub const BLACK_GLAZED_TERRACOTTA: Item = Item {
-        id: 613,
+        id: 614,
         registry_key: "black_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2138,7 +2160,7 @@ impl Item {
         ],
     };
     pub const BLACK_HARNESS: Item = Item {
-        id: 853,
+        id: 854,
         registry_key: "black_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2158,24 +2180,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:black_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:black_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const BLACK_SHULKER_BOX: Item = Item {
-        id: 597,
+        id: 598,
         registry_key: "black_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2194,7 +2214,7 @@ impl Item {
         ],
     };
     pub const BLACK_STAINED_GLASS: Item = Item {
-        id: 545,
+        id: 546,
         registry_key: "black_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2213,7 +2233,7 @@ impl Item {
         ],
     };
     pub const BLACK_STAINED_GLASS_PANE: Item = Item {
-        id: 561,
+        id: 562,
         registry_key: "black_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2232,7 +2252,7 @@ impl Item {
         ],
     };
     pub const BLACK_TERRACOTTA: Item = Item {
-        id: 501,
+        id: 502,
         registry_key: "black_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2270,7 +2290,7 @@ impl Item {
         ],
     };
     pub const BLACKSTONE: Item = Item {
-        id: 1385,
+        id: 1386,
         registry_key: "blackstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2289,7 +2309,7 @@ impl Item {
         ],
     };
     pub const BLACKSTONE_SLAB: Item = Item {
-        id: 1386,
+        id: 1387,
         registry_key: "blackstone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2308,7 +2328,7 @@ impl Item {
         ],
     };
     pub const BLACKSTONE_STAIRS: Item = Item {
-        id: 1387,
+        id: 1388,
         registry_key: "blackstone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2327,7 +2347,7 @@ impl Item {
         ],
     };
     pub const BLACKSTONE_WALL: Item = Item {
-        id: 471,
+        id: 472,
         registry_key: "blackstone_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2346,7 +2366,7 @@ impl Item {
         ],
     };
     pub const BLADE_POTTERY_SHERD: Item = Item {
-        id: 1448,
+        id: 1449,
         registry_key: "blade_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2365,7 +2385,7 @@ impl Item {
         ],
     };
     pub const BLAST_FURNACE: Item = Item {
-        id: 1356,
+        id: 1357,
         registry_key: "blast_furnace",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2384,7 +2404,7 @@ impl Item {
         ],
     };
     pub const BLAZE_POWDER: Item = Item {
-        id: 1124,
+        id: 1125,
         registry_key: "blaze_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2403,7 +2423,7 @@ impl Item {
         ],
     };
     pub const BLAZE_ROD: Item = Item {
-        id: 1116,
+        id: 1117,
         registry_key: "blaze_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2422,7 +2442,7 @@ impl Item {
         ],
     };
     pub const BLAZE_SPAWN_EGG: Item = Item {
-        id: 1203,
+        id: 1204,
         registry_key: "blaze_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2441,7 +2461,7 @@ impl Item {
         ],
     };
     pub const BLUE_BANNER: Item = Item {
-        id: 1277,
+        id: 1278,
         registry_key: "blue_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -2460,7 +2480,7 @@ impl Item {
         ],
     };
     pub const BLUE_BED: Item = Item {
-        id: 1097,
+        id: 1098,
         registry_key: "blue_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2479,7 +2499,7 @@ impl Item {
         ],
     };
     pub const BLUE_BUNDLE: Item = Item {
-        id: 1048,
+        id: 1049,
         registry_key: "blue_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2498,7 +2518,7 @@ impl Item {
         ],
     };
     pub const BLUE_CANDLE: Item = Item {
-        id: 1410,
+        id: 1411,
         registry_key: "blue_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2517,7 +2537,7 @@ impl Item {
         ],
     };
     pub const BLUE_CARPET: Item = Item {
-        id: 516,
+        id: 517,
         registry_key: "blue_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2537,25 +2557,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:blue_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:blue_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const BLUE_CONCRETE: Item = Item {
-        id: 625,
+        id: 626,
         registry_key: "blue_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2574,7 +2594,7 @@ impl Item {
         ],
     };
     pub const BLUE_CONCRETE_POWDER: Item = Item {
-        id: 641,
+        id: 642,
         registry_key: "blue_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2593,7 +2613,7 @@ impl Item {
         ],
     };
     pub const BLUE_DYE: Item = Item {
-        id: 1077,
+        id: 1078,
         registry_key: "blue_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2612,7 +2632,7 @@ impl Item {
         ],
     };
     pub const BLUE_EGG: Item = Item {
-        id: 1032,
+        id: 1033,
         registry_key: "blue_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -2631,7 +2651,7 @@ impl Item {
         ],
     };
     pub const BLUE_GLAZED_TERRACOTTA: Item = Item {
-        id: 609,
+        id: 610,
         registry_key: "blue_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2650,7 +2670,7 @@ impl Item {
         ],
     };
     pub const BLUE_HARNESS: Item = Item {
-        id: 849,
+        id: 850,
         registry_key: "blue_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2670,24 +2690,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:blue_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:blue_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const BLUE_ICE: Item = Item {
-        id: 679,
+        id: 680,
         registry_key: "blue_ice",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2706,7 +2724,7 @@ impl Item {
         ],
     };
     pub const BLUE_ORCHID: Item = Item {
-        id: 233,
+        id: 234,
         registry_key: "blue_orchid",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2725,7 +2743,7 @@ impl Item {
         ],
     };
     pub const BLUE_SHULKER_BOX: Item = Item {
-        id: 593,
+        id: 594,
         registry_key: "blue_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2744,7 +2762,7 @@ impl Item {
         ],
     };
     pub const BLUE_STAINED_GLASS: Item = Item {
-        id: 541,
+        id: 542,
         registry_key: "blue_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2763,7 +2781,7 @@ impl Item {
         ],
     };
     pub const BLUE_STAINED_GLASS_PANE: Item = Item {
-        id: 557,
+        id: 558,
         registry_key: "blue_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2782,7 +2800,7 @@ impl Item {
         ],
     };
     pub const BLUE_TERRACOTTA: Item = Item {
-        id: 497,
+        id: 498,
         registry_key: "blue_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2820,7 +2838,7 @@ impl Item {
         ],
     };
     pub const BOGGED_SPAWN_EGG: Item = Item {
-        id: 1172,
+        id: 1173,
         registry_key: "bogged_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2839,7 +2857,7 @@ impl Item {
         ],
     };
     pub const BOLT_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1444,
+        id: 1445,
         registry_key: "bolt_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2858,7 +2876,7 @@ impl Item {
         ],
     };
     pub const BONE: Item = Item {
-        id: 1083,
+        id: 1084,
         registry_key: "bone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2877,7 +2895,7 @@ impl Item {
         ],
     };
     pub const BONE_BLOCK: Item = Item {
-        id: 579,
+        id: 580,
         registry_key: "bone_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2896,7 +2914,7 @@ impl Item {
         ],
     };
     pub const BONE_MEAL: Item = Item {
-        id: 1082,
+        id: 1083,
         registry_key: "bone_meal",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2915,7 +2933,7 @@ impl Item {
         ],
     };
     pub const BOOK: Item = Item {
-        id: 1029,
+        id: 1030,
         registry_key: "book",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2934,7 +2952,7 @@ impl Item {
         ],
     };
     pub const BOOKSHELF: Item = Item {
-        id: 317,
+        id: 318,
         registry_key: "bookshelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -2953,7 +2971,7 @@ impl Item {
         ],
     };
     pub const BORDURE_INDENTED_BANNER_PATTERN: Item = Item {
-        id: 1351,
+        id: 1352,
         registry_key: "bordure_indented_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2972,7 +2990,7 @@ impl Item {
         ],
     };
     pub const BOW: Item = Item {
-        id: 894,
+        id: 895,
         registry_key: "bow",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -2993,7 +3011,7 @@ impl Item {
         ],
     };
     pub const BOWL: Item = Item {
-        id: 892,
+        id: 893,
         registry_key: "bowl",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3012,7 +3030,7 @@ impl Item {
         ],
     };
     pub const BRAIN_CORAL: Item = Item {
-        id: 660,
+        id: 661,
         registry_key: "brain_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3031,7 +3049,7 @@ impl Item {
         ],
     };
     pub const BRAIN_CORAL_BLOCK: Item = Item {
-        id: 655,
+        id: 656,
         registry_key: "brain_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3050,7 +3068,7 @@ impl Item {
         ],
     };
     pub const BRAIN_CORAL_FAN: Item = Item {
-        id: 670,
+        id: 671,
         registry_key: "brain_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3069,7 +3087,7 @@ impl Item {
         ],
     };
     pub const BREAD: Item = Item {
-        id: 953,
+        id: 954,
         registry_key: "bread",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3097,12 +3115,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const BREEZE_ROD: Item = Item {
-        id: 1222,
+        id: 1223,
         registry_key: "breeze_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3121,7 +3143,7 @@ impl Item {
         ],
     };
     pub const BREEZE_SPAWN_EGG: Item = Item {
-        id: 1188,
+        id: 1189,
         registry_key: "breeze_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3140,7 +3162,7 @@ impl Item {
         ],
     };
     pub const BREWER_POTTERY_SHERD: Item = Item {
-        id: 1449,
+        id: 1450,
         registry_key: "brewer_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3159,7 +3181,7 @@ impl Item {
         ],
     };
     pub const BREWING_STAND: Item = Item {
-        id: 1126,
+        id: 1127,
         registry_key: "brewing_stand",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3178,7 +3200,7 @@ impl Item {
         ],
     };
     pub const BRICK: Item = Item {
-        id: 1025,
+        id: 1026,
         registry_key: "brick",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3197,7 +3219,7 @@ impl Item {
         ],
     };
     pub const BRICK_SLAB: Item = Item {
-        id: 289,
+        id: 290,
         registry_key: "brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3216,7 +3238,7 @@ impl Item {
         ],
     };
     pub const BRICK_STAIRS: Item = Item {
-        id: 419,
+        id: 420,
         registry_key: "brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3235,7 +3257,7 @@ impl Item {
         ],
     };
     pub const BRICK_WALL: Item = Item {
-        id: 458,
+        id: 459,
         registry_key: "brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3254,7 +3276,7 @@ impl Item {
         ],
     };
     pub const BRICKS: Item = Item {
-        id: 304,
+        id: 305,
         registry_key: "bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3273,7 +3295,7 @@ impl Item {
         ],
     };
     pub const BROWN_BANNER: Item = Item {
-        id: 1278,
+        id: 1279,
         registry_key: "brown_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -3292,7 +3314,7 @@ impl Item {
         ],
     };
     pub const BROWN_BED: Item = Item {
-        id: 1098,
+        id: 1099,
         registry_key: "brown_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -3311,7 +3333,7 @@ impl Item {
         ],
     };
     pub const BROWN_BUNDLE: Item = Item {
-        id: 1049,
+        id: 1050,
         registry_key: "brown_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -3330,7 +3352,7 @@ impl Item {
         ],
     };
     pub const BROWN_CANDLE: Item = Item {
-        id: 1411,
+        id: 1412,
         registry_key: "brown_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3349,7 +3371,7 @@ impl Item {
         ],
     };
     pub const BROWN_CARPET: Item = Item {
-        id: 517,
+        id: 518,
         registry_key: "brown_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3369,25 +3391,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:brown_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:brown_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const BROWN_CONCRETE: Item = Item {
-        id: 626,
+        id: 627,
         registry_key: "brown_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3406,7 +3428,7 @@ impl Item {
         ],
     };
     pub const BROWN_CONCRETE_POWDER: Item = Item {
-        id: 642,
+        id: 643,
         registry_key: "brown_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3425,7 +3447,7 @@ impl Item {
         ],
     };
     pub const BROWN_DYE: Item = Item {
-        id: 1078,
+        id: 1079,
         registry_key: "brown_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3444,7 +3466,7 @@ impl Item {
         ],
     };
     pub const BROWN_EGG: Item = Item {
-        id: 1033,
+        id: 1034,
         registry_key: "brown_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -3463,7 +3485,7 @@ impl Item {
         ],
     };
     pub const BROWN_GLAZED_TERRACOTTA: Item = Item {
-        id: 610,
+        id: 611,
         registry_key: "brown_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3482,7 +3504,7 @@ impl Item {
         ],
     };
     pub const BROWN_HARNESS: Item = Item {
-        id: 850,
+        id: 851,
         registry_key: "brown_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -3502,24 +3524,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:brown_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:brown_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const BROWN_MUSHROOM: Item = Item {
-        id: 247,
+        id: 248,
         registry_key: "brown_mushroom",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3538,7 +3558,7 @@ impl Item {
         ],
     };
     pub const BROWN_MUSHROOM_BLOCK: Item = Item {
-        id: 387,
+        id: 388,
         registry_key: "brown_mushroom_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3557,7 +3577,7 @@ impl Item {
         ],
     };
     pub const BROWN_SHULKER_BOX: Item = Item {
-        id: 594,
+        id: 595,
         registry_key: "brown_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -3576,7 +3596,7 @@ impl Item {
         ],
     };
     pub const BROWN_STAINED_GLASS: Item = Item {
-        id: 542,
+        id: 543,
         registry_key: "brown_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3595,7 +3615,7 @@ impl Item {
         ],
     };
     pub const BROWN_STAINED_GLASS_PANE: Item = Item {
-        id: 558,
+        id: 559,
         registry_key: "brown_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3614,7 +3634,7 @@ impl Item {
         ],
     };
     pub const BROWN_TERRACOTTA: Item = Item {
-        id: 498,
+        id: 499,
         registry_key: "brown_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3652,7 +3672,7 @@ impl Item {
         ],
     };
     pub const BRUSH: Item = Item {
-        id: 1425,
+        id: 1426,
         registry_key: "brush",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -3673,7 +3693,7 @@ impl Item {
         ],
     };
     pub const BUBBLE_CORAL: Item = Item {
-        id: 661,
+        id: 662,
         registry_key: "bubble_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3692,7 +3712,7 @@ impl Item {
         ],
     };
     pub const BUBBLE_CORAL_BLOCK: Item = Item {
-        id: 656,
+        id: 657,
         registry_key: "bubble_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3711,7 +3731,7 @@ impl Item {
         ],
     };
     pub const BUBBLE_CORAL_FAN: Item = Item {
-        id: 671,
+        id: 672,
         registry_key: "bubble_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3730,7 +3750,7 @@ impl Item {
         ],
     };
     pub const BUCKET: Item = Item {
-        id: 1012,
+        id: 1013,
         registry_key: "bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -3768,7 +3788,7 @@ impl Item {
         ],
     };
     pub const BUNDLE: Item = Item {
-        id: 1036,
+        id: 1037,
         registry_key: "bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -3787,7 +3807,7 @@ impl Item {
         ],
     };
     pub const BURN_POTTERY_SHERD: Item = Item {
-        id: 1450,
+        id: 1451,
         registry_key: "burn_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3825,7 +3845,7 @@ impl Item {
         ],
     };
     pub const CACTUS: Item = Item {
-        id: 340,
+        id: 341,
         registry_key: "cactus",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3844,7 +3864,7 @@ impl Item {
         ],
     };
     pub const CACTUS_FLOWER: Item = Item {
-        id: 341,
+        id: 342,
         registry_key: "cactus_flower",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3863,7 +3883,7 @@ impl Item {
         ],
     };
     pub const CAKE: Item = Item {
-        id: 1085,
+        id: 1086,
         registry_key: "cake",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -3901,7 +3921,7 @@ impl Item {
         ],
     };
     pub const CALIBRATED_SCULK_SENSOR: Item = Item {
-        id: 743,
+        id: 744,
         registry_key: "calibrated_sculk_sensor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3920,7 +3940,7 @@ impl Item {
         ],
     };
     pub const CAMEL_HUSK_SPAWN_EGG: Item = Item {
-        id: 1173,
+        id: 1174,
         registry_key: "camel_husk_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3939,7 +3959,7 @@ impl Item {
         ],
     };
     pub const CAMEL_SPAWN_EGG: Item = Item {
-        id: 1134,
+        id: 1135,
         registry_key: "camel_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3958,7 +3978,7 @@ impl Item {
         ],
     };
     pub const CAMPFIRE: Item = Item {
-        id: 1375,
+        id: 1376,
         registry_key: "campfire",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3977,7 +3997,7 @@ impl Item {
         ],
     };
     pub const CANDLE: Item = Item {
-        id: 1398,
+        id: 1399,
         registry_key: "candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -3996,7 +4016,7 @@ impl Item {
         ],
     };
     pub const CARROT: Item = Item {
-        id: 1227,
+        id: 1228,
         registry_key: "carrot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4024,12 +4044,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const CARROT_ON_A_STICK: Item = Item {
-        id: 859,
+        id: 860,
         registry_key: "carrot_on_a_stick",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -4050,7 +4074,7 @@ impl Item {
         ],
     };
     pub const CARTOGRAPHY_TABLE: Item = Item {
-        id: 1357,
+        id: 1358,
         registry_key: "cartography_table",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4069,7 +4093,7 @@ impl Item {
         ],
     };
     pub const CARVED_PUMPKIN: Item = Item {
-        id: 357,
+        id: 358,
         registry_key: "carved_pumpkin",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4095,22 +4119,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
-                    camera_overlay: Some("minecraft:misc/pumpkinblur"),
+                    camera_overlay: Some(Cow::Borrowed("minecraft:misc/pumpkinblur")),
                     allowed_entities: None,
                     dispensable: true,
                     swappable: false,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const CAT_SPAWN_EGG: Item = Item {
-        id: 1138,
+        id: 1139,
         registry_key: "cat_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4129,7 +4153,7 @@ impl Item {
         ],
     };
     pub const CAULDRON: Item = Item {
-        id: 1127,
+        id: 1128,
         registry_key: "cauldron",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4148,7 +4172,7 @@ impl Item {
         ],
     };
     pub const CAVE_SPIDER_SPAWN_EGG: Item = Item {
-        id: 1186,
+        id: 1187,
         registry_key: "cave_spider_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4167,7 +4191,7 @@ impl Item {
         ],
     };
     pub const CHAIN_COMMAND_BLOCK: Item = Item {
-        id: 574,
+        id: 575,
         registry_key: "chain_command_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4186,7 +4210,7 @@ impl Item {
         ],
     };
     pub const CHAINMAIL_BOOTS: Item = Item {
-        id: 965,
+        id: 966,
         registry_key: "chainmail_boots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -4223,8 +4247,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::FEET,
-                    equip_sound: "minecraft:item.armor.equip_chain",
-                    asset_id: Some("minecraft:chainmail"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipChain),
+                    asset_id: Some(Cow::Borrowed("minecraft:chainmail")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -4232,13 +4256,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const CHAINMAIL_CHESTPLATE: Item = Item {
-        id: 963,
+        id: 964,
         registry_key: "chainmail_chestplate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -4275,8 +4299,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
-                    equip_sound: "minecraft:item.armor.equip_chain",
-                    asset_id: Some("minecraft:chainmail"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipChain),
+                    asset_id: Some(Cow::Borrowed("minecraft:chainmail")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -4284,13 +4308,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const CHAINMAIL_HELMET: Item = Item {
-        id: 962,
+        id: 963,
         registry_key: "chainmail_helmet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -4327,8 +4351,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "minecraft:item.armor.equip_chain",
-                    asset_id: Some("minecraft:chainmail"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipChain),
+                    asset_id: Some(Cow::Borrowed("minecraft:chainmail")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -4336,13 +4360,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const CHAINMAIL_LEGGINGS: Item = Item {
-        id: 964,
+        id: 965,
         registry_key: "chainmail_leggings",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -4379,8 +4403,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::LEGS,
-                    equip_sound: "minecraft:item.armor.equip_chain",
-                    asset_id: Some("minecraft:chainmail"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipChain),
+                    asset_id: Some(Cow::Borrowed("minecraft:chainmail")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -4388,13 +4412,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const CHARCOAL: Item = Item {
-        id: 897,
+        id: 898,
         registry_key: "charcoal",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4413,7 +4437,7 @@ impl Item {
         ],
     };
     pub const CHERRY_BOAT: Item = Item {
-        id: 873,
+        id: 874,
         registry_key: "cherry_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -4432,7 +4456,7 @@ impl Item {
         ],
     };
     pub const CHERRY_BUTTON: Item = Item {
-        id: 756,
+        id: 757,
         registry_key: "cherry_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4451,7 +4475,7 @@ impl Item {
         ],
     };
     pub const CHERRY_CHEST_BOAT: Item = Item {
-        id: 874,
+        id: 875,
         registry_key: "cherry_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -4470,7 +4494,7 @@ impl Item {
         ],
     };
     pub const CHERRY_DOOR: Item = Item {
-        id: 785,
+        id: 786,
         registry_key: "cherry_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4489,7 +4513,7 @@ impl Item {
         ],
     };
     pub const CHERRY_FENCE: Item = Item {
-        id: 349,
+        id: 350,
         registry_key: "cherry_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4508,7 +4532,7 @@ impl Item {
         ],
     };
     pub const CHERRY_FENCE_GATE: Item = Item {
-        id: 826,
+        id: 827,
         registry_key: "cherry_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4527,7 +4551,7 @@ impl Item {
         ],
     };
     pub const CHERRY_HANGING_SIGN: Item = Item {
-        id: 1005,
+        id: 1006,
         registry_key: "cherry_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -4603,7 +4627,7 @@ impl Item {
         ],
     };
     pub const CHERRY_PRESSURE_PLATE: Item = Item {
-        id: 772,
+        id: 773,
         registry_key: "cherry_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4641,7 +4665,7 @@ impl Item {
         ],
     };
     pub const CHERRY_SHELF: Item = Item {
-        id: 308,
+        id: 309,
         registry_key: "cherry_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4660,7 +4684,7 @@ impl Item {
         ],
     };
     pub const CHERRY_SIGN: Item = Item {
-        id: 993,
+        id: 994,
         registry_key: "cherry_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -4679,7 +4703,7 @@ impl Item {
         ],
     };
     pub const CHERRY_SLAB: Item = Item {
-        id: 275,
+        id: 276,
         registry_key: "cherry_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4698,7 +4722,7 @@ impl Item {
         ],
     };
     pub const CHERRY_STAIRS: Item = Item {
-        id: 446,
+        id: 447,
         registry_key: "cherry_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4717,7 +4741,7 @@ impl Item {
         ],
     };
     pub const CHERRY_TRAPDOOR: Item = Item {
-        id: 806,
+        id: 807,
         registry_key: "cherry_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4755,7 +4779,7 @@ impl Item {
         ],
     };
     pub const CHEST: Item = Item {
-        id: 331,
+        id: 332,
         registry_key: "chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4774,7 +4798,7 @@ impl Item {
         ],
     };
     pub const CHEST_MINECART: Item = Item {
-        id: 855,
+        id: 856,
         registry_key: "chest_minecart",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -4793,7 +4817,7 @@ impl Item {
         ],
     };
     pub const CHICKEN: Item = Item {
-        id: 1112,
+        id: 1113,
         registry_key: "chicken",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4821,12 +4845,26 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[ConsumeEffect::ApplyEffects((
+                        Cow::Borrowed(&[StatusEffectInstance {
+                            effect_id: Cow::Borrowed("minecraft:hunger"),
+                            amplifier: 0i32,
+                            duration: 600i32,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                        }]),
+                        0.3f32,
+                    ))]),
                 },
             ),
         ],
     };
     pub const CHICKEN_SPAWN_EGG: Item = Item {
-        id: 1130,
+        id: 1131,
         registry_key: "chicken_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4845,7 +4883,7 @@ impl Item {
         ],
     };
     pub const CHIPPED_ANVIL: Item = Item {
-        id: 479,
+        id: 480,
         registry_key: "chipped_anvil",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4864,7 +4902,7 @@ impl Item {
         ],
     };
     pub const CHISELED_BOOKSHELF: Item = Item {
-        id: 318,
+        id: 319,
         registry_key: "chiseled_bookshelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4902,7 +4940,7 @@ impl Item {
         ],
     };
     pub const CHISELED_DEEPSLATE: Item = Item {
-        id: 385,
+        id: 386,
         registry_key: "chiseled_deepslate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4921,7 +4959,7 @@ impl Item {
         ],
     };
     pub const CHISELED_NETHER_BRICKS: Item = Item {
-        id: 426,
+        id: 427,
         registry_key: "chiseled_nether_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4940,7 +4978,7 @@ impl Item {
         ],
     };
     pub const CHISELED_POLISHED_BLACKSTONE: Item = Item {
-        id: 1392,
+        id: 1393,
         registry_key: "chiseled_polished_blackstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4959,7 +4997,7 @@ impl Item {
         ],
     };
     pub const CHISELED_QUARTZ_BLOCK: Item = Item {
-        id: 481,
+        id: 482,
         registry_key: "chiseled_quartz_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4978,7 +5016,7 @@ impl Item {
         ],
     };
     pub const CHISELED_RED_SANDSTONE: Item = Item {
-        id: 570,
+        id: 571,
         registry_key: "chiseled_red_sandstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -4997,7 +5035,7 @@ impl Item {
         ],
     };
     pub const CHISELED_RESIN_BRICKS: Item = Item {
-        id: 418,
+        id: 419,
         registry_key: "chiseled_resin_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5035,7 +5073,7 @@ impl Item {
         ],
     };
     pub const CHISELED_STONE_BRICKS: Item = Item {
-        id: 378,
+        id: 379,
         registry_key: "chiseled_stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5092,7 +5130,7 @@ impl Item {
         ],
     };
     pub const CHORUS_FLOWER: Item = Item {
-        id: 325,
+        id: 326,
         registry_key: "chorus_flower",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5111,7 +5149,7 @@ impl Item {
         ],
     };
     pub const CHORUS_FRUIT: Item = Item {
-        id: 1283,
+        id: 1284,
         registry_key: "chorus_fruit",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5139,12 +5177,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[ConsumeEffect::TeleportRandomly(16f32)]),
                 },
             ),
         ],
     };
     pub const CHORUS_PLANT: Item = Item {
-        id: 324,
+        id: 325,
         registry_key: "chorus_plant",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5163,7 +5205,7 @@ impl Item {
         ],
     };
     pub const CLAY: Item = Item {
-        id: 342,
+        id: 343,
         registry_key: "clay",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5182,7 +5224,7 @@ impl Item {
         ],
     };
     pub const CLAY_BALL: Item = Item {
-        id: 1026,
+        id: 1027,
         registry_key: "clay_ball",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5201,7 +5243,7 @@ impl Item {
         ],
     };
     pub const CLOCK: Item = Item {
-        id: 1054,
+        id: 1055,
         registry_key: "clock",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5220,7 +5262,7 @@ impl Item {
         ],
     };
     pub const CLOSED_EYEBLOSSOM: Item = Item {
-        id: 231,
+        id: 232,
         registry_key: "closed_eyeblossom",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5239,7 +5281,7 @@ impl Item {
         ],
     };
     pub const COAL: Item = Item {
-        id: 896,
+        id: 897,
         registry_key: "coal",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5315,7 +5357,7 @@ impl Item {
         ],
     };
     pub const COAST_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1429,
+        id: 1430,
         registry_key: "coast_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5353,7 +5395,7 @@ impl Item {
         ],
     };
     pub const COBBLED_DEEPSLATE_SLAB: Item = Item {
-        id: 712,
+        id: 713,
         registry_key: "cobbled_deepslate_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5372,7 +5414,7 @@ impl Item {
         ],
     };
     pub const COBBLED_DEEPSLATE_STAIRS: Item = Item {
-        id: 695,
+        id: 696,
         registry_key: "cobbled_deepslate_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5391,7 +5433,7 @@ impl Item {
         ],
     };
     pub const COBBLED_DEEPSLATE_WALL: Item = Item {
-        id: 474,
+        id: 475,
         registry_key: "cobbled_deepslate_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5429,7 +5471,7 @@ impl Item {
         ],
     };
     pub const COBBLESTONE_SLAB: Item = Item {
-        id: 288,
+        id: 289,
         registry_key: "cobblestone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5448,7 +5490,7 @@ impl Item {
         ],
     };
     pub const COBBLESTONE_STAIRS: Item = Item {
-        id: 336,
+        id: 337,
         registry_key: "cobblestone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5467,7 +5509,7 @@ impl Item {
         ],
     };
     pub const COBBLESTONE_WALL: Item = Item {
-        id: 456,
+        id: 457,
         registry_key: "cobblestone_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5505,7 +5547,7 @@ impl Item {
         ],
     };
     pub const COCOA_BEANS: Item = Item {
-        id: 1065,
+        id: 1066,
         registry_key: "cocoa_beans",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5524,7 +5566,7 @@ impl Item {
         ],
     };
     pub const COD: Item = Item {
-        id: 1057,
+        id: 1058,
         registry_key: "cod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5552,12 +5594,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COD_BUCKET: Item = Item {
-        id: 1021,
+        id: 1022,
         registry_key: "cod_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -5584,7 +5630,7 @@ impl Item {
         ],
     };
     pub const COD_SPAWN_EGG: Item = Item {
-        id: 1152,
+        id: 1153,
         registry_key: "cod_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5603,7 +5649,7 @@ impl Item {
         ],
     };
     pub const COMMAND_BLOCK: Item = Item {
-        id: 454,
+        id: 455,
         registry_key: "command_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5622,7 +5668,7 @@ impl Item {
         ],
     };
     pub const COMMAND_BLOCK_MINECART: Item = Item {
-        id: 1263,
+        id: 1264,
         registry_key: "command_block_minecart",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -5641,7 +5687,7 @@ impl Item {
         ],
     };
     pub const COMPARATOR: Item = Item {
-        id: 721,
+        id: 722,
         registry_key: "comparator",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5660,7 +5706,7 @@ impl Item {
         ],
     };
     pub const COMPASS: Item = Item {
-        id: 1034,
+        id: 1035,
         registry_key: "compass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5679,7 +5725,7 @@ impl Item {
         ],
     };
     pub const COMPOSTER: Item = Item {
-        id: 1353,
+        id: 1354,
         registry_key: "composter",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5698,7 +5744,7 @@ impl Item {
         ],
     };
     pub const CONDUIT: Item = Item {
-        id: 680,
+        id: 681,
         registry_key: "conduit",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5717,7 +5763,7 @@ impl Item {
         ],
     };
     pub const COOKED_BEEF: Item = Item {
-        id: 1111,
+        id: 1112,
         registry_key: "cooked_beef",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5745,12 +5791,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COOKED_CHICKEN: Item = Item {
-        id: 1113,
+        id: 1114,
         registry_key: "cooked_chicken",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5778,12 +5828,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COOKED_COD: Item = Item {
-        id: 1061,
+        id: 1062,
         registry_key: "cooked_cod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5811,12 +5865,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COOKED_MUTTON: Item = Item {
-        id: 1265,
+        id: 1266,
         registry_key: "cooked_mutton",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5844,12 +5902,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COOKED_PORKCHOP: Item = Item {
-        id: 984,
+        id: 985,
         registry_key: "cooked_porkchop",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5877,12 +5939,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COOKED_RABBIT: Item = Item {
-        id: 1250,
+        id: 1251,
         registry_key: "cooked_rabbit",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5910,12 +5976,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COOKED_SALMON: Item = Item {
-        id: 1062,
+        id: 1063,
         registry_key: "cooked_salmon",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5943,12 +6013,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COOKIE: Item = Item {
-        id: 1102,
+        id: 1103,
         registry_key: "cookie",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -5976,12 +6050,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const COPPER_AXE: Item = Item {
-        id: 919,
+        id: 920,
         registry_key: "copper_axe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6019,12 +6097,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_COPPER_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_copper_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_AXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/axe")),
                             speed: Some(5f32),
                             correct_for_drops: Some(true),
                         },
@@ -6043,7 +6121,7 @@ impl Item {
         ],
     };
     pub const COPPER_BARS: Item = Item {
-        id: 391,
+        id: 392,
         registry_key: "copper_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6081,7 +6159,7 @@ impl Item {
         ],
     };
     pub const COPPER_BOOTS: Item = Item {
-        id: 961,
+        id: 962,
         registry_key: "copper_boots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6118,8 +6196,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::FEET,
-                    equip_sound: "minecraft:item.armor.equip_copper",
-                    asset_id: Some("minecraft:copper"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipCopper),
+                    asset_id: Some(Cow::Borrowed("minecraft:copper")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -6127,13 +6205,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const COPPER_BULB: Item = Item {
-        id: 1476,
+        id: 1477,
         registry_key: "copper_bulb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6152,7 +6230,7 @@ impl Item {
         ],
     };
     pub const COPPER_CHAIN: Item = Item {
-        id: 400,
+        id: 401,
         registry_key: "copper_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6171,7 +6249,7 @@ impl Item {
         ],
     };
     pub const COPPER_CHEST: Item = Item {
-        id: 1484,
+        id: 1485,
         registry_key: "copper_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6190,7 +6268,7 @@ impl Item {
         ],
     };
     pub const COPPER_CHESTPLATE: Item = Item {
-        id: 959,
+        id: 960,
         registry_key: "copper_chestplate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6227,8 +6305,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
-                    equip_sound: "minecraft:item.armor.equip_copper",
-                    asset_id: Some("minecraft:copper"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipCopper),
+                    asset_id: Some(Cow::Borrowed("minecraft:copper")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -6236,13 +6314,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const COPPER_DOOR: Item = Item {
-        id: 792,
+        id: 793,
         registry_key: "copper_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6261,7 +6339,7 @@ impl Item {
         ],
     };
     pub const COPPER_GOLEM_SPAWN_EGG: Item = Item {
-        id: 1166,
+        id: 1167,
         registry_key: "copper_golem_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6280,7 +6358,7 @@ impl Item {
         ],
     };
     pub const COPPER_GOLEM_STATUE: Item = Item {
-        id: 1492,
+        id: 1493,
         registry_key: "copper_golem_statue",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6299,7 +6377,7 @@ impl Item {
         ],
     };
     pub const COPPER_GRATE: Item = Item {
-        id: 1468,
+        id: 1469,
         registry_key: "copper_grate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6318,7 +6396,7 @@ impl Item {
         ],
     };
     pub const COPPER_HELMET: Item = Item {
-        id: 958,
+        id: 959,
         registry_key: "copper_helmet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6355,8 +6433,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "minecraft:item.armor.equip_copper",
-                    asset_id: Some("minecraft:copper"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipCopper),
+                    asset_id: Some(Cow::Borrowed("minecraft:copper")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -6364,13 +6442,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const COPPER_HOE: Item = Item {
-        id: 920,
+        id: 921,
         registry_key: "copper_hoe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6408,12 +6486,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_COPPER_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_copper_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_HOE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/hoe")),
                             speed: Some(5f32),
                             correct_for_drops: Some(true),
                         },
@@ -6432,7 +6510,7 @@ impl Item {
         ],
     };
     pub const COPPER_HORSE_ARMOR: Item = Item {
-        id: 1255,
+        id: 1256,
         registry_key: "copper_horse_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6467,24 +6545,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.horse.armor",
-                    asset_id: Some("minecraft:copper"),
+                    equip_sound: IdOr::Id(Sound::EntityHorseArmor),
+                    asset_id: Some(Cow::Borrowed("minecraft:copper")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_HORSE_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_horse_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.horse_armor.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemHorseArmorUnequip),
                 },
             ),
         ],
     };
     pub const COPPER_INGOT: Item = Item {
-        id: 906,
+        id: 907,
         registry_key: "copper_ingot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6503,7 +6579,7 @@ impl Item {
         ],
     };
     pub const COPPER_LANTERN: Item = Item {
-        id: 1365,
+        id: 1366,
         registry_key: "copper_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6522,7 +6598,7 @@ impl Item {
         ],
     };
     pub const COPPER_LEGGINGS: Item = Item {
-        id: 960,
+        id: 961,
         registry_key: "copper_leggings",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6559,8 +6635,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::LEGS,
-                    equip_sound: "minecraft:item.armor.equip_copper",
-                    asset_id: Some("minecraft:copper"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipCopper),
+                    asset_id: Some(Cow::Borrowed("minecraft:copper")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -6568,13 +6644,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const COPPER_NAUTILUS_ARMOR: Item = Item {
-        id: 1337,
+        id: 1338,
         registry_key: "copper_nautilus_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6609,24 +6685,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:item.armor.equip_nautilus",
-                    asset_id: Some("minecraft:copper"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNautilus),
+                    asset_id: Some(Cow::Borrowed("minecraft:copper")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_NAUTILUS_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_nautilus_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.armor.unequip_nautilus"),
+                    shearing_sound: IdOr::Id(Sound::ItemArmorUnequipNautilus),
                 },
             ),
         ],
     };
     pub const COPPER_NUGGET: Item = Item {
-        id: 1306,
+        id: 1307,
         registry_key: "copper_nugget",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6664,7 +6738,7 @@ impl Item {
         ],
     };
     pub const COPPER_PICKAXE: Item = Item {
-        id: 918,
+        id: 919,
         registry_key: "copper_pickaxe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6702,12 +6776,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_COPPER_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_copper_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_PICKAXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/pickaxe")),
                             speed: Some(5f32),
                             correct_for_drops: Some(true),
                         },
@@ -6726,7 +6800,7 @@ impl Item {
         ],
     };
     pub const COPPER_SHOVEL: Item = Item {
-        id: 917,
+        id: 918,
         registry_key: "copper_shovel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6764,12 +6838,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_COPPER_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_copper_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_SHOVEL),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/shovel")),
                             speed: Some(5f32),
                             correct_for_drops: Some(true),
                         },
@@ -6788,7 +6862,7 @@ impl Item {
         ],
     };
     pub const COPPER_SPEAR: Item = Item {
-        id: 1298,
+        id: 1299,
         registry_key: "copper_spear",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6830,7 +6904,7 @@ impl Item {
         ],
     };
     pub const COPPER_SWORD: Item = Item {
-        id: 916,
+        id: 917,
         registry_key: "copper_sword",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -6868,17 +6942,17 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::COBWEB])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::COBWEB])),
                             speed: Some(15f32),
                             correct_for_drops: Some(true),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_INSTANTLY_MINES),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_instantly_mines")),
                             speed: Some(340282350000000000000000000000000000000f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_EFFICIENT),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_efficient")),
                             speed: Some(1.5f32),
                             correct_for_drops: None,
                         },
@@ -6897,7 +6971,7 @@ impl Item {
         ],
     };
     pub const COPPER_TORCH: Item = Item {
-        id: 366,
+        id: 367,
         registry_key: "copper_torch",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6916,7 +6990,7 @@ impl Item {
         ],
     };
     pub const COPPER_TRAPDOOR: Item = Item {
-        id: 813,
+        id: 814,
         registry_key: "copper_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6935,7 +7009,7 @@ impl Item {
         ],
     };
     pub const CORNFLOWER: Item = Item {
-        id: 241,
+        id: 242,
         registry_key: "cornflower",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6954,7 +7028,7 @@ impl Item {
         ],
     };
     pub const COW_SPAWN_EGG: Item = Item {
-        id: 1131,
+        id: 1132,
         registry_key: "cow_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6973,7 +7047,7 @@ impl Item {
         ],
     };
     pub const CRACKED_DEEPSLATE_BRICKS: Item = Item {
-        id: 382,
+        id: 383,
         registry_key: "cracked_deepslate_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -6992,7 +7066,7 @@ impl Item {
         ],
     };
     pub const CRACKED_DEEPSLATE_TILES: Item = Item {
-        id: 384,
+        id: 385,
         registry_key: "cracked_deepslate_tiles",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7011,7 +7085,7 @@ impl Item {
         ],
     };
     pub const CRACKED_NETHER_BRICKS: Item = Item {
-        id: 425,
+        id: 426,
         registry_key: "cracked_nether_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7030,7 +7104,7 @@ impl Item {
         ],
     };
     pub const CRACKED_POLISHED_BLACKSTONE_BRICKS: Item = Item {
-        id: 1396,
+        id: 1397,
         registry_key: "cracked_polished_blackstone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7049,7 +7123,7 @@ impl Item {
         ],
     };
     pub const CRACKED_STONE_BRICKS: Item = Item {
-        id: 377,
+        id: 378,
         registry_key: "cracked_stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7068,7 +7142,7 @@ impl Item {
         ],
     };
     pub const CRAFTER: Item = Item {
-        id: 1103,
+        id: 1104,
         registry_key: "crafter",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7087,7 +7161,7 @@ impl Item {
         ],
     };
     pub const CRAFTING_TABLE: Item = Item {
-        id: 332,
+        id: 333,
         registry_key: "crafting_table",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7106,7 +7180,7 @@ impl Item {
         ],
     };
     pub const CREAKING_HEART: Item = Item {
-        id: 330,
+        id: 331,
         registry_key: "creaking_heart",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7125,7 +7199,7 @@ impl Item {
         ],
     };
     pub const CREAKING_SPAWN_EGG: Item = Item {
-        id: 1189,
+        id: 1190,
         registry_key: "creaking_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7144,7 +7218,7 @@ impl Item {
         ],
     };
     pub const CREEPER_BANNER_PATTERN: Item = Item {
-        id: 1343,
+        id: 1344,
         registry_key: "creeper_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -7163,7 +7237,7 @@ impl Item {
         ],
     };
     pub const CREEPER_HEAD: Item = Item {
-        id: 1237,
+        id: 1238,
         registry_key: "creeper_head",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7189,7 +7263,7 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
                     camera_overlay: None,
                     allowed_entities: None,
@@ -7198,13 +7272,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const CREEPER_SPAWN_EGG: Item = Item {
-        id: 1190,
+        id: 1191,
         registry_key: "creeper_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7223,7 +7297,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_BUTTON: Item = Item {
-        id: 761,
+        id: 762,
         registry_key: "crimson_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7242,7 +7316,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_DOOR: Item = Item {
-        id: 790,
+        id: 791,
         registry_key: "crimson_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7261,7 +7335,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_FENCE: Item = Item {
-        id: 354,
+        id: 355,
         registry_key: "crimson_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7280,7 +7354,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_FENCE_GATE: Item = Item {
-        id: 831,
+        id: 832,
         registry_key: "crimson_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7299,7 +7373,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_FUNGUS: Item = Item {
-        id: 249,
+        id: 250,
         registry_key: "crimson_fungus",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7318,7 +7392,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_HANGING_SIGN: Item = Item {
-        id: 1010,
+        id: 1011,
         registry_key: "crimson_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -7394,7 +7468,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_PRESSURE_PLATE: Item = Item {
-        id: 777,
+        id: 778,
         registry_key: "crimson_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7413,7 +7487,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_ROOTS: Item = Item {
-        id: 251,
+        id: 252,
         registry_key: "crimson_roots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7432,7 +7506,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_SHELF: Item = Item {
-        id: 309,
+        id: 310,
         registry_key: "crimson_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7451,7 +7525,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_SIGN: Item = Item {
-        id: 998,
+        id: 999,
         registry_key: "crimson_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -7470,7 +7544,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_SLAB: Item = Item {
-        id: 281,
+        id: 282,
         registry_key: "crimson_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7489,7 +7563,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_STAIRS: Item = Item {
-        id: 452,
+        id: 453,
         registry_key: "crimson_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7527,7 +7601,7 @@ impl Item {
         ],
     };
     pub const CRIMSON_TRAPDOOR: Item = Item {
-        id: 811,
+        id: 812,
         registry_key: "crimson_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7546,7 +7620,7 @@ impl Item {
         ],
     };
     pub const CROSSBOW: Item = Item {
-        id: 1339,
+        id: 1340,
         registry_key: "crossbow",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -7567,7 +7641,7 @@ impl Item {
         ],
     };
     pub const CRYING_OBSIDIAN: Item = Item {
-        id: 1384,
+        id: 1385,
         registry_key: "crying_obsidian",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7643,7 +7717,7 @@ impl Item {
         ],
     };
     pub const CUT_RED_SANDSTONE: Item = Item {
-        id: 571,
+        id: 572,
         registry_key: "cut_red_sandstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7662,7 +7736,7 @@ impl Item {
         ],
     };
     pub const CUT_RED_SANDSTONE_SLAB: Item = Item {
-        id: 295,
+        id: 296,
         registry_key: "cut_red_sandstone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7700,7 +7774,7 @@ impl Item {
         ],
     };
     pub const CUT_SANDSTONE_SLAB: Item = Item {
-        id: 286,
+        id: 287,
         registry_key: "cut_sandstone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7719,7 +7793,7 @@ impl Item {
         ],
     };
     pub const CYAN_BANNER: Item = Item {
-        id: 1275,
+        id: 1276,
         registry_key: "cyan_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -7738,7 +7812,7 @@ impl Item {
         ],
     };
     pub const CYAN_BED: Item = Item {
-        id: 1095,
+        id: 1096,
         registry_key: "cyan_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -7757,7 +7831,7 @@ impl Item {
         ],
     };
     pub const CYAN_BUNDLE: Item = Item {
-        id: 1046,
+        id: 1047,
         registry_key: "cyan_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -7776,7 +7850,7 @@ impl Item {
         ],
     };
     pub const CYAN_CANDLE: Item = Item {
-        id: 1408,
+        id: 1409,
         registry_key: "cyan_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7795,7 +7869,7 @@ impl Item {
         ],
     };
     pub const CYAN_CARPET: Item = Item {
-        id: 514,
+        id: 515,
         registry_key: "cyan_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7815,25 +7889,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:cyan_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:cyan_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const CYAN_CONCRETE: Item = Item {
-        id: 623,
+        id: 624,
         registry_key: "cyan_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7852,7 +7926,7 @@ impl Item {
         ],
     };
     pub const CYAN_CONCRETE_POWDER: Item = Item {
-        id: 639,
+        id: 640,
         registry_key: "cyan_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7871,7 +7945,7 @@ impl Item {
         ],
     };
     pub const CYAN_DYE: Item = Item {
-        id: 1075,
+        id: 1076,
         registry_key: "cyan_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7890,7 +7964,7 @@ impl Item {
         ],
     };
     pub const CYAN_GLAZED_TERRACOTTA: Item = Item {
-        id: 607,
+        id: 608,
         registry_key: "cyan_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7909,7 +7983,7 @@ impl Item {
         ],
     };
     pub const CYAN_HARNESS: Item = Item {
-        id: 847,
+        id: 848,
         registry_key: "cyan_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -7929,24 +8003,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:cyan_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:cyan_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const CYAN_SHULKER_BOX: Item = Item {
-        id: 591,
+        id: 592,
         registry_key: "cyan_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -7965,7 +8037,7 @@ impl Item {
         ],
     };
     pub const CYAN_STAINED_GLASS: Item = Item {
-        id: 539,
+        id: 540,
         registry_key: "cyan_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -7984,7 +8056,7 @@ impl Item {
         ],
     };
     pub const CYAN_STAINED_GLASS_PANE: Item = Item {
-        id: 555,
+        id: 556,
         registry_key: "cyan_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8003,7 +8075,7 @@ impl Item {
         ],
     };
     pub const CYAN_TERRACOTTA: Item = Item {
-        id: 495,
+        id: 496,
         registry_key: "cyan_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8041,7 +8113,7 @@ impl Item {
         ],
     };
     pub const DAMAGED_ANVIL: Item = Item {
-        id: 480,
+        id: 481,
         registry_key: "damaged_anvil",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8079,7 +8151,7 @@ impl Item {
         ],
     };
     pub const DANGER_POTTERY_SHERD: Item = Item {
-        id: 1451,
+        id: 1452,
         registry_key: "danger_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8098,7 +8170,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_BOAT: Item = Item {
-        id: 875,
+        id: 876,
         registry_key: "dark_oak_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -8117,7 +8189,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_BUTTON: Item = Item {
-        id: 757,
+        id: 758,
         registry_key: "dark_oak_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8136,7 +8208,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_CHEST_BOAT: Item = Item {
-        id: 876,
+        id: 877,
         registry_key: "dark_oak_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -8155,7 +8227,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_DOOR: Item = Item {
-        id: 786,
+        id: 787,
         registry_key: "dark_oak_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8174,7 +8246,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_FENCE: Item = Item {
-        id: 350,
+        id: 351,
         registry_key: "dark_oak_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8193,7 +8265,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_FENCE_GATE: Item = Item {
-        id: 827,
+        id: 828,
         registry_key: "dark_oak_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8212,7 +8284,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_HANGING_SIGN: Item = Item {
-        id: 1006,
+        id: 1007,
         registry_key: "dark_oak_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -8288,7 +8360,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_PRESSURE_PLATE: Item = Item {
-        id: 773,
+        id: 774,
         registry_key: "dark_oak_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8326,7 +8398,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_SHELF: Item = Item {
-        id: 310,
+        id: 311,
         registry_key: "dark_oak_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8345,7 +8417,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_SIGN: Item = Item {
-        id: 994,
+        id: 995,
         registry_key: "dark_oak_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -8364,7 +8436,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_SLAB: Item = Item {
-        id: 276,
+        id: 277,
         registry_key: "dark_oak_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8383,7 +8455,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_STAIRS: Item = Item {
-        id: 447,
+        id: 448,
         registry_key: "dark_oak_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8402,7 +8474,7 @@ impl Item {
         ],
     };
     pub const DARK_OAK_TRAPDOOR: Item = Item {
-        id: 807,
+        id: 808,
         registry_key: "dark_oak_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8440,7 +8512,7 @@ impl Item {
         ],
     };
     pub const DARK_PRISMARINE: Item = Item {
-        id: 564,
+        id: 565,
         registry_key: "dark_prismarine",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8459,7 +8531,7 @@ impl Item {
         ],
     };
     pub const DARK_PRISMARINE_SLAB: Item = Item {
-        id: 299,
+        id: 300,
         registry_key: "dark_prismarine_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8478,7 +8550,7 @@ impl Item {
         ],
     };
     pub const DARK_PRISMARINE_STAIRS: Item = Item {
-        id: 567,
+        id: 568,
         registry_key: "dark_prismarine_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8497,7 +8569,7 @@ impl Item {
         ],
     };
     pub const DAYLIGHT_DETECTOR: Item = Item {
-        id: 741,
+        id: 742,
         registry_key: "daylight_detector",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8516,7 +8588,7 @@ impl Item {
         ],
     };
     pub const DEAD_BRAIN_CORAL: Item = Item {
-        id: 664,
+        id: 665,
         registry_key: "dead_brain_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8535,7 +8607,7 @@ impl Item {
         ],
     };
     pub const DEAD_BRAIN_CORAL_BLOCK: Item = Item {
-        id: 650,
+        id: 651,
         registry_key: "dead_brain_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8554,7 +8626,7 @@ impl Item {
         ],
     };
     pub const DEAD_BRAIN_CORAL_FAN: Item = Item {
-        id: 675,
+        id: 676,
         registry_key: "dead_brain_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8573,7 +8645,7 @@ impl Item {
         ],
     };
     pub const DEAD_BUBBLE_CORAL: Item = Item {
-        id: 665,
+        id: 666,
         registry_key: "dead_bubble_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8592,7 +8664,7 @@ impl Item {
         ],
     };
     pub const DEAD_BUBBLE_CORAL_BLOCK: Item = Item {
-        id: 651,
+        id: 652,
         registry_key: "dead_bubble_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8611,7 +8683,7 @@ impl Item {
         ],
     };
     pub const DEAD_BUBBLE_CORAL_FAN: Item = Item {
-        id: 676,
+        id: 677,
         registry_key: "dead_bubble_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8649,7 +8721,7 @@ impl Item {
         ],
     };
     pub const DEAD_FIRE_CORAL: Item = Item {
-        id: 666,
+        id: 667,
         registry_key: "dead_fire_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8668,7 +8740,7 @@ impl Item {
         ],
     };
     pub const DEAD_FIRE_CORAL_BLOCK: Item = Item {
-        id: 652,
+        id: 653,
         registry_key: "dead_fire_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8687,7 +8759,7 @@ impl Item {
         ],
     };
     pub const DEAD_FIRE_CORAL_FAN: Item = Item {
-        id: 677,
+        id: 678,
         registry_key: "dead_fire_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8706,7 +8778,7 @@ impl Item {
         ],
     };
     pub const DEAD_HORN_CORAL: Item = Item {
-        id: 667,
+        id: 668,
         registry_key: "dead_horn_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8725,7 +8797,7 @@ impl Item {
         ],
     };
     pub const DEAD_HORN_CORAL_BLOCK: Item = Item {
-        id: 653,
+        id: 654,
         registry_key: "dead_horn_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8744,7 +8816,7 @@ impl Item {
         ],
     };
     pub const DEAD_HORN_CORAL_FAN: Item = Item {
-        id: 678,
+        id: 679,
         registry_key: "dead_horn_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8763,7 +8835,7 @@ impl Item {
         ],
     };
     pub const DEAD_TUBE_CORAL: Item = Item {
-        id: 668,
+        id: 669,
         registry_key: "dead_tube_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8782,7 +8854,7 @@ impl Item {
         ],
     };
     pub const DEAD_TUBE_CORAL_BLOCK: Item = Item {
-        id: 649,
+        id: 650,
         registry_key: "dead_tube_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8801,7 +8873,7 @@ impl Item {
         ],
     };
     pub const DEAD_TUBE_CORAL_FAN: Item = Item {
-        id: 674,
+        id: 675,
         registry_key: "dead_tube_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8820,7 +8892,7 @@ impl Item {
         ],
     };
     pub const DEBUG_STICK: Item = Item {
-        id: 1308,
+        id: 1309,
         registry_key: "debug_stick",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -8839,7 +8911,7 @@ impl Item {
         ],
     };
     pub const DECORATED_POT: Item = Item {
-        id: 319,
+        id: 320,
         registry_key: "decorated_pot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8877,7 +8949,7 @@ impl Item {
         ],
     };
     pub const DEEPSLATE_BRICK_SLAB: Item = Item {
-        id: 714,
+        id: 715,
         registry_key: "deepslate_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8896,7 +8968,7 @@ impl Item {
         ],
     };
     pub const DEEPSLATE_BRICK_STAIRS: Item = Item {
-        id: 697,
+        id: 698,
         registry_key: "deepslate_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8915,7 +8987,7 @@ impl Item {
         ],
     };
     pub const DEEPSLATE_BRICK_WALL: Item = Item {
-        id: 476,
+        id: 477,
         registry_key: "deepslate_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -8934,7 +9006,7 @@ impl Item {
         ],
     };
     pub const DEEPSLATE_BRICKS: Item = Item {
-        id: 381,
+        id: 382,
         registry_key: "deepslate_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9105,7 +9177,7 @@ impl Item {
         ],
     };
     pub const DEEPSLATE_TILE_SLAB: Item = Item {
-        id: 715,
+        id: 716,
         registry_key: "deepslate_tile_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9124,7 +9196,7 @@ impl Item {
         ],
     };
     pub const DEEPSLATE_TILE_STAIRS: Item = Item {
-        id: 698,
+        id: 699,
         registry_key: "deepslate_tile_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9143,7 +9215,7 @@ impl Item {
         ],
     };
     pub const DEEPSLATE_TILE_WALL: Item = Item {
-        id: 477,
+        id: 478,
         registry_key: "deepslate_tile_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9162,7 +9234,7 @@ impl Item {
         ],
     };
     pub const DEEPSLATE_TILES: Item = Item {
-        id: 383,
+        id: 384,
         registry_key: "deepslate_tiles",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9181,7 +9253,7 @@ impl Item {
         ],
     };
     pub const DETECTOR_RAIL: Item = Item {
-        id: 834,
+        id: 835,
         registry_key: "detector_rail",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9200,7 +9272,7 @@ impl Item {
         ],
     };
     pub const DIAMOND: Item = Item {
-        id: 898,
+        id: 899,
         registry_key: "diamond",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9219,7 +9291,7 @@ impl Item {
         ],
     };
     pub const DIAMOND_AXE: Item = Item {
-        id: 939,
+        id: 940,
         registry_key: "diamond_axe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9257,12 +9329,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_DIAMOND_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_diamond_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_AXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/axe")),
                             speed: Some(8f32),
                             correct_for_drops: Some(true),
                         },
@@ -9300,7 +9372,7 @@ impl Item {
         ],
     };
     pub const DIAMOND_BOOTS: Item = Item {
-        id: 973,
+        id: 974,
         registry_key: "diamond_boots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9337,8 +9409,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::FEET,
-                    equip_sound: "minecraft:item.armor.equip_diamond",
-                    asset_id: Some("minecraft:diamond"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipDiamond),
+                    asset_id: Some(Cow::Borrowed("minecraft:diamond")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -9346,13 +9418,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const DIAMOND_CHESTPLATE: Item = Item {
-        id: 971,
+        id: 972,
         registry_key: "diamond_chestplate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9389,8 +9461,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
-                    equip_sound: "minecraft:item.armor.equip_diamond",
-                    asset_id: Some("minecraft:diamond"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipDiamond),
+                    asset_id: Some(Cow::Borrowed("minecraft:diamond")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -9398,13 +9470,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const DIAMOND_HELMET: Item = Item {
-        id: 970,
+        id: 971,
         registry_key: "diamond_helmet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9441,8 +9513,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "minecraft:item.armor.equip_diamond",
-                    asset_id: Some("minecraft:diamond"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipDiamond),
+                    asset_id: Some(Cow::Borrowed("minecraft:diamond")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -9450,13 +9522,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const DIAMOND_HOE: Item = Item {
-        id: 940,
+        id: 941,
         registry_key: "diamond_hoe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9494,12 +9566,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_DIAMOND_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_diamond_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_HOE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/hoe")),
                             speed: Some(8f32),
                             correct_for_drops: Some(true),
                         },
@@ -9518,7 +9590,7 @@ impl Item {
         ],
     };
     pub const DIAMOND_HORSE_ARMOR: Item = Item {
-        id: 1258,
+        id: 1259,
         registry_key: "diamond_horse_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9553,24 +9625,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.horse.armor",
-                    asset_id: Some("minecraft:diamond"),
+                    equip_sound: IdOr::Id(Sound::EntityHorseArmor),
+                    asset_id: Some(Cow::Borrowed("minecraft:diamond")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_HORSE_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_horse_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.horse_armor.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemHorseArmorUnequip),
                 },
             ),
         ],
     };
     pub const DIAMOND_LEGGINGS: Item = Item {
-        id: 972,
+        id: 973,
         registry_key: "diamond_leggings",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9607,8 +9677,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::LEGS,
-                    equip_sound: "minecraft:item.armor.equip_diamond",
-                    asset_id: Some("minecraft:diamond"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipDiamond),
+                    asset_id: Some(Cow::Borrowed("minecraft:diamond")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -9616,13 +9686,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const DIAMOND_NAUTILUS_ARMOR: Item = Item {
-        id: 1335,
+        id: 1336,
         registry_key: "diamond_nautilus_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9657,18 +9727,16 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:item.armor.equip_nautilus",
-                    asset_id: Some("minecraft:diamond"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNautilus),
+                    asset_id: Some(Cow::Borrowed("minecraft:diamond")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_NAUTILUS_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_nautilus_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.armor.unequip_nautilus"),
+                    shearing_sound: IdOr::Id(Sound::ItemArmorUnequipNautilus),
                 },
             ),
         ],
@@ -9693,7 +9761,7 @@ impl Item {
         ],
     };
     pub const DIAMOND_PICKAXE: Item = Item {
-        id: 938,
+        id: 939,
         registry_key: "diamond_pickaxe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9731,12 +9799,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_DIAMOND_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_diamond_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_PICKAXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/pickaxe")),
                             speed: Some(8f32),
                             correct_for_drops: Some(true),
                         },
@@ -9755,7 +9823,7 @@ impl Item {
         ],
     };
     pub const DIAMOND_SHOVEL: Item = Item {
-        id: 937,
+        id: 938,
         registry_key: "diamond_shovel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9793,12 +9861,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_DIAMOND_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_diamond_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_SHOVEL),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/shovel")),
                             speed: Some(8f32),
                             correct_for_drops: Some(true),
                         },
@@ -9817,7 +9885,7 @@ impl Item {
         ],
     };
     pub const DIAMOND_SPEAR: Item = Item {
-        id: 1301,
+        id: 1302,
         registry_key: "diamond_spear",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9859,7 +9927,7 @@ impl Item {
         ],
     };
     pub const DIAMOND_SWORD: Item = Item {
-        id: 936,
+        id: 937,
         registry_key: "diamond_sword",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -9897,17 +9965,17 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::COBWEB])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::COBWEB])),
                             speed: Some(15f32),
                             correct_for_drops: Some(true),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_INSTANTLY_MINES),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_instantly_mines")),
                             speed: Some(340282350000000000000000000000000000000f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_EFFICIENT),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_efficient")),
                             speed: Some(1.5f32),
                             correct_for_drops: None,
                         },
@@ -9945,7 +10013,7 @@ impl Item {
         ],
     };
     pub const DIORITE_SLAB: Item = Item {
-        id: 711,
+        id: 712,
         registry_key: "diorite_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9964,7 +10032,7 @@ impl Item {
         ],
     };
     pub const DIORITE_STAIRS: Item = Item {
-        id: 694,
+        id: 695,
         registry_key: "diorite_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -9983,7 +10051,7 @@ impl Item {
         ],
     };
     pub const DIORITE_WALL: Item = Item {
-        id: 470,
+        id: 471,
         registry_key: "diorite_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10021,7 +10089,7 @@ impl Item {
         ],
     };
     pub const DIRT_PATH: Item = Item {
-        id: 523,
+        id: 524,
         registry_key: "dirt_path",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10040,7 +10108,7 @@ impl Item {
         ],
     };
     pub const DISC_FRAGMENT_5: Item = Item {
-        id: 1330,
+        id: 1331,
         registry_key: "disc_fragment_5",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10059,7 +10127,7 @@ impl Item {
         ],
     };
     pub const DISPENSER: Item = Item {
-        id: 728,
+        id: 729,
         registry_key: "dispenser",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10078,7 +10146,7 @@ impl Item {
         ],
     };
     pub const DOLPHIN_SPAWN_EGG: Item = Item {
-        id: 1153,
+        id: 1154,
         registry_key: "dolphin_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10097,7 +10165,7 @@ impl Item {
         ],
     };
     pub const DONKEY_SPAWN_EGG: Item = Item {
-        id: 1135,
+        id: 1136,
         registry_key: "donkey_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10116,7 +10184,7 @@ impl Item {
         ],
     };
     pub const DRAGON_BREATH: Item = Item {
-        id: 1290,
+        id: 1291,
         registry_key: "dragon_breath",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10135,7 +10203,7 @@ impl Item {
         ],
     };
     pub const DRAGON_EGG: Item = Item {
-        id: 437,
+        id: 438,
         registry_key: "dragon_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10154,7 +10222,7 @@ impl Item {
         ],
     };
     pub const DRAGON_HEAD: Item = Item {
-        id: 1238,
+        id: 1239,
         registry_key: "dragon_head",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10180,7 +10248,7 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
                     camera_overlay: None,
                     allowed_entities: None,
@@ -10189,13 +10257,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const DRIED_GHAST: Item = Item {
-        id: 648,
+        id: 649,
         registry_key: "dried_ghast",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10214,7 +10282,7 @@ impl Item {
         ],
     };
     pub const DRIED_KELP: Item = Item {
-        id: 1107,
+        id: 1108,
         registry_key: "dried_kelp",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10242,12 +10310,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 0.8,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const DRIED_KELP_BLOCK: Item = Item {
-        id: 1027,
+        id: 1028,
         registry_key: "dried_kelp_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10285,7 +10357,7 @@ impl Item {
         ],
     };
     pub const DROPPER: Item = Item {
-        id: 729,
+        id: 730,
         registry_key: "dropper",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10304,7 +10376,7 @@ impl Item {
         ],
     };
     pub const DROWNED_SPAWN_EGG: Item = Item {
-        id: 1174,
+        id: 1175,
         registry_key: "drowned_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10323,7 +10395,7 @@ impl Item {
         ],
     };
     pub const DUNE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1428,
+        id: 1429,
         registry_key: "dune_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10342,7 +10414,7 @@ impl Item {
         ],
     };
     pub const ECHO_SHARD: Item = Item {
-        id: 1424,
+        id: 1425,
         registry_key: "echo_shard",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10361,7 +10433,7 @@ impl Item {
         ],
     };
     pub const EGG: Item = Item {
-        id: 1031,
+        id: 1032,
         registry_key: "egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -10380,7 +10452,7 @@ impl Item {
         ],
     };
     pub const ELDER_GUARDIAN_SPAWN_EGG: Item = Item {
-        id: 1191,
+        id: 1192,
         registry_key: "elder_guardian_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10399,7 +10471,7 @@ impl Item {
         ],
     };
     pub const ELYTRA: Item = Item {
-        id: 862,
+        id: 863,
         registry_key: "elytra",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -10421,8 +10493,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
-                    equip_sound: "minecraft:item.armor.equip_elytra",
-                    asset_id: Some("minecraft:elytra"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipElytra),
+                    asset_id: Some(Cow::Borrowed("minecraft:elytra")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -10430,13 +10502,13 @@ impl Item {
                     damage_on_hurt: false,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const EMERALD: Item = Item {
-        id: 899,
+        id: 900,
         registry_key: "emerald",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10455,7 +10527,7 @@ impl Item {
         ],
     };
     pub const EMERALD_BLOCK: Item = Item {
-        id: 440,
+        id: 441,
         registry_key: "emerald_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10493,7 +10565,7 @@ impl Item {
         ],
     };
     pub const ENCHANTED_BOOK: Item = Item {
-        id: 1244,
+        id: 1245,
         registry_key: "enchanted_book",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -10512,7 +10584,7 @@ impl Item {
         ],
     };
     pub const ENCHANTED_GOLDEN_APPLE: Item = Item {
-        id: 987,
+        id: 988,
         registry_key: "enchanted_golden_apple",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10540,12 +10612,52 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[ConsumeEffect::ApplyEffects((
+                        Cow::Borrowed(&[
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:regeneration"),
+                                amplifier: 1i32,
+                                duration: 400i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:resistance"),
+                                amplifier: 0i32,
+                                duration: 6000i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:fire_resistance"),
+                                amplifier: 0i32,
+                                duration: 6000i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:absorption"),
+                                amplifier: 3i32,
+                                duration: 2400i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                        ]),
+                        1f32,
+                    ))]),
                 },
             ),
         ],
     };
     pub const ENCHANTING_TABLE: Item = Item {
-        id: 433,
+        id: 434,
         registry_key: "enchanting_table",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10564,7 +10676,7 @@ impl Item {
         ],
     };
     pub const END_CRYSTAL: Item = Item {
-        id: 1282,
+        id: 1283,
         registry_key: "end_crystal",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10583,7 +10695,7 @@ impl Item {
         ],
     };
     pub const END_PORTAL_FRAME: Item = Item {
-        id: 434,
+        id: 435,
         registry_key: "end_portal_frame",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10602,7 +10714,7 @@ impl Item {
         ],
     };
     pub const END_ROD: Item = Item {
-        id: 323,
+        id: 324,
         registry_key: "end_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10621,7 +10733,7 @@ impl Item {
         ],
     };
     pub const END_STONE: Item = Item {
-        id: 435,
+        id: 436,
         registry_key: "end_stone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10640,7 +10752,7 @@ impl Item {
         ],
     };
     pub const END_STONE_BRICK_SLAB: Item = Item {
-        id: 704,
+        id: 705,
         registry_key: "end_stone_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10659,7 +10771,7 @@ impl Item {
         ],
     };
     pub const END_STONE_BRICK_STAIRS: Item = Item {
-        id: 686,
+        id: 687,
         registry_key: "end_stone_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10678,7 +10790,7 @@ impl Item {
         ],
     };
     pub const END_STONE_BRICK_WALL: Item = Item {
-        id: 469,
+        id: 470,
         registry_key: "end_stone_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10697,7 +10809,7 @@ impl Item {
         ],
     };
     pub const END_STONE_BRICKS: Item = Item {
-        id: 436,
+        id: 437,
         registry_key: "end_stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10716,7 +10828,7 @@ impl Item {
         ],
     };
     pub const ENDER_CHEST: Item = Item {
-        id: 439,
+        id: 440,
         registry_key: "ender_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10735,7 +10847,7 @@ impl Item {
         ],
     };
     pub const ENDER_DRAGON_SPAWN_EGG: Item = Item {
-        id: 1213,
+        id: 1214,
         registry_key: "ender_dragon_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10754,7 +10866,7 @@ impl Item {
         ],
     };
     pub const ENDER_EYE: Item = Item {
-        id: 1128,
+        id: 1129,
         registry_key: "ender_eye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10773,7 +10885,7 @@ impl Item {
         ],
     };
     pub const ENDER_PEARL: Item = Item {
-        id: 1115,
+        id: 1116,
         registry_key: "ender_pearl",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -10792,7 +10904,7 @@ impl Item {
         ],
     };
     pub const ENDERMAN_SPAWN_EGG: Item = Item {
-        id: 1214,
+        id: 1215,
         registry_key: "enderman_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10811,7 +10923,7 @@ impl Item {
         ],
     };
     pub const ENDERMITE_SPAWN_EGG: Item = Item {
-        id: 1215,
+        id: 1216,
         registry_key: "endermite_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10830,7 +10942,7 @@ impl Item {
         ],
     };
     pub const EVOKER_SPAWN_EGG: Item = Item {
-        id: 1198,
+        id: 1199,
         registry_key: "evoker_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10849,7 +10961,7 @@ impl Item {
         ],
     };
     pub const EXPERIENCE_BOTTLE: Item = Item {
-        id: 1217,
+        id: 1218,
         registry_key: "experience_bottle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10868,7 +10980,7 @@ impl Item {
         ],
     };
     pub const EXPLORER_POTTERY_SHERD: Item = Item {
-        id: 1452,
+        id: 1453,
         registry_key: "explorer_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10925,7 +11037,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_BARS: Item = Item {
-        id: 392,
+        id: 393,
         registry_key: "exposed_copper_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10944,7 +11056,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_BULB: Item = Item {
-        id: 1477,
+        id: 1478,
         registry_key: "exposed_copper_bulb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10963,7 +11075,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_CHAIN: Item = Item {
-        id: 401,
+        id: 402,
         registry_key: "exposed_copper_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -10982,7 +11094,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_CHEST: Item = Item {
-        id: 1485,
+        id: 1486,
         registry_key: "exposed_copper_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11001,7 +11113,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_DOOR: Item = Item {
-        id: 793,
+        id: 794,
         registry_key: "exposed_copper_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11020,7 +11132,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_GOLEM_STATUE: Item = Item {
-        id: 1493,
+        id: 1494,
         registry_key: "exposed_copper_golem_statue",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11039,7 +11151,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_GRATE: Item = Item {
-        id: 1469,
+        id: 1470,
         registry_key: "exposed_copper_grate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11058,7 +11170,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_LANTERN: Item = Item {
-        id: 1366,
+        id: 1367,
         registry_key: "exposed_copper_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11077,7 +11189,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_COPPER_TRAPDOOR: Item = Item {
-        id: 814,
+        id: 815,
         registry_key: "exposed_copper_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11153,7 +11265,7 @@ impl Item {
         ],
     };
     pub const EXPOSED_LIGHTNING_ROD: Item = Item {
-        id: 734,
+        id: 735,
         registry_key: "exposed_lightning_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11172,7 +11284,7 @@ impl Item {
         ],
     };
     pub const EYE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1432,
+        id: 1433,
         registry_key: "eye_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11191,7 +11303,7 @@ impl Item {
         ],
     };
     pub const FARMLAND: Item = Item {
-        id: 333,
+        id: 334,
         registry_key: "farmland",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11210,7 +11322,7 @@ impl Item {
         ],
     };
     pub const FEATHER: Item = Item {
-        id: 949,
+        id: 950,
         registry_key: "feather",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11229,7 +11341,7 @@ impl Item {
         ],
     };
     pub const FERMENTED_SPIDER_EYE: Item = Item {
-        id: 1123,
+        id: 1124,
         registry_key: "fermented_spider_eye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11267,7 +11379,7 @@ impl Item {
         ],
     };
     pub const FIELD_MASONED_BANNER_PATTERN: Item = Item {
-        id: 1350,
+        id: 1351,
         registry_key: "field_masoned_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -11286,7 +11398,7 @@ impl Item {
         ],
     };
     pub const FILLED_MAP: Item = Item {
-        id: 1104,
+        id: 1105,
         registry_key: "filled_map",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11305,7 +11417,7 @@ impl Item {
         ],
     };
     pub const FIRE_CHARGE: Item = Item {
-        id: 1218,
+        id: 1219,
         registry_key: "fire_charge",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11324,7 +11436,7 @@ impl Item {
         ],
     };
     pub const FIRE_CORAL: Item = Item {
-        id: 662,
+        id: 663,
         registry_key: "fire_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11343,7 +11455,7 @@ impl Item {
         ],
     };
     pub const FIRE_CORAL_BLOCK: Item = Item {
-        id: 657,
+        id: 658,
         registry_key: "fire_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11362,7 +11474,7 @@ impl Item {
         ],
     };
     pub const FIRE_CORAL_FAN: Item = Item {
-        id: 672,
+        id: 673,
         registry_key: "fire_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11400,7 +11512,7 @@ impl Item {
         ],
     };
     pub const FIREWORK_ROCKET: Item = Item {
-        id: 1242,
+        id: 1243,
         registry_key: "firework_rocket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11419,7 +11531,7 @@ impl Item {
         ],
     };
     pub const FIREWORK_STAR: Item = Item {
-        id: 1243,
+        id: 1244,
         registry_key: "firework_star",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11438,7 +11550,7 @@ impl Item {
         ],
     };
     pub const FISHING_ROD: Item = Item {
-        id: 1053,
+        id: 1054,
         registry_key: "fishing_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -11459,7 +11571,7 @@ impl Item {
         ],
     };
     pub const FLETCHING_TABLE: Item = Item {
-        id: 1358,
+        id: 1359,
         registry_key: "fletching_table",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11478,7 +11590,7 @@ impl Item {
         ],
     };
     pub const FLINT: Item = Item {
-        id: 982,
+        id: 983,
         registry_key: "flint",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11497,7 +11609,7 @@ impl Item {
         ],
     };
     pub const FLINT_AND_STEEL: Item = Item {
-        id: 891,
+        id: 892,
         registry_key: "flint_and_steel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -11518,7 +11630,7 @@ impl Item {
         ],
     };
     pub const FLOW_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1443,
+        id: 1444,
         registry_key: "flow_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11537,7 +11649,7 @@ impl Item {
         ],
     };
     pub const FLOW_BANNER_PATTERN: Item = Item {
-        id: 1348,
+        id: 1349,
         registry_key: "flow_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -11556,7 +11668,7 @@ impl Item {
         ],
     };
     pub const FLOW_POTTERY_SHERD: Item = Item {
-        id: 1453,
+        id: 1454,
         registry_key: "flow_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11575,7 +11687,7 @@ impl Item {
         ],
     };
     pub const FLOWER_BANNER_PATTERN: Item = Item {
-        id: 1342,
+        id: 1343,
         registry_key: "flower_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -11594,7 +11706,7 @@ impl Item {
         ],
     };
     pub const FLOWER_POT: Item = Item {
-        id: 1226,
+        id: 1227,
         registry_key: "flower_pot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11651,7 +11763,7 @@ impl Item {
         ],
     };
     pub const FOX_SPAWN_EGG: Item = Item {
-        id: 1144,
+        id: 1145,
         registry_key: "fox_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11670,7 +11782,7 @@ impl Item {
         ],
     };
     pub const FRIEND_POTTERY_SHERD: Item = Item {
-        id: 1454,
+        id: 1455,
         registry_key: "friend_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11689,7 +11801,7 @@ impl Item {
         ],
     };
     pub const FROG_SPAWN_EGG: Item = Item {
-        id: 1154,
+        id: 1155,
         registry_key: "frog_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11708,7 +11820,7 @@ impl Item {
         ],
     };
     pub const FROGSPAWN: Item = Item {
-        id: 1423,
+        id: 1424,
         registry_key: "frogspawn",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11727,7 +11839,7 @@ impl Item {
         ],
     };
     pub const FURNACE: Item = Item {
-        id: 334,
+        id: 335,
         registry_key: "furnace",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11746,7 +11858,7 @@ impl Item {
         ],
     };
     pub const FURNACE_MINECART: Item = Item {
-        id: 856,
+        id: 857,
         registry_key: "furnace_minecart",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -11765,7 +11877,7 @@ impl Item {
         ],
     };
     pub const GHAST_SPAWN_EGG: Item = Item {
-        id: 1204,
+        id: 1205,
         registry_key: "ghast_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11784,7 +11896,7 @@ impl Item {
         ],
     };
     pub const GHAST_TEAR: Item = Item {
-        id: 1117,
+        id: 1118,
         registry_key: "ghast_tear",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11803,7 +11915,7 @@ impl Item {
         ],
     };
     pub const GILDED_BLACKSTONE: Item = Item {
-        id: 1388,
+        id: 1389,
         registry_key: "gilded_blackstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11841,7 +11953,7 @@ impl Item {
         ],
     };
     pub const GLASS_BOTTLE: Item = Item {
-        id: 1120,
+        id: 1121,
         registry_key: "glass_bottle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11860,7 +11972,7 @@ impl Item {
         ],
     };
     pub const GLASS_PANE: Item = Item {
-        id: 408,
+        id: 409,
         registry_key: "glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11879,7 +11991,7 @@ impl Item {
         ],
     };
     pub const GLISTERING_MELON_SLICE: Item = Item {
-        id: 1129,
+        id: 1130,
         registry_key: "glistering_melon_slice",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11898,7 +12010,7 @@ impl Item {
         ],
     };
     pub const GLOBE_BANNER_PATTERN: Item = Item {
-        id: 1346,
+        id: 1347,
         registry_key: "globe_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -11917,7 +12029,7 @@ impl Item {
         ],
     };
     pub const GLOW_BERRIES: Item = Item {
-        id: 1374,
+        id: 1375,
         registry_key: "glow_berries",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11945,12 +12057,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const GLOW_INK_SAC: Item = Item {
-        id: 1064,
+        id: 1065,
         registry_key: "glow_ink_sac",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11969,7 +12085,7 @@ impl Item {
         ],
     };
     pub const GLOW_ITEM_FRAME: Item = Item {
-        id: 1225,
+        id: 1226,
         registry_key: "glow_item_frame",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -11988,7 +12104,7 @@ impl Item {
         ],
     };
     pub const GLOW_LICHEN: Item = Item {
-        id: 411,
+        id: 412,
         registry_key: "glow_lichen",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12007,7 +12123,7 @@ impl Item {
         ],
     };
     pub const GLOW_SQUID_SPAWN_EGG: Item = Item {
-        id: 1155,
+        id: 1156,
         registry_key: "glow_squid_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12026,7 +12142,7 @@ impl Item {
         ],
     };
     pub const GLOWSTONE: Item = Item {
-        id: 367,
+        id: 368,
         registry_key: "glowstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12045,7 +12161,7 @@ impl Item {
         ],
     };
     pub const GLOWSTONE_DUST: Item = Item {
-        id: 1056,
+        id: 1057,
         registry_key: "glowstone_dust",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12064,7 +12180,7 @@ impl Item {
         ],
     };
     pub const GOAT_HORN: Item = Item {
-        id: 1352,
+        id: 1353,
         registry_key: "goat_horn",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12083,7 +12199,7 @@ impl Item {
         ],
     };
     pub const GOAT_SPAWN_EGG: Item = Item {
-        id: 1145,
+        id: 1146,
         registry_key: "goat_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12121,7 +12237,7 @@ impl Item {
         ],
     };
     pub const GOLD_INGOT: Item = Item {
-        id: 908,
+        id: 909,
         registry_key: "gold_ingot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12140,7 +12256,7 @@ impl Item {
         ],
     };
     pub const GOLD_NUGGET: Item = Item {
-        id: 1118,
+        id: 1119,
         registry_key: "gold_nugget",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12178,7 +12294,7 @@ impl Item {
         ],
     };
     pub const GOLDEN_APPLE: Item = Item {
-        id: 986,
+        id: 987,
         registry_key: "golden_apple",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12206,12 +12322,36 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[ConsumeEffect::ApplyEffects((
+                        Cow::Borrowed(&[
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:regeneration"),
+                                amplifier: 1i32,
+                                duration: 100i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:absorption"),
+                                amplifier: 0i32,
+                                duration: 2400i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                        ]),
+                        1f32,
+                    ))]),
                 },
             ),
         ],
     };
     pub const GOLDEN_AXE: Item = Item {
-        id: 929,
+        id: 930,
         registry_key: "golden_axe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12249,12 +12389,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_GOLD_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_gold_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_AXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/axe")),
                             speed: Some(12f32),
                             correct_for_drops: Some(true),
                         },
@@ -12273,7 +12413,7 @@ impl Item {
         ],
     };
     pub const GOLDEN_BOOTS: Item = Item {
-        id: 977,
+        id: 978,
         registry_key: "golden_boots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12310,8 +12450,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::FEET,
-                    equip_sound: "minecraft:item.armor.equip_gold",
-                    asset_id: Some("minecraft:gold"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGold),
+                    asset_id: Some(Cow::Borrowed("minecraft:gold")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -12319,13 +12459,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const GOLDEN_CARROT: Item = Item {
-        id: 1232,
+        id: 1233,
         registry_key: "golden_carrot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12353,12 +12493,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const GOLDEN_CHESTPLATE: Item = Item {
-        id: 975,
+        id: 976,
         registry_key: "golden_chestplate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12395,8 +12539,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
-                    equip_sound: "minecraft:item.armor.equip_gold",
-                    asset_id: Some("minecraft:gold"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGold),
+                    asset_id: Some(Cow::Borrowed("minecraft:gold")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -12404,13 +12548,32 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
+                },
+            ),
+        ],
+    };
+    pub const GOLDEN_DANDELION: Item = Item {
+        id: 230,
+        registry_key: "golden_dandelion",
+        components: &[
+            (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
+            (
+                ItemName,
+                &ItemNameImpl {
+                    name: "block.minecraft.golden_dandelion",
+                },
+            ),
+            (
+                AttributeModifiers,
+                &AttributeModifiersImpl {
+                    attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const GOLDEN_HELMET: Item = Item {
-        id: 974,
+        id: 975,
         registry_key: "golden_helmet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12447,8 +12610,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "minecraft:item.armor.equip_gold",
-                    asset_id: Some("minecraft:gold"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGold),
+                    asset_id: Some(Cow::Borrowed("minecraft:gold")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -12456,13 +12619,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const GOLDEN_HOE: Item = Item {
-        id: 930,
+        id: 931,
         registry_key: "golden_hoe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12500,12 +12663,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_GOLD_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_gold_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_HOE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/hoe")),
                             speed: Some(12f32),
                             correct_for_drops: Some(true),
                         },
@@ -12524,7 +12687,7 @@ impl Item {
         ],
     };
     pub const GOLDEN_HORSE_ARMOR: Item = Item {
-        id: 1257,
+        id: 1258,
         registry_key: "golden_horse_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12559,24 +12722,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.horse.armor",
-                    asset_id: Some("minecraft:gold"),
+                    equip_sound: IdOr::Id(Sound::EntityHorseArmor),
+                    asset_id: Some(Cow::Borrowed("minecraft:gold")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_HORSE_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_horse_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.horse_armor.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemHorseArmorUnequip),
                 },
             ),
         ],
     };
     pub const GOLDEN_LEGGINGS: Item = Item {
-        id: 976,
+        id: 977,
         registry_key: "golden_leggings",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12613,8 +12774,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::LEGS,
-                    equip_sound: "minecraft:item.armor.equip_gold",
-                    asset_id: Some("minecraft:gold"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGold),
+                    asset_id: Some(Cow::Borrowed("minecraft:gold")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -12622,13 +12783,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const GOLDEN_NAUTILUS_ARMOR: Item = Item {
-        id: 1334,
+        id: 1335,
         registry_key: "golden_nautilus_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12663,24 +12824,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:item.armor.equip_nautilus",
-                    asset_id: Some("minecraft:gold"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNautilus),
+                    asset_id: Some(Cow::Borrowed("minecraft:gold")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_NAUTILUS_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_nautilus_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.armor.unequip_nautilus"),
+                    shearing_sound: IdOr::Id(Sound::ItemArmorUnequipNautilus),
                 },
             ),
         ],
     };
     pub const GOLDEN_PICKAXE: Item = Item {
-        id: 928,
+        id: 929,
         registry_key: "golden_pickaxe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12718,12 +12877,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_GOLD_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_gold_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_PICKAXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/pickaxe")),
                             speed: Some(12f32),
                             correct_for_drops: Some(true),
                         },
@@ -12742,7 +12901,7 @@ impl Item {
         ],
     };
     pub const GOLDEN_SHOVEL: Item = Item {
-        id: 927,
+        id: 928,
         registry_key: "golden_shovel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12780,12 +12939,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_GOLD_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_gold_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_SHOVEL),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/shovel")),
                             speed: Some(12f32),
                             correct_for_drops: Some(true),
                         },
@@ -12804,7 +12963,7 @@ impl Item {
         ],
     };
     pub const GOLDEN_SPEAR: Item = Item {
-        id: 1300,
+        id: 1301,
         registry_key: "golden_spear",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12846,7 +13005,7 @@ impl Item {
         ],
     };
     pub const GOLDEN_SWORD: Item = Item {
-        id: 926,
+        id: 927,
         registry_key: "golden_sword",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -12884,17 +13043,17 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::COBWEB])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::COBWEB])),
                             speed: Some(15f32),
                             correct_for_drops: Some(true),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_INSTANTLY_MINES),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_instantly_mines")),
                             speed: Some(340282350000000000000000000000000000000f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_EFFICIENT),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_efficient")),
                             speed: Some(1.5f32),
                             correct_for_drops: None,
                         },
@@ -12932,7 +13091,7 @@ impl Item {
         ],
     };
     pub const GRANITE_SLAB: Item = Item {
-        id: 707,
+        id: 708,
         registry_key: "granite_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12951,7 +13110,7 @@ impl Item {
         ],
     };
     pub const GRANITE_STAIRS: Item = Item {
-        id: 690,
+        id: 691,
         registry_key: "granite_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -12970,7 +13129,7 @@ impl Item {
         ],
     };
     pub const GRANITE_WALL: Item = Item {
-        id: 462,
+        id: 463,
         registry_key: "granite_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13027,7 +13186,7 @@ impl Item {
         ],
     };
     pub const GRAY_BANNER: Item = Item {
-        id: 1273,
+        id: 1274,
         registry_key: "gray_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -13046,7 +13205,7 @@ impl Item {
         ],
     };
     pub const GRAY_BED: Item = Item {
-        id: 1093,
+        id: 1094,
         registry_key: "gray_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13065,7 +13224,7 @@ impl Item {
         ],
     };
     pub const GRAY_BUNDLE: Item = Item {
-        id: 1044,
+        id: 1045,
         registry_key: "gray_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13084,7 +13243,7 @@ impl Item {
         ],
     };
     pub const GRAY_CANDLE: Item = Item {
-        id: 1406,
+        id: 1407,
         registry_key: "gray_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13103,7 +13262,7 @@ impl Item {
         ],
     };
     pub const GRAY_CARPET: Item = Item {
-        id: 512,
+        id: 513,
         registry_key: "gray_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13123,25 +13282,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:gray_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:gray_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const GRAY_CONCRETE: Item = Item {
-        id: 621,
+        id: 622,
         registry_key: "gray_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13160,7 +13319,7 @@ impl Item {
         ],
     };
     pub const GRAY_CONCRETE_POWDER: Item = Item {
-        id: 637,
+        id: 638,
         registry_key: "gray_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13179,7 +13338,7 @@ impl Item {
         ],
     };
     pub const GRAY_DYE: Item = Item {
-        id: 1073,
+        id: 1074,
         registry_key: "gray_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13198,7 +13357,7 @@ impl Item {
         ],
     };
     pub const GRAY_GLAZED_TERRACOTTA: Item = Item {
-        id: 605,
+        id: 606,
         registry_key: "gray_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13217,7 +13376,7 @@ impl Item {
         ],
     };
     pub const GRAY_HARNESS: Item = Item {
-        id: 845,
+        id: 846,
         registry_key: "gray_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13237,24 +13396,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:gray_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:gray_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const GRAY_SHULKER_BOX: Item = Item {
-        id: 589,
+        id: 590,
         registry_key: "gray_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13273,7 +13430,7 @@ impl Item {
         ],
     };
     pub const GRAY_STAINED_GLASS: Item = Item {
-        id: 537,
+        id: 538,
         registry_key: "gray_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13292,7 +13449,7 @@ impl Item {
         ],
     };
     pub const GRAY_STAINED_GLASS_PANE: Item = Item {
-        id: 553,
+        id: 554,
         registry_key: "gray_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13311,7 +13468,7 @@ impl Item {
         ],
     };
     pub const GRAY_TERRACOTTA: Item = Item {
-        id: 493,
+        id: 494,
         registry_key: "gray_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13349,7 +13506,7 @@ impl Item {
         ],
     };
     pub const GREEN_BANNER: Item = Item {
-        id: 1279,
+        id: 1280,
         registry_key: "green_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -13368,7 +13525,7 @@ impl Item {
         ],
     };
     pub const GREEN_BED: Item = Item {
-        id: 1099,
+        id: 1100,
         registry_key: "green_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13387,7 +13544,7 @@ impl Item {
         ],
     };
     pub const GREEN_BUNDLE: Item = Item {
-        id: 1050,
+        id: 1051,
         registry_key: "green_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13406,7 +13563,7 @@ impl Item {
         ],
     };
     pub const GREEN_CANDLE: Item = Item {
-        id: 1412,
+        id: 1413,
         registry_key: "green_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13425,7 +13582,7 @@ impl Item {
         ],
     };
     pub const GREEN_CARPET: Item = Item {
-        id: 518,
+        id: 519,
         registry_key: "green_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13445,25 +13602,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:green_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:green_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const GREEN_CONCRETE: Item = Item {
-        id: 627,
+        id: 628,
         registry_key: "green_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13482,7 +13639,7 @@ impl Item {
         ],
     };
     pub const GREEN_CONCRETE_POWDER: Item = Item {
-        id: 643,
+        id: 644,
         registry_key: "green_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13501,7 +13658,7 @@ impl Item {
         ],
     };
     pub const GREEN_DYE: Item = Item {
-        id: 1079,
+        id: 1080,
         registry_key: "green_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13520,7 +13677,7 @@ impl Item {
         ],
     };
     pub const GREEN_GLAZED_TERRACOTTA: Item = Item {
-        id: 611,
+        id: 612,
         registry_key: "green_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13539,7 +13696,7 @@ impl Item {
         ],
     };
     pub const GREEN_HARNESS: Item = Item {
-        id: 851,
+        id: 852,
         registry_key: "green_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13559,24 +13716,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:green_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:green_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const GREEN_SHULKER_BOX: Item = Item {
-        id: 595,
+        id: 596,
         registry_key: "green_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13595,7 +13750,7 @@ impl Item {
         ],
     };
     pub const GREEN_STAINED_GLASS: Item = Item {
-        id: 543,
+        id: 544,
         registry_key: "green_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13614,7 +13769,7 @@ impl Item {
         ],
     };
     pub const GREEN_STAINED_GLASS_PANE: Item = Item {
-        id: 559,
+        id: 560,
         registry_key: "green_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13633,7 +13788,7 @@ impl Item {
         ],
     };
     pub const GREEN_TERRACOTTA: Item = Item {
-        id: 499,
+        id: 500,
         registry_key: "green_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13671,7 +13826,7 @@ impl Item {
         ],
     };
     pub const GRINDSTONE: Item = Item {
-        id: 1359,
+        id: 1360,
         registry_key: "grindstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13690,7 +13845,7 @@ impl Item {
         ],
     };
     pub const GUARDIAN_SPAWN_EGG: Item = Item {
-        id: 1192,
+        id: 1193,
         registry_key: "guardian_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13709,7 +13864,7 @@ impl Item {
         ],
     };
     pub const GUNPOWDER: Item = Item {
-        id: 950,
+        id: 951,
         registry_key: "gunpowder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13728,7 +13883,7 @@ impl Item {
         ],
     };
     pub const GUSTER_BANNER_PATTERN: Item = Item {
-        id: 1349,
+        id: 1350,
         registry_key: "guster_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -13747,7 +13902,7 @@ impl Item {
         ],
     };
     pub const GUSTER_POTTERY_SHERD: Item = Item {
-        id: 1455,
+        id: 1456,
         registry_key: "guster_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13766,7 +13921,7 @@ impl Item {
         ],
     };
     pub const HANGING_ROOTS: Item = Item {
-        id: 266,
+        id: 267,
         registry_key: "hanging_roots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13785,7 +13940,7 @@ impl Item {
         ],
     };
     pub const HAPPY_GHAST_SPAWN_EGG: Item = Item {
-        id: 1205,
+        id: 1206,
         registry_key: "happy_ghast_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13804,7 +13959,7 @@ impl Item {
         ],
     };
     pub const HAY_BLOCK: Item = Item {
-        id: 504,
+        id: 505,
         registry_key: "hay_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13823,7 +13978,7 @@ impl Item {
         ],
     };
     pub const HEART_OF_THE_SEA: Item = Item {
-        id: 1338,
+        id: 1339,
         registry_key: "heart_of_the_sea",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13842,7 +13997,7 @@ impl Item {
         ],
     };
     pub const HEART_POTTERY_SHERD: Item = Item {
-        id: 1456,
+        id: 1457,
         registry_key: "heart_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13861,7 +14016,7 @@ impl Item {
         ],
     };
     pub const HEARTBREAK_POTTERY_SHERD: Item = Item {
-        id: 1457,
+        id: 1458,
         registry_key: "heartbreak_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13899,7 +14054,7 @@ impl Item {
         ],
     };
     pub const HEAVY_WEIGHTED_PRESSURE_PLATE: Item = Item {
-        id: 766,
+        id: 767,
         registry_key: "heavy_weighted_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13918,7 +14073,7 @@ impl Item {
         ],
     };
     pub const HOGLIN_SPAWN_EGG: Item = Item {
-        id: 1206,
+        id: 1207,
         registry_key: "hoglin_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13937,7 +14092,7 @@ impl Item {
         ],
     };
     pub const HONEY_BLOCK: Item = Item {
-        id: 725,
+        id: 726,
         registry_key: "honey_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -13956,7 +14111,7 @@ impl Item {
         ],
     };
     pub const HONEY_BOTTLE: Item = Item {
-        id: 1381,
+        id: 1382,
         registry_key: "honey_bottle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -13984,12 +14139,18 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 2.0,
+                    animation: ConsumeAnimation::Drink,
+                    sound_event: IdOr::Id(Sound::ItemHoneyBottleDrink),
+                    consume_particles: false,
+                    effects: Cow::Borrowed(&[ConsumeEffect::RemoveEffects(IDSet::IDs(
+                        Cow::Borrowed(&[&StatusEffect::POISON]),
+                    ))]),
                 },
             ),
         ],
     };
     pub const HONEYCOMB: Item = Item {
-        id: 1378,
+        id: 1379,
         registry_key: "honeycomb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14008,7 +14169,7 @@ impl Item {
         ],
     };
     pub const HONEYCOMB_BLOCK: Item = Item {
-        id: 1382,
+        id: 1383,
         registry_key: "honeycomb_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14027,7 +14188,7 @@ impl Item {
         ],
     };
     pub const HOPPER: Item = Item {
-        id: 727,
+        id: 728,
         registry_key: "hopper",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14046,7 +14207,7 @@ impl Item {
         ],
     };
     pub const HOPPER_MINECART: Item = Item {
-        id: 858,
+        id: 859,
         registry_key: "hopper_minecart",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14065,7 +14226,7 @@ impl Item {
         ],
     };
     pub const HORN_CORAL: Item = Item {
-        id: 663,
+        id: 664,
         registry_key: "horn_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14084,7 +14245,7 @@ impl Item {
         ],
     };
     pub const HORN_CORAL_BLOCK: Item = Item {
-        id: 658,
+        id: 659,
         registry_key: "horn_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14103,7 +14264,7 @@ impl Item {
         ],
     };
     pub const HORN_CORAL_FAN: Item = Item {
-        id: 673,
+        id: 674,
         registry_key: "horn_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14122,7 +14283,7 @@ impl Item {
         ],
     };
     pub const HORSE_SPAWN_EGG: Item = Item {
-        id: 1136,
+        id: 1137,
         registry_key: "horse_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14141,7 +14302,7 @@ impl Item {
         ],
     };
     pub const HOST_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1442,
+        id: 1443,
         registry_key: "host_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14160,7 +14321,7 @@ impl Item {
         ],
     };
     pub const HOWL_POTTERY_SHERD: Item = Item {
-        id: 1458,
+        id: 1459,
         registry_key: "howl_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14179,7 +14340,7 @@ impl Item {
         ],
     };
     pub const HUSK_SPAWN_EGG: Item = Item {
-        id: 1175,
+        id: 1176,
         registry_key: "husk_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14198,7 +14359,7 @@ impl Item {
         ],
     };
     pub const ICE: Item = Item {
-        id: 338,
+        id: 339,
         registry_key: "ice",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14217,7 +14378,7 @@ impl Item {
         ],
     };
     pub const INFESTED_CHISELED_STONE_BRICKS: Item = Item {
-        id: 373,
+        id: 374,
         registry_key: "infested_chiseled_stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14236,7 +14397,7 @@ impl Item {
         ],
     };
     pub const INFESTED_COBBLESTONE: Item = Item {
-        id: 369,
+        id: 370,
         registry_key: "infested_cobblestone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14255,7 +14416,7 @@ impl Item {
         ],
     };
     pub const INFESTED_CRACKED_STONE_BRICKS: Item = Item {
-        id: 372,
+        id: 373,
         registry_key: "infested_cracked_stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14274,7 +14435,7 @@ impl Item {
         ],
     };
     pub const INFESTED_DEEPSLATE: Item = Item {
-        id: 374,
+        id: 375,
         registry_key: "infested_deepslate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14293,7 +14454,7 @@ impl Item {
         ],
     };
     pub const INFESTED_MOSSY_STONE_BRICKS: Item = Item {
-        id: 371,
+        id: 372,
         registry_key: "infested_mossy_stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14312,7 +14473,7 @@ impl Item {
         ],
     };
     pub const INFESTED_STONE: Item = Item {
-        id: 368,
+        id: 369,
         registry_key: "infested_stone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14331,7 +14492,7 @@ impl Item {
         ],
     };
     pub const INFESTED_STONE_BRICKS: Item = Item {
-        id: 370,
+        id: 371,
         registry_key: "infested_stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14350,7 +14511,7 @@ impl Item {
         ],
     };
     pub const INK_SAC: Item = Item {
-        id: 1063,
+        id: 1064,
         registry_key: "ink_sac",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14369,7 +14530,7 @@ impl Item {
         ],
     };
     pub const IRON_AXE: Item = Item {
-        id: 934,
+        id: 935,
         registry_key: "iron_axe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14407,12 +14568,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_IRON_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_iron_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_AXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/axe")),
                             speed: Some(6f32),
                             correct_for_drops: Some(true),
                         },
@@ -14431,7 +14592,7 @@ impl Item {
         ],
     };
     pub const IRON_BARS: Item = Item {
-        id: 390,
+        id: 391,
         registry_key: "iron_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14469,7 +14630,7 @@ impl Item {
         ],
     };
     pub const IRON_BOOTS: Item = Item {
-        id: 969,
+        id: 970,
         registry_key: "iron_boots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14506,8 +14667,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::FEET,
-                    equip_sound: "minecraft:item.armor.equip_iron",
-                    asset_id: Some("minecraft:iron"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipIron),
+                    asset_id: Some(Cow::Borrowed("minecraft:iron")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -14515,13 +14676,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const IRON_CHAIN: Item = Item {
-        id: 399,
+        id: 400,
         registry_key: "iron_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14540,7 +14701,7 @@ impl Item {
         ],
     };
     pub const IRON_CHESTPLATE: Item = Item {
-        id: 967,
+        id: 968,
         registry_key: "iron_chestplate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14577,8 +14738,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
-                    equip_sound: "minecraft:item.armor.equip_iron",
-                    asset_id: Some("minecraft:iron"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipIron),
+                    asset_id: Some(Cow::Borrowed("minecraft:iron")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -14586,13 +14747,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const IRON_DOOR: Item = Item {
-        id: 779,
+        id: 780,
         registry_key: "iron_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14611,7 +14772,7 @@ impl Item {
         ],
     };
     pub const IRON_GOLEM_SPAWN_EGG: Item = Item {
-        id: 1167,
+        id: 1168,
         registry_key: "iron_golem_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14630,7 +14791,7 @@ impl Item {
         ],
     };
     pub const IRON_HELMET: Item = Item {
-        id: 966,
+        id: 967,
         registry_key: "iron_helmet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14667,8 +14828,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "minecraft:item.armor.equip_iron",
-                    asset_id: Some("minecraft:iron"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipIron),
+                    asset_id: Some(Cow::Borrowed("minecraft:iron")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -14676,13 +14837,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const IRON_HOE: Item = Item {
-        id: 935,
+        id: 936,
         registry_key: "iron_hoe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14720,12 +14881,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_IRON_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_iron_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_HOE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/hoe")),
                             speed: Some(6f32),
                             correct_for_drops: Some(true),
                         },
@@ -14744,7 +14905,7 @@ impl Item {
         ],
     };
     pub const IRON_HORSE_ARMOR: Item = Item {
-        id: 1256,
+        id: 1257,
         registry_key: "iron_horse_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14779,24 +14940,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.horse.armor",
-                    asset_id: Some("minecraft:iron"),
+                    equip_sound: IdOr::Id(Sound::EntityHorseArmor),
+                    asset_id: Some(Cow::Borrowed("minecraft:iron")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_HORSE_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_horse_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.horse_armor.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemHorseArmorUnequip),
                 },
             ),
         ],
     };
     pub const IRON_INGOT: Item = Item {
-        id: 904,
+        id: 905,
         registry_key: "iron_ingot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14815,7 +14974,7 @@ impl Item {
         ],
     };
     pub const IRON_LEGGINGS: Item = Item {
-        id: 968,
+        id: 969,
         registry_key: "iron_leggings",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14852,8 +15011,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::LEGS,
-                    equip_sound: "minecraft:item.armor.equip_iron",
-                    asset_id: Some("minecraft:iron"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipIron),
+                    asset_id: Some(Cow::Borrowed("minecraft:iron")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -14861,13 +15020,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const IRON_NAUTILUS_ARMOR: Item = Item {
-        id: 1333,
+        id: 1334,
         registry_key: "iron_nautilus_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14902,24 +15061,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:item.armor.equip_nautilus",
-                    asset_id: Some("minecraft:iron"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNautilus),
+                    asset_id: Some(Cow::Borrowed("minecraft:iron")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_NAUTILUS_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_nautilus_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.armor.unequip_nautilus"),
+                    shearing_sound: IdOr::Id(Sound::ItemArmorUnequipNautilus),
                 },
             ),
         ],
     };
     pub const IRON_NUGGET: Item = Item {
-        id: 1305,
+        id: 1306,
         registry_key: "iron_nugget",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -14957,7 +15114,7 @@ impl Item {
         ],
     };
     pub const IRON_PICKAXE: Item = Item {
-        id: 933,
+        id: 934,
         registry_key: "iron_pickaxe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -14995,12 +15152,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_IRON_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_iron_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_PICKAXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/pickaxe")),
                             speed: Some(6f32),
                             correct_for_drops: Some(true),
                         },
@@ -15019,7 +15176,7 @@ impl Item {
         ],
     };
     pub const IRON_SHOVEL: Item = Item {
-        id: 932,
+        id: 933,
         registry_key: "iron_shovel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15057,12 +15214,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_IRON_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_iron_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_SHOVEL),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/shovel")),
                             speed: Some(6f32),
                             correct_for_drops: Some(true),
                         },
@@ -15081,7 +15238,7 @@ impl Item {
         ],
     };
     pub const IRON_SPEAR: Item = Item {
-        id: 1299,
+        id: 1300,
         registry_key: "iron_spear",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15123,7 +15280,7 @@ impl Item {
         ],
     };
     pub const IRON_SWORD: Item = Item {
-        id: 931,
+        id: 932,
         registry_key: "iron_sword",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15161,17 +15318,17 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::COBWEB])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::COBWEB])),
                             speed: Some(15f32),
                             correct_for_drops: Some(true),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_INSTANTLY_MINES),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_instantly_mines")),
                             speed: Some(340282350000000000000000000000000000000f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_EFFICIENT),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_efficient")),
                             speed: Some(1.5f32),
                             correct_for_drops: None,
                         },
@@ -15190,7 +15347,7 @@ impl Item {
         ],
     };
     pub const IRON_TRAPDOOR: Item = Item {
-        id: 800,
+        id: 801,
         registry_key: "iron_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15209,7 +15366,7 @@ impl Item {
         ],
     };
     pub const ITEM_FRAME: Item = Item {
-        id: 1224,
+        id: 1225,
         registry_key: "item_frame",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15228,7 +15385,7 @@ impl Item {
         ],
     };
     pub const JACK_O_LANTERN: Item = Item {
-        id: 358,
+        id: 359,
         registry_key: "jack_o_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15247,7 +15404,7 @@ impl Item {
         ],
     };
     pub const JIGSAW: Item = Item {
-        id: 884,
+        id: 885,
         registry_key: "jigsaw",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15266,7 +15423,7 @@ impl Item {
         ],
     };
     pub const JUKEBOX: Item = Item {
-        id: 343,
+        id: 344,
         registry_key: "jukebox",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15285,7 +15442,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_BOAT: Item = Item {
-        id: 869,
+        id: 870,
         registry_key: "jungle_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15304,7 +15461,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_BUTTON: Item = Item {
-        id: 754,
+        id: 755,
         registry_key: "jungle_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15323,7 +15480,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_CHEST_BOAT: Item = Item {
-        id: 870,
+        id: 871,
         registry_key: "jungle_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15342,7 +15499,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_DOOR: Item = Item {
-        id: 783,
+        id: 784,
         registry_key: "jungle_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15361,7 +15518,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_FENCE: Item = Item {
-        id: 347,
+        id: 348,
         registry_key: "jungle_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15380,7 +15537,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_FENCE_GATE: Item = Item {
-        id: 824,
+        id: 825,
         registry_key: "jungle_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15399,7 +15556,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_HANGING_SIGN: Item = Item {
-        id: 1003,
+        id: 1004,
         registry_key: "jungle_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -15475,7 +15632,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_PRESSURE_PLATE: Item = Item {
-        id: 770,
+        id: 771,
         registry_key: "jungle_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15513,7 +15670,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_SHELF: Item = Item {
-        id: 311,
+        id: 312,
         registry_key: "jungle_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15532,7 +15689,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_SIGN: Item = Item {
-        id: 991,
+        id: 992,
         registry_key: "jungle_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -15551,7 +15708,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_SLAB: Item = Item {
-        id: 273,
+        id: 274,
         registry_key: "jungle_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15570,7 +15727,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_STAIRS: Item = Item {
-        id: 444,
+        id: 445,
         registry_key: "jungle_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15589,7 +15746,7 @@ impl Item {
         ],
     };
     pub const JUNGLE_TRAPDOOR: Item = Item {
-        id: 804,
+        id: 805,
         registry_key: "jungle_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15627,7 +15784,7 @@ impl Item {
         ],
     };
     pub const KELP: Item = Item {
-        id: 257,
+        id: 258,
         registry_key: "kelp",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15646,7 +15803,7 @@ impl Item {
         ],
     };
     pub const KNOWLEDGE_BOOK: Item = Item {
-        id: 1307,
+        id: 1308,
         registry_key: "knowledge_book",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15665,7 +15822,7 @@ impl Item {
         ],
     };
     pub const LADDER: Item = Item {
-        id: 335,
+        id: 336,
         registry_key: "ladder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15684,7 +15841,7 @@ impl Item {
         ],
     };
     pub const LANTERN: Item = Item {
-        id: 1363,
+        id: 1364,
         registry_key: "lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15722,7 +15879,7 @@ impl Item {
         ],
     };
     pub const LAPIS_LAZULI: Item = Item {
-        id: 900,
+        id: 901,
         registry_key: "lapis_lazuli",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15760,7 +15917,7 @@ impl Item {
         ],
     };
     pub const LARGE_AMETHYST_BUD: Item = Item {
-        id: 1417,
+        id: 1418,
         registry_key: "large_amethyst_bud",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15779,7 +15936,7 @@ impl Item {
         ],
     };
     pub const LARGE_FERN: Item = Item {
-        id: 529,
+        id: 530,
         registry_key: "large_fern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15798,7 +15955,7 @@ impl Item {
         ],
     };
     pub const LAVA_BUCKET: Item = Item {
-        id: 1014,
+        id: 1015,
         registry_key: "lava_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15817,7 +15974,7 @@ impl Item {
         ],
     };
     pub const LEAD: Item = Item {
-        id: 1261,
+        id: 1262,
         registry_key: "lead",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15836,7 +15993,7 @@ impl Item {
         ],
     };
     pub const LEAF_LITTER: Item = Item {
-        id: 260,
+        id: 261,
         registry_key: "leaf_litter",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15855,7 +16012,7 @@ impl Item {
         ],
     };
     pub const LEATHER: Item = Item {
-        id: 1017,
+        id: 1018,
         registry_key: "leather",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -15874,7 +16031,7 @@ impl Item {
         ],
     };
     pub const LEATHER_BOOTS: Item = Item {
-        id: 957,
+        id: 958,
         registry_key: "leather_boots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15911,8 +16068,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::FEET,
-                    equip_sound: "minecraft:item.armor.equip_leather",
-                    asset_id: Some("minecraft:leather"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipLeather),
+                    asset_id: Some(Cow::Borrowed("minecraft:leather")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -15920,13 +16077,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const LEATHER_CHESTPLATE: Item = Item {
-        id: 955,
+        id: 956,
         registry_key: "leather_chestplate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -15963,8 +16120,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
-                    equip_sound: "minecraft:item.armor.equip_leather",
-                    asset_id: Some("minecraft:leather"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipLeather),
+                    asset_id: Some(Cow::Borrowed("minecraft:leather")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -15972,13 +16129,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const LEATHER_HELMET: Item = Item {
-        id: 954,
+        id: 955,
         registry_key: "leather_helmet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16015,8 +16172,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "minecraft:item.armor.equip_leather",
-                    asset_id: Some("minecraft:leather"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipLeather),
+                    asset_id: Some(Cow::Borrowed("minecraft:leather")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -16024,13 +16181,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const LEATHER_HORSE_ARMOR: Item = Item {
-        id: 1260,
+        id: 1261,
         registry_key: "leather_horse_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16065,24 +16222,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.horse.armor",
-                    asset_id: Some("minecraft:leather"),
+                    equip_sound: IdOr::Id(Sound::EntityHorseArmor),
+                    asset_id: Some(Cow::Borrowed("minecraft:leather")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_HORSE_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_horse_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.horse_armor.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemHorseArmorUnequip),
                 },
             ),
         ],
     };
     pub const LEATHER_LEGGINGS: Item = Item {
-        id: 956,
+        id: 957,
         registry_key: "leather_leggings",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16119,8 +16274,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::LEGS,
-                    equip_sound: "minecraft:item.armor.equip_leather",
-                    asset_id: Some("minecraft:leather"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipLeather),
+                    asset_id: Some(Cow::Borrowed("minecraft:leather")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -16128,13 +16283,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const LECTERN: Item = Item {
-        id: 730,
+        id: 731,
         registry_key: "lectern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16153,7 +16308,7 @@ impl Item {
         ],
     };
     pub const LEVER: Item = Item {
-        id: 732,
+        id: 733,
         registry_key: "lever",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16172,7 +16327,7 @@ impl Item {
         ],
     };
     pub const LIGHT: Item = Item {
-        id: 503,
+        id: 504,
         registry_key: "light",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16191,7 +16346,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_BANNER: Item = Item {
-        id: 1269,
+        id: 1270,
         registry_key: "light_blue_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -16210,7 +16365,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_BED: Item = Item {
-        id: 1089,
+        id: 1090,
         registry_key: "light_blue_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16229,7 +16384,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_BUNDLE: Item = Item {
-        id: 1040,
+        id: 1041,
         registry_key: "light_blue_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16248,7 +16403,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_CANDLE: Item = Item {
-        id: 1402,
+        id: 1403,
         registry_key: "light_blue_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16267,7 +16422,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_CARPET: Item = Item {
-        id: 508,
+        id: 509,
         registry_key: "light_blue_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16287,25 +16442,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:light_blue_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:light_blue_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const LIGHT_BLUE_CONCRETE: Item = Item {
-        id: 617,
+        id: 618,
         registry_key: "light_blue_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16324,7 +16479,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_CONCRETE_POWDER: Item = Item {
-        id: 633,
+        id: 634,
         registry_key: "light_blue_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16343,7 +16498,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_DYE: Item = Item {
-        id: 1069,
+        id: 1070,
         registry_key: "light_blue_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16362,7 +16517,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_GLAZED_TERRACOTTA: Item = Item {
-        id: 601,
+        id: 602,
         registry_key: "light_blue_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16381,7 +16536,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_HARNESS: Item = Item {
-        id: 841,
+        id: 842,
         registry_key: "light_blue_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16401,24 +16556,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:light_blue_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:light_blue_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const LIGHT_BLUE_SHULKER_BOX: Item = Item {
-        id: 585,
+        id: 586,
         registry_key: "light_blue_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16437,7 +16590,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_STAINED_GLASS: Item = Item {
-        id: 533,
+        id: 534,
         registry_key: "light_blue_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16456,7 +16609,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_STAINED_GLASS_PANE: Item = Item {
-        id: 549,
+        id: 550,
         registry_key: "light_blue_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16475,7 +16628,7 @@ impl Item {
         ],
     };
     pub const LIGHT_BLUE_TERRACOTTA: Item = Item {
-        id: 489,
+        id: 490,
         registry_key: "light_blue_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16513,7 +16666,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_BANNER: Item = Item {
-        id: 1274,
+        id: 1275,
         registry_key: "light_gray_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -16532,7 +16685,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_BED: Item = Item {
-        id: 1094,
+        id: 1095,
         registry_key: "light_gray_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16551,7 +16704,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_BUNDLE: Item = Item {
-        id: 1045,
+        id: 1046,
         registry_key: "light_gray_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16570,7 +16723,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_CANDLE: Item = Item {
-        id: 1407,
+        id: 1408,
         registry_key: "light_gray_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16589,7 +16742,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_CARPET: Item = Item {
-        id: 513,
+        id: 514,
         registry_key: "light_gray_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16609,25 +16762,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:light_gray_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:light_gray_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const LIGHT_GRAY_CONCRETE: Item = Item {
-        id: 622,
+        id: 623,
         registry_key: "light_gray_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16646,7 +16799,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_CONCRETE_POWDER: Item = Item {
-        id: 638,
+        id: 639,
         registry_key: "light_gray_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16665,7 +16818,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_DYE: Item = Item {
-        id: 1074,
+        id: 1075,
         registry_key: "light_gray_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16684,7 +16837,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_GLAZED_TERRACOTTA: Item = Item {
-        id: 606,
+        id: 607,
         registry_key: "light_gray_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16703,7 +16856,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_HARNESS: Item = Item {
-        id: 846,
+        id: 847,
         registry_key: "light_gray_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16723,24 +16876,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:light_gray_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:light_gray_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const LIGHT_GRAY_SHULKER_BOX: Item = Item {
-        id: 590,
+        id: 591,
         registry_key: "light_gray_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16759,7 +16910,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_STAINED_GLASS: Item = Item {
-        id: 538,
+        id: 539,
         registry_key: "light_gray_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16778,7 +16929,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_STAINED_GLASS_PANE: Item = Item {
-        id: 554,
+        id: 555,
         registry_key: "light_gray_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16797,7 +16948,7 @@ impl Item {
         ],
     };
     pub const LIGHT_GRAY_TERRACOTTA: Item = Item {
-        id: 494,
+        id: 495,
         registry_key: "light_gray_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16835,7 +16986,7 @@ impl Item {
         ],
     };
     pub const LIGHT_WEIGHTED_PRESSURE_PLATE: Item = Item {
-        id: 765,
+        id: 766,
         registry_key: "light_weighted_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16854,7 +17005,7 @@ impl Item {
         ],
     };
     pub const LIGHTNING_ROD: Item = Item {
-        id: 733,
+        id: 734,
         registry_key: "lightning_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16873,7 +17024,7 @@ impl Item {
         ],
     };
     pub const LILAC: Item = Item {
-        id: 525,
+        id: 526,
         registry_key: "lilac",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16892,7 +17043,7 @@ impl Item {
         ],
     };
     pub const LILY_OF_THE_VALLEY: Item = Item {
-        id: 242,
+        id: 243,
         registry_key: "lily_of_the_valley",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16911,7 +17062,7 @@ impl Item {
         ],
     };
     pub const LILY_PAD: Item = Item {
-        id: 423,
+        id: 424,
         registry_key: "lily_pad",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -16930,7 +17081,7 @@ impl Item {
         ],
     };
     pub const LIME_BANNER: Item = Item {
-        id: 1271,
+        id: 1272,
         registry_key: "lime_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -16949,7 +17100,7 @@ impl Item {
         ],
     };
     pub const LIME_BED: Item = Item {
-        id: 1091,
+        id: 1092,
         registry_key: "lime_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16968,7 +17119,7 @@ impl Item {
         ],
     };
     pub const LIME_BUNDLE: Item = Item {
-        id: 1042,
+        id: 1043,
         registry_key: "lime_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -16987,7 +17138,7 @@ impl Item {
         ],
     };
     pub const LIME_CANDLE: Item = Item {
-        id: 1404,
+        id: 1405,
         registry_key: "lime_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17006,7 +17157,7 @@ impl Item {
         ],
     };
     pub const LIME_CARPET: Item = Item {
-        id: 510,
+        id: 511,
         registry_key: "lime_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17026,25 +17177,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:lime_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:lime_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const LIME_CONCRETE: Item = Item {
-        id: 619,
+        id: 620,
         registry_key: "lime_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17063,7 +17214,7 @@ impl Item {
         ],
     };
     pub const LIME_CONCRETE_POWDER: Item = Item {
-        id: 635,
+        id: 636,
         registry_key: "lime_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17082,7 +17233,7 @@ impl Item {
         ],
     };
     pub const LIME_DYE: Item = Item {
-        id: 1071,
+        id: 1072,
         registry_key: "lime_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17101,7 +17252,7 @@ impl Item {
         ],
     };
     pub const LIME_GLAZED_TERRACOTTA: Item = Item {
-        id: 603,
+        id: 604,
         registry_key: "lime_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17120,7 +17271,7 @@ impl Item {
         ],
     };
     pub const LIME_HARNESS: Item = Item {
-        id: 843,
+        id: 844,
         registry_key: "lime_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17140,24 +17291,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:lime_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:lime_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const LIME_SHULKER_BOX: Item = Item {
-        id: 587,
+        id: 588,
         registry_key: "lime_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17176,7 +17325,7 @@ impl Item {
         ],
     };
     pub const LIME_STAINED_GLASS: Item = Item {
-        id: 535,
+        id: 536,
         registry_key: "lime_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17195,7 +17344,7 @@ impl Item {
         ],
     };
     pub const LIME_STAINED_GLASS_PANE: Item = Item {
-        id: 551,
+        id: 552,
         registry_key: "lime_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17214,7 +17363,7 @@ impl Item {
         ],
     };
     pub const LIME_TERRACOTTA: Item = Item {
-        id: 491,
+        id: 492,
         registry_key: "lime_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17252,7 +17401,7 @@ impl Item {
         ],
     };
     pub const LINGERING_POTION: Item = Item {
-        id: 1294,
+        id: 1295,
         registry_key: "lingering_potion",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17271,7 +17420,7 @@ impl Item {
         ],
     };
     pub const LLAMA_SPAWN_EGG: Item = Item {
-        id: 1146,
+        id: 1147,
         registry_key: "llama_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17290,7 +17439,7 @@ impl Item {
         ],
     };
     pub const LODESTONE: Item = Item {
-        id: 1383,
+        id: 1384,
         registry_key: "lodestone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17309,7 +17458,7 @@ impl Item {
         ],
     };
     pub const LOOM: Item = Item {
-        id: 1341,
+        id: 1342,
         registry_key: "loom",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17328,7 +17477,7 @@ impl Item {
         ],
     };
     pub const MACE: Item = Item {
-        id: 1223,
+        id: 1224,
         registry_key: "mace",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17379,7 +17528,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_BANNER: Item = Item {
-        id: 1268,
+        id: 1269,
         registry_key: "magenta_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -17398,7 +17547,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_BED: Item = Item {
-        id: 1088,
+        id: 1089,
         registry_key: "magenta_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17417,7 +17566,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_BUNDLE: Item = Item {
-        id: 1039,
+        id: 1040,
         registry_key: "magenta_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17436,7 +17585,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_CANDLE: Item = Item {
-        id: 1401,
+        id: 1402,
         registry_key: "magenta_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17455,7 +17604,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_CARPET: Item = Item {
-        id: 507,
+        id: 508,
         registry_key: "magenta_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17475,25 +17624,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:magenta_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:magenta_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const MAGENTA_CONCRETE: Item = Item {
-        id: 616,
+        id: 617,
         registry_key: "magenta_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17512,7 +17661,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_CONCRETE_POWDER: Item = Item {
-        id: 632,
+        id: 633,
         registry_key: "magenta_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17531,7 +17680,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_DYE: Item = Item {
-        id: 1068,
+        id: 1069,
         registry_key: "magenta_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17550,7 +17699,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_GLAZED_TERRACOTTA: Item = Item {
-        id: 600,
+        id: 601,
         registry_key: "magenta_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17569,7 +17718,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_HARNESS: Item = Item {
-        id: 840,
+        id: 841,
         registry_key: "magenta_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17589,24 +17738,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:magenta_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:magenta_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const MAGENTA_SHULKER_BOX: Item = Item {
-        id: 584,
+        id: 585,
         registry_key: "magenta_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17625,7 +17772,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_STAINED_GLASS: Item = Item {
-        id: 532,
+        id: 533,
         registry_key: "magenta_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17644,7 +17791,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_STAINED_GLASS_PANE: Item = Item {
-        id: 548,
+        id: 549,
         registry_key: "magenta_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17663,7 +17810,7 @@ impl Item {
         ],
     };
     pub const MAGENTA_TERRACOTTA: Item = Item {
-        id: 488,
+        id: 489,
         registry_key: "magenta_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17701,7 +17848,7 @@ impl Item {
         ],
     };
     pub const MAGMA_BLOCK: Item = Item {
-        id: 575,
+        id: 576,
         registry_key: "magma_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17720,7 +17867,7 @@ impl Item {
         ],
     };
     pub const MAGMA_CREAM: Item = Item {
-        id: 1125,
+        id: 1126,
         registry_key: "magma_cream",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17739,7 +17886,7 @@ impl Item {
         ],
     };
     pub const MAGMA_CUBE_SPAWN_EGG: Item = Item {
-        id: 1207,
+        id: 1208,
         registry_key: "magma_cube_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17758,7 +17905,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_BOAT: Item = Item {
-        id: 879,
+        id: 880,
         registry_key: "mangrove_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17777,7 +17924,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_BUTTON: Item = Item {
-        id: 759,
+        id: 760,
         registry_key: "mangrove_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17796,7 +17943,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_CHEST_BOAT: Item = Item {
-        id: 880,
+        id: 881,
         registry_key: "mangrove_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -17815,7 +17962,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_DOOR: Item = Item {
-        id: 788,
+        id: 789,
         registry_key: "mangrove_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17834,7 +17981,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_FENCE: Item = Item {
-        id: 352,
+        id: 353,
         registry_key: "mangrove_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17853,7 +18000,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_FENCE_GATE: Item = Item {
-        id: 829,
+        id: 830,
         registry_key: "mangrove_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -17872,7 +18019,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_HANGING_SIGN: Item = Item {
-        id: 1008,
+        id: 1009,
         registry_key: "mangrove_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -17948,7 +18095,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_PRESSURE_PLATE: Item = Item {
-        id: 775,
+        id: 776,
         registry_key: "mangrove_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18005,7 +18152,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_SHELF: Item = Item {
-        id: 312,
+        id: 313,
         registry_key: "mangrove_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18024,7 +18171,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_SIGN: Item = Item {
-        id: 996,
+        id: 997,
         registry_key: "mangrove_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -18043,7 +18190,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_SLAB: Item = Item {
-        id: 278,
+        id: 279,
         registry_key: "mangrove_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18062,7 +18209,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_STAIRS: Item = Item {
-        id: 449,
+        id: 450,
         registry_key: "mangrove_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18081,7 +18228,7 @@ impl Item {
         ],
     };
     pub const MANGROVE_TRAPDOOR: Item = Item {
-        id: 809,
+        id: 810,
         registry_key: "mangrove_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18119,7 +18266,7 @@ impl Item {
         ],
     };
     pub const MAP: Item = Item {
-        id: 1231,
+        id: 1232,
         registry_key: "map",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18138,7 +18285,7 @@ impl Item {
         ],
     };
     pub const MEDIUM_AMETHYST_BUD: Item = Item {
-        id: 1416,
+        id: 1417,
         registry_key: "medium_amethyst_bud",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18157,7 +18304,7 @@ impl Item {
         ],
     };
     pub const MELON: Item = Item {
-        id: 409,
+        id: 410,
         registry_key: "melon",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18176,7 +18323,7 @@ impl Item {
         ],
     };
     pub const MELON_SEEDS: Item = Item {
-        id: 1109,
+        id: 1110,
         registry_key: "melon_seeds",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18195,7 +18342,7 @@ impl Item {
         ],
     };
     pub const MELON_SLICE: Item = Item {
-        id: 1106,
+        id: 1107,
         registry_key: "melon_slice",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18223,12 +18370,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const MILK_BUCKET: Item = Item {
-        id: 1018,
+        id: 1019,
         registry_key: "milk_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18248,12 +18399,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Drink,
+                    sound_event: IdOr::Id(Sound::EntityGenericDrink),
+                    consume_particles: false,
+                    effects: Cow::Borrowed(&[ConsumeEffect::ClearAllEffects]),
                 },
             ),
         ],
     };
     pub const MINECART: Item = Item {
-        id: 854,
+        id: 855,
         registry_key: "minecart",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18272,7 +18427,7 @@ impl Item {
         ],
     };
     pub const MINER_POTTERY_SHERD: Item = Item {
-        id: 1459,
+        id: 1460,
         registry_key: "miner_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18291,7 +18446,7 @@ impl Item {
         ],
     };
     pub const MOJANG_BANNER_PATTERN: Item = Item {
-        id: 1345,
+        id: 1346,
         registry_key: "mojang_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18310,7 +18465,7 @@ impl Item {
         ],
     };
     pub const MOOSHROOM_SPAWN_EGG: Item = Item {
-        id: 1164,
+        id: 1165,
         registry_key: "mooshroom_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18329,7 +18484,7 @@ impl Item {
         ],
     };
     pub const MOSS_BLOCK: Item = Item {
-        id: 262,
+        id: 263,
         registry_key: "moss_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18348,7 +18503,7 @@ impl Item {
         ],
     };
     pub const MOSS_CARPET: Item = Item {
-        id: 261,
+        id: 262,
         registry_key: "moss_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18367,7 +18522,7 @@ impl Item {
         ],
     };
     pub const MOSSY_COBBLESTONE: Item = Item {
-        id: 320,
+        id: 321,
         registry_key: "mossy_cobblestone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18386,7 +18541,7 @@ impl Item {
         ],
     };
     pub const MOSSY_COBBLESTONE_SLAB: Item = Item {
-        id: 703,
+        id: 704,
         registry_key: "mossy_cobblestone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18405,7 +18560,7 @@ impl Item {
         ],
     };
     pub const MOSSY_COBBLESTONE_STAIRS: Item = Item {
-        id: 685,
+        id: 686,
         registry_key: "mossy_cobblestone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18424,7 +18579,7 @@ impl Item {
         ],
     };
     pub const MOSSY_COBBLESTONE_WALL: Item = Item {
-        id: 457,
+        id: 458,
         registry_key: "mossy_cobblestone_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18443,7 +18598,7 @@ impl Item {
         ],
     };
     pub const MOSSY_STONE_BRICK_SLAB: Item = Item {
-        id: 701,
+        id: 702,
         registry_key: "mossy_stone_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18462,7 +18617,7 @@ impl Item {
         ],
     };
     pub const MOSSY_STONE_BRICK_STAIRS: Item = Item {
-        id: 683,
+        id: 684,
         registry_key: "mossy_stone_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18481,7 +18636,7 @@ impl Item {
         ],
     };
     pub const MOSSY_STONE_BRICK_WALL: Item = Item {
-        id: 461,
+        id: 462,
         registry_key: "mossy_stone_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18500,7 +18655,7 @@ impl Item {
         ],
     };
     pub const MOSSY_STONE_BRICKS: Item = Item {
-        id: 376,
+        id: 377,
         registry_key: "mossy_stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18519,7 +18674,7 @@ impl Item {
         ],
     };
     pub const MOURNER_POTTERY_SHERD: Item = Item {
-        id: 1460,
+        id: 1461,
         registry_key: "mourner_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18557,7 +18712,7 @@ impl Item {
         ],
     };
     pub const MUD_BRICK_SLAB: Item = Item {
-        id: 291,
+        id: 292,
         registry_key: "mud_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18576,7 +18731,7 @@ impl Item {
         ],
     };
     pub const MUD_BRICK_STAIRS: Item = Item {
-        id: 421,
+        id: 422,
         registry_key: "mud_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18595,7 +18750,7 @@ impl Item {
         ],
     };
     pub const MUD_BRICK_WALL: Item = Item {
-        id: 464,
+        id: 465,
         registry_key: "mud_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18614,7 +18769,7 @@ impl Item {
         ],
     };
     pub const MUD_BRICKS: Item = Item {
-        id: 380,
+        id: 381,
         registry_key: "mud_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18652,7 +18807,7 @@ impl Item {
         ],
     };
     pub const MULE_SPAWN_EGG: Item = Item {
-        id: 1137,
+        id: 1138,
         registry_key: "mule_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18671,7 +18826,7 @@ impl Item {
         ],
     };
     pub const MUSHROOM_STEM: Item = Item {
-        id: 389,
+        id: 390,
         registry_key: "mushroom_stem",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -18690,7 +18845,7 @@ impl Item {
         ],
     };
     pub const MUSHROOM_STEW: Item = Item {
-        id: 947,
+        id: 948,
         registry_key: "mushroom_stew",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18718,12 +18873,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const MUSIC_DISC_11: Item = Item {
-        id: 1322,
+        id: 1323,
         registry_key: "music_disc_11",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18748,7 +18907,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_13: Item = Item {
-        id: 1309,
+        id: 1310,
         registry_key: "music_disc_13",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18773,7 +18932,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_5: Item = Item {
-        id: 1326,
+        id: 1327,
         registry_key: "music_disc_5",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18798,7 +18957,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_BLOCKS: Item = Item {
-        id: 1311,
+        id: 1312,
         registry_key: "music_disc_blocks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18823,7 +18982,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_CAT: Item = Item {
-        id: 1310,
+        id: 1311,
         registry_key: "music_disc_cat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18848,7 +19007,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_CHIRP: Item = Item {
-        id: 1312,
+        id: 1313,
         registry_key: "music_disc_chirp",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18873,7 +19032,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_CREATOR: Item = Item {
-        id: 1313,
+        id: 1314,
         registry_key: "music_disc_creator",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18898,7 +19057,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_CREATOR_MUSIC_BOX: Item = Item {
-        id: 1314,
+        id: 1315,
         registry_key: "music_disc_creator_music_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18923,7 +19082,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_FAR: Item = Item {
-        id: 1315,
+        id: 1316,
         registry_key: "music_disc_far",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18948,7 +19107,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_LAVA_CHICKEN: Item = Item {
-        id: 1316,
+        id: 1317,
         registry_key: "music_disc_lava_chicken",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18973,7 +19132,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_MALL: Item = Item {
-        id: 1317,
+        id: 1318,
         registry_key: "music_disc_mall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -18998,7 +19157,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_MELLOHI: Item = Item {
-        id: 1318,
+        id: 1319,
         registry_key: "music_disc_mellohi",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19023,7 +19182,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_OTHERSIDE: Item = Item {
-        id: 1324,
+        id: 1325,
         registry_key: "music_disc_otherside",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19048,7 +19207,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_PIGSTEP: Item = Item {
-        id: 1327,
+        id: 1328,
         registry_key: "music_disc_pigstep",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19073,7 +19232,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_PRECIPICE: Item = Item {
-        id: 1328,
+        id: 1329,
         registry_key: "music_disc_precipice",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19098,7 +19257,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_RELIC: Item = Item {
-        id: 1325,
+        id: 1326,
         registry_key: "music_disc_relic",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19123,7 +19282,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_STAL: Item = Item {
-        id: 1319,
+        id: 1320,
         registry_key: "music_disc_stal",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19148,7 +19307,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_STRAD: Item = Item {
-        id: 1320,
+        id: 1321,
         registry_key: "music_disc_strad",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19173,7 +19332,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_TEARS: Item = Item {
-        id: 1329,
+        id: 1330,
         registry_key: "music_disc_tears",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19198,7 +19357,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_WAIT: Item = Item {
-        id: 1323,
+        id: 1324,
         registry_key: "music_disc_wait",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19223,7 +19382,7 @@ impl Item {
         ],
     };
     pub const MUSIC_DISC_WARD: Item = Item {
-        id: 1321,
+        id: 1322,
         registry_key: "music_disc_ward",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19248,7 +19407,7 @@ impl Item {
         ],
     };
     pub const MUTTON: Item = Item {
-        id: 1264,
+        id: 1265,
         registry_key: "mutton",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19276,12 +19435,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const MYCELIUM: Item = Item {
-        id: 422,
+        id: 423,
         registry_key: "mycelium",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19300,7 +19463,7 @@ impl Item {
         ],
     };
     pub const NAME_TAG: Item = Item {
-        id: 1262,
+        id: 1263,
         registry_key: "name_tag",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19319,7 +19482,7 @@ impl Item {
         ],
     };
     pub const NAUTILUS_SHELL: Item = Item {
-        id: 1332,
+        id: 1333,
         registry_key: "nautilus_shell",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19338,7 +19501,7 @@ impl Item {
         ],
     };
     pub const NAUTILUS_SPAWN_EGG: Item = Item {
-        id: 1156,
+        id: 1157,
         registry_key: "nautilus_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19357,7 +19520,7 @@ impl Item {
         ],
     };
     pub const NETHER_BRICK: Item = Item {
-        id: 1245,
+        id: 1246,
         registry_key: "nether_brick",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19376,7 +19539,7 @@ impl Item {
         ],
     };
     pub const NETHER_BRICK_FENCE: Item = Item {
-        id: 427,
+        id: 428,
         registry_key: "nether_brick_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19395,7 +19558,7 @@ impl Item {
         ],
     };
     pub const NETHER_BRICK_SLAB: Item = Item {
-        id: 292,
+        id: 293,
         registry_key: "nether_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19414,7 +19577,7 @@ impl Item {
         ],
     };
     pub const NETHER_BRICK_STAIRS: Item = Item {
-        id: 428,
+        id: 429,
         registry_key: "nether_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19433,7 +19596,7 @@ impl Item {
         ],
     };
     pub const NETHER_BRICK_WALL: Item = Item {
-        id: 465,
+        id: 466,
         registry_key: "nether_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19452,7 +19615,7 @@ impl Item {
         ],
     };
     pub const NETHER_BRICKS: Item = Item {
-        id: 424,
+        id: 425,
         registry_key: "nether_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19509,7 +19672,7 @@ impl Item {
         ],
     };
     pub const NETHER_SPROUTS: Item = Item {
-        id: 253,
+        id: 254,
         registry_key: "nether_sprouts",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19528,7 +19691,7 @@ impl Item {
         ],
     };
     pub const NETHER_STAR: Item = Item {
-        id: 1240,
+        id: 1241,
         registry_key: "nether_star",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19553,7 +19716,7 @@ impl Item {
         ],
     };
     pub const NETHER_WART: Item = Item {
-        id: 1119,
+        id: 1120,
         registry_key: "nether_wart",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19572,7 +19735,7 @@ impl Item {
         ],
     };
     pub const NETHER_WART_BLOCK: Item = Item {
-        id: 576,
+        id: 577,
         registry_key: "nether_wart_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -19591,7 +19754,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_AXE: Item = Item {
-        id: 944,
+        id: 945,
         registry_key: "netherite_axe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19629,12 +19792,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_NETHERITE_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_netherite_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_AXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/axe")),
                             speed: Some(9f32),
                             correct_for_drops: Some(true),
                         },
@@ -19684,7 +19847,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_BOOTS: Item = Item {
-        id: 981,
+        id: 982,
         registry_key: "netherite_boots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19734,8 +19897,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::FEET,
-                    equip_sound: "minecraft:item.armor.equip_netherite",
-                    asset_id: Some("minecraft:netherite"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNetherite),
+                    asset_id: Some(Cow::Borrowed("minecraft:netherite")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -19743,13 +19906,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const NETHERITE_CHESTPLATE: Item = Item {
-        id: 979,
+        id: 980,
         registry_key: "netherite_chestplate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19799,8 +19962,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::CHEST,
-                    equip_sound: "minecraft:item.armor.equip_netherite",
-                    asset_id: Some("minecraft:netherite"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNetherite),
+                    asset_id: Some(Cow::Borrowed("minecraft:netherite")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -19808,13 +19971,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const NETHERITE_HELMET: Item = Item {
-        id: 978,
+        id: 979,
         registry_key: "netherite_helmet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19864,8 +20027,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "minecraft:item.armor.equip_netherite",
-                    asset_id: Some("minecraft:netherite"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNetherite),
+                    asset_id: Some(Cow::Borrowed("minecraft:netherite")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -19873,13 +20036,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const NETHERITE_HOE: Item = Item {
-        id: 945,
+        id: 946,
         registry_key: "netherite_hoe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19917,12 +20080,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_NETHERITE_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_netherite_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_HOE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/hoe")),
                             speed: Some(9f32),
                             correct_for_drops: Some(true),
                         },
@@ -19947,7 +20110,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_HORSE_ARMOR: Item = Item {
-        id: 1259,
+        id: 1260,
         registry_key: "netherite_horse_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -19995,24 +20158,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.horse.armor",
-                    asset_id: Some("minecraft:netherite"),
+                    equip_sound: IdOr::Id(Sound::EntityHorseArmor),
+                    asset_id: Some(Cow::Borrowed("minecraft:netherite")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_HORSE_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_horse_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.horse_armor.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemHorseArmorUnequip),
                 },
             ),
         ],
     };
     pub const NETHERITE_INGOT: Item = Item {
-        id: 909,
+        id: 910,
         registry_key: "netherite_ingot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20037,7 +20198,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_LEGGINGS: Item = Item {
-        id: 980,
+        id: 981,
         registry_key: "netherite_leggings",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -20087,8 +20248,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::LEGS,
-                    equip_sound: "minecraft:item.armor.equip_netherite",
-                    asset_id: Some("minecraft:netherite"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNetherite),
+                    asset_id: Some(Cow::Borrowed("minecraft:netherite")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -20096,13 +20257,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const NETHERITE_NAUTILUS_ARMOR: Item = Item {
-        id: 1336,
+        id: 1337,
         registry_key: "netherite_nautilus_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -20150,24 +20311,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:item.armor.equip_nautilus",
-                    asset_id: Some("minecraft:netherite"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipNautilus),
+                    asset_id: Some(Cow::Borrowed("minecraft:netherite")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_WEAR_NAUTILUS_ARMOR,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_wear_nautilus_armor"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: false,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.armor.unequip_nautilus"),
+                    shearing_sound: IdOr::Id(Sound::ItemArmorUnequipNautilus),
                 },
             ),
         ],
     };
     pub const NETHERITE_PICKAXE: Item = Item {
-        id: 943,
+        id: 944,
         registry_key: "netherite_pickaxe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -20205,12 +20364,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_NETHERITE_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_netherite_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_PICKAXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/pickaxe")),
                             speed: Some(9f32),
                             correct_for_drops: Some(true),
                         },
@@ -20235,7 +20394,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_SCRAP: Item = Item {
-        id: 910,
+        id: 911,
         registry_key: "netherite_scrap",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20260,7 +20419,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_SHOVEL: Item = Item {
-        id: 942,
+        id: 943,
         registry_key: "netherite_shovel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -20298,12 +20457,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_NETHERITE_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_netherite_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_SHOVEL),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/shovel")),
                             speed: Some(9f32),
                             correct_for_drops: Some(true),
                         },
@@ -20328,7 +20487,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_SPEAR: Item = Item {
-        id: 1302,
+        id: 1303,
         registry_key: "netherite_spear",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -20376,7 +20535,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_SWORD: Item = Item {
-        id: 941,
+        id: 942,
         registry_key: "netherite_sword",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -20414,17 +20573,17 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::COBWEB])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::COBWEB])),
                             speed: Some(15f32),
                             correct_for_drops: Some(true),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_INSTANTLY_MINES),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_instantly_mines")),
                             speed: Some(340282350000000000000000000000000000000f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_EFFICIENT),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_efficient")),
                             speed: Some(1.5f32),
                             correct_for_drops: None,
                         },
@@ -20449,7 +20608,7 @@ impl Item {
         ],
     };
     pub const NETHERITE_UPGRADE_SMITHING_TEMPLATE: Item = Item {
-        id: 1426,
+        id: 1427,
         registry_key: "netherite_upgrade_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20468,7 +20627,7 @@ impl Item {
         ],
     };
     pub const NETHERRACK: Item = Item {
-        id: 359,
+        id: 360,
         registry_key: "netherrack",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20487,7 +20646,7 @@ impl Item {
         ],
     };
     pub const NOTE_BLOCK: Item = Item {
-        id: 748,
+        id: 749,
         registry_key: "note_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20506,7 +20665,7 @@ impl Item {
         ],
     };
     pub const OAK_BOAT: Item = Item {
-        id: 863,
+        id: 864,
         registry_key: "oak_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -20525,7 +20684,7 @@ impl Item {
         ],
     };
     pub const OAK_BUTTON: Item = Item {
-        id: 751,
+        id: 752,
         registry_key: "oak_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20544,7 +20703,7 @@ impl Item {
         ],
     };
     pub const OAK_CHEST_BOAT: Item = Item {
-        id: 864,
+        id: 865,
         registry_key: "oak_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -20563,7 +20722,7 @@ impl Item {
         ],
     };
     pub const OAK_DOOR: Item = Item {
-        id: 780,
+        id: 781,
         registry_key: "oak_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20582,7 +20741,7 @@ impl Item {
         ],
     };
     pub const OAK_FENCE: Item = Item {
-        id: 344,
+        id: 345,
         registry_key: "oak_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20601,7 +20760,7 @@ impl Item {
         ],
     };
     pub const OAK_FENCE_GATE: Item = Item {
-        id: 821,
+        id: 822,
         registry_key: "oak_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20620,7 +20779,7 @@ impl Item {
         ],
     };
     pub const OAK_HANGING_SIGN: Item = Item {
-        id: 1000,
+        id: 1001,
         registry_key: "oak_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -20696,7 +20855,7 @@ impl Item {
         ],
     };
     pub const OAK_PRESSURE_PLATE: Item = Item {
-        id: 767,
+        id: 768,
         registry_key: "oak_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20734,7 +20893,7 @@ impl Item {
         ],
     };
     pub const OAK_SHELF: Item = Item {
-        id: 313,
+        id: 314,
         registry_key: "oak_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20753,7 +20912,7 @@ impl Item {
         ],
     };
     pub const OAK_SIGN: Item = Item {
-        id: 988,
+        id: 989,
         registry_key: "oak_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -20772,7 +20931,7 @@ impl Item {
         ],
     };
     pub const OAK_SLAB: Item = Item {
-        id: 270,
+        id: 271,
         registry_key: "oak_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20791,7 +20950,7 @@ impl Item {
         ],
     };
     pub const OAK_STAIRS: Item = Item {
-        id: 441,
+        id: 442,
         registry_key: "oak_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20810,7 +20969,7 @@ impl Item {
         ],
     };
     pub const OAK_TRAPDOOR: Item = Item {
-        id: 801,
+        id: 802,
         registry_key: "oak_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20848,7 +21007,7 @@ impl Item {
         ],
     };
     pub const OBSERVER: Item = Item {
-        id: 726,
+        id: 727,
         registry_key: "observer",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20867,7 +21026,7 @@ impl Item {
         ],
     };
     pub const OBSIDIAN: Item = Item {
-        id: 321,
+        id: 322,
         registry_key: "obsidian",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20886,7 +21045,7 @@ impl Item {
         ],
     };
     pub const OCELOT_SPAWN_EGG: Item = Item {
-        id: 1147,
+        id: 1148,
         registry_key: "ocelot_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20905,7 +21064,7 @@ impl Item {
         ],
     };
     pub const OCHRE_FROGLIGHT: Item = Item {
-        id: 1420,
+        id: 1421,
         registry_key: "ochre_froglight",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20924,7 +21083,7 @@ impl Item {
         ],
     };
     pub const OMINOUS_BOTTLE: Item = Item {
-        id: 1504,
+        id: 1505,
         registry_key: "ominous_bottle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20944,12 +21103,18 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Drink,
+                    sound_event: IdOr::Id(Sound::EntityGenericDrink),
+                    consume_particles: false,
+                    effects: Cow::Borrowed(&[ConsumeEffect::PlaySound(IdOr::Id(
+                        Sound::ItemOminousBottleDispose,
+                    ))]),
                 },
             ),
         ],
     };
     pub const OMINOUS_TRIAL_KEY: Item = Item {
-        id: 1502,
+        id: 1503,
         registry_key: "ominous_trial_key",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20968,7 +21133,7 @@ impl Item {
         ],
     };
     pub const OPEN_EYEBLOSSOM: Item = Item {
-        id: 230,
+        id: 231,
         registry_key: "open_eyeblossom",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -20987,7 +21152,7 @@ impl Item {
         ],
     };
     pub const ORANGE_BANNER: Item = Item {
-        id: 1267,
+        id: 1268,
         registry_key: "orange_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -21006,7 +21171,7 @@ impl Item {
         ],
     };
     pub const ORANGE_BED: Item = Item {
-        id: 1087,
+        id: 1088,
         registry_key: "orange_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -21025,7 +21190,7 @@ impl Item {
         ],
     };
     pub const ORANGE_BUNDLE: Item = Item {
-        id: 1038,
+        id: 1039,
         registry_key: "orange_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -21044,7 +21209,7 @@ impl Item {
         ],
     };
     pub const ORANGE_CANDLE: Item = Item {
-        id: 1400,
+        id: 1401,
         registry_key: "orange_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21063,7 +21228,7 @@ impl Item {
         ],
     };
     pub const ORANGE_CARPET: Item = Item {
-        id: 506,
+        id: 507,
         registry_key: "orange_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21083,25 +21248,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:orange_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:orange_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const ORANGE_CONCRETE: Item = Item {
-        id: 615,
+        id: 616,
         registry_key: "orange_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21120,7 +21285,7 @@ impl Item {
         ],
     };
     pub const ORANGE_CONCRETE_POWDER: Item = Item {
-        id: 631,
+        id: 632,
         registry_key: "orange_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21139,7 +21304,7 @@ impl Item {
         ],
     };
     pub const ORANGE_DYE: Item = Item {
-        id: 1067,
+        id: 1068,
         registry_key: "orange_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21158,7 +21323,7 @@ impl Item {
         ],
     };
     pub const ORANGE_GLAZED_TERRACOTTA: Item = Item {
-        id: 599,
+        id: 600,
         registry_key: "orange_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21177,7 +21342,7 @@ impl Item {
         ],
     };
     pub const ORANGE_HARNESS: Item = Item {
-        id: 839,
+        id: 840,
         registry_key: "orange_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -21197,24 +21362,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:orange_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:orange_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const ORANGE_SHULKER_BOX: Item = Item {
-        id: 583,
+        id: 584,
         registry_key: "orange_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -21233,7 +21396,7 @@ impl Item {
         ],
     };
     pub const ORANGE_STAINED_GLASS: Item = Item {
-        id: 531,
+        id: 532,
         registry_key: "orange_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21252,7 +21415,7 @@ impl Item {
         ],
     };
     pub const ORANGE_STAINED_GLASS_PANE: Item = Item {
-        id: 547,
+        id: 548,
         registry_key: "orange_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21271,7 +21434,7 @@ impl Item {
         ],
     };
     pub const ORANGE_TERRACOTTA: Item = Item {
-        id: 487,
+        id: 488,
         registry_key: "orange_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21290,7 +21453,7 @@ impl Item {
         ],
     };
     pub const ORANGE_TULIP: Item = Item {
-        id: 237,
+        id: 238,
         registry_key: "orange_tulip",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21328,7 +21491,7 @@ impl Item {
         ],
     };
     pub const OXEYE_DAISY: Item = Item {
-        id: 240,
+        id: 241,
         registry_key: "oxeye_daisy",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21385,7 +21548,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_BARS: Item = Item {
-        id: 394,
+        id: 395,
         registry_key: "oxidized_copper_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21404,7 +21567,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_BULB: Item = Item {
-        id: 1479,
+        id: 1480,
         registry_key: "oxidized_copper_bulb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21423,7 +21586,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_CHAIN: Item = Item {
-        id: 403,
+        id: 404,
         registry_key: "oxidized_copper_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21442,7 +21605,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_CHEST: Item = Item {
-        id: 1487,
+        id: 1488,
         registry_key: "oxidized_copper_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21461,7 +21624,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_DOOR: Item = Item {
-        id: 795,
+        id: 796,
         registry_key: "oxidized_copper_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21480,7 +21643,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_GOLEM_STATUE: Item = Item {
-        id: 1495,
+        id: 1496,
         registry_key: "oxidized_copper_golem_statue",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21499,7 +21662,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_GRATE: Item = Item {
-        id: 1471,
+        id: 1472,
         registry_key: "oxidized_copper_grate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21518,7 +21681,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_LANTERN: Item = Item {
-        id: 1368,
+        id: 1369,
         registry_key: "oxidized_copper_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21537,7 +21700,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_COPPER_TRAPDOOR: Item = Item {
-        id: 816,
+        id: 817,
         registry_key: "oxidized_copper_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21613,7 +21776,7 @@ impl Item {
         ],
     };
     pub const OXIDIZED_LIGHTNING_ROD: Item = Item {
-        id: 736,
+        id: 737,
         registry_key: "oxidized_lightning_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21632,7 +21795,7 @@ impl Item {
         ],
     };
     pub const PACKED_ICE: Item = Item {
-        id: 522,
+        id: 523,
         registry_key: "packed_ice",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21651,7 +21814,7 @@ impl Item {
         ],
     };
     pub const PACKED_MUD: Item = Item {
-        id: 379,
+        id: 380,
         registry_key: "packed_mud",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21670,7 +21833,7 @@ impl Item {
         ],
     };
     pub const PAINTING: Item = Item {
-        id: 985,
+        id: 986,
         registry_key: "painting",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21689,7 +21852,7 @@ impl Item {
         ],
     };
     pub const PALE_HANGING_MOSS: Item = Item {
-        id: 264,
+        id: 265,
         registry_key: "pale_hanging_moss",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21708,7 +21871,7 @@ impl Item {
         ],
     };
     pub const PALE_MOSS_BLOCK: Item = Item {
-        id: 265,
+        id: 266,
         registry_key: "pale_moss_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21727,7 +21890,7 @@ impl Item {
         ],
     };
     pub const PALE_MOSS_CARPET: Item = Item {
-        id: 263,
+        id: 264,
         registry_key: "pale_moss_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21746,7 +21909,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_BOAT: Item = Item {
-        id: 877,
+        id: 878,
         registry_key: "pale_oak_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -21765,7 +21928,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_BUTTON: Item = Item {
-        id: 758,
+        id: 759,
         registry_key: "pale_oak_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21784,7 +21947,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_CHEST_BOAT: Item = Item {
-        id: 878,
+        id: 879,
         registry_key: "pale_oak_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -21803,7 +21966,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_DOOR: Item = Item {
-        id: 787,
+        id: 788,
         registry_key: "pale_oak_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21822,7 +21985,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_FENCE: Item = Item {
-        id: 351,
+        id: 352,
         registry_key: "pale_oak_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21841,7 +22004,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_FENCE_GATE: Item = Item {
-        id: 828,
+        id: 829,
         registry_key: "pale_oak_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21860,7 +22023,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_HANGING_SIGN: Item = Item {
-        id: 1007,
+        id: 1008,
         registry_key: "pale_oak_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -21936,7 +22099,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_PRESSURE_PLATE: Item = Item {
-        id: 774,
+        id: 775,
         registry_key: "pale_oak_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21974,7 +22137,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_SHELF: Item = Item {
-        id: 314,
+        id: 315,
         registry_key: "pale_oak_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -21993,7 +22156,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_SIGN: Item = Item {
-        id: 995,
+        id: 996,
         registry_key: "pale_oak_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -22012,7 +22175,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_SLAB: Item = Item {
-        id: 277,
+        id: 278,
         registry_key: "pale_oak_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22031,7 +22194,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_STAIRS: Item = Item {
-        id: 448,
+        id: 449,
         registry_key: "pale_oak_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22050,7 +22213,7 @@ impl Item {
         ],
     };
     pub const PALE_OAK_TRAPDOOR: Item = Item {
-        id: 808,
+        id: 809,
         registry_key: "pale_oak_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22088,7 +22251,7 @@ impl Item {
         ],
     };
     pub const PANDA_SPAWN_EGG: Item = Item {
-        id: 1148,
+        id: 1149,
         registry_key: "panda_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22107,7 +22270,7 @@ impl Item {
         ],
     };
     pub const PAPER: Item = Item {
-        id: 1028,
+        id: 1029,
         registry_key: "paper",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22126,7 +22289,7 @@ impl Item {
         ],
     };
     pub const PARCHED_SPAWN_EGG: Item = Item {
-        id: 1176,
+        id: 1177,
         registry_key: "parched_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22145,7 +22308,7 @@ impl Item {
         ],
     };
     pub const PARROT_SPAWN_EGG: Item = Item {
-        id: 1139,
+        id: 1140,
         registry_key: "parrot_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22164,7 +22327,7 @@ impl Item {
         ],
     };
     pub const PEARLESCENT_FROGLIGHT: Item = Item {
-        id: 1422,
+        id: 1423,
         registry_key: "pearlescent_froglight",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22183,7 +22346,7 @@ impl Item {
         ],
     };
     pub const PEONY: Item = Item {
-        id: 527,
+        id: 528,
         registry_key: "peony",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22202,7 +22365,7 @@ impl Item {
         ],
     };
     pub const PETRIFIED_OAK_SLAB: Item = Item {
-        id: 287,
+        id: 288,
         registry_key: "petrified_oak_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22221,7 +22384,7 @@ impl Item {
         ],
     };
     pub const PHANTOM_MEMBRANE: Item = Item {
-        id: 861,
+        id: 862,
         registry_key: "phantom_membrane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22240,7 +22403,7 @@ impl Item {
         ],
     };
     pub const PHANTOM_SPAWN_EGG: Item = Item {
-        id: 1193,
+        id: 1194,
         registry_key: "phantom_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22259,7 +22422,7 @@ impl Item {
         ],
     };
     pub const PIG_SPAWN_EGG: Item = Item {
-        id: 1132,
+        id: 1133,
         registry_key: "pig_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22278,7 +22441,7 @@ impl Item {
         ],
     };
     pub const PIGLIN_BANNER_PATTERN: Item = Item {
-        id: 1347,
+        id: 1348,
         registry_key: "piglin_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -22297,7 +22460,7 @@ impl Item {
         ],
     };
     pub const PIGLIN_BRUTE_SPAWN_EGG: Item = Item {
-        id: 1209,
+        id: 1210,
         registry_key: "piglin_brute_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22316,7 +22479,7 @@ impl Item {
         ],
     };
     pub const PIGLIN_HEAD: Item = Item {
-        id: 1239,
+        id: 1240,
         registry_key: "piglin_head",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22342,7 +22505,7 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
                     camera_overlay: None,
                     allowed_entities: None,
@@ -22351,13 +22514,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const PIGLIN_SPAWN_EGG: Item = Item {
-        id: 1208,
+        id: 1209,
         registry_key: "piglin_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22376,7 +22539,7 @@ impl Item {
         ],
     };
     pub const PILLAGER_SPAWN_EGG: Item = Item {
-        id: 1199,
+        id: 1200,
         registry_key: "pillager_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22395,7 +22558,7 @@ impl Item {
         ],
     };
     pub const PINK_BANNER: Item = Item {
-        id: 1272,
+        id: 1273,
         registry_key: "pink_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -22414,7 +22577,7 @@ impl Item {
         ],
     };
     pub const PINK_BED: Item = Item {
-        id: 1092,
+        id: 1093,
         registry_key: "pink_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -22433,7 +22596,7 @@ impl Item {
         ],
     };
     pub const PINK_BUNDLE: Item = Item {
-        id: 1043,
+        id: 1044,
         registry_key: "pink_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -22452,7 +22615,7 @@ impl Item {
         ],
     };
     pub const PINK_CANDLE: Item = Item {
-        id: 1405,
+        id: 1406,
         registry_key: "pink_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22471,7 +22634,7 @@ impl Item {
         ],
     };
     pub const PINK_CARPET: Item = Item {
-        id: 511,
+        id: 512,
         registry_key: "pink_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22491,25 +22654,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:pink_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:pink_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const PINK_CONCRETE: Item = Item {
-        id: 620,
+        id: 621,
         registry_key: "pink_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22528,7 +22691,7 @@ impl Item {
         ],
     };
     pub const PINK_CONCRETE_POWDER: Item = Item {
-        id: 636,
+        id: 637,
         registry_key: "pink_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22547,7 +22710,7 @@ impl Item {
         ],
     };
     pub const PINK_DYE: Item = Item {
-        id: 1072,
+        id: 1073,
         registry_key: "pink_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22566,7 +22729,7 @@ impl Item {
         ],
     };
     pub const PINK_GLAZED_TERRACOTTA: Item = Item {
-        id: 604,
+        id: 605,
         registry_key: "pink_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22585,7 +22748,7 @@ impl Item {
         ],
     };
     pub const PINK_HARNESS: Item = Item {
-        id: 844,
+        id: 845,
         registry_key: "pink_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -22605,24 +22768,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:pink_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:pink_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const PINK_PETALS: Item = Item {
-        id: 258,
+        id: 259,
         registry_key: "pink_petals",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22641,7 +22802,7 @@ impl Item {
         ],
     };
     pub const PINK_SHULKER_BOX: Item = Item {
-        id: 588,
+        id: 589,
         registry_key: "pink_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -22660,7 +22821,7 @@ impl Item {
         ],
     };
     pub const PINK_STAINED_GLASS: Item = Item {
-        id: 536,
+        id: 537,
         registry_key: "pink_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22679,7 +22840,7 @@ impl Item {
         ],
     };
     pub const PINK_STAINED_GLASS_PANE: Item = Item {
-        id: 552,
+        id: 553,
         registry_key: "pink_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22698,7 +22859,7 @@ impl Item {
         ],
     };
     pub const PINK_TERRACOTTA: Item = Item {
-        id: 492,
+        id: 493,
         registry_key: "pink_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22717,7 +22878,7 @@ impl Item {
         ],
     };
     pub const PINK_TULIP: Item = Item {
-        id: 239,
+        id: 240,
         registry_key: "pink_tulip",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22755,7 +22916,7 @@ impl Item {
         ],
     };
     pub const PISTON: Item = Item {
-        id: 722,
+        id: 723,
         registry_key: "piston",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22774,7 +22935,7 @@ impl Item {
         ],
     };
     pub const PITCHER_PLANT: Item = Item {
-        id: 245,
+        id: 246,
         registry_key: "pitcher_plant",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22793,7 +22954,7 @@ impl Item {
         ],
     };
     pub const PITCHER_POD: Item = Item {
-        id: 1286,
+        id: 1287,
         registry_key: "pitcher_pod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22812,7 +22973,7 @@ impl Item {
         ],
     };
     pub const PLAYER_HEAD: Item = Item {
-        id: 1235,
+        id: 1236,
         registry_key: "player_head",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22838,7 +22999,7 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
                     camera_overlay: None,
                     allowed_entities: None,
@@ -22847,13 +23008,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const PLENTY_POTTERY_SHERD: Item = Item {
-        id: 1461,
+        id: 1462,
         registry_key: "plenty_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22891,7 +23052,7 @@ impl Item {
         ],
     };
     pub const POINTED_DRIPSTONE: Item = Item {
-        id: 1419,
+        id: 1420,
         registry_key: "pointed_dripstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22910,7 +23071,7 @@ impl Item {
         ],
     };
     pub const POISONOUS_POTATO: Item = Item {
-        id: 1230,
+        id: 1231,
         registry_key: "poisonous_potato",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22938,12 +23099,26 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[ConsumeEffect::ApplyEffects((
+                        Cow::Borrowed(&[StatusEffectInstance {
+                            effect_id: Cow::Borrowed("minecraft:poison"),
+                            amplifier: 0i32,
+                            duration: 100i32,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                        }]),
+                        0.6f32,
+                    ))]),
                 },
             ),
         ],
     };
     pub const POLAR_BEAR_SPAWN_EGG: Item = Item {
-        id: 1149,
+        id: 1150,
         registry_key: "polar_bear_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -22981,7 +23156,7 @@ impl Item {
         ],
     };
     pub const POLISHED_ANDESITE_SLAB: Item = Item {
-        id: 710,
+        id: 711,
         registry_key: "polished_andesite_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23000,7 +23175,7 @@ impl Item {
         ],
     };
     pub const POLISHED_ANDESITE_STAIRS: Item = Item {
-        id: 693,
+        id: 694,
         registry_key: "polished_andesite_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23019,7 +23194,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BASALT: Item = Item {
-        id: 363,
+        id: 364,
         registry_key: "polished_basalt",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23038,7 +23213,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE: Item = Item {
-        id: 1389,
+        id: 1390,
         registry_key: "polished_blackstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23057,7 +23232,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_BRICK_SLAB: Item = Item {
-        id: 1394,
+        id: 1395,
         registry_key: "polished_blackstone_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23076,7 +23251,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_BRICK_STAIRS: Item = Item {
-        id: 1395,
+        id: 1396,
         registry_key: "polished_blackstone_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23095,7 +23270,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_BRICK_WALL: Item = Item {
-        id: 473,
+        id: 474,
         registry_key: "polished_blackstone_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23114,7 +23289,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_BRICKS: Item = Item {
-        id: 1393,
+        id: 1394,
         registry_key: "polished_blackstone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23133,7 +23308,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_BUTTON: Item = Item {
-        id: 750,
+        id: 751,
         registry_key: "polished_blackstone_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23152,7 +23327,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_PRESSURE_PLATE: Item = Item {
-        id: 764,
+        id: 765,
         registry_key: "polished_blackstone_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23171,7 +23346,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_SLAB: Item = Item {
-        id: 1390,
+        id: 1391,
         registry_key: "polished_blackstone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23190,7 +23365,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_STAIRS: Item = Item {
-        id: 1391,
+        id: 1392,
         registry_key: "polished_blackstone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23209,7 +23384,7 @@ impl Item {
         ],
     };
     pub const POLISHED_BLACKSTONE_WALL: Item = Item {
-        id: 472,
+        id: 473,
         registry_key: "polished_blackstone_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23247,7 +23422,7 @@ impl Item {
         ],
     };
     pub const POLISHED_DEEPSLATE_SLAB: Item = Item {
-        id: 713,
+        id: 714,
         registry_key: "polished_deepslate_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23266,7 +23441,7 @@ impl Item {
         ],
     };
     pub const POLISHED_DEEPSLATE_STAIRS: Item = Item {
-        id: 696,
+        id: 697,
         registry_key: "polished_deepslate_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23285,7 +23460,7 @@ impl Item {
         ],
     };
     pub const POLISHED_DEEPSLATE_WALL: Item = Item {
-        id: 475,
+        id: 476,
         registry_key: "polished_deepslate_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23323,7 +23498,7 @@ impl Item {
         ],
     };
     pub const POLISHED_DIORITE_SLAB: Item = Item {
-        id: 702,
+        id: 703,
         registry_key: "polished_diorite_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23342,7 +23517,7 @@ impl Item {
         ],
     };
     pub const POLISHED_DIORITE_STAIRS: Item = Item {
-        id: 684,
+        id: 685,
         registry_key: "polished_diorite_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23380,7 +23555,7 @@ impl Item {
         ],
     };
     pub const POLISHED_GRANITE_SLAB: Item = Item {
-        id: 699,
+        id: 700,
         registry_key: "polished_granite_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23399,7 +23574,7 @@ impl Item {
         ],
     };
     pub const POLISHED_GRANITE_STAIRS: Item = Item {
-        id: 681,
+        id: 682,
         registry_key: "polished_granite_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23494,7 +23669,7 @@ impl Item {
         ],
     };
     pub const POPPED_CHORUS_FRUIT: Item = Item {
-        id: 1284,
+        id: 1285,
         registry_key: "popped_chorus_fruit",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23513,7 +23688,7 @@ impl Item {
         ],
     };
     pub const POPPY: Item = Item {
-        id: 232,
+        id: 233,
         registry_key: "poppy",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23532,7 +23707,7 @@ impl Item {
         ],
     };
     pub const PORKCHOP: Item = Item {
-        id: 983,
+        id: 984,
         registry_key: "porkchop",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23560,12 +23735,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const POTATO: Item = Item {
-        id: 1228,
+        id: 1229,
         registry_key: "potato",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23593,12 +23772,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const POTION: Item = Item {
-        id: 1121,
+        id: 1122,
         registry_key: "potion",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -23618,12 +23801,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Drink,
+                    sound_event: IdOr::Id(Sound::EntityGenericDrink),
+                    consume_particles: false,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const POWDER_SNOW_BUCKET: Item = Item {
-        id: 1015,
+        id: 1016,
         registry_key: "powder_snow_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -23642,7 +23829,7 @@ impl Item {
         ],
     };
     pub const POWERED_RAIL: Item = Item {
-        id: 833,
+        id: 834,
         registry_key: "powered_rail",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23661,7 +23848,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE: Item = Item {
-        id: 562,
+        id: 563,
         registry_key: "prismarine",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23680,7 +23867,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE_BRICK_SLAB: Item = Item {
-        id: 298,
+        id: 299,
         registry_key: "prismarine_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23699,7 +23886,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE_BRICK_STAIRS: Item = Item {
-        id: 566,
+        id: 567,
         registry_key: "prismarine_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23718,7 +23905,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE_BRICKS: Item = Item {
-        id: 563,
+        id: 564,
         registry_key: "prismarine_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23737,7 +23924,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE_CRYSTALS: Item = Item {
-        id: 1248,
+        id: 1249,
         registry_key: "prismarine_crystals",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23756,7 +23943,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE_SHARD: Item = Item {
-        id: 1247,
+        id: 1248,
         registry_key: "prismarine_shard",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23775,7 +23962,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE_SLAB: Item = Item {
-        id: 297,
+        id: 298,
         registry_key: "prismarine_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23794,7 +23981,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE_STAIRS: Item = Item {
-        id: 565,
+        id: 566,
         registry_key: "prismarine_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23813,7 +24000,7 @@ impl Item {
         ],
     };
     pub const PRISMARINE_WALL: Item = Item {
-        id: 459,
+        id: 460,
         registry_key: "prismarine_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23832,7 +24019,7 @@ impl Item {
         ],
     };
     pub const PRIZE_POTTERY_SHERD: Item = Item {
-        id: 1462,
+        id: 1463,
         registry_key: "prize_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23851,7 +24038,7 @@ impl Item {
         ],
     };
     pub const PUFFERFISH: Item = Item {
-        id: 1060,
+        id: 1061,
         registry_key: "pufferfish",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23879,12 +24066,44 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[ConsumeEffect::ApplyEffects((
+                        Cow::Borrowed(&[
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:poison"),
+                                amplifier: 1i32,
+                                duration: 1200i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:hunger"),
+                                amplifier: 2i32,
+                                duration: 300i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                            StatusEffectInstance {
+                                effect_id: Cow::Borrowed("minecraft:nausea"),
+                                amplifier: 0i32,
+                                duration: 300i32,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                            },
+                        ]),
+                        1f32,
+                    ))]),
                 },
             ),
         ],
     };
     pub const PUFFERFISH_BUCKET: Item = Item {
-        id: 1019,
+        id: 1020,
         registry_key: "pufferfish_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -23911,7 +24130,7 @@ impl Item {
         ],
     };
     pub const PUFFERFISH_SPAWN_EGG: Item = Item {
-        id: 1157,
+        id: 1158,
         registry_key: "pufferfish_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23930,7 +24149,7 @@ impl Item {
         ],
     };
     pub const PUMPKIN: Item = Item {
-        id: 356,
+        id: 357,
         registry_key: "pumpkin",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23949,7 +24168,7 @@ impl Item {
         ],
     };
     pub const PUMPKIN_PIE: Item = Item {
-        id: 1241,
+        id: 1242,
         registry_key: "pumpkin_pie",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -23977,12 +24196,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const PUMPKIN_SEEDS: Item = Item {
-        id: 1108,
+        id: 1109,
         registry_key: "pumpkin_seeds",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24001,7 +24224,7 @@ impl Item {
         ],
     };
     pub const PURPLE_BANNER: Item = Item {
-        id: 1276,
+        id: 1277,
         registry_key: "purple_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -24020,7 +24243,7 @@ impl Item {
         ],
     };
     pub const PURPLE_BED: Item = Item {
-        id: 1096,
+        id: 1097,
         registry_key: "purple_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -24039,7 +24262,7 @@ impl Item {
         ],
     };
     pub const PURPLE_BUNDLE: Item = Item {
-        id: 1047,
+        id: 1048,
         registry_key: "purple_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -24058,7 +24281,7 @@ impl Item {
         ],
     };
     pub const PURPLE_CANDLE: Item = Item {
-        id: 1409,
+        id: 1410,
         registry_key: "purple_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24077,7 +24300,7 @@ impl Item {
         ],
     };
     pub const PURPLE_CARPET: Item = Item {
-        id: 515,
+        id: 516,
         registry_key: "purple_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24097,25 +24320,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:purple_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:purple_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const PURPLE_CONCRETE: Item = Item {
-        id: 624,
+        id: 625,
         registry_key: "purple_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24134,7 +24357,7 @@ impl Item {
         ],
     };
     pub const PURPLE_CONCRETE_POWDER: Item = Item {
-        id: 640,
+        id: 641,
         registry_key: "purple_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24153,7 +24376,7 @@ impl Item {
         ],
     };
     pub const PURPLE_DYE: Item = Item {
-        id: 1076,
+        id: 1077,
         registry_key: "purple_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24172,7 +24395,7 @@ impl Item {
         ],
     };
     pub const PURPLE_GLAZED_TERRACOTTA: Item = Item {
-        id: 608,
+        id: 609,
         registry_key: "purple_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24191,7 +24414,7 @@ impl Item {
         ],
     };
     pub const PURPLE_HARNESS: Item = Item {
-        id: 848,
+        id: 849,
         registry_key: "purple_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -24211,24 +24434,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:purple_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:purple_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const PURPLE_SHULKER_BOX: Item = Item {
-        id: 592,
+        id: 593,
         registry_key: "purple_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -24247,7 +24468,7 @@ impl Item {
         ],
     };
     pub const PURPLE_STAINED_GLASS: Item = Item {
-        id: 540,
+        id: 541,
         registry_key: "purple_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24266,7 +24487,7 @@ impl Item {
         ],
     };
     pub const PURPLE_STAINED_GLASS_PANE: Item = Item {
-        id: 556,
+        id: 557,
         registry_key: "purple_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24285,7 +24506,7 @@ impl Item {
         ],
     };
     pub const PURPLE_TERRACOTTA: Item = Item {
-        id: 496,
+        id: 497,
         registry_key: "purple_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24323,7 +24544,7 @@ impl Item {
         ],
     };
     pub const PURPUR_BLOCK: Item = Item {
-        id: 326,
+        id: 327,
         registry_key: "purpur_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24342,7 +24563,7 @@ impl Item {
         ],
     };
     pub const PURPUR_PILLAR: Item = Item {
-        id: 327,
+        id: 328,
         registry_key: "purpur_pillar",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24361,7 +24582,7 @@ impl Item {
         ],
     };
     pub const PURPUR_SLAB: Item = Item {
-        id: 296,
+        id: 297,
         registry_key: "purpur_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24380,7 +24601,7 @@ impl Item {
         ],
     };
     pub const PURPUR_STAIRS: Item = Item {
-        id: 328,
+        id: 329,
         registry_key: "purpur_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24399,7 +24620,7 @@ impl Item {
         ],
     };
     pub const QUARTZ: Item = Item {
-        id: 901,
+        id: 902,
         registry_key: "quartz",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24418,7 +24639,7 @@ impl Item {
         ],
     };
     pub const QUARTZ_BLOCK: Item = Item {
-        id: 482,
+        id: 483,
         registry_key: "quartz_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24437,7 +24658,7 @@ impl Item {
         ],
     };
     pub const QUARTZ_BRICKS: Item = Item {
-        id: 483,
+        id: 484,
         registry_key: "quartz_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24456,7 +24677,7 @@ impl Item {
         ],
     };
     pub const QUARTZ_PILLAR: Item = Item {
-        id: 484,
+        id: 485,
         registry_key: "quartz_pillar",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24475,7 +24696,7 @@ impl Item {
         ],
     };
     pub const QUARTZ_SLAB: Item = Item {
-        id: 293,
+        id: 294,
         registry_key: "quartz_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24494,7 +24715,7 @@ impl Item {
         ],
     };
     pub const QUARTZ_STAIRS: Item = Item {
-        id: 485,
+        id: 486,
         registry_key: "quartz_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24513,7 +24734,7 @@ impl Item {
         ],
     };
     pub const RABBIT: Item = Item {
-        id: 1249,
+        id: 1250,
         registry_key: "rabbit",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24541,12 +24762,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const RABBIT_FOOT: Item = Item {
-        id: 1252,
+        id: 1253,
         registry_key: "rabbit_foot",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24565,7 +24790,7 @@ impl Item {
         ],
     };
     pub const RABBIT_HIDE: Item = Item {
-        id: 1253,
+        id: 1254,
         registry_key: "rabbit_hide",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24584,7 +24809,7 @@ impl Item {
         ],
     };
     pub const RABBIT_SPAWN_EGG: Item = Item {
-        id: 1150,
+        id: 1151,
         registry_key: "rabbit_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24603,7 +24828,7 @@ impl Item {
         ],
     };
     pub const RABBIT_STEW: Item = Item {
-        id: 1251,
+        id: 1252,
         registry_key: "rabbit_stew",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -24631,12 +24856,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const RAIL: Item = Item {
-        id: 835,
+        id: 836,
         registry_key: "rail",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24655,7 +24884,7 @@ impl Item {
         ],
     };
     pub const RAISER_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1441,
+        id: 1442,
         registry_key: "raiser_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24674,7 +24903,7 @@ impl Item {
         ],
     };
     pub const RAVAGER_SPAWN_EGG: Item = Item {
-        id: 1200,
+        id: 1201,
         registry_key: "ravager_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24693,7 +24922,7 @@ impl Item {
         ],
     };
     pub const RAW_COPPER: Item = Item {
-        id: 905,
+        id: 906,
         registry_key: "raw_copper",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24731,7 +24960,7 @@ impl Item {
         ],
     };
     pub const RAW_GOLD: Item = Item {
-        id: 907,
+        id: 908,
         registry_key: "raw_gold",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24769,7 +24998,7 @@ impl Item {
         ],
     };
     pub const RAW_IRON: Item = Item {
-        id: 903,
+        id: 904,
         registry_key: "raw_iron",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24807,7 +25036,7 @@ impl Item {
         ],
     };
     pub const RECOVERY_COMPASS: Item = Item {
-        id: 1035,
+        id: 1036,
         registry_key: "recovery_compass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24826,7 +25055,7 @@ impl Item {
         ],
     };
     pub const RED_BANNER: Item = Item {
-        id: 1280,
+        id: 1281,
         registry_key: "red_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -24845,7 +25074,7 @@ impl Item {
         ],
     };
     pub const RED_BED: Item = Item {
-        id: 1100,
+        id: 1101,
         registry_key: "red_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -24864,7 +25093,7 @@ impl Item {
         ],
     };
     pub const RED_BUNDLE: Item = Item {
-        id: 1051,
+        id: 1052,
         registry_key: "red_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -24883,7 +25112,7 @@ impl Item {
         ],
     };
     pub const RED_CANDLE: Item = Item {
-        id: 1413,
+        id: 1414,
         registry_key: "red_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24902,7 +25131,7 @@ impl Item {
         ],
     };
     pub const RED_CARPET: Item = Item {
-        id: 519,
+        id: 520,
         registry_key: "red_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24922,25 +25151,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:red_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:red_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const RED_CONCRETE: Item = Item {
-        id: 628,
+        id: 629,
         registry_key: "red_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24959,7 +25188,7 @@ impl Item {
         ],
     };
     pub const RED_CONCRETE_POWDER: Item = Item {
-        id: 644,
+        id: 645,
         registry_key: "red_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24978,7 +25207,7 @@ impl Item {
         ],
     };
     pub const RED_DYE: Item = Item {
-        id: 1080,
+        id: 1081,
         registry_key: "red_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -24997,7 +25226,7 @@ impl Item {
         ],
     };
     pub const RED_GLAZED_TERRACOTTA: Item = Item {
-        id: 612,
+        id: 613,
         registry_key: "red_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25016,7 +25245,7 @@ impl Item {
         ],
     };
     pub const RED_HARNESS: Item = Item {
-        id: 852,
+        id: 853,
         registry_key: "red_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -25036,24 +25265,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:red_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:red_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const RED_MUSHROOM: Item = Item {
-        id: 248,
+        id: 249,
         registry_key: "red_mushroom",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25072,7 +25299,7 @@ impl Item {
         ],
     };
     pub const RED_MUSHROOM_BLOCK: Item = Item {
-        id: 388,
+        id: 389,
         registry_key: "red_mushroom_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25091,7 +25318,7 @@ impl Item {
         ],
     };
     pub const RED_NETHER_BRICK_SLAB: Item = Item {
-        id: 709,
+        id: 710,
         registry_key: "red_nether_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25110,7 +25337,7 @@ impl Item {
         ],
     };
     pub const RED_NETHER_BRICK_STAIRS: Item = Item {
-        id: 692,
+        id: 693,
         registry_key: "red_nether_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25129,7 +25356,7 @@ impl Item {
         ],
     };
     pub const RED_NETHER_BRICK_WALL: Item = Item {
-        id: 467,
+        id: 468,
         registry_key: "red_nether_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25148,7 +25375,7 @@ impl Item {
         ],
     };
     pub const RED_NETHER_BRICKS: Item = Item {
-        id: 578,
+        id: 579,
         registry_key: "red_nether_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25186,7 +25413,7 @@ impl Item {
         ],
     };
     pub const RED_SANDSTONE: Item = Item {
-        id: 569,
+        id: 570,
         registry_key: "red_sandstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25205,7 +25432,7 @@ impl Item {
         ],
     };
     pub const RED_SANDSTONE_SLAB: Item = Item {
-        id: 294,
+        id: 295,
         registry_key: "red_sandstone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25224,7 +25451,7 @@ impl Item {
         ],
     };
     pub const RED_SANDSTONE_STAIRS: Item = Item {
-        id: 572,
+        id: 573,
         registry_key: "red_sandstone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25243,7 +25470,7 @@ impl Item {
         ],
     };
     pub const RED_SANDSTONE_WALL: Item = Item {
-        id: 460,
+        id: 461,
         registry_key: "red_sandstone_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25262,7 +25489,7 @@ impl Item {
         ],
     };
     pub const RED_SHULKER_BOX: Item = Item {
-        id: 596,
+        id: 597,
         registry_key: "red_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -25281,7 +25508,7 @@ impl Item {
         ],
     };
     pub const RED_STAINED_GLASS: Item = Item {
-        id: 544,
+        id: 545,
         registry_key: "red_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25300,7 +25527,7 @@ impl Item {
         ],
     };
     pub const RED_STAINED_GLASS_PANE: Item = Item {
-        id: 560,
+        id: 561,
         registry_key: "red_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25319,7 +25546,7 @@ impl Item {
         ],
     };
     pub const RED_TERRACOTTA: Item = Item {
-        id: 500,
+        id: 501,
         registry_key: "red_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25338,7 +25565,7 @@ impl Item {
         ],
     };
     pub const RED_TULIP: Item = Item {
-        id: 236,
+        id: 237,
         registry_key: "red_tulip",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25376,7 +25603,7 @@ impl Item {
         ],
     };
     pub const REDSTONE: Item = Item {
-        id: 717,
+        id: 718,
         registry_key: "redstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25395,7 +25622,7 @@ impl Item {
         ],
     };
     pub const REDSTONE_BLOCK: Item = Item {
-        id: 719,
+        id: 720,
         registry_key: "redstone_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25414,7 +25641,7 @@ impl Item {
         ],
     };
     pub const REDSTONE_LAMP: Item = Item {
-        id: 747,
+        id: 748,
         registry_key: "redstone_lamp",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25452,7 +25679,7 @@ impl Item {
         ],
     };
     pub const REDSTONE_TORCH: Item = Item {
-        id: 718,
+        id: 719,
         registry_key: "redstone_torch",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25471,7 +25698,7 @@ impl Item {
         ],
     };
     pub const REINFORCED_DEEPSLATE: Item = Item {
-        id: 386,
+        id: 387,
         registry_key: "reinforced_deepslate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25490,7 +25717,7 @@ impl Item {
         ],
     };
     pub const REPEATER: Item = Item {
-        id: 720,
+        id: 721,
         registry_key: "repeater",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25509,7 +25736,7 @@ impl Item {
         ],
     };
     pub const REPEATING_COMMAND_BLOCK: Item = Item {
-        id: 573,
+        id: 574,
         registry_key: "repeating_command_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25528,7 +25755,7 @@ impl Item {
         ],
     };
     pub const RESIN_BLOCK: Item = Item {
-        id: 413,
+        id: 414,
         registry_key: "resin_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25547,7 +25774,7 @@ impl Item {
         ],
     };
     pub const RESIN_BRICK: Item = Item {
-        id: 1246,
+        id: 1247,
         registry_key: "resin_brick",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25566,7 +25793,7 @@ impl Item {
         ],
     };
     pub const RESIN_BRICK_SLAB: Item = Item {
-        id: 416,
+        id: 417,
         registry_key: "resin_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25585,7 +25812,7 @@ impl Item {
         ],
     };
     pub const RESIN_BRICK_STAIRS: Item = Item {
-        id: 415,
+        id: 416,
         registry_key: "resin_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25604,7 +25831,7 @@ impl Item {
         ],
     };
     pub const RESIN_BRICK_WALL: Item = Item {
-        id: 417,
+        id: 418,
         registry_key: "resin_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25623,7 +25850,7 @@ impl Item {
         ],
     };
     pub const RESIN_BRICKS: Item = Item {
-        id: 414,
+        id: 415,
         registry_key: "resin_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25642,7 +25869,7 @@ impl Item {
         ],
     };
     pub const RESIN_CLUMP: Item = Item {
-        id: 412,
+        id: 413,
         registry_key: "resin_clump",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25661,7 +25888,7 @@ impl Item {
         ],
     };
     pub const RESPAWN_ANCHOR: Item = Item {
-        id: 1397,
+        id: 1398,
         registry_key: "respawn_anchor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25680,7 +25907,7 @@ impl Item {
         ],
     };
     pub const RIB_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1436,
+        id: 1437,
         registry_key: "rib_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25718,7 +25945,7 @@ impl Item {
         ],
     };
     pub const ROSE_BUSH: Item = Item {
-        id: 526,
+        id: 527,
         registry_key: "rose_bush",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25737,7 +25964,7 @@ impl Item {
         ],
     };
     pub const ROTTEN_FLESH: Item = Item {
-        id: 1114,
+        id: 1115,
         registry_key: "rotten_flesh",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25765,12 +25992,26 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[ConsumeEffect::ApplyEffects((
+                        Cow::Borrowed(&[StatusEffectInstance {
+                            effect_id: Cow::Borrowed("minecraft:hunger"),
+                            amplifier: 0i32,
+                            duration: 600i32,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                        }]),
+                        0.8f32,
+                    ))]),
                 },
             ),
         ],
     };
     pub const SADDLE: Item = Item {
-        id: 837,
+        id: 838,
         registry_key: "saddle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -25790,24 +26031,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::SADDLE,
-                    equip_sound: "minecraft:entity.horse.saddle",
-                    asset_id: Some("minecraft:saddle"),
+                    equip_sound: IdOr::Id(Sound::EntityHorseSaddle),
+                    asset_id: Some(Cow::Borrowed("minecraft:saddle")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_SADDLE,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_saddle"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.saddle.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemSaddleUnequip),
                 },
             ),
         ],
     };
     pub const SALMON: Item = Item {
-        id: 1058,
+        id: 1059,
         registry_key: "salmon",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25835,12 +26074,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const SALMON_BUCKET: Item = Item {
-        id: 1020,
+        id: 1021,
         registry_key: "salmon_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -25867,7 +26110,7 @@ impl Item {
         ],
     };
     pub const SALMON_SPAWN_EGG: Item = Item {
-        id: 1158,
+        id: 1159,
         registry_key: "salmon_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25924,7 +26167,7 @@ impl Item {
         ],
     };
     pub const SANDSTONE_SLAB: Item = Item {
-        id: 285,
+        id: 286,
         registry_key: "sandstone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25943,7 +26186,7 @@ impl Item {
         ],
     };
     pub const SANDSTONE_STAIRS: Item = Item {
-        id: 438,
+        id: 439,
         registry_key: "sandstone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25962,7 +26205,7 @@ impl Item {
         ],
     };
     pub const SANDSTONE_WALL: Item = Item {
-        id: 468,
+        id: 469,
         registry_key: "sandstone_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -25981,7 +26224,7 @@ impl Item {
         ],
     };
     pub const SCAFFOLDING: Item = Item {
-        id: 716,
+        id: 717,
         registry_key: "scaffolding",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26000,7 +26243,7 @@ impl Item {
         ],
     };
     pub const SCRAPE_POTTERY_SHERD: Item = Item {
-        id: 1463,
+        id: 1464,
         registry_key: "scrape_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26019,7 +26262,7 @@ impl Item {
         ],
     };
     pub const SCULK: Item = Item {
-        id: 429,
+        id: 430,
         registry_key: "sculk",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26038,7 +26281,7 @@ impl Item {
         ],
     };
     pub const SCULK_CATALYST: Item = Item {
-        id: 431,
+        id: 432,
         registry_key: "sculk_catalyst",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26057,7 +26300,7 @@ impl Item {
         ],
     };
     pub const SCULK_SENSOR: Item = Item {
-        id: 742,
+        id: 743,
         registry_key: "sculk_sensor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26076,7 +26319,7 @@ impl Item {
         ],
     };
     pub const SCULK_SHRIEKER: Item = Item {
-        id: 432,
+        id: 433,
         registry_key: "sculk_shrieker",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26095,7 +26338,7 @@ impl Item {
         ],
     };
     pub const SCULK_VEIN: Item = Item {
-        id: 430,
+        id: 431,
         registry_key: "sculk_vein",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26114,7 +26357,7 @@ impl Item {
         ],
     };
     pub const SEA_LANTERN: Item = Item {
-        id: 568,
+        id: 569,
         registry_key: "sea_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26171,7 +26414,7 @@ impl Item {
         ],
     };
     pub const SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1427,
+        id: 1428,
         registry_key: "sentry_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26190,7 +26433,7 @@ impl Item {
         ],
     };
     pub const SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1439,
+        id: 1440,
         registry_key: "shaper_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26209,7 +26452,7 @@ impl Item {
         ],
     };
     pub const SHEAF_POTTERY_SHERD: Item = Item {
-        id: 1464,
+        id: 1465,
         registry_key: "sheaf_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26228,7 +26471,7 @@ impl Item {
         ],
     };
     pub const SHEARS: Item = Item {
-        id: 1105,
+        id: 1106,
         registry_key: "shears",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -26251,22 +26494,22 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::COBWEB])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::COBWEB])),
                             speed: Some(15f32),
                             correct_for_drops: Some(true),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_LEAVES),
+                            blocks: Tag(Cow::Borrowed("minecraft:leaves")),
                             speed: Some(15f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_WOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:wool")),
                             speed: Some(5f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::VINE, &Block::GLOW_LICHEN])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::VINE, &Block::GLOW_LICHEN])),
                             speed: Some(2f32),
                             correct_for_drops: None,
                         },
@@ -26279,7 +26522,7 @@ impl Item {
         ],
     };
     pub const SHEEP_SPAWN_EGG: Item = Item {
-        id: 1133,
+        id: 1134,
         registry_key: "sheep_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26298,7 +26541,7 @@ impl Item {
         ],
     };
     pub const SHELTER_POTTERY_SHERD: Item = Item {
-        id: 1465,
+        id: 1466,
         registry_key: "shelter_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26317,7 +26560,7 @@ impl Item {
         ],
     };
     pub const SHIELD: Item = Item {
-        id: 1295,
+        id: 1296,
         registry_key: "shield",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -26340,7 +26583,7 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::OFF_HAND,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
                     camera_overlay: None,
                     allowed_entities: None,
@@ -26349,7 +26592,7 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
@@ -26393,7 +26636,7 @@ impl Item {
         ],
     };
     pub const SHROOMLIGHT: Item = Item {
-        id: 1377,
+        id: 1378,
         registry_key: "shroomlight",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26412,7 +26655,7 @@ impl Item {
         ],
     };
     pub const SHULKER_BOX: Item = Item {
-        id: 581,
+        id: 582,
         registry_key: "shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -26431,7 +26674,7 @@ impl Item {
         ],
     };
     pub const SHULKER_SHELL: Item = Item {
-        id: 1304,
+        id: 1305,
         registry_key: "shulker_shell",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26450,7 +26693,7 @@ impl Item {
         ],
     };
     pub const SHULKER_SPAWN_EGG: Item = Item {
-        id: 1216,
+        id: 1217,
         registry_key: "shulker_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26469,7 +26712,7 @@ impl Item {
         ],
     };
     pub const SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1440,
+        id: 1441,
         registry_key: "silence_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26488,7 +26731,7 @@ impl Item {
         ],
     };
     pub const SILVERFISH_SPAWN_EGG: Item = Item {
-        id: 1194,
+        id: 1195,
         registry_key: "silverfish_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26507,7 +26750,7 @@ impl Item {
         ],
     };
     pub const SKELETON_HORSE_SPAWN_EGG: Item = Item {
-        id: 1178,
+        id: 1179,
         registry_key: "skeleton_horse_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26526,7 +26769,7 @@ impl Item {
         ],
     };
     pub const SKELETON_SKULL: Item = Item {
-        id: 1233,
+        id: 1234,
         registry_key: "skeleton_skull",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26552,7 +26795,7 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
                     camera_overlay: None,
                     allowed_entities: None,
@@ -26561,13 +26804,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const SKELETON_SPAWN_EGG: Item = Item {
-        id: 1177,
+        id: 1178,
         registry_key: "skeleton_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26586,7 +26829,7 @@ impl Item {
         ],
     };
     pub const SKULL_BANNER_PATTERN: Item = Item {
-        id: 1344,
+        id: 1345,
         registry_key: "skull_banner_pattern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -26605,7 +26848,7 @@ impl Item {
         ],
     };
     pub const SKULL_POTTERY_SHERD: Item = Item {
-        id: 1466,
+        id: 1467,
         registry_key: "skull_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26624,7 +26867,7 @@ impl Item {
         ],
     };
     pub const SLIME_BALL: Item = Item {
-        id: 1030,
+        id: 1031,
         registry_key: "slime_ball",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26643,7 +26886,7 @@ impl Item {
         ],
     };
     pub const SLIME_BLOCK: Item = Item {
-        id: 724,
+        id: 725,
         registry_key: "slime_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26662,7 +26905,7 @@ impl Item {
         ],
     };
     pub const SLIME_SPAWN_EGG: Item = Item {
-        id: 1195,
+        id: 1196,
         registry_key: "slime_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26681,7 +26924,7 @@ impl Item {
         ],
     };
     pub const SMALL_AMETHYST_BUD: Item = Item {
-        id: 1415,
+        id: 1416,
         registry_key: "small_amethyst_bud",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26700,7 +26943,7 @@ impl Item {
         ],
     };
     pub const SMALL_DRIPLEAF: Item = Item {
-        id: 268,
+        id: 269,
         registry_key: "small_dripleaf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26719,7 +26962,7 @@ impl Item {
         ],
     };
     pub const SMITHING_TABLE: Item = Item {
-        id: 1360,
+        id: 1361,
         registry_key: "smithing_table",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26738,7 +26981,7 @@ impl Item {
         ],
     };
     pub const SMOKER: Item = Item {
-        id: 1355,
+        id: 1356,
         registry_key: "smoker",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26757,7 +27000,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_BASALT: Item = Item {
-        id: 364,
+        id: 365,
         registry_key: "smooth_basalt",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26776,7 +27019,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_QUARTZ: Item = Item {
-        id: 300,
+        id: 301,
         registry_key: "smooth_quartz",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26795,7 +27038,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_QUARTZ_SLAB: Item = Item {
-        id: 706,
+        id: 707,
         registry_key: "smooth_quartz_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26814,7 +27057,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_QUARTZ_STAIRS: Item = Item {
-        id: 689,
+        id: 690,
         registry_key: "smooth_quartz_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26833,7 +27076,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_RED_SANDSTONE: Item = Item {
-        id: 301,
+        id: 302,
         registry_key: "smooth_red_sandstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26852,7 +27095,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_RED_SANDSTONE_SLAB: Item = Item {
-        id: 700,
+        id: 701,
         registry_key: "smooth_red_sandstone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26871,7 +27114,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_RED_SANDSTONE_STAIRS: Item = Item {
-        id: 682,
+        id: 683,
         registry_key: "smooth_red_sandstone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26890,7 +27133,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_SANDSTONE: Item = Item {
-        id: 302,
+        id: 303,
         registry_key: "smooth_sandstone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26909,7 +27152,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_SANDSTONE_SLAB: Item = Item {
-        id: 705,
+        id: 706,
         registry_key: "smooth_sandstone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26928,7 +27171,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_SANDSTONE_STAIRS: Item = Item {
-        id: 688,
+        id: 689,
         registry_key: "smooth_sandstone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26947,7 +27190,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_STONE: Item = Item {
-        id: 303,
+        id: 304,
         registry_key: "smooth_stone",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26966,7 +27209,7 @@ impl Item {
         ],
     };
     pub const SMOOTH_STONE_SLAB: Item = Item {
-        id: 284,
+        id: 285,
         registry_key: "smooth_stone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -26985,7 +27228,7 @@ impl Item {
         ],
     };
     pub const SNIFFER_EGG: Item = Item {
-        id: 647,
+        id: 648,
         registry_key: "sniffer_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27004,7 +27247,7 @@ impl Item {
         ],
     };
     pub const SNIFFER_SPAWN_EGG: Item = Item {
-        id: 1165,
+        id: 1166,
         registry_key: "sniffer_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27023,7 +27266,7 @@ impl Item {
         ],
     };
     pub const SNORT_POTTERY_SHERD: Item = Item {
-        id: 1467,
+        id: 1468,
         registry_key: "snort_pottery_sherd",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27042,7 +27285,7 @@ impl Item {
         ],
     };
     pub const SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1435,
+        id: 1436,
         registry_key: "snout_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27061,7 +27304,7 @@ impl Item {
         ],
     };
     pub const SNOW: Item = Item {
-        id: 337,
+        id: 338,
         registry_key: "snow",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27080,7 +27323,7 @@ impl Item {
         ],
     };
     pub const SNOW_BLOCK: Item = Item {
-        id: 339,
+        id: 340,
         registry_key: "snow_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27099,7 +27342,7 @@ impl Item {
         ],
     };
     pub const SNOW_GOLEM_SPAWN_EGG: Item = Item {
-        id: 1168,
+        id: 1169,
         registry_key: "snow_golem_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27118,7 +27361,7 @@ impl Item {
         ],
     };
     pub const SNOWBALL: Item = Item {
-        id: 1016,
+        id: 1017,
         registry_key: "snowball",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -27137,7 +27380,7 @@ impl Item {
         ],
     };
     pub const SOUL_CAMPFIRE: Item = Item {
-        id: 1376,
+        id: 1377,
         registry_key: "soul_campfire",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27156,7 +27399,7 @@ impl Item {
         ],
     };
     pub const SOUL_LANTERN: Item = Item {
-        id: 1364,
+        id: 1365,
         registry_key: "soul_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27175,7 +27418,7 @@ impl Item {
         ],
     };
     pub const SOUL_SAND: Item = Item {
-        id: 360,
+        id: 361,
         registry_key: "soul_sand",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27194,7 +27437,7 @@ impl Item {
         ],
     };
     pub const SOUL_SOIL: Item = Item {
-        id: 361,
+        id: 362,
         registry_key: "soul_soil",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27213,7 +27456,7 @@ impl Item {
         ],
     };
     pub const SOUL_TORCH: Item = Item {
-        id: 365,
+        id: 366,
         registry_key: "soul_torch",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27232,7 +27475,7 @@ impl Item {
         ],
     };
     pub const SPAWNER: Item = Item {
-        id: 329,
+        id: 330,
         registry_key: "spawner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27251,7 +27494,7 @@ impl Item {
         ],
     };
     pub const SPECTRAL_ARROW: Item = Item {
-        id: 1292,
+        id: 1293,
         registry_key: "spectral_arrow",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27270,7 +27513,7 @@ impl Item {
         ],
     };
     pub const SPIDER_EYE: Item = Item {
-        id: 1122,
+        id: 1123,
         registry_key: "spider_eye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27298,12 +27541,26 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[ConsumeEffect::ApplyEffects((
+                        Cow::Borrowed(&[StatusEffectInstance {
+                            effect_id: Cow::Borrowed("minecraft:poison"),
+                            amplifier: 0i32,
+                            duration: 100i32,
+                            ambient: false,
+                            show_particles: true,
+                            show_icon: true,
+                        }]),
+                        1f32,
+                    ))]),
                 },
             ),
         ],
     };
     pub const SPIDER_SPAWN_EGG: Item = Item {
-        id: 1187,
+        id: 1188,
         registry_key: "spider_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27322,7 +27579,7 @@ impl Item {
         ],
     };
     pub const SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1437,
+        id: 1438,
         registry_key: "spire_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27341,7 +27598,7 @@ impl Item {
         ],
     };
     pub const SPLASH_POTION: Item = Item {
-        id: 1291,
+        id: 1292,
         registry_key: "splash_potion",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -27379,7 +27636,7 @@ impl Item {
         ],
     };
     pub const SPORE_BLOSSOM: Item = Item {
-        id: 246,
+        id: 247,
         registry_key: "spore_blossom",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27398,7 +27655,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_BOAT: Item = Item {
-        id: 865,
+        id: 866,
         registry_key: "spruce_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -27417,7 +27674,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_BUTTON: Item = Item {
-        id: 752,
+        id: 753,
         registry_key: "spruce_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27436,7 +27693,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_CHEST_BOAT: Item = Item {
-        id: 866,
+        id: 867,
         registry_key: "spruce_chest_boat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -27455,7 +27712,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_DOOR: Item = Item {
-        id: 781,
+        id: 782,
         registry_key: "spruce_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27474,7 +27731,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_FENCE: Item = Item {
-        id: 345,
+        id: 346,
         registry_key: "spruce_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27493,7 +27750,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_FENCE_GATE: Item = Item {
-        id: 822,
+        id: 823,
         registry_key: "spruce_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27512,7 +27769,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_HANGING_SIGN: Item = Item {
-        id: 1001,
+        id: 1002,
         registry_key: "spruce_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -27588,7 +27845,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_PRESSURE_PLATE: Item = Item {
-        id: 768,
+        id: 769,
         registry_key: "spruce_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27626,7 +27883,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_SHELF: Item = Item {
-        id: 315,
+        id: 316,
         registry_key: "spruce_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27645,7 +27902,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_SIGN: Item = Item {
-        id: 989,
+        id: 990,
         registry_key: "spruce_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -27664,7 +27921,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_SLAB: Item = Item {
-        id: 271,
+        id: 272,
         registry_key: "spruce_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27683,7 +27940,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_STAIRS: Item = Item {
-        id: 442,
+        id: 443,
         registry_key: "spruce_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27702,7 +27959,7 @@ impl Item {
         ],
     };
     pub const SPRUCE_TRAPDOOR: Item = Item {
-        id: 802,
+        id: 803,
         registry_key: "spruce_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27740,7 +27997,7 @@ impl Item {
         ],
     };
     pub const SPYGLASS: Item = Item {
-        id: 1055,
+        id: 1056,
         registry_key: "spyglass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -27759,7 +28016,7 @@ impl Item {
         ],
     };
     pub const SQUID_SPAWN_EGG: Item = Item {
-        id: 1159,
+        id: 1160,
         registry_key: "squid_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27778,7 +28035,7 @@ impl Item {
         ],
     };
     pub const STICK: Item = Item {
-        id: 946,
+        id: 947,
         registry_key: "stick",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27797,7 +28054,7 @@ impl Item {
         ],
     };
     pub const STICKY_PISTON: Item = Item {
-        id: 723,
+        id: 724,
         registry_key: "sticky_piston",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27835,7 +28092,7 @@ impl Item {
         ],
     };
     pub const STONE_AXE: Item = Item {
-        id: 924,
+        id: 925,
         registry_key: "stone_axe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -27873,12 +28130,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_STONE_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_stone_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_AXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/axe")),
                             speed: Some(4f32),
                             correct_for_drops: Some(true),
                         },
@@ -27897,7 +28154,7 @@ impl Item {
         ],
     };
     pub const STONE_BRICK_SLAB: Item = Item {
-        id: 290,
+        id: 291,
         registry_key: "stone_brick_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27916,7 +28173,7 @@ impl Item {
         ],
     };
     pub const STONE_BRICK_STAIRS: Item = Item {
-        id: 420,
+        id: 421,
         registry_key: "stone_brick_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27935,7 +28192,7 @@ impl Item {
         ],
     };
     pub const STONE_BRICK_WALL: Item = Item {
-        id: 463,
+        id: 464,
         registry_key: "stone_brick_wall",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27954,7 +28211,7 @@ impl Item {
         ],
     };
     pub const STONE_BRICKS: Item = Item {
-        id: 375,
+        id: 376,
         registry_key: "stone_bricks",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27973,7 +28230,7 @@ impl Item {
         ],
     };
     pub const STONE_BUTTON: Item = Item {
-        id: 749,
+        id: 750,
         registry_key: "stone_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -27992,7 +28249,7 @@ impl Item {
         ],
     };
     pub const STONE_HOE: Item = Item {
-        id: 925,
+        id: 926,
         registry_key: "stone_hoe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -28030,12 +28287,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_STONE_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_stone_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_HOE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/hoe")),
                             speed: Some(4f32),
                             correct_for_drops: Some(true),
                         },
@@ -28054,7 +28311,7 @@ impl Item {
         ],
     };
     pub const STONE_PICKAXE: Item = Item {
-        id: 923,
+        id: 924,
         registry_key: "stone_pickaxe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -28092,12 +28349,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_STONE_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_stone_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_PICKAXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/pickaxe")),
                             speed: Some(4f32),
                             correct_for_drops: Some(true),
                         },
@@ -28116,7 +28373,7 @@ impl Item {
         ],
     };
     pub const STONE_PRESSURE_PLATE: Item = Item {
-        id: 763,
+        id: 764,
         registry_key: "stone_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28135,7 +28392,7 @@ impl Item {
         ],
     };
     pub const STONE_SHOVEL: Item = Item {
-        id: 922,
+        id: 923,
         registry_key: "stone_shovel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -28173,12 +28430,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_STONE_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_stone_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_SHOVEL),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/shovel")),
                             speed: Some(4f32),
                             correct_for_drops: Some(true),
                         },
@@ -28197,7 +28454,7 @@ impl Item {
         ],
     };
     pub const STONE_SLAB: Item = Item {
-        id: 283,
+        id: 284,
         registry_key: "stone_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28216,7 +28473,7 @@ impl Item {
         ],
     };
     pub const STONE_SPEAR: Item = Item {
-        id: 1297,
+        id: 1298,
         registry_key: "stone_spear",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -28258,7 +28515,7 @@ impl Item {
         ],
     };
     pub const STONE_STAIRS: Item = Item {
-        id: 687,
+        id: 688,
         registry_key: "stone_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28277,7 +28534,7 @@ impl Item {
         ],
     };
     pub const STONE_SWORD: Item = Item {
-        id: 921,
+        id: 922,
         registry_key: "stone_sword",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -28315,17 +28572,17 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::COBWEB])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::COBWEB])),
                             speed: Some(15f32),
                             correct_for_drops: Some(true),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_INSTANTLY_MINES),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_instantly_mines")),
                             speed: Some(340282350000000000000000000000000000000f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_EFFICIENT),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_efficient")),
                             speed: Some(1.5f32),
                             correct_for_drops: None,
                         },
@@ -28344,7 +28601,7 @@ impl Item {
         ],
     };
     pub const STONECUTTER: Item = Item {
-        id: 1361,
+        id: 1362,
         registry_key: "stonecutter",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28363,7 +28620,7 @@ impl Item {
         ],
     };
     pub const STRAY_SPAWN_EGG: Item = Item {
-        id: 1179,
+        id: 1180,
         registry_key: "stray_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28382,7 +28639,7 @@ impl Item {
         ],
     };
     pub const STRIDER_SPAWN_EGG: Item = Item {
-        id: 1210,
+        id: 1211,
         registry_key: "strider_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28401,7 +28658,7 @@ impl Item {
         ],
     };
     pub const STRING: Item = Item {
-        id: 948,
+        id: 949,
         registry_key: "string",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28857,7 +29114,7 @@ impl Item {
         ],
     };
     pub const STRUCTURE_BLOCK: Item = Item {
-        id: 883,
+        id: 884,
         registry_key: "structure_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28876,7 +29133,7 @@ impl Item {
         ],
     };
     pub const STRUCTURE_VOID: Item = Item {
-        id: 580,
+        id: 581,
         registry_key: "structure_void",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28895,7 +29152,7 @@ impl Item {
         ],
     };
     pub const SUGAR: Item = Item {
-        id: 1084,
+        id: 1085,
         registry_key: "sugar",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28914,7 +29171,7 @@ impl Item {
         ],
     };
     pub const SUGAR_CANE: Item = Item {
-        id: 256,
+        id: 257,
         registry_key: "sugar_cane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28933,7 +29190,7 @@ impl Item {
         ],
     };
     pub const SUNFLOWER: Item = Item {
-        id: 524,
+        id: 525,
         registry_key: "sunflower",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -28990,7 +29247,7 @@ impl Item {
         ],
     };
     pub const SUSPICIOUS_STEW: Item = Item {
-        id: 1340,
+        id: 1341,
         registry_key: "suspicious_stew",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -29018,12 +29275,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const SWEET_BERRIES: Item = Item {
-        id: 1373,
+        id: 1374,
         registry_key: "sweet_berries",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29051,12 +29312,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const TADPOLE_BUCKET: Item = Item {
-        id: 1024,
+        id: 1025,
         registry_key: "tadpole_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -29075,7 +29340,7 @@ impl Item {
         ],
     };
     pub const TADPOLE_SPAWN_EGG: Item = Item {
-        id: 1160,
+        id: 1161,
         registry_key: "tadpole_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29113,7 +29378,7 @@ impl Item {
         ],
     };
     pub const TALL_GRASS: Item = Item {
-        id: 528,
+        id: 529,
         registry_key: "tall_grass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29132,7 +29397,7 @@ impl Item {
         ],
     };
     pub const TARGET: Item = Item {
-        id: 731,
+        id: 732,
         registry_key: "target",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29151,7 +29416,7 @@ impl Item {
         ],
     };
     pub const TERRACOTTA: Item = Item {
-        id: 521,
+        id: 522,
         registry_key: "terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29170,7 +29435,7 @@ impl Item {
         ],
     };
     pub const TEST_BLOCK: Item = Item {
-        id: 885,
+        id: 886,
         registry_key: "test_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29189,7 +29454,7 @@ impl Item {
         ],
     };
     pub const TEST_INSTANCE_BLOCK: Item = Item {
-        id: 886,
+        id: 887,
         registry_key: "test_instance_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29208,7 +29473,7 @@ impl Item {
         ],
     };
     pub const TIDE_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1434,
+        id: 1435,
         registry_key: "tide_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29246,7 +29511,7 @@ impl Item {
         ],
     };
     pub const TIPPED_ARROW: Item = Item {
-        id: 1293,
+        id: 1294,
         registry_key: "tipped_arrow",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29265,7 +29530,7 @@ impl Item {
         ],
     };
     pub const TNT: Item = Item {
-        id: 746,
+        id: 747,
         registry_key: "tnt",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29284,7 +29549,7 @@ impl Item {
         ],
     };
     pub const TNT_MINECART: Item = Item {
-        id: 857,
+        id: 858,
         registry_key: "tnt_minecart",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -29303,7 +29568,7 @@ impl Item {
         ],
     };
     pub const TORCH: Item = Item {
-        id: 322,
+        id: 323,
         registry_key: "torch",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29322,7 +29587,7 @@ impl Item {
         ],
     };
     pub const TORCHFLOWER: Item = Item {
-        id: 244,
+        id: 245,
         registry_key: "torchflower",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29341,7 +29606,7 @@ impl Item {
         ],
     };
     pub const TORCHFLOWER_SEEDS: Item = Item {
-        id: 1285,
+        id: 1286,
         registry_key: "torchflower_seeds",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29360,7 +29625,7 @@ impl Item {
         ],
     };
     pub const TOTEM_OF_UNDYING: Item = Item {
-        id: 1303,
+        id: 1304,
         registry_key: "totem_of_undying",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -29380,7 +29645,7 @@ impl Item {
         ],
     };
     pub const TRADER_LLAMA_SPAWN_EGG: Item = Item {
-        id: 1169,
+        id: 1170,
         registry_key: "trader_llama_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29399,7 +29664,7 @@ impl Item {
         ],
     };
     pub const TRAPPED_CHEST: Item = Item {
-        id: 745,
+        id: 746,
         registry_key: "trapped_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29418,7 +29683,7 @@ impl Item {
         ],
     };
     pub const TRIAL_KEY: Item = Item {
-        id: 1501,
+        id: 1502,
         registry_key: "trial_key",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29437,7 +29702,7 @@ impl Item {
         ],
     };
     pub const TRIAL_SPAWNER: Item = Item {
-        id: 1500,
+        id: 1501,
         registry_key: "trial_spawner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29456,7 +29721,7 @@ impl Item {
         ],
     };
     pub const TRIDENT: Item = Item {
-        id: 1331,
+        id: 1332,
         registry_key: "trident",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -29507,7 +29772,7 @@ impl Item {
         ],
     };
     pub const TRIPWIRE_HOOK: Item = Item {
-        id: 744,
+        id: 745,
         registry_key: "tripwire_hook",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29526,7 +29791,7 @@ impl Item {
         ],
     };
     pub const TROPICAL_FISH: Item = Item {
-        id: 1059,
+        id: 1060,
         registry_key: "tropical_fish",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29554,12 +29819,16 @@ impl Item {
                 Consumable,
                 &ConsumableImpl {
                     consume_seconds: 1.6,
+                    animation: ConsumeAnimation::Eat,
+                    sound_event: IdOr::Id(Sound::EntityGenericEat),
+                    consume_particles: true,
+                    effects: Cow::Borrowed(&[]),
                 },
             ),
         ],
     };
     pub const TROPICAL_FISH_BUCKET: Item = Item {
-        id: 1022,
+        id: 1023,
         registry_key: "tropical_fish_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -29586,7 +29855,7 @@ impl Item {
         ],
     };
     pub const TROPICAL_FISH_SPAWN_EGG: Item = Item {
-        id: 1161,
+        id: 1162,
         registry_key: "tropical_fish_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29605,7 +29874,7 @@ impl Item {
         ],
     };
     pub const TUBE_CORAL: Item = Item {
-        id: 659,
+        id: 660,
         registry_key: "tube_coral",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29624,7 +29893,7 @@ impl Item {
         ],
     };
     pub const TUBE_CORAL_BLOCK: Item = Item {
-        id: 654,
+        id: 655,
         registry_key: "tube_coral_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29643,7 +29912,7 @@ impl Item {
         ],
     };
     pub const TUBE_CORAL_FAN: Item = Item {
-        id: 669,
+        id: 670,
         registry_key: "tube_coral_fan",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29814,7 +30083,7 @@ impl Item {
         ],
     };
     pub const TURTLE_EGG: Item = Item {
-        id: 646,
+        id: 647,
         registry_key: "turtle_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29833,7 +30102,7 @@ impl Item {
         ],
     };
     pub const TURTLE_HELMET: Item = Item {
-        id: 887,
+        id: 888,
         registry_key: "turtle_helmet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -29870,8 +30139,8 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "minecraft:item.armor.equip_turtle",
-                    asset_id: Some("minecraft:turtle_scute"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipTurtle),
+                    asset_id: Some(Cow::Borrowed("minecraft:turtle_scute")),
                     camera_overlay: None,
                     allowed_entities: None,
                     dispensable: true,
@@ -29879,13 +30148,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const TURTLE_SCUTE: Item = Item {
-        id: 888,
+        id: 889,
         registry_key: "turtle_scute",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29904,7 +30173,7 @@ impl Item {
         ],
     };
     pub const TURTLE_SPAWN_EGG: Item = Item {
-        id: 1162,
+        id: 1163,
         registry_key: "turtle_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29923,7 +30192,7 @@ impl Item {
         ],
     };
     pub const TWISTING_VINES: Item = Item {
-        id: 255,
+        id: 256,
         registry_key: "twisting_vines",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29942,7 +30211,7 @@ impl Item {
         ],
     };
     pub const VAULT: Item = Item {
-        id: 1503,
+        id: 1504,
         registry_key: "vault",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29961,7 +30230,7 @@ impl Item {
         ],
     };
     pub const VERDANT_FROGLIGHT: Item = Item {
-        id: 1421,
+        id: 1422,
         registry_key: "verdant_froglight",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29980,7 +30249,7 @@ impl Item {
         ],
     };
     pub const VEX_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1433,
+        id: 1434,
         registry_key: "vex_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -29999,7 +30268,7 @@ impl Item {
         ],
     };
     pub const VEX_SPAWN_EGG: Item = Item {
-        id: 1202,
+        id: 1203,
         registry_key: "vex_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30018,7 +30287,7 @@ impl Item {
         ],
     };
     pub const VILLAGER_SPAWN_EGG: Item = Item {
-        id: 1170,
+        id: 1171,
         registry_key: "villager_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30037,7 +30306,7 @@ impl Item {
         ],
     };
     pub const VINDICATOR_SPAWN_EGG: Item = Item {
-        id: 1201,
+        id: 1202,
         registry_key: "vindicator_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30056,7 +30325,7 @@ impl Item {
         ],
     };
     pub const VINE: Item = Item {
-        id: 410,
+        id: 411,
         registry_key: "vine",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30075,7 +30344,7 @@ impl Item {
         ],
     };
     pub const WANDERING_TRADER_SPAWN_EGG: Item = Item {
-        id: 1171,
+        id: 1172,
         registry_key: "wandering_trader_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30094,7 +30363,7 @@ impl Item {
         ],
     };
     pub const WARD_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1431,
+        id: 1432,
         registry_key: "ward_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30113,7 +30382,7 @@ impl Item {
         ],
     };
     pub const WARDEN_SPAWN_EGG: Item = Item {
-        id: 1196,
+        id: 1197,
         registry_key: "warden_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30132,7 +30401,7 @@ impl Item {
         ],
     };
     pub const WARPED_BUTTON: Item = Item {
-        id: 762,
+        id: 763,
         registry_key: "warped_button",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30151,7 +30420,7 @@ impl Item {
         ],
     };
     pub const WARPED_DOOR: Item = Item {
-        id: 791,
+        id: 792,
         registry_key: "warped_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30170,7 +30439,7 @@ impl Item {
         ],
     };
     pub const WARPED_FENCE: Item = Item {
-        id: 355,
+        id: 356,
         registry_key: "warped_fence",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30189,7 +30458,7 @@ impl Item {
         ],
     };
     pub const WARPED_FENCE_GATE: Item = Item {
-        id: 832,
+        id: 833,
         registry_key: "warped_fence_gate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30208,7 +30477,7 @@ impl Item {
         ],
     };
     pub const WARPED_FUNGUS: Item = Item {
-        id: 250,
+        id: 251,
         registry_key: "warped_fungus",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30227,7 +30496,7 @@ impl Item {
         ],
     };
     pub const WARPED_FUNGUS_ON_A_STICK: Item = Item {
-        id: 860,
+        id: 861,
         registry_key: "warped_fungus_on_a_stick",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -30248,7 +30517,7 @@ impl Item {
         ],
     };
     pub const WARPED_HANGING_SIGN: Item = Item {
-        id: 1011,
+        id: 1012,
         registry_key: "warped_hanging_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -30324,7 +30593,7 @@ impl Item {
         ],
     };
     pub const WARPED_PRESSURE_PLATE: Item = Item {
-        id: 778,
+        id: 779,
         registry_key: "warped_pressure_plate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30343,7 +30612,7 @@ impl Item {
         ],
     };
     pub const WARPED_ROOTS: Item = Item {
-        id: 252,
+        id: 253,
         registry_key: "warped_roots",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30362,7 +30631,7 @@ impl Item {
         ],
     };
     pub const WARPED_SHELF: Item = Item {
-        id: 316,
+        id: 317,
         registry_key: "warped_shelf",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30381,7 +30650,7 @@ impl Item {
         ],
     };
     pub const WARPED_SIGN: Item = Item {
-        id: 999,
+        id: 1000,
         registry_key: "warped_sign",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -30400,7 +30669,7 @@ impl Item {
         ],
     };
     pub const WARPED_SLAB: Item = Item {
-        id: 282,
+        id: 283,
         registry_key: "warped_slab",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30419,7 +30688,7 @@ impl Item {
         ],
     };
     pub const WARPED_STAIRS: Item = Item {
-        id: 453,
+        id: 454,
         registry_key: "warped_stairs",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30457,7 +30726,7 @@ impl Item {
         ],
     };
     pub const WARPED_TRAPDOOR: Item = Item {
-        id: 812,
+        id: 813,
         registry_key: "warped_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30476,7 +30745,7 @@ impl Item {
         ],
     };
     pub const WARPED_WART_BLOCK: Item = Item {
-        id: 577,
+        id: 578,
         registry_key: "warped_wart_block",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30495,7 +30764,7 @@ impl Item {
         ],
     };
     pub const WATER_BUCKET: Item = Item {
-        id: 1013,
+        id: 1014,
         registry_key: "water_bucket",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -30533,7 +30802,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_BARS: Item = Item {
-        id: 395,
+        id: 396,
         registry_key: "waxed_copper_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30571,7 +30840,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_BULB: Item = Item {
-        id: 1480,
+        id: 1481,
         registry_key: "waxed_copper_bulb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30590,7 +30859,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_CHAIN: Item = Item {
-        id: 404,
+        id: 405,
         registry_key: "waxed_copper_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30609,7 +30878,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_CHEST: Item = Item {
-        id: 1488,
+        id: 1489,
         registry_key: "waxed_copper_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30628,7 +30897,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_DOOR: Item = Item {
-        id: 796,
+        id: 797,
         registry_key: "waxed_copper_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30647,7 +30916,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_GOLEM_STATUE: Item = Item {
-        id: 1496,
+        id: 1497,
         registry_key: "waxed_copper_golem_statue",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30666,7 +30935,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_GRATE: Item = Item {
-        id: 1472,
+        id: 1473,
         registry_key: "waxed_copper_grate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30685,7 +30954,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_LANTERN: Item = Item {
-        id: 1369,
+        id: 1370,
         registry_key: "waxed_copper_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30704,7 +30973,7 @@ impl Item {
         ],
     };
     pub const WAXED_COPPER_TRAPDOOR: Item = Item {
-        id: 817,
+        id: 818,
         registry_key: "waxed_copper_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30818,7 +31087,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_BARS: Item = Item {
-        id: 396,
+        id: 397,
         registry_key: "waxed_exposed_copper_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30837,7 +31106,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_BULB: Item = Item {
-        id: 1481,
+        id: 1482,
         registry_key: "waxed_exposed_copper_bulb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30856,7 +31125,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_CHAIN: Item = Item {
-        id: 405,
+        id: 406,
         registry_key: "waxed_exposed_copper_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30875,7 +31144,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_CHEST: Item = Item {
-        id: 1489,
+        id: 1490,
         registry_key: "waxed_exposed_copper_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30894,7 +31163,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_DOOR: Item = Item {
-        id: 797,
+        id: 798,
         registry_key: "waxed_exposed_copper_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30913,7 +31182,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_GOLEM_STATUE: Item = Item {
-        id: 1497,
+        id: 1498,
         registry_key: "waxed_exposed_copper_golem_statue",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30932,7 +31201,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_GRATE: Item = Item {
-        id: 1473,
+        id: 1474,
         registry_key: "waxed_exposed_copper_grate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30951,7 +31220,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_LANTERN: Item = Item {
-        id: 1370,
+        id: 1371,
         registry_key: "waxed_exposed_copper_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -30970,7 +31239,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_COPPER_TRAPDOOR: Item = Item {
-        id: 818,
+        id: 819,
         registry_key: "waxed_exposed_copper_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31046,7 +31315,7 @@ impl Item {
         ],
     };
     pub const WAXED_EXPOSED_LIGHTNING_ROD: Item = Item {
-        id: 738,
+        id: 739,
         registry_key: "waxed_exposed_lightning_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31065,7 +31334,7 @@ impl Item {
         ],
     };
     pub const WAXED_LIGHTNING_ROD: Item = Item {
-        id: 737,
+        id: 738,
         registry_key: "waxed_lightning_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31122,7 +31391,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_BARS: Item = Item {
-        id: 398,
+        id: 399,
         registry_key: "waxed_oxidized_copper_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31141,7 +31410,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_BULB: Item = Item {
-        id: 1483,
+        id: 1484,
         registry_key: "waxed_oxidized_copper_bulb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31160,7 +31429,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_CHAIN: Item = Item {
-        id: 407,
+        id: 408,
         registry_key: "waxed_oxidized_copper_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31179,7 +31448,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_CHEST: Item = Item {
-        id: 1491,
+        id: 1492,
         registry_key: "waxed_oxidized_copper_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31198,7 +31467,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_DOOR: Item = Item {
-        id: 799,
+        id: 800,
         registry_key: "waxed_oxidized_copper_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31217,7 +31486,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_GOLEM_STATUE: Item = Item {
-        id: 1499,
+        id: 1500,
         registry_key: "waxed_oxidized_copper_golem_statue",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31236,7 +31505,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_GRATE: Item = Item {
-        id: 1475,
+        id: 1476,
         registry_key: "waxed_oxidized_copper_grate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31255,7 +31524,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_LANTERN: Item = Item {
-        id: 1372,
+        id: 1373,
         registry_key: "waxed_oxidized_copper_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31274,7 +31543,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_COPPER_TRAPDOOR: Item = Item {
-        id: 820,
+        id: 821,
         registry_key: "waxed_oxidized_copper_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31350,7 +31619,7 @@ impl Item {
         ],
     };
     pub const WAXED_OXIDIZED_LIGHTNING_ROD: Item = Item {
-        id: 740,
+        id: 741,
         registry_key: "waxed_oxidized_lightning_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31407,7 +31676,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_BARS: Item = Item {
-        id: 397,
+        id: 398,
         registry_key: "waxed_weathered_copper_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31426,7 +31695,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_BULB: Item = Item {
-        id: 1482,
+        id: 1483,
         registry_key: "waxed_weathered_copper_bulb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31445,7 +31714,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_CHAIN: Item = Item {
-        id: 406,
+        id: 407,
         registry_key: "waxed_weathered_copper_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31464,7 +31733,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_CHEST: Item = Item {
-        id: 1490,
+        id: 1491,
         registry_key: "waxed_weathered_copper_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31483,7 +31752,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_DOOR: Item = Item {
-        id: 798,
+        id: 799,
         registry_key: "waxed_weathered_copper_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31502,7 +31771,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_GOLEM_STATUE: Item = Item {
-        id: 1498,
+        id: 1499,
         registry_key: "waxed_weathered_copper_golem_statue",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31521,7 +31790,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_GRATE: Item = Item {
-        id: 1474,
+        id: 1475,
         registry_key: "waxed_weathered_copper_grate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31540,7 +31809,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_LANTERN: Item = Item {
-        id: 1371,
+        id: 1372,
         registry_key: "waxed_weathered_copper_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31559,7 +31828,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_COPPER_TRAPDOOR: Item = Item {
-        id: 819,
+        id: 820,
         registry_key: "waxed_weathered_copper_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31635,7 +31904,7 @@ impl Item {
         ],
     };
     pub const WAXED_WEATHERED_LIGHTNING_ROD: Item = Item {
-        id: 739,
+        id: 740,
         registry_key: "waxed_weathered_lightning_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31654,7 +31923,7 @@ impl Item {
         ],
     };
     pub const WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1438,
+        id: 1439,
         registry_key: "wayfinder_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31711,7 +31980,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_BARS: Item = Item {
-        id: 393,
+        id: 394,
         registry_key: "weathered_copper_bars",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31730,7 +31999,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_BULB: Item = Item {
-        id: 1478,
+        id: 1479,
         registry_key: "weathered_copper_bulb",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31749,7 +32018,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_CHAIN: Item = Item {
-        id: 402,
+        id: 403,
         registry_key: "weathered_copper_chain",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31768,7 +32037,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_CHEST: Item = Item {
-        id: 1486,
+        id: 1487,
         registry_key: "weathered_copper_chest",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31787,7 +32056,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_DOOR: Item = Item {
-        id: 794,
+        id: 795,
         registry_key: "weathered_copper_door",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31806,7 +32075,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_GOLEM_STATUE: Item = Item {
-        id: 1494,
+        id: 1495,
         registry_key: "weathered_copper_golem_statue",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31825,7 +32094,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_GRATE: Item = Item {
-        id: 1470,
+        id: 1471,
         registry_key: "weathered_copper_grate",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31844,7 +32113,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_LANTERN: Item = Item {
-        id: 1367,
+        id: 1368,
         registry_key: "weathered_copper_lantern",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31863,7 +32132,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_COPPER_TRAPDOOR: Item = Item {
-        id: 815,
+        id: 816,
         registry_key: "weathered_copper_trapdoor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31939,7 +32208,7 @@ impl Item {
         ],
     };
     pub const WEATHERED_LIGHTNING_ROD: Item = Item {
-        id: 735,
+        id: 736,
         registry_key: "weathered_lightning_rod",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31958,7 +32227,7 @@ impl Item {
         ],
     };
     pub const WEEPING_VINES: Item = Item {
-        id: 254,
+        id: 255,
         registry_key: "weeping_vines",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -31996,7 +32265,7 @@ impl Item {
         ],
     };
     pub const WHEAT: Item = Item {
-        id: 952,
+        id: 953,
         registry_key: "wheat",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32015,7 +32284,7 @@ impl Item {
         ],
     };
     pub const WHEAT_SEEDS: Item = Item {
-        id: 951,
+        id: 952,
         registry_key: "wheat_seeds",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32034,7 +32303,7 @@ impl Item {
         ],
     };
     pub const WHITE_BANNER: Item = Item {
-        id: 1266,
+        id: 1267,
         registry_key: "white_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -32053,7 +32322,7 @@ impl Item {
         ],
     };
     pub const WHITE_BED: Item = Item {
-        id: 1086,
+        id: 1087,
         registry_key: "white_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32072,7 +32341,7 @@ impl Item {
         ],
     };
     pub const WHITE_BUNDLE: Item = Item {
-        id: 1037,
+        id: 1038,
         registry_key: "white_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32091,7 +32360,7 @@ impl Item {
         ],
     };
     pub const WHITE_CANDLE: Item = Item {
-        id: 1399,
+        id: 1400,
         registry_key: "white_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32110,7 +32379,7 @@ impl Item {
         ],
     };
     pub const WHITE_CARPET: Item = Item {
-        id: 505,
+        id: 506,
         registry_key: "white_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32130,25 +32399,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:white_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:white_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const WHITE_CONCRETE: Item = Item {
-        id: 614,
+        id: 615,
         registry_key: "white_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32167,7 +32436,7 @@ impl Item {
         ],
     };
     pub const WHITE_CONCRETE_POWDER: Item = Item {
-        id: 630,
+        id: 631,
         registry_key: "white_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32186,7 +32455,7 @@ impl Item {
         ],
     };
     pub const WHITE_DYE: Item = Item {
-        id: 1066,
+        id: 1067,
         registry_key: "white_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32205,7 +32474,7 @@ impl Item {
         ],
     };
     pub const WHITE_GLAZED_TERRACOTTA: Item = Item {
-        id: 598,
+        id: 599,
         registry_key: "white_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32224,7 +32493,7 @@ impl Item {
         ],
     };
     pub const WHITE_HARNESS: Item = Item {
-        id: 838,
+        id: 839,
         registry_key: "white_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32244,24 +32513,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:white_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:white_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const WHITE_SHULKER_BOX: Item = Item {
-        id: 582,
+        id: 583,
         registry_key: "white_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32280,7 +32547,7 @@ impl Item {
         ],
     };
     pub const WHITE_STAINED_GLASS: Item = Item {
-        id: 530,
+        id: 531,
         registry_key: "white_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32299,7 +32566,7 @@ impl Item {
         ],
     };
     pub const WHITE_STAINED_GLASS_PANE: Item = Item {
-        id: 546,
+        id: 547,
         registry_key: "white_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32318,7 +32585,7 @@ impl Item {
         ],
     };
     pub const WHITE_TERRACOTTA: Item = Item {
-        id: 486,
+        id: 487,
         registry_key: "white_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32337,7 +32604,7 @@ impl Item {
         ],
     };
     pub const WHITE_TULIP: Item = Item {
-        id: 238,
+        id: 239,
         registry_key: "white_tulip",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32375,7 +32642,7 @@ impl Item {
         ],
     };
     pub const WILD_ARMOR_TRIM_SMITHING_TEMPLATE: Item = Item {
-        id: 1430,
+        id: 1431,
         registry_key: "wild_armor_trim_smithing_template",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32394,7 +32661,7 @@ impl Item {
         ],
     };
     pub const WILDFLOWERS: Item = Item {
-        id: 259,
+        id: 260,
         registry_key: "wildflowers",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32413,7 +32680,7 @@ impl Item {
         ],
     };
     pub const WIND_CHARGE: Item = Item {
-        id: 1219,
+        id: 1220,
         registry_key: "wind_charge",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32432,7 +32699,7 @@ impl Item {
         ],
     };
     pub const WITCH_SPAWN_EGG: Item = Item {
-        id: 1197,
+        id: 1198,
         registry_key: "witch_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32451,7 +32718,7 @@ impl Item {
         ],
     };
     pub const WITHER_ROSE: Item = Item {
-        id: 243,
+        id: 244,
         registry_key: "wither_rose",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32470,7 +32737,7 @@ impl Item {
         ],
     };
     pub const WITHER_SKELETON_SKULL: Item = Item {
-        id: 1234,
+        id: 1235,
         registry_key: "wither_skeleton_skull",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32496,7 +32763,7 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
                     camera_overlay: None,
                     allowed_entities: None,
@@ -32505,13 +32772,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const WITHER_SKELETON_SPAWN_EGG: Item = Item {
-        id: 1181,
+        id: 1182,
         registry_key: "wither_skeleton_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32530,7 +32797,7 @@ impl Item {
         ],
     };
     pub const WITHER_SPAWN_EGG: Item = Item {
-        id: 1180,
+        id: 1181,
         registry_key: "wither_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32549,7 +32816,7 @@ impl Item {
         ],
     };
     pub const WOLF_ARMOR: Item = Item {
-        id: 890,
+        id: 891,
         registry_key: "wolf_armor",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32586,24 +32853,24 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:item.armor.equip_wolf",
-                    asset_id: Some("minecraft:armadillo_scute"),
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipWolf),
+                    asset_id: Some(Cow::Borrowed("minecraft:armadillo_scute")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Single(
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
                         &crate::entity_type::EntityType::WOLF,
-                    )]),
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.armor.unequip_wolf"),
+                    shearing_sound: IdOr::Id(Sound::ItemArmorUnequipWolf),
                 },
             ),
         ],
     };
     pub const WOLF_SPAWN_EGG: Item = Item {
-        id: 1140,
+        id: 1141,
         registry_key: "wolf_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -32622,7 +32889,7 @@ impl Item {
         ],
     };
     pub const WOODEN_AXE: Item = Item {
-        id: 914,
+        id: 915,
         registry_key: "wooden_axe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32660,12 +32927,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_WOODEN_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_wooden_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_AXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/axe")),
                             speed: Some(2f32),
                             correct_for_drops: Some(true),
                         },
@@ -32684,7 +32951,7 @@ impl Item {
         ],
     };
     pub const WOODEN_HOE: Item = Item {
-        id: 915,
+        id: 916,
         registry_key: "wooden_hoe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32722,12 +32989,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_WOODEN_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_wooden_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_HOE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/hoe")),
                             speed: Some(2f32),
                             correct_for_drops: Some(true),
                         },
@@ -32746,7 +33013,7 @@ impl Item {
         ],
     };
     pub const WOODEN_PICKAXE: Item = Item {
-        id: 913,
+        id: 914,
         registry_key: "wooden_pickaxe",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32784,12 +33051,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_WOODEN_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_wooden_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_PICKAXE),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/pickaxe")),
                             speed: Some(2f32),
                             correct_for_drops: Some(true),
                         },
@@ -32808,7 +33075,7 @@ impl Item {
         ],
     };
     pub const WOODEN_SHOVEL: Item = Item {
-        id: 912,
+        id: 913,
         registry_key: "wooden_shovel",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32846,12 +33113,12 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_INCORRECT_FOR_WOODEN_TOOL),
+                            blocks: Tag(Cow::Borrowed("minecraft:incorrect_for_wooden_tool")),
                             speed: None,
                             correct_for_drops: Some(false),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_MINEABLE_SHOVEL),
+                            blocks: Tag(Cow::Borrowed("minecraft:mineable/shovel")),
                             speed: Some(2f32),
                             correct_for_drops: Some(true),
                         },
@@ -32870,7 +33137,7 @@ impl Item {
         ],
     };
     pub const WOODEN_SPEAR: Item = Item {
-        id: 1296,
+        id: 1297,
         registry_key: "wooden_spear",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32912,7 +33179,7 @@ impl Item {
         ],
     };
     pub const WOODEN_SWORD: Item = Item {
-        id: 911,
+        id: 912,
         registry_key: "wooden_sword",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32950,17 +33217,17 @@ impl Item {
                 &ToolImpl {
                     rules: Cow::Borrowed(&[
                         ToolRule {
-                            blocks: Blocks(Cow::Borrowed(&[&Block::COBWEB])),
+                            blocks: IDs(Cow::Borrowed(&[&Block::COBWEB])),
                             speed: Some(15f32),
                             correct_for_drops: Some(true),
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_INSTANTLY_MINES),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_instantly_mines")),
                             speed: Some(340282350000000000000000000000000000000f32),
                             correct_for_drops: None,
                         },
                         ToolRule {
-                            blocks: Tag(&tag::Block::MINECRAFT_SWORD_EFFICIENT),
+                            blocks: Tag(Cow::Borrowed("minecraft:sword_efficient")),
                             speed: Some(1.5f32),
                             correct_for_drops: None,
                         },
@@ -32979,7 +33246,7 @@ impl Item {
         ],
     };
     pub const WRITABLE_BOOK: Item = Item {
-        id: 1220,
+        id: 1221,
         registry_key: "writable_book",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -32998,7 +33265,7 @@ impl Item {
         ],
     };
     pub const WRITTEN_BOOK: Item = Item {
-        id: 1221,
+        id: 1222,
         registry_key: "written_book",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -33017,7 +33284,7 @@ impl Item {
         ],
     };
     pub const YELLOW_BANNER: Item = Item {
-        id: 1270,
+        id: 1271,
         registry_key: "yellow_banner",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 16 }),
@@ -33036,7 +33303,7 @@ impl Item {
         ],
     };
     pub const YELLOW_BED: Item = Item {
-        id: 1090,
+        id: 1091,
         registry_key: "yellow_bed",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -33055,7 +33322,7 @@ impl Item {
         ],
     };
     pub const YELLOW_BUNDLE: Item = Item {
-        id: 1041,
+        id: 1042,
         registry_key: "yellow_bundle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -33074,7 +33341,7 @@ impl Item {
         ],
     };
     pub const YELLOW_CANDLE: Item = Item {
-        id: 1403,
+        id: 1404,
         registry_key: "yellow_candle",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33093,7 +33360,7 @@ impl Item {
         ],
     };
     pub const YELLOW_CARPET: Item = Item {
-        id: 509,
+        id: 510,
         registry_key: "yellow_carpet",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33113,25 +33380,25 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.llama.swag",
-                    asset_id: Some("minecraft:yellow_carpet"),
+                    equip_sound: IdOr::Id(Sound::EntityLlamaSwag),
+                    asset_id: Some(Cow::Borrowed("minecraft:yellow_carpet")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::LLAMA),
-                        EntityTypeOrTag::Single(&crate::entity_type::EntityType::TRADER_LLAMA),
-                    ]),
+                    allowed_entities: Some(IDSet::IDs(Cow::Borrowed(&[
+                        &crate::entity_type::EntityType::LLAMA,
+                        &crate::entity_type::EntityType::TRADER_LLAMA,
+                    ]))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:item.llama_carpet.unequip"),
+                    shearing_sound: IdOr::Id(Sound::ItemLlamaCarpetUnequip),
                 },
             ),
         ],
     };
     pub const YELLOW_CONCRETE: Item = Item {
-        id: 618,
+        id: 619,
         registry_key: "yellow_concrete",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33150,7 +33417,7 @@ impl Item {
         ],
     };
     pub const YELLOW_CONCRETE_POWDER: Item = Item {
-        id: 634,
+        id: 635,
         registry_key: "yellow_concrete_powder",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33169,7 +33436,7 @@ impl Item {
         ],
     };
     pub const YELLOW_DYE: Item = Item {
-        id: 1070,
+        id: 1071,
         registry_key: "yellow_dye",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33188,7 +33455,7 @@ impl Item {
         ],
     };
     pub const YELLOW_GLAZED_TERRACOTTA: Item = Item {
-        id: 602,
+        id: 603,
         registry_key: "yellow_glazed_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33207,7 +33474,7 @@ impl Item {
         ],
     };
     pub const YELLOW_HARNESS: Item = Item {
-        id: 842,
+        id: 843,
         registry_key: "yellow_harness",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -33227,24 +33494,22 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::BODY,
-                    equip_sound: "minecraft:entity.happy_ghast.equip",
-                    asset_id: Some("minecraft:yellow_harness"),
+                    equip_sound: IdOr::Id(Sound::EntityHappyGhastEquip),
+                    asset_id: Some(Cow::Borrowed("minecraft:yellow_harness")),
                     camera_overlay: None,
-                    allowed_entities: Some(&[EntityTypeOrTag::Tag(
-                        &crate::tag::EntityType::MINECRAFT_CAN_EQUIP_HARNESS,
-                    )]),
+                    allowed_entities: Some(IDSet::Tag(Cow::Borrowed("can_equip_harness"))),
                     dispensable: true,
                     swappable: true,
                     damage_on_hurt: true,
                     equip_on_interact: true,
                     can_be_sheared: true,
-                    shearing_sound: Some("minecraft:entity.happy_ghast.unequip"),
+                    shearing_sound: IdOr::Id(Sound::EntityHappyGhastUnequip),
                 },
             ),
         ],
     };
     pub const YELLOW_SHULKER_BOX: Item = Item {
-        id: 586,
+        id: 587,
         registry_key: "yellow_shulker_box",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 1 }),
@@ -33263,7 +33528,7 @@ impl Item {
         ],
     };
     pub const YELLOW_STAINED_GLASS: Item = Item {
-        id: 534,
+        id: 535,
         registry_key: "yellow_stained_glass",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33282,7 +33547,7 @@ impl Item {
         ],
     };
     pub const YELLOW_STAINED_GLASS_PANE: Item = Item {
-        id: 550,
+        id: 551,
         registry_key: "yellow_stained_glass_pane",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33301,7 +33566,7 @@ impl Item {
         ],
     };
     pub const YELLOW_TERRACOTTA: Item = Item {
-        id: 490,
+        id: 491,
         registry_key: "yellow_terracotta",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33339,7 +33604,7 @@ impl Item {
         ],
     };
     pub const ZOGLIN_SPAWN_EGG: Item = Item {
-        id: 1211,
+        id: 1212,
         registry_key: "zoglin_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33358,7 +33623,7 @@ impl Item {
         ],
     };
     pub const ZOMBIE_HEAD: Item = Item {
-        id: 1236,
+        id: 1237,
         registry_key: "zombie_head",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33384,7 +33649,7 @@ impl Item {
                 Equippable,
                 &EquippableImpl {
                     slot: &EquipmentSlot::HEAD,
-                    equip_sound: "item.armor.equip_generic",
+                    equip_sound: IdOr::Id(Sound::ItemArmorEquipGeneric),
                     asset_id: None,
                     camera_overlay: None,
                     allowed_entities: None,
@@ -33393,13 +33658,13 @@ impl Item {
                     damage_on_hurt: true,
                     equip_on_interact: false,
                     can_be_sheared: false,
-                    shearing_sound: None,
+                    shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
         ],
     };
     pub const ZOMBIE_HORSE_SPAWN_EGG: Item = Item {
-        id: 1183,
+        id: 1184,
         registry_key: "zombie_horse_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33418,7 +33683,7 @@ impl Item {
         ],
     };
     pub const ZOMBIE_NAUTILUS_SPAWN_EGG: Item = Item {
-        id: 1184,
+        id: 1185,
         registry_key: "zombie_nautilus_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33437,7 +33702,7 @@ impl Item {
         ],
     };
     pub const ZOMBIE_SPAWN_EGG: Item = Item {
-        id: 1182,
+        id: 1183,
         registry_key: "zombie_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33456,7 +33721,7 @@ impl Item {
         ],
     };
     pub const ZOMBIE_VILLAGER_SPAWN_EGG: Item = Item {
-        id: 1185,
+        id: 1186,
         registry_key: "zombie_villager_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -33475,7 +33740,7 @@ impl Item {
         ],
     };
     pub const ZOMBIFIED_PIGLIN_SPAWN_EGG: Item = Item {
-        id: 1212,
+        id: 1213,
         registry_key: "zombified_piglin_spawn_egg",
         components: &[
             (MaxStackSize, &MaxStackSizeImpl { size: 64 }),
@@ -34074,6 +34339,7 @@ impl Item {
             "golden_boots" => Some(&Self::GOLDEN_BOOTS),
             "golden_carrot" => Some(&Self::GOLDEN_CARROT),
             "golden_chestplate" => Some(&Self::GOLDEN_CHESTPLATE),
+            "golden_dandelion" => Some(&Self::GOLDEN_DANDELION),
             "golden_helmet" => Some(&Self::GOLDEN_HELMET),
             "golden_hoe" => Some(&Self::GOLDEN_HOE),
             "golden_horse_armor" => Some(&Self::GOLDEN_HORSE_ARMOR),
@@ -35037,421 +35303,421 @@ impl Item {
     #[doc = "Try to parse an item from a raw id."]
     pub const fn from_id(id: u16) -> Option<&'static Self> {
         match id {
-            871 => Some(&Self::ACACIA_BOAT),
-            755 => Some(&Self::ACACIA_BUTTON),
-            872 => Some(&Self::ACACIA_CHEST_BOAT),
-            784 => Some(&Self::ACACIA_DOOR),
-            348 => Some(&Self::ACACIA_FENCE),
-            825 => Some(&Self::ACACIA_FENCE_GATE),
-            1004 => Some(&Self::ACACIA_HANGING_SIGN),
+            872 => Some(&Self::ACACIA_BOAT),
+            756 => Some(&Self::ACACIA_BUTTON),
+            873 => Some(&Self::ACACIA_CHEST_BOAT),
+            785 => Some(&Self::ACACIA_DOOR),
+            349 => Some(&Self::ACACIA_FENCE),
+            826 => Some(&Self::ACACIA_FENCE_GATE),
+            1005 => Some(&Self::ACACIA_HANGING_SIGN),
             186 => Some(&Self::ACACIA_LEAVES),
             138 => Some(&Self::ACACIA_LOG),
             40 => Some(&Self::ACACIA_PLANKS),
-            771 => Some(&Self::ACACIA_PRESSURE_PLATE),
+            772 => Some(&Self::ACACIA_PRESSURE_PLATE),
             53 => Some(&Self::ACACIA_SAPLING),
-            305 => Some(&Self::ACACIA_SHELF),
-            992 => Some(&Self::ACACIA_SIGN),
-            274 => Some(&Self::ACACIA_SLAB),
-            445 => Some(&Self::ACACIA_STAIRS),
-            805 => Some(&Self::ACACIA_TRAPDOOR),
+            306 => Some(&Self::ACACIA_SHELF),
+            993 => Some(&Self::ACACIA_SIGN),
+            275 => Some(&Self::ACACIA_SLAB),
+            446 => Some(&Self::ACACIA_STAIRS),
+            806 => Some(&Self::ACACIA_TRAPDOOR),
             175 => Some(&Self::ACACIA_WOOD),
-            836 => Some(&Self::ACTIVATOR_RAIL),
+            837 => Some(&Self::ACTIVATOR_RAIL),
             0 => Some(&Self::AIR),
-            1163 => Some(&Self::ALLAY_SPAWN_EGG),
-            234 => Some(&Self::ALLIUM),
+            1164 => Some(&Self::ALLAY_SPAWN_EGG),
+            235 => Some(&Self::ALLIUM),
             88 => Some(&Self::AMETHYST_BLOCK),
-            1418 => Some(&Self::AMETHYST_CLUSTER),
-            902 => Some(&Self::AMETHYST_SHARD),
+            1419 => Some(&Self::AMETHYST_CLUSTER),
+            903 => Some(&Self::AMETHYST_SHARD),
             82 => Some(&Self::ANCIENT_DEBRIS),
             6 => Some(&Self::ANDESITE),
-            708 => Some(&Self::ANDESITE_SLAB),
-            691 => Some(&Self::ANDESITE_STAIRS),
-            466 => Some(&Self::ANDESITE_WALL),
-            1445 => Some(&Self::ANGLER_POTTERY_SHERD),
-            478 => Some(&Self::ANVIL),
-            893 => Some(&Self::APPLE),
-            1446 => Some(&Self::ARCHER_POTTERY_SHERD),
-            889 => Some(&Self::ARMADILLO_SCUTE),
-            1141 => Some(&Self::ARMADILLO_SPAWN_EGG),
-            1254 => Some(&Self::ARMOR_STAND),
-            1447 => Some(&Self::ARMS_UP_POTTERY_SHERD),
-            895 => Some(&Self::ARROW),
-            1023 => Some(&Self::AXOLOTL_BUCKET),
-            1151 => Some(&Self::AXOLOTL_SPAWN_EGG),
+            709 => Some(&Self::ANDESITE_SLAB),
+            692 => Some(&Self::ANDESITE_STAIRS),
+            467 => Some(&Self::ANDESITE_WALL),
+            1446 => Some(&Self::ANGLER_POTTERY_SHERD),
+            479 => Some(&Self::ANVIL),
+            894 => Some(&Self::APPLE),
+            1447 => Some(&Self::ARCHER_POTTERY_SHERD),
+            890 => Some(&Self::ARMADILLO_SCUTE),
+            1142 => Some(&Self::ARMADILLO_SPAWN_EGG),
+            1255 => Some(&Self::ARMOR_STAND),
+            1448 => Some(&Self::ARMS_UP_POTTERY_SHERD),
+            896 => Some(&Self::ARROW),
+            1024 => Some(&Self::AXOLOTL_BUCKET),
+            1152 => Some(&Self::AXOLOTL_SPAWN_EGG),
             205 => Some(&Self::AZALEA),
             191 => Some(&Self::AZALEA_LEAVES),
-            235 => Some(&Self::AZURE_BLUET),
-            1229 => Some(&Self::BAKED_POTATO),
-            269 => Some(&Self::BAMBOO),
+            236 => Some(&Self::AZURE_BLUET),
+            1230 => Some(&Self::BAKED_POTATO),
+            270 => Some(&Self::BAMBOO),
             147 => Some(&Self::BAMBOO_BLOCK),
-            760 => Some(&Self::BAMBOO_BUTTON),
-            882 => Some(&Self::BAMBOO_CHEST_RAFT),
-            789 => Some(&Self::BAMBOO_DOOR),
-            353 => Some(&Self::BAMBOO_FENCE),
-            830 => Some(&Self::BAMBOO_FENCE_GATE),
-            1009 => Some(&Self::BAMBOO_HANGING_SIGN),
+            761 => Some(&Self::BAMBOO_BUTTON),
+            883 => Some(&Self::BAMBOO_CHEST_RAFT),
+            790 => Some(&Self::BAMBOO_DOOR),
+            354 => Some(&Self::BAMBOO_FENCE),
+            831 => Some(&Self::BAMBOO_FENCE_GATE),
+            1010 => Some(&Self::BAMBOO_HANGING_SIGN),
             48 => Some(&Self::BAMBOO_MOSAIC),
-            280 => Some(&Self::BAMBOO_MOSAIC_SLAB),
-            451 => Some(&Self::BAMBOO_MOSAIC_STAIRS),
+            281 => Some(&Self::BAMBOO_MOSAIC_SLAB),
+            452 => Some(&Self::BAMBOO_MOSAIC_STAIRS),
             45 => Some(&Self::BAMBOO_PLANKS),
-            776 => Some(&Self::BAMBOO_PRESSURE_PLATE),
-            881 => Some(&Self::BAMBOO_RAFT),
-            306 => Some(&Self::BAMBOO_SHELF),
-            997 => Some(&Self::BAMBOO_SIGN),
-            279 => Some(&Self::BAMBOO_SLAB),
-            450 => Some(&Self::BAMBOO_STAIRS),
-            810 => Some(&Self::BAMBOO_TRAPDOOR),
-            1354 => Some(&Self::BARREL),
-            502 => Some(&Self::BARRIER),
-            362 => Some(&Self::BASALT),
-            1142 => Some(&Self::BAT_SPAWN_EGG),
-            455 => Some(&Self::BEACON),
+            777 => Some(&Self::BAMBOO_PRESSURE_PLATE),
+            882 => Some(&Self::BAMBOO_RAFT),
+            307 => Some(&Self::BAMBOO_SHELF),
+            998 => Some(&Self::BAMBOO_SIGN),
+            280 => Some(&Self::BAMBOO_SLAB),
+            451 => Some(&Self::BAMBOO_STAIRS),
+            811 => Some(&Self::BAMBOO_TRAPDOOR),
+            1355 => Some(&Self::BARREL),
+            503 => Some(&Self::BARRIER),
+            363 => Some(&Self::BASALT),
+            1143 => Some(&Self::BAT_SPAWN_EGG),
+            456 => Some(&Self::BEACON),
             58 => Some(&Self::BEDROCK),
-            1379 => Some(&Self::BEE_NEST),
-            1143 => Some(&Self::BEE_SPAWN_EGG),
-            1110 => Some(&Self::BEEF),
-            1380 => Some(&Self::BEEHIVE),
-            1287 => Some(&Self::BEETROOT),
-            1288 => Some(&Self::BEETROOT_SEEDS),
-            1289 => Some(&Self::BEETROOT_SOUP),
-            1362 => Some(&Self::BELL),
-            267 => Some(&Self::BIG_DRIPLEAF),
-            867 => Some(&Self::BIRCH_BOAT),
-            753 => Some(&Self::BIRCH_BUTTON),
-            868 => Some(&Self::BIRCH_CHEST_BOAT),
-            782 => Some(&Self::BIRCH_DOOR),
-            346 => Some(&Self::BIRCH_FENCE),
-            823 => Some(&Self::BIRCH_FENCE_GATE),
-            1002 => Some(&Self::BIRCH_HANGING_SIGN),
+            1380 => Some(&Self::BEE_NEST),
+            1144 => Some(&Self::BEE_SPAWN_EGG),
+            1111 => Some(&Self::BEEF),
+            1381 => Some(&Self::BEEHIVE),
+            1288 => Some(&Self::BEETROOT),
+            1289 => Some(&Self::BEETROOT_SEEDS),
+            1290 => Some(&Self::BEETROOT_SOUP),
+            1363 => Some(&Self::BELL),
+            268 => Some(&Self::BIG_DRIPLEAF),
+            868 => Some(&Self::BIRCH_BOAT),
+            754 => Some(&Self::BIRCH_BUTTON),
+            869 => Some(&Self::BIRCH_CHEST_BOAT),
+            783 => Some(&Self::BIRCH_DOOR),
+            347 => Some(&Self::BIRCH_FENCE),
+            824 => Some(&Self::BIRCH_FENCE_GATE),
+            1003 => Some(&Self::BIRCH_HANGING_SIGN),
             184 => Some(&Self::BIRCH_LEAVES),
             136 => Some(&Self::BIRCH_LOG),
             38 => Some(&Self::BIRCH_PLANKS),
-            769 => Some(&Self::BIRCH_PRESSURE_PLATE),
+            770 => Some(&Self::BIRCH_PRESSURE_PLATE),
             51 => Some(&Self::BIRCH_SAPLING),
-            307 => Some(&Self::BIRCH_SHELF),
-            990 => Some(&Self::BIRCH_SIGN),
-            272 => Some(&Self::BIRCH_SLAB),
-            443 => Some(&Self::BIRCH_STAIRS),
-            803 => Some(&Self::BIRCH_TRAPDOOR),
+            308 => Some(&Self::BIRCH_SHELF),
+            991 => Some(&Self::BIRCH_SIGN),
+            273 => Some(&Self::BIRCH_SLAB),
+            444 => Some(&Self::BIRCH_STAIRS),
+            804 => Some(&Self::BIRCH_TRAPDOOR),
             173 => Some(&Self::BIRCH_WOOD),
-            1281 => Some(&Self::BLACK_BANNER),
-            1101 => Some(&Self::BLACK_BED),
-            1052 => Some(&Self::BLACK_BUNDLE),
-            1414 => Some(&Self::BLACK_CANDLE),
-            520 => Some(&Self::BLACK_CARPET),
-            629 => Some(&Self::BLACK_CONCRETE),
-            645 => Some(&Self::BLACK_CONCRETE_POWDER),
-            1081 => Some(&Self::BLACK_DYE),
-            613 => Some(&Self::BLACK_GLAZED_TERRACOTTA),
-            853 => Some(&Self::BLACK_HARNESS),
-            597 => Some(&Self::BLACK_SHULKER_BOX),
-            545 => Some(&Self::BLACK_STAINED_GLASS),
-            561 => Some(&Self::BLACK_STAINED_GLASS_PANE),
-            501 => Some(&Self::BLACK_TERRACOTTA),
+            1282 => Some(&Self::BLACK_BANNER),
+            1102 => Some(&Self::BLACK_BED),
+            1053 => Some(&Self::BLACK_BUNDLE),
+            1415 => Some(&Self::BLACK_CANDLE),
+            521 => Some(&Self::BLACK_CARPET),
+            630 => Some(&Self::BLACK_CONCRETE),
+            646 => Some(&Self::BLACK_CONCRETE_POWDER),
+            1082 => Some(&Self::BLACK_DYE),
+            614 => Some(&Self::BLACK_GLAZED_TERRACOTTA),
+            854 => Some(&Self::BLACK_HARNESS),
+            598 => Some(&Self::BLACK_SHULKER_BOX),
+            546 => Some(&Self::BLACK_STAINED_GLASS),
+            562 => Some(&Self::BLACK_STAINED_GLASS_PANE),
+            502 => Some(&Self::BLACK_TERRACOTTA),
             228 => Some(&Self::BLACK_WOOL),
-            1385 => Some(&Self::BLACKSTONE),
-            1386 => Some(&Self::BLACKSTONE_SLAB),
-            1387 => Some(&Self::BLACKSTONE_STAIRS),
-            471 => Some(&Self::BLACKSTONE_WALL),
-            1448 => Some(&Self::BLADE_POTTERY_SHERD),
-            1356 => Some(&Self::BLAST_FURNACE),
-            1124 => Some(&Self::BLAZE_POWDER),
-            1116 => Some(&Self::BLAZE_ROD),
-            1203 => Some(&Self::BLAZE_SPAWN_EGG),
-            1277 => Some(&Self::BLUE_BANNER),
-            1097 => Some(&Self::BLUE_BED),
-            1048 => Some(&Self::BLUE_BUNDLE),
-            1410 => Some(&Self::BLUE_CANDLE),
-            516 => Some(&Self::BLUE_CARPET),
-            625 => Some(&Self::BLUE_CONCRETE),
-            641 => Some(&Self::BLUE_CONCRETE_POWDER),
-            1077 => Some(&Self::BLUE_DYE),
-            1032 => Some(&Self::BLUE_EGG),
-            609 => Some(&Self::BLUE_GLAZED_TERRACOTTA),
-            849 => Some(&Self::BLUE_HARNESS),
-            679 => Some(&Self::BLUE_ICE),
-            233 => Some(&Self::BLUE_ORCHID),
-            593 => Some(&Self::BLUE_SHULKER_BOX),
-            541 => Some(&Self::BLUE_STAINED_GLASS),
-            557 => Some(&Self::BLUE_STAINED_GLASS_PANE),
-            497 => Some(&Self::BLUE_TERRACOTTA),
+            1386 => Some(&Self::BLACKSTONE),
+            1387 => Some(&Self::BLACKSTONE_SLAB),
+            1388 => Some(&Self::BLACKSTONE_STAIRS),
+            472 => Some(&Self::BLACKSTONE_WALL),
+            1449 => Some(&Self::BLADE_POTTERY_SHERD),
+            1357 => Some(&Self::BLAST_FURNACE),
+            1125 => Some(&Self::BLAZE_POWDER),
+            1117 => Some(&Self::BLAZE_ROD),
+            1204 => Some(&Self::BLAZE_SPAWN_EGG),
+            1278 => Some(&Self::BLUE_BANNER),
+            1098 => Some(&Self::BLUE_BED),
+            1049 => Some(&Self::BLUE_BUNDLE),
+            1411 => Some(&Self::BLUE_CANDLE),
+            517 => Some(&Self::BLUE_CARPET),
+            626 => Some(&Self::BLUE_CONCRETE),
+            642 => Some(&Self::BLUE_CONCRETE_POWDER),
+            1078 => Some(&Self::BLUE_DYE),
+            1033 => Some(&Self::BLUE_EGG),
+            610 => Some(&Self::BLUE_GLAZED_TERRACOTTA),
+            850 => Some(&Self::BLUE_HARNESS),
+            680 => Some(&Self::BLUE_ICE),
+            234 => Some(&Self::BLUE_ORCHID),
+            594 => Some(&Self::BLUE_SHULKER_BOX),
+            542 => Some(&Self::BLUE_STAINED_GLASS),
+            558 => Some(&Self::BLUE_STAINED_GLASS_PANE),
+            498 => Some(&Self::BLUE_TERRACOTTA),
             224 => Some(&Self::BLUE_WOOL),
-            1172 => Some(&Self::BOGGED_SPAWN_EGG),
-            1444 => Some(&Self::BOLT_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1083 => Some(&Self::BONE),
-            579 => Some(&Self::BONE_BLOCK),
-            1082 => Some(&Self::BONE_MEAL),
-            1029 => Some(&Self::BOOK),
-            317 => Some(&Self::BOOKSHELF),
-            1351 => Some(&Self::BORDURE_INDENTED_BANNER_PATTERN),
-            894 => Some(&Self::BOW),
-            892 => Some(&Self::BOWL),
-            660 => Some(&Self::BRAIN_CORAL),
-            655 => Some(&Self::BRAIN_CORAL_BLOCK),
-            670 => Some(&Self::BRAIN_CORAL_FAN),
-            953 => Some(&Self::BREAD),
-            1222 => Some(&Self::BREEZE_ROD),
-            1188 => Some(&Self::BREEZE_SPAWN_EGG),
-            1449 => Some(&Self::BREWER_POTTERY_SHERD),
-            1126 => Some(&Self::BREWING_STAND),
-            1025 => Some(&Self::BRICK),
-            289 => Some(&Self::BRICK_SLAB),
-            419 => Some(&Self::BRICK_STAIRS),
-            458 => Some(&Self::BRICK_WALL),
-            304 => Some(&Self::BRICKS),
-            1278 => Some(&Self::BROWN_BANNER),
-            1098 => Some(&Self::BROWN_BED),
-            1049 => Some(&Self::BROWN_BUNDLE),
-            1411 => Some(&Self::BROWN_CANDLE),
-            517 => Some(&Self::BROWN_CARPET),
-            626 => Some(&Self::BROWN_CONCRETE),
-            642 => Some(&Self::BROWN_CONCRETE_POWDER),
-            1078 => Some(&Self::BROWN_DYE),
-            1033 => Some(&Self::BROWN_EGG),
-            610 => Some(&Self::BROWN_GLAZED_TERRACOTTA),
-            850 => Some(&Self::BROWN_HARNESS),
-            247 => Some(&Self::BROWN_MUSHROOM),
-            387 => Some(&Self::BROWN_MUSHROOM_BLOCK),
-            594 => Some(&Self::BROWN_SHULKER_BOX),
-            542 => Some(&Self::BROWN_STAINED_GLASS),
-            558 => Some(&Self::BROWN_STAINED_GLASS_PANE),
-            498 => Some(&Self::BROWN_TERRACOTTA),
+            1173 => Some(&Self::BOGGED_SPAWN_EGG),
+            1445 => Some(&Self::BOLT_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1084 => Some(&Self::BONE),
+            580 => Some(&Self::BONE_BLOCK),
+            1083 => Some(&Self::BONE_MEAL),
+            1030 => Some(&Self::BOOK),
+            318 => Some(&Self::BOOKSHELF),
+            1352 => Some(&Self::BORDURE_INDENTED_BANNER_PATTERN),
+            895 => Some(&Self::BOW),
+            893 => Some(&Self::BOWL),
+            661 => Some(&Self::BRAIN_CORAL),
+            656 => Some(&Self::BRAIN_CORAL_BLOCK),
+            671 => Some(&Self::BRAIN_CORAL_FAN),
+            954 => Some(&Self::BREAD),
+            1223 => Some(&Self::BREEZE_ROD),
+            1189 => Some(&Self::BREEZE_SPAWN_EGG),
+            1450 => Some(&Self::BREWER_POTTERY_SHERD),
+            1127 => Some(&Self::BREWING_STAND),
+            1026 => Some(&Self::BRICK),
+            290 => Some(&Self::BRICK_SLAB),
+            420 => Some(&Self::BRICK_STAIRS),
+            459 => Some(&Self::BRICK_WALL),
+            305 => Some(&Self::BRICKS),
+            1279 => Some(&Self::BROWN_BANNER),
+            1099 => Some(&Self::BROWN_BED),
+            1050 => Some(&Self::BROWN_BUNDLE),
+            1412 => Some(&Self::BROWN_CANDLE),
+            518 => Some(&Self::BROWN_CARPET),
+            627 => Some(&Self::BROWN_CONCRETE),
+            643 => Some(&Self::BROWN_CONCRETE_POWDER),
+            1079 => Some(&Self::BROWN_DYE),
+            1034 => Some(&Self::BROWN_EGG),
+            611 => Some(&Self::BROWN_GLAZED_TERRACOTTA),
+            851 => Some(&Self::BROWN_HARNESS),
+            248 => Some(&Self::BROWN_MUSHROOM),
+            388 => Some(&Self::BROWN_MUSHROOM_BLOCK),
+            595 => Some(&Self::BROWN_SHULKER_BOX),
+            543 => Some(&Self::BROWN_STAINED_GLASS),
+            559 => Some(&Self::BROWN_STAINED_GLASS_PANE),
+            499 => Some(&Self::BROWN_TERRACOTTA),
             225 => Some(&Self::BROWN_WOOL),
-            1425 => Some(&Self::BRUSH),
-            661 => Some(&Self::BUBBLE_CORAL),
-            656 => Some(&Self::BUBBLE_CORAL_BLOCK),
-            671 => Some(&Self::BUBBLE_CORAL_FAN),
-            1012 => Some(&Self::BUCKET),
+            1426 => Some(&Self::BRUSH),
+            662 => Some(&Self::BUBBLE_CORAL),
+            657 => Some(&Self::BUBBLE_CORAL_BLOCK),
+            672 => Some(&Self::BUBBLE_CORAL_FAN),
+            1013 => Some(&Self::BUCKET),
             89 => Some(&Self::BUDDING_AMETHYST),
-            1036 => Some(&Self::BUNDLE),
-            1450 => Some(&Self::BURN_POTTERY_SHERD),
+            1037 => Some(&Self::BUNDLE),
+            1451 => Some(&Self::BURN_POTTERY_SHERD),
             204 => Some(&Self::BUSH),
-            340 => Some(&Self::CACTUS),
-            341 => Some(&Self::CACTUS_FLOWER),
-            1085 => Some(&Self::CAKE),
+            341 => Some(&Self::CACTUS),
+            342 => Some(&Self::CACTUS_FLOWER),
+            1086 => Some(&Self::CAKE),
             11 => Some(&Self::CALCITE),
-            743 => Some(&Self::CALIBRATED_SCULK_SENSOR),
-            1173 => Some(&Self::CAMEL_HUSK_SPAWN_EGG),
-            1134 => Some(&Self::CAMEL_SPAWN_EGG),
-            1375 => Some(&Self::CAMPFIRE),
-            1398 => Some(&Self::CANDLE),
-            1227 => Some(&Self::CARROT),
-            859 => Some(&Self::CARROT_ON_A_STICK),
-            1357 => Some(&Self::CARTOGRAPHY_TABLE),
-            357 => Some(&Self::CARVED_PUMPKIN),
-            1138 => Some(&Self::CAT_SPAWN_EGG),
-            1127 => Some(&Self::CAULDRON),
-            1186 => Some(&Self::CAVE_SPIDER_SPAWN_EGG),
-            574 => Some(&Self::CHAIN_COMMAND_BLOCK),
-            965 => Some(&Self::CHAINMAIL_BOOTS),
-            963 => Some(&Self::CHAINMAIL_CHESTPLATE),
-            962 => Some(&Self::CHAINMAIL_HELMET),
-            964 => Some(&Self::CHAINMAIL_LEGGINGS),
-            897 => Some(&Self::CHARCOAL),
-            873 => Some(&Self::CHERRY_BOAT),
-            756 => Some(&Self::CHERRY_BUTTON),
-            874 => Some(&Self::CHERRY_CHEST_BOAT),
-            785 => Some(&Self::CHERRY_DOOR),
-            349 => Some(&Self::CHERRY_FENCE),
-            826 => Some(&Self::CHERRY_FENCE_GATE),
-            1005 => Some(&Self::CHERRY_HANGING_SIGN),
+            744 => Some(&Self::CALIBRATED_SCULK_SENSOR),
+            1174 => Some(&Self::CAMEL_HUSK_SPAWN_EGG),
+            1135 => Some(&Self::CAMEL_SPAWN_EGG),
+            1376 => Some(&Self::CAMPFIRE),
+            1399 => Some(&Self::CANDLE),
+            1228 => Some(&Self::CARROT),
+            860 => Some(&Self::CARROT_ON_A_STICK),
+            1358 => Some(&Self::CARTOGRAPHY_TABLE),
+            358 => Some(&Self::CARVED_PUMPKIN),
+            1139 => Some(&Self::CAT_SPAWN_EGG),
+            1128 => Some(&Self::CAULDRON),
+            1187 => Some(&Self::CAVE_SPIDER_SPAWN_EGG),
+            575 => Some(&Self::CHAIN_COMMAND_BLOCK),
+            966 => Some(&Self::CHAINMAIL_BOOTS),
+            964 => Some(&Self::CHAINMAIL_CHESTPLATE),
+            963 => Some(&Self::CHAINMAIL_HELMET),
+            965 => Some(&Self::CHAINMAIL_LEGGINGS),
+            898 => Some(&Self::CHARCOAL),
+            874 => Some(&Self::CHERRY_BOAT),
+            757 => Some(&Self::CHERRY_BUTTON),
+            875 => Some(&Self::CHERRY_CHEST_BOAT),
+            786 => Some(&Self::CHERRY_DOOR),
+            350 => Some(&Self::CHERRY_FENCE),
+            827 => Some(&Self::CHERRY_FENCE_GATE),
+            1006 => Some(&Self::CHERRY_HANGING_SIGN),
             187 => Some(&Self::CHERRY_LEAVES),
             139 => Some(&Self::CHERRY_LOG),
             41 => Some(&Self::CHERRY_PLANKS),
-            772 => Some(&Self::CHERRY_PRESSURE_PLATE),
+            773 => Some(&Self::CHERRY_PRESSURE_PLATE),
             54 => Some(&Self::CHERRY_SAPLING),
-            308 => Some(&Self::CHERRY_SHELF),
-            993 => Some(&Self::CHERRY_SIGN),
-            275 => Some(&Self::CHERRY_SLAB),
-            446 => Some(&Self::CHERRY_STAIRS),
-            806 => Some(&Self::CHERRY_TRAPDOOR),
+            309 => Some(&Self::CHERRY_SHELF),
+            994 => Some(&Self::CHERRY_SIGN),
+            276 => Some(&Self::CHERRY_SLAB),
+            447 => Some(&Self::CHERRY_STAIRS),
+            807 => Some(&Self::CHERRY_TRAPDOOR),
             176 => Some(&Self::CHERRY_WOOD),
-            331 => Some(&Self::CHEST),
-            855 => Some(&Self::CHEST_MINECART),
-            1112 => Some(&Self::CHICKEN),
-            1130 => Some(&Self::CHICKEN_SPAWN_EGG),
-            479 => Some(&Self::CHIPPED_ANVIL),
-            318 => Some(&Self::CHISELED_BOOKSHELF),
+            332 => Some(&Self::CHEST),
+            856 => Some(&Self::CHEST_MINECART),
+            1113 => Some(&Self::CHICKEN),
+            1131 => Some(&Self::CHICKEN_SPAWN_EGG),
+            480 => Some(&Self::CHIPPED_ANVIL),
+            319 => Some(&Self::CHISELED_BOOKSHELF),
             98 => Some(&Self::CHISELED_COPPER),
-            385 => Some(&Self::CHISELED_DEEPSLATE),
-            426 => Some(&Self::CHISELED_NETHER_BRICKS),
-            1392 => Some(&Self::CHISELED_POLISHED_BLACKSTONE),
-            481 => Some(&Self::CHISELED_QUARTZ_BLOCK),
-            570 => Some(&Self::CHISELED_RED_SANDSTONE),
-            418 => Some(&Self::CHISELED_RESIN_BRICKS),
+            386 => Some(&Self::CHISELED_DEEPSLATE),
+            427 => Some(&Self::CHISELED_NETHER_BRICKS),
+            1393 => Some(&Self::CHISELED_POLISHED_BLACKSTONE),
+            482 => Some(&Self::CHISELED_QUARTZ_BLOCK),
+            571 => Some(&Self::CHISELED_RED_SANDSTONE),
+            419 => Some(&Self::CHISELED_RESIN_BRICKS),
             199 => Some(&Self::CHISELED_SANDSTONE),
-            378 => Some(&Self::CHISELED_STONE_BRICKS),
+            379 => Some(&Self::CHISELED_STONE_BRICKS),
             16 => Some(&Self::CHISELED_TUFF),
             25 => Some(&Self::CHISELED_TUFF_BRICKS),
-            325 => Some(&Self::CHORUS_FLOWER),
-            1283 => Some(&Self::CHORUS_FRUIT),
-            324 => Some(&Self::CHORUS_PLANT),
-            342 => Some(&Self::CLAY),
-            1026 => Some(&Self::CLAY_BALL),
-            1054 => Some(&Self::CLOCK),
-            231 => Some(&Self::CLOSED_EYEBLOSSOM),
-            896 => Some(&Self::COAL),
+            326 => Some(&Self::CHORUS_FLOWER),
+            1284 => Some(&Self::CHORUS_FRUIT),
+            325 => Some(&Self::CHORUS_PLANT),
+            343 => Some(&Self::CLAY),
+            1027 => Some(&Self::CLAY_BALL),
+            1055 => Some(&Self::CLOCK),
+            232 => Some(&Self::CLOSED_EYEBLOSSOM),
+            897 => Some(&Self::COAL),
             83 => Some(&Self::COAL_BLOCK),
             64 => Some(&Self::COAL_ORE),
             29 => Some(&Self::COARSE_DIRT),
-            1429 => Some(&Self::COAST_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1430 => Some(&Self::COAST_ARMOR_TRIM_SMITHING_TEMPLATE),
             9 => Some(&Self::COBBLED_DEEPSLATE),
-            712 => Some(&Self::COBBLED_DEEPSLATE_SLAB),
-            695 => Some(&Self::COBBLED_DEEPSLATE_STAIRS),
-            474 => Some(&Self::COBBLED_DEEPSLATE_WALL),
+            713 => Some(&Self::COBBLED_DEEPSLATE_SLAB),
+            696 => Some(&Self::COBBLED_DEEPSLATE_STAIRS),
+            475 => Some(&Self::COBBLED_DEEPSLATE_WALL),
             35 => Some(&Self::COBBLESTONE),
-            288 => Some(&Self::COBBLESTONE_SLAB),
-            336 => Some(&Self::COBBLESTONE_STAIRS),
-            456 => Some(&Self::COBBLESTONE_WALL),
+            289 => Some(&Self::COBBLESTONE_SLAB),
+            337 => Some(&Self::COBBLESTONE_STAIRS),
+            457 => Some(&Self::COBBLESTONE_WALL),
             201 => Some(&Self::COBWEB),
-            1065 => Some(&Self::COCOA_BEANS),
-            1057 => Some(&Self::COD),
-            1021 => Some(&Self::COD_BUCKET),
-            1152 => Some(&Self::COD_SPAWN_EGG),
-            454 => Some(&Self::COMMAND_BLOCK),
-            1263 => Some(&Self::COMMAND_BLOCK_MINECART),
-            721 => Some(&Self::COMPARATOR),
-            1034 => Some(&Self::COMPASS),
-            1353 => Some(&Self::COMPOSTER),
-            680 => Some(&Self::CONDUIT),
-            1111 => Some(&Self::COOKED_BEEF),
-            1113 => Some(&Self::COOKED_CHICKEN),
-            1061 => Some(&Self::COOKED_COD),
-            1265 => Some(&Self::COOKED_MUTTON),
-            984 => Some(&Self::COOKED_PORKCHOP),
-            1250 => Some(&Self::COOKED_RABBIT),
-            1062 => Some(&Self::COOKED_SALMON),
-            1102 => Some(&Self::COOKIE),
-            919 => Some(&Self::COPPER_AXE),
-            391 => Some(&Self::COPPER_BARS),
+            1066 => Some(&Self::COCOA_BEANS),
+            1058 => Some(&Self::COD),
+            1022 => Some(&Self::COD_BUCKET),
+            1153 => Some(&Self::COD_SPAWN_EGG),
+            455 => Some(&Self::COMMAND_BLOCK),
+            1264 => Some(&Self::COMMAND_BLOCK_MINECART),
+            722 => Some(&Self::COMPARATOR),
+            1035 => Some(&Self::COMPASS),
+            1354 => Some(&Self::COMPOSTER),
+            681 => Some(&Self::CONDUIT),
+            1112 => Some(&Self::COOKED_BEEF),
+            1114 => Some(&Self::COOKED_CHICKEN),
+            1062 => Some(&Self::COOKED_COD),
+            1266 => Some(&Self::COOKED_MUTTON),
+            985 => Some(&Self::COOKED_PORKCHOP),
+            1251 => Some(&Self::COOKED_RABBIT),
+            1063 => Some(&Self::COOKED_SALMON),
+            1103 => Some(&Self::COOKIE),
+            920 => Some(&Self::COPPER_AXE),
+            392 => Some(&Self::COPPER_BARS),
             91 => Some(&Self::COPPER_BLOCK),
-            961 => Some(&Self::COPPER_BOOTS),
-            1476 => Some(&Self::COPPER_BULB),
-            400 => Some(&Self::COPPER_CHAIN),
-            1484 => Some(&Self::COPPER_CHEST),
-            959 => Some(&Self::COPPER_CHESTPLATE),
-            792 => Some(&Self::COPPER_DOOR),
-            1166 => Some(&Self::COPPER_GOLEM_SPAWN_EGG),
-            1492 => Some(&Self::COPPER_GOLEM_STATUE),
-            1468 => Some(&Self::COPPER_GRATE),
-            958 => Some(&Self::COPPER_HELMET),
-            920 => Some(&Self::COPPER_HOE),
-            1255 => Some(&Self::COPPER_HORSE_ARMOR),
-            906 => Some(&Self::COPPER_INGOT),
-            1365 => Some(&Self::COPPER_LANTERN),
-            960 => Some(&Self::COPPER_LEGGINGS),
-            1337 => Some(&Self::COPPER_NAUTILUS_ARMOR),
-            1306 => Some(&Self::COPPER_NUGGET),
+            962 => Some(&Self::COPPER_BOOTS),
+            1477 => Some(&Self::COPPER_BULB),
+            401 => Some(&Self::COPPER_CHAIN),
+            1485 => Some(&Self::COPPER_CHEST),
+            960 => Some(&Self::COPPER_CHESTPLATE),
+            793 => Some(&Self::COPPER_DOOR),
+            1167 => Some(&Self::COPPER_GOLEM_SPAWN_EGG),
+            1493 => Some(&Self::COPPER_GOLEM_STATUE),
+            1469 => Some(&Self::COPPER_GRATE),
+            959 => Some(&Self::COPPER_HELMET),
+            921 => Some(&Self::COPPER_HOE),
+            1256 => Some(&Self::COPPER_HORSE_ARMOR),
+            907 => Some(&Self::COPPER_INGOT),
+            1366 => Some(&Self::COPPER_LANTERN),
+            961 => Some(&Self::COPPER_LEGGINGS),
+            1338 => Some(&Self::COPPER_NAUTILUS_ARMOR),
+            1307 => Some(&Self::COPPER_NUGGET),
             68 => Some(&Self::COPPER_ORE),
-            918 => Some(&Self::COPPER_PICKAXE),
-            917 => Some(&Self::COPPER_SHOVEL),
-            1298 => Some(&Self::COPPER_SPEAR),
-            916 => Some(&Self::COPPER_SWORD),
-            366 => Some(&Self::COPPER_TORCH),
-            813 => Some(&Self::COPPER_TRAPDOOR),
-            241 => Some(&Self::CORNFLOWER),
-            1131 => Some(&Self::COW_SPAWN_EGG),
-            382 => Some(&Self::CRACKED_DEEPSLATE_BRICKS),
-            384 => Some(&Self::CRACKED_DEEPSLATE_TILES),
-            425 => Some(&Self::CRACKED_NETHER_BRICKS),
-            1396 => Some(&Self::CRACKED_POLISHED_BLACKSTONE_BRICKS),
-            377 => Some(&Self::CRACKED_STONE_BRICKS),
-            1103 => Some(&Self::CRAFTER),
-            332 => Some(&Self::CRAFTING_TABLE),
-            330 => Some(&Self::CREAKING_HEART),
-            1189 => Some(&Self::CREAKING_SPAWN_EGG),
-            1343 => Some(&Self::CREEPER_BANNER_PATTERN),
-            1237 => Some(&Self::CREEPER_HEAD),
-            1190 => Some(&Self::CREEPER_SPAWN_EGG),
-            761 => Some(&Self::CRIMSON_BUTTON),
-            790 => Some(&Self::CRIMSON_DOOR),
-            354 => Some(&Self::CRIMSON_FENCE),
-            831 => Some(&Self::CRIMSON_FENCE_GATE),
-            249 => Some(&Self::CRIMSON_FUNGUS),
-            1010 => Some(&Self::CRIMSON_HANGING_SIGN),
+            919 => Some(&Self::COPPER_PICKAXE),
+            918 => Some(&Self::COPPER_SHOVEL),
+            1299 => Some(&Self::COPPER_SPEAR),
+            917 => Some(&Self::COPPER_SWORD),
+            367 => Some(&Self::COPPER_TORCH),
+            814 => Some(&Self::COPPER_TRAPDOOR),
+            242 => Some(&Self::CORNFLOWER),
+            1132 => Some(&Self::COW_SPAWN_EGG),
+            383 => Some(&Self::CRACKED_DEEPSLATE_BRICKS),
+            385 => Some(&Self::CRACKED_DEEPSLATE_TILES),
+            426 => Some(&Self::CRACKED_NETHER_BRICKS),
+            1397 => Some(&Self::CRACKED_POLISHED_BLACKSTONE_BRICKS),
+            378 => Some(&Self::CRACKED_STONE_BRICKS),
+            1104 => Some(&Self::CRAFTER),
+            333 => Some(&Self::CRAFTING_TABLE),
+            331 => Some(&Self::CREAKING_HEART),
+            1190 => Some(&Self::CREAKING_SPAWN_EGG),
+            1344 => Some(&Self::CREEPER_BANNER_PATTERN),
+            1238 => Some(&Self::CREEPER_HEAD),
+            1191 => Some(&Self::CREEPER_SPAWN_EGG),
+            762 => Some(&Self::CRIMSON_BUTTON),
+            791 => Some(&Self::CRIMSON_DOOR),
+            355 => Some(&Self::CRIMSON_FENCE),
+            832 => Some(&Self::CRIMSON_FENCE_GATE),
+            250 => Some(&Self::CRIMSON_FUNGUS),
+            1011 => Some(&Self::CRIMSON_HANGING_SIGN),
             180 => Some(&Self::CRIMSON_HYPHAE),
             33 => Some(&Self::CRIMSON_NYLIUM),
             46 => Some(&Self::CRIMSON_PLANKS),
-            777 => Some(&Self::CRIMSON_PRESSURE_PLATE),
-            251 => Some(&Self::CRIMSON_ROOTS),
-            309 => Some(&Self::CRIMSON_SHELF),
-            998 => Some(&Self::CRIMSON_SIGN),
-            281 => Some(&Self::CRIMSON_SLAB),
-            452 => Some(&Self::CRIMSON_STAIRS),
+            778 => Some(&Self::CRIMSON_PRESSURE_PLATE),
+            252 => Some(&Self::CRIMSON_ROOTS),
+            310 => Some(&Self::CRIMSON_SHELF),
+            999 => Some(&Self::CRIMSON_SIGN),
+            282 => Some(&Self::CRIMSON_SLAB),
+            453 => Some(&Self::CRIMSON_STAIRS),
             145 => Some(&Self::CRIMSON_STEM),
-            811 => Some(&Self::CRIMSON_TRAPDOOR),
-            1339 => Some(&Self::CROSSBOW),
-            1384 => Some(&Self::CRYING_OBSIDIAN),
+            812 => Some(&Self::CRIMSON_TRAPDOOR),
+            1340 => Some(&Self::CROSSBOW),
+            1385 => Some(&Self::CRYING_OBSIDIAN),
             102 => Some(&Self::CUT_COPPER),
             110 => Some(&Self::CUT_COPPER_SLAB),
             106 => Some(&Self::CUT_COPPER_STAIRS),
-            571 => Some(&Self::CUT_RED_SANDSTONE),
-            295 => Some(&Self::CUT_RED_SANDSTONE_SLAB),
+            572 => Some(&Self::CUT_RED_SANDSTONE),
+            296 => Some(&Self::CUT_RED_SANDSTONE_SLAB),
             200 => Some(&Self::CUT_SANDSTONE),
-            286 => Some(&Self::CUT_SANDSTONE_SLAB),
-            1275 => Some(&Self::CYAN_BANNER),
-            1095 => Some(&Self::CYAN_BED),
-            1046 => Some(&Self::CYAN_BUNDLE),
-            1408 => Some(&Self::CYAN_CANDLE),
-            514 => Some(&Self::CYAN_CARPET),
-            623 => Some(&Self::CYAN_CONCRETE),
-            639 => Some(&Self::CYAN_CONCRETE_POWDER),
-            1075 => Some(&Self::CYAN_DYE),
-            607 => Some(&Self::CYAN_GLAZED_TERRACOTTA),
-            847 => Some(&Self::CYAN_HARNESS),
-            591 => Some(&Self::CYAN_SHULKER_BOX),
-            539 => Some(&Self::CYAN_STAINED_GLASS),
-            555 => Some(&Self::CYAN_STAINED_GLASS_PANE),
-            495 => Some(&Self::CYAN_TERRACOTTA),
+            287 => Some(&Self::CUT_SANDSTONE_SLAB),
+            1276 => Some(&Self::CYAN_BANNER),
+            1096 => Some(&Self::CYAN_BED),
+            1047 => Some(&Self::CYAN_BUNDLE),
+            1409 => Some(&Self::CYAN_CANDLE),
+            515 => Some(&Self::CYAN_CARPET),
+            624 => Some(&Self::CYAN_CONCRETE),
+            640 => Some(&Self::CYAN_CONCRETE_POWDER),
+            1076 => Some(&Self::CYAN_DYE),
+            608 => Some(&Self::CYAN_GLAZED_TERRACOTTA),
+            848 => Some(&Self::CYAN_HARNESS),
+            592 => Some(&Self::CYAN_SHULKER_BOX),
+            540 => Some(&Self::CYAN_STAINED_GLASS),
+            556 => Some(&Self::CYAN_STAINED_GLASS_PANE),
+            496 => Some(&Self::CYAN_TERRACOTTA),
             222 => Some(&Self::CYAN_WOOL),
-            480 => Some(&Self::DAMAGED_ANVIL),
+            481 => Some(&Self::DAMAGED_ANVIL),
             229 => Some(&Self::DANDELION),
-            1451 => Some(&Self::DANGER_POTTERY_SHERD),
-            875 => Some(&Self::DARK_OAK_BOAT),
-            757 => Some(&Self::DARK_OAK_BUTTON),
-            876 => Some(&Self::DARK_OAK_CHEST_BOAT),
-            786 => Some(&Self::DARK_OAK_DOOR),
-            350 => Some(&Self::DARK_OAK_FENCE),
-            827 => Some(&Self::DARK_OAK_FENCE_GATE),
-            1006 => Some(&Self::DARK_OAK_HANGING_SIGN),
+            1452 => Some(&Self::DANGER_POTTERY_SHERD),
+            876 => Some(&Self::DARK_OAK_BOAT),
+            758 => Some(&Self::DARK_OAK_BUTTON),
+            877 => Some(&Self::DARK_OAK_CHEST_BOAT),
+            787 => Some(&Self::DARK_OAK_DOOR),
+            351 => Some(&Self::DARK_OAK_FENCE),
+            828 => Some(&Self::DARK_OAK_FENCE_GATE),
+            1007 => Some(&Self::DARK_OAK_HANGING_SIGN),
             188 => Some(&Self::DARK_OAK_LEAVES),
             141 => Some(&Self::DARK_OAK_LOG),
             42 => Some(&Self::DARK_OAK_PLANKS),
-            773 => Some(&Self::DARK_OAK_PRESSURE_PLATE),
+            774 => Some(&Self::DARK_OAK_PRESSURE_PLATE),
             55 => Some(&Self::DARK_OAK_SAPLING),
-            310 => Some(&Self::DARK_OAK_SHELF),
-            994 => Some(&Self::DARK_OAK_SIGN),
-            276 => Some(&Self::DARK_OAK_SLAB),
-            447 => Some(&Self::DARK_OAK_STAIRS),
-            807 => Some(&Self::DARK_OAK_TRAPDOOR),
+            311 => Some(&Self::DARK_OAK_SHELF),
+            995 => Some(&Self::DARK_OAK_SIGN),
+            277 => Some(&Self::DARK_OAK_SLAB),
+            448 => Some(&Self::DARK_OAK_STAIRS),
+            808 => Some(&Self::DARK_OAK_TRAPDOOR),
             178 => Some(&Self::DARK_OAK_WOOD),
-            564 => Some(&Self::DARK_PRISMARINE),
-            299 => Some(&Self::DARK_PRISMARINE_SLAB),
-            567 => Some(&Self::DARK_PRISMARINE_STAIRS),
-            741 => Some(&Self::DAYLIGHT_DETECTOR),
-            664 => Some(&Self::DEAD_BRAIN_CORAL),
-            650 => Some(&Self::DEAD_BRAIN_CORAL_BLOCK),
-            675 => Some(&Self::DEAD_BRAIN_CORAL_FAN),
-            665 => Some(&Self::DEAD_BUBBLE_CORAL),
-            651 => Some(&Self::DEAD_BUBBLE_CORAL_BLOCK),
-            676 => Some(&Self::DEAD_BUBBLE_CORAL_FAN),
+            565 => Some(&Self::DARK_PRISMARINE),
+            300 => Some(&Self::DARK_PRISMARINE_SLAB),
+            568 => Some(&Self::DARK_PRISMARINE_STAIRS),
+            742 => Some(&Self::DAYLIGHT_DETECTOR),
+            665 => Some(&Self::DEAD_BRAIN_CORAL),
+            651 => Some(&Self::DEAD_BRAIN_CORAL_BLOCK),
+            676 => Some(&Self::DEAD_BRAIN_CORAL_FAN),
+            666 => Some(&Self::DEAD_BUBBLE_CORAL),
+            652 => Some(&Self::DEAD_BUBBLE_CORAL_BLOCK),
+            677 => Some(&Self::DEAD_BUBBLE_CORAL_FAN),
             207 => Some(&Self::DEAD_BUSH),
-            666 => Some(&Self::DEAD_FIRE_CORAL),
-            652 => Some(&Self::DEAD_FIRE_CORAL_BLOCK),
-            677 => Some(&Self::DEAD_FIRE_CORAL_FAN),
-            667 => Some(&Self::DEAD_HORN_CORAL),
-            653 => Some(&Self::DEAD_HORN_CORAL_BLOCK),
-            678 => Some(&Self::DEAD_HORN_CORAL_FAN),
-            668 => Some(&Self::DEAD_TUBE_CORAL),
-            649 => Some(&Self::DEAD_TUBE_CORAL_BLOCK),
-            674 => Some(&Self::DEAD_TUBE_CORAL_FAN),
-            1308 => Some(&Self::DEBUG_STICK),
-            319 => Some(&Self::DECORATED_POT),
+            667 => Some(&Self::DEAD_FIRE_CORAL),
+            653 => Some(&Self::DEAD_FIRE_CORAL_BLOCK),
+            678 => Some(&Self::DEAD_FIRE_CORAL_FAN),
+            668 => Some(&Self::DEAD_HORN_CORAL),
+            654 => Some(&Self::DEAD_HORN_CORAL_BLOCK),
+            679 => Some(&Self::DEAD_HORN_CORAL_FAN),
+            669 => Some(&Self::DEAD_TUBE_CORAL),
+            650 => Some(&Self::DEAD_TUBE_CORAL_BLOCK),
+            675 => Some(&Self::DEAD_TUBE_CORAL_FAN),
+            1309 => Some(&Self::DEBUG_STICK),
+            320 => Some(&Self::DECORATED_POT),
             8 => Some(&Self::DEEPSLATE),
-            714 => Some(&Self::DEEPSLATE_BRICK_SLAB),
-            697 => Some(&Self::DEEPSLATE_BRICK_STAIRS),
-            476 => Some(&Self::DEEPSLATE_BRICK_WALL),
-            381 => Some(&Self::DEEPSLATE_BRICKS),
+            715 => Some(&Self::DEEPSLATE_BRICK_SLAB),
+            698 => Some(&Self::DEEPSLATE_BRICK_STAIRS),
+            477 => Some(&Self::DEEPSLATE_BRICK_WALL),
+            382 => Some(&Self::DEEPSLATE_BRICKS),
             65 => Some(&Self::DEEPSLATE_COAL_ORE),
             69 => Some(&Self::DEEPSLATE_COPPER_ORE),
             79 => Some(&Self::DEEPSLATE_DIAMOND_ORE),
@@ -35460,848 +35726,849 @@ impl Item {
             67 => Some(&Self::DEEPSLATE_IRON_ORE),
             77 => Some(&Self::DEEPSLATE_LAPIS_ORE),
             73 => Some(&Self::DEEPSLATE_REDSTONE_ORE),
-            715 => Some(&Self::DEEPSLATE_TILE_SLAB),
-            698 => Some(&Self::DEEPSLATE_TILE_STAIRS),
-            477 => Some(&Self::DEEPSLATE_TILE_WALL),
-            383 => Some(&Self::DEEPSLATE_TILES),
-            834 => Some(&Self::DETECTOR_RAIL),
-            898 => Some(&Self::DIAMOND),
-            939 => Some(&Self::DIAMOND_AXE),
+            716 => Some(&Self::DEEPSLATE_TILE_SLAB),
+            699 => Some(&Self::DEEPSLATE_TILE_STAIRS),
+            478 => Some(&Self::DEEPSLATE_TILE_WALL),
+            384 => Some(&Self::DEEPSLATE_TILES),
+            835 => Some(&Self::DETECTOR_RAIL),
+            899 => Some(&Self::DIAMOND),
+            940 => Some(&Self::DIAMOND_AXE),
             93 => Some(&Self::DIAMOND_BLOCK),
-            973 => Some(&Self::DIAMOND_BOOTS),
-            971 => Some(&Self::DIAMOND_CHESTPLATE),
-            970 => Some(&Self::DIAMOND_HELMET),
-            940 => Some(&Self::DIAMOND_HOE),
-            1258 => Some(&Self::DIAMOND_HORSE_ARMOR),
-            972 => Some(&Self::DIAMOND_LEGGINGS),
-            1335 => Some(&Self::DIAMOND_NAUTILUS_ARMOR),
+            974 => Some(&Self::DIAMOND_BOOTS),
+            972 => Some(&Self::DIAMOND_CHESTPLATE),
+            971 => Some(&Self::DIAMOND_HELMET),
+            941 => Some(&Self::DIAMOND_HOE),
+            1259 => Some(&Self::DIAMOND_HORSE_ARMOR),
+            973 => Some(&Self::DIAMOND_LEGGINGS),
+            1336 => Some(&Self::DIAMOND_NAUTILUS_ARMOR),
             78 => Some(&Self::DIAMOND_ORE),
-            938 => Some(&Self::DIAMOND_PICKAXE),
-            937 => Some(&Self::DIAMOND_SHOVEL),
-            1301 => Some(&Self::DIAMOND_SPEAR),
-            936 => Some(&Self::DIAMOND_SWORD),
+            939 => Some(&Self::DIAMOND_PICKAXE),
+            938 => Some(&Self::DIAMOND_SHOVEL),
+            1302 => Some(&Self::DIAMOND_SPEAR),
+            937 => Some(&Self::DIAMOND_SWORD),
             4 => Some(&Self::DIORITE),
-            711 => Some(&Self::DIORITE_SLAB),
-            694 => Some(&Self::DIORITE_STAIRS),
-            470 => Some(&Self::DIORITE_WALL),
+            712 => Some(&Self::DIORITE_SLAB),
+            695 => Some(&Self::DIORITE_STAIRS),
+            471 => Some(&Self::DIORITE_WALL),
             28 => Some(&Self::DIRT),
-            523 => Some(&Self::DIRT_PATH),
-            1330 => Some(&Self::DISC_FRAGMENT_5),
-            728 => Some(&Self::DISPENSER),
-            1153 => Some(&Self::DOLPHIN_SPAWN_EGG),
-            1135 => Some(&Self::DONKEY_SPAWN_EGG),
-            1290 => Some(&Self::DRAGON_BREATH),
-            437 => Some(&Self::DRAGON_EGG),
-            1238 => Some(&Self::DRAGON_HEAD),
-            648 => Some(&Self::DRIED_GHAST),
-            1107 => Some(&Self::DRIED_KELP),
-            1027 => Some(&Self::DRIED_KELP_BLOCK),
+            524 => Some(&Self::DIRT_PATH),
+            1331 => Some(&Self::DISC_FRAGMENT_5),
+            729 => Some(&Self::DISPENSER),
+            1154 => Some(&Self::DOLPHIN_SPAWN_EGG),
+            1136 => Some(&Self::DONKEY_SPAWN_EGG),
+            1291 => Some(&Self::DRAGON_BREATH),
+            438 => Some(&Self::DRAGON_EGG),
+            1239 => Some(&Self::DRAGON_HEAD),
+            649 => Some(&Self::DRIED_GHAST),
+            1108 => Some(&Self::DRIED_KELP),
+            1028 => Some(&Self::DRIED_KELP_BLOCK),
             26 => Some(&Self::DRIPSTONE_BLOCK),
-            729 => Some(&Self::DROPPER),
-            1174 => Some(&Self::DROWNED_SPAWN_EGG),
-            1428 => Some(&Self::DUNE_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1424 => Some(&Self::ECHO_SHARD),
-            1031 => Some(&Self::EGG),
-            1191 => Some(&Self::ELDER_GUARDIAN_SPAWN_EGG),
-            862 => Some(&Self::ELYTRA),
-            899 => Some(&Self::EMERALD),
-            440 => Some(&Self::EMERALD_BLOCK),
+            730 => Some(&Self::DROPPER),
+            1175 => Some(&Self::DROWNED_SPAWN_EGG),
+            1429 => Some(&Self::DUNE_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1425 => Some(&Self::ECHO_SHARD),
+            1032 => Some(&Self::EGG),
+            1192 => Some(&Self::ELDER_GUARDIAN_SPAWN_EGG),
+            863 => Some(&Self::ELYTRA),
+            900 => Some(&Self::EMERALD),
+            441 => Some(&Self::EMERALD_BLOCK),
             74 => Some(&Self::EMERALD_ORE),
-            1244 => Some(&Self::ENCHANTED_BOOK),
-            987 => Some(&Self::ENCHANTED_GOLDEN_APPLE),
-            433 => Some(&Self::ENCHANTING_TABLE),
-            1282 => Some(&Self::END_CRYSTAL),
-            434 => Some(&Self::END_PORTAL_FRAME),
-            323 => Some(&Self::END_ROD),
-            435 => Some(&Self::END_STONE),
-            704 => Some(&Self::END_STONE_BRICK_SLAB),
-            686 => Some(&Self::END_STONE_BRICK_STAIRS),
-            469 => Some(&Self::END_STONE_BRICK_WALL),
-            436 => Some(&Self::END_STONE_BRICKS),
-            439 => Some(&Self::ENDER_CHEST),
-            1213 => Some(&Self::ENDER_DRAGON_SPAWN_EGG),
-            1128 => Some(&Self::ENDER_EYE),
-            1115 => Some(&Self::ENDER_PEARL),
-            1214 => Some(&Self::ENDERMAN_SPAWN_EGG),
-            1215 => Some(&Self::ENDERMITE_SPAWN_EGG),
-            1198 => Some(&Self::EVOKER_SPAWN_EGG),
-            1217 => Some(&Self::EXPERIENCE_BOTTLE),
-            1452 => Some(&Self::EXPLORER_POTTERY_SHERD),
+            1245 => Some(&Self::ENCHANTED_BOOK),
+            988 => Some(&Self::ENCHANTED_GOLDEN_APPLE),
+            434 => Some(&Self::ENCHANTING_TABLE),
+            1283 => Some(&Self::END_CRYSTAL),
+            435 => Some(&Self::END_PORTAL_FRAME),
+            324 => Some(&Self::END_ROD),
+            436 => Some(&Self::END_STONE),
+            705 => Some(&Self::END_STONE_BRICK_SLAB),
+            687 => Some(&Self::END_STONE_BRICK_STAIRS),
+            470 => Some(&Self::END_STONE_BRICK_WALL),
+            437 => Some(&Self::END_STONE_BRICKS),
+            440 => Some(&Self::ENDER_CHEST),
+            1214 => Some(&Self::ENDER_DRAGON_SPAWN_EGG),
+            1129 => Some(&Self::ENDER_EYE),
+            1116 => Some(&Self::ENDER_PEARL),
+            1215 => Some(&Self::ENDERMAN_SPAWN_EGG),
+            1216 => Some(&Self::ENDERMITE_SPAWN_EGG),
+            1199 => Some(&Self::EVOKER_SPAWN_EGG),
+            1218 => Some(&Self::EXPERIENCE_BOTTLE),
+            1453 => Some(&Self::EXPLORER_POTTERY_SHERD),
             99 => Some(&Self::EXPOSED_CHISELED_COPPER),
             95 => Some(&Self::EXPOSED_COPPER),
-            392 => Some(&Self::EXPOSED_COPPER_BARS),
-            1477 => Some(&Self::EXPOSED_COPPER_BULB),
-            401 => Some(&Self::EXPOSED_COPPER_CHAIN),
-            1485 => Some(&Self::EXPOSED_COPPER_CHEST),
-            793 => Some(&Self::EXPOSED_COPPER_DOOR),
-            1493 => Some(&Self::EXPOSED_COPPER_GOLEM_STATUE),
-            1469 => Some(&Self::EXPOSED_COPPER_GRATE),
-            1366 => Some(&Self::EXPOSED_COPPER_LANTERN),
-            814 => Some(&Self::EXPOSED_COPPER_TRAPDOOR),
+            393 => Some(&Self::EXPOSED_COPPER_BARS),
+            1478 => Some(&Self::EXPOSED_COPPER_BULB),
+            402 => Some(&Self::EXPOSED_COPPER_CHAIN),
+            1486 => Some(&Self::EXPOSED_COPPER_CHEST),
+            794 => Some(&Self::EXPOSED_COPPER_DOOR),
+            1494 => Some(&Self::EXPOSED_COPPER_GOLEM_STATUE),
+            1470 => Some(&Self::EXPOSED_COPPER_GRATE),
+            1367 => Some(&Self::EXPOSED_COPPER_LANTERN),
+            815 => Some(&Self::EXPOSED_COPPER_TRAPDOOR),
             103 => Some(&Self::EXPOSED_CUT_COPPER),
             111 => Some(&Self::EXPOSED_CUT_COPPER_SLAB),
             107 => Some(&Self::EXPOSED_CUT_COPPER_STAIRS),
-            734 => Some(&Self::EXPOSED_LIGHTNING_ROD),
-            1432 => Some(&Self::EYE_ARMOR_TRIM_SMITHING_TEMPLATE),
-            333 => Some(&Self::FARMLAND),
-            949 => Some(&Self::FEATHER),
-            1123 => Some(&Self::FERMENTED_SPIDER_EYE),
+            735 => Some(&Self::EXPOSED_LIGHTNING_ROD),
+            1433 => Some(&Self::EYE_ARMOR_TRIM_SMITHING_TEMPLATE),
+            334 => Some(&Self::FARMLAND),
+            950 => Some(&Self::FEATHER),
+            1124 => Some(&Self::FERMENTED_SPIDER_EYE),
             203 => Some(&Self::FERN),
-            1350 => Some(&Self::FIELD_MASONED_BANNER_PATTERN),
-            1104 => Some(&Self::FILLED_MAP),
-            1218 => Some(&Self::FIRE_CHARGE),
-            662 => Some(&Self::FIRE_CORAL),
-            657 => Some(&Self::FIRE_CORAL_BLOCK),
-            672 => Some(&Self::FIRE_CORAL_FAN),
+            1351 => Some(&Self::FIELD_MASONED_BANNER_PATTERN),
+            1105 => Some(&Self::FILLED_MAP),
+            1219 => Some(&Self::FIRE_CHARGE),
+            663 => Some(&Self::FIRE_CORAL),
+            658 => Some(&Self::FIRE_CORAL_BLOCK),
+            673 => Some(&Self::FIRE_CORAL_FAN),
             208 => Some(&Self::FIREFLY_BUSH),
-            1242 => Some(&Self::FIREWORK_ROCKET),
-            1243 => Some(&Self::FIREWORK_STAR),
-            1053 => Some(&Self::FISHING_ROD),
-            1358 => Some(&Self::FLETCHING_TABLE),
-            982 => Some(&Self::FLINT),
-            891 => Some(&Self::FLINT_AND_STEEL),
-            1443 => Some(&Self::FLOW_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1348 => Some(&Self::FLOW_BANNER_PATTERN),
-            1453 => Some(&Self::FLOW_POTTERY_SHERD),
-            1342 => Some(&Self::FLOWER_BANNER_PATTERN),
-            1226 => Some(&Self::FLOWER_POT),
+            1243 => Some(&Self::FIREWORK_ROCKET),
+            1244 => Some(&Self::FIREWORK_STAR),
+            1054 => Some(&Self::FISHING_ROD),
+            1359 => Some(&Self::FLETCHING_TABLE),
+            983 => Some(&Self::FLINT),
+            892 => Some(&Self::FLINT_AND_STEEL),
+            1444 => Some(&Self::FLOW_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1349 => Some(&Self::FLOW_BANNER_PATTERN),
+            1454 => Some(&Self::FLOW_POTTERY_SHERD),
+            1343 => Some(&Self::FLOWER_BANNER_PATTERN),
+            1227 => Some(&Self::FLOWER_POT),
             206 => Some(&Self::FLOWERING_AZALEA),
             192 => Some(&Self::FLOWERING_AZALEA_LEAVES),
-            1144 => Some(&Self::FOX_SPAWN_EGG),
-            1454 => Some(&Self::FRIEND_POTTERY_SHERD),
-            1154 => Some(&Self::FROG_SPAWN_EGG),
-            1423 => Some(&Self::FROGSPAWN),
-            334 => Some(&Self::FURNACE),
-            856 => Some(&Self::FURNACE_MINECART),
-            1204 => Some(&Self::GHAST_SPAWN_EGG),
-            1117 => Some(&Self::GHAST_TEAR),
-            1388 => Some(&Self::GILDED_BLACKSTONE),
+            1145 => Some(&Self::FOX_SPAWN_EGG),
+            1455 => Some(&Self::FRIEND_POTTERY_SHERD),
+            1155 => Some(&Self::FROG_SPAWN_EGG),
+            1424 => Some(&Self::FROGSPAWN),
+            335 => Some(&Self::FURNACE),
+            857 => Some(&Self::FURNACE_MINECART),
+            1205 => Some(&Self::GHAST_SPAWN_EGG),
+            1118 => Some(&Self::GHAST_TEAR),
+            1389 => Some(&Self::GILDED_BLACKSTONE),
             195 => Some(&Self::GLASS),
-            1120 => Some(&Self::GLASS_BOTTLE),
-            408 => Some(&Self::GLASS_PANE),
-            1129 => Some(&Self::GLISTERING_MELON_SLICE),
-            1346 => Some(&Self::GLOBE_BANNER_PATTERN),
-            1374 => Some(&Self::GLOW_BERRIES),
-            1064 => Some(&Self::GLOW_INK_SAC),
-            1225 => Some(&Self::GLOW_ITEM_FRAME),
-            411 => Some(&Self::GLOW_LICHEN),
-            1155 => Some(&Self::GLOW_SQUID_SPAWN_EGG),
-            367 => Some(&Self::GLOWSTONE),
-            1056 => Some(&Self::GLOWSTONE_DUST),
-            1352 => Some(&Self::GOAT_HORN),
-            1145 => Some(&Self::GOAT_SPAWN_EGG),
+            1121 => Some(&Self::GLASS_BOTTLE),
+            409 => Some(&Self::GLASS_PANE),
+            1130 => Some(&Self::GLISTERING_MELON_SLICE),
+            1347 => Some(&Self::GLOBE_BANNER_PATTERN),
+            1375 => Some(&Self::GLOW_BERRIES),
+            1065 => Some(&Self::GLOW_INK_SAC),
+            1226 => Some(&Self::GLOW_ITEM_FRAME),
+            412 => Some(&Self::GLOW_LICHEN),
+            1156 => Some(&Self::GLOW_SQUID_SPAWN_EGG),
+            368 => Some(&Self::GLOWSTONE),
+            1057 => Some(&Self::GLOWSTONE_DUST),
+            1353 => Some(&Self::GOAT_HORN),
+            1146 => Some(&Self::GOAT_SPAWN_EGG),
             92 => Some(&Self::GOLD_BLOCK),
-            908 => Some(&Self::GOLD_INGOT),
-            1118 => Some(&Self::GOLD_NUGGET),
+            909 => Some(&Self::GOLD_INGOT),
+            1119 => Some(&Self::GOLD_NUGGET),
             70 => Some(&Self::GOLD_ORE),
-            986 => Some(&Self::GOLDEN_APPLE),
-            929 => Some(&Self::GOLDEN_AXE),
-            977 => Some(&Self::GOLDEN_BOOTS),
-            1232 => Some(&Self::GOLDEN_CARROT),
-            975 => Some(&Self::GOLDEN_CHESTPLATE),
-            974 => Some(&Self::GOLDEN_HELMET),
-            930 => Some(&Self::GOLDEN_HOE),
-            1257 => Some(&Self::GOLDEN_HORSE_ARMOR),
-            976 => Some(&Self::GOLDEN_LEGGINGS),
-            1334 => Some(&Self::GOLDEN_NAUTILUS_ARMOR),
-            928 => Some(&Self::GOLDEN_PICKAXE),
-            927 => Some(&Self::GOLDEN_SHOVEL),
-            1300 => Some(&Self::GOLDEN_SPEAR),
-            926 => Some(&Self::GOLDEN_SWORD),
+            987 => Some(&Self::GOLDEN_APPLE),
+            930 => Some(&Self::GOLDEN_AXE),
+            978 => Some(&Self::GOLDEN_BOOTS),
+            1233 => Some(&Self::GOLDEN_CARROT),
+            976 => Some(&Self::GOLDEN_CHESTPLATE),
+            230 => Some(&Self::GOLDEN_DANDELION),
+            975 => Some(&Self::GOLDEN_HELMET),
+            931 => Some(&Self::GOLDEN_HOE),
+            1258 => Some(&Self::GOLDEN_HORSE_ARMOR),
+            977 => Some(&Self::GOLDEN_LEGGINGS),
+            1335 => Some(&Self::GOLDEN_NAUTILUS_ARMOR),
+            929 => Some(&Self::GOLDEN_PICKAXE),
+            928 => Some(&Self::GOLDEN_SHOVEL),
+            1301 => Some(&Self::GOLDEN_SPEAR),
+            927 => Some(&Self::GOLDEN_SWORD),
             2 => Some(&Self::GRANITE),
-            707 => Some(&Self::GRANITE_SLAB),
-            690 => Some(&Self::GRANITE_STAIRS),
-            462 => Some(&Self::GRANITE_WALL),
+            708 => Some(&Self::GRANITE_SLAB),
+            691 => Some(&Self::GRANITE_STAIRS),
+            463 => Some(&Self::GRANITE_WALL),
             27 => Some(&Self::GRASS_BLOCK),
             63 => Some(&Self::GRAVEL),
-            1273 => Some(&Self::GRAY_BANNER),
-            1093 => Some(&Self::GRAY_BED),
-            1044 => Some(&Self::GRAY_BUNDLE),
-            1406 => Some(&Self::GRAY_CANDLE),
-            512 => Some(&Self::GRAY_CARPET),
-            621 => Some(&Self::GRAY_CONCRETE),
-            637 => Some(&Self::GRAY_CONCRETE_POWDER),
-            1073 => Some(&Self::GRAY_DYE),
-            605 => Some(&Self::GRAY_GLAZED_TERRACOTTA),
-            845 => Some(&Self::GRAY_HARNESS),
-            589 => Some(&Self::GRAY_SHULKER_BOX),
-            537 => Some(&Self::GRAY_STAINED_GLASS),
-            553 => Some(&Self::GRAY_STAINED_GLASS_PANE),
-            493 => Some(&Self::GRAY_TERRACOTTA),
+            1274 => Some(&Self::GRAY_BANNER),
+            1094 => Some(&Self::GRAY_BED),
+            1045 => Some(&Self::GRAY_BUNDLE),
+            1407 => Some(&Self::GRAY_CANDLE),
+            513 => Some(&Self::GRAY_CARPET),
+            622 => Some(&Self::GRAY_CONCRETE),
+            638 => Some(&Self::GRAY_CONCRETE_POWDER),
+            1074 => Some(&Self::GRAY_DYE),
+            606 => Some(&Self::GRAY_GLAZED_TERRACOTTA),
+            846 => Some(&Self::GRAY_HARNESS),
+            590 => Some(&Self::GRAY_SHULKER_BOX),
+            538 => Some(&Self::GRAY_STAINED_GLASS),
+            554 => Some(&Self::GRAY_STAINED_GLASS_PANE),
+            494 => Some(&Self::GRAY_TERRACOTTA),
             220 => Some(&Self::GRAY_WOOL),
-            1279 => Some(&Self::GREEN_BANNER),
-            1099 => Some(&Self::GREEN_BED),
-            1050 => Some(&Self::GREEN_BUNDLE),
-            1412 => Some(&Self::GREEN_CANDLE),
-            518 => Some(&Self::GREEN_CARPET),
-            627 => Some(&Self::GREEN_CONCRETE),
-            643 => Some(&Self::GREEN_CONCRETE_POWDER),
-            1079 => Some(&Self::GREEN_DYE),
-            611 => Some(&Self::GREEN_GLAZED_TERRACOTTA),
-            851 => Some(&Self::GREEN_HARNESS),
-            595 => Some(&Self::GREEN_SHULKER_BOX),
-            543 => Some(&Self::GREEN_STAINED_GLASS),
-            559 => Some(&Self::GREEN_STAINED_GLASS_PANE),
-            499 => Some(&Self::GREEN_TERRACOTTA),
+            1280 => Some(&Self::GREEN_BANNER),
+            1100 => Some(&Self::GREEN_BED),
+            1051 => Some(&Self::GREEN_BUNDLE),
+            1413 => Some(&Self::GREEN_CANDLE),
+            519 => Some(&Self::GREEN_CARPET),
+            628 => Some(&Self::GREEN_CONCRETE),
+            644 => Some(&Self::GREEN_CONCRETE_POWDER),
+            1080 => Some(&Self::GREEN_DYE),
+            612 => Some(&Self::GREEN_GLAZED_TERRACOTTA),
+            852 => Some(&Self::GREEN_HARNESS),
+            596 => Some(&Self::GREEN_SHULKER_BOX),
+            544 => Some(&Self::GREEN_STAINED_GLASS),
+            560 => Some(&Self::GREEN_STAINED_GLASS_PANE),
+            500 => Some(&Self::GREEN_TERRACOTTA),
             226 => Some(&Self::GREEN_WOOL),
-            1359 => Some(&Self::GRINDSTONE),
-            1192 => Some(&Self::GUARDIAN_SPAWN_EGG),
-            950 => Some(&Self::GUNPOWDER),
-            1349 => Some(&Self::GUSTER_BANNER_PATTERN),
-            1455 => Some(&Self::GUSTER_POTTERY_SHERD),
-            266 => Some(&Self::HANGING_ROOTS),
-            1205 => Some(&Self::HAPPY_GHAST_SPAWN_EGG),
-            504 => Some(&Self::HAY_BLOCK),
-            1338 => Some(&Self::HEART_OF_THE_SEA),
-            1456 => Some(&Self::HEART_POTTERY_SHERD),
-            1457 => Some(&Self::HEARTBREAK_POTTERY_SHERD),
+            1360 => Some(&Self::GRINDSTONE),
+            1193 => Some(&Self::GUARDIAN_SPAWN_EGG),
+            951 => Some(&Self::GUNPOWDER),
+            1350 => Some(&Self::GUSTER_BANNER_PATTERN),
+            1456 => Some(&Self::GUSTER_POTTERY_SHERD),
+            267 => Some(&Self::HANGING_ROOTS),
+            1206 => Some(&Self::HAPPY_GHAST_SPAWN_EGG),
+            505 => Some(&Self::HAY_BLOCK),
+            1339 => Some(&Self::HEART_OF_THE_SEA),
+            1457 => Some(&Self::HEART_POTTERY_SHERD),
+            1458 => Some(&Self::HEARTBREAK_POTTERY_SHERD),
             87 => Some(&Self::HEAVY_CORE),
-            766 => Some(&Self::HEAVY_WEIGHTED_PRESSURE_PLATE),
-            1206 => Some(&Self::HOGLIN_SPAWN_EGG),
-            725 => Some(&Self::HONEY_BLOCK),
-            1381 => Some(&Self::HONEY_BOTTLE),
-            1378 => Some(&Self::HONEYCOMB),
-            1382 => Some(&Self::HONEYCOMB_BLOCK),
-            727 => Some(&Self::HOPPER),
-            858 => Some(&Self::HOPPER_MINECART),
-            663 => Some(&Self::HORN_CORAL),
-            658 => Some(&Self::HORN_CORAL_BLOCK),
-            673 => Some(&Self::HORN_CORAL_FAN),
-            1136 => Some(&Self::HORSE_SPAWN_EGG),
-            1442 => Some(&Self::HOST_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1458 => Some(&Self::HOWL_POTTERY_SHERD),
-            1175 => Some(&Self::HUSK_SPAWN_EGG),
-            338 => Some(&Self::ICE),
-            373 => Some(&Self::INFESTED_CHISELED_STONE_BRICKS),
-            369 => Some(&Self::INFESTED_COBBLESTONE),
-            372 => Some(&Self::INFESTED_CRACKED_STONE_BRICKS),
-            374 => Some(&Self::INFESTED_DEEPSLATE),
-            371 => Some(&Self::INFESTED_MOSSY_STONE_BRICKS),
-            368 => Some(&Self::INFESTED_STONE),
-            370 => Some(&Self::INFESTED_STONE_BRICKS),
-            1063 => Some(&Self::INK_SAC),
-            934 => Some(&Self::IRON_AXE),
-            390 => Some(&Self::IRON_BARS),
+            767 => Some(&Self::HEAVY_WEIGHTED_PRESSURE_PLATE),
+            1207 => Some(&Self::HOGLIN_SPAWN_EGG),
+            726 => Some(&Self::HONEY_BLOCK),
+            1382 => Some(&Self::HONEY_BOTTLE),
+            1379 => Some(&Self::HONEYCOMB),
+            1383 => Some(&Self::HONEYCOMB_BLOCK),
+            728 => Some(&Self::HOPPER),
+            859 => Some(&Self::HOPPER_MINECART),
+            664 => Some(&Self::HORN_CORAL),
+            659 => Some(&Self::HORN_CORAL_BLOCK),
+            674 => Some(&Self::HORN_CORAL_FAN),
+            1137 => Some(&Self::HORSE_SPAWN_EGG),
+            1443 => Some(&Self::HOST_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1459 => Some(&Self::HOWL_POTTERY_SHERD),
+            1176 => Some(&Self::HUSK_SPAWN_EGG),
+            339 => Some(&Self::ICE),
+            374 => Some(&Self::INFESTED_CHISELED_STONE_BRICKS),
+            370 => Some(&Self::INFESTED_COBBLESTONE),
+            373 => Some(&Self::INFESTED_CRACKED_STONE_BRICKS),
+            375 => Some(&Self::INFESTED_DEEPSLATE),
+            372 => Some(&Self::INFESTED_MOSSY_STONE_BRICKS),
+            369 => Some(&Self::INFESTED_STONE),
+            371 => Some(&Self::INFESTED_STONE_BRICKS),
+            1064 => Some(&Self::INK_SAC),
+            935 => Some(&Self::IRON_AXE),
+            391 => Some(&Self::IRON_BARS),
             90 => Some(&Self::IRON_BLOCK),
-            969 => Some(&Self::IRON_BOOTS),
-            399 => Some(&Self::IRON_CHAIN),
-            967 => Some(&Self::IRON_CHESTPLATE),
-            779 => Some(&Self::IRON_DOOR),
-            1167 => Some(&Self::IRON_GOLEM_SPAWN_EGG),
-            966 => Some(&Self::IRON_HELMET),
-            935 => Some(&Self::IRON_HOE),
-            1256 => Some(&Self::IRON_HORSE_ARMOR),
-            904 => Some(&Self::IRON_INGOT),
-            968 => Some(&Self::IRON_LEGGINGS),
-            1333 => Some(&Self::IRON_NAUTILUS_ARMOR),
-            1305 => Some(&Self::IRON_NUGGET),
+            970 => Some(&Self::IRON_BOOTS),
+            400 => Some(&Self::IRON_CHAIN),
+            968 => Some(&Self::IRON_CHESTPLATE),
+            780 => Some(&Self::IRON_DOOR),
+            1168 => Some(&Self::IRON_GOLEM_SPAWN_EGG),
+            967 => Some(&Self::IRON_HELMET),
+            936 => Some(&Self::IRON_HOE),
+            1257 => Some(&Self::IRON_HORSE_ARMOR),
+            905 => Some(&Self::IRON_INGOT),
+            969 => Some(&Self::IRON_LEGGINGS),
+            1334 => Some(&Self::IRON_NAUTILUS_ARMOR),
+            1306 => Some(&Self::IRON_NUGGET),
             66 => Some(&Self::IRON_ORE),
-            933 => Some(&Self::IRON_PICKAXE),
-            932 => Some(&Self::IRON_SHOVEL),
-            1299 => Some(&Self::IRON_SPEAR),
-            931 => Some(&Self::IRON_SWORD),
-            800 => Some(&Self::IRON_TRAPDOOR),
-            1224 => Some(&Self::ITEM_FRAME),
-            358 => Some(&Self::JACK_O_LANTERN),
-            884 => Some(&Self::JIGSAW),
-            343 => Some(&Self::JUKEBOX),
-            869 => Some(&Self::JUNGLE_BOAT),
-            754 => Some(&Self::JUNGLE_BUTTON),
-            870 => Some(&Self::JUNGLE_CHEST_BOAT),
-            783 => Some(&Self::JUNGLE_DOOR),
-            347 => Some(&Self::JUNGLE_FENCE),
-            824 => Some(&Self::JUNGLE_FENCE_GATE),
-            1003 => Some(&Self::JUNGLE_HANGING_SIGN),
+            934 => Some(&Self::IRON_PICKAXE),
+            933 => Some(&Self::IRON_SHOVEL),
+            1300 => Some(&Self::IRON_SPEAR),
+            932 => Some(&Self::IRON_SWORD),
+            801 => Some(&Self::IRON_TRAPDOOR),
+            1225 => Some(&Self::ITEM_FRAME),
+            359 => Some(&Self::JACK_O_LANTERN),
+            885 => Some(&Self::JIGSAW),
+            344 => Some(&Self::JUKEBOX),
+            870 => Some(&Self::JUNGLE_BOAT),
+            755 => Some(&Self::JUNGLE_BUTTON),
+            871 => Some(&Self::JUNGLE_CHEST_BOAT),
+            784 => Some(&Self::JUNGLE_DOOR),
+            348 => Some(&Self::JUNGLE_FENCE),
+            825 => Some(&Self::JUNGLE_FENCE_GATE),
+            1004 => Some(&Self::JUNGLE_HANGING_SIGN),
             185 => Some(&Self::JUNGLE_LEAVES),
             137 => Some(&Self::JUNGLE_LOG),
             39 => Some(&Self::JUNGLE_PLANKS),
-            770 => Some(&Self::JUNGLE_PRESSURE_PLATE),
+            771 => Some(&Self::JUNGLE_PRESSURE_PLATE),
             52 => Some(&Self::JUNGLE_SAPLING),
-            311 => Some(&Self::JUNGLE_SHELF),
-            991 => Some(&Self::JUNGLE_SIGN),
-            273 => Some(&Self::JUNGLE_SLAB),
-            444 => Some(&Self::JUNGLE_STAIRS),
-            804 => Some(&Self::JUNGLE_TRAPDOOR),
+            312 => Some(&Self::JUNGLE_SHELF),
+            992 => Some(&Self::JUNGLE_SIGN),
+            274 => Some(&Self::JUNGLE_SLAB),
+            445 => Some(&Self::JUNGLE_STAIRS),
+            805 => Some(&Self::JUNGLE_TRAPDOOR),
             174 => Some(&Self::JUNGLE_WOOD),
-            257 => Some(&Self::KELP),
-            1307 => Some(&Self::KNOWLEDGE_BOOK),
-            335 => Some(&Self::LADDER),
-            1363 => Some(&Self::LANTERN),
+            258 => Some(&Self::KELP),
+            1308 => Some(&Self::KNOWLEDGE_BOOK),
+            336 => Some(&Self::LADDER),
+            1364 => Some(&Self::LANTERN),
             197 => Some(&Self::LAPIS_BLOCK),
-            900 => Some(&Self::LAPIS_LAZULI),
+            901 => Some(&Self::LAPIS_LAZULI),
             76 => Some(&Self::LAPIS_ORE),
-            1417 => Some(&Self::LARGE_AMETHYST_BUD),
-            529 => Some(&Self::LARGE_FERN),
-            1014 => Some(&Self::LAVA_BUCKET),
-            1261 => Some(&Self::LEAD),
-            260 => Some(&Self::LEAF_LITTER),
-            1017 => Some(&Self::LEATHER),
-            957 => Some(&Self::LEATHER_BOOTS),
-            955 => Some(&Self::LEATHER_CHESTPLATE),
-            954 => Some(&Self::LEATHER_HELMET),
-            1260 => Some(&Self::LEATHER_HORSE_ARMOR),
-            956 => Some(&Self::LEATHER_LEGGINGS),
-            730 => Some(&Self::LECTERN),
-            732 => Some(&Self::LEVER),
-            503 => Some(&Self::LIGHT),
-            1269 => Some(&Self::LIGHT_BLUE_BANNER),
-            1089 => Some(&Self::LIGHT_BLUE_BED),
-            1040 => Some(&Self::LIGHT_BLUE_BUNDLE),
-            1402 => Some(&Self::LIGHT_BLUE_CANDLE),
-            508 => Some(&Self::LIGHT_BLUE_CARPET),
-            617 => Some(&Self::LIGHT_BLUE_CONCRETE),
-            633 => Some(&Self::LIGHT_BLUE_CONCRETE_POWDER),
-            1069 => Some(&Self::LIGHT_BLUE_DYE),
-            601 => Some(&Self::LIGHT_BLUE_GLAZED_TERRACOTTA),
-            841 => Some(&Self::LIGHT_BLUE_HARNESS),
-            585 => Some(&Self::LIGHT_BLUE_SHULKER_BOX),
-            533 => Some(&Self::LIGHT_BLUE_STAINED_GLASS),
-            549 => Some(&Self::LIGHT_BLUE_STAINED_GLASS_PANE),
-            489 => Some(&Self::LIGHT_BLUE_TERRACOTTA),
+            1418 => Some(&Self::LARGE_AMETHYST_BUD),
+            530 => Some(&Self::LARGE_FERN),
+            1015 => Some(&Self::LAVA_BUCKET),
+            1262 => Some(&Self::LEAD),
+            261 => Some(&Self::LEAF_LITTER),
+            1018 => Some(&Self::LEATHER),
+            958 => Some(&Self::LEATHER_BOOTS),
+            956 => Some(&Self::LEATHER_CHESTPLATE),
+            955 => Some(&Self::LEATHER_HELMET),
+            1261 => Some(&Self::LEATHER_HORSE_ARMOR),
+            957 => Some(&Self::LEATHER_LEGGINGS),
+            731 => Some(&Self::LECTERN),
+            733 => Some(&Self::LEVER),
+            504 => Some(&Self::LIGHT),
+            1270 => Some(&Self::LIGHT_BLUE_BANNER),
+            1090 => Some(&Self::LIGHT_BLUE_BED),
+            1041 => Some(&Self::LIGHT_BLUE_BUNDLE),
+            1403 => Some(&Self::LIGHT_BLUE_CANDLE),
+            509 => Some(&Self::LIGHT_BLUE_CARPET),
+            618 => Some(&Self::LIGHT_BLUE_CONCRETE),
+            634 => Some(&Self::LIGHT_BLUE_CONCRETE_POWDER),
+            1070 => Some(&Self::LIGHT_BLUE_DYE),
+            602 => Some(&Self::LIGHT_BLUE_GLAZED_TERRACOTTA),
+            842 => Some(&Self::LIGHT_BLUE_HARNESS),
+            586 => Some(&Self::LIGHT_BLUE_SHULKER_BOX),
+            534 => Some(&Self::LIGHT_BLUE_STAINED_GLASS),
+            550 => Some(&Self::LIGHT_BLUE_STAINED_GLASS_PANE),
+            490 => Some(&Self::LIGHT_BLUE_TERRACOTTA),
             216 => Some(&Self::LIGHT_BLUE_WOOL),
-            1274 => Some(&Self::LIGHT_GRAY_BANNER),
-            1094 => Some(&Self::LIGHT_GRAY_BED),
-            1045 => Some(&Self::LIGHT_GRAY_BUNDLE),
-            1407 => Some(&Self::LIGHT_GRAY_CANDLE),
-            513 => Some(&Self::LIGHT_GRAY_CARPET),
-            622 => Some(&Self::LIGHT_GRAY_CONCRETE),
-            638 => Some(&Self::LIGHT_GRAY_CONCRETE_POWDER),
-            1074 => Some(&Self::LIGHT_GRAY_DYE),
-            606 => Some(&Self::LIGHT_GRAY_GLAZED_TERRACOTTA),
-            846 => Some(&Self::LIGHT_GRAY_HARNESS),
-            590 => Some(&Self::LIGHT_GRAY_SHULKER_BOX),
-            538 => Some(&Self::LIGHT_GRAY_STAINED_GLASS),
-            554 => Some(&Self::LIGHT_GRAY_STAINED_GLASS_PANE),
-            494 => Some(&Self::LIGHT_GRAY_TERRACOTTA),
+            1275 => Some(&Self::LIGHT_GRAY_BANNER),
+            1095 => Some(&Self::LIGHT_GRAY_BED),
+            1046 => Some(&Self::LIGHT_GRAY_BUNDLE),
+            1408 => Some(&Self::LIGHT_GRAY_CANDLE),
+            514 => Some(&Self::LIGHT_GRAY_CARPET),
+            623 => Some(&Self::LIGHT_GRAY_CONCRETE),
+            639 => Some(&Self::LIGHT_GRAY_CONCRETE_POWDER),
+            1075 => Some(&Self::LIGHT_GRAY_DYE),
+            607 => Some(&Self::LIGHT_GRAY_GLAZED_TERRACOTTA),
+            847 => Some(&Self::LIGHT_GRAY_HARNESS),
+            591 => Some(&Self::LIGHT_GRAY_SHULKER_BOX),
+            539 => Some(&Self::LIGHT_GRAY_STAINED_GLASS),
+            555 => Some(&Self::LIGHT_GRAY_STAINED_GLASS_PANE),
+            495 => Some(&Self::LIGHT_GRAY_TERRACOTTA),
             221 => Some(&Self::LIGHT_GRAY_WOOL),
-            765 => Some(&Self::LIGHT_WEIGHTED_PRESSURE_PLATE),
-            733 => Some(&Self::LIGHTNING_ROD),
-            525 => Some(&Self::LILAC),
-            242 => Some(&Self::LILY_OF_THE_VALLEY),
-            423 => Some(&Self::LILY_PAD),
-            1271 => Some(&Self::LIME_BANNER),
-            1091 => Some(&Self::LIME_BED),
-            1042 => Some(&Self::LIME_BUNDLE),
-            1404 => Some(&Self::LIME_CANDLE),
-            510 => Some(&Self::LIME_CARPET),
-            619 => Some(&Self::LIME_CONCRETE),
-            635 => Some(&Self::LIME_CONCRETE_POWDER),
-            1071 => Some(&Self::LIME_DYE),
-            603 => Some(&Self::LIME_GLAZED_TERRACOTTA),
-            843 => Some(&Self::LIME_HARNESS),
-            587 => Some(&Self::LIME_SHULKER_BOX),
-            535 => Some(&Self::LIME_STAINED_GLASS),
-            551 => Some(&Self::LIME_STAINED_GLASS_PANE),
-            491 => Some(&Self::LIME_TERRACOTTA),
+            766 => Some(&Self::LIGHT_WEIGHTED_PRESSURE_PLATE),
+            734 => Some(&Self::LIGHTNING_ROD),
+            526 => Some(&Self::LILAC),
+            243 => Some(&Self::LILY_OF_THE_VALLEY),
+            424 => Some(&Self::LILY_PAD),
+            1272 => Some(&Self::LIME_BANNER),
+            1092 => Some(&Self::LIME_BED),
+            1043 => Some(&Self::LIME_BUNDLE),
+            1405 => Some(&Self::LIME_CANDLE),
+            511 => Some(&Self::LIME_CARPET),
+            620 => Some(&Self::LIME_CONCRETE),
+            636 => Some(&Self::LIME_CONCRETE_POWDER),
+            1072 => Some(&Self::LIME_DYE),
+            604 => Some(&Self::LIME_GLAZED_TERRACOTTA),
+            844 => Some(&Self::LIME_HARNESS),
+            588 => Some(&Self::LIME_SHULKER_BOX),
+            536 => Some(&Self::LIME_STAINED_GLASS),
+            552 => Some(&Self::LIME_STAINED_GLASS_PANE),
+            492 => Some(&Self::LIME_TERRACOTTA),
             218 => Some(&Self::LIME_WOOL),
-            1294 => Some(&Self::LINGERING_POTION),
-            1146 => Some(&Self::LLAMA_SPAWN_EGG),
-            1383 => Some(&Self::LODESTONE),
-            1341 => Some(&Self::LOOM),
-            1223 => Some(&Self::MACE),
-            1268 => Some(&Self::MAGENTA_BANNER),
-            1088 => Some(&Self::MAGENTA_BED),
-            1039 => Some(&Self::MAGENTA_BUNDLE),
-            1401 => Some(&Self::MAGENTA_CANDLE),
-            507 => Some(&Self::MAGENTA_CARPET),
-            616 => Some(&Self::MAGENTA_CONCRETE),
-            632 => Some(&Self::MAGENTA_CONCRETE_POWDER),
-            1068 => Some(&Self::MAGENTA_DYE),
-            600 => Some(&Self::MAGENTA_GLAZED_TERRACOTTA),
-            840 => Some(&Self::MAGENTA_HARNESS),
-            584 => Some(&Self::MAGENTA_SHULKER_BOX),
-            532 => Some(&Self::MAGENTA_STAINED_GLASS),
-            548 => Some(&Self::MAGENTA_STAINED_GLASS_PANE),
-            488 => Some(&Self::MAGENTA_TERRACOTTA),
+            1295 => Some(&Self::LINGERING_POTION),
+            1147 => Some(&Self::LLAMA_SPAWN_EGG),
+            1384 => Some(&Self::LODESTONE),
+            1342 => Some(&Self::LOOM),
+            1224 => Some(&Self::MACE),
+            1269 => Some(&Self::MAGENTA_BANNER),
+            1089 => Some(&Self::MAGENTA_BED),
+            1040 => Some(&Self::MAGENTA_BUNDLE),
+            1402 => Some(&Self::MAGENTA_CANDLE),
+            508 => Some(&Self::MAGENTA_CARPET),
+            617 => Some(&Self::MAGENTA_CONCRETE),
+            633 => Some(&Self::MAGENTA_CONCRETE_POWDER),
+            1069 => Some(&Self::MAGENTA_DYE),
+            601 => Some(&Self::MAGENTA_GLAZED_TERRACOTTA),
+            841 => Some(&Self::MAGENTA_HARNESS),
+            585 => Some(&Self::MAGENTA_SHULKER_BOX),
+            533 => Some(&Self::MAGENTA_STAINED_GLASS),
+            549 => Some(&Self::MAGENTA_STAINED_GLASS_PANE),
+            489 => Some(&Self::MAGENTA_TERRACOTTA),
             215 => Some(&Self::MAGENTA_WOOL),
-            575 => Some(&Self::MAGMA_BLOCK),
-            1125 => Some(&Self::MAGMA_CREAM),
-            1207 => Some(&Self::MAGMA_CUBE_SPAWN_EGG),
-            879 => Some(&Self::MANGROVE_BOAT),
-            759 => Some(&Self::MANGROVE_BUTTON),
-            880 => Some(&Self::MANGROVE_CHEST_BOAT),
-            788 => Some(&Self::MANGROVE_DOOR),
-            352 => Some(&Self::MANGROVE_FENCE),
-            829 => Some(&Self::MANGROVE_FENCE_GATE),
-            1008 => Some(&Self::MANGROVE_HANGING_SIGN),
+            576 => Some(&Self::MAGMA_BLOCK),
+            1126 => Some(&Self::MAGMA_CREAM),
+            1208 => Some(&Self::MAGMA_CUBE_SPAWN_EGG),
+            880 => Some(&Self::MANGROVE_BOAT),
+            760 => Some(&Self::MANGROVE_BUTTON),
+            881 => Some(&Self::MANGROVE_CHEST_BOAT),
+            789 => Some(&Self::MANGROVE_DOOR),
+            353 => Some(&Self::MANGROVE_FENCE),
+            830 => Some(&Self::MANGROVE_FENCE_GATE),
+            1009 => Some(&Self::MANGROVE_HANGING_SIGN),
             190 => Some(&Self::MANGROVE_LEAVES),
             142 => Some(&Self::MANGROVE_LOG),
             44 => Some(&Self::MANGROVE_PLANKS),
-            775 => Some(&Self::MANGROVE_PRESSURE_PLATE),
+            776 => Some(&Self::MANGROVE_PRESSURE_PLATE),
             57 => Some(&Self::MANGROVE_PROPAGULE),
             143 => Some(&Self::MANGROVE_ROOTS),
-            312 => Some(&Self::MANGROVE_SHELF),
-            996 => Some(&Self::MANGROVE_SIGN),
-            278 => Some(&Self::MANGROVE_SLAB),
-            449 => Some(&Self::MANGROVE_STAIRS),
-            809 => Some(&Self::MANGROVE_TRAPDOOR),
+            313 => Some(&Self::MANGROVE_SHELF),
+            997 => Some(&Self::MANGROVE_SIGN),
+            279 => Some(&Self::MANGROVE_SLAB),
+            450 => Some(&Self::MANGROVE_STAIRS),
+            810 => Some(&Self::MANGROVE_TRAPDOOR),
             179 => Some(&Self::MANGROVE_WOOD),
-            1231 => Some(&Self::MAP),
-            1416 => Some(&Self::MEDIUM_AMETHYST_BUD),
-            409 => Some(&Self::MELON),
-            1109 => Some(&Self::MELON_SEEDS),
-            1106 => Some(&Self::MELON_SLICE),
-            1018 => Some(&Self::MILK_BUCKET),
-            854 => Some(&Self::MINECART),
-            1459 => Some(&Self::MINER_POTTERY_SHERD),
-            1345 => Some(&Self::MOJANG_BANNER_PATTERN),
-            1164 => Some(&Self::MOOSHROOM_SPAWN_EGG),
-            262 => Some(&Self::MOSS_BLOCK),
-            261 => Some(&Self::MOSS_CARPET),
-            320 => Some(&Self::MOSSY_COBBLESTONE),
-            703 => Some(&Self::MOSSY_COBBLESTONE_SLAB),
-            685 => Some(&Self::MOSSY_COBBLESTONE_STAIRS),
-            457 => Some(&Self::MOSSY_COBBLESTONE_WALL),
-            701 => Some(&Self::MOSSY_STONE_BRICK_SLAB),
-            683 => Some(&Self::MOSSY_STONE_BRICK_STAIRS),
-            461 => Some(&Self::MOSSY_STONE_BRICK_WALL),
-            376 => Some(&Self::MOSSY_STONE_BRICKS),
-            1460 => Some(&Self::MOURNER_POTTERY_SHERD),
+            1232 => Some(&Self::MAP),
+            1417 => Some(&Self::MEDIUM_AMETHYST_BUD),
+            410 => Some(&Self::MELON),
+            1110 => Some(&Self::MELON_SEEDS),
+            1107 => Some(&Self::MELON_SLICE),
+            1019 => Some(&Self::MILK_BUCKET),
+            855 => Some(&Self::MINECART),
+            1460 => Some(&Self::MINER_POTTERY_SHERD),
+            1346 => Some(&Self::MOJANG_BANNER_PATTERN),
+            1165 => Some(&Self::MOOSHROOM_SPAWN_EGG),
+            263 => Some(&Self::MOSS_BLOCK),
+            262 => Some(&Self::MOSS_CARPET),
+            321 => Some(&Self::MOSSY_COBBLESTONE),
+            704 => Some(&Self::MOSSY_COBBLESTONE_SLAB),
+            686 => Some(&Self::MOSSY_COBBLESTONE_STAIRS),
+            458 => Some(&Self::MOSSY_COBBLESTONE_WALL),
+            702 => Some(&Self::MOSSY_STONE_BRICK_SLAB),
+            684 => Some(&Self::MOSSY_STONE_BRICK_STAIRS),
+            462 => Some(&Self::MOSSY_STONE_BRICK_WALL),
+            377 => Some(&Self::MOSSY_STONE_BRICKS),
+            1461 => Some(&Self::MOURNER_POTTERY_SHERD),
             32 => Some(&Self::MUD),
-            291 => Some(&Self::MUD_BRICK_SLAB),
-            421 => Some(&Self::MUD_BRICK_STAIRS),
-            464 => Some(&Self::MUD_BRICK_WALL),
-            380 => Some(&Self::MUD_BRICKS),
+            292 => Some(&Self::MUD_BRICK_SLAB),
+            422 => Some(&Self::MUD_BRICK_STAIRS),
+            465 => Some(&Self::MUD_BRICK_WALL),
+            381 => Some(&Self::MUD_BRICKS),
             144 => Some(&Self::MUDDY_MANGROVE_ROOTS),
-            1137 => Some(&Self::MULE_SPAWN_EGG),
-            389 => Some(&Self::MUSHROOM_STEM),
-            947 => Some(&Self::MUSHROOM_STEW),
-            1322 => Some(&Self::MUSIC_DISC_11),
-            1309 => Some(&Self::MUSIC_DISC_13),
-            1326 => Some(&Self::MUSIC_DISC_5),
-            1311 => Some(&Self::MUSIC_DISC_BLOCKS),
-            1310 => Some(&Self::MUSIC_DISC_CAT),
-            1312 => Some(&Self::MUSIC_DISC_CHIRP),
-            1313 => Some(&Self::MUSIC_DISC_CREATOR),
-            1314 => Some(&Self::MUSIC_DISC_CREATOR_MUSIC_BOX),
-            1315 => Some(&Self::MUSIC_DISC_FAR),
-            1316 => Some(&Self::MUSIC_DISC_LAVA_CHICKEN),
-            1317 => Some(&Self::MUSIC_DISC_MALL),
-            1318 => Some(&Self::MUSIC_DISC_MELLOHI),
-            1324 => Some(&Self::MUSIC_DISC_OTHERSIDE),
-            1327 => Some(&Self::MUSIC_DISC_PIGSTEP),
-            1328 => Some(&Self::MUSIC_DISC_PRECIPICE),
-            1325 => Some(&Self::MUSIC_DISC_RELIC),
-            1319 => Some(&Self::MUSIC_DISC_STAL),
-            1320 => Some(&Self::MUSIC_DISC_STRAD),
-            1329 => Some(&Self::MUSIC_DISC_TEARS),
-            1323 => Some(&Self::MUSIC_DISC_WAIT),
-            1321 => Some(&Self::MUSIC_DISC_WARD),
-            1264 => Some(&Self::MUTTON),
-            422 => Some(&Self::MYCELIUM),
-            1262 => Some(&Self::NAME_TAG),
-            1332 => Some(&Self::NAUTILUS_SHELL),
-            1156 => Some(&Self::NAUTILUS_SPAWN_EGG),
-            1245 => Some(&Self::NETHER_BRICK),
-            427 => Some(&Self::NETHER_BRICK_FENCE),
-            292 => Some(&Self::NETHER_BRICK_SLAB),
-            428 => Some(&Self::NETHER_BRICK_STAIRS),
-            465 => Some(&Self::NETHER_BRICK_WALL),
-            424 => Some(&Self::NETHER_BRICKS),
+            1138 => Some(&Self::MULE_SPAWN_EGG),
+            390 => Some(&Self::MUSHROOM_STEM),
+            948 => Some(&Self::MUSHROOM_STEW),
+            1323 => Some(&Self::MUSIC_DISC_11),
+            1310 => Some(&Self::MUSIC_DISC_13),
+            1327 => Some(&Self::MUSIC_DISC_5),
+            1312 => Some(&Self::MUSIC_DISC_BLOCKS),
+            1311 => Some(&Self::MUSIC_DISC_CAT),
+            1313 => Some(&Self::MUSIC_DISC_CHIRP),
+            1314 => Some(&Self::MUSIC_DISC_CREATOR),
+            1315 => Some(&Self::MUSIC_DISC_CREATOR_MUSIC_BOX),
+            1316 => Some(&Self::MUSIC_DISC_FAR),
+            1317 => Some(&Self::MUSIC_DISC_LAVA_CHICKEN),
+            1318 => Some(&Self::MUSIC_DISC_MALL),
+            1319 => Some(&Self::MUSIC_DISC_MELLOHI),
+            1325 => Some(&Self::MUSIC_DISC_OTHERSIDE),
+            1328 => Some(&Self::MUSIC_DISC_PIGSTEP),
+            1329 => Some(&Self::MUSIC_DISC_PRECIPICE),
+            1326 => Some(&Self::MUSIC_DISC_RELIC),
+            1320 => Some(&Self::MUSIC_DISC_STAL),
+            1321 => Some(&Self::MUSIC_DISC_STRAD),
+            1330 => Some(&Self::MUSIC_DISC_TEARS),
+            1324 => Some(&Self::MUSIC_DISC_WAIT),
+            1322 => Some(&Self::MUSIC_DISC_WARD),
+            1265 => Some(&Self::MUTTON),
+            423 => Some(&Self::MYCELIUM),
+            1263 => Some(&Self::NAME_TAG),
+            1333 => Some(&Self::NAUTILUS_SHELL),
+            1157 => Some(&Self::NAUTILUS_SPAWN_EGG),
+            1246 => Some(&Self::NETHER_BRICK),
+            428 => Some(&Self::NETHER_BRICK_FENCE),
+            293 => Some(&Self::NETHER_BRICK_SLAB),
+            429 => Some(&Self::NETHER_BRICK_STAIRS),
+            466 => Some(&Self::NETHER_BRICK_WALL),
+            425 => Some(&Self::NETHER_BRICKS),
             80 => Some(&Self::NETHER_GOLD_ORE),
             81 => Some(&Self::NETHER_QUARTZ_ORE),
-            253 => Some(&Self::NETHER_SPROUTS),
-            1240 => Some(&Self::NETHER_STAR),
-            1119 => Some(&Self::NETHER_WART),
-            576 => Some(&Self::NETHER_WART_BLOCK),
-            944 => Some(&Self::NETHERITE_AXE),
+            254 => Some(&Self::NETHER_SPROUTS),
+            1241 => Some(&Self::NETHER_STAR),
+            1120 => Some(&Self::NETHER_WART),
+            577 => Some(&Self::NETHER_WART_BLOCK),
+            945 => Some(&Self::NETHERITE_AXE),
             94 => Some(&Self::NETHERITE_BLOCK),
-            981 => Some(&Self::NETHERITE_BOOTS),
-            979 => Some(&Self::NETHERITE_CHESTPLATE),
-            978 => Some(&Self::NETHERITE_HELMET),
-            945 => Some(&Self::NETHERITE_HOE),
-            1259 => Some(&Self::NETHERITE_HORSE_ARMOR),
-            909 => Some(&Self::NETHERITE_INGOT),
-            980 => Some(&Self::NETHERITE_LEGGINGS),
-            1336 => Some(&Self::NETHERITE_NAUTILUS_ARMOR),
-            943 => Some(&Self::NETHERITE_PICKAXE),
-            910 => Some(&Self::NETHERITE_SCRAP),
-            942 => Some(&Self::NETHERITE_SHOVEL),
-            1302 => Some(&Self::NETHERITE_SPEAR),
-            941 => Some(&Self::NETHERITE_SWORD),
-            1426 => Some(&Self::NETHERITE_UPGRADE_SMITHING_TEMPLATE),
-            359 => Some(&Self::NETHERRACK),
-            748 => Some(&Self::NOTE_BLOCK),
-            863 => Some(&Self::OAK_BOAT),
-            751 => Some(&Self::OAK_BUTTON),
-            864 => Some(&Self::OAK_CHEST_BOAT),
-            780 => Some(&Self::OAK_DOOR),
-            344 => Some(&Self::OAK_FENCE),
-            821 => Some(&Self::OAK_FENCE_GATE),
-            1000 => Some(&Self::OAK_HANGING_SIGN),
+            982 => Some(&Self::NETHERITE_BOOTS),
+            980 => Some(&Self::NETHERITE_CHESTPLATE),
+            979 => Some(&Self::NETHERITE_HELMET),
+            946 => Some(&Self::NETHERITE_HOE),
+            1260 => Some(&Self::NETHERITE_HORSE_ARMOR),
+            910 => Some(&Self::NETHERITE_INGOT),
+            981 => Some(&Self::NETHERITE_LEGGINGS),
+            1337 => Some(&Self::NETHERITE_NAUTILUS_ARMOR),
+            944 => Some(&Self::NETHERITE_PICKAXE),
+            911 => Some(&Self::NETHERITE_SCRAP),
+            943 => Some(&Self::NETHERITE_SHOVEL),
+            1303 => Some(&Self::NETHERITE_SPEAR),
+            942 => Some(&Self::NETHERITE_SWORD),
+            1427 => Some(&Self::NETHERITE_UPGRADE_SMITHING_TEMPLATE),
+            360 => Some(&Self::NETHERRACK),
+            749 => Some(&Self::NOTE_BLOCK),
+            864 => Some(&Self::OAK_BOAT),
+            752 => Some(&Self::OAK_BUTTON),
+            865 => Some(&Self::OAK_CHEST_BOAT),
+            781 => Some(&Self::OAK_DOOR),
+            345 => Some(&Self::OAK_FENCE),
+            822 => Some(&Self::OAK_FENCE_GATE),
+            1001 => Some(&Self::OAK_HANGING_SIGN),
             182 => Some(&Self::OAK_LEAVES),
             134 => Some(&Self::OAK_LOG),
             36 => Some(&Self::OAK_PLANKS),
-            767 => Some(&Self::OAK_PRESSURE_PLATE),
+            768 => Some(&Self::OAK_PRESSURE_PLATE),
             49 => Some(&Self::OAK_SAPLING),
-            313 => Some(&Self::OAK_SHELF),
-            988 => Some(&Self::OAK_SIGN),
-            270 => Some(&Self::OAK_SLAB),
-            441 => Some(&Self::OAK_STAIRS),
-            801 => Some(&Self::OAK_TRAPDOOR),
+            314 => Some(&Self::OAK_SHELF),
+            989 => Some(&Self::OAK_SIGN),
+            271 => Some(&Self::OAK_SLAB),
+            442 => Some(&Self::OAK_STAIRS),
+            802 => Some(&Self::OAK_TRAPDOOR),
             171 => Some(&Self::OAK_WOOD),
-            726 => Some(&Self::OBSERVER),
-            321 => Some(&Self::OBSIDIAN),
-            1147 => Some(&Self::OCELOT_SPAWN_EGG),
-            1420 => Some(&Self::OCHRE_FROGLIGHT),
-            1504 => Some(&Self::OMINOUS_BOTTLE),
-            1502 => Some(&Self::OMINOUS_TRIAL_KEY),
-            230 => Some(&Self::OPEN_EYEBLOSSOM),
-            1267 => Some(&Self::ORANGE_BANNER),
-            1087 => Some(&Self::ORANGE_BED),
-            1038 => Some(&Self::ORANGE_BUNDLE),
-            1400 => Some(&Self::ORANGE_CANDLE),
-            506 => Some(&Self::ORANGE_CARPET),
-            615 => Some(&Self::ORANGE_CONCRETE),
-            631 => Some(&Self::ORANGE_CONCRETE_POWDER),
-            1067 => Some(&Self::ORANGE_DYE),
-            599 => Some(&Self::ORANGE_GLAZED_TERRACOTTA),
-            839 => Some(&Self::ORANGE_HARNESS),
-            583 => Some(&Self::ORANGE_SHULKER_BOX),
-            531 => Some(&Self::ORANGE_STAINED_GLASS),
-            547 => Some(&Self::ORANGE_STAINED_GLASS_PANE),
-            487 => Some(&Self::ORANGE_TERRACOTTA),
-            237 => Some(&Self::ORANGE_TULIP),
+            727 => Some(&Self::OBSERVER),
+            322 => Some(&Self::OBSIDIAN),
+            1148 => Some(&Self::OCELOT_SPAWN_EGG),
+            1421 => Some(&Self::OCHRE_FROGLIGHT),
+            1505 => Some(&Self::OMINOUS_BOTTLE),
+            1503 => Some(&Self::OMINOUS_TRIAL_KEY),
+            231 => Some(&Self::OPEN_EYEBLOSSOM),
+            1268 => Some(&Self::ORANGE_BANNER),
+            1088 => Some(&Self::ORANGE_BED),
+            1039 => Some(&Self::ORANGE_BUNDLE),
+            1401 => Some(&Self::ORANGE_CANDLE),
+            507 => Some(&Self::ORANGE_CARPET),
+            616 => Some(&Self::ORANGE_CONCRETE),
+            632 => Some(&Self::ORANGE_CONCRETE_POWDER),
+            1068 => Some(&Self::ORANGE_DYE),
+            600 => Some(&Self::ORANGE_GLAZED_TERRACOTTA),
+            840 => Some(&Self::ORANGE_HARNESS),
+            584 => Some(&Self::ORANGE_SHULKER_BOX),
+            532 => Some(&Self::ORANGE_STAINED_GLASS),
+            548 => Some(&Self::ORANGE_STAINED_GLASS_PANE),
+            488 => Some(&Self::ORANGE_TERRACOTTA),
+            238 => Some(&Self::ORANGE_TULIP),
             214 => Some(&Self::ORANGE_WOOL),
-            240 => Some(&Self::OXEYE_DAISY),
+            241 => Some(&Self::OXEYE_DAISY),
             101 => Some(&Self::OXIDIZED_CHISELED_COPPER),
             97 => Some(&Self::OXIDIZED_COPPER),
-            394 => Some(&Self::OXIDIZED_COPPER_BARS),
-            1479 => Some(&Self::OXIDIZED_COPPER_BULB),
-            403 => Some(&Self::OXIDIZED_COPPER_CHAIN),
-            1487 => Some(&Self::OXIDIZED_COPPER_CHEST),
-            795 => Some(&Self::OXIDIZED_COPPER_DOOR),
-            1495 => Some(&Self::OXIDIZED_COPPER_GOLEM_STATUE),
-            1471 => Some(&Self::OXIDIZED_COPPER_GRATE),
-            1368 => Some(&Self::OXIDIZED_COPPER_LANTERN),
-            816 => Some(&Self::OXIDIZED_COPPER_TRAPDOOR),
+            395 => Some(&Self::OXIDIZED_COPPER_BARS),
+            1480 => Some(&Self::OXIDIZED_COPPER_BULB),
+            404 => Some(&Self::OXIDIZED_COPPER_CHAIN),
+            1488 => Some(&Self::OXIDIZED_COPPER_CHEST),
+            796 => Some(&Self::OXIDIZED_COPPER_DOOR),
+            1496 => Some(&Self::OXIDIZED_COPPER_GOLEM_STATUE),
+            1472 => Some(&Self::OXIDIZED_COPPER_GRATE),
+            1369 => Some(&Self::OXIDIZED_COPPER_LANTERN),
+            817 => Some(&Self::OXIDIZED_COPPER_TRAPDOOR),
             105 => Some(&Self::OXIDIZED_CUT_COPPER),
             113 => Some(&Self::OXIDIZED_CUT_COPPER_SLAB),
             109 => Some(&Self::OXIDIZED_CUT_COPPER_STAIRS),
-            736 => Some(&Self::OXIDIZED_LIGHTNING_ROD),
-            522 => Some(&Self::PACKED_ICE),
-            379 => Some(&Self::PACKED_MUD),
-            985 => Some(&Self::PAINTING),
-            264 => Some(&Self::PALE_HANGING_MOSS),
-            265 => Some(&Self::PALE_MOSS_BLOCK),
-            263 => Some(&Self::PALE_MOSS_CARPET),
-            877 => Some(&Self::PALE_OAK_BOAT),
-            758 => Some(&Self::PALE_OAK_BUTTON),
-            878 => Some(&Self::PALE_OAK_CHEST_BOAT),
-            787 => Some(&Self::PALE_OAK_DOOR),
-            351 => Some(&Self::PALE_OAK_FENCE),
-            828 => Some(&Self::PALE_OAK_FENCE_GATE),
-            1007 => Some(&Self::PALE_OAK_HANGING_SIGN),
+            737 => Some(&Self::OXIDIZED_LIGHTNING_ROD),
+            523 => Some(&Self::PACKED_ICE),
+            380 => Some(&Self::PACKED_MUD),
+            986 => Some(&Self::PAINTING),
+            265 => Some(&Self::PALE_HANGING_MOSS),
+            266 => Some(&Self::PALE_MOSS_BLOCK),
+            264 => Some(&Self::PALE_MOSS_CARPET),
+            878 => Some(&Self::PALE_OAK_BOAT),
+            759 => Some(&Self::PALE_OAK_BUTTON),
+            879 => Some(&Self::PALE_OAK_CHEST_BOAT),
+            788 => Some(&Self::PALE_OAK_DOOR),
+            352 => Some(&Self::PALE_OAK_FENCE),
+            829 => Some(&Self::PALE_OAK_FENCE_GATE),
+            1008 => Some(&Self::PALE_OAK_HANGING_SIGN),
             189 => Some(&Self::PALE_OAK_LEAVES),
             140 => Some(&Self::PALE_OAK_LOG),
             43 => Some(&Self::PALE_OAK_PLANKS),
-            774 => Some(&Self::PALE_OAK_PRESSURE_PLATE),
+            775 => Some(&Self::PALE_OAK_PRESSURE_PLATE),
             56 => Some(&Self::PALE_OAK_SAPLING),
-            314 => Some(&Self::PALE_OAK_SHELF),
-            995 => Some(&Self::PALE_OAK_SIGN),
-            277 => Some(&Self::PALE_OAK_SLAB),
-            448 => Some(&Self::PALE_OAK_STAIRS),
-            808 => Some(&Self::PALE_OAK_TRAPDOOR),
+            315 => Some(&Self::PALE_OAK_SHELF),
+            996 => Some(&Self::PALE_OAK_SIGN),
+            278 => Some(&Self::PALE_OAK_SLAB),
+            449 => Some(&Self::PALE_OAK_STAIRS),
+            809 => Some(&Self::PALE_OAK_TRAPDOOR),
             177 => Some(&Self::PALE_OAK_WOOD),
-            1148 => Some(&Self::PANDA_SPAWN_EGG),
-            1028 => Some(&Self::PAPER),
-            1176 => Some(&Self::PARCHED_SPAWN_EGG),
-            1139 => Some(&Self::PARROT_SPAWN_EGG),
-            1422 => Some(&Self::PEARLESCENT_FROGLIGHT),
-            527 => Some(&Self::PEONY),
-            287 => Some(&Self::PETRIFIED_OAK_SLAB),
-            861 => Some(&Self::PHANTOM_MEMBRANE),
-            1193 => Some(&Self::PHANTOM_SPAWN_EGG),
-            1132 => Some(&Self::PIG_SPAWN_EGG),
-            1347 => Some(&Self::PIGLIN_BANNER_PATTERN),
-            1209 => Some(&Self::PIGLIN_BRUTE_SPAWN_EGG),
-            1239 => Some(&Self::PIGLIN_HEAD),
-            1208 => Some(&Self::PIGLIN_SPAWN_EGG),
-            1199 => Some(&Self::PILLAGER_SPAWN_EGG),
-            1272 => Some(&Self::PINK_BANNER),
-            1092 => Some(&Self::PINK_BED),
-            1043 => Some(&Self::PINK_BUNDLE),
-            1405 => Some(&Self::PINK_CANDLE),
-            511 => Some(&Self::PINK_CARPET),
-            620 => Some(&Self::PINK_CONCRETE),
-            636 => Some(&Self::PINK_CONCRETE_POWDER),
-            1072 => Some(&Self::PINK_DYE),
-            604 => Some(&Self::PINK_GLAZED_TERRACOTTA),
-            844 => Some(&Self::PINK_HARNESS),
-            258 => Some(&Self::PINK_PETALS),
-            588 => Some(&Self::PINK_SHULKER_BOX),
-            536 => Some(&Self::PINK_STAINED_GLASS),
-            552 => Some(&Self::PINK_STAINED_GLASS_PANE),
-            492 => Some(&Self::PINK_TERRACOTTA),
-            239 => Some(&Self::PINK_TULIP),
+            1149 => Some(&Self::PANDA_SPAWN_EGG),
+            1029 => Some(&Self::PAPER),
+            1177 => Some(&Self::PARCHED_SPAWN_EGG),
+            1140 => Some(&Self::PARROT_SPAWN_EGG),
+            1423 => Some(&Self::PEARLESCENT_FROGLIGHT),
+            528 => Some(&Self::PEONY),
+            288 => Some(&Self::PETRIFIED_OAK_SLAB),
+            862 => Some(&Self::PHANTOM_MEMBRANE),
+            1194 => Some(&Self::PHANTOM_SPAWN_EGG),
+            1133 => Some(&Self::PIG_SPAWN_EGG),
+            1348 => Some(&Self::PIGLIN_BANNER_PATTERN),
+            1210 => Some(&Self::PIGLIN_BRUTE_SPAWN_EGG),
+            1240 => Some(&Self::PIGLIN_HEAD),
+            1209 => Some(&Self::PIGLIN_SPAWN_EGG),
+            1200 => Some(&Self::PILLAGER_SPAWN_EGG),
+            1273 => Some(&Self::PINK_BANNER),
+            1093 => Some(&Self::PINK_BED),
+            1044 => Some(&Self::PINK_BUNDLE),
+            1406 => Some(&Self::PINK_CANDLE),
+            512 => Some(&Self::PINK_CARPET),
+            621 => Some(&Self::PINK_CONCRETE),
+            637 => Some(&Self::PINK_CONCRETE_POWDER),
+            1073 => Some(&Self::PINK_DYE),
+            605 => Some(&Self::PINK_GLAZED_TERRACOTTA),
+            845 => Some(&Self::PINK_HARNESS),
+            259 => Some(&Self::PINK_PETALS),
+            589 => Some(&Self::PINK_SHULKER_BOX),
+            537 => Some(&Self::PINK_STAINED_GLASS),
+            553 => Some(&Self::PINK_STAINED_GLASS_PANE),
+            493 => Some(&Self::PINK_TERRACOTTA),
+            240 => Some(&Self::PINK_TULIP),
             219 => Some(&Self::PINK_WOOL),
-            722 => Some(&Self::PISTON),
-            245 => Some(&Self::PITCHER_PLANT),
-            1286 => Some(&Self::PITCHER_POD),
-            1235 => Some(&Self::PLAYER_HEAD),
-            1461 => Some(&Self::PLENTY_POTTERY_SHERD),
+            723 => Some(&Self::PISTON),
+            246 => Some(&Self::PITCHER_PLANT),
+            1287 => Some(&Self::PITCHER_POD),
+            1236 => Some(&Self::PLAYER_HEAD),
+            1462 => Some(&Self::PLENTY_POTTERY_SHERD),
             30 => Some(&Self::PODZOL),
-            1419 => Some(&Self::POINTED_DRIPSTONE),
-            1230 => Some(&Self::POISONOUS_POTATO),
-            1149 => Some(&Self::POLAR_BEAR_SPAWN_EGG),
+            1420 => Some(&Self::POINTED_DRIPSTONE),
+            1231 => Some(&Self::POISONOUS_POTATO),
+            1150 => Some(&Self::POLAR_BEAR_SPAWN_EGG),
             7 => Some(&Self::POLISHED_ANDESITE),
-            710 => Some(&Self::POLISHED_ANDESITE_SLAB),
-            693 => Some(&Self::POLISHED_ANDESITE_STAIRS),
-            363 => Some(&Self::POLISHED_BASALT),
-            1389 => Some(&Self::POLISHED_BLACKSTONE),
-            1394 => Some(&Self::POLISHED_BLACKSTONE_BRICK_SLAB),
-            1395 => Some(&Self::POLISHED_BLACKSTONE_BRICK_STAIRS),
-            473 => Some(&Self::POLISHED_BLACKSTONE_BRICK_WALL),
-            1393 => Some(&Self::POLISHED_BLACKSTONE_BRICKS),
-            750 => Some(&Self::POLISHED_BLACKSTONE_BUTTON),
-            764 => Some(&Self::POLISHED_BLACKSTONE_PRESSURE_PLATE),
-            1390 => Some(&Self::POLISHED_BLACKSTONE_SLAB),
-            1391 => Some(&Self::POLISHED_BLACKSTONE_STAIRS),
-            472 => Some(&Self::POLISHED_BLACKSTONE_WALL),
+            711 => Some(&Self::POLISHED_ANDESITE_SLAB),
+            694 => Some(&Self::POLISHED_ANDESITE_STAIRS),
+            364 => Some(&Self::POLISHED_BASALT),
+            1390 => Some(&Self::POLISHED_BLACKSTONE),
+            1395 => Some(&Self::POLISHED_BLACKSTONE_BRICK_SLAB),
+            1396 => Some(&Self::POLISHED_BLACKSTONE_BRICK_STAIRS),
+            474 => Some(&Self::POLISHED_BLACKSTONE_BRICK_WALL),
+            1394 => Some(&Self::POLISHED_BLACKSTONE_BRICKS),
+            751 => Some(&Self::POLISHED_BLACKSTONE_BUTTON),
+            765 => Some(&Self::POLISHED_BLACKSTONE_PRESSURE_PLATE),
+            1391 => Some(&Self::POLISHED_BLACKSTONE_SLAB),
+            1392 => Some(&Self::POLISHED_BLACKSTONE_STAIRS),
+            473 => Some(&Self::POLISHED_BLACKSTONE_WALL),
             10 => Some(&Self::POLISHED_DEEPSLATE),
-            713 => Some(&Self::POLISHED_DEEPSLATE_SLAB),
-            696 => Some(&Self::POLISHED_DEEPSLATE_STAIRS),
-            475 => Some(&Self::POLISHED_DEEPSLATE_WALL),
+            714 => Some(&Self::POLISHED_DEEPSLATE_SLAB),
+            697 => Some(&Self::POLISHED_DEEPSLATE_STAIRS),
+            476 => Some(&Self::POLISHED_DEEPSLATE_WALL),
             5 => Some(&Self::POLISHED_DIORITE),
-            702 => Some(&Self::POLISHED_DIORITE_SLAB),
-            684 => Some(&Self::POLISHED_DIORITE_STAIRS),
+            703 => Some(&Self::POLISHED_DIORITE_SLAB),
+            685 => Some(&Self::POLISHED_DIORITE_STAIRS),
             3 => Some(&Self::POLISHED_GRANITE),
-            699 => Some(&Self::POLISHED_GRANITE_SLAB),
-            681 => Some(&Self::POLISHED_GRANITE_STAIRS),
+            700 => Some(&Self::POLISHED_GRANITE_SLAB),
+            682 => Some(&Self::POLISHED_GRANITE_STAIRS),
             17 => Some(&Self::POLISHED_TUFF),
             18 => Some(&Self::POLISHED_TUFF_SLAB),
             19 => Some(&Self::POLISHED_TUFF_STAIRS),
             20 => Some(&Self::POLISHED_TUFF_WALL),
-            1284 => Some(&Self::POPPED_CHORUS_FRUIT),
-            232 => Some(&Self::POPPY),
-            983 => Some(&Self::PORKCHOP),
-            1228 => Some(&Self::POTATO),
-            1121 => Some(&Self::POTION),
-            1015 => Some(&Self::POWDER_SNOW_BUCKET),
-            833 => Some(&Self::POWERED_RAIL),
-            562 => Some(&Self::PRISMARINE),
-            298 => Some(&Self::PRISMARINE_BRICK_SLAB),
-            566 => Some(&Self::PRISMARINE_BRICK_STAIRS),
-            563 => Some(&Self::PRISMARINE_BRICKS),
-            1248 => Some(&Self::PRISMARINE_CRYSTALS),
-            1247 => Some(&Self::PRISMARINE_SHARD),
-            297 => Some(&Self::PRISMARINE_SLAB),
-            565 => Some(&Self::PRISMARINE_STAIRS),
-            459 => Some(&Self::PRISMARINE_WALL),
-            1462 => Some(&Self::PRIZE_POTTERY_SHERD),
-            1060 => Some(&Self::PUFFERFISH),
-            1019 => Some(&Self::PUFFERFISH_BUCKET),
-            1157 => Some(&Self::PUFFERFISH_SPAWN_EGG),
-            356 => Some(&Self::PUMPKIN),
-            1241 => Some(&Self::PUMPKIN_PIE),
-            1108 => Some(&Self::PUMPKIN_SEEDS),
-            1276 => Some(&Self::PURPLE_BANNER),
-            1096 => Some(&Self::PURPLE_BED),
-            1047 => Some(&Self::PURPLE_BUNDLE),
-            1409 => Some(&Self::PURPLE_CANDLE),
-            515 => Some(&Self::PURPLE_CARPET),
-            624 => Some(&Self::PURPLE_CONCRETE),
-            640 => Some(&Self::PURPLE_CONCRETE_POWDER),
-            1076 => Some(&Self::PURPLE_DYE),
-            608 => Some(&Self::PURPLE_GLAZED_TERRACOTTA),
-            848 => Some(&Self::PURPLE_HARNESS),
-            592 => Some(&Self::PURPLE_SHULKER_BOX),
-            540 => Some(&Self::PURPLE_STAINED_GLASS),
-            556 => Some(&Self::PURPLE_STAINED_GLASS_PANE),
-            496 => Some(&Self::PURPLE_TERRACOTTA),
+            1285 => Some(&Self::POPPED_CHORUS_FRUIT),
+            233 => Some(&Self::POPPY),
+            984 => Some(&Self::PORKCHOP),
+            1229 => Some(&Self::POTATO),
+            1122 => Some(&Self::POTION),
+            1016 => Some(&Self::POWDER_SNOW_BUCKET),
+            834 => Some(&Self::POWERED_RAIL),
+            563 => Some(&Self::PRISMARINE),
+            299 => Some(&Self::PRISMARINE_BRICK_SLAB),
+            567 => Some(&Self::PRISMARINE_BRICK_STAIRS),
+            564 => Some(&Self::PRISMARINE_BRICKS),
+            1249 => Some(&Self::PRISMARINE_CRYSTALS),
+            1248 => Some(&Self::PRISMARINE_SHARD),
+            298 => Some(&Self::PRISMARINE_SLAB),
+            566 => Some(&Self::PRISMARINE_STAIRS),
+            460 => Some(&Self::PRISMARINE_WALL),
+            1463 => Some(&Self::PRIZE_POTTERY_SHERD),
+            1061 => Some(&Self::PUFFERFISH),
+            1020 => Some(&Self::PUFFERFISH_BUCKET),
+            1158 => Some(&Self::PUFFERFISH_SPAWN_EGG),
+            357 => Some(&Self::PUMPKIN),
+            1242 => Some(&Self::PUMPKIN_PIE),
+            1109 => Some(&Self::PUMPKIN_SEEDS),
+            1277 => Some(&Self::PURPLE_BANNER),
+            1097 => Some(&Self::PURPLE_BED),
+            1048 => Some(&Self::PURPLE_BUNDLE),
+            1410 => Some(&Self::PURPLE_CANDLE),
+            516 => Some(&Self::PURPLE_CARPET),
+            625 => Some(&Self::PURPLE_CONCRETE),
+            641 => Some(&Self::PURPLE_CONCRETE_POWDER),
+            1077 => Some(&Self::PURPLE_DYE),
+            609 => Some(&Self::PURPLE_GLAZED_TERRACOTTA),
+            849 => Some(&Self::PURPLE_HARNESS),
+            593 => Some(&Self::PURPLE_SHULKER_BOX),
+            541 => Some(&Self::PURPLE_STAINED_GLASS),
+            557 => Some(&Self::PURPLE_STAINED_GLASS_PANE),
+            497 => Some(&Self::PURPLE_TERRACOTTA),
             223 => Some(&Self::PURPLE_WOOL),
-            326 => Some(&Self::PURPUR_BLOCK),
-            327 => Some(&Self::PURPUR_PILLAR),
-            296 => Some(&Self::PURPUR_SLAB),
-            328 => Some(&Self::PURPUR_STAIRS),
-            901 => Some(&Self::QUARTZ),
-            482 => Some(&Self::QUARTZ_BLOCK),
-            483 => Some(&Self::QUARTZ_BRICKS),
-            484 => Some(&Self::QUARTZ_PILLAR),
-            293 => Some(&Self::QUARTZ_SLAB),
-            485 => Some(&Self::QUARTZ_STAIRS),
-            1249 => Some(&Self::RABBIT),
-            1252 => Some(&Self::RABBIT_FOOT),
-            1253 => Some(&Self::RABBIT_HIDE),
-            1150 => Some(&Self::RABBIT_SPAWN_EGG),
-            1251 => Some(&Self::RABBIT_STEW),
-            835 => Some(&Self::RAIL),
-            1441 => Some(&Self::RAISER_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1200 => Some(&Self::RAVAGER_SPAWN_EGG),
-            905 => Some(&Self::RAW_COPPER),
+            327 => Some(&Self::PURPUR_BLOCK),
+            328 => Some(&Self::PURPUR_PILLAR),
+            297 => Some(&Self::PURPUR_SLAB),
+            329 => Some(&Self::PURPUR_STAIRS),
+            902 => Some(&Self::QUARTZ),
+            483 => Some(&Self::QUARTZ_BLOCK),
+            484 => Some(&Self::QUARTZ_BRICKS),
+            485 => Some(&Self::QUARTZ_PILLAR),
+            294 => Some(&Self::QUARTZ_SLAB),
+            486 => Some(&Self::QUARTZ_STAIRS),
+            1250 => Some(&Self::RABBIT),
+            1253 => Some(&Self::RABBIT_FOOT),
+            1254 => Some(&Self::RABBIT_HIDE),
+            1151 => Some(&Self::RABBIT_SPAWN_EGG),
+            1252 => Some(&Self::RABBIT_STEW),
+            836 => Some(&Self::RAIL),
+            1442 => Some(&Self::RAISER_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1201 => Some(&Self::RAVAGER_SPAWN_EGG),
+            906 => Some(&Self::RAW_COPPER),
             85 => Some(&Self::RAW_COPPER_BLOCK),
-            907 => Some(&Self::RAW_GOLD),
+            908 => Some(&Self::RAW_GOLD),
             86 => Some(&Self::RAW_GOLD_BLOCK),
-            903 => Some(&Self::RAW_IRON),
+            904 => Some(&Self::RAW_IRON),
             84 => Some(&Self::RAW_IRON_BLOCK),
-            1035 => Some(&Self::RECOVERY_COMPASS),
-            1280 => Some(&Self::RED_BANNER),
-            1100 => Some(&Self::RED_BED),
-            1051 => Some(&Self::RED_BUNDLE),
-            1413 => Some(&Self::RED_CANDLE),
-            519 => Some(&Self::RED_CARPET),
-            628 => Some(&Self::RED_CONCRETE),
-            644 => Some(&Self::RED_CONCRETE_POWDER),
-            1080 => Some(&Self::RED_DYE),
-            612 => Some(&Self::RED_GLAZED_TERRACOTTA),
-            852 => Some(&Self::RED_HARNESS),
-            248 => Some(&Self::RED_MUSHROOM),
-            388 => Some(&Self::RED_MUSHROOM_BLOCK),
-            709 => Some(&Self::RED_NETHER_BRICK_SLAB),
-            692 => Some(&Self::RED_NETHER_BRICK_STAIRS),
-            467 => Some(&Self::RED_NETHER_BRICK_WALL),
-            578 => Some(&Self::RED_NETHER_BRICKS),
+            1036 => Some(&Self::RECOVERY_COMPASS),
+            1281 => Some(&Self::RED_BANNER),
+            1101 => Some(&Self::RED_BED),
+            1052 => Some(&Self::RED_BUNDLE),
+            1414 => Some(&Self::RED_CANDLE),
+            520 => Some(&Self::RED_CARPET),
+            629 => Some(&Self::RED_CONCRETE),
+            645 => Some(&Self::RED_CONCRETE_POWDER),
+            1081 => Some(&Self::RED_DYE),
+            613 => Some(&Self::RED_GLAZED_TERRACOTTA),
+            853 => Some(&Self::RED_HARNESS),
+            249 => Some(&Self::RED_MUSHROOM),
+            389 => Some(&Self::RED_MUSHROOM_BLOCK),
+            710 => Some(&Self::RED_NETHER_BRICK_SLAB),
+            693 => Some(&Self::RED_NETHER_BRICK_STAIRS),
+            468 => Some(&Self::RED_NETHER_BRICK_WALL),
+            579 => Some(&Self::RED_NETHER_BRICKS),
             62 => Some(&Self::RED_SAND),
-            569 => Some(&Self::RED_SANDSTONE),
-            294 => Some(&Self::RED_SANDSTONE_SLAB),
-            572 => Some(&Self::RED_SANDSTONE_STAIRS),
-            460 => Some(&Self::RED_SANDSTONE_WALL),
-            596 => Some(&Self::RED_SHULKER_BOX),
-            544 => Some(&Self::RED_STAINED_GLASS),
-            560 => Some(&Self::RED_STAINED_GLASS_PANE),
-            500 => Some(&Self::RED_TERRACOTTA),
-            236 => Some(&Self::RED_TULIP),
+            570 => Some(&Self::RED_SANDSTONE),
+            295 => Some(&Self::RED_SANDSTONE_SLAB),
+            573 => Some(&Self::RED_SANDSTONE_STAIRS),
+            461 => Some(&Self::RED_SANDSTONE_WALL),
+            597 => Some(&Self::RED_SHULKER_BOX),
+            545 => Some(&Self::RED_STAINED_GLASS),
+            561 => Some(&Self::RED_STAINED_GLASS_PANE),
+            501 => Some(&Self::RED_TERRACOTTA),
+            237 => Some(&Self::RED_TULIP),
             227 => Some(&Self::RED_WOOL),
-            717 => Some(&Self::REDSTONE),
-            719 => Some(&Self::REDSTONE_BLOCK),
-            747 => Some(&Self::REDSTONE_LAMP),
+            718 => Some(&Self::REDSTONE),
+            720 => Some(&Self::REDSTONE_BLOCK),
+            748 => Some(&Self::REDSTONE_LAMP),
             72 => Some(&Self::REDSTONE_ORE),
-            718 => Some(&Self::REDSTONE_TORCH),
-            386 => Some(&Self::REINFORCED_DEEPSLATE),
-            720 => Some(&Self::REPEATER),
-            573 => Some(&Self::REPEATING_COMMAND_BLOCK),
-            413 => Some(&Self::RESIN_BLOCK),
-            1246 => Some(&Self::RESIN_BRICK),
-            416 => Some(&Self::RESIN_BRICK_SLAB),
-            415 => Some(&Self::RESIN_BRICK_STAIRS),
-            417 => Some(&Self::RESIN_BRICK_WALL),
-            414 => Some(&Self::RESIN_BRICKS),
-            412 => Some(&Self::RESIN_CLUMP),
-            1397 => Some(&Self::RESPAWN_ANCHOR),
-            1436 => Some(&Self::RIB_ARMOR_TRIM_SMITHING_TEMPLATE),
+            719 => Some(&Self::REDSTONE_TORCH),
+            387 => Some(&Self::REINFORCED_DEEPSLATE),
+            721 => Some(&Self::REPEATER),
+            574 => Some(&Self::REPEATING_COMMAND_BLOCK),
+            414 => Some(&Self::RESIN_BLOCK),
+            1247 => Some(&Self::RESIN_BRICK),
+            417 => Some(&Self::RESIN_BRICK_SLAB),
+            416 => Some(&Self::RESIN_BRICK_STAIRS),
+            418 => Some(&Self::RESIN_BRICK_WALL),
+            415 => Some(&Self::RESIN_BRICKS),
+            413 => Some(&Self::RESIN_CLUMP),
+            1398 => Some(&Self::RESPAWN_ANCHOR),
+            1437 => Some(&Self::RIB_ARMOR_TRIM_SMITHING_TEMPLATE),
             31 => Some(&Self::ROOTED_DIRT),
-            526 => Some(&Self::ROSE_BUSH),
-            1114 => Some(&Self::ROTTEN_FLESH),
-            837 => Some(&Self::SADDLE),
-            1058 => Some(&Self::SALMON),
-            1020 => Some(&Self::SALMON_BUCKET),
-            1158 => Some(&Self::SALMON_SPAWN_EGG),
+            527 => Some(&Self::ROSE_BUSH),
+            1115 => Some(&Self::ROTTEN_FLESH),
+            838 => Some(&Self::SADDLE),
+            1059 => Some(&Self::SALMON),
+            1021 => Some(&Self::SALMON_BUCKET),
+            1159 => Some(&Self::SALMON_SPAWN_EGG),
             59 => Some(&Self::SAND),
             198 => Some(&Self::SANDSTONE),
-            285 => Some(&Self::SANDSTONE_SLAB),
-            438 => Some(&Self::SANDSTONE_STAIRS),
-            468 => Some(&Self::SANDSTONE_WALL),
-            716 => Some(&Self::SCAFFOLDING),
-            1463 => Some(&Self::SCRAPE_POTTERY_SHERD),
-            429 => Some(&Self::SCULK),
-            431 => Some(&Self::SCULK_CATALYST),
-            742 => Some(&Self::SCULK_SENSOR),
-            432 => Some(&Self::SCULK_SHRIEKER),
-            430 => Some(&Self::SCULK_VEIN),
-            568 => Some(&Self::SEA_LANTERN),
+            286 => Some(&Self::SANDSTONE_SLAB),
+            439 => Some(&Self::SANDSTONE_STAIRS),
+            469 => Some(&Self::SANDSTONE_WALL),
+            717 => Some(&Self::SCAFFOLDING),
+            1464 => Some(&Self::SCRAPE_POTTERY_SHERD),
+            430 => Some(&Self::SCULK),
+            432 => Some(&Self::SCULK_CATALYST),
+            743 => Some(&Self::SCULK_SENSOR),
+            433 => Some(&Self::SCULK_SHRIEKER),
+            431 => Some(&Self::SCULK_VEIN),
+            569 => Some(&Self::SEA_LANTERN),
             212 => Some(&Self::SEA_PICKLE),
             211 => Some(&Self::SEAGRASS),
-            1427 => Some(&Self::SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1439 => Some(&Self::SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1464 => Some(&Self::SHEAF_POTTERY_SHERD),
-            1105 => Some(&Self::SHEARS),
-            1133 => Some(&Self::SHEEP_SPAWN_EGG),
-            1465 => Some(&Self::SHELTER_POTTERY_SHERD),
-            1295 => Some(&Self::SHIELD),
+            1428 => Some(&Self::SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1440 => Some(&Self::SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1465 => Some(&Self::SHEAF_POTTERY_SHERD),
+            1106 => Some(&Self::SHEARS),
+            1134 => Some(&Self::SHEEP_SPAWN_EGG),
+            1466 => Some(&Self::SHELTER_POTTERY_SHERD),
+            1296 => Some(&Self::SHIELD),
             209 => Some(&Self::SHORT_DRY_GRASS),
             202 => Some(&Self::SHORT_GRASS),
-            1377 => Some(&Self::SHROOMLIGHT),
-            581 => Some(&Self::SHULKER_BOX),
-            1304 => Some(&Self::SHULKER_SHELL),
-            1216 => Some(&Self::SHULKER_SPAWN_EGG),
-            1440 => Some(&Self::SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1194 => Some(&Self::SILVERFISH_SPAWN_EGG),
-            1178 => Some(&Self::SKELETON_HORSE_SPAWN_EGG),
-            1233 => Some(&Self::SKELETON_SKULL),
-            1177 => Some(&Self::SKELETON_SPAWN_EGG),
-            1344 => Some(&Self::SKULL_BANNER_PATTERN),
-            1466 => Some(&Self::SKULL_POTTERY_SHERD),
-            1030 => Some(&Self::SLIME_BALL),
-            724 => Some(&Self::SLIME_BLOCK),
-            1195 => Some(&Self::SLIME_SPAWN_EGG),
-            1415 => Some(&Self::SMALL_AMETHYST_BUD),
-            268 => Some(&Self::SMALL_DRIPLEAF),
-            1360 => Some(&Self::SMITHING_TABLE),
-            1355 => Some(&Self::SMOKER),
-            364 => Some(&Self::SMOOTH_BASALT),
-            300 => Some(&Self::SMOOTH_QUARTZ),
-            706 => Some(&Self::SMOOTH_QUARTZ_SLAB),
-            689 => Some(&Self::SMOOTH_QUARTZ_STAIRS),
-            301 => Some(&Self::SMOOTH_RED_SANDSTONE),
-            700 => Some(&Self::SMOOTH_RED_SANDSTONE_SLAB),
-            682 => Some(&Self::SMOOTH_RED_SANDSTONE_STAIRS),
-            302 => Some(&Self::SMOOTH_SANDSTONE),
-            705 => Some(&Self::SMOOTH_SANDSTONE_SLAB),
-            688 => Some(&Self::SMOOTH_SANDSTONE_STAIRS),
-            303 => Some(&Self::SMOOTH_STONE),
-            284 => Some(&Self::SMOOTH_STONE_SLAB),
-            647 => Some(&Self::SNIFFER_EGG),
-            1165 => Some(&Self::SNIFFER_SPAWN_EGG),
-            1467 => Some(&Self::SNORT_POTTERY_SHERD),
-            1435 => Some(&Self::SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE),
-            337 => Some(&Self::SNOW),
-            339 => Some(&Self::SNOW_BLOCK),
-            1168 => Some(&Self::SNOW_GOLEM_SPAWN_EGG),
-            1016 => Some(&Self::SNOWBALL),
-            1376 => Some(&Self::SOUL_CAMPFIRE),
-            1364 => Some(&Self::SOUL_LANTERN),
-            360 => Some(&Self::SOUL_SAND),
-            361 => Some(&Self::SOUL_SOIL),
-            365 => Some(&Self::SOUL_TORCH),
-            329 => Some(&Self::SPAWNER),
-            1292 => Some(&Self::SPECTRAL_ARROW),
-            1122 => Some(&Self::SPIDER_EYE),
-            1187 => Some(&Self::SPIDER_SPAWN_EGG),
-            1437 => Some(&Self::SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1291 => Some(&Self::SPLASH_POTION),
+            1378 => Some(&Self::SHROOMLIGHT),
+            582 => Some(&Self::SHULKER_BOX),
+            1305 => Some(&Self::SHULKER_SHELL),
+            1217 => Some(&Self::SHULKER_SPAWN_EGG),
+            1441 => Some(&Self::SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1195 => Some(&Self::SILVERFISH_SPAWN_EGG),
+            1179 => Some(&Self::SKELETON_HORSE_SPAWN_EGG),
+            1234 => Some(&Self::SKELETON_SKULL),
+            1178 => Some(&Self::SKELETON_SPAWN_EGG),
+            1345 => Some(&Self::SKULL_BANNER_PATTERN),
+            1467 => Some(&Self::SKULL_POTTERY_SHERD),
+            1031 => Some(&Self::SLIME_BALL),
+            725 => Some(&Self::SLIME_BLOCK),
+            1196 => Some(&Self::SLIME_SPAWN_EGG),
+            1416 => Some(&Self::SMALL_AMETHYST_BUD),
+            269 => Some(&Self::SMALL_DRIPLEAF),
+            1361 => Some(&Self::SMITHING_TABLE),
+            1356 => Some(&Self::SMOKER),
+            365 => Some(&Self::SMOOTH_BASALT),
+            301 => Some(&Self::SMOOTH_QUARTZ),
+            707 => Some(&Self::SMOOTH_QUARTZ_SLAB),
+            690 => Some(&Self::SMOOTH_QUARTZ_STAIRS),
+            302 => Some(&Self::SMOOTH_RED_SANDSTONE),
+            701 => Some(&Self::SMOOTH_RED_SANDSTONE_SLAB),
+            683 => Some(&Self::SMOOTH_RED_SANDSTONE_STAIRS),
+            303 => Some(&Self::SMOOTH_SANDSTONE),
+            706 => Some(&Self::SMOOTH_SANDSTONE_SLAB),
+            689 => Some(&Self::SMOOTH_SANDSTONE_STAIRS),
+            304 => Some(&Self::SMOOTH_STONE),
+            285 => Some(&Self::SMOOTH_STONE_SLAB),
+            648 => Some(&Self::SNIFFER_EGG),
+            1166 => Some(&Self::SNIFFER_SPAWN_EGG),
+            1468 => Some(&Self::SNORT_POTTERY_SHERD),
+            1436 => Some(&Self::SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE),
+            338 => Some(&Self::SNOW),
+            340 => Some(&Self::SNOW_BLOCK),
+            1169 => Some(&Self::SNOW_GOLEM_SPAWN_EGG),
+            1017 => Some(&Self::SNOWBALL),
+            1377 => Some(&Self::SOUL_CAMPFIRE),
+            1365 => Some(&Self::SOUL_LANTERN),
+            361 => Some(&Self::SOUL_SAND),
+            362 => Some(&Self::SOUL_SOIL),
+            366 => Some(&Self::SOUL_TORCH),
+            330 => Some(&Self::SPAWNER),
+            1293 => Some(&Self::SPECTRAL_ARROW),
+            1123 => Some(&Self::SPIDER_EYE),
+            1188 => Some(&Self::SPIDER_SPAWN_EGG),
+            1438 => Some(&Self::SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1292 => Some(&Self::SPLASH_POTION),
             193 => Some(&Self::SPONGE),
-            246 => Some(&Self::SPORE_BLOSSOM),
-            865 => Some(&Self::SPRUCE_BOAT),
-            752 => Some(&Self::SPRUCE_BUTTON),
-            866 => Some(&Self::SPRUCE_CHEST_BOAT),
-            781 => Some(&Self::SPRUCE_DOOR),
-            345 => Some(&Self::SPRUCE_FENCE),
-            822 => Some(&Self::SPRUCE_FENCE_GATE),
-            1001 => Some(&Self::SPRUCE_HANGING_SIGN),
+            247 => Some(&Self::SPORE_BLOSSOM),
+            866 => Some(&Self::SPRUCE_BOAT),
+            753 => Some(&Self::SPRUCE_BUTTON),
+            867 => Some(&Self::SPRUCE_CHEST_BOAT),
+            782 => Some(&Self::SPRUCE_DOOR),
+            346 => Some(&Self::SPRUCE_FENCE),
+            823 => Some(&Self::SPRUCE_FENCE_GATE),
+            1002 => Some(&Self::SPRUCE_HANGING_SIGN),
             183 => Some(&Self::SPRUCE_LEAVES),
             135 => Some(&Self::SPRUCE_LOG),
             37 => Some(&Self::SPRUCE_PLANKS),
-            768 => Some(&Self::SPRUCE_PRESSURE_PLATE),
+            769 => Some(&Self::SPRUCE_PRESSURE_PLATE),
             50 => Some(&Self::SPRUCE_SAPLING),
-            315 => Some(&Self::SPRUCE_SHELF),
-            989 => Some(&Self::SPRUCE_SIGN),
-            271 => Some(&Self::SPRUCE_SLAB),
-            442 => Some(&Self::SPRUCE_STAIRS),
-            802 => Some(&Self::SPRUCE_TRAPDOOR),
+            316 => Some(&Self::SPRUCE_SHELF),
+            990 => Some(&Self::SPRUCE_SIGN),
+            272 => Some(&Self::SPRUCE_SLAB),
+            443 => Some(&Self::SPRUCE_STAIRS),
+            803 => Some(&Self::SPRUCE_TRAPDOOR),
             172 => Some(&Self::SPRUCE_WOOD),
-            1055 => Some(&Self::SPYGLASS),
-            1159 => Some(&Self::SQUID_SPAWN_EGG),
-            946 => Some(&Self::STICK),
-            723 => Some(&Self::STICKY_PISTON),
+            1056 => Some(&Self::SPYGLASS),
+            1160 => Some(&Self::SQUID_SPAWN_EGG),
+            947 => Some(&Self::STICK),
+            724 => Some(&Self::STICKY_PISTON),
             1 => Some(&Self::STONE),
-            924 => Some(&Self::STONE_AXE),
-            290 => Some(&Self::STONE_BRICK_SLAB),
-            420 => Some(&Self::STONE_BRICK_STAIRS),
-            463 => Some(&Self::STONE_BRICK_WALL),
-            375 => Some(&Self::STONE_BRICKS),
-            749 => Some(&Self::STONE_BUTTON),
-            925 => Some(&Self::STONE_HOE),
-            923 => Some(&Self::STONE_PICKAXE),
-            763 => Some(&Self::STONE_PRESSURE_PLATE),
-            922 => Some(&Self::STONE_SHOVEL),
-            283 => Some(&Self::STONE_SLAB),
-            1297 => Some(&Self::STONE_SPEAR),
-            687 => Some(&Self::STONE_STAIRS),
-            921 => Some(&Self::STONE_SWORD),
-            1361 => Some(&Self::STONECUTTER),
-            1179 => Some(&Self::STRAY_SPAWN_EGG),
-            1210 => Some(&Self::STRIDER_SPAWN_EGG),
-            948 => Some(&Self::STRING),
+            925 => Some(&Self::STONE_AXE),
+            291 => Some(&Self::STONE_BRICK_SLAB),
+            421 => Some(&Self::STONE_BRICK_STAIRS),
+            464 => Some(&Self::STONE_BRICK_WALL),
+            376 => Some(&Self::STONE_BRICKS),
+            750 => Some(&Self::STONE_BUTTON),
+            926 => Some(&Self::STONE_HOE),
+            924 => Some(&Self::STONE_PICKAXE),
+            764 => Some(&Self::STONE_PRESSURE_PLATE),
+            923 => Some(&Self::STONE_SHOVEL),
+            284 => Some(&Self::STONE_SLAB),
+            1298 => Some(&Self::STONE_SPEAR),
+            688 => Some(&Self::STONE_STAIRS),
+            922 => Some(&Self::STONE_SWORD),
+            1362 => Some(&Self::STONECUTTER),
+            1180 => Some(&Self::STRAY_SPAWN_EGG),
+            1211 => Some(&Self::STRIDER_SPAWN_EGG),
+            949 => Some(&Self::STRING),
             152 => Some(&Self::STRIPPED_ACACIA_LOG),
             163 => Some(&Self::STRIPPED_ACACIA_WOOD),
             170 => Some(&Self::STRIPPED_BAMBOO_BLOCK),
@@ -36325,44 +36592,44 @@ impl Item {
             160 => Some(&Self::STRIPPED_SPRUCE_WOOD),
             169 => Some(&Self::STRIPPED_WARPED_HYPHAE),
             158 => Some(&Self::STRIPPED_WARPED_STEM),
-            883 => Some(&Self::STRUCTURE_BLOCK),
-            580 => Some(&Self::STRUCTURE_VOID),
-            1084 => Some(&Self::SUGAR),
-            256 => Some(&Self::SUGAR_CANE),
-            524 => Some(&Self::SUNFLOWER),
+            884 => Some(&Self::STRUCTURE_BLOCK),
+            581 => Some(&Self::STRUCTURE_VOID),
+            1085 => Some(&Self::SUGAR),
+            257 => Some(&Self::SUGAR_CANE),
+            525 => Some(&Self::SUNFLOWER),
             61 => Some(&Self::SUSPICIOUS_GRAVEL),
             60 => Some(&Self::SUSPICIOUS_SAND),
-            1340 => Some(&Self::SUSPICIOUS_STEW),
-            1373 => Some(&Self::SWEET_BERRIES),
-            1024 => Some(&Self::TADPOLE_BUCKET),
-            1160 => Some(&Self::TADPOLE_SPAWN_EGG),
+            1341 => Some(&Self::SUSPICIOUS_STEW),
+            1374 => Some(&Self::SWEET_BERRIES),
+            1025 => Some(&Self::TADPOLE_BUCKET),
+            1161 => Some(&Self::TADPOLE_SPAWN_EGG),
             210 => Some(&Self::TALL_DRY_GRASS),
-            528 => Some(&Self::TALL_GRASS),
-            731 => Some(&Self::TARGET),
-            521 => Some(&Self::TERRACOTTA),
-            885 => Some(&Self::TEST_BLOCK),
-            886 => Some(&Self::TEST_INSTANCE_BLOCK),
-            1434 => Some(&Self::TIDE_ARMOR_TRIM_SMITHING_TEMPLATE),
+            529 => Some(&Self::TALL_GRASS),
+            732 => Some(&Self::TARGET),
+            522 => Some(&Self::TERRACOTTA),
+            886 => Some(&Self::TEST_BLOCK),
+            887 => Some(&Self::TEST_INSTANCE_BLOCK),
+            1435 => Some(&Self::TIDE_ARMOR_TRIM_SMITHING_TEMPLATE),
             196 => Some(&Self::TINTED_GLASS),
-            1293 => Some(&Self::TIPPED_ARROW),
-            746 => Some(&Self::TNT),
-            857 => Some(&Self::TNT_MINECART),
-            322 => Some(&Self::TORCH),
-            244 => Some(&Self::TORCHFLOWER),
-            1285 => Some(&Self::TORCHFLOWER_SEEDS),
-            1303 => Some(&Self::TOTEM_OF_UNDYING),
-            1169 => Some(&Self::TRADER_LLAMA_SPAWN_EGG),
-            745 => Some(&Self::TRAPPED_CHEST),
-            1501 => Some(&Self::TRIAL_KEY),
-            1500 => Some(&Self::TRIAL_SPAWNER),
-            1331 => Some(&Self::TRIDENT),
-            744 => Some(&Self::TRIPWIRE_HOOK),
-            1059 => Some(&Self::TROPICAL_FISH),
-            1022 => Some(&Self::TROPICAL_FISH_BUCKET),
-            1161 => Some(&Self::TROPICAL_FISH_SPAWN_EGG),
-            659 => Some(&Self::TUBE_CORAL),
-            654 => Some(&Self::TUBE_CORAL_BLOCK),
-            669 => Some(&Self::TUBE_CORAL_FAN),
+            1294 => Some(&Self::TIPPED_ARROW),
+            747 => Some(&Self::TNT),
+            858 => Some(&Self::TNT_MINECART),
+            323 => Some(&Self::TORCH),
+            245 => Some(&Self::TORCHFLOWER),
+            1286 => Some(&Self::TORCHFLOWER_SEEDS),
+            1304 => Some(&Self::TOTEM_OF_UNDYING),
+            1170 => Some(&Self::TRADER_LLAMA_SPAWN_EGG),
+            746 => Some(&Self::TRAPPED_CHEST),
+            1502 => Some(&Self::TRIAL_KEY),
+            1501 => Some(&Self::TRIAL_SPAWNER),
+            1332 => Some(&Self::TRIDENT),
+            745 => Some(&Self::TRIPWIRE_HOOK),
+            1060 => Some(&Self::TROPICAL_FISH),
+            1023 => Some(&Self::TROPICAL_FISH_BUCKET),
+            1162 => Some(&Self::TROPICAL_FISH_SPAWN_EGG),
+            660 => Some(&Self::TUBE_CORAL),
+            655 => Some(&Self::TUBE_CORAL_BLOCK),
+            670 => Some(&Self::TUBE_CORAL_FAN),
             12 => Some(&Self::TUFF),
             22 => Some(&Self::TUFF_BRICK_SLAB),
             23 => Some(&Self::TUFF_BRICK_STAIRS),
@@ -36371,177 +36638,177 @@ impl Item {
             13 => Some(&Self::TUFF_SLAB),
             14 => Some(&Self::TUFF_STAIRS),
             15 => Some(&Self::TUFF_WALL),
-            646 => Some(&Self::TURTLE_EGG),
-            887 => Some(&Self::TURTLE_HELMET),
-            888 => Some(&Self::TURTLE_SCUTE),
-            1162 => Some(&Self::TURTLE_SPAWN_EGG),
-            255 => Some(&Self::TWISTING_VINES),
-            1503 => Some(&Self::VAULT),
-            1421 => Some(&Self::VERDANT_FROGLIGHT),
-            1433 => Some(&Self::VEX_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1202 => Some(&Self::VEX_SPAWN_EGG),
-            1170 => Some(&Self::VILLAGER_SPAWN_EGG),
-            1201 => Some(&Self::VINDICATOR_SPAWN_EGG),
-            410 => Some(&Self::VINE),
-            1171 => Some(&Self::WANDERING_TRADER_SPAWN_EGG),
-            1431 => Some(&Self::WARD_ARMOR_TRIM_SMITHING_TEMPLATE),
-            1196 => Some(&Self::WARDEN_SPAWN_EGG),
-            762 => Some(&Self::WARPED_BUTTON),
-            791 => Some(&Self::WARPED_DOOR),
-            355 => Some(&Self::WARPED_FENCE),
-            832 => Some(&Self::WARPED_FENCE_GATE),
-            250 => Some(&Self::WARPED_FUNGUS),
-            860 => Some(&Self::WARPED_FUNGUS_ON_A_STICK),
-            1011 => Some(&Self::WARPED_HANGING_SIGN),
+            647 => Some(&Self::TURTLE_EGG),
+            888 => Some(&Self::TURTLE_HELMET),
+            889 => Some(&Self::TURTLE_SCUTE),
+            1163 => Some(&Self::TURTLE_SPAWN_EGG),
+            256 => Some(&Self::TWISTING_VINES),
+            1504 => Some(&Self::VAULT),
+            1422 => Some(&Self::VERDANT_FROGLIGHT),
+            1434 => Some(&Self::VEX_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1203 => Some(&Self::VEX_SPAWN_EGG),
+            1171 => Some(&Self::VILLAGER_SPAWN_EGG),
+            1202 => Some(&Self::VINDICATOR_SPAWN_EGG),
+            411 => Some(&Self::VINE),
+            1172 => Some(&Self::WANDERING_TRADER_SPAWN_EGG),
+            1432 => Some(&Self::WARD_ARMOR_TRIM_SMITHING_TEMPLATE),
+            1197 => Some(&Self::WARDEN_SPAWN_EGG),
+            763 => Some(&Self::WARPED_BUTTON),
+            792 => Some(&Self::WARPED_DOOR),
+            356 => Some(&Self::WARPED_FENCE),
+            833 => Some(&Self::WARPED_FENCE_GATE),
+            251 => Some(&Self::WARPED_FUNGUS),
+            861 => Some(&Self::WARPED_FUNGUS_ON_A_STICK),
+            1012 => Some(&Self::WARPED_HANGING_SIGN),
             181 => Some(&Self::WARPED_HYPHAE),
             34 => Some(&Self::WARPED_NYLIUM),
             47 => Some(&Self::WARPED_PLANKS),
-            778 => Some(&Self::WARPED_PRESSURE_PLATE),
-            252 => Some(&Self::WARPED_ROOTS),
-            316 => Some(&Self::WARPED_SHELF),
-            999 => Some(&Self::WARPED_SIGN),
-            282 => Some(&Self::WARPED_SLAB),
-            453 => Some(&Self::WARPED_STAIRS),
+            779 => Some(&Self::WARPED_PRESSURE_PLATE),
+            253 => Some(&Self::WARPED_ROOTS),
+            317 => Some(&Self::WARPED_SHELF),
+            1000 => Some(&Self::WARPED_SIGN),
+            283 => Some(&Self::WARPED_SLAB),
+            454 => Some(&Self::WARPED_STAIRS),
             146 => Some(&Self::WARPED_STEM),
-            812 => Some(&Self::WARPED_TRAPDOOR),
-            577 => Some(&Self::WARPED_WART_BLOCK),
-            1013 => Some(&Self::WATER_BUCKET),
+            813 => Some(&Self::WARPED_TRAPDOOR),
+            578 => Some(&Self::WARPED_WART_BLOCK),
+            1014 => Some(&Self::WATER_BUCKET),
             118 => Some(&Self::WAXED_CHISELED_COPPER),
-            395 => Some(&Self::WAXED_COPPER_BARS),
+            396 => Some(&Self::WAXED_COPPER_BARS),
             114 => Some(&Self::WAXED_COPPER_BLOCK),
-            1480 => Some(&Self::WAXED_COPPER_BULB),
-            404 => Some(&Self::WAXED_COPPER_CHAIN),
-            1488 => Some(&Self::WAXED_COPPER_CHEST),
-            796 => Some(&Self::WAXED_COPPER_DOOR),
-            1496 => Some(&Self::WAXED_COPPER_GOLEM_STATUE),
-            1472 => Some(&Self::WAXED_COPPER_GRATE),
-            1369 => Some(&Self::WAXED_COPPER_LANTERN),
-            817 => Some(&Self::WAXED_COPPER_TRAPDOOR),
+            1481 => Some(&Self::WAXED_COPPER_BULB),
+            405 => Some(&Self::WAXED_COPPER_CHAIN),
+            1489 => Some(&Self::WAXED_COPPER_CHEST),
+            797 => Some(&Self::WAXED_COPPER_DOOR),
+            1497 => Some(&Self::WAXED_COPPER_GOLEM_STATUE),
+            1473 => Some(&Self::WAXED_COPPER_GRATE),
+            1370 => Some(&Self::WAXED_COPPER_LANTERN),
+            818 => Some(&Self::WAXED_COPPER_TRAPDOOR),
             122 => Some(&Self::WAXED_CUT_COPPER),
             130 => Some(&Self::WAXED_CUT_COPPER_SLAB),
             126 => Some(&Self::WAXED_CUT_COPPER_STAIRS),
             119 => Some(&Self::WAXED_EXPOSED_CHISELED_COPPER),
             115 => Some(&Self::WAXED_EXPOSED_COPPER),
-            396 => Some(&Self::WAXED_EXPOSED_COPPER_BARS),
-            1481 => Some(&Self::WAXED_EXPOSED_COPPER_BULB),
-            405 => Some(&Self::WAXED_EXPOSED_COPPER_CHAIN),
-            1489 => Some(&Self::WAXED_EXPOSED_COPPER_CHEST),
-            797 => Some(&Self::WAXED_EXPOSED_COPPER_DOOR),
-            1497 => Some(&Self::WAXED_EXPOSED_COPPER_GOLEM_STATUE),
-            1473 => Some(&Self::WAXED_EXPOSED_COPPER_GRATE),
-            1370 => Some(&Self::WAXED_EXPOSED_COPPER_LANTERN),
-            818 => Some(&Self::WAXED_EXPOSED_COPPER_TRAPDOOR),
+            397 => Some(&Self::WAXED_EXPOSED_COPPER_BARS),
+            1482 => Some(&Self::WAXED_EXPOSED_COPPER_BULB),
+            406 => Some(&Self::WAXED_EXPOSED_COPPER_CHAIN),
+            1490 => Some(&Self::WAXED_EXPOSED_COPPER_CHEST),
+            798 => Some(&Self::WAXED_EXPOSED_COPPER_DOOR),
+            1498 => Some(&Self::WAXED_EXPOSED_COPPER_GOLEM_STATUE),
+            1474 => Some(&Self::WAXED_EXPOSED_COPPER_GRATE),
+            1371 => Some(&Self::WAXED_EXPOSED_COPPER_LANTERN),
+            819 => Some(&Self::WAXED_EXPOSED_COPPER_TRAPDOOR),
             123 => Some(&Self::WAXED_EXPOSED_CUT_COPPER),
             131 => Some(&Self::WAXED_EXPOSED_CUT_COPPER_SLAB),
             127 => Some(&Self::WAXED_EXPOSED_CUT_COPPER_STAIRS),
-            738 => Some(&Self::WAXED_EXPOSED_LIGHTNING_ROD),
-            737 => Some(&Self::WAXED_LIGHTNING_ROD),
+            739 => Some(&Self::WAXED_EXPOSED_LIGHTNING_ROD),
+            738 => Some(&Self::WAXED_LIGHTNING_ROD),
             121 => Some(&Self::WAXED_OXIDIZED_CHISELED_COPPER),
             117 => Some(&Self::WAXED_OXIDIZED_COPPER),
-            398 => Some(&Self::WAXED_OXIDIZED_COPPER_BARS),
-            1483 => Some(&Self::WAXED_OXIDIZED_COPPER_BULB),
-            407 => Some(&Self::WAXED_OXIDIZED_COPPER_CHAIN),
-            1491 => Some(&Self::WAXED_OXIDIZED_COPPER_CHEST),
-            799 => Some(&Self::WAXED_OXIDIZED_COPPER_DOOR),
-            1499 => Some(&Self::WAXED_OXIDIZED_COPPER_GOLEM_STATUE),
-            1475 => Some(&Self::WAXED_OXIDIZED_COPPER_GRATE),
-            1372 => Some(&Self::WAXED_OXIDIZED_COPPER_LANTERN),
-            820 => Some(&Self::WAXED_OXIDIZED_COPPER_TRAPDOOR),
+            399 => Some(&Self::WAXED_OXIDIZED_COPPER_BARS),
+            1484 => Some(&Self::WAXED_OXIDIZED_COPPER_BULB),
+            408 => Some(&Self::WAXED_OXIDIZED_COPPER_CHAIN),
+            1492 => Some(&Self::WAXED_OXIDIZED_COPPER_CHEST),
+            800 => Some(&Self::WAXED_OXIDIZED_COPPER_DOOR),
+            1500 => Some(&Self::WAXED_OXIDIZED_COPPER_GOLEM_STATUE),
+            1476 => Some(&Self::WAXED_OXIDIZED_COPPER_GRATE),
+            1373 => Some(&Self::WAXED_OXIDIZED_COPPER_LANTERN),
+            821 => Some(&Self::WAXED_OXIDIZED_COPPER_TRAPDOOR),
             125 => Some(&Self::WAXED_OXIDIZED_CUT_COPPER),
             133 => Some(&Self::WAXED_OXIDIZED_CUT_COPPER_SLAB),
             129 => Some(&Self::WAXED_OXIDIZED_CUT_COPPER_STAIRS),
-            740 => Some(&Self::WAXED_OXIDIZED_LIGHTNING_ROD),
+            741 => Some(&Self::WAXED_OXIDIZED_LIGHTNING_ROD),
             120 => Some(&Self::WAXED_WEATHERED_CHISELED_COPPER),
             116 => Some(&Self::WAXED_WEATHERED_COPPER),
-            397 => Some(&Self::WAXED_WEATHERED_COPPER_BARS),
-            1482 => Some(&Self::WAXED_WEATHERED_COPPER_BULB),
-            406 => Some(&Self::WAXED_WEATHERED_COPPER_CHAIN),
-            1490 => Some(&Self::WAXED_WEATHERED_COPPER_CHEST),
-            798 => Some(&Self::WAXED_WEATHERED_COPPER_DOOR),
-            1498 => Some(&Self::WAXED_WEATHERED_COPPER_GOLEM_STATUE),
-            1474 => Some(&Self::WAXED_WEATHERED_COPPER_GRATE),
-            1371 => Some(&Self::WAXED_WEATHERED_COPPER_LANTERN),
-            819 => Some(&Self::WAXED_WEATHERED_COPPER_TRAPDOOR),
+            398 => Some(&Self::WAXED_WEATHERED_COPPER_BARS),
+            1483 => Some(&Self::WAXED_WEATHERED_COPPER_BULB),
+            407 => Some(&Self::WAXED_WEATHERED_COPPER_CHAIN),
+            1491 => Some(&Self::WAXED_WEATHERED_COPPER_CHEST),
+            799 => Some(&Self::WAXED_WEATHERED_COPPER_DOOR),
+            1499 => Some(&Self::WAXED_WEATHERED_COPPER_GOLEM_STATUE),
+            1475 => Some(&Self::WAXED_WEATHERED_COPPER_GRATE),
+            1372 => Some(&Self::WAXED_WEATHERED_COPPER_LANTERN),
+            820 => Some(&Self::WAXED_WEATHERED_COPPER_TRAPDOOR),
             124 => Some(&Self::WAXED_WEATHERED_CUT_COPPER),
             132 => Some(&Self::WAXED_WEATHERED_CUT_COPPER_SLAB),
             128 => Some(&Self::WAXED_WEATHERED_CUT_COPPER_STAIRS),
-            739 => Some(&Self::WAXED_WEATHERED_LIGHTNING_ROD),
-            1438 => Some(&Self::WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE),
+            740 => Some(&Self::WAXED_WEATHERED_LIGHTNING_ROD),
+            1439 => Some(&Self::WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE),
             100 => Some(&Self::WEATHERED_CHISELED_COPPER),
             96 => Some(&Self::WEATHERED_COPPER),
-            393 => Some(&Self::WEATHERED_COPPER_BARS),
-            1478 => Some(&Self::WEATHERED_COPPER_BULB),
-            402 => Some(&Self::WEATHERED_COPPER_CHAIN),
-            1486 => Some(&Self::WEATHERED_COPPER_CHEST),
-            794 => Some(&Self::WEATHERED_COPPER_DOOR),
-            1494 => Some(&Self::WEATHERED_COPPER_GOLEM_STATUE),
-            1470 => Some(&Self::WEATHERED_COPPER_GRATE),
-            1367 => Some(&Self::WEATHERED_COPPER_LANTERN),
-            815 => Some(&Self::WEATHERED_COPPER_TRAPDOOR),
+            394 => Some(&Self::WEATHERED_COPPER_BARS),
+            1479 => Some(&Self::WEATHERED_COPPER_BULB),
+            403 => Some(&Self::WEATHERED_COPPER_CHAIN),
+            1487 => Some(&Self::WEATHERED_COPPER_CHEST),
+            795 => Some(&Self::WEATHERED_COPPER_DOOR),
+            1495 => Some(&Self::WEATHERED_COPPER_GOLEM_STATUE),
+            1471 => Some(&Self::WEATHERED_COPPER_GRATE),
+            1368 => Some(&Self::WEATHERED_COPPER_LANTERN),
+            816 => Some(&Self::WEATHERED_COPPER_TRAPDOOR),
             104 => Some(&Self::WEATHERED_CUT_COPPER),
             112 => Some(&Self::WEATHERED_CUT_COPPER_SLAB),
             108 => Some(&Self::WEATHERED_CUT_COPPER_STAIRS),
-            735 => Some(&Self::WEATHERED_LIGHTNING_ROD),
-            254 => Some(&Self::WEEPING_VINES),
+            736 => Some(&Self::WEATHERED_LIGHTNING_ROD),
+            255 => Some(&Self::WEEPING_VINES),
             194 => Some(&Self::WET_SPONGE),
-            952 => Some(&Self::WHEAT),
-            951 => Some(&Self::WHEAT_SEEDS),
-            1266 => Some(&Self::WHITE_BANNER),
-            1086 => Some(&Self::WHITE_BED),
-            1037 => Some(&Self::WHITE_BUNDLE),
-            1399 => Some(&Self::WHITE_CANDLE),
-            505 => Some(&Self::WHITE_CARPET),
-            614 => Some(&Self::WHITE_CONCRETE),
-            630 => Some(&Self::WHITE_CONCRETE_POWDER),
-            1066 => Some(&Self::WHITE_DYE),
-            598 => Some(&Self::WHITE_GLAZED_TERRACOTTA),
-            838 => Some(&Self::WHITE_HARNESS),
-            582 => Some(&Self::WHITE_SHULKER_BOX),
-            530 => Some(&Self::WHITE_STAINED_GLASS),
-            546 => Some(&Self::WHITE_STAINED_GLASS_PANE),
-            486 => Some(&Self::WHITE_TERRACOTTA),
-            238 => Some(&Self::WHITE_TULIP),
+            953 => Some(&Self::WHEAT),
+            952 => Some(&Self::WHEAT_SEEDS),
+            1267 => Some(&Self::WHITE_BANNER),
+            1087 => Some(&Self::WHITE_BED),
+            1038 => Some(&Self::WHITE_BUNDLE),
+            1400 => Some(&Self::WHITE_CANDLE),
+            506 => Some(&Self::WHITE_CARPET),
+            615 => Some(&Self::WHITE_CONCRETE),
+            631 => Some(&Self::WHITE_CONCRETE_POWDER),
+            1067 => Some(&Self::WHITE_DYE),
+            599 => Some(&Self::WHITE_GLAZED_TERRACOTTA),
+            839 => Some(&Self::WHITE_HARNESS),
+            583 => Some(&Self::WHITE_SHULKER_BOX),
+            531 => Some(&Self::WHITE_STAINED_GLASS),
+            547 => Some(&Self::WHITE_STAINED_GLASS_PANE),
+            487 => Some(&Self::WHITE_TERRACOTTA),
+            239 => Some(&Self::WHITE_TULIP),
             213 => Some(&Self::WHITE_WOOL),
-            1430 => Some(&Self::WILD_ARMOR_TRIM_SMITHING_TEMPLATE),
-            259 => Some(&Self::WILDFLOWERS),
-            1219 => Some(&Self::WIND_CHARGE),
-            1197 => Some(&Self::WITCH_SPAWN_EGG),
-            243 => Some(&Self::WITHER_ROSE),
-            1234 => Some(&Self::WITHER_SKELETON_SKULL),
-            1181 => Some(&Self::WITHER_SKELETON_SPAWN_EGG),
-            1180 => Some(&Self::WITHER_SPAWN_EGG),
-            890 => Some(&Self::WOLF_ARMOR),
-            1140 => Some(&Self::WOLF_SPAWN_EGG),
-            914 => Some(&Self::WOODEN_AXE),
-            915 => Some(&Self::WOODEN_HOE),
-            913 => Some(&Self::WOODEN_PICKAXE),
-            912 => Some(&Self::WOODEN_SHOVEL),
-            1296 => Some(&Self::WOODEN_SPEAR),
-            911 => Some(&Self::WOODEN_SWORD),
-            1220 => Some(&Self::WRITABLE_BOOK),
-            1221 => Some(&Self::WRITTEN_BOOK),
-            1270 => Some(&Self::YELLOW_BANNER),
-            1090 => Some(&Self::YELLOW_BED),
-            1041 => Some(&Self::YELLOW_BUNDLE),
-            1403 => Some(&Self::YELLOW_CANDLE),
-            509 => Some(&Self::YELLOW_CARPET),
-            618 => Some(&Self::YELLOW_CONCRETE),
-            634 => Some(&Self::YELLOW_CONCRETE_POWDER),
-            1070 => Some(&Self::YELLOW_DYE),
-            602 => Some(&Self::YELLOW_GLAZED_TERRACOTTA),
-            842 => Some(&Self::YELLOW_HARNESS),
-            586 => Some(&Self::YELLOW_SHULKER_BOX),
-            534 => Some(&Self::YELLOW_STAINED_GLASS),
-            550 => Some(&Self::YELLOW_STAINED_GLASS_PANE),
-            490 => Some(&Self::YELLOW_TERRACOTTA),
+            1431 => Some(&Self::WILD_ARMOR_TRIM_SMITHING_TEMPLATE),
+            260 => Some(&Self::WILDFLOWERS),
+            1220 => Some(&Self::WIND_CHARGE),
+            1198 => Some(&Self::WITCH_SPAWN_EGG),
+            244 => Some(&Self::WITHER_ROSE),
+            1235 => Some(&Self::WITHER_SKELETON_SKULL),
+            1182 => Some(&Self::WITHER_SKELETON_SPAWN_EGG),
+            1181 => Some(&Self::WITHER_SPAWN_EGG),
+            891 => Some(&Self::WOLF_ARMOR),
+            1141 => Some(&Self::WOLF_SPAWN_EGG),
+            915 => Some(&Self::WOODEN_AXE),
+            916 => Some(&Self::WOODEN_HOE),
+            914 => Some(&Self::WOODEN_PICKAXE),
+            913 => Some(&Self::WOODEN_SHOVEL),
+            1297 => Some(&Self::WOODEN_SPEAR),
+            912 => Some(&Self::WOODEN_SWORD),
+            1221 => Some(&Self::WRITABLE_BOOK),
+            1222 => Some(&Self::WRITTEN_BOOK),
+            1271 => Some(&Self::YELLOW_BANNER),
+            1091 => Some(&Self::YELLOW_BED),
+            1042 => Some(&Self::YELLOW_BUNDLE),
+            1404 => Some(&Self::YELLOW_CANDLE),
+            510 => Some(&Self::YELLOW_CARPET),
+            619 => Some(&Self::YELLOW_CONCRETE),
+            635 => Some(&Self::YELLOW_CONCRETE_POWDER),
+            1071 => Some(&Self::YELLOW_DYE),
+            603 => Some(&Self::YELLOW_GLAZED_TERRACOTTA),
+            843 => Some(&Self::YELLOW_HARNESS),
+            587 => Some(&Self::YELLOW_SHULKER_BOX),
+            535 => Some(&Self::YELLOW_STAINED_GLASS),
+            551 => Some(&Self::YELLOW_STAINED_GLASS_PANE),
+            491 => Some(&Self::YELLOW_TERRACOTTA),
             217 => Some(&Self::YELLOW_WOOL),
-            1211 => Some(&Self::ZOGLIN_SPAWN_EGG),
-            1236 => Some(&Self::ZOMBIE_HEAD),
-            1183 => Some(&Self::ZOMBIE_HORSE_SPAWN_EGG),
-            1184 => Some(&Self::ZOMBIE_NAUTILUS_SPAWN_EGG),
-            1182 => Some(&Self::ZOMBIE_SPAWN_EGG),
-            1185 => Some(&Self::ZOMBIE_VILLAGER_SPAWN_EGG),
-            1212 => Some(&Self::ZOMBIFIED_PIGLIN_SPAWN_EGG),
+            1212 => Some(&Self::ZOGLIN_SPAWN_EGG),
+            1237 => Some(&Self::ZOMBIE_HEAD),
+            1184 => Some(&Self::ZOMBIE_HORSE_SPAWN_EGG),
+            1185 => Some(&Self::ZOMBIE_NAUTILUS_SPAWN_EGG),
+            1183 => Some(&Self::ZOMBIE_SPAWN_EGG),
+            1186 => Some(&Self::ZOMBIE_VILLAGER_SPAWN_EGG),
+            1213 => Some(&Self::ZOMBIFIED_PIGLIN_SPAWN_EGG),
             _ => None,
         }
     }

@@ -393,7 +393,7 @@ impl EntityBase for ItemEntity {
         Box::pin(async {
             self.entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_STACK,
+                    TrackedData::ITEM,
                     MetaDataType::ITEM_STACK,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )])

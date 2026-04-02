@@ -4,8 +4,8 @@ use serde_json::Value;
 use std::fs;
 
 use crate::placed_feature::{
-    value_to_block_direction, value_to_block_predicate, value_to_block_state_codec,
-    value_to_height_provider, value_to_int_provider,
+    value_to_block_direction, value_to_block_predicate, value_to_block_state,
+    value_to_block_state_codec, value_to_height_provider, value_to_int_provider,
 };
 
 /// Reads `configured_features.json` and emits a `build_configured_features()` function `TokenStream`.
@@ -92,6 +92,8 @@ pub fn build() -> TokenStream {
                 spring_feature::{BlockWrapper, SpringFeatureFeature},
                 geode::GeodeFeature,
                 tree::TreeFeature,
+                vegetation_patch::VegetationPatchFeature,
+                waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
                 tree::trunk::{TrunkPlacer, TrunkType,
                     bending::BendingTrunkPlacer,
                     cherry::CherryTrunkPlacer,
@@ -176,8 +178,8 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             }
         }
         "minecraft:netherrack_replace_blobs" => {
-            let target = value_to_block_state_codec(&config["target"]);
-            let state = value_to_block_state_codec(&config["state"]);
+            let target = value_to_block_state(&config["target"]);
+            let state = value_to_block_state(&config["state"]);
             let radius = value_to_int_provider(&config["radius"]);
             quote! {
                 ConfiguredFeature::NetherrackReplaceBlobs(ReplaceBlobsFeature {
@@ -213,7 +215,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                     arr.iter()
                         .map(|t| {
                             let rule = value_to_rule_test(&t["target"]);
-                            let state = value_to_block_state_codec(&t["state"]);
+                            let state = value_to_block_state(&t["state"]);
                             quote! { OreTarget { target: #rule, state: #state } }
                         })
                         .collect()
@@ -236,7 +238,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             }
         }
         "minecraft:spring_feature" => {
-            let state = value_to_block_state_codec(&config["state"]);
+            let state = value_to_block_state(&config["state"]);
             let req = config["requires_block_below"].as_bool().unwrap_or(true);
             let rock = config["rock_count"].as_i64().unwrap_or(4) as i32;
             let hole = config["hole_count"].as_i64().unwrap_or(1) as i32;
@@ -487,6 +489,62 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 )
             }
         }
+        "minecraft:vegetation_patch" | "minecraft:waterlogged_vegetation_patch" => {
+            let replaceable = value_to_block_predicate(&config["replaceable"]);
+            let ground_state = value_to_block_state_provider(&config["ground_state"]);
+            let vegetation_feature = value_to_inline_placed_feature(&config["vegetation_feature"]);
+            let surface = match config["surface"].as_str().unwrap_or("floor") {
+                "ceiling" => {
+                    quote! { pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Ceiling }
+                }
+                _ => {
+                    quote! { pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor }
+                }
+            };
+            let depth = value_to_int_provider(&config["depth"]);
+            let extra_bottom = config["extra_bottom_block_chance"].as_f64().unwrap_or(0.0) as f32;
+            let vert_range = config["vertical_range"].as_i64().unwrap_or(0) as i32;
+            let veg_chance = config["vegetation_chance"].as_f64().unwrap_or(0.0) as f32;
+            let xz = value_to_int_provider(&config["xz_radius"]);
+            let extra_edge = config["extra_edge_column_chance"].as_f64().unwrap_or(0.0) as f32;
+
+            if type_str == "minecraft:vegetation_patch" {
+                quote! {
+                    ConfiguredFeature::VegetationPatch(vegetation_patch::VegetationPatchFeature {
+                        replaceable: #replaceable,
+                        ground_state: #ground_state,
+                        vegetation_feature: Box::new(#vegetation_feature),
+                        surface: #surface,
+                        depth: #depth,
+                        extra_bottom_block_chance: #extra_bottom,
+                        vertical_range: #vert_range,
+                        vegetation_chance: #veg_chance,
+                        xz_radius: #xz,
+                        extra_edge_column_chance: #extra_edge,
+                    })
+                }
+            } else {
+                quote! {
+                    ConfiguredFeature::WaterloggedVegetationPatch(waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature {
+                        base: vegetation_patch::VegetationPatchFeature {
+                            replaceable: #replaceable,
+                            ground_state: #ground_state,
+                            vegetation_feature: Box::new(#vegetation_feature),
+                            surface: #surface,
+                            depth: #depth,
+                            extra_bottom_block_chance: #extra_bottom,
+                            vertical_range: #vert_range,
+                            vegetation_chance: #veg_chance,
+                            xz_radius: #xz,
+                            extra_edge_column_chance: #extra_edge,
+                        }
+                    })
+                }
+            }
+        }
+        "minecraft:glowstone_blob" => {
+            quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) }
+        }
         "minecraft:basalt_columns" => {
             let height = value_to_int_provider(&config["height"]);
             let reach = value_to_int_provider(&config["reach"]);
@@ -497,7 +555,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 })
             }
         }
-
+        
         // All TODO/empty features
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
@@ -517,20 +575,11 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:ice_spike" => {
             quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
         }
-        "minecraft:glowstone_blob" => {
-            quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) }
-        }
         "minecraft:freeze_top_layer" => {
             quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) }
         }
         "minecraft:vines" => {
             quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) }
-        }
-        "minecraft:vegetation_patch" => {
-            quote! { ConfiguredFeature::VegetationPatch(crate::generation::feature::features::vegetation_patch::VegetationPatchFeature {}) }
-        }
-        "minecraft:waterlogged_vegetation_patch" => {
-            quote! { ConfiguredFeature::WaterloggedVegetationPatch(crate::generation::feature::features::waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature {}) }
         }
         "minecraft:root_system" => {
             quote! { ConfiguredFeature::RootSystem(crate::generation::feature::features::root_system::RootSystemFeature {}) }
@@ -631,7 +680,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
         "minecraft:simple_state_provider" => {
-            let state = value_to_block_state_codec(&v["state"]);
+            let state = value_to_block_state(&v["state"]);
             quote! { BlockStateProvider::Simple(SimpleStateProvider { state: #state }) }
         }
         "minecraft:weighted_state_provider" => {
@@ -640,7 +689,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
                 .map(|arr| {
                     arr.iter()
                         .map(|e| {
-                            let data = value_to_block_state_codec(&e["data"]);
+                            let data = value_to_block_state(&e["data"]);
                             let weight = e["weight"].as_i64().unwrap_or(1) as i32;
                             quote! { Weighted { data: #data, weight: #weight } }
                         })
@@ -654,14 +703,14 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             }
         }
         "minecraft:rotated_block_provider" => {
-            let state = value_to_block_state_codec(&v["state"]);
+            let state = value_to_block_state(&v["state"]);
             quote! { BlockStateProvider::Pillar(PillarBlockStateProvider { state: #state }) }
         }
         "minecraft:noise_provider" => {
             let base = value_to_noise_base(v);
             let states: Vec<TokenStream> = v["states"]
                 .as_array()
-                .map(|arr| arr.iter().map(value_to_block_state_codec).collect())
+                .map(|arr| arr.iter().map(value_to_block_state).collect())
                 .unwrap_or_default();
             quote! {
                 BlockStateProvider::NoiseProvider(NoiseBlockStateProvider {
@@ -674,7 +723,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             let base_provider = value_to_noise_base(v);
             let states: Vec<TokenStream> = v["states"]
                 .as_array()
-                .map(|arr| arr.iter().map(value_to_block_state_codec).collect())
+                .map(|arr| arr.iter().map(value_to_block_state).collect())
                 .unwrap_or_default();
             let base_noise_provider = quote! {
                 NoiseBlockStateProvider { base: #base_provider, states: vec![#(#states),*] }
@@ -696,14 +745,14 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             let base = value_to_noise_base(v);
             let threshold = v["threshold"].as_f64().unwrap_or(0.0) as f32;
             let high_chance = v["high_chance"].as_f64().unwrap_or(0.0) as f32;
-            let default = value_to_block_state_codec(&v["default_state"]);
+            let default = value_to_block_state(&v["default_state"]);
             let low: Vec<TokenStream> = v["low_states"]
                 .as_array()
-                .map(|a| a.iter().map(value_to_block_state_codec).collect())
+                .map(|a| a.iter().map(value_to_block_state).collect())
                 .unwrap_or_default();
             let high: Vec<TokenStream> = v["high_states"]
                 .as_array()
-                .map(|a| a.iter().map(value_to_block_state_codec).collect())
+                .map(|a| a.iter().map(value_to_block_state).collect())
                 .unwrap_or_default();
             quote! {
                 BlockStateProvider::NoiseThreshold(NoiseThresholdBlockStateProvider {
@@ -732,7 +781,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
             // Default to air
             quote! {
                 BlockStateProvider::Simple(SimpleStateProvider {
-                    state: BlockStateCodec { name: &pumpkin_data::Block::AIR, properties: None },
+                    state: pumpkin_data::Block::AIR.default_state,
                 })
             }
         }
@@ -786,7 +835,7 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
             quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: #block.to_string() }) }
         }
         "minecraft:blockstate_match" => {
-            let state = value_to_block_state_codec(&v["block_state"]);
+            let state = value_to_block_state(&v["block_state"]);
             quote! { RuleTest::BlockStateMatch(BlockStateMatchRuleTest { block_state: #state }) }
         }
         "minecraft:tag_match" => {
@@ -799,7 +848,7 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
             quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: #block.to_string(), probability: #prob }) }
         }
         "minecraft:random_blockstate_match" => {
-            let state = value_to_block_state_codec(&v["block_state"]);
+            let state = value_to_block_state(&v["block_state"]);
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
             quote! { RuleTest::RandomBlockStateMatch(RandomBlockStateMatchRuleTest { block_state: #state, probability: #prob }) }
         }

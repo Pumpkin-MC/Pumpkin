@@ -4,6 +4,7 @@ use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
 use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
+use crate::block::blocks::brewing_stand::BrewingStandBlock;
 use crate::block::blocks::cake::CakeBlock;
 use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::candle_cakes::CandleCakeBlock;
@@ -64,15 +65,18 @@ use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
 use crate::block::blocks::plant::nether_sprouts::NetherSproutsBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
-use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
+use crate::block::blocks::plant::seagrass::SeaGrassBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::spore_blossom::SporeBlossomBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::plant::tall_seagrass::TallSeaGrassBlock;
+use crate::block::blocks::plant::weeping_vines::WeepingVinesBlock;
 use crate::block::blocks::plant::wither_rose::WitherRoseBlock;
 use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
+use crate::block::blocks::redstone::bell::BellBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
 use crate::block::blocks::redstone::copper_bulb::CopperBulbBlock;
@@ -187,6 +191,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FenceBlock);
     manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
+    manager.register(BrewingStandBlock);
     manager.register(BlastFurnaceBlock);
     manager.register(SmokerBlock);
     manager.register(GlassPaneBlock);
@@ -218,6 +223,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
+    manager.register(TallSeaGrassBlock);
     manager.register(KelpBlock);
     manager.register(NetherWartBlock);
     manager.register(WheatBlock);
@@ -265,6 +271,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(SporeBlossomBlock);
     manager.register(ConduitBlock);
     manager.register(DripstoneBlock);
+    manager.register(WeepingVinesBlock);
 
     manager.register(FallingBlock);
 
@@ -275,6 +282,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Redstone
     manager.register(ButtonBlock);
+    manager.register(BellBlock);
     manager.register(LeverBlock);
     manager.register(ObserverBlock);
     manager.register(TripwireBlock);
