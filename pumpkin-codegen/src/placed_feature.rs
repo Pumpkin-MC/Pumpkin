@@ -38,7 +38,7 @@ pub fn build() -> TokenStream {
             };
             use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
             use pumpkin_util::math::int_provider::{
-                BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider,
+                BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
                 ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
                 WeightedEntry, WeightedListIntProvider,
             };
@@ -92,7 +92,7 @@ fn value_to_feature(v: &Value) -> TokenStream {
             let cf = value_to_inline_configured_feature(v);
             quote! { Feature::Inlined(Box::new(#cf)) }
         }
-        _ => quote! { Feature::Named(String::new()) },
+        _ => panic!("Wrong feature value"),
     }
 }
 
@@ -273,10 +273,11 @@ pub fn value_to_block_predicate(v: &Value) -> TokenStream {
     // "true" (or any non-# string) is AlwaysTrue.
     if let Some(s) = v.as_str() {
         if let Some(tag) = s.strip_prefix('#') {
+            let tag_ident = quote::format_ident!("{}", tag.to_uppercase().replace([':', '-'], "_"));
             return quote! {
                 BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
                     offset: OffsetBlocksBlockPredicate { offset: None },
-                    tag: #tag.to_string(),
+                    tag: pumpkin_data::tag::Block::#tag_ident,
                 })
             };
         }
@@ -299,10 +300,11 @@ pub fn value_to_block_predicate(v: &Value) -> TokenStream {
         "minecraft:matching_block_tag" => {
             let offset = value_to_offset_predicate(&v["offset"]);
             let tag = v["tag"].as_str().unwrap_or("");
+            let tag_ident = quote::format_ident!("{}", tag.to_uppercase().replace([':', '-'], "_"));
             quote! {
                 BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
                     offset: #offset,
-                    tag: #tag.to_string(),
+                    tag: pumpkin_data::tag::Block::#tag_ident,
                 })
             }
         }
@@ -526,6 +528,12 @@ pub fn value_to_int_provider(v: &Value) -> TokenStream {
                     let src = value_to_int_provider(&v["source"]);
                     quote! { IntProvider::Object(NormalIntProvider::Clamped(ClampedIntProvider { source: Box::new(#src), min_inclusive: #min, max_inclusive: #max })) }
                 }
+                "minecraft:trapezoid" => {
+                    let min = v["min"].as_i64().unwrap_or(0) as i32;
+                    let max = v["max"].as_i64().unwrap_or(0) as i32;
+                    let plateau = v["plateau"].as_i64().unwrap_or(0) as i32;
+                    quote! { IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider { min_inclusive: #min, max_inclusive: #max, plateau: #plateau })) }
+                }
                 "minecraft:clamped_normal" => {
                     let mean = v["mean"].as_f64().unwrap_or(0.0) as f32;
                     let dev = v["deviation"].as_f64().unwrap_or(1.0) as f32;
@@ -549,12 +557,11 @@ pub fn value_to_int_provider(v: &Value) -> TokenStream {
                     quote! { IntProvider::Object(NormalIntProvider::WeightedList(WeightedListIntProvider { distribution: vec![#(#entries),*] })) }
                 }
                 _ => {
-                    let val = v["value"].as_i64().unwrap_or(0) as i32;
-                    quote! { IntProvider::Constant(#val) }
+                    panic!("Unknown Int Provider, Seems like Mojang added a new one")
                 }
             }
         }
-        _ => quote! { IntProvider::Constant(0) },
+        _ => panic!("Unknown Int Provider, Seems like Mojang added a new one"),
     }
 }
 
@@ -573,7 +580,7 @@ pub fn value_to_height_map(s: &str) -> TokenStream {
         "OCEAN_FLOOR" => quote! { HeightMap::OceanFloor },
         "MOTION_BLOCKING" => quote! { HeightMap::MotionBlocking },
         "MOTION_BLOCKING_NO_LEAVES" => quote! { HeightMap::MotionBlockingNoLeaves },
-        _ => quote! { HeightMap::MotionBlocking },
+        _ => panic!("Unknown Height map"),
     }
 }
 
@@ -592,7 +599,7 @@ pub fn value_to_block_direction(s: &str) -> TokenStream {
         "south" => quote! { BlockDirection::South },
         "west" => quote! { BlockDirection::West },
         "east" => quote! { BlockDirection::East },
-        _ => quote! { BlockDirection::Down },
+        _ => panic!("Unknown Block direction"),
     }
 }
 

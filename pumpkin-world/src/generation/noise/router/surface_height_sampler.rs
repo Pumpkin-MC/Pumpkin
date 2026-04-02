@@ -79,33 +79,25 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
     }
 
     fn calculate_height_estimate(&mut self, aligned_x: i32, aligned_z: i32) -> i32 {
-        let mut low = self.minimum_y;
-        let mut high = self.maximum_y;
-        let mut result = i32::MAX;
-
         let sample_options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
 
-        while low <= high {
-            let mid = low + ((high - low) / 2);
-            let stepped_mid = mid - (mid % self.y_level_step_count as i32);
+        // preliminarySurfaceLevel (FindTopSurface) returns the surface Y directly.
+        // Sample at y=0 — FindTopSurface ignores the incoming Y and computes its own.
+        let pos = Vector3::new(aligned_x, 0, aligned_z);
+        let surface_y = ChunkNoiseFunctionComponent::sample_from_stack(
+            &mut self.component_stack,
+            &pos,
+            &sample_options,
+        );
 
-            let pos = Vector3::new(aligned_x, stepped_mid, aligned_z);
-            let density = ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut self.component_stack,
-                &pos,
-                &sample_options,
-            );
-
-            if density > Self::NOTCHIAN_SAMPLE_CUTOFF {
-                result = stepped_mid;
-                low = stepped_mid + self.y_level_step_count as i32;
-            } else {
-                high = stepped_mid - self.y_level_step_count as i32;
-            }
+        // FindTopSurface returns lowerBound as f64 when no solid block found,
+        // which is below minimum_y — treat that as "no surface"
+        if surface_y <= self.minimum_y as f64 {
+            i32::MAX
+        } else {
+            surface_y as i32
         }
-
-        result
     }
 
     #[must_use]

@@ -4,43 +4,52 @@ use pumpkin_util::{
     random::RandomGenerator,
 };
 
-use crate::generation::feature::features::tree::{TreeNode, trunk::TrunkPlacer};
 use crate::generation::proto_chunk::GenerationCache;
+use crate::{
+    generation::{
+        block_state_provider::BlockStateProvider,
+        feature::features::tree::{TreeNode, trunk::TrunkPlacer},
+    },
+    world::BlockRegistryExt,
+};
 
 pub struct GiantTrunkPlacer;
 
 impl GiantTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
+        block_registry: &dyn BlockRegistryExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
-        _random: &mut RandomGenerator,
-        force_dirt: bool,
-        dirt_state: &BlockState,
+        random: &mut RandomGenerator,
+        below_trunk_provider: &BlockStateProvider,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         let pos = start_pos.down();
-        placer.set_dirt(chunk, &pos, force_dirt, dirt_state);
+        placer.set_dirt(block_registry, chunk, random, &pos, below_trunk_provider);
         placer.set_dirt(
+            block_registry,
             chunk,
+            random,
             &pos.offset(BlockDirection::East.to_offset()),
-            force_dirt,
-            dirt_state,
+            below_trunk_provider,
         );
         placer.set_dirt(
+            block_registry,
             chunk,
+            random,
             &pos.offset(BlockDirection::South.to_offset()),
-            force_dirt,
-            dirt_state,
+            below_trunk_provider,
         );
         placer.set_dirt(
+            block_registry,
             chunk,
+            random,
             &pos.offset(BlockDirection::South.to_offset())
                 .offset(BlockDirection::South.to_offset()),
-            force_dirt,
-            dirt_state,
+            below_trunk_provider,
         );
 
         let mut trunk_poses = Vec::new();

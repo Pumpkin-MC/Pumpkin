@@ -789,94 +789,94 @@ mod tests {
 
     // ── weapon category predicates ───────────────────────────────────
 
-    // /// 2-durability combat weapons (axes/pickaxes/shovels/hoes) must match their category predicate.
-    // #[test]
-    // fn weapon_categories_identify_2_cost_items() {
-    //     // Items that should have is_axe / is_pickaxe / is_shovel / is_hoe = true.
-    //     let axes: &[&Item] = &[
-    //         &Item::WOODEN_AXE,
-    //         &Item::STONE_AXE,
-    //         &Item::IRON_AXE,
-    //         &Item::GOLDEN_AXE,
-    //         &Item::DIAMOND_AXE,
-    //         &Item::NETHERITE_AXE,
-    //     ];
-    //     let pickaxes: &[&Item] = &[
-    //         &Item::WOODEN_PICKAXE,
-    //         &Item::STONE_PICKAXE,
-    //         &Item::IRON_PICKAXE,
-    //         &Item::GOLDEN_PICKAXE,
-    //         &Item::DIAMOND_PICKAXE,
-    //         &Item::NETHERITE_PICKAXE,
-    //     ];
-    //     let shovels: &[&Item] = &[
-    //         &Item::WOODEN_SHOVEL,
-    //         &Item::STONE_SHOVEL,
-    //         &Item::IRON_SHOVEL,
-    //         &Item::GOLDEN_SHOVEL,
-    //         &Item::DIAMOND_SHOVEL,
-    //         &Item::NETHERITE_SHOVEL,
-    //     ];
-    //     let hoes: &[&Item] = &[
-    //         &Item::WOODEN_HOE,
-    //         &Item::STONE_HOE,
-    //         &Item::IRON_HOE,
-    //         &Item::GOLDEN_HOE,
-    //         &Item::DIAMOND_HOE,
-    //         &Item::NETHERITE_HOE,
-    //     ];
+    /// 2-durability combat weapons (axes/pickaxes/shovels/hoes) must match their category predicate.
+    #[test]
+    fn weapon_categories_identify_2_cost_items() {
+        // Items that should have is_axe / is_pickaxe / is_shovel / is_hoe = true.
+        let axes: &[&Item] = &[
+            &Item::WOODEN_AXE,
+            &Item::STONE_AXE,
+            &Item::IRON_AXE,
+            &Item::GOLDEN_AXE,
+            &Item::DIAMOND_AXE,
+            &Item::NETHERITE_AXE,
+        ];
+        let pickaxes: &[&Item] = &[
+            &Item::WOODEN_PICKAXE,
+            &Item::STONE_PICKAXE,
+            &Item::IRON_PICKAXE,
+            &Item::GOLDEN_PICKAXE,
+            &Item::DIAMOND_PICKAXE,
+            &Item::NETHERITE_PICKAXE,
+        ];
+        let shovels: &[&Item] = &[
+            &Item::WOODEN_SHOVEL,
+            &Item::STONE_SHOVEL,
+            &Item::IRON_SHOVEL,
+            &Item::GOLDEN_SHOVEL,
+            &Item::DIAMOND_SHOVEL,
+            &Item::NETHERITE_SHOVEL,
+        ];
+        let hoes: &[&Item] = &[
+            &Item::WOODEN_HOE,
+            &Item::STONE_HOE,
+            &Item::IRON_HOE,
+            &Item::GOLDEN_HOE,
+            &Item::DIAMOND_HOE,
+            &Item::NETHERITE_HOE,
+        ];
 
-    //     for item in axes {
-    //         let stack = ItemStack::new(1, item);
-    //         assert!(stack.is_axe(), "{} should be an axe", item.registry_key);
-    //         assert!(
-    //             !stack.is_sword(),
-    //             "{} should not be a sword",
-    //             item.registry_key
-    //         );
-    //     }
-    //     for item in pickaxes {
-    //         let stack = ItemStack::new(1, item);
-    //         assert!(
-    //             stack.is_pickaxe(),
-    //             "{} should be a pickaxe",
-    //             item.registry_key
-    //         );
-    //     }
-    //     for item in shovels {
-    //         let stack = ItemStack::new(1, item);
-    //         assert!(
-    //             stack.is_shovel(),
-    //             "{} should be a shovel",
-    //             item.registry_key
-    //         );
-    //     }
-    //     for item in hoes {
-    //         let stack = ItemStack::new(1, item);
-    //         assert!(stack.is_hoe(), "{} should be a hoe", item.registry_key);
-    //     }
+        for item in axes {
+            let stack = ItemStack::new(1, item);
+            assert!(stack.is_axe(), "{} should be an axe", item.registry_key);
+            assert!(
+                !stack.is_sword(),
+                "{} should not be a sword",
+                item.registry_key
+            );
+        }
+        for item in pickaxes {
+            let stack = ItemStack::new(1, item);
+            assert!(
+                stack.is_pickaxe(),
+                "{} should be a pickaxe",
+                item.registry_key
+            );
+        }
+        for item in shovels {
+            let stack = ItemStack::new(1, item);
+            assert!(
+                stack.is_shovel(),
+                "{} should be a shovel",
+                item.registry_key
+            );
+        }
+        for item in hoes {
+            let stack = ItemStack::new(1, item);
+            assert!(stack.is_hoe(), "{} should be a hoe", item.registry_key);
+        }
 
-    //     // Swords should cost 1, so they must NOT match any 2-cost predicate.
-    //     let swords: &[&Item] = &[
-    //         &Item::IRON_SWORD,
-    //         &Item::DIAMOND_SWORD,
-    //         &Item::NETHERITE_SWORD,
-    //     ];
-    //     for item in swords {
-    //         let stack = ItemStack::new(1, item);
-    //         assert!(stack.is_sword(), "{} should be a sword", item.registry_key);
-    //         assert!(
-    //             !stack.is_axe(),
-    //             "{} should not be an axe",
-    //             item.registry_key
-    //         );
-    //         assert!(
-    //             !stack.is_pickaxe(),
-    //             "{} should not be a pickaxe",
-    //             item.registry_key
-    //         );
-    //     }
-    // }
+        // Swords should cost 1, so they must NOT match any 2-cost predicate.
+        let swords: &[&Item] = &[
+            &Item::IRON_SWORD,
+            &Item::DIAMOND_SWORD,
+            &Item::NETHERITE_SWORD,
+        ];
+        for item in swords {
+            let stack = ItemStack::new(1, item);
+            assert!(stack.is_sword(), "{} should be a sword", item.registry_key);
+            assert!(
+                !stack.is_axe(),
+                "{} should not be an axe",
+                item.registry_key
+            );
+            assert!(
+                !stack.is_pickaxe(),
+                "{} should not be a pickaxe",
+                item.registry_key
+            );
+        }
+    }
 
     // ── Unbreaking (statistical) ─────────────────────────────────────
 

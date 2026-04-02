@@ -37,7 +37,7 @@ impl BlockStateProvider {
             Self::Pillar(provider) => provider.get(pos),
             Self::RandomizedInt(provider) => provider.get(random, pos),
             // Without chunk context, fall through to fallback (rules cannot be evaluated)
-            Self::Rule(provider) => provider.fallback.get(random, pos),
+            Self::Rule(_provider) => todo!(), //provider.get(random, pos),
         }
     }
 
@@ -53,10 +53,23 @@ impl BlockStateProvider {
             _ => self.get(random, pos),
         }
     }
+
+    pub fn get_optional<T: GenerationCache>(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Option<&'static BlockState> {
+        match self {
+            Self::Rule(provider) => provider.get_optional(block_registry, chunk, random, pos),
+            _ => Some(self.get(random, pos)),
+        }
+    }
 }
 
 pub struct RuleBasedBlockStateProvider {
-    pub fallback: Box<BlockStateProvider>,
+    pub fallback: Option<Box<BlockStateProvider>>,
     pub rules: Vec<BlockStateRule>,
 }
 
@@ -68,14 +81,27 @@ impl RuleBasedBlockStateProvider {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> &'static BlockState {
+        if let Some(optional) = self.get_optional(block_registry, chunk, random, pos) {
+            return optional;
+        }
+        GenerationCache::get_block_state(chunk, &pos.0).to_state()
+    }
+    pub fn get_optional<T: GenerationCache>(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Option<&'static BlockState> {
         for rule in &self.rules {
             if rule.if_true.test(block_registry, chunk, &pos) {
-                return rule
-                    .then
-                    .get_with_context(block_registry, chunk, random, pos);
+                return Some(
+                    rule.then
+                        .get_with_context(block_registry, chunk, random, pos),
+                );
             }
         }
-        self.fallback.get(random, pos)
+        self.fallback.as_ref().map(|f| f.get(random, pos))
     }
 }
 

@@ -43,7 +43,7 @@ pub fn build() -> TokenStream {
             };
             use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
             use pumpkin_util::math::int_provider::{
-                BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider,
+                BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
                 ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
                 WeightedEntry, WeightedListIntProvider,
             };
@@ -566,6 +566,9 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
         }
+        "minecraft:fossil" => {
+            quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
+        }
         "minecraft:lake" => {
             quote! { ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {}) }
         }
@@ -575,7 +578,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:huge_red_mushroom" => {
             quote! { ConfiguredFeature::HugeRedMushroom(crate::generation::feature::features::huge_red_mushroom::HugeRedMushroomFeature {}) }
         }
-        "minecraft:ice_spike" => {
+        "minecraft:spike" => {
             quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
         }
         "minecraft:freeze_top_layer" => {
@@ -596,7 +599,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:iceberg" => {
             quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature {}) }
         }
-        "minecraft:forest_rock" => {
+        "minecraft:block_blob" => {
             quote! { ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {}) }
         }
         "minecraft:end_platform" => {
@@ -783,8 +786,14 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
                 })
             }
         }
-        _ if !v["fallback"].is_null() => {
-            let fallback = value_to_block_state_provider(&v["fallback"]);
+        "minecraft:rule_based_state_provider" => {
+            let fallback = if !v["fallback"].is_null() {
+                let provider = value_to_block_state_provider(&v["fallback"]);
+                quote! { Some(Box::new(#provider))}
+            } else {
+                quote! { None }
+            };
+
             let rules: Vec<TokenStream> = v["rules"]
                 .as_array()
                 .map(|arr| {
@@ -799,7 +808,7 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
                 .unwrap_or_default();
             quote! {
                 BlockStateProvider::Rule(RuleBasedBlockStateProvider {
-                    fallback: Box::new(#fallback),
+                    fallback: #fallback,
                     rules: vec![#(#rules),*],
                 })
             }
@@ -859,7 +868,7 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
         "minecraft:always_true" | "" => quote! { RuleTest::AlwaysTrue },
         "minecraft:block_match" => {
             let block = v["block"].as_str().unwrap_or("minecraft:stone");
-    let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
+            let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
             let block_ident =
                 quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
             quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: pumpkin_data::Block::#block_ident }) }
@@ -870,12 +879,13 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
         }
         "minecraft:tag_match" => {
             let tag = v["tag"].as_str().unwrap_or("");
-            quote! { RuleTest::TagMatch(TagMatchRuleTest { tag: #tag.to_string() }) }
+            let tag_ident = quote::format_ident!("{}", tag.to_uppercase().replace([':', '-'], "_"));
+            quote! { RuleTest::TagMatch(TagMatchRuleTest { tag: pumpkin_data::tag::Block::#tag_ident }) }
         }
         "minecraft:random_block_match" => {
             let block = v["block"].as_str().unwrap_or("minecraft:stone");
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
-    let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
+            let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
             let block_ident =
                 quote::format_ident!("{}", block.to_uppercase().replace([':', '-'], "_"));
             quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: pumpkin_data::Block::#block_ident, probability: #prob }) }
@@ -918,28 +928,26 @@ fn value_to_block_wrapper(v: &Value) -> TokenStream {
 /// # Arguments
 /// – `config` – the `"config"` sub-object of a `minecraft:tree` configured feature JSON entry.
 fn value_to_tree_feature(config: &Value) -> TokenStream {
-    let dirt = value_to_block_state_provider(&config["dirt_provider"]);
     let trunk = value_to_block_state_provider(&config["trunk_provider"]);
     let trunk_placer = value_to_trunk_placer(&config["trunk_placer"]);
     let foliage = value_to_block_state_provider(&config["foliage_provider"]);
     let foliage_placer = value_to_foliage_placer(&config["foliage_placer"]);
     let min_size = value_to_feature_size(&config["minimum_size"]);
     let ignore_vines = config["ignore_vines"].as_bool().unwrap_or(true);
-    let force_dirt = config["force_dirt"].as_bool().unwrap_or(false);
+    let below_trunk_provider = value_to_block_state_provider(&config["below_trunk_provider"]);
     let decorators: Vec<TokenStream> = config["decorators"]
         .as_array()
         .map(|arr| arr.iter().map(value_to_tree_decorator).collect())
         .unwrap_or_default();
     quote! {
         TreeFeature {
-            dirt_provider: #dirt,
             trunk_provider: #trunk,
             trunk_placer: #trunk_placer,
             foliage_provider: #foliage,
             foliage_placer: #foliage_placer,
             minimum_size: #min_size,
             ignore_vines: #ignore_vines,
-            force_dirt: #force_dirt,
+            below_trunk_provider: #below_trunk_provider,
             decorators: vec![#(#decorators),*],
         }
     }
