@@ -84,11 +84,6 @@ async fn main() {
 
     pumpkin::init_logger(&advanced_config);
 
-    let default_panic = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        default_panic(info);
-        std::process::exit(1);
-    }));
     info!(
         "{}",
         TextComponent::text(format!(
@@ -238,13 +233,13 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
         // We cannot gracefully shut down as the main thread
         // has panicked. However, we can still generate the crash report.
 
-        if let Some(crash_report) = try_to_set_crash_report(crash_report) {
+        if let Some(crash_report) = try_set_crash_report(crash_report) {
             crash_report.print_to_console();
             crash_report.save_and_log();
 
             tracing::error!(
                 "{}",
-                TextComponent::text("Exiting due to the main thread panicking.")
+                TextComponent::text("Aborting due to the main thread panicking.")
                     .color(Color::Named(NamedColor::Red))
                     .to_pretty_console()
             );
@@ -253,7 +248,7 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
             tracing::error!(
                 "{}: {}",
                 TextComponent::text(
-                    "The main thread panicked while stopping the server; forcefully exiting"
+                    "The main thread panicked while stopping the server; aborting."
                 )
                 .color(Color::Named(NamedColor::Red))
                 .bold()
@@ -269,7 +264,7 @@ fn handle_panic(panic_info: &PanicHookInfo<'_>) {
         exit(1);
     }
 
-    if try_to_set_crash_report(crash_report).is_some() {
+    if try_set_crash_report(crash_report).is_some() {
         // It's the first panic; let's stop the server.
         stop_server();
     } else {
@@ -294,10 +289,10 @@ fn is_main_thread() -> bool {
 }
 
 /// Returns `Some` if the crash report was successfully set. That
-/// means it is the first panic and it must be logged and saved later.
+/// means it is the first panic, and it must be logged and saved later.
 ///
 /// Returns `None` otherwise as the panic is subsequent.
-fn try_to_set_crash_report(crash_report: CrashReport) -> Option<&'static CrashReport> {
+fn try_set_crash_report(crash_report: CrashReport) -> Option<&'static CrashReport> {
     if !SERVER_IS_STOPPING.load(Ordering::Acquire) && CRASH_REPORT.set(crash_report).is_ok() {
         CRASH_REPORT.get()
     } else {
