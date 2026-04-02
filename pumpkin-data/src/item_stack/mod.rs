@@ -110,6 +110,13 @@ impl ItemStack {
         patch: Vec::new(),
     };
 
+    pub fn split_off(&mut self, amount: u8) -> Self {
+        let count = amount.min(self.item_count);
+        let result = self.copy_with_count(count);
+        self.decrement(count);
+        result
+    }
+
     #[must_use]
     pub fn get_max_stack_size(&self) -> u8 {
         self.get_data_component::<MaxStackSizeImpl>()

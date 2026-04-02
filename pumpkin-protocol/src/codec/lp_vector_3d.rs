@@ -13,9 +13,9 @@ use serde::{
 };
 
 #[derive(Clone, Copy)]
-pub struct Velocity(pub Vector3<f64>);
+pub struct LpVector3d(pub Vector3<f64>);
 
-impl Velocity {
+impl LpVector3d {
     pub fn write<W: std::io::Write>(&self, writer: &mut W) -> Result<(), WritingError> {
         let velocity = self.0;
 
@@ -153,7 +153,7 @@ fn from_long(quantized: i64, scale: f64) -> f64 {
     (normalized / 0.5) * scale
 }
 
-impl Serialize for Velocity {
+impl Serialize for LpVector3d {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
         self.write(&mut buf).unwrap();
@@ -161,7 +161,7 @@ impl Serialize for Velocity {
     }
 }
 
-impl<'de> de::Deserialize<'de> for Velocity {
+impl<'de> de::Deserialize<'de> for LpVector3d {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -169,7 +169,7 @@ impl<'de> de::Deserialize<'de> for Velocity {
         struct VelocityVisitor;
 
         impl Visitor<'_> for VelocityVisitor {
-            type Value = Velocity;
+            type Value = LpVector3d;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
                 formatter.write_str("a byte array representing bit-packed velocity")
@@ -180,7 +180,7 @@ impl<'de> de::Deserialize<'de> for Velocity {
                 E: de::Error,
             {
                 let mut cursor = std::io::Cursor::new(v);
-                Velocity::read(&mut cursor).map_err(de::Error::custom)
+                LpVector3d::read(&mut cursor).map_err(de::Error::custom)
             }
         }
 
@@ -190,7 +190,7 @@ impl<'de> de::Deserialize<'de> for Velocity {
 
 #[cfg(test)]
 mod tests {
-    use super::{Velocity, encode_legacy_velocity_component};
+    use super::{LpVector3d, encode_legacy_velocity_component};
     use pumpkin_util::math::vector3::Vector3;
 
     #[test]
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn write_legacy_writes_three_i16_be_components() {
-        let velocity = Velocity(Vector3::new(0.5, -0.5, 0.0));
+        let velocity = LpVector3d(Vector3::new(0.5, -0.5, 0.0));
         let mut buf = Vec::new();
         velocity.write_legacy(&mut buf).unwrap();
         assert_eq!(buf, vec![0x0F, 0xA0, 0xF0, 0x60, 0x00, 0x00]);
