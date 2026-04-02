@@ -138,7 +138,6 @@ result-*
 # Vanilla minecraft server
 banned-ips.json
 banned-players.json
-crash-reports/
 eula.txt
 ops.json
 server.properties
