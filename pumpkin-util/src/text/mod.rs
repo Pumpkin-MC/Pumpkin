@@ -12,6 +12,7 @@ use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
 use std::fmt::Formatter;
+use std::sync::LazyLock;
 use style::Style;
 
 pub mod click;
@@ -872,6 +873,52 @@ impl TextComponent {
     pub fn shadow_color(mut self, color: ARGBColor) -> Self {
         self.0.style.shadow_color = Some(color);
         self
+    }
+}
+
+impl TextComponent {
+    /// Joins multiple text components into one with a separator containing a gray comma
+    /// and a space after it.
+    ///
+    /// # Arguments
+    /// - `elements` - The elements to join.
+    ///
+    /// # Returns
+    /// The resultant text component with all the elements joined in it.
+    #[must_use]
+    pub fn join_with_comma(elements: Vec<Self>) -> Self {
+        static DEFAULT_SEPARATOR: LazyLock<TextComponent> = LazyLock::new(|| {
+            TextComponent::text(", ").color(Color::Named(color::NamedColor::Gray))
+        });
+
+        Self::join(elements, &DEFAULT_SEPARATOR)
+    }
+
+    /// Joins multiple text components into one with the given separator text component.
+    /// Use [`TextComponent::join_with_comma`] instead if you just want to join text components with
+    /// a comma in between.
+    ///
+    /// # Arguments
+    /// - `elements` - The elements to join.
+    /// - `separator` - The separator to use for joining the elements provided.
+    ///
+    /// # Returns
+    /// The resultant text component with all the elements joined in it.
+    #[must_use]
+    pub fn join(elements: Vec<Self>, separator: &Self) -> Self {
+        let mut result = Self::empty();
+        let mut first = true;
+
+        for element in elements {
+            if !first {
+                result = result.add_child(separator.clone());
+            }
+
+            result = result.add_child(element);
+            first = false;
+        }
+
+        result
     }
 }
 
