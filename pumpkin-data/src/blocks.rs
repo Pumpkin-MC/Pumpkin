@@ -14,14 +14,12 @@ use std::hash::{Hash, Hasher};
 /// This struct contains the base properties shared by all instances of a block
 /// Data-driven attributes like `hardness` and `blast_resistance` are defined here,
 /// while specific orientations or variations are stored in the associated `BlockState`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block {
     /// The numeric ID used for internal registry mapping.
     pub id: u16,
     /// The unique namespaced ID (e.g., "`diamond_ore`").
     pub name: &'static str,
-    /// The key used for client-side localization (e.g., "`block.minecraft.diamond_ore`").
-    pub translation_key: &'static str,
     /// How hard the block is to break. A value of -1.0 indicates an unbreakable block (e.g., Bedrock).
     pub hardness: f32,
     /// The block's resistance to explosions.

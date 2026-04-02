@@ -115,7 +115,7 @@ impl StagedChunkEnum {
         match self {
             Self::Empty => 0,
             Self::StructureStart => 0,
-            Self::StructureReferences => 8,
+            Self::StructureReferences => 0,
             Self::Biomes => 0,
             Self::Noise => 0,
             Self::Surface => 0,
@@ -131,7 +131,7 @@ impl StagedChunkEnum {
         match self {
             Self::Empty => 0,
             Self::StructureStart => 0,
-            Self::StructureReferences => 8,
+            Self::StructureReferences => 0,
             Self::Biomes => 0,
             Self::Noise => 0,
             Self::Surface => 0,

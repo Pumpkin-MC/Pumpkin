@@ -9,7 +9,8 @@ use bytes::Bytes;
 use tokio::io::{AsyncRead, BufReader, ReadBuf};
 
 use crate::{
-    Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor,
+    Aes128Cfb8Dec, CompressionThreshold, MAX_PACKET_SIZE, PacketDecodeError, RawPacket,
+    StreamDecryptor,
     codec::var_uint::VarUInt,
     ser::{NetworkReadExt, ReadingError},
 };
@@ -138,6 +139,9 @@ impl UDPNetworkDecoder {
         })?;
 
         let packet_len = u64::from(packet_len.0);
+        if !(0..=MAX_PACKET_SIZE).contains(&packet_len) {
+            Err(PacketDecodeError::OutOfBounds)?;
+        }
 
         let var_header = VarUInt::decode(&mut reader)?;
 
@@ -159,8 +163,17 @@ impl UDPNetworkDecoder {
         // Gamepacket ID: Remaining 10 bits (bits 4 to 13)
         let gamepacket_id = (header & 0x3FF) as u16; // 0x3FF is 10 bits set to 1
 
+        let header_size = var_header.written_size();
+
+        if (packet_len as usize) < header_size {
+            return Err(PacketDecodeError::MalformedLength(
+                "Packet length is smaller than the header size".to_string(),
+            ));
+        }
+        let payload_len = packet_len as usize - header_size;
+
         let payload = reader
-            .read_boxed_slice(packet_len as usize - var_header.written_size())
+            .read_boxed_slice(payload_len)
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
         Ok(RawPacket {

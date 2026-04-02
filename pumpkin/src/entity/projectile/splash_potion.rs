@@ -6,11 +6,11 @@ use crate::{
     server::Server,
 };
 use pumpkin_data::Block;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::java::client::play::CWorldEvent;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::RwLock;
 
@@ -111,7 +111,7 @@ impl EntityBase for SplashPotionEntity {
             // Sync the item stack
             entity
                 .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::DATA_ITEM,
+                    pumpkin_data::tracked_data::TrackedData::ITEM_STACK,
                     pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
                     &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
                         stack.clone(),

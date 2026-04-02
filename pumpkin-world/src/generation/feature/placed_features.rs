@@ -84,7 +84,7 @@ impl PlacedFeature {
         let feature = match &self.feature {
             Feature::Named(name) => CONFIGURED_FEATURES
                 .get(name.strip_prefix("minecraft:").unwrap_or(name))
-                .unwrap(),
+                .expect("Name: {name} not found"),
             Feature::Inlined(feature) => feature,
         };
 
@@ -121,7 +121,7 @@ pub enum PlacementModifier {
     HeightRange(HeightRangePlacementModifier),
     InSquare(SquarePlacementModifier),
     RandomOffset(RandomOffsetPlacementModifier),
-    FixedPlacement,
+    FixedPlacement(Vec<BlockPos>),
 }
 
 impl PlacementModifier {
@@ -161,7 +161,7 @@ impl PlacementModifier {
             Self::HeightRange(modifier) => modifier.get_positions(min_y, height, random, pos),
             Self::InSquare(_) => SquarePlacementModifier::get_positions(random, pos),
             Self::RandomOffset(modifier) => modifier.get_positions(random, pos),
-            Self::FixedPlacement => Box::new(iter::empty()),
+            Self::FixedPlacement(positions) => Box::new(positions.clone().into_iter()),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 /// Utilities for reading potion contents from an `ItemStack` and applying effects.
 pub struct PotionContents;
@@ -95,7 +95,7 @@ impl PotionContents {
 
             // Custom effects appended
             for ce in &pc.custom_effects {
-                if let Some(se) = status_effect_from_id(ce.effect_id) {
+                if let Some(se) = StatusEffect::from_minecraft_name(&ce.effect_id) {
                     out.push((
                         se,
                         ce.duration,
@@ -182,51 +182,5 @@ impl PotionContents {
                 target.add_effect(eff).await;
             }
         }
-    }
-}
-
-/// Map numeric effect id to generated `StatusEffect` const. This is a manual mapping because the generated
-/// code does not provide a `from_id` helper. TODO: fix this?
-const fn status_effect_from_id(id: i32) -> Option<&'static StatusEffect> {
-    match id as u8 {
-        x if x == StatusEffect::ABSORPTION.id => Some(&StatusEffect::ABSORPTION),
-        x if x == StatusEffect::BAD_OMEN.id => Some(&StatusEffect::BAD_OMEN),
-        x if x == StatusEffect::BLINDNESS.id => Some(&StatusEffect::BLINDNESS),
-        x if x == StatusEffect::CONDUIT_POWER.id => Some(&StatusEffect::CONDUIT_POWER),
-        x if x == StatusEffect::DARKNESS.id => Some(&StatusEffect::DARKNESS),
-        x if x == StatusEffect::DOLPHINS_GRACE.id => Some(&StatusEffect::DOLPHINS_GRACE),
-        x if x == StatusEffect::FIRE_RESISTANCE.id => Some(&StatusEffect::FIRE_RESISTANCE),
-        x if x == StatusEffect::GLOWING.id => Some(&StatusEffect::GLOWING),
-        x if x == StatusEffect::HASTE.id => Some(&StatusEffect::HASTE),
-        x if x == StatusEffect::HEALTH_BOOST.id => Some(&StatusEffect::HEALTH_BOOST),
-        x if x == StatusEffect::HERO_OF_THE_VILLAGE.id => Some(&StatusEffect::HERO_OF_THE_VILLAGE),
-        x if x == StatusEffect::HUNGER.id => Some(&StatusEffect::HUNGER),
-        x if x == StatusEffect::INFESTED.id => Some(&StatusEffect::INFESTED),
-        x if x == StatusEffect::INSTANT_DAMAGE.id => Some(&StatusEffect::INSTANT_DAMAGE),
-        x if x == StatusEffect::INSTANT_HEALTH.id => Some(&StatusEffect::INSTANT_HEALTH),
-        x if x == StatusEffect::INVISIBILITY.id => Some(&StatusEffect::INVISIBILITY),
-        x if x == StatusEffect::JUMP_BOOST.id => Some(&StatusEffect::JUMP_BOOST),
-        x if x == StatusEffect::LEVITATION.id => Some(&StatusEffect::LEVITATION),
-        x if x == StatusEffect::LUCK.id => Some(&StatusEffect::LUCK),
-        x if x == StatusEffect::MINING_FATIGUE.id => Some(&StatusEffect::MINING_FATIGUE),
-        x if x == StatusEffect::NAUSEA.id => Some(&StatusEffect::NAUSEA),
-        x if x == StatusEffect::NIGHT_VISION.id => Some(&StatusEffect::NIGHT_VISION),
-        x if x == StatusEffect::OOZING.id => Some(&StatusEffect::OOZING),
-        x if x == StatusEffect::POISON.id => Some(&StatusEffect::POISON),
-        x if x == StatusEffect::RAID_OMEN.id => Some(&StatusEffect::RAID_OMEN),
-        x if x == StatusEffect::REGENERATION.id => Some(&StatusEffect::REGENERATION),
-        x if x == StatusEffect::RESISTANCE.id => Some(&StatusEffect::RESISTANCE),
-        x if x == StatusEffect::SATURATION.id => Some(&StatusEffect::SATURATION),
-        x if x == StatusEffect::SLOW_FALLING.id => Some(&StatusEffect::SLOW_FALLING),
-        x if x == StatusEffect::SLOWNESS.id => Some(&StatusEffect::SLOWNESS),
-        x if x == StatusEffect::SPEED.id => Some(&StatusEffect::SPEED),
-        x if x == StatusEffect::STRENGTH.id => Some(&StatusEffect::STRENGTH),
-        x if x == StatusEffect::UNLUCK.id => Some(&StatusEffect::UNLUCK),
-        x if x == StatusEffect::WATER_BREATHING.id => Some(&StatusEffect::WATER_BREATHING),
-        x if x == StatusEffect::WEAKNESS.id => Some(&StatusEffect::WEAKNESS),
-        x if x == StatusEffect::WEAVING.id => Some(&StatusEffect::WEAVING),
-        x if x == StatusEffect::WIND_CHARGED.id => Some(&StatusEffect::WIND_CHARGED),
-        x if x == StatusEffect::WITHER.id => Some(&StatusEffect::WITHER),
-        _ => None,
     }
 }

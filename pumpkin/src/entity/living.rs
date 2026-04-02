@@ -37,6 +37,7 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
@@ -54,7 +55,6 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;
@@ -236,7 +236,7 @@ impl LivingEntity {
         self.livings_flags.store(b, Ordering::Relaxed);
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_LIVING_FLAGS,
+                TrackedData::LIVING_ENTITY_FLAGS,
                 MetaDataType::BYTE,
                 b,
             )])
@@ -265,7 +265,7 @@ impl LivingEntity {
         // tell everyone entities health changed
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_HEALTH,
+                TrackedData::HEALTH_ID,
                 MetaDataType::FLOAT,
                 clamped,
             )])
@@ -337,6 +337,7 @@ impl LivingEntity {
             v1_21_7: 17u8,
             v1_21_9: 17u8,
             v1_21_11: 17u8,
+            v26_1: 17u8, // ?
         })
     }
 
@@ -1280,10 +1281,7 @@ impl LivingEntity {
 
             // Plays the death sound
             world
-                .send_entity_status(
-                    &self.entity,
-                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-                )
+                .send_entity_status(&self.entity, EntityStatus::Death)
                 .await;
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
@@ -1474,7 +1472,7 @@ impl LivingEntity {
                 self.entity
                     .world
                     .load()
-                    .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
+                    .send_entity_status(&self.entity, EntityStatus::ProtectedFromDeath)
                     .await;
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
@@ -1533,7 +1531,7 @@ impl LivingEntity {
             let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
-                    (pumpkin_world::item::DamageResult::Untouched, None)
+                    (pumpkin_data::item_stack::DamageResult::Untouched, None)
                 } else {
                     // Items without `EquippableImpl` component take damage freely.
                     // Items with `damage_on_hurt: false` (e.g. elytra) are exempt from armor hit durability.
@@ -1546,18 +1544,18 @@ impl LivingEntity {
                     if takes_damage {
                         // Base armor durability damage.
                         let result = stack.damage_item(armor_damage);
-                        let changed = result != pumpkin_world::item::DamageResult::Untouched;
+                        let changed = result != pumpkin_data::item_stack::DamageResult::Untouched;
                         (result, changed.then_some(stack.clone()))
                     } else {
                         // Equippable items can opt out of on-hurt durability loss (e.g. elytra).
-                        (pumpkin_world::item::DamageResult::Untouched, None)
+                        (pumpkin_data::item_stack::DamageResult::Untouched, None)
                     }
                 }
             };
 
             if let Some(updated_stack) = updated_stack_opt {
                 // Broadcast break status before clearing the slot.
-                if slot_result == pumpkin_world::item::DamageResult::Broken {
+                if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
                         .send_entity_status(&self.entity, super::equipment_break_status(slot))
@@ -1631,7 +1629,7 @@ impl LivingEntity {
         // Send health metadata
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_HEALTH,
+                TrackedData::HEALTH_ID,
                 MetaDataType::FLOAT,
                 max_health,
             )])
@@ -2204,7 +2202,7 @@ impl EntityBase for LivingEntity {
                     self.entity
                         .world
                         .load()
-                        .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
+                        .send_entity_status(&self.entity, EntityStatus::Death)
                         .await;
                     self.entity.remove().await;
                 }

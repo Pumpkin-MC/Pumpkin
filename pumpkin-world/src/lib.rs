@@ -12,7 +12,6 @@ pub mod data;
 pub mod dimension;
 pub mod generation;
 pub mod inventory;
-pub mod item;
 pub mod level;
 pub mod lighting;
 pub mod lock;
@@ -24,7 +23,7 @@ pub mod world_info;
 pub type BlockId = u16;
 pub type BlockStateId = u16;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.11";
+pub const CURRENT_MC_VERSION: &str = "26.1";
 
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 924;

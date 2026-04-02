@@ -1,7 +1,7 @@
-use pumpkin_data::block_properties::BlockHalf;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::Half;
 use pumpkin_data::block_properties::HorizontalFacing;
-use pumpkin_data::block_properties::StairShape;
+use pumpkin_data::block_properties::StairsShape;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{BlockDirection, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -28,14 +28,14 @@ impl BlockBehaviour for StairBlock {
 
             stair_props.facing = args.player.living_entity.entity.get_horizontal_facing();
             stair_props.half = match args.direction {
-                BlockDirection::Up => BlockHalf::Top,
-                BlockDirection::Down => BlockHalf::Bottom,
+                BlockDirection::Up => Half::Top,
+                BlockDirection::Down => Half::Bottom,
                 _ => match args.use_item_on.cursor_pos.y {
-                    0.0..0.5 => BlockHalf::Bottom,
-                    0.5..1.0 => BlockHalf::Top,
+                    0.0..0.5 => Half::Bottom,
+                    0.5..1.0 => Half::Top,
 
                     // This cannot happen normally
-                    _ => BlockHalf::Bottom,
+                    _ => Half::Bottom,
                 },
             };
 
@@ -82,8 +82,8 @@ async fn compute_stair_shape(
     world: &World,
     block_pos: &BlockPos,
     facing: HorizontalFacing,
-    half: BlockHalf,
-) -> StairShape {
+    half: Half,
+) -> StairsShape {
     let right_locked = get_stair_properties_if_exists(
         world,
         &block_pos.offset(facing.rotate_clockwise().to_offset()),
@@ -103,7 +103,7 @@ async fn compute_stair_shape(
     });
 
     if left_locked && right_locked {
-        return StairShape::Straight;
+        return StairsShape::Straight;
     }
 
     if let Some(other_stair_props) =
@@ -111,9 +111,9 @@ async fn compute_stair_shape(
         && other_stair_props.half == half
     {
         if !left_locked && other_stair_props.facing == facing.rotate_clockwise() {
-            return StairShape::OuterRight;
+            return StairsShape::OuterRight;
         } else if !right_locked && other_stair_props.facing == facing.rotate_counter_clockwise() {
-            return StairShape::OuterLeft;
+            return StairsShape::OuterLeft;
         }
     }
 
@@ -123,13 +123,13 @@ async fn compute_stair_shape(
         && other_stair_props.half == half
     {
         if !right_locked && other_stair_props.facing == facing.rotate_clockwise() {
-            return StairShape::InnerRight;
+            return StairsShape::InnerRight;
         } else if !left_locked && other_stair_props.facing == facing.rotate_counter_clockwise() {
-            return StairShape::InnerLeft;
+            return StairsShape::InnerLeft;
         }
     }
 
-    StairShape::Straight
+    StairsShape::Straight
 }
 
 async fn get_stair_properties_if_exists(

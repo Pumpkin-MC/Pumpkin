@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21: &[u16] = &[
+pub static ENTITY_ID_REMAP_V_26_1_TO_V_1_21: &[u16] = &[
     0, 1, 0, 1, 2, 3, 4, 5, 8, 9, 6, 7, 12, 13, 8, 9, 11, 12, 13, 14, 15, 15, 16, 22, 23, 18, 19,
     20, 21, 21, 22, 29, 23, 32, 33, 24, 25, 26, 27, 28, 29, 33, 34, 31, 32, 30, 35, 36, 37, 38, 39,
     40, 62, 41, 42, 43, 44, 45, 46, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 72,
@@ -8,7 +8,7 @@ pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21: &[u16] = &[
     99, 100, 119, 120, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
     116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 129, 126, 127, 128, 129,
 ];
-pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_2: &[u16] = &[
+pub static ENTITY_ID_REMAP_V_26_1_TO_V_1_21_2: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 22, 23, 24,
     25, 26, 27, 27, 28, 29, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
     49, 50, 51, 52, 53, 54, 55, 56, 57, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
@@ -18,7 +18,7 @@ pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_2: &[u16] = &[
     131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 149, 146, 147, 148,
     149,
 ];
-pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_4: &[u16] = &[
+pub static ENTITY_ID_REMAP_V_26_1_TO_V_1_21_4: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 22, 23, 24,
     25, 26, 27, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
     48, 49, 50, 51, 52, 53, 54, 55, 56, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70,
@@ -28,7 +28,7 @@ pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_4: &[u16] = &[
     130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 148, 145, 146, 147,
     148,
 ];
-pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_5: &[u16] = &[
+pub static ENTITY_ID_REMAP_V_26_1_TO_V_1_21_5: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 22, 23, 24,
     25, 26, 27, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
     48, 49, 50, 51, 52, 53, 54, 55, 56, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70,
@@ -38,7 +38,7 @@ pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_5: &[u16] = &[
     131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 149, 146, 147, 148,
     149,
 ];
-pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_6: &[u16] = &[
+pub static ENTITY_ID_REMAP_V_26_1_TO_V_1_21_6: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 22, 23, 24,
     25, 26, 27, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
     48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
@@ -48,7 +48,7 @@ pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_6: &[u16] = &[
     132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 150, 147, 148, 149,
     150,
 ];
-pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_7: &[u16] = &[
+pub static ENTITY_ID_REMAP_V_26_1_TO_V_1_21_7: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 22, 23, 24,
     25, 26, 27, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
     48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,
@@ -58,7 +58,7 @@ pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_7: &[u16] = &[
     132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 150, 147, 148, 149,
     150,
 ];
-pub static ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_9: &[u16] = &[
+pub static ENTITY_ID_REMAP_V_26_1_TO_V_1_21_9: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 22, 23, 24,
     25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
     49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
@@ -74,31 +74,31 @@ pub fn remap_entity_id_for_version(
     version: pumpkin_util::version::MinecraftVersion,
 ) -> u16 {
     match version {
-        pumpkin_util::version::MinecraftVersion::V_1_21 => ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21
+        pumpkin_util::version::MinecraftVersion::V_1_21 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_2 => ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_2
+        pumpkin_util::version::MinecraftVersion::V_1_21_2 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_2
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_4 => ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_4
+        pumpkin_util::version::MinecraftVersion::V_1_21_4 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_4
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_5 => ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_5
+        pumpkin_util::version::MinecraftVersion::V_1_21_5 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_5
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_6 => ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_6
+        pumpkin_util::version::MinecraftVersion::V_1_21_6 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_6
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_7 => ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_7
+        pumpkin_util::version::MinecraftVersion::V_1_21_7 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_7
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_9 => ENTITY_ID_REMAP_V_1_21_11_TO_V_1_21_9
+        pumpkin_util::version::MinecraftVersion::V_1_21_9 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_9
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),

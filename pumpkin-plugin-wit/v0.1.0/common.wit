@@ -49,6 +49,11 @@ interface common {
         b: u8,
     }
 
+    record item-stack {
+        registry-key: string,
+        count: u8,
+    }
+
     enum locale {
         af-za,
         ar-sa,

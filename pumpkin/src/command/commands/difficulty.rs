@@ -1,37 +1,35 @@
-use crate::command::CommandResult;
-use crate::command::args::difficulty::DifficultyArgumentConsumer;
-use crate::command::args::{Arg, GetCloned};
-use crate::command::dispatcher::CommandError::{self, InvalidConsumption};
-use crate::command::tree::builder::argument;
-use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use crate::command::argument_builder::{ArgumentBuilder, command, literal};
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::{Difficulty, PermissionLvl};
 
-const NAMES: [&str; 1] = ["difficulty"];
+const DESCRIPTION: &str = "Query or change the difficulty of the world.";
+const PERMISSION: &str = "minecraft:command.difficulty";
 
-const DESCRIPTION: &str = "Change the difficulty of the world.";
-
-pub const ARG_DIFFICULTY: &str = "difficulty";
+const FAILURE_ERROR_TYPE: CommandErrorType<1> =
+    CommandErrorType::new("commands.difficulty.failure");
 
 struct DifficultyQueryExecutor;
 
 impl CommandExecutor for DifficultyQueryExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        _args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let difficulty = server.get_difficulty();
-            let difficulty_string = format!("{difficulty:?}").to_lowercase();
-            let translation_key = format!("options.difficulty.{difficulty_string}");
+            let difficulty = context.server().get_difficulty();
 
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.difficulty.query",
-                    [TextComponent::translate(translation_key, [])],
-                ))
+            context
+                .source
+                .send_feedback(
+                    TextComponent::translate(
+                        "commands.difficulty.query",
+                        [TextComponent::translate(difficulty.translation_key(), [])],
+                    ),
+                    false,
+                )
                 .await;
 
             Ok(difficulty as i32)
@@ -39,41 +37,34 @@ impl CommandExecutor for DifficultyQueryExecutor {
     }
 }
 
-struct DifficultySetExecutor;
+struct DifficultySetExecutor(Difficulty);
 
 impl CommandExecutor for DifficultySetExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Difficulty(difficulty)) = args.get_cloned(&ARG_DIFFICULTY) else {
-                return Err(InvalidConsumption(Some(ARG_DIFFICULTY.into())));
-            };
-
-            let difficulty_string = format!("{difficulty:?}").to_lowercase();
-            let translation_key = format!("options.difficulty.{difficulty_string}");
+            let difficulty = self.0;
+            let server = context.server();
 
             {
                 let level_info = server.level_info.load();
 
                 if level_info.difficulty == difficulty {
-                    return Err(CommandError::CommandFailed(TextComponent::translate(
-                        "commands.difficulty.failure",
-                        [TextComponent::translate(translation_key, [])],
-                    )));
+                    return Err(FAILURE_ERROR_TYPE
+                        .create_without_context(TextComponent::text(difficulty.name())));
                 }
             }
 
             server.set_difficulty(difficulty, true).await;
 
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.difficulty.success",
-                    [TextComponent::translate(translation_key, [])],
-                ))
+            context
+                .source
+                .send_feedback(
+                    TextComponent::translate(
+                        "commands.difficulty.success",
+                        [TextComponent::translate(difficulty.translation_key(), [])],
+                    ),
+                    true,
+                )
                 .await;
 
             Ok(0)
@@ -81,9 +72,22 @@ impl CommandExecutor for DifficultySetExecutor {
     }
 }
 
-#[must_use]
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .execute(DifficultyQueryExecutor)
-        .then(argument(ARG_DIFFICULTY, DifficultyArgumentConsumer).execute(DifficultySetExecutor))
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+    registry
+        .register_permission(Permission::new(
+            PERMISSION,
+            DESCRIPTION,
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .expect("Permission should have registered successfully");
+
+    dispatcher.register(
+        command("difficulty", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(literal("peaceful").executes(DifficultySetExecutor(Difficulty::Peaceful)))
+            .then(literal("easy").executes(DifficultySetExecutor(Difficulty::Easy)))
+            .then(literal("normal").executes(DifficultySetExecutor(Difficulty::Normal)))
+            .then(literal("hard").executes(DifficultySetExecutor(Difficulty::Hard)))
+            .executes(DifficultyQueryExecutor),
+    );
 }

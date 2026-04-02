@@ -81,11 +81,13 @@ impl CommandExecutor for TargetsPosExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-            let pos = BlockPosArgumentConsumer::find_spawnable_arg(args, ARG_POS)?;
+            let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
+                return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
+            };
 
             for target in targets {
                 let yaw = target.living_entity.entity.yaw.load();
-                set_spawnpoint(sender, target, pos, yaw).await;
+                set_spawnpoint(sender, target, *pos, yaw).await;
             }
 
             Ok(targets.len() as i32)
@@ -105,13 +107,15 @@ impl CommandExecutor for TargetsPosAngleExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-            let pos = BlockPosArgumentConsumer::find_spawnable_arg(args, ARG_POS)?;
+            let Some(Arg::BlockPos(pos)) = args.get(ARG_POS) else {
+                return Err(CommandError::InvalidConsumption(Some(ARG_POS.into())));
+            };
             let Some(Arg::Rotation(yaw, _, _, _)) = args.get(ARG_ANGLE) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_ANGLE.into())));
             };
 
             for target in targets {
-                set_spawnpoint(sender, target, pos, *yaw).await;
+                set_spawnpoint(sender, target, *pos, *yaw).await;
             }
 
             Ok(targets.len() as i32)
@@ -128,7 +132,7 @@ async fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: Block
 
     sender
         .send_message(TextComponent::translate(
-            translation::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
+            translation::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE_NEW,
             [
                 TextComponent::text(pos.0.x.to_string()),
                 TextComponent::text(pos.0.y.to_string()),

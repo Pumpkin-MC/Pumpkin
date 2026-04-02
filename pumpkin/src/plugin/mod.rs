@@ -311,6 +311,14 @@ impl PluginManager {
                 continue;
             }
 
+            if path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("deactivated"))
+            {
+                continue;
+            }
+
             // Start loading plugin concurrently
             match self.start_loading_plugin(&path).await {
                 Ok(task) => load_tasks.push(task),

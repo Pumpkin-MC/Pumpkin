@@ -12,6 +12,7 @@ world plugin {
     import text;
     import command;
     import context;
+    import i18n;
 
     // This is what the plugin should provide
     export init-plugin: func();
