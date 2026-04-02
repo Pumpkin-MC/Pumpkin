@@ -303,7 +303,7 @@ impl EndermanEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_ANGRY,
+                TrackedData::CREEPY,
                 MetaDataType::BOOLEAN,
                 angry,
             )])
@@ -320,7 +320,7 @@ impl EndermanEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_PROVOKED,
+                TrackedData::STARED_AT,
                 MetaDataType::BOOLEAN,
                 provoked,
             )])
@@ -334,7 +334,7 @@ impl EndermanEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_CARRIED_BLOCK,
+                TrackedData::CARRY_STATE,
                 MetaDataType::OPTIONAL_BLOCK_STATE,
                 value,
             )])

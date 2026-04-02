@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection,
-    block_properties::{HorizontalFacing, RailShape, StraightRailShape},
+    block_properties::{HorizontalFacing, RailShape, RailShapeStraight},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
@@ -47,7 +47,7 @@ pub(super) async fn compute_placed_rail_shape(
     world: &World,
     block_pos: &BlockPos,
     player_facing: HorizontalFacing,
-) -> StraightRailShape {
+) -> RailShapeStraight {
     // Use the same sophisticated logic as normal rails, but adapted for straight rails
     // Check each direction for rail connections, similar to normal rail placement
 
@@ -60,17 +60,17 @@ pub(super) async fn compute_placed_rail_shape(
         {
             // We have connections in both East and West
             if east_rail.elevation == RailElevation::Up {
-                return StraightRailShape::AscendingEast;
+                return RailShapeStraight::AscendingEast;
             } else if west_rail.elevation == RailElevation::Up {
-                return StraightRailShape::AscendingWest;
+                return RailShapeStraight::AscendingWest;
             }
-            return StraightRailShape::EastWest;
+            return RailShapeStraight::EastWest;
         }
         // Only East connection
         if east_rail.elevation == RailElevation::Up {
-            return StraightRailShape::AscendingEast;
+            return RailShapeStraight::AscendingEast;
         }
-        return StraightRailShape::EastWest;
+        return RailShapeStraight::EastWest;
     }
 
     // Check South
@@ -83,26 +83,26 @@ pub(super) async fn compute_placed_rail_shape(
         {
             // We have connections in both South and North
             if south_rail.elevation == RailElevation::Up {
-                return StraightRailShape::AscendingSouth;
+                return RailShapeStraight::AscendingSouth;
             } else if north_rail.elevation == RailElevation::Up {
-                return StraightRailShape::AscendingNorth;
+                return RailShapeStraight::AscendingNorth;
             }
-            return StraightRailShape::NorthSouth;
+            return RailShapeStraight::NorthSouth;
         }
         // Only South connection
         if south_rail.elevation == RailElevation::Up {
-            return StraightRailShape::AscendingSouth;
+            return RailShapeStraight::AscendingSouth;
         }
-        return StraightRailShape::NorthSouth;
+        return RailShapeStraight::NorthSouth;
     }
 
     // Check West
     if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await
     {
         if west_rail.elevation == RailElevation::Up {
-            return StraightRailShape::AscendingWest;
+            return RailShapeStraight::AscendingWest;
         }
-        return StraightRailShape::EastWest;
+        return RailShapeStraight::EastWest;
     }
 
     // Check North
@@ -110,9 +110,9 @@ pub(super) async fn compute_placed_rail_shape(
         Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await
     {
         if north_rail.elevation == RailElevation::Up {
-            return StraightRailShape::AscendingNorth;
+            return RailShapeStraight::AscendingNorth;
         }
-        return StraightRailShape::NorthSouth;
+        return RailShapeStraight::NorthSouth;
     }
 
     // No connections found, use player facing direction

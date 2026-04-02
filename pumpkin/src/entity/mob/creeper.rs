@@ -92,7 +92,7 @@ impl CreeperEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_FUSE_SPEED,
+                TrackedData::FUSE_ID,
                 MetaDataType::INTEGER,
                 VarInt(speed),
             )])
@@ -237,7 +237,7 @@ impl Mob for CreeperEntity {
             self.ignited.store(true, Ordering::Relaxed);
             entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_IGNITED,
+                    TrackedData::IS_IGNITED,
                     MetaDataType::BOOLEAN,
                     true,
                 )])

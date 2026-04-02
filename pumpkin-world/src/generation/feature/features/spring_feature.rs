@@ -1,11 +1,11 @@
-use pumpkin_data::BlockDirection;
+use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{block::BlockStateCodec, world::BlockRegistryExt};
+use crate::world::BlockRegistryExt;
 
 pub struct SpringFeatureFeature {
-    pub state: BlockStateCodec,
+    pub state: &'static BlockState,
     pub requires_block_below: bool,
     pub rock_count: i32,
     pub hole_count: i32,
@@ -129,7 +129,7 @@ impl SpringFeatureFeature {
             air += 1;
         }
         if valid == self.rock_count && air == self.hole_count {
-            chunk.set_block_state(&pos.0, self.state.get_state());
+            chunk.set_block_state(&pos.0, self.state);
             return true;
         }
         false

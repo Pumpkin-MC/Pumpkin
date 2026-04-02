@@ -3,7 +3,7 @@ use crate::block::entities::BlockEntity;
 use crate::inventory::{Clearable, Inventory, InventoryFuture, split_stack};
 use crate::item::ItemStack;
 use crate::world::SimpleWorld;
-use pumpkin_data::block_properties::{BlockProperties, HopperFacing, HopperLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_nbt::compound::NbtCompound;
@@ -22,19 +22,19 @@ pub struct HopperBlockEntity {
     pub position: BlockPos,
     pub items: [Arc<Mutex<ItemStack>>; Self::INVENTORY_SIZE],
     pub dirty: AtomicBool,
-    pub facing: HopperFacing,
+    pub facing: FacingHopper,
     pub cooldown_time: AtomicI32,
     pub ticked_game_time: AtomicI64,
 }
 
 #[must_use]
-pub fn to_offset(facing: &HopperFacing) -> Vector3<i32> {
+pub fn to_offset(facing: &FacingHopper) -> Vector3<i32> {
     match facing {
-        HopperFacing::Down => (0, -1, 0),
-        HopperFacing::North => (0, 0, -1),
-        HopperFacing::South => (0, 0, 1),
-        HopperFacing::West => (-1, 0, 0),
-        HopperFacing::East => (1, 0, 0),
+        FacingHopper::Down => (0, -1, 0),
+        FacingHopper::North => (0, 0, -1),
+        FacingHopper::South => (0, 0, 1),
+        FacingHopper::West => (-1, 0, 0),
+        FacingHopper::East => (1, 0, 0),
     }
     .into()
 }
@@ -61,7 +61,7 @@ impl BlockEntity for HopperBlockEntity {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
             dirty: AtomicBool::new(false),
-            facing: HopperFacing::Down,
+            facing: FacingHopper::Down,
             cooldown_time: AtomicI32::from(nbt.get_int("TransferCooldown").unwrap_or(-1)),
             ticked_game_time: AtomicI64::new(0),
         };
@@ -124,7 +124,7 @@ impl HopperBlockEntity {
     pub const ID: &'static str = "minecraft:hopper";
 
     #[must_use]
-    pub fn new(position: BlockPos, facing: HopperFacing) -> Self {
+    pub fn new(position: BlockPos, facing: FacingHopper) -> Self {
         Self {
             position,
             items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),

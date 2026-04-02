@@ -94,10 +94,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "acacia".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -107,6 +104,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::ACACIA_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -125,6 +123,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::ACACIA_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -149,34 +148,19 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "amethyst_geode".to_string(),
         ConfiguredFeature::Geode(Box::new(GeodeFeature {
             filling_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::AIR,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::AIR.default_state,
             }),
             inner_layer_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::AMETHYST_BLOCK,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::AMETHYST_BLOCK.default_state,
             }),
             alternate_inner_layer_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::BUDDING_AMETHYST,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::BUDDING_AMETHYST.default_state,
             }),
             middle_layer_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::CALCITE,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::CALCITE.default_state,
             }),
             outer_layer_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::SMOOTH_BASALT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::SMOOTH_BASALT.default_state,
             }),
             inner_placements: vec![
                 {
@@ -254,10 +238,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "azalea_tree".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::ROOTED_DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::ROOTED_DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -267,6 +248,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -295,6 +277,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                 name: &pumpkin_data::Block::AZALEA_LEAVES,
                                 properties: Some(props),
                             }
+                            .get_state()
                         },
                         weight: 3i32,
                     },
@@ -308,6 +291,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                 name: &pumpkin_data::Block::FLOWERING_AZALEA_LEAVES,
                                 properties: Some(props),
                             }
+                            .get_state()
                         },
                         weight: 1i32,
                     },
@@ -370,10 +354,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     map.insert(
         "basalt_blobs".to_string(),
         ConfiguredFeature::NetherrackReplaceBlobs(ReplaceBlobsFeature {
-            target: BlockStateCodec {
-                name: &pumpkin_data::Block::NETHERRACK,
-                properties: None,
-            },
+            target: pumpkin_data::Block::NETHERRACK.default_state,
             state: {
                 let mut props = std::collections::HashMap::new();
                 props.insert("axis".to_string(), "y".to_string());
@@ -381,6 +362,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     name: &pumpkin_data::Block::BASALT,
                     properties: Some(props),
                 }
+                .get_state()
             },
             radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
                 min_inclusive: 3i32,
@@ -398,10 +380,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "birch".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -411,6 +390,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -429,6 +409,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -453,10 +434,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "birch_bees_0002".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -466,6 +444,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -484,6 +463,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -510,10 +490,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "birch_bees_0002_leaf_litter".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -523,6 +500,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -541,6 +519,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -578,6 +557,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -590,6 +570,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -602,6 +583,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -614,6 +596,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -626,6 +609,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -638,6 +622,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -650,6 +635,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -662,6 +648,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -674,6 +661,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -686,6 +674,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -698,6 +687,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -710,6 +700,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -733,6 +724,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -745,6 +737,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -757,6 +750,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -769,6 +763,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -781,6 +776,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -793,6 +789,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -805,6 +802,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -817,6 +815,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -829,6 +828,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -841,6 +841,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -853,6 +854,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -865,6 +867,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -877,6 +880,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -889,6 +893,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -901,6 +906,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -913,6 +919,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -927,10 +934,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "birch_bees_002".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -940,6 +944,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -958,6 +963,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -984,10 +990,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "birch_bees_005".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -997,6 +1000,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -1015,6 +1019,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -1041,10 +1046,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "birch_leaf_litter".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -1054,6 +1056,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -1072,6 +1075,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -1106,6 +1110,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1118,6 +1123,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1130,6 +1136,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1142,6 +1149,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1154,6 +1162,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1166,6 +1175,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1178,6 +1188,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1190,6 +1201,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1202,6 +1214,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1214,6 +1227,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1226,6 +1240,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1238,6 +1253,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1261,6 +1277,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1273,6 +1290,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1285,6 +1303,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1297,6 +1316,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1309,6 +1329,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1321,6 +1342,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1333,6 +1355,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1345,6 +1368,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1357,6 +1381,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1369,6 +1394,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1381,6 +1407,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1393,6 +1420,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1405,6 +1433,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1417,6 +1446,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1429,6 +1459,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1441,6 +1472,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -1474,14 +1506,8 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     map.insert(
         "blackstone_blobs".to_string(),
         ConfiguredFeature::NetherrackReplaceBlobs(ReplaceBlobsFeature {
-            target: BlockStateCodec {
-                name: &pumpkin_data::Block::NETHERRACK,
-                properties: None,
-            },
-            state: BlockStateCodec {
-                name: &pumpkin_data::Block::BLACKSTONE,
-                properties: None,
-            },
+            target: pumpkin_data::Block::NETHERRACK.default_state,
+            state: pumpkin_data::Block::BLACKSTONE.default_state,
             radius: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
                 min_inclusive: 3i32,
                 max_inclusive: 7i32,
@@ -1548,6 +1574,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                         name: &pumpkin_data::Block::CAVE_VINES_PLANT,
                                         properties: Some(props),
                                     }
+                                    .get_state()
                                 },
                                 weight: 4i32,
                             },
@@ -1559,6 +1586,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                         name: &pumpkin_data::Block::CAVE_VINES_PLANT,
                                         properties: Some(props),
                                     }
+                                    .get_state()
                                 },
                                 weight: 1i32,
                             },
@@ -1581,6 +1609,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::CAVE_VINES,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                         weight: 4i32,
                                     },
@@ -1593,6 +1622,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::CAVE_VINES,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                         weight: 1i32,
                                     },
@@ -1656,6 +1686,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                         name: &pumpkin_data::Block::CAVE_VINES_PLANT,
                                         properties: Some(props),
                                     }
+                                    .get_state()
                                 },
                                 weight: 4i32,
                             },
@@ -1667,6 +1698,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                         name: &pumpkin_data::Block::CAVE_VINES_PLANT,
                                         properties: Some(props),
                                     }
+                                    .get_state()
                                 },
                                 weight: 1i32,
                             },
@@ -1689,6 +1721,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::CAVE_VINES,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                         weight: 4i32,
                                     },
@@ -1701,6 +1734,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::CAVE_VINES,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                         weight: 1i32,
                                     },
@@ -1729,10 +1763,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "cherry".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -1742,6 +1773,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::CHERRY_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -1760,6 +1792,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::CHERRY_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -1790,10 +1823,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "cherry_bees_005".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -1803,6 +1833,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::CHERRY_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -1821,6 +1852,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::CHERRY_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -1865,10 +1897,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         tag: "minecraft:lush_ground_replaceable".to_string(),
                     }),
                     ground_state: BlockStateProvider::Simple(SimpleStateProvider {
-                        state: BlockStateCodec {
-                            name: &pumpkin_data::Block::CLAY,
-                            properties: None,
-                        },
+                        state: pumpkin_data::Block::CLAY.default_state,
                     }),
                     vegetation_feature: Box::new(PlacedFeature {
                         feature: Feature::Named("dripleaf".to_string()),
@@ -1898,10 +1927,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 tag: "minecraft:lush_ground_replaceable".to_string(),
             }),
             ground_state: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::CLAY,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::CLAY.default_state,
             }),
             vegetation_feature: Box::new(PlacedFeature {
                 feature: Feature::Named("dripleaf".to_string()),
@@ -1925,24 +1951,15 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             state_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                 entries: vec![
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::CRIMSON_ROOTS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::CRIMSON_ROOTS.default_state,
                         weight: 87i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::CRIMSON_FUNGUS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::CRIMSON_FUNGUS.default_state,
                         weight: 11i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::WARPED_FUNGUS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::WARPED_FUNGUS.default_state,
                         weight: 1i32,
                     },
                 ],
@@ -1957,24 +1974,15 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             state_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                 entries: vec![
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::CRIMSON_ROOTS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::CRIMSON_ROOTS.default_state,
                         weight: 87i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::CRIMSON_FUNGUS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::CRIMSON_FUNGUS.default_state,
                         weight: 11i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::WARPED_FUNGUS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::WARPED_FUNGUS.default_state,
                         weight: 1i32,
                     },
                 ],
@@ -2041,10 +2049,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "dark_oak".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -2054,6 +2059,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::DARK_OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -2072,6 +2078,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::DARK_OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -2098,10 +2105,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "dark_oak_leaf_litter".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -2111,6 +2115,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::DARK_OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -2129,6 +2134,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::DARK_OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -2165,6 +2171,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2177,6 +2184,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2189,6 +2197,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2201,6 +2210,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2213,6 +2223,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2225,6 +2236,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2237,6 +2249,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2249,6 +2262,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2261,6 +2275,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2273,6 +2288,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2285,6 +2301,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2297,6 +2314,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2320,6 +2338,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2332,6 +2351,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2344,6 +2364,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2356,6 +2377,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2368,6 +2390,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2380,6 +2403,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2392,6 +2416,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2404,6 +2429,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2416,6 +2442,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2428,6 +2455,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2440,6 +2468,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2452,6 +2481,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2464,6 +2494,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2476,6 +2507,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2488,6 +2520,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2500,6 +2533,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -2560,6 +2594,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::SMALL_DRIPLEAF,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                         weight: 1i32,
                                     },
@@ -2576,6 +2611,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::SMALL_DRIPLEAF,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                         weight: 1i32,
                                     },
@@ -2592,6 +2628,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::SMALL_DRIPLEAF,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                         weight: 1i32,
                                     },
@@ -2608,6 +2645,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::SMALL_DRIPLEAF,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                         weight: 1i32,
                                     },
@@ -2656,6 +2694,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::BIG_DRIPLEAF_STEM,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                     }),
                                 },
@@ -2674,6 +2713,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::BIG_DRIPLEAF,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                     }),
                                 },
@@ -2731,6 +2771,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::BIG_DRIPLEAF_STEM,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                     }),
                                 },
@@ -2749,6 +2790,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::BIG_DRIPLEAF,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                     }),
                                 },
@@ -2806,6 +2848,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::BIG_DRIPLEAF_STEM,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                     }),
                                 },
@@ -2824,6 +2867,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::BIG_DRIPLEAF,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                     }),
                                 },
@@ -2881,6 +2925,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::BIG_DRIPLEAF_STEM,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                     }),
                                 },
@@ -2899,6 +2944,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                 name: &pumpkin_data::Block::BIG_DRIPLEAF,
                                                 properties: Some(props),
                                             }
+                                            .get_state()
                                         },
                                     }),
                                 },
@@ -2969,6 +3015,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
         }),
@@ -2984,6 +3031,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::JUNGLE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
         }),
@@ -2999,6 +3047,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
         }),
@@ -3014,6 +3063,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
         }),
@@ -3029,6 +3079,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
         }),
@@ -3037,10 +3088,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "fancy_oak".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -3050,6 +3098,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -3068,6 +3117,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -3092,10 +3142,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "fancy_oak_bees".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -3105,6 +3152,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -3123,6 +3171,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -3149,10 +3198,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "fancy_oak_bees_0002_leaf_litter".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -3162,6 +3208,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -3180,6 +3227,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -3217,6 +3265,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3229,6 +3278,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3241,6 +3291,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3253,6 +3304,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3265,6 +3317,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3277,6 +3330,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3289,6 +3343,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3301,6 +3356,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3313,6 +3369,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3325,6 +3382,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3337,6 +3395,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3349,6 +3408,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3372,6 +3432,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3384,6 +3445,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3396,6 +3458,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3408,6 +3471,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3420,6 +3484,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3432,6 +3497,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3444,6 +3510,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3456,6 +3523,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3468,6 +3536,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3480,6 +3549,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3492,6 +3562,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3504,6 +3575,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3516,6 +3588,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3528,6 +3601,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3540,6 +3614,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3552,6 +3627,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3566,10 +3642,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "fancy_oak_bees_002".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -3579,6 +3652,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -3597,6 +3671,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -3623,10 +3698,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "fancy_oak_bees_005".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -3636,6 +3708,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -3654,6 +3727,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -3680,10 +3754,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "fancy_oak_leaf_litter".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -3693,6 +3764,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -3711,6 +3783,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -3745,6 +3818,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3757,6 +3831,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3769,6 +3844,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3781,6 +3857,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3793,6 +3870,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3805,6 +3883,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3817,6 +3896,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3829,6 +3909,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3841,6 +3922,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3853,6 +3935,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3865,6 +3948,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3877,6 +3961,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3900,6 +3985,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3912,6 +3998,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3924,6 +4011,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3936,6 +4024,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3948,6 +4037,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3960,6 +4050,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3972,6 +4063,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3984,6 +4076,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -3996,6 +4089,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4008,6 +4102,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4020,6 +4115,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4032,6 +4128,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4044,6 +4141,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4056,6 +4154,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4068,6 +4167,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4080,6 +4180,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4110,6 +4211,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4122,6 +4224,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4134,6 +4237,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4146,6 +4250,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4158,6 +4263,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4170,6 +4276,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4182,6 +4289,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4194,6 +4302,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4206,6 +4315,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4218,6 +4328,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4230,6 +4341,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4242,6 +4354,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4254,6 +4367,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4266,6 +4380,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4278,6 +4393,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4290,6 +4406,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::PINK_PETALS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -4321,17 +4438,11 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         to_place: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                             entries: vec![
                                 Weighted {
-                                    data: BlockStateCodec {
-                                        name: &pumpkin_data::Block::POPPY,
-                                        properties: None,
-                                    },
+                                    data: pumpkin_data::Block::POPPY.default_state,
                                     weight: 2i32,
                                 },
                                 Weighted {
-                                    data: BlockStateCodec {
-                                        name: &pumpkin_data::Block::DANDELION,
-                                        properties: None,
-                                    },
+                                    data: pumpkin_data::Block::DANDELION.default_state,
                                     weight: 1i32,
                                 },
                             ],
@@ -4369,50 +4480,17 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                 scale: 0.020833334f32,
                             },
                             states: vec![
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::DANDELION,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::POPPY,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::ALLIUM,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::AZURE_BLUET,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::RED_TULIP,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::ORANGE_TULIP,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::WHITE_TULIP,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::PINK_TULIP,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::OXEYE_DAISY,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::CORNFLOWER,
-                                    properties: None,
-                                },
-                                BlockStateCodec {
-                                    name: &pumpkin_data::Block::LILY_OF_THE_VALLEY,
-                                    properties: None,
-                                },
+                                pumpkin_data::Block::DANDELION.default_state,
+                                pumpkin_data::Block::POPPY.default_state,
+                                pumpkin_data::Block::ALLIUM.default_state,
+                                pumpkin_data::Block::AZURE_BLUET.default_state,
+                                pumpkin_data::Block::RED_TULIP.default_state,
+                                pumpkin_data::Block::ORANGE_TULIP.default_state,
+                                pumpkin_data::Block::WHITE_TULIP.default_state,
+                                pumpkin_data::Block::PINK_TULIP.default_state,
+                                pumpkin_data::Block::OXEYE_DAISY.default_state,
+                                pumpkin_data::Block::CORNFLOWER.default_state,
+                                pumpkin_data::Block::LILY_OF_THE_VALLEY.default_state,
                             ],
                         }),
                         schedule_tick: None,
@@ -4456,35 +4534,15 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::TALL_GRASS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::ALLIUM,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::POPPY,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::AZURE_BLUET,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::DANDELION,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::CORNFLOWER,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::OXEYE_DAISY,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::SHORT_GRASS,
-                                        properties: None,
-                                    },
+                                    pumpkin_data::Block::ALLIUM.default_state,
+                                    pumpkin_data::Block::POPPY.default_state,
+                                    pumpkin_data::Block::AZURE_BLUET.default_state,
+                                    pumpkin_data::Block::DANDELION.default_state,
+                                    pumpkin_data::Block::CORNFLOWER.default_state,
+                                    pumpkin_data::Block::OXEYE_DAISY.default_state,
+                                    pumpkin_data::Block::SHORT_GRASS.default_state,
                                 ],
                             },
                             variety: [1u32, 3u32],
@@ -4518,10 +4576,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::CLOSED_EYEBLOSSOM,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::CLOSED_EYEBLOSSOM.default_state,
                         }),
                         schedule_tick: Some(true),
                     },
@@ -4558,45 +4613,18 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                 },
                                 threshold: -0.8f32,
                                 high_chance: 0.33333334f32,
-                                default_state: BlockStateCodec {
-                                    name: &pumpkin_data::Block::DANDELION,
-                                    properties: None,
-                                },
+                                default_state: pumpkin_data::Block::DANDELION.default_state,
                                 low_states: vec![
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::ORANGE_TULIP,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::RED_TULIP,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::PINK_TULIP,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::WHITE_TULIP,
-                                        properties: None,
-                                    },
+                                    pumpkin_data::Block::ORANGE_TULIP.default_state,
+                                    pumpkin_data::Block::RED_TULIP.default_state,
+                                    pumpkin_data::Block::PINK_TULIP.default_state,
+                                    pumpkin_data::Block::WHITE_TULIP.default_state,
                                 ],
                                 high_states: vec![
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::POPPY,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::AZURE_BLUET,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::OXEYE_DAISY,
-                                        properties: None,
-                                    },
-                                    BlockStateCodec {
-                                        name: &pumpkin_data::Block::CORNFLOWER,
-                                        properties: None,
-                                    },
+                                    pumpkin_data::Block::POPPY.default_state,
+                                    pumpkin_data::Block::AZURE_BLUET.default_state,
+                                    pumpkin_data::Block::OXEYE_DAISY.default_state,
+                                    pumpkin_data::Block::CORNFLOWER.default_state,
                                 ],
                             },
                         ),
@@ -4624,10 +4652,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::BLUE_ORCHID,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::BLUE_ORCHID.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -4667,6 +4692,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                     name: &pumpkin_data::Block::LILAC,
                                                     properties: Some(props),
                                                 }
+                                                .get_state()
                                             },
                                         }),
                                         schedule_tick: None,
@@ -4709,6 +4735,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                     name: &pumpkin_data::Block::ROSE_BUSH,
                                                     properties: Some(props),
                                                 }
+                                                .get_state()
                                             },
                                         }),
                                         schedule_tick: None,
@@ -4751,6 +4778,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                                     name: &pumpkin_data::Block::PEONY,
                                                     properties: Some(props),
                                                 }
+                                                .get_state()
                                             },
                                         }),
                                         schedule_tick: None,
@@ -4783,10 +4811,8 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                 feature: Feature::Inlined(Box::new(
                                     ConfiguredFeature::SimpleBlock(SimpleBlockFeature {
                                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                                            state: BlockStateCodec {
-                                                name: &pumpkin_data::Block::LILY_OF_THE_VALLEY,
-                                                properties: None,
-                                            },
+                                            state: pumpkin_data::Block::LILY_OF_THE_VALLEY
+                                                .default_state,
                                         }),
                                         schedule_tick: None,
                                     }),
@@ -4881,10 +4907,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "jungle_bush".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -4894,6 +4917,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::JUNGLE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -4912,6 +4936,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -4936,10 +4961,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "jungle_tree".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -4949,6 +4971,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::JUNGLE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -4967,6 +4990,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::JUNGLE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -4995,10 +5019,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "jungle_tree_no_vine".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -5008,6 +5029,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::JUNGLE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -5026,6 +5048,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::JUNGLE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -5083,10 +5106,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "mangrove".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -5096,6 +5116,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::MANGROVE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -5114,6 +5135,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::MANGROVE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -5167,10 +5189,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "mega_jungle_tree".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -5180,6 +5199,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::JUNGLE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -5198,6 +5218,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::JUNGLE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -5225,10 +5246,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "mega_pine".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -5238,6 +5256,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -5256,6 +5275,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -5287,10 +5307,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "mega_spruce".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -5300,6 +5317,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -5318,6 +5336,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -5359,10 +5378,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 tag: "minecraft:moss_replaceable".to_string(),
             }),
             ground_state: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::MOSS_BLOCK,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::MOSS_BLOCK.default_state,
             }),
             vegetation_feature: Box::new(PlacedFeature {
                 feature: Feature::Named("moss_vegetation".to_string()),
@@ -5388,10 +5404,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 tag: "minecraft:moss_replaceable".to_string(),
             }),
             ground_state: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::MOSS_BLOCK,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::MOSS_BLOCK.default_state,
             }),
             vegetation_feature: Box::new(PlacedFeature {
                 feature: Feature::Named("moss_vegetation".to_string()),
@@ -5417,10 +5430,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 tag: "minecraft:moss_replaceable".to_string(),
             }),
             ground_state: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::MOSS_BLOCK,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::MOSS_BLOCK.default_state,
             }),
             vegetation_feature: Box::new(PlacedFeature {
                 feature: Feature::Named("cave_vine_in_moss".to_string()),
@@ -5447,31 +5457,19 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             to_place: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                 entries: vec![
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::FLOWERING_AZALEA,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::FLOWERING_AZALEA.default_state,
                         weight: 4i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::AZALEA,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::AZALEA.default_state,
                         weight: 7i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::MOSS_CARPET,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::MOSS_CARPET.default_state,
                         weight: 25i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::SHORT_GRASS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::SHORT_GRASS.default_state,
                         weight: 50i32,
                     },
                     Weighted {
@@ -5482,6 +5480,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                 name: &pumpkin_data::Block::TALL_GRASS,
                                 properties: Some(props),
                             }
+                            .get_state()
                         },
                         weight: 10i32,
                     },
@@ -5507,10 +5506,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "nether_sprouts".to_string(),
         ConfiguredFeature::NetherForestVegetation(NetherForestVegetationFeature {
             state_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::NETHER_SPROUTS,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::NETHER_SPROUTS.default_state,
             }),
             spread_width: 8i32,
             spread_height: 4i32,
@@ -5520,10 +5516,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "nether_sprouts_bonemeal".to_string(),
         ConfiguredFeature::NetherForestVegetation(NetherForestVegetationFeature {
             state_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::NETHER_SPROUTS,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::NETHER_SPROUTS.default_state,
             }),
             spread_width: 3i32,
             spread_height: 1i32,
@@ -5533,10 +5526,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "oak".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -5546,6 +5536,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -5564,6 +5555,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -5588,10 +5580,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "oak_bees_0002_leaf_litter".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -5601,6 +5590,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -5619,6 +5609,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -5656,6 +5647,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5668,6 +5660,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5680,6 +5673,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5692,6 +5686,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5704,6 +5699,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5716,6 +5712,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5728,6 +5725,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5740,6 +5738,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5752,6 +5751,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5764,6 +5764,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5776,6 +5777,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5788,6 +5790,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5811,6 +5814,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5823,6 +5827,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5835,6 +5840,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5847,6 +5853,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5859,6 +5866,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5871,6 +5879,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5883,6 +5892,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5895,6 +5905,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5907,6 +5918,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5919,6 +5931,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5931,6 +5944,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5943,6 +5957,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5955,6 +5970,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5967,6 +5983,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5979,6 +5996,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -5991,6 +6009,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6005,10 +6024,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "oak_bees_002".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -6018,6 +6034,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -6036,6 +6053,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -6062,10 +6080,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "oak_bees_005".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -6075,6 +6090,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -6093,6 +6109,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -6119,10 +6136,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "oak_leaf_litter".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -6132,6 +6146,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -6150,6 +6165,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -6184,6 +6200,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6196,6 +6213,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6208,6 +6226,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6220,6 +6239,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6232,6 +6252,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6244,6 +6265,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6256,6 +6278,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6268,6 +6291,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6280,6 +6304,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6292,6 +6317,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6304,6 +6330,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6316,6 +6343,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6339,6 +6367,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6351,6 +6380,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6363,6 +6393,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6375,6 +6406,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6387,6 +6419,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6399,6 +6432,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6411,6 +6445,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6423,6 +6458,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6435,6 +6471,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6447,6 +6484,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6459,6 +6497,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6471,6 +6510,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6483,6 +6523,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6495,6 +6536,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6507,6 +6549,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6519,6 +6562,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -6550,10 +6594,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::TagMatch(TagMatchRuleTest {
                     tag: "minecraft:base_stone_overworld".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::ANDESITE,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::ANDESITE.default_state,
             }],
         }),
     );
@@ -6566,10 +6607,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
                     block: "minecraft:netherrack".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::BLACKSTONE,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::BLACKSTONE.default_state,
             }],
         }),
     );
@@ -6582,10 +6620,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::TagMatch(TagMatchRuleTest {
                     tag: "minecraft:base_stone_overworld".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::CLAY,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::CLAY.default_state,
             }],
         }),
     );
@@ -6599,19 +6634,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::COAL_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::COAL_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_COAL_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_COAL_ORE.default_state,
                 },
             ],
         }),
@@ -6626,19 +6655,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::COAL_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::COAL_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_COAL_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_COAL_ORE.default_state,
                 },
             ],
         }),
@@ -6653,19 +6676,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::COPPER_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::COPPER_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_COPPER_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_COPPER_ORE.default_state,
                 },
             ],
         }),
@@ -6680,19 +6697,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::COPPER_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::COPPER_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_COPPER_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_COPPER_ORE.default_state,
                 },
             ],
         }),
@@ -6707,19 +6718,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DIAMOND_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DIAMOND_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE.default_state,
                 },
             ],
         }),
@@ -6734,19 +6739,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DIAMOND_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DIAMOND_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE.default_state,
                 },
             ],
         }),
@@ -6761,19 +6760,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DIAMOND_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DIAMOND_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE.default_state,
                 },
             ],
         }),
@@ -6788,19 +6781,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DIAMOND_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DIAMOND_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_DIAMOND_ORE.default_state,
                 },
             ],
         }),
@@ -6814,10 +6801,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::TagMatch(TagMatchRuleTest {
                     tag: "minecraft:base_stone_overworld".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIORITE,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIORITE.default_state,
             }],
         }),
     );
@@ -6830,10 +6814,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::TagMatch(TagMatchRuleTest {
                     tag: "minecraft:base_stone_overworld".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }],
         }),
     );
@@ -6847,19 +6828,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::EMERALD_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::EMERALD_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_EMERALD_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_EMERALD_ORE.default_state,
                 },
             ],
         }),
@@ -6874,19 +6849,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::GOLD_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::GOLD_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_GOLD_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_GOLD_ORE.default_state,
                 },
             ],
         }),
@@ -6901,19 +6870,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::GOLD_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::GOLD_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_GOLD_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_GOLD_ORE.default_state,
                 },
             ],
         }),
@@ -6927,10 +6890,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::TagMatch(TagMatchRuleTest {
                     tag: "minecraft:base_stone_overworld".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::GRANITE,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::GRANITE.default_state,
             }],
         }),
     );
@@ -6943,10 +6903,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::TagMatch(TagMatchRuleTest {
                     tag: "minecraft:base_stone_overworld".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::GRAVEL,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::GRAVEL.default_state,
             }],
         }),
     );
@@ -6959,10 +6916,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
                     block: "minecraft:netherrack".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::GRAVEL,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::GRAVEL.default_state,
             }],
         }),
     );
@@ -6976,10 +6930,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::INFESTED_STONE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::INFESTED_STONE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
@@ -6992,6 +6943,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                             name: &pumpkin_data::Block::INFESTED_DEEPSLATE,
                             properties: Some(props),
                         }
+                        .get_state()
                     },
                 },
             ],
@@ -7007,19 +6959,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::IRON_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::IRON_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_IRON_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_IRON_ORE.default_state,
                 },
             ],
         }),
@@ -7034,19 +6980,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::IRON_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::IRON_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_IRON_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_IRON_ORE.default_state,
                 },
             ],
         }),
@@ -7061,19 +7001,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::LAPIS_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::LAPIS_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_LAPIS_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_LAPIS_ORE.default_state,
                 },
             ],
         }),
@@ -7088,19 +7022,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:stone_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::LAPIS_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::LAPIS_ORE.default_state,
                 },
                 OreTarget {
                     target: RuleTest::TagMatch(TagMatchRuleTest {
                         tag: "minecraft:deepslate_ore_replaceables".to_string(),
                     }),
-                    state: BlockStateCodec {
-                        name: &pumpkin_data::Block::DEEPSLATE_LAPIS_ORE,
-                        properties: None,
-                    },
+                    state: pumpkin_data::Block::DEEPSLATE_LAPIS_ORE.default_state,
                 },
             ],
         }),
@@ -7114,10 +7042,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
                     block: "minecraft:netherrack".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::MAGMA_BLOCK,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::MAGMA_BLOCK.default_state,
             }],
         }),
     );
@@ -7130,10 +7055,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
                     block: "minecraft:netherrack".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::NETHER_GOLD_ORE,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::NETHER_GOLD_ORE.default_state,
             }],
         }),
     );
@@ -7146,10 +7068,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
                     block: "minecraft:netherrack".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::NETHER_QUARTZ_ORE,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::NETHER_QUARTZ_ORE.default_state,
             }],
         }),
     );
@@ -7170,6 +7089,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                             name: &pumpkin_data::Block::REDSTONE_ORE,
                             properties: Some(props),
                         }
+                        .get_state()
                     },
                 },
                 OreTarget {
@@ -7183,6 +7103,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                             name: &pumpkin_data::Block::DEEPSLATE_REDSTONE_ORE,
                             properties: Some(props),
                         }
+                        .get_state()
                     },
                 },
             ],
@@ -7197,10 +7118,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::BlockMatch(BlockMatchRuleTest {
                     block: "minecraft:netherrack".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::SOUL_SAND,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::SOUL_SAND.default_state,
             }],
         }),
     );
@@ -7213,10 +7131,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 target: RuleTest::TagMatch(TagMatchRuleTest {
                     tag: "minecraft:base_stone_overworld".to_string(),
                 }),
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::TUFF,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::TUFF.default_state,
             }],
         }),
     );
@@ -7230,10 +7145,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::CLOSED_EYEBLOSSOM,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::CLOSED_EYEBLOSSOM.default_state,
                         }),
                         schedule_tick: Some(true),
                     },
@@ -7273,10 +7185,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 tag: "minecraft:moss_replaceable".to_string(),
             }),
             ground_state: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::PALE_MOSS_BLOCK,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::PALE_MOSS_BLOCK.default_state,
             }),
             vegetation_feature: Box::new(PlacedFeature {
                 feature: Feature::Named("pale_moss_vegetation".to_string()),
@@ -7302,10 +7211,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 tag: "minecraft:moss_replaceable".to_string(),
             }),
             ground_state: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::PALE_MOSS_BLOCK,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::PALE_MOSS_BLOCK.default_state,
             }),
             vegetation_feature: Box::new(PlacedFeature {
                 feature: Feature::Named("pale_moss_vegetation".to_string()),
@@ -7340,14 +7246,12 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                 name: &pumpkin_data::Block::PALE_MOSS_CARPET,
                                 properties: Some(props),
                             }
+                            .get_state()
                         },
                         weight: 25i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::SHORT_GRASS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::SHORT_GRASS.default_state,
                         weight: 25i32,
                     },
                     Weighted {
@@ -7358,6 +7262,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                 name: &pumpkin_data::Block::TALL_GRASS,
                                 properties: Some(props),
                             }
+                            .get_state()
                         },
                         weight: 10i32,
                     },
@@ -7370,10 +7275,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "pale_oak".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -7383,6 +7285,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::PALE_OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -7401,6 +7304,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::PALE_OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -7427,10 +7331,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "pale_oak_bonemeal".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -7440,6 +7341,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::PALE_OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -7458,6 +7360,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::PALE_OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -7484,10 +7387,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "pale_oak_creaking".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -7497,6 +7397,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::PALE_OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -7515,6 +7416,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::PALE_OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -7557,6 +7459,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                     name: &pumpkin_data::Block::SWEET_BERRY_BUSH,
                                     properties: Some(props),
                                 }
+                                .get_state()
                             },
                         }),
                         schedule_tick: None,
@@ -7597,10 +7500,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::BROWN_MUSHROOM,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::BROWN_MUSHROOM.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -7626,10 +7526,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::BUSH,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::BUSH.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -7670,6 +7567,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::CACTUS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                 }),
                             },
@@ -7689,10 +7587,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                     },
                                 )),
                                 provider: BlockStateProvider::Simple(SimpleStateProvider {
-                                    state: BlockStateCodec {
-                                        name: &pumpkin_data::Block::CACTUS_FLOWER,
-                                        properties: None,
-                                    },
+                                    state: pumpkin_data::Block::CACTUS_FLOWER.default_state,
                                 }),
                             },
                         ],
@@ -7744,10 +7639,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::CRIMSON_ROOTS,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::CRIMSON_ROOTS.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -7773,10 +7665,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::DEAD_BUSH,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::DEAD_BUSH.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -7804,17 +7693,11 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         to_place: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                             entries: vec![
                                 Weighted {
-                                    data: BlockStateCodec {
-                                        name: &pumpkin_data::Block::SHORT_DRY_GRASS,
-                                        properties: None,
-                                    },
+                                    data: pumpkin_data::Block::SHORT_DRY_GRASS.default_state,
                                     weight: 1i32,
                                 },
                                 Weighted {
-                                    data: BlockStateCodec {
-                                        name: &pumpkin_data::Block::TALL_DRY_GRASS,
-                                        properties: None,
-                                    },
+                                    data: pumpkin_data::Block::TALL_DRY_GRASS.default_state,
                                     weight: 1i32,
                                 },
                             ],
@@ -7855,6 +7738,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                     name: &pumpkin_data::Block::FIRE,
                                     properties: Some(props),
                                 }
+                                .get_state()
                             },
                         }),
                         schedule_tick: None,
@@ -7895,10 +7779,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::FIREFLY_BUSH,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::FIREFLY_BUSH.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -7924,10 +7805,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::SHORT_GRASS,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::SHORT_GRASS.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -7955,17 +7833,11 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         to_place: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                             entries: vec![
                                 Weighted {
-                                    data: BlockStateCodec {
-                                        name: &pumpkin_data::Block::SHORT_GRASS,
-                                        properties: None,
-                                    },
+                                    data: pumpkin_data::Block::SHORT_GRASS.default_state,
                                     weight: 3i32,
                                 },
                                 Weighted {
-                                    data: BlockStateCodec {
-                                        name: &pumpkin_data::Block::FERN,
-                                        properties: None,
-                                    },
+                                    data: pumpkin_data::Block::FERN.default_state,
                                     weight: 1i32,
                                 },
                             ],
@@ -8012,10 +7884,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::SHORT_GRASS,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::SHORT_GRASS.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -8048,6 +7917,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                     name: &pumpkin_data::Block::LARGE_FERN,
                                     properties: Some(props),
                                 }
+                                .get_state()
                             },
                         }),
                         schedule_tick: None,
@@ -8084,6 +7954,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8096,6 +7967,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8108,6 +7980,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8120,6 +7993,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8132,6 +8006,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8144,6 +8019,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8156,6 +8032,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8168,6 +8045,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8180,6 +8058,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8192,6 +8071,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8204,6 +8084,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8216,6 +8097,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::LEAF_LITTER,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -8259,10 +8141,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::MELON,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::MELON.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -8305,10 +8184,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::PUMPKIN,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::PUMPKIN.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -8348,10 +8224,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::RED_MUSHROOM,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::RED_MUSHROOM.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -8377,10 +8250,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::SOUL_FIRE,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::SOUL_FIRE.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -8434,6 +8304,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                         name: &pumpkin_data::Block::SUGAR_CANE,
                                         properties: Some(props),
                                     }
+                                    .get_state()
                                 },
                             }),
                         }],
@@ -8540,6 +8411,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                     name: &pumpkin_data::Block::SUNFLOWER,
                                     properties: Some(props),
                                 }
+                                .get_state()
                             },
                         }),
                         schedule_tick: None,
@@ -8568,17 +8440,11 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         to_place: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                             entries: vec![
                                 Weighted {
-                                    data: BlockStateCodec {
-                                        name: &pumpkin_data::Block::SHORT_GRASS,
-                                        properties: None,
-                                    },
+                                    data: pumpkin_data::Block::SHORT_GRASS.default_state,
                                     weight: 1i32,
                                 },
                                 Weighted {
-                                    data: BlockStateCodec {
-                                        name: &pumpkin_data::Block::FERN,
-                                        properties: None,
-                                    },
+                                    data: pumpkin_data::Block::FERN.default_state,
                                     weight: 4i32,
                                 },
                             ],
@@ -8614,6 +8480,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                     name: &pumpkin_data::Block::TALL_GRASS,
                                     properties: Some(props),
                                 }
+                                .get_state()
                             },
                         }),
                         schedule_tick: None,
@@ -8640,10 +8507,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                 feature: Feature::Inlined(Box::new(ConfiguredFeature::SimpleBlock(
                     SimpleBlockFeature {
                         to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                            state: BlockStateCodec {
-                                name: &pumpkin_data::Block::LILY_PAD,
-                                properties: None,
-                            },
+                            state: pumpkin_data::Block::LILY_PAD.default_state,
                         }),
                         schedule_tick: None,
                     },
@@ -8693,10 +8557,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "pine".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -8706,6 +8567,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -8724,6 +8586,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -8878,10 +8741,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "single_piece_of_grass".to_string(),
         ConfiguredFeature::SimpleBlock(SimpleBlockFeature {
             to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::SHORT_GRASS,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::SHORT_GRASS.default_state,
             }),
             schedule_tick: None,
         }),
@@ -8896,10 +8756,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "spore_blossom".to_string(),
         ConfiguredFeature::SimpleBlock(SimpleBlockFeature {
             to_place: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::SPORE_BLOSSOM,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::SPORE_BLOSSOM.default_state,
             }),
             schedule_tick: None,
         }),
@@ -8914,6 +8771,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     name: &pumpkin_data::Block::LAVA,
                     properties: Some(props),
                 }
+                .get_state()
             },
             requires_block_below: true,
             rock_count: 4i32,
@@ -8935,6 +8793,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     name: &pumpkin_data::Block::LAVA,
                     properties: Some(props),
                 }
+                .get_state()
             },
             requires_block_below: true,
             rock_count: 4i32,
@@ -8958,6 +8817,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     name: &pumpkin_data::Block::LAVA,
                     properties: Some(props),
                 }
+                .get_state()
             },
             requires_block_below: true,
             rock_count: 4i32,
@@ -8984,6 +8844,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     name: &pumpkin_data::Block::LAVA,
                     properties: Some(props),
                 }
+                .get_state()
             },
             requires_block_below: false,
             rock_count: 5i32,
@@ -9001,6 +8862,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     name: &pumpkin_data::Block::LAVA,
                     properties: Some(props),
                 }
+                .get_state()
             },
             requires_block_below: false,
             rock_count: 4i32,
@@ -9018,6 +8880,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                     name: &pumpkin_data::Block::WATER,
                     properties: Some(props),
                 }
+                .get_state()
             },
             requires_block_below: true,
             rock_count: 4i32,
@@ -9041,10 +8904,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "spruce".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -9054,6 +8914,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -9072,6 +8933,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::SPRUCE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -9109,10 +8971,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "super_birch_bees".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -9122,6 +8981,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -9140,6 +9000,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -9166,10 +9027,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "super_birch_bees_0002".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -9179,6 +9037,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -9197,6 +9056,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::BIRCH_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -9223,10 +9083,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "swamp_oak".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -9236,6 +9093,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -9254,6 +9112,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::OAK_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -9278,10 +9137,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "tall_mangrove".to_string(),
         ConfiguredFeature::Tree(Box::new(TreeFeature {
             dirt_provider: BlockStateProvider::Simple(SimpleStateProvider {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::DIRT,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::DIRT.default_state,
             }),
             trunk_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -9291,6 +9147,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::MANGROVE_LOG,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             trunk_placer: TrunkPlacer {
@@ -9309,6 +9166,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                         name: &pumpkin_data::Block::MANGROVE_LEAVES,
                         properties: Some(props),
                     }
+                    .get_state()
                 },
             }),
             foliage_placer: FoliagePlacer {
@@ -9641,31 +9499,19 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             state_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                 entries: vec![
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::WARPED_ROOTS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::WARPED_ROOTS.default_state,
                         weight: 85i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::CRIMSON_ROOTS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::CRIMSON_ROOTS.default_state,
                         weight: 1i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::WARPED_FUNGUS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::WARPED_FUNGUS.default_state,
                         weight: 13i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::CRIMSON_FUNGUS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::CRIMSON_FUNGUS.default_state,
                         weight: 1i32,
                     },
                 ],
@@ -9680,31 +9526,19 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
             state_provider: BlockStateProvider::Weighted(WeightedBlockStateProvider {
                 entries: vec![
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::WARPED_ROOTS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::WARPED_ROOTS.default_state,
                         weight: 85i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::CRIMSON_ROOTS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::CRIMSON_ROOTS.default_state,
                         weight: 1i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::WARPED_FUNGUS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::WARPED_FUNGUS.default_state,
                         weight: 13i32,
                     },
                     Weighted {
-                        data: BlockStateCodec {
-                            name: &pumpkin_data::Block::CRIMSON_FUNGUS,
-                            properties: None,
-                        },
+                        data: pumpkin_data::Block::CRIMSON_FUNGUS.default_state,
                         weight: 1i32,
                     },
                 ],
@@ -9751,6 +9585,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9763,6 +9598,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9775,6 +9611,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9787,6 +9624,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9799,6 +9637,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9811,6 +9650,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9823,6 +9663,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9835,6 +9676,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9847,6 +9689,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9859,6 +9702,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9871,6 +9715,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9883,6 +9728,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9895,6 +9741,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9907,6 +9754,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9919,6 +9767,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9931,6 +9780,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9970,6 +9820,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9982,6 +9833,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -9994,6 +9846,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10006,6 +9859,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10018,6 +9872,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10030,6 +9885,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10042,6 +9898,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10054,6 +9911,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10066,6 +9924,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10078,6 +9937,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10090,6 +9950,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10102,6 +9963,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10114,6 +9976,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10126,6 +9989,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10138,6 +10002,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },
@@ -10150,6 +10015,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
                                             name: &pumpkin_data::Block::WILDFLOWERS,
                                             properties: Some(props),
                                         }
+                                        .get_state()
                                     },
                                     weight: 1i32,
                                 },

@@ -33,7 +33,7 @@ impl ArgumentConsumer for EnchantmentArgumentConsumer {
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let name_opt: Option<&'a str> = args.pop();
+        let name_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
         let result: Option<Arg<'a>> = name_opt.map_or_else(
             || None,

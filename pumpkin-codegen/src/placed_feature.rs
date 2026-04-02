@@ -658,6 +658,31 @@ pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
     }
 }
 
+pub fn value_to_block_state(v: &Value) -> TokenStream {
+    let name = v["Name"].as_str().unwrap_or("minecraft:air");
+    let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
+    let block_ident =
+        quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
+    if let Some(props) = v["Properties"].as_object() {
+        let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
+        let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();
+        quote! {
+            {
+                let mut props = std::collections::HashMap::new();
+                #(props.insert(#keys.to_string(), #vals.to_string());)*
+                BlockStateCodec {
+                    name: &pumpkin_data::Block::#block_ident,
+                    properties: Some(props),
+                }.get_state()
+            }
+        }
+    } else {
+        quote! {
+            pumpkin_data::Block::#block_ident.default_state
+        }
+    }
+}
+
 /// Converts a nullable JSON integer into an `Option<i32>` token stream.
 ///
 /// # Arguments
