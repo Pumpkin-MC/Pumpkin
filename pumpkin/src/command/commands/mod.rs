@@ -146,10 +146,6 @@ pub async fn default_dispatcher(
         "minecraft:command.whitelist",
     );
     dispatcher.register(transfer::init_command_tree(), "minecraft:command.transfer");
-    dispatcher.register(
-        setidletimeout::init_command_tree(),
-        "minecraft:command.setidletimeout",
-    );
 
     let mut dispatcher = {
         let mut wrapper_dispatcher = CommandDispatcher::new();
@@ -160,6 +156,7 @@ pub async fn default_dispatcher(
     difficulty::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
+    setidletimeout::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
 
     dispatcher
@@ -409,7 +406,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
 }
 
-#[expect(clippy::too_many_lines)]
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
     registry
@@ -507,13 +503,6 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.transfer",
             "Transfers the player to another server",
-            PermissionDefault::Op(PermissionLvl::Three),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.setidletimeout",
-            "Sets the time before idle players are kicked",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();

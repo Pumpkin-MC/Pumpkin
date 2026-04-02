@@ -30,15 +30,15 @@ where
         reader.set_cursor(reader_start);
         Err(too_low_error_type.create(
             reader,
-            TextComponent::text(value.to_string()),
             TextComponent::text(min.to_string()),
+            TextComponent::text(value.to_string()),
         ))
     } else if value > max {
         reader.set_cursor(reader_start);
         Err(too_high_error_type.create(
             reader,
-            TextComponent::text(value.to_string()),
             TextComponent::text(max.to_string()),
+            TextComponent::text(value.to_string()),
         ))
     } else {
         Ok(value)
