@@ -37,7 +37,7 @@ impl FancyTrunkPlacer {
         let mut list: Vec<BranchPosition> = Vec::new();
         let mut logs = Vec::new();
 
-        list.push(BranchPosition::new(start_pos, m));
+        list.push(BranchPosition::new(start_pos.up_height(k), m));
 
         for n in (0..=(j - 5)).rev() {
             let f = Self::should_generate_branch(j, n);

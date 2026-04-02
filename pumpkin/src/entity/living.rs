@@ -37,6 +37,7 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
@@ -54,7 +55,6 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;
@@ -1531,7 +1531,7 @@ impl LivingEntity {
             let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
-                    (pumpkin_world::item::DamageResult::Untouched, None)
+                    (pumpkin_data::item_stack::DamageResult::Untouched, None)
                 } else {
                     // Items without `EquippableImpl` component take damage freely.
                     // Items with `damage_on_hurt: false` (e.g. elytra) are exempt from armor hit durability.
@@ -1544,18 +1544,18 @@ impl LivingEntity {
                     if takes_damage {
                         // Base armor durability damage.
                         let result = stack.damage_item(armor_damage);
-                        let changed = result != pumpkin_world::item::DamageResult::Untouched;
+                        let changed = result != pumpkin_data::item_stack::DamageResult::Untouched;
                         (result, changed.then_some(stack.clone()))
                     } else {
                         // Equippable items can opt out of on-hurt durability loss (e.g. elytra).
-                        (pumpkin_world::item::DamageResult::Untouched, None)
+                        (pumpkin_data::item_stack::DamageResult::Untouched, None)
                     }
                 }
             };
 
             if let Some(updated_stack) = updated_stack_opt {
                 // Broadcast break status before clearing the slot.
-                if slot_result == pumpkin_world::item::DamageResult::Broken {
+                if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
                         .send_entity_status(&self.entity, super::equipment_break_status(slot))

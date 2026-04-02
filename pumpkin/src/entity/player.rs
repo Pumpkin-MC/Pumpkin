@@ -38,6 +38,7 @@ use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -78,7 +79,6 @@ use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::{GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
-use pumpkin_world::item::ItemStack;
 use pumpkin_world::level::{Level, SyncChunk, SyncEntityChunk};
 
 use crate::block;
@@ -852,14 +852,14 @@ impl Player {
         let updated = {
             let mut stack = stack_arc.lock().await;
             let result = stack.damage_item(amount);
-            (result != pumpkin_world::item::DamageResult::Untouched)
+            (result != pumpkin_data::item_stack::DamageResult::Untouched)
                 .then_some((result, stack.clone()))
         };
 
         if let Some((result, updated_stack)) = updated {
             // Send the break status before clearing the slot so the client can
             // use the item texture for break particles.
-            if result == pumpkin_world::item::DamageResult::Broken {
+            if result == pumpkin_data::item_stack::DamageResult::Broken {
                 self.world()
                     .send_entity_status(
                         &self.living_entity.entity,

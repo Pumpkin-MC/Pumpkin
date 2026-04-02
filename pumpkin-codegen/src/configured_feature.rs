@@ -49,9 +49,11 @@ pub fn build() -> TokenStream {
             };
             use crate::block::BlockStateCodec;
             use crate::generation::block_state_provider::{
-                BlockStateProvider, DualNoiseBlockStateProvider, NoiseBlockStateProvider,
-                NoiseBlockStateProviderBase, NoiseThresholdBlockStateProvider, PillarBlockStateProvider,
-                RandomizedIntBlockStateProvider, SimpleStateProvider, WeightedBlockStateProvider,
+                BlockStateProvider, BlockStateRule, DualNoiseBlockStateProvider,
+                NoiseBlockStateProvider, NoiseBlockStateProviderBase,
+                NoiseThresholdBlockStateProvider, PillarBlockStateProvider,
+                RandomizedIntBlockStateProvider, RuleBasedBlockStateProvider, SimpleStateProvider,
+                WeightedBlockStateProvider,
             };
             use pumpkin_util::math::pool::Weighted;
             use pumpkin_util::DoublePerlinNoiseParametersCodec;
@@ -545,6 +547,20 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:glowstone_blob" => {
             quote! { ConfiguredFeature::GlowstoneBlob(crate::generation::feature::features::glowstone_blob::GlowstoneBlobFeature {}) }
         }
+        "minecraft:disk" => {
+            let state_provider = value_to_block_state_provider(&config["state_provider"]);
+            let target = value_to_block_predicate(&config["target"]);
+            let radius = value_to_int_provider(&config["radius"]);
+            let half_height = config["half_height"].as_i64().unwrap_or(1) as i32;
+            quote! {
+                ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {
+                    state_provider: #state_provider,
+                    target: #target,
+                    radius: #radius,
+                    half_height: #half_height,
+                })
+            }
+        }
 
         // All TODO/empty features
         "minecraft:fossil" => {
@@ -552,9 +568,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:lake" => {
             quote! { ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {}) }
-        }
-        "minecraft:disk" => {
-            quote! { ConfiguredFeature::Disk(crate::generation::feature::features::disk::DiskFeature {}) }
         }
         "minecraft:huge_brown_mushroom" => {
             quote! { ConfiguredFeature::HugeBrownMushroom(crate::generation::feature::features::huge_brown_mushroom::HugeBrownMushroomFeature {}) }
@@ -770,6 +783,27 @@ fn value_to_block_state_provider(v: &Value) -> TokenStream {
                 })
             }
         }
+        _ if !v["fallback"].is_null() => {
+            let fallback = value_to_block_state_provider(&v["fallback"]);
+            let rules: Vec<TokenStream> = v["rules"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .map(|rule| {
+                            let if_true = value_to_block_predicate(&rule["if_true"]);
+                            let then = value_to_block_state_provider(&rule["then"]);
+                            quote! { BlockStateRule { if_true: #if_true, then: #then } }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            quote! {
+                BlockStateProvider::Rule(RuleBasedBlockStateProvider {
+                    fallback: Box::new(#fallback),
+                    rules: vec![#(#rules),*],
+                })
+            }
+        }
         _ => {
             // Default to air
             quote! {
@@ -825,7 +859,10 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
         "minecraft:always_true" | "" => quote! { RuleTest::AlwaysTrue },
         "minecraft:block_match" => {
             let block = v["block"].as_str().unwrap_or("minecraft:stone");
-            quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: #block.to_string() }) }
+    let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
+            let block_ident =
+                quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
+            quote! { RuleTest::BlockMatch(BlockMatchRuleTest { block: pumpkin_data::Block::#block_ident }) }
         }
         "minecraft:blockstate_match" => {
             let state = value_to_block_state(&v["block_state"]);
@@ -838,7 +875,10 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
         "minecraft:random_block_match" => {
             let block = v["block"].as_str().unwrap_or("minecraft:stone");
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
-            quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: #block.to_string(), probability: #prob }) }
+    let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
+            let block_ident =
+                quote::format_ident!("{}", block.to_uppercase().replace([':', '-'], "_"));
+            quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: pumpkin_data::Block::#block_ident, probability: #prob }) }
         }
         "minecraft:random_blockstate_match" => {
             let state = value_to_block_state(&v["block_state"]);
@@ -1233,7 +1273,23 @@ fn value_to_placement_modifier_cf(v: &Value) -> TokenStream {
     match type_str {
         "minecraft:biome" => quote! { PlacementModifier::Biome(BiomePlacementModifier) },
         "minecraft:in_square" => quote! { PlacementModifier::InSquare(SquarePlacementModifier) },
-        "minecraft:fixed_placement" => quote! { PlacementModifier::FixedPlacement },
+        "minecraft:fixed_placement" => {
+            let positions = v["positions"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .map(|p| {
+                            let coords = p.as_array().unwrap();
+                            let x = coords[0].as_i64().unwrap_or(0) as i32;
+                            let y = coords[1].as_i64().unwrap_or(0) as i32;
+                            let z = coords[2].as_i64().unwrap_or(0) as i32;
+                            quote! { BlockPos::new(#x, #y, #z) }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            quote! { PlacementModifier::FixedPlacement(vec![#(#positions),*]) }
+        }
         "minecraft:heightmap" => {
             let hm = crate::placed_feature::value_to_height_map(
                 v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"),

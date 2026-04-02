@@ -22,6 +22,8 @@ pub struct VanillaGenerator {
     pub terrain_cache: TerrainCache,
 
     pub default_block: &'static BlockState,
+
+    pub global_structure_cache: crate::generation::structure::placement::GlobalStructureCache,
 }
 
 impl GeneratorInit for VanillaGenerator {
@@ -50,6 +52,8 @@ impl GeneratorInit for VanillaGenerator {
             dimension,
             terrain_cache,
             default_block,
+            global_structure_cache:
+                crate::generation::structure::placement::GlobalStructureCache::new(),
         }
     }
 }

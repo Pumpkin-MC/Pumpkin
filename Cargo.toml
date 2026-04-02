@@ -181,7 +181,7 @@ ureq = "3.3.0"
 wasmtime = "43.0"
 wasmtime-wasi = "43.0"
 wit-bindgen = "0.54"
-wasmparser = "0.245"
+wasmparser = "0.246"
 
 postcard = { version = "1.1", features = ["alloc"] }
 tracing-serde-structured = "0.4"

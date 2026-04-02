@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::{
     codec::{
         item_stack_seralizer::{ItemStackSerializer, OptionalItemStackHash},
@@ -9,7 +10,6 @@ use pumpkin_protocol::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
     },
 };
-use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 use crate::screen_handler::{InventoryPlayer, ScreenHandlerBehaviour};

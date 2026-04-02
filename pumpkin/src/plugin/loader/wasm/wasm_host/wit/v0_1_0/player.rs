@@ -52,7 +52,7 @@ fn world_from_resource(
 }
 
 fn to_wit_item_stack(
-    stack: &pumpkin_world::item::ItemStack,
+    stack: &pumpkin_data::item_stack::ItemStack,
 ) -> Option<pumpkin::plugin::common::ItemStack> {
     if stack.item_count == 0 {
         return None;
@@ -399,6 +399,135 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn get_experience_points(&mut self, player: Resource<Player>) -> Result<i32, String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.experience_points.load(Ordering::Relaxed))
+    }
+
+    async fn set_experience_level(
+        &mut self,
+        player: Resource<Player>,
+        level: i32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.set_experience_level(level, true).await;
+        Ok(())
+    }
+
+    async fn set_experience_progress(
+        &mut self,
+        player: Resource<Player>,
+        progress: f32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .set_experience(
+                player.experience_level.load(Ordering::Relaxed),
+                progress,
+                player.experience_points.load(Ordering::Relaxed),
+            )
+            .await;
+        Ok(())
+    }
+
+    async fn set_experience_points(
+        &mut self,
+        player: Resource<Player>,
+        points: i32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .set_experience(
+                player.experience_level.load(Ordering::Relaxed),
+                player.experience_progress.load(),
+                points,
+            )
+            .await;
+        Ok(())
+    }
+
+    async fn add_experience_levels(
+        &mut self,
+        player: Resource<Player>,
+        levels: i32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.add_experience_levels(levels).await;
+        Ok(())
+    }
+
+    async fn add_experience_points(
+        &mut self,
+        player: Resource<Player>,
+        points: i32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.add_experience_points(points).await;
+        Ok(())
+    }
+
+    async fn is_sneaking(&mut self, player: Resource<Player>) -> Result<bool, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_entity().sneaking.load(Ordering::Relaxed))
+    }
+
+    async fn is_sprinting(&mut self, player: Resource<Player>) -> Result<bool, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_entity().sprinting.load(Ordering::Relaxed))
+    }
+
+    async fn is_on_ground(&mut self, player: Resource<Player>) -> Result<bool, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_entity().on_ground.load(Ordering::Relaxed))
+    }
+
+    async fn is_flying(&mut self, player: Resource<Player>) -> Result<bool, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.is_flying().await)
+    }
+
+    async fn set_flying(&mut self, player: Resource<Player>, flying: bool) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        {
+            let mut abilities = player.abilities.lock().await;
+            abilities.flying = flying;
+        };
+        player.send_abilities_update().await;
+        Ok(())
+    }
+
+    async fn get_abilities(
+        &mut self,
+        player: Resource<Player>,
+    ) -> Result<pumpkin::plugin::player::PlayerAbilities, String> {
+        let player = player_from_resource(self, &player)?;
+        let abilities = player.abilities.lock().await;
+        Ok(pumpkin::plugin::player::PlayerAbilities {
+            invulnerable: abilities.invulnerable,
+            flying: abilities.flying,
+            allow_flying: abilities.allow_flying,
+            creative: abilities.creative,
+            allow_modify_world: abilities.allow_modify_world,
+            fly_speed: abilities.fly_speed,
+            walk_speed: abilities.walk_speed,
+        })
+    }
+
+    async fn set_abilities(
+        &mut self,
+        player: Resource<Player>,
+        abilities: pumpkin::plugin::player::PlayerAbilities,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        {
+            let mut a = player.abilities.lock().await;
+            a.invulnerable = abilities.invulnerable;
+            a.flying = abilities.flying;
+            a.allow_flying = abilities.allow_flying;
+            a.creative = abilities.creative;
+            a.allow_modify_world = abilities.allow_modify_world;
+            a.fly_speed = abilities.fly_speed;
+            a.walk_speed = abilities.walk_speed;
+        };
+        player.send_abilities_update().await;
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
