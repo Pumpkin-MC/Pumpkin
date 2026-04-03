@@ -2162,9 +2162,10 @@ impl Player {
 
     pub async fn ban(&self, server: &Server, reason: Option<TextComponent>) {
         let mut banned_players = server.data.banned_player_list.write().await;
-        let string_reason = reason
-            .clone()
-            .map_or_else(|| "Banned by an operator.".to_string(), pumpkin_util::text::TextComponent::get_text);
+        let string_reason = reason.clone().map_or_else(
+            || "Banned by an operator.".to_string(),
+            pumpkin_util::text::TextComponent::get_text,
+        );
 
         if banned_players
             .banned_players
@@ -2195,9 +2196,10 @@ impl Player {
 
     pub async fn ban_ip(&self, server: &Server, reason: Option<TextComponent>) {
         let mut banned_ips = server.data.banned_ip_list.write().await;
-        let string_reason = reason
-            .clone()
-            .map_or_else(|| "Banned by an operator.".to_string(), pumpkin_util::text::TextComponent::get_text);
+        let string_reason = reason.clone().map_or_else(
+            || "Banned by an operator.".to_string(),
+            pumpkin_util::text::TextComponent::get_text,
+        );
         let target_ip = self.client.address().await.ip();
 
         if banned_ips.get_entry(&target_ip).is_some() {
