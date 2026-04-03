@@ -67,7 +67,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{
 };
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
-use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
+use pumpkin_protocol::java::client::play::{CPlayerSpawnPosition, CSystemChatMessage};
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
@@ -484,6 +484,11 @@ impl World {
         let players = self.players.load();
         let recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
         Self::broadcast_java_grouped(packet, recipients_by_version).await;
+    }
+
+    pub async fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
+        let packet = CSystemChatMessage::new(message, overlay);
+        self.broadcast_packet_all(&packet).await;
     }
 
     pub async fn broadcast_message(
@@ -1394,6 +1399,40 @@ impl World {
         }
         // TODO this.level.canSpawnEntitiesInChunk(chunkPos)
         spawn_for_chunk(self, chunk_pos, chunk, spawn_state, spawn_list).await;
+    }
+
+    pub async fn set_time_of_day(&self, time: i64) {
+        let mut level_time = self.level_time.lock().await;
+        level_time.set_time(time);
+        level_time.send_time(self).await;
+    }
+
+    pub async fn is_raining(&self) -> bool {
+        self.weather.lock().await.raining
+    }
+
+    pub async fn set_raining(&self, raining: bool) {
+        let mut weather = self.weather.lock().await;
+        if weather.raining != raining {
+            let thunder = weather.thundering;
+            weather
+                .set_weather_parameters(self, 0, 0, raining, thunder)
+                .await;
+        }
+    }
+
+    pub async fn is_thundering(&self) -> bool {
+        self.weather.lock().await.thundering
+    }
+
+    pub async fn set_thundering(&self, thundering: bool) {
+        let mut weather = self.weather.lock().await;
+        if weather.thundering != thundering {
+            let raining = weather.raining;
+            weather
+                .set_weather_parameters(self, 0, 0, raining, thundering)
+                .await;
+        }
     }
 
     /// Gets the y position of the first non air block from the top down
@@ -2601,6 +2640,26 @@ impl World {
             .cloned()
     }
 
+    /// Retrieves an entity by their unique UUID.
+    ///
+    /// This function searches the world's entities for one with the specified UUID.
+    /// If found, it returns an `Arc<dyn EntityBase>` reference to that entity. Otherwise, it returns `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `id`: The UUID of the entity to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
+    pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
+        self.entities
+            .load()
+            .iter()
+            .find(|p| p.get_entity().entity_uuid == id)
+            .cloned()
+    }
+
     /// Gets a list of players whose location equals the given position in the world.
     ///
     /// It iterates through the players in the world and checks their location. If the player's location matches the
@@ -2730,6 +2789,70 @@ impl World {
                     .unwrap()
             })
             .map(|p| p.1.clone())
+    }
+
+    /// Adds entities to the provided [`Vec`] that satisfy a particular condition and are
+    /// present in the provided [`BoundingBox`].
+    ///
+    /// # Arguments
+    ///
+    /// * `list`: The `Vec` to add to.
+    /// * `max_list_capacity`: The maximum capacity of `list` for adding entities. If this limit is reached, no more
+    ///   entities will be added to the list. If `list` already reaches this limit, nothing happens.
+    /// * `bounding_box`: The bounding box to filter any added entities.
+    /// * `predicate`: A predicate function, which has to be `true` for an entity to be added to the list.
+    pub fn extend_entities_in_box_where(
+        &self,
+        list: &mut Vec<Arc<dyn EntityBase>>,
+        max_list_capacity: usize,
+        bounding_box: BoundingBox,
+        predicate: impl Fn(&dyn EntityBase) -> bool,
+    ) {
+        self.extend_entities_where(list, max_list_capacity, |e| {
+            bounding_box.intersects(&e.get_entity().bounding_box.load()) && predicate(e)
+        });
+    }
+
+    /// Adds entities to the provided [`Vec`] that satisfy a particular condition.
+    ///
+    /// # Arguments
+    ///
+    /// * `list`: The `Vec` to add to.
+    /// * `max_list_capacity`: The maximum capacity of `list` for adding entities. If this limit is reached, no more
+    ///   entities will be added to the list. If `list` already reaches this limit, nothing happens.
+    /// * `predicate`: A predicate function, which has to be `true` for an entity to be added to the list.
+    pub fn extend_entities_where(
+        &self,
+        list: &mut Vec<Arc<dyn EntityBase>>,
+        max_list_capacity: usize,
+        predicate: impl Fn(&dyn EntityBase) -> bool,
+    ) {
+        if list.len() >= max_list_capacity {
+            return;
+        }
+        // Loop the players.
+        for player in self.players.load().iter() {
+            if !predicate(player.as_ref()) {
+                continue;
+            }
+            // We add the player to the list.
+            list.push(player.clone());
+            // Check if the list is too big.
+            if list.len() > max_list_capacity {
+                return;
+            }
+        }
+        // Same with entities.
+        for entity in self.entities.load().iter() {
+            if !predicate(entity.as_ref()) {
+                continue;
+            }
+            list.push(entity.clone());
+            if list.len() > max_list_capacity {
+                return;
+            }
+            // TODO: Implement ender dragon handling
+        }
     }
 
     /// Adds a player to the world and broadcasts a join message if enabled.

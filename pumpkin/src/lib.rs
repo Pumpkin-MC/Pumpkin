@@ -125,7 +125,10 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             .with_thread_ids(advanced_config.logging.threads);
 
         if advanced_config.logging.timestamp {
-            let fmt_layer = fmt_layer.with_timer(fmt::time::UtcTime::new(
+            let local_offset =
+                time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+            let fmt_layer = fmt_layer.with_timer(fmt::time::OffsetTime::new(
+                local_offset,
                 time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
             ));
             let registry = tracing_subscriber::registry()

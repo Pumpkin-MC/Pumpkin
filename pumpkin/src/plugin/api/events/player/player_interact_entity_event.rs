@@ -26,7 +26,7 @@ pub struct PlayerInteractEntityEvent {
     pub action: ActionType,
 
     /// The position on the entity that was clicked (only for `InteractAt`).
-    pub target_position: Option<Vector3<f32>>,
+    pub target_position: Option<Vector3<f64>>,
 
     /// Whether the player was sneaking during the interaction.
     pub sneaking: bool,
@@ -37,7 +37,7 @@ impl PlayerInteractEntityEvent {
         player: &Arc<Player>,
         target: Arc<dyn EntityBase>,
         action: ActionType,
-        target_position: Option<Vector3<f32>>,
+        target_position: Option<Vector3<f64>>,
         sneaking: bool,
     ) -> Self {
         Self {

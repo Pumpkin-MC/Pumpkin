@@ -33,4 +33,22 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             pumpkin_util::Difficulty::Hard => Difficulty::Hard,
         }
     }
+
+    async fn get_player_count(
+        &mut self,
+        _server: Resource<pumpkin::plugin::server::Server>,
+    ) -> u32 {
+        let server = self.server.as_ref().expect("server not available");
+        server.get_player_count() as u32
+    }
+
+    async fn get_mspt(&mut self, _server: Resource<pumpkin::plugin::server::Server>) -> f64 {
+        let server = self.server.as_ref().expect("server not available");
+        server.get_mspt()
+    }
+
+    async fn get_tps(&mut self, _server: Resource<pumpkin::plugin::server::Server>) -> f64 {
+        let server = self.server.as_ref().expect("server not available");
+        server.get_tps()
+    }
 }

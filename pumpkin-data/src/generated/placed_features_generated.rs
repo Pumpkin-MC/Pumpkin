@@ -17,8 +17,8 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
     use pumpkin_util::HeightMap;
     use pumpkin_util::math::int_provider::{
         BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider,
-        ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider, WeightedEntry,
-        WeightedListIntProvider,
+        ConstantIntProvider, IntProvider, NormalIntProvider, TrapezoidIntProvider,
+        UniformIntProvider, WeightedEntry, WeightedListIntProvider,
     };
     use pumpkin_util::math::vector3::Vector3;
     use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
@@ -369,7 +369,7 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
     map.insert(
         "brown_mushroom_nether".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_brown_mushroom".to_string()),
+            feature: Feature::Named("brown_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 2u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -380,13 +380,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "brown_mushroom_normal".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_brown_mushroom".to_string()),
+            feature: Feature::Named("brown_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 256u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -394,13 +419,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "brown_mushroom_old_growth".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_brown_mushroom".to_string()),
+            feature: Feature::Named("brown_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(3i32),
@@ -411,13 +461,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "brown_mushroom_swamp".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_brown_mushroom".to_string()),
+            feature: Feature::Named("brown_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(2i32),
@@ -427,13 +502,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "brown_mushroom_taiga".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_brown_mushroom".to_string()),
+            feature: Feature::Named("brown_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 4u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -441,6 +541,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -465,10 +590,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                         offset: OffsetBlocksBlockPredicate { offset: None },
                         direction: BlockDirection::Down,
                     }),
-                    allowed_search_condition: Some(BlockPredicate::MatchingBlocks(
-                        MatchingBlocksBlockPredicate {
+                    allowed_search_condition: Some(BlockPredicate::MatchingBlockTag(
+                        MatchingBlockTagPredicate {
                             offset: OffsetBlocksBlockPredicate { offset: None },
-                            blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                            tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                         },
                     )),
                     max_steps: 12i32,
@@ -841,7 +966,7 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
         PlacedFeature {
             feature: Feature::Named("end_platform".to_string()),
             placement: vec![
-                PlacementModifier::FixedPlacement(vec![BlockPos::new(100, 50, 0)]),
+                PlacementModifier::FixedPlacement(vec![BlockPos::new(100i32, 49i32, 0i32)]),
                 PlacementModifier::Biome(BiomePlacementModifier),
             ],
         },
@@ -1078,6 +1203,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -6i32,
+                            max_inclusive: 6i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -1109,6 +1259,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -6i32,
+                            max_inclusive: 6i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -1148,6 +1323,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -6i32,
+                            max_inclusive: 6i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -1169,7 +1369,33 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
         "flower_plain".to_string(),
         PlacedFeature {
             feature: Feature::Named("flower_plain".to_string()),
-            placement: vec![],
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -6i32,
+                            max_inclusive: 6i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
+            ],
         },
     );
     map.insert(
@@ -1188,6 +1414,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -6i32,
+                            max_inclusive: 6i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -1202,6 +1453,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -6i32,
+                            max_inclusive: 6i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -1377,12 +1653,12 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
     map.insert(
         "grass_bonemeal".to_string(),
         PlacedFeature {
-            feature: Feature::Named("single_piece_of_grass".to_string()),
+            feature: Feature::Named("grass".to_string()),
             placement: vec![PlacementModifier::BlockPredicateFilter(
                 BlockFilterPlacementModifier {
-                    predicate: BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
-                        blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                     }),
                 },
             )],
@@ -1562,12 +1838,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     target_condition: BlockPredicate::AllOf(AllOfBlockPredicate {
                         predicates: vec![
                             BlockPredicate::Not(NotBlockPredicate {
-                                predicate: Box::new(BlockPredicate::MatchingBlocks(
-                                    MatchingBlocksBlockPredicate {
+                                predicate: Box::new(BlockPredicate::MatchingBlockTag(
+                                    MatchingBlockTagPredicate {
                                         offset: OffsetBlocksBlockPredicate { offset: None },
-                                        blocks: MatchingBlocksWrapper::Single(
-                                            "minecraft:air".to_string(),
-                                        ),
+                                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                                     },
                                 )),
                             }),
@@ -1644,10 +1918,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     target_condition: BlockPredicate::Solid(SolidBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
                     }),
-                    allowed_search_condition: Some(BlockPredicate::MatchingBlocks(
-                        MatchingBlocksBlockPredicate {
+                    allowed_search_condition: Some(BlockPredicate::MatchingBlockTag(
+                        MatchingBlockTagPredicate {
                             offset: OffsetBlocksBlockPredicate { offset: None },
-                            blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                            tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                         },
                     )),
                     max_steps: 12i32,
@@ -1680,10 +1954,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     target_condition: BlockPredicate::Solid(SolidBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
                     }),
-                    allowed_search_condition: Some(BlockPredicate::MatchingBlocks(
-                        MatchingBlocksBlockPredicate {
+                    allowed_search_condition: Some(BlockPredicate::MatchingBlockTag(
+                        MatchingBlockTagPredicate {
                             offset: OffsetBlocksBlockPredicate { offset: None },
-                            blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                            tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                         },
                     )),
                     max_steps: 12i32,
@@ -1716,10 +1990,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     target_condition: BlockPredicate::Solid(SolidBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
                     }),
-                    allowed_search_condition: Some(BlockPredicate::MatchingBlocks(
-                        MatchingBlocksBlockPredicate {
+                    allowed_search_condition: Some(BlockPredicate::MatchingBlockTag(
+                        MatchingBlockTagPredicate {
                             offset: OffsetBlocksBlockPredicate { offset: None },
-                            blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                            tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                         },
                     )),
                     max_steps: 12i32,
@@ -2760,7 +3034,7 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
     map.insert(
         "pale_garden_flowers".to_string(),
         PlacedFeature {
-            feature: Feature::Named("pale_forest_flowers".to_string()),
+            feature: Feature::Named("pale_forest_flower".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 8u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -2768,6 +3042,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlockingNoLeaves,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -2853,14 +3152,52 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
     map.insert(
         "patch_berry_bush".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_berry_bush".to_string()),
-            placement: vec![],
+            feature: Feature::Named("berry_bush".to_string()),
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:grass_block".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
+            ],
         },
     );
     map.insert(
         "patch_berry_common".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_berry_bush".to_string()),
+            feature: Feature::Named("berry_bush".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 32u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -2868,13 +3205,50 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:grass_block".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_berry_rare".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_berry_bush".to_string()),
+            feature: Feature::Named("berry_bush".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 384u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -2882,13 +3256,50 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:grass_block".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_bush".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_bush".to_string()),
+            feature: Feature::Named("bush".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 4u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -2896,20 +3307,86 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(24i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -5i32,
+                            max_inclusive: 5i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_cactus".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_cactus".to_string()),
-            placement: vec![],
+            feature: Feature::Named("cactus".to_string()),
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(10i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::CACTUS,
+                                        properties: Some(props),
+                                    }
+                                },
+                            }),
+                        ],
+                    }),
+                }),
+            ],
         },
     );
     map.insert(
         "patch_cactus_decorated".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_cactus".to_string()),
+            feature: Feature::Named("cactus".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 13u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -2917,13 +3394,53 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(10i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::CACTUS,
+                                        properties: Some(props),
+                                    }
+                                },
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_cactus_desert".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_cactus".to_string()),
+            feature: Feature::Named("cactus".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 6u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -2931,13 +3448,53 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(10i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::CACTUS,
+                                        properties: Some(props),
+                                    }
+                                },
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_crimson_roots".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_crimson_roots".to_string()),
+            feature: Feature::Named("crimson_roots".to_string()),
             placement: vec![
                 PlacementModifier::HeightRange(HeightRangePlacementModifier {
                     height: HeightProvider::Uniform(UniformHeightProvider {
@@ -2946,26 +3503,76 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_dead_bush".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_dead_bush".to_string()),
+            feature: Feature::Named("dead_bush".to_string()),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(4i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_dead_bush_2".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_dead_bush".to_string()),
+            feature: Feature::Named("dead_bush".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(2i32),
@@ -2975,13 +3582,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(4i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_dead_bush_badlands".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_dead_bush".to_string()),
+            feature: Feature::Named("dead_bush".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
@@ -2991,13 +3623,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(4i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_dry_grass_badlands".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_dry_grass".to_string()),
+            feature: Feature::Named("dry_grass".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 6u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3005,13 +3662,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_dry_grass_desert".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_dry_grass".to_string()),
+            feature: Feature::Named("dry_grass".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 3u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3019,6 +3701,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -3041,13 +3748,50 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:netherrack".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_firefly_bush_near_water".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_firefly_bush".to_string()),
+            feature: Feature::Named("firefly_bush".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(2i32),
@@ -3060,9 +3804,9 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
                         predicates: vec![
-                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
@@ -3114,13 +3858,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                         ],
                     }),
                 }),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(20i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -4i32,
+                            max_inclusive: 4i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_firefly_bush_near_water_swamp".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_firefly_bush".to_string()),
+            feature: Feature::Named("firefly_bush".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(3i32),
@@ -3133,9 +3902,9 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                 PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
                     predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
                         predicates: vec![
-                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
-                                blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                             }),
                             BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
                                 offset: OffsetBlocksBlockPredicate { offset: None },
@@ -3187,13 +3956,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                         ],
                     }),
                 }),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(20i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -4i32,
+                            max_inclusive: 4i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_firefly_bush_swamp".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_firefly_bush".to_string()),
+            feature: Feature::Named("firefly_bush".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 8u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3201,26 +3995,76 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(20i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -4i32,
+                            max_inclusive: 4i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_badlands".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_grass".to_string()),
+            feature: Feature::Named("grass".to_string()),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_forest".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_grass".to_string()),
+            feature: Feature::Named("grass".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(2i32),
@@ -3230,13 +4074,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_jungle".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_grass_jungle".to_string()),
+            feature: Feature::Named("grass_jungle".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(25i32),
@@ -3246,13 +4115,54 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::Not(NotBlockPredicate {
+                                predicate: Box::new(BlockPredicate::MatchingBlocks(
+                                    MatchingBlocksBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                        },
+                                        blocks: MatchingBlocksWrapper::Single(
+                                            "minecraft:podzol".to_string(),
+                                        ),
+                                    },
+                                )),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_meadow".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_grass_meadow".to_string()),
+            feature: Feature::Named("grass".to_string()),
             placement: vec![
                 PlacementModifier::NoiseThresholdCount(NoiseThresholdCountPlacementModifier {
                     noise_level: -0.8f64,
@@ -3264,13 +4174,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(16i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_normal".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_grass".to_string()),
+            feature: Feature::Named("grass".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(5i32),
@@ -3280,13 +4215,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_plain".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_grass".to_string()),
+            feature: Feature::Named("grass".to_string()),
             placement: vec![
                 PlacementModifier::NoiseThresholdCount(NoiseThresholdCountPlacementModifier {
                     noise_level: -0.8f64,
@@ -3298,13 +4258,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_savanna".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_grass".to_string()),
+            feature: Feature::Named("grass".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(20i32),
@@ -3314,13 +4299,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_taiga".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_taiga_grass".to_string()),
+            feature: Feature::Named("taiga_grass".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(7i32),
@@ -3330,26 +4340,76 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_grass_taiga_2".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_taiga_grass".to_string()),
+            feature: Feature::Named("taiga_grass".to_string()),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_large_fern".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_large_fern".to_string()),
+            feature: Feature::Named("large_fern".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 5u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3357,13 +4417,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_leaf_litter".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_leaf_litter".to_string()),
+            feature: Feature::Named("leaf_litter".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(2i32),
@@ -3373,13 +4458,50 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:grass_block".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_melon".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_melon".to_string()),
+            feature: Feature::Named("melon".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 6u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3387,13 +4509,55 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::Replaceable(ReplaceableBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                            }),
+                            BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                fluids: MatchingBlocksWrapper::Single(
+                                    "minecraft:empty".to_string(),
+                                ),
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:grass_block".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_melon_sparse".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_melon".to_string()),
+            feature: Feature::Named("melon".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 64u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3401,13 +4565,55 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::Replaceable(ReplaceableBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                            }),
+                            BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                fluids: MatchingBlocksWrapper::Single(
+                                    "minecraft:empty".to_string(),
+                                ),
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:grass_block".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_pumpkin".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_pumpkin".to_string()),
+            feature: Feature::Named("pumpkin".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 300u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3415,6 +4621,43 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:grass_block".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
@@ -3437,13 +4680,50 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::MatchingBlocks(MatchingBlocksBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate {
+                                    offset: Some(Vector3::new(0i32, -1i32, 0i32)),
+                                },
+                                blocks: MatchingBlocksWrapper::Single(
+                                    "minecraft:soul_soil".to_string(),
+                                ),
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_sugar_cane".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_sugar_cane".to_string()),
+            feature: Feature::Named("sugar_cane".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 6u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3451,13 +4731,93 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(20i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -4i32,
+                            max_inclusive: 4i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::SUGAR_CANE,
+                                        properties: Some(props),
+                                    }
+                                },
+                            }),
+                            BlockPredicate::AnyOf(AnyOfBlockPredicate {
+                                predicates: vec![
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(1i32, -1i32, 0i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(-1i32, -1i32, 0i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, 1i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, -1i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_sugar_cane_badlands".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_sugar_cane".to_string()),
+            feature: Feature::Named("sugar_cane".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 5u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3465,26 +4825,186 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(20i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -4i32,
+                            max_inclusive: 4i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::SUGAR_CANE,
+                                        properties: Some(props),
+                                    }
+                                },
+                            }),
+                            BlockPredicate::AnyOf(AnyOfBlockPredicate {
+                                predicates: vec![
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(1i32, -1i32, 0i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(-1i32, -1i32, 0i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, 1i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, -1i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_sugar_cane_desert".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_sugar_cane".to_string()),
+            feature: Feature::Named("sugar_cane".to_string()),
             placement: vec![
                 PlacementModifier::InSquare(SquarePlacementModifier),
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(20i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -4i32,
+                            max_inclusive: 4i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::SUGAR_CANE,
+                                        properties: Some(props),
+                                    }
+                                },
+                            }),
+                            BlockPredicate::AnyOf(AnyOfBlockPredicate {
+                                predicates: vec![
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(1i32, -1i32, 0i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(-1i32, -1i32, 0i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, 1i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, -1i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_sugar_cane_swamp".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_sugar_cane".to_string()),
+            feature: Feature::Named("sugar_cane".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 3u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3492,13 +5012,93 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(20i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -4i32,
+                            max_inclusive: 4i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: 0i32,
+                            max_inclusive: 0i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::AllOf(AllOfBlockPredicate {
+                        predicates: vec![
+                            BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                            }),
+                            BlockPredicate::WouldSurvive(WouldSurviveBlockPredicate {
+                                offset: OffsetBlocksBlockPredicate { offset: None },
+                                state: {
+                                    let mut props = std::collections::HashMap::new();
+                                    props.insert("age".to_string(), "0".to_string());
+                                    BlockStateCodec {
+                                        name: &pumpkin_data::Block::SUGAR_CANE,
+                                        properties: Some(props),
+                                    }
+                                },
+                            }),
+                            BlockPredicate::AnyOf(AnyOfBlockPredicate {
+                                predicates: vec![
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(1i32, -1i32, 0i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(-1i32, -1i32, 0i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, 1i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                    BlockPredicate::MatchingFluids(MatchingFluidsBlockPredicate {
+                                        offset: OffsetBlocksBlockPredicate {
+                                            offset: Some(Vector3::new(0i32, -1i32, -1i32)),
+                                        },
+                                        fluids: MatchingBlocksWrapper::Multiple(vec![
+                                            "minecraft:water".to_string(),
+                                            "minecraft:flowing_water".to_string(),
+                                        ]),
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_sunflower".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_sunflower".to_string()),
+            feature: Feature::Named("sunflower".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 3u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3506,20 +5106,71 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_taiga_grass".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_taiga_grass".to_string()),
-            placement: vec![],
+            feature: Feature::Named("taiga_grass".to_string()),
+            placement: vec![
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(32i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
+            ],
         },
     );
     map.insert(
         "patch_tall_grass".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_tall_grass".to_string()),
+            feature: Feature::Named("tall_grass".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 5u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3527,13 +5178,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_tall_grass_2".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_tall_grass".to_string()),
+            feature: Feature::Named("tall_grass".to_string()),
             placement: vec![
                 PlacementModifier::NoiseThresholdCount(NoiseThresholdCountPlacementModifier {
                     noise_level: -0.8f64,
@@ -3546,13 +5222,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "patch_waterlily".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_waterlily".to_string()),
+            feature: Feature::Named("waterlily".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(4i32),
@@ -3562,6 +5263,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::WorldSurfaceWg,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(10i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -3725,7 +5451,7 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
     map.insert(
         "red_mushroom_nether".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_red_mushroom".to_string()),
+            feature: Feature::Named("red_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 2u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3736,13 +5462,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     }),
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "red_mushroom_normal".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_red_mushroom".to_string()),
+            feature: Feature::Named("red_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 512u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3750,13 +5501,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "red_mushroom_old_growth".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_red_mushroom".to_string()),
+            feature: Feature::Named("red_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 171u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3764,13 +5540,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "red_mushroom_swamp".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_red_mushroom".to_string()),
+            feature: Feature::Named("red_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 64u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3778,13 +5579,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "red_mushroom_taiga".to_string(),
         PlacedFeature {
-            feature: Feature::Named("patch_red_mushroom".to_string()),
+            feature: Feature::Named("red_mushroom".to_string()),
             placement: vec![
                 PlacementModifier::RarityFilter(RarityFilterPlacementModifier { chance: 256u32 }),
                 PlacementModifier::InSquare(SquarePlacementModifier),
@@ -3792,6 +5618,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(96i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -7i32,
+                            max_inclusive: 7i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -3i32,
+                            max_inclusive: 3i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
@@ -3818,10 +5669,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     target_condition: BlockPredicate::Solid(SolidBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
                     }),
-                    allowed_search_condition: Some(BlockPredicate::MatchingBlocks(
-                        MatchingBlocksBlockPredicate {
+                    allowed_search_condition: Some(BlockPredicate::MatchingBlockTag(
+                        MatchingBlockTagPredicate {
                             offset: OffsetBlocksBlockPredicate { offset: None },
-                            blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                            tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                         },
                     )),
                     max_steps: 12i32,
@@ -4056,10 +5907,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     target_condition: BlockPredicate::Solid(SolidBlockPredicate {
                         offset: OffsetBlocksBlockPredicate { offset: None },
                     }),
-                    allowed_search_condition: Some(BlockPredicate::MatchingBlocks(
-                        MatchingBlocksBlockPredicate {
+                    allowed_search_condition: Some(BlockPredicate::MatchingBlockTag(
+                        MatchingBlockTagPredicate {
                             offset: OffsetBlocksBlockPredicate { offset: None },
-                            blocks: MatchingBlocksWrapper::Single("minecraft:air".to_string()),
+                            tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
                         },
                     )),
                     max_steps: 12i32,
@@ -5251,7 +7102,7 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
     map.insert(
         "wildflowers_birch_forest".to_string(),
         PlacedFeature {
-            feature: Feature::Named("wildflowers_birch_forest".to_string()),
+            feature: Feature::Named("wildflower".to_string()),
             placement: vec![
                 PlacementModifier::Count(CountPlacementModifier {
                     count: IntProvider::Constant(3i32),
@@ -5262,13 +7113,38 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(64i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -6i32,
+                            max_inclusive: 6i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );
     map.insert(
         "wildflowers_meadow".to_string(),
         PlacedFeature {
-            feature: Feature::Named("wildflowers_meadow".to_string()),
+            feature: Feature::Named("wildflower".to_string()),
             placement: vec![
                 PlacementModifier::NoiseThresholdCount(NoiseThresholdCountPlacementModifier {
                     noise_level: -0.8f64,
@@ -5280,6 +7156,31 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                     heightmap: HeightMap::MotionBlocking,
                 }),
                 PlacementModifier::Biome(BiomePlacementModifier),
+                PlacementModifier::Count(CountPlacementModifier {
+                    count: IntProvider::Constant(8i32),
+                }),
+                PlacementModifier::RandomOffset(RandomOffsetPlacementModifier {
+                    xz_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -6i32,
+                            max_inclusive: 6i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                    y_spread: IntProvider::Object(NormalIntProvider::Trapezoid(
+                        TrapezoidIntProvider {
+                            min_inclusive: -2i32,
+                            max_inclusive: 2i32,
+                            plateau: 0i32,
+                        },
+                    )),
+                }),
+                PlacementModifier::BlockPredicateFilter(BlockFilterPlacementModifier {
+                    predicate: BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                        offset: OffsetBlocksBlockPredicate { offset: None },
+                        tag: pumpkin_data::tag::Block::MINECRAFT_AIR,
+                    }),
+                }),
             ],
         },
     );

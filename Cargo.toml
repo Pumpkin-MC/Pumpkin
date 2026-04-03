@@ -90,7 +90,7 @@ debug = true
 strip = false
 
 [workspace.dependencies]
-tokio = { version = "1.50", default-features = false }
+tokio = { version = "1.51", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
 
 
@@ -181,7 +181,7 @@ ureq = "3.3.0"
 wasmtime = "43.0"
 wasmtime-wasi = "43.0"
 wit-bindgen = "0.54"
-wasmparser = "0.245"
+wasmparser = "0.246"
 
 postcard = { version = "1.1", features = ["alloc"] }
 tracing-serde-structured = "0.4"

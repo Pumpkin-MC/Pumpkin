@@ -4,6 +4,16 @@ interface player {
     use permission.{permission-level};
     use text.{text-component};
 
+    record player-abilities {
+        invulnerable:       bool,
+        flying:             bool,
+        allow-flying:       bool,
+        creative:           bool,
+        allow-modify-world: bool,
+        fly-speed:          f32,
+        walk-speed:         f32,
+    }
+
     resource player {
         get-id: func () -> result<string, string>;
         get-name: func () -> result<string, string>;
@@ -34,6 +44,10 @@ interface player {
         teleport: func (position: position, yaw: f32, pitch: f32) -> result<_, string>;
         teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>) -> result<_, string>;
         kick: func (message: text-component) -> result<_, string>;
+        respawn: func () -> result<_, string>;
+
+        ban: func (reason: option<text-component>) -> result<_, string>;
+        ban-ip: func (reason: option<text-component>) -> result<_, string>;
 
         // Inventory
         get-selected-slot: func () -> result<u8, string>;
@@ -42,11 +56,38 @@ interface player {
 
         // Status
         get-health: func () -> result<f32, string>;
+        set-health: func (health: f32) -> result<_, string>;
         get-max-health: func () -> result<f32, string>;
+        set-max-health: func (max-health: f32) -> result<_, string>;
         get-food-level: func () -> result<u8, string>;
+        set-food-level: func (food-level: u8) -> result<_, string>;
         get-saturation: func () -> result<f32, string>;
-        get-experience-level: func () -> result<s32, string>;
-        get-experience-progress: func () -> result<f32, string>;
-        get-experience-points: func () -> result<s32, string>;
+        set-saturation: func (saturation: f32) -> result<_, string>;
+        get-exhaustion: func () -> result<f32, string>;
+        set-exhaustion: func (exhaustion: f32) -> result<_, string>;
+        get-absorption: func () -> result<f32, string>;
+        set-absorption: func (absorption: f32) -> result<_, string>;
+
+        get-experience-level:    func() -> result<s32, string>;
+        get-experience-progress: func() -> result<f32, string>;
+        get-experience-points:   func() -> result<s32, string>;
+        set-experience-level:    func(level: s32) -> result<_, string>;
+        set-experience-progress: func(progress: f32) -> result<_, string>;
+        set-experience-points:   func(points: s32) -> result<_, string>;
+        add-experience-levels:   func(levels: s32) -> result<_, string>;
+        add-experience-points:   func(points: s32) -> result<_, string>;
+
+        is-sneaking:  func() -> result<bool, string>;
+        set-sneaking: func(sneaking: bool) -> result<_, string>;
+        is-sprinting: func() -> result<bool, string>;
+        set-sprinting: func(sprinting: bool) -> result<_, string>;
+        is-on-ground: func() -> result<bool, string>;
+        is-flying:    func() -> result<bool, string>;
+        set-flying:   func(flying: bool) -> result<_, string>;
+
+        get-abilities: func() -> result<player-abilities, string>;
+        set-abilities: func(abilities: player-abilities) -> result<_, string>;
+
+        get-ip: func() -> result<string, string>;
     }
 }

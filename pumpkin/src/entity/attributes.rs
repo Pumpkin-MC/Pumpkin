@@ -1,8 +1,6 @@
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use std::collections::HashMap;
-use std::sync::LazyLock;
-use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -259,88 +257,4 @@ impl AttributeRegistry {
             inner.insert(attr.id, val);
         }
     }
-}
-
-// Provide a global default registry that can be referenced.
-pub static DEFAULT_ATTRIBUTE_REGISTRY: LazyLock<RwLock<AttributeRegistry>> =
-    LazyLock::new(|| RwLock::new(AttributeRegistry::new()));
-
-/// Initialize the global attribute registry with per-entity registrations.
-pub fn init_all_attributes() {
-    let mut reg = DEFAULT_ATTRIBUTE_REGISTRY.write().unwrap();
-
-    // Register per-entity attribute builders here. Add entries as modules implement
-    // `create_attributes()` on their entity types.
-    reg.register_builder(
-        &EntityType::CREEPER, // Aw man
-        crate::entity::mob::creeper::CreeperEntity::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::ENDERMAN,
-        crate::entity::mob::enderman::EndermanEntity::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::WOLF,
-        crate::entity::passive::wolf::WolfEntity::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::IRON_GOLEM,
-        crate::entity::passive::iron_golem::IronGolemEntity::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::SNOW_GOLEM,
-        crate::entity::passive::snow_golem::SnowGolemEntity::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::SKELETON,
-        crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
-    );
-
-    // Register skeleton variants that reuse the base skeleton attributes
-    reg.register_builder(
-        &EntityType::STRAY,
-        crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::WITHER_SKELETON,
-        crate::entity::mob::skeleton::SkeletonEntityBase::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::ZOMBIE,
-        crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
-    );
-
-    // Register zombie-family variants that reuse the zombie attributes
-    reg.register_builder(
-        &EntityType::HUSK,
-        crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::DROWNED,
-        crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::ZOMBIE_VILLAGER,
-        crate::entity::mob::zombie::ZombieEntityBase::create_attributes(),
-    );
-
-    // Boss entities
-    reg.register_builder(
-        &EntityType::WITHER,
-        crate::entity::boss::wither::WitherEntity::create_attributes(),
-    );
-
-    reg.register_builder(
-        &EntityType::PLAYER,
-        crate::entity::player::Player::create_attributes(),
-    );
 }
