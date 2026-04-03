@@ -96,6 +96,8 @@ wasmparser = { workspace = true }
 postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
 
+bitflags = { workspace = true }
+
 [dev-dependencies]
 tempfile.workspace = true
 
