@@ -72,7 +72,7 @@ impl Context {
     /// A string representing the path to the data folder.
     #[must_use]
     pub fn get_data_folder(&self) -> PathBuf {
-        let path = Path::new("./plugins").join(&self.metadata.name);
+        let path = Path::new("plugins").join(&self.metadata.name);
         if !path.exists() {
             fs::create_dir_all(&path).unwrap();
         }
