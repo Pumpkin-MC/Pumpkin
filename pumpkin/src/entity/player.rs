@@ -28,7 +28,6 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::entity::attributes::AttributeBuilder;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
@@ -595,11 +594,6 @@ impl Player {
             screen_handler_listener: Arc::new(ScreenListener {}),
             screen_handler_sync_handler: Arc::new(SyncHandler::new()),
         }
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.1)
     }
 
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited

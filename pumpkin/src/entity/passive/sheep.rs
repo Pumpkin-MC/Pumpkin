@@ -3,8 +3,6 @@ use std::sync::{
     atomic::{AtomicU8, Ordering},
 };
 
-use crate::entity::attributes::AttributeBuilder;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::{
     entity::EntityType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
 };
@@ -14,9 +12,9 @@ use pumpkin_protocol::java::client::play::Metadata;
 use crate::entity::{
     Entity, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
-        eat_grass::EatGrassGoal, escape_danger::EscapeDangerGoal, look_around::LookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        eat_grass::EatGrassGoal, escape_danger::EscapeDangerGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -53,7 +51,7 @@ impl SheepEntity {
                 7,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
@@ -77,7 +75,7 @@ impl SheepEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::COLOR_ID,
+                TrackedData::WOOL_ID,
                 MetaDataType::BYTE,
                 byte as i8,
             )])
@@ -96,13 +94,6 @@ impl SheepEntity {
             self.get_packed_byte() & !0x10
         };
         self.set_packed_and_sync(byte).await;
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new()
-            .add(Attributes::MOVEMENT_SPEED, 0.23)
-            .add(Attributes::MAX_HEALTH, 8.0)
     }
 }
 

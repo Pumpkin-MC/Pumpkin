@@ -11,39 +11,32 @@ use crate::entity::{
     mob::{Mob, MobEntity},
 };
 
-pub mod bogged;
-pub mod parched;
-#[allow(clippy::module_inception)]
-pub mod skeleton;
-pub mod stray;
-pub mod wither;
-
-pub struct SkeletonEntityBase {
-    pub mob_entity: MobEntity,
+pub struct BlazeEntity {
+    entity: Arc<MobEntity>,
 }
 
-impl SkeletonEntityBase {
+impl BlazeEntity {
     pub async fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
-        let mob = Self { mob_entity };
-        let mob_arc = Arc::new(mob);
+        let entity = Arc::new(MobEntity::new(entity));
+        let zombie = Self { entity };
+        let mob_arc = Arc::new(zombie);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
+            let mut goal_selector = mob_arc.entity.goals_selector.lock().await;
+            let mut target_selector = mob_arc.entity.target_selector.lock().await;
 
+            // TODO
             goal_selector.add_goal(
                 8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
-
             target_selector.add_goal(
                 2,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
+                ActiveTargetGoal::with_default(&mob_arc.entity, &EntityType::PLAYER, true),
             );
         };
 
@@ -51,10 +44,10 @@ impl SkeletonEntityBase {
     }
 }
 
-impl NBTStorage for SkeletonEntityBase {}
+impl NBTStorage for BlazeEntity {}
 
-impl Mob for SkeletonEntityBase {
+impl Mob for BlazeEntity {
     fn get_mob_entity(&self) -> &MobEntity {
-        &self.mob_entity
+        &self.entity
     }
 }

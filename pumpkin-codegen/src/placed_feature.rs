@@ -126,8 +126,7 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
             quote! { PlacementModifier::FixedPlacement(vec![#(#positions),*]) }
         }
         "minecraft:heightmap" => {
-            let heightmap =
-                value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
+            let heightmap = value_to_height_map(v["heightmap"].as_str().unwrap());
             quote! {
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: #heightmap,

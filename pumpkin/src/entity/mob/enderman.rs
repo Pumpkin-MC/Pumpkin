@@ -3,7 +3,6 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use crate::entity::attributes::AttributeBuilder;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use pumpkin_data::attributes::Attributes;
@@ -36,7 +35,7 @@ use crate::entity::{
     ai::{
         goal::{
             GoalFuture, active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
-            look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
             melee_attack::MeleeAttackGoal, pick_up_block::PickUpBlockGoal,
             place_block::PlaceBlockGoal, revenge::RevengeGoal, swim::SwimGoal,
             teleport_towards_player::TeleportTowardsPlayerGoal, wander_around::WanderAroundGoal,
@@ -101,7 +100,7 @@ impl EndermanEntity {
                 8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(10, Box::new(PlaceBlockGoal::new(mob_arc.clone())));
             goal_selector.add_goal(11, Box::new(PickUpBlockGoal::new(mob_arc.clone())));
 
@@ -114,16 +113,6 @@ impl EndermanEntity {
         };
 
         mob_arc
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new()
-            .add(Attributes::ATTACK_DAMAGE, 7.0)
-            .add(Attributes::FOLLOW_RANGE, 64.0)
-            .add(Attributes::MOVEMENT_SPEED, 0.3)
-            .add(Attributes::STEP_HEIGHT, 1.0)
-            .add(Attributes::MAX_HEALTH, 40.0)
     }
 
     pub async fn teleport_randomly(&self) -> bool {
