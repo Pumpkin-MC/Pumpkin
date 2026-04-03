@@ -13,6 +13,7 @@ use crate::{
 use pumpkin_data::{
     block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
     item::Item,
+    item_stack::ItemStack,
     sound::{Sound, SoundCategory},
     tag,
     tag::Taggable,
@@ -21,7 +22,7 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_world::{
     BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    inventory::Inventory, item::ItemStack,
+    inventory::Inventory,
 };
 use tokio::sync::Mutex;
 

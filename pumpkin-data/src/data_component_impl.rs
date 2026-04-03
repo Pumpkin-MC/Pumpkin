@@ -4,11 +4,13 @@ use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
-    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemName,
-    JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable,
+    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
+    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
 };
+use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
-use crate::tag::{Tag, Taggable};
+use crate::sound::Sound;
+use crate::tag::{RegistryKey, Tag, Taggable};
 use crate::{AttributeModifierSlot, Block, Enchantment};
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
@@ -21,12 +23,17 @@ use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, de};
 use std::any::Any;
 use std::borrow::Cow;
+use std::error::Error;
 use std::fmt::Debug;
-use std::hash::Hash;
+use std::str::FromStr;
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
 
 pub trait DataComponentImpl: Send + Sync {
     fn write_data(&self) -> NbtTag {
-        todo!()
+        NbtTag::End
     }
     fn get_hash(&self) -> i32 {
         todo!()
@@ -53,6 +60,9 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
+        ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
+        Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
+        Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -191,7 +201,27 @@ impl DataComponentImpl for ItemNameImpl {
     default_impl!(ItemName);
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub struct ItemModelImpl;
+pub struct ItemModelImpl {
+    pub id: String,
+}
+impl ItemModelImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_string().map(|id| Self {
+            id: String::from(id),
+        })
+    }
+}
+impl DataComponentImpl for ItemModelImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.id.clone())
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.id.as_str()) as i32
+    }
+
+    default_impl!(ItemModel);
+}
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct LoreImpl;
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -228,6 +258,86 @@ fn get_i32_hash(val: i32) -> u32 {
     let mut digest = Digest::new(Crc32Iscsi);
     digest.update(&[8u8]);
     digest.update(&val.to_le_bytes());
+    digest.finalize() as u32
+}
+
+fn get_f32_hash(val: f32) -> u32 {
+    let mut digest = Digest::new(Crc32Iscsi);
+    digest.update(&[7u8]);
+    digest.update(&val.to_bits().to_le_bytes());
+    digest.finalize() as u32
+}
+
+fn get_idor_hash(val: &IdOr<SoundEvent>) -> u32 {
+    let mut digest = Digest::new(Crc32Iscsi);
+    digest.update(&[6u8]);
+    match val {
+        IdOr::Id(sound) => {
+            digest.update(&[1u8]);
+            digest.update(&get_str_hash(sound.to_name()).to_le_bytes());
+        }
+        IdOr::Value(sound) => {
+            digest.update(&[2u8]);
+            digest.update(&get_str_hash(sound.sound_name.as_str()).to_le_bytes());
+            if let Some(range) = sound.range {
+                digest.update(&[1u8]);
+                digest.update(&get_f32_hash(range).to_le_bytes());
+            } else {
+                digest.update(&[0u8]);
+            }
+        }
+    }
+    digest.finalize() as u32
+}
+
+fn put_idor(nbt: &mut NbtCompound, key: &str, val: &IdOr<SoundEvent>) {
+    match val {
+        IdOr::Id(id) => nbt.put_string(key, format!("minecraft:{}", id.to_name())),
+        IdOr::Value(sound) => {
+            let mut sound_compound = NbtCompound::new();
+
+            sound_compound.put_string("sound_id", sound.sound_name.clone());
+            if let Some(range) = sound.range {
+                sound_compound.put_float("range", range);
+            }
+            nbt.put(key, NbtTag::Compound(sound_compound));
+        }
+    }
+}
+
+fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<SoundEvent> {
+    if let Some(sound) = nbt.get_string(key) {
+        let sound = sound.strip_prefix("minecraft:").unwrap_or(sound);
+        IdOr::Id(Sound::from_name(sound).unwrap_or(default))
+    } else if let Some(sound_compound) = nbt.get_compound(key) {
+        let sound_name = sound_compound
+            .get_string("sound_id")
+            .expect("SoundEvent compound must have a 'sound_id' field");
+        let range = sound_compound.get_float("range");
+        IdOr::Value(SoundEvent {
+            sound_name: sound_name.to_string(),
+            range,
+        })
+    } else {
+        IdOr::Id(default)
+    }
+}
+
+fn get_idset_hash<T: IDSetContent>(val: &IDSet<T>) -> u32 {
+    let mut digest = Digest::new(Crc32Iscsi);
+    match val {
+        IDSet::Tag(tag) => {
+            digest.update(&[1u8]);
+            digest.update(&get_str_hash(tag).to_le_bytes());
+        }
+        IDSet::IDs(ids) => {
+            digest.update(&[2u8]);
+            for id in ids.iter() {
+                digest.update(&[3u8]);
+                digest.update(&get_i32_hash(id.registry_id() as i32).to_le_bytes());
+            }
+        }
+    }
     digest.finalize() as u32
 }
 
@@ -328,22 +438,212 @@ impl Hash for FoodImpl {
         self.can_always_eat.hash(state);
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SoundEvent {
+    pub sound_name: String,
+    pub range: Option<f32>,
+}
+
+impl Hash for SoundEvent {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.sound_name.hash(state);
+        if let Some(val) = self.range {
+            true.hash(state);
+            unsafe { (*(&raw const val).cast::<u32>()).hash(state) };
+        } else {
+            false.hash(state);
+        }
+    }
+}
+
+impl SoundEvent {
+    pub const fn new(sound_name: String, range: Option<f32>) -> Self {
+        Self { sound_name, range }
+    }
+}
+#[derive(Clone, Debug, PartialEq, Hash)]
+pub enum IdOr<T> {
+    Id(Sound),
+    Value(T),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConsumableImpl {
     pub consume_seconds: f32,
-    // TODO: more
+    pub animation: ConsumeAnimation,
+    pub sound_event: IdOr<SoundEvent>,
+    pub consume_particles: bool,
+    pub effects: Cow<'static, [ConsumeEffect]>,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum ConsumeAnimation {
+    None,
+    Eat,
+    Drink,
+    Block,
+    Bow,
+    Spear,
+    Crossbow,
+    Spyglass,
+    Horn,
+    Brush,
+}
+
+impl ConsumeAnimation {
+    #[must_use]
+    pub const fn to_str(&self) -> &'static str {
+        match self {
+            ConsumeAnimation::None => "none",
+            ConsumeAnimation::Eat => "eat",
+            ConsumeAnimation::Drink => "drink",
+            ConsumeAnimation::Block => "block",
+            ConsumeAnimation::Bow => "bow",
+            ConsumeAnimation::Spear => "spear",
+            ConsumeAnimation::Crossbow => "crossbow",
+            ConsumeAnimation::Spyglass => "spyglass",
+            ConsumeAnimation::Horn => "horn",
+            ConsumeAnimation::Brush => "brush",
+        }
+    }
+}
+impl TryFrom<i32> for ConsumeAnimation {
+    type Error = ();
+
+    /// Attempts to convert an `i32` value into a [`ConsumeAnimation`].
+    ///
+    /// # Parameters
+    /// - `value`: The numeric representation of a consume animation.
+    ///
+    /// # Returns
+    /// - `Ok(ConsumeAnimation)` if the value corresponds to a valid consume animation:
+    ///   - `0` → `None`
+    ///   - `1` → `Eat`
+    ///   - `2` → `Drink`
+    ///   - `3` → `Block`
+    ///   - `4` → `Bow`
+    ///   - `5` → `Spear`
+    ///   - `6` → `Crossbow`
+    ///   - `7` → `Spyglass`
+    ///   - `8` → `Horn`
+    ///   - `9` → `Brush`
+    /// - `Err(())` if the value does not correspond to any valid consume animation.
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::None),
+            1 => Ok(Self::Eat),
+            2 => Ok(Self::Drink),
+            3 => Ok(Self::Block),
+            4 => Ok(Self::Bow),
+            5 => Ok(Self::Spear),
+            6 => Ok(Self::Crossbow),
+            7 => Ok(Self::Spyglass),
+            8 => Ok(Self::Horn),
+            9 => Ok(Self::Brush),
+            _ => Err(()),
+        }
+    }
+}
+impl FromStr for ConsumeAnimation {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "none" => Ok(Self::None),
+            "eat" => Ok(Self::Eat),
+            "drink" => Ok(Self::Drink),
+            "block" => Ok(Self::Block),
+            "bow" => Ok(Self::Bow),
+            "spear" => Ok(Self::Spear),
+            "crossbow" => Ok(Self::Crossbow),
+            "spyglass" => Ok(Self::Spyglass),
+            "horn" => Ok(Self::Horn),
+            "brush" => Ok(Self::Brush),
+            _ => Err(()),
+        }
+    }
 }
 
 impl ConsumableImpl {
+    pub const fn new(
+        consume_seconds: f32,
+        animation: ConsumeAnimation,
+        sound_event: IdOr<SoundEvent>,
+        consume_particles: bool,
+        effects: Cow<'static, [ConsumeEffect]>,
+    ) -> Self {
+        Self {
+            consume_seconds,
+            animation,
+            sound_event,
+            consume_particles,
+            effects,
+        }
+    }
     #[must_use]
     pub fn consume_ticks(&self) -> i32 {
         (self.consume_seconds * 20.0) as i32
     }
-}
 
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let consume_seconds = compound.get_float("consume_seconds")?;
+        let animation = compound
+            .get_string("animation")?
+            .parse::<ConsumeAnimation>()
+            .ok()?;
+        let sound_event = get_idor(compound, "sound", Sound::EntityGenericEat); // Default to generic eat sound if the sound name is invalid
+        let consume_particles = compound.get_bool("has_consume_particles").unwrap_or(false);
+        let opt_list = compound.get_list("on_consume_effects");
+
+        let effects: Cow<'static, [ConsumeEffect]> = if let Some(effect_list) = opt_list {
+            effect_list
+                .iter()
+                .filter_map(ConsumeEffect::read_data)
+                .collect()
+        } else {
+            Cow::Borrowed(&[])
+        };
+
+        Some(Self {
+            consume_seconds,
+            animation,
+            sound_event,
+            consume_particles,
+            effects,
+        })
+    }
+}
 impl DataComponentImpl for ConsumableImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_float("consume_seconds", self.consume_seconds);
+        compound.put_string("animation", self.animation.to_str().to_string());
+        put_idor(&mut compound, "sound", &self.sound_event);
+        compound.put_bool("has_consume_particles", self.consume_particles);
+
+        let nbt_vec = self.effects.iter().map(|x| x.as_nbt()).collect();
+        compound.put_list("on_consume_effects", nbt_vec);
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        digest.update(&get_f32_hash(self.consume_seconds).to_le_bytes());
+        digest.update(&get_i32_hash(self.animation.clone() as i32).to_le_bytes());
+        digest.update(&get_idor_hash(&self.sound_event).to_be_bytes());
+        digest.update(&[self.consume_particles as u8]);
+        for effect in self.effects.iter() {
+            digest.update(&effect.get_hash().to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        digest.finalize() as i32
+    }
+
     default_impl!(Consumable);
 }
+
 impl Hash for ConsumableImpl {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         unsafe { (*(&raw const self.consume_seconds).cast::<u32>()).hash(state) };
@@ -580,15 +880,81 @@ impl DataComponentImpl for DamageResistantImpl {
     default_impl!(DamageResistant);
 }
 
-#[derive(Clone, Hash, PartialEq, Eq)]
-pub enum IDSet {
-    Tag(&'static Tag),
-    Blocks(Cow<'static, [&'static Block]>),
+pub trait IDSetContent {
+    fn registry_id(&self) -> u16;
+    fn to_string(&self) -> String;
+    fn from_id(id: u16) -> Option<&'static Self>;
+    fn from_str(name: &str) -> Option<&'static Self>;
+}
+
+impl IDSetContent for Block {
+    fn registry_id(&self) -> u16 {
+        Taggable::registry_id(self)
+    }
+
+    fn from_id(id: u16) -> Option<&'static Self> {
+        Some(Block::from_id(id))
+    }
+
+    fn from_str(name: &str) -> Option<&'static Self> {
+        Block::from_name(name)
+    }
+
+    fn to_string(&self) -> String {
+        self.name.to_string()
+    }
+}
+
+#[derive(Clone, Hash, PartialEq, Debug)]
+pub enum IDSet<T: IDSetContent + 'static> {
+    Tag(Cow<'static, str>),
+    IDs(Cow<'static, [&'static T]>),
+}
+
+impl<T: IDSetContent + 'static> IDSet<T> {
+    fn read(data: &NbtTag) -> Option<Self> {
+        match data.clone() {
+            NbtTag::String(tag) => {
+                if tag.starts_with("#") {
+                    Some(Self::Tag(Cow::Owned(tag.strip_prefix("#")?.to_string())))
+                } else {
+                    Some(Self::IDs(Cow::Owned([T::from_str(tag.as_str())?].to_vec())))
+                }
+            }
+            NbtTag::List(nbt_tags) => {
+                let mut ids = Vec::<&T>::new();
+                for nbt in nbt_tags {
+                    if let NbtTag::String(id) = nbt
+                        && let Some(instance) = T::from_str(id.as_str())
+                    {
+                        ids.push(instance);
+                    }
+                }
+                Some(Self::IDs(Cow::Owned(ids)))
+            }
+            _ => None,
+        }
+    }
+
+    fn write(&self, compound: &mut NbtCompound, key: &str) {
+        match self {
+            Self::Tag(cow) => {
+                let mut tag = cow.to_string();
+                tag.insert(0, '#');
+                compound.put_string(key, tag);
+            }
+            Self::IDs(arr) => {
+                let id_vec: Vec<NbtTag> =
+                    arr.iter().map(|x| NbtTag::String(x.to_string())).collect();
+                compound.put_list(key, id_vec);
+            }
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
 pub struct ToolRule {
-    pub blocks: IDSet,
+    pub blocks: IDSet<Block>,
     pub speed: Option<f32>,
     pub correct_for_drops: Option<bool>,
 }
@@ -622,8 +988,44 @@ impl Hash for ToolImpl {
         self.can_destroy_blocks_in_creative.hash(state);
     }
 }
+/// Weapon component: specifies durability cost per attack.
+/// NOTE: If additional fields are added, update `get_hash()` to include them.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct WeaponImpl;
+pub struct WeaponImpl {
+    pub item_damage_per_attack: u32,
+}
+impl WeaponImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        // NOTE: Error handling for item_damage_per_attack:
+        // - Missing key: defaults to 1 (vanilla behavior for unmodified items).
+        // - Wrong NBT type (e.g. float instead of int): silently defaults to 1.
+        // - Negative value: clamped to 0 then cast to u32 (protects against direct NBT manipulation).
+        // This conservative approach prioritizes safety over strict validation.
+        // TODO: Add tracing::warn! at the call site (in pumpkin crate where tracing is available)
+        // to help datapack authors debug negative values or type mismatches.
+        let item_damage_per_attack = compound
+            .get_int("item_damage_per_attack")
+            .unwrap_or(1)
+            .max(0) as u32;
+        // TODO: Deserialize disable_blocking_for_seconds once NBT float API is clarified.
+        // For now, preserve it by storing the raw compound for round-trip fidelity.
+        Some(Self {
+            item_damage_per_attack,
+        })
+    }
+}
+impl DataComponentImpl for WeaponImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_int("item_damage_per_attack", self.item_damage_per_attack as i32);
+        NbtTag::Compound(compound)
+    }
+    fn get_hash(&self) -> i32 {
+        self.item_damage_per_attack as i32
+    }
+    default_impl!(Weapon);
+}
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum EquipmentType {
@@ -728,17 +1130,60 @@ impl EquipmentSlot {
     }
 
     #[must_use]
-    pub fn get_from_name(name: &str) -> Option<Self> {
+    pub const fn get_slot_index(&self) -> i32 {
+        match self {
+            Self::MainHand(data) => data.index,
+            Self::OffHand(data) => data.index,
+            Self::Feet(data) => data.index,
+            Self::Legs(data) => data.index,
+            Self::Chest(data) => data.index,
+            Self::Head(data) => data.index,
+            Self::Body(data) => data.index,
+            Self::Saddle(data) => data.index,
+        }
+    }
+
+    #[must_use]
+    pub fn from_slot_index(name: i32) -> Option<&'static Self> {
         match name {
-            "mainhand" => Some(Self::MAIN_HAND),
-            "offhand" => Some(Self::OFF_HAND),
-            "feet" => Some(Self::FEET),
-            "legs" => Some(Self::LEGS),
-            "chest" => Some(Self::CHEST),
-            "head" => Some(Self::HEAD),
-            "body" => Some(Self::BODY),
-            "saddle" => Some(Self::SADDLE),
+            0 => Some(&Self::MAIN_HAND),
+            1 => Some(&Self::FEET),
+            2 => Some(&Self::LEGS),
+            3 => Some(&Self::CHEST),
+            4 => Some(&Self::HEAD),
+            5 => Some(&Self::OFF_HAND),
+            6 => Some(&Self::BODY),
+            7 => Some(&Self::SADDLE),
             _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn get_from_name(name: &str) -> Option<&'static Self> {
+        match name {
+            "mainhand" => Some(&Self::MAIN_HAND),
+            "offhand" => Some(&Self::OFF_HAND),
+            "feet" => Some(&Self::FEET),
+            "legs" => Some(&Self::LEGS),
+            "chest" => Some(&Self::CHEST),
+            "head" => Some(&Self::HEAD),
+            "body" => Some(&Self::BODY),
+            "saddle" => Some(&Self::SADDLE),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn to_name(&self) -> &Cow<'static, str> {
+        match self {
+            Self::MainHand(data) => &data.name,
+            Self::OffHand(data) => &data.name,
+            Self::Feet(data) => &data.name,
+            Self::Legs(data) => &data.name,
+            Self::Chest(data) => &data.name,
+            Self::Head(data) => &data.name,
+            Self::Body(data) => &data.name,
+            Self::Saddle(data) => &data.name,
         }
     }
 
@@ -807,21 +1252,117 @@ impl Hash for EntityTypeOrTag {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EnchantableImpl;
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq)]
 pub struct EquippableImpl {
     pub slot: &'static EquipmentSlot,
-    pub equip_sound: &'static str,
-    pub asset_id: Option<&'static str>,
-    pub camera_overlay: Option<&'static str>,
-    pub allowed_entities: Option<&'static [EntityTypeOrTag]>,
+    pub equip_sound: IdOr<SoundEvent>,
+    pub asset_id: Option<Cow<'static, str>>,
+    pub camera_overlay: Option<Cow<'static, str>>,
+    pub allowed_entities: Option<IDSet<EntityType>>,
     pub dispensable: bool,
     pub swappable: bool,
     pub damage_on_hurt: bool,
     pub equip_on_interact: bool,
     pub can_be_sheared: bool,
-    pub shearing_sound: Option<&'static str>,
+    pub shearing_sound: IdOr<SoundEvent>,
+}
+
+impl EquippableImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+
+        let slot = EquipmentSlot::get_from_name(compound.get_string("slot")?)?;
+
+        let asset_id = compound
+            .get_string("asset_id")
+            .map(|str| Cow::Owned(str.to_owned()));
+        let camera_overlay = compound
+            .get_string("camera_overlay")
+            .map(|str| Cow::Owned(str.to_owned()));
+
+        let dispensable = compound.get_bool("dispensable").unwrap_or(true);
+        let swappable = compound.get_bool("swappable").unwrap_or(true);
+        let damage_on_hurt = compound.get_bool("damage_on_hurt").unwrap_or(true);
+        let equip_on_interact = compound.get_bool("equip_on_interact").unwrap_or(false);
+        let can_be_sheared = compound.get_bool("can_be_sheared").unwrap_or(false);
+
+        let equip_sound = get_idor(compound, "equip_sound", Sound::ItemArmorEquipGeneric);
+        let shearing_sound = get_idor(compound, "shearing_sound_sound", Sound::ItemShearsSnip);
+
+        let allowed_entities = if let Some(nbt) = compound.get("allowed_entities") {
+            IDSet::<EntityType>::read(nbt)
+        } else {
+            None
+        };
+
+        Some(Self {
+            slot,
+            equip_sound,
+            asset_id,
+            camera_overlay,
+            allowed_entities,
+            dispensable,
+            swappable,
+            damage_on_hurt,
+            equip_on_interact,
+            can_be_sheared,
+            shearing_sound,
+        })
+    }
 }
 impl DataComponentImpl for EquippableImpl {
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[16u8]); // is it used?
+        digest.update(&get_i32_hash(self.slot.get_slot_index()).to_le_bytes());
+        digest.update(&get_idor_hash(&self.equip_sound).to_le_bytes());
+
+        if let Some(asset) = &self.asset_id {
+            digest.update(&[1u8]);
+            digest.update(&get_str_hash(asset).to_le_bytes());
+        }
+        if let Some(overlay) = &self.camera_overlay {
+            digest.update(&[2u8]);
+            digest.update(&get_str_hash(overlay).to_le_bytes());
+        }
+        if let Some(allowed_entities) = &self.allowed_entities {
+            digest.update(&[3u8]);
+            digest.update(&get_idset_hash(allowed_entities).to_le_bytes());
+        }
+
+        digest.update(&[self.dispensable as u8]);
+        digest.update(&[self.swappable as u8]);
+        digest.update(&[self.damage_on_hurt as u8]);
+        digest.update(&[self.equip_on_interact as u8]);
+        digest.update(&[self.can_be_sheared as u8]);
+
+        digest.update(&get_idor_hash(&self.shearing_sound).to_le_bytes());
+        digest.finalize() as i32
+    }
+
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+
+        compound.put_string("slot", self.slot.to_name().to_string());
+        put_idor(&mut compound, "equip_sound", &self.equip_sound);
+        put_idor(&mut compound, "shearing_sound", &self.shearing_sound);
+        if let Some(asset_id) = &self.asset_id {
+            compound.put_string("asset_id", asset_id.to_string());
+        }
+        if let Some(camera_overlay) = &self.camera_overlay {
+            compound.put_string("camera_overlay", camera_overlay.to_string());
+        }
+        if let Some(allowed_entities) = &self.allowed_entities {
+            allowed_entities.write(&mut compound, "allowed_entities");
+        }
+        compound.put_bool("dispensable", self.dispensable);
+        compound.put_bool("swappable", self.swappable);
+        compound.put_bool("damage_on_hurt", self.damage_on_hurt);
+        compound.put_bool("equip_on_interact", self.equip_on_interact);
+        compound.put_bool("can_be_sheared", self.can_be_sheared);
+
+        NbtTag::Compound(compound)
+    }
     default_impl!(Equippable);
 }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -860,7 +1401,7 @@ pub struct BundleContentsImpl;
 /// Status effect instance for potion contents
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct StatusEffectInstance {
-    pub effect_id: i32,
+    pub effect_id: Cow<'static, str>,
     pub amplifier: i32,
     pub duration: i32,
     pub ambient: bool,
@@ -868,6 +1409,191 @@ pub struct StatusEffectInstance {
     pub show_icon: bool,
 }
 
+impl StatusEffectInstance {
+    pub fn read_data(nbt: &NbtTag) -> Option<Self> {
+        let compound = nbt.extract_compound()?;
+
+        let effect_id = Cow::Owned(compound.get_string("id")?.to_string());
+        let amplifier = compound.get_int("amplifier")?;
+        let duration = compound.get_int("duration")?;
+        let ambient = compound.get_bool("ambient")?;
+        let show_particles = compound.get_bool("show_particles")?;
+        let show_icon = compound.get_bool("show_icon")?;
+
+        Some(Self {
+            effect_id,
+            amplifier,
+            duration,
+            ambient,
+            show_particles,
+            show_icon,
+        })
+    }
+
+    pub fn as_nbt(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+
+        compound.put_string("id", self.effect_id.to_string());
+        compound.put_int("amplifier", self.amplifier);
+        compound.put_int("duration", self.duration);
+        compound.put_bool("ambient", self.ambient);
+        compound.put_bool("show_particles", self.show_particles);
+        compound.put_bool("show_icon", self.show_icon);
+
+        NbtTag::Compound(compound)
+    }
+
+    pub fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+
+        digest.update(&get_str_hash(self.effect_id.as_ref()).to_le_bytes());
+        digest.update(&get_i32_hash(self.amplifier).to_le_bytes());
+        digest.update(&get_i32_hash(self.duration).to_le_bytes());
+        digest.update(&[self.ambient as u8]);
+        digest.update(&[self.show_particles as u8]);
+        digest.update(&[self.show_icon as u8]);
+
+        digest.finalize() as i32
+    }
+}
+
+impl Hash for ConsumeEffect {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_str().hash(state);
+        match self {
+            ConsumeEffect::ApplyEffects(tuple) => {
+                tuple.0.hash(state);
+                unsafe { (*(&raw const tuple.1).cast::<u32>()).hash(state) };
+            }
+            ConsumeEffect::RemoveEffects(status_effect_instances) => {
+                status_effect_instances.hash(state)
+            }
+            ConsumeEffect::ClearAllEffects => (),
+            ConsumeEffect::TeleportRandomly(dst) => unsafe {
+                (*(&raw const dst).cast::<u32>()).hash(state)
+            },
+            ConsumeEffect::PlaySound(id_or) => id_or.hash(state),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ConsumeEffect {
+    /// Vec of status effect and a f32 representing
+    /// the probability
+    ApplyEffects((Cow<'static, [StatusEffectInstance]>, f32)),
+    RemoveEffects(IDSet<StatusEffect>),
+    ClearAllEffects,
+    /// f32 diameter
+    TeleportRandomly(f32),
+    PlaySound(IdOr<SoundEvent>),
+}
+impl ConsumeEffect {
+    pub fn to_str(&self) -> &str {
+        match self {
+            ConsumeEffect::ApplyEffects(_) => "apply_effects",
+            ConsumeEffect::RemoveEffects(_) => "remove_effects",
+            ConsumeEffect::ClearAllEffects => "clear_all_effects",
+            ConsumeEffect::TeleportRandomly(_) => "teleport_randomly",
+            ConsumeEffect::PlaySound(_) => "play_sound",
+        }
+    }
+
+    pub fn registry_id(&self) -> u8 {
+        match self {
+            ConsumeEffect::ApplyEffects(_) => 0,
+            ConsumeEffect::RemoveEffects(_) => 1,
+            ConsumeEffect::ClearAllEffects => 2,
+            ConsumeEffect::TeleportRandomly(_) => 3,
+            ConsumeEffect::PlaySound(_) => 4,
+        }
+    }
+
+    pub fn read_data(nbt: &NbtTag) -> Option<Self> {
+        let compound = nbt.extract_compound()?;
+
+        let r#type = compound.get_string("type")?;
+
+        match r#type {
+            "remove_effects" => {
+                let idset = IDSet::read(compound.get("effects")?)?;
+                Some(Self::RemoveEffects(idset))
+            }
+            "clear_all_effects" => Some(Self::ClearAllEffects),
+            "teleport_randomly" => {
+                let dst = compound.get_float("diameter")?;
+                Some(Self::TeleportRandomly(dst))
+            }
+            "play_sound" => {
+                let sound = get_idor(compound, "sound", Sound::EntityGenericEat);
+                Some(Self::PlaySound(sound))
+            }
+            "apply_effects" => {
+                let probability = compound.get_float("probability")?;
+                let effects_vec: Vec<StatusEffectInstance> = compound
+                    .get_list("effects")?
+                    .iter()
+                    .filter_map(StatusEffectInstance::read_data)
+                    .collect();
+                let effects: Cow<'static, [StatusEffectInstance]> = Cow::Owned(effects_vec);
+                Some(Self::ApplyEffects((effects, probability)))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn as_nbt(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_string("type", self.to_str().to_string());
+
+        match self {
+            ConsumeEffect::ApplyEffects(data) => {
+                let nbt_arr = data.0.iter().map(|x| x.as_nbt()).collect();
+                compound.put_list("effects", nbt_arr);
+                compound.put_float("probability", data.1);
+            }
+            ConsumeEffect::RemoveEffects(idset) => idset.write(&mut compound, "effects"),
+            ConsumeEffect::ClearAllEffects => (),
+            ConsumeEffect::TeleportRandomly(dst) => compound.put_float("diameter", *dst),
+            ConsumeEffect::PlaySound(id_or) => {
+                put_idor(&mut compound, "sound", id_or);
+            }
+        }
+
+        NbtTag::Compound(compound)
+    }
+
+    pub fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+
+        match self {
+            ConsumeEffect::ApplyEffects((effects, probability)) => {
+                digest.update(&[1u8]);
+                for effect in effects.iter() {
+                    digest.update(&effect.get_hash().to_le_bytes());
+                }
+                digest.update(&[13u8]);
+                digest.update(&get_f32_hash(*probability).to_le_bytes());
+            }
+            ConsumeEffect::RemoveEffects(idset) => {
+                digest.update(&[2u8]);
+                digest.update(&get_idset_hash(idset).to_le_bytes());
+            }
+            ConsumeEffect::ClearAllEffects => {
+                digest.update(&[3u8]);
+            }
+            ConsumeEffect::TeleportRandomly(dst) => {
+                digest.update(&[4u8]);
+                digest.update(&get_f32_hash(*dst).to_le_bytes());
+            }
+            ConsumeEffect::PlaySound(id_or) => {
+                digest.update(&[5u8]);
+                digest.update(&get_idor_hash(id_or).to_le_bytes());
+            }
+        }
+        digest.finalize() as i32
+    }
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotionContentsImpl {
     pub potion_id: Option<i32>,
@@ -901,7 +1627,8 @@ impl PotionContentsImpl {
                         let effect_tag = item.extract_compound()?;
 
                         // Try to get the ID
-                        let id = effect_tag.get_int("id")?;
+                        let id: Cow<'static, str> =
+                            Cow::Owned(effect_tag.get_string("id")?.to_string());
 
                         // Fallback values for optional fields
                         let amplifier = effect_tag
@@ -955,7 +1682,7 @@ impl DataComponentImpl for PotionContentsImpl {
             let mut effects_list = Vec::new();
             for effect in &self.custom_effects {
                 let mut effect_compound = NbtCompound::new();
-                effect_compound.put_int("id", effect.effect_id);
+                effect_compound.put_string("id", effect.effect_id.to_string());
                 effect_compound.put_int("amplifier", effect.amplifier);
                 effect_compound.put_int("duration", effect.duration);
                 effect_compound.put_byte("ambient", effect.ambient as i8);
@@ -994,12 +1721,7 @@ impl DataComponentImpl for PotionContentsImpl {
         if !self.custom_effects.is_empty() {
             digest.update(&[4u8]);
             for effect in &self.custom_effects {
-                digest.update(&get_i32_hash(effect.effect_id).to_le_bytes());
-                digest.update(&get_i32_hash(effect.amplifier).to_le_bytes());
-                digest.update(&get_i32_hash(effect.duration).to_le_bytes());
-                digest.update(&[effect.ambient as u8]);
-                digest.update(&[effect.show_particles as u8]);
-                digest.update(&[effect.show_icon as u8]);
+                digest.update(&effect.get_hash().to_le_bytes());
             }
         }
 

@@ -4,6 +4,8 @@ use quote::{format_ident, quote};
 use crate::remap::{MappingNode, ParsedMappings, Remapper};
 use crate::version::MinecraftVersion;
 
+/// Generates the `TokenStream` for per-version entity ID remap tables and the
+/// `remap_entity_id_for_version` function.
 pub fn build() -> TokenStream {
     let node_1_21 = MappingNode {
         version: MinecraftVersion::V_1_21,
@@ -42,7 +44,7 @@ pub fn build() -> TokenStream {
     };
 
     let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
-        version: MinecraftVersion::V_1_21_11,
+        version: MinecraftVersion::V_26_1,
         remapper: |first, second| match (first, second) {
             (Some(first), Some(second)) => Some(
                 first

@@ -13,13 +13,16 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 
-// --- EnumCreator with from_string support ---
+/// Builder that generates an enum with `from_string` and `identifier_string` methods.
 pub struct EnumCreator {
+    /// Name of the enum to generate (converted to PascalCase).
     pub name: String,
+    /// Set of variant names (converted to PascalCase for the enum variants).
     pub values: BTreeSet<String>,
 }
 
 impl ToTokens for EnumCreator {
+    /// Emits the enum definition and its `from_string`/`identifier_string` impl block.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = format_ident!("{}", self.name.to_pascal_case());
 
@@ -62,15 +65,13 @@ impl ToTokens for EnumCreator {
     }
 }
 
-const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
+/// The newest protocol version whose tag data is served as the latest-version fallback.
+const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
 
+/// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
+/// modules, and the `Taggable` trait with its lookup helpers.
 pub(crate) fn build() -> TokenStream {
     // --- Rerun Triggers ---
-    println!("cargo:rerun-if-changed=../assets/blocks.json");
-    println!("cargo:rerun-if-changed=../assets/items.json");
-    println!("cargo:rerun-if-changed=../assets/biome.json");
-    println!("cargo:rerun-if-changed=../assets/fluids.json");
-    println!("cargo:rerun-if-changed=../assets/entities.json");
 
     // Watch specific tag versions
     let assets = [
@@ -83,6 +84,7 @@ pub(crate) fn build() -> TokenStream {
         (MinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
         (MinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
         (MinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
+        (MinecraftVersion::V_26_1, "26_1_tags.json"),
     ];
 
     // --- Load Global Assets ---
@@ -118,13 +120,11 @@ pub(crate) fn build() -> TokenStream {
     let mut timeline_id_map: BTreeMap<String, u16> = BTreeMap::new();
     if let Ok(registries) = serde_json::from_str::<serde_json::Value>(
         &fs::read_to_string("../assets/registry/1_21_11_synced_registries.json").unwrap(),
-    ) {
-        if let Some(timelines) = registries.get("timeline") {
-            if let Some(obj) = timelines.as_object() {
-                for (i, name) in obj.keys().enumerate() {
-                    timeline_id_map.insert(name.clone(), i as u16);
-                }
-            }
+    ) && let Some(timelines) = registries.get("timeline")
+        && let Some(obj) = timelines.as_object()
+    {
+        for (i, name) in obj.keys().enumerate() {
+            timeline_id_map.insert(name.clone(), i as u16);
         }
     }
     // dimension_id_map will be used when resolving dimension_type tag entries below
@@ -139,7 +139,7 @@ pub(crate) fn build() -> TokenStream {
 
     let mut all_registry_keys = HashSet::new();
     all_registry_keys.insert("dimension_type".to_string());
-    
+
     let mut latest_modules = Vec::new();
     let mut legacy_modules = Vec::new();
 
@@ -147,7 +147,6 @@ pub(crate) fn build() -> TokenStream {
 
     for (ver, file) in assets {
         let file_path = format!("../assets/tags/{file}");
-        println!("cargo:rerun-if-changed={file_path}");
 
         let tags: BTreeMap<String, BTreeMap<String, Vec<String>>> =
             serde_json::from_str(&fs::read_to_string(&file_path).unwrap()).unwrap();

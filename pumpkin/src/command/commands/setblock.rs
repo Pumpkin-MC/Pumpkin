@@ -42,7 +42,6 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
             let block_state_id = block.default_state.id;
-            let pos = BlockPosArgumentConsumer::find_arg(args, ARG_BLOCK_POS)?;
             let mode = self.0;
             let world = match sender {
                 CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
@@ -56,13 +55,7 @@ impl CommandExecutor for Executor {
                 CommandSender::Player(player) => player.world().clone(),
                 CommandSender::CommandBlock(_, w) => w.clone(),
             };
-
-            if !world.is_in_build_limit(pos) {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
-                    "argument.pos.outofbounds",
-                    [],
-                )));
-            }
+            let pos = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_BLOCK_POS, &world)?;
 
             let success = match mode {
                 Mode::Destroy => {

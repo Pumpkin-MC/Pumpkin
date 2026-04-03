@@ -9,6 +9,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
@@ -16,7 +17,6 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -26,6 +26,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub mod bat;
+pub mod blaze;
 pub mod creeper;
 pub mod enderman;
 pub mod silverfish;
@@ -104,7 +105,7 @@ impl MobEntity {
             self.living_entity
                 .entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_MOB_FLAGS,
+                    TrackedData::MOB_FLAGS_ID,
                     MetaDataType::BYTE,
                     new_b,
                 )])
@@ -569,7 +570,8 @@ pub trait SunSensitive: Mob + Send + Sync {
             if head_item.is_empty() {
                 entity.set_on_fire_for(8.0);
             } else {
-                head_item.damage_item(damage_amount);
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                let _ = head_item.damage_item(damage_amount);
             }
         })
     }

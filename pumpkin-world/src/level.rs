@@ -8,6 +8,7 @@ use crate::{
         ChunkData, ChunkEntityData, ChunkReadingError,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
+        palette::has_random_ticking_fluid,
     },
     generation::get_world_gen,
     tick::{OrderedTick, ScheduledTick, TickPriority},
@@ -106,8 +107,15 @@ pub struct Level {
 pub struct TickData {
     pub block_ticks: Vec<OrderedTick<&'static Block>>,
     pub fluid_ticks: Vec<OrderedTick<&'static Fluid>>,
-    pub random_ticks: Vec<ScheduledTick<()>>,
+    pub random_ticks: Vec<RandomTickSample>,
     pub block_entities: Vec<Arc<dyn BlockEntity>>,
+}
+
+#[derive(Clone, Copy)]
+pub struct RandomTickSample {
+    pub position: BlockPos,
+    pub tick_block: bool,
+    pub tick_fluid: bool,
 }
 
 #[derive(Clone)]
@@ -295,7 +303,7 @@ impl Level {
         info!("Joining {} threads for {}...", handle_count, world_id);
         let join_task = tokio::task::spawn_blocking(move || {
             let mut failed_count = 0;
-            for handle in handles.into_iter() {
+            for handle in handles {
                 if handle.join().is_err() {
                     failed_count += 1;
                 }
@@ -453,8 +461,6 @@ impl Level {
             block_entities: Vec::new(),
         };
 
-        let r = rand::random::<u32>();
-
         for chunk in self.loaded_chunks.iter() {
             let chunk_x_base = chunk.x * 16;
             let chunk_z_base = chunk.z * 16;
@@ -464,32 +470,43 @@ impl Level {
                 .block_entities
                 .extend(chunk.block_entities.lock().unwrap().values().cloned());
 
+            // Acquire the read lock once per chunk to avoid per-section lock overhead
+            let sections = chunk.section.block_sections.read().unwrap();
+            let random_tick_sections = chunk.section.random_tick_sections.read().unwrap();
+            let min_y = chunk.section.min_y;
+
             for i in 0..section_count {
-                let y_base = i as i32 * 16;
+                if !random_tick_sections[i].is_randomly_ticking() {
+                    continue;
+                }
+                let y_base = min_y + (i as i32 * 16);
                 for _ in 0..3 {
+                    // Generate a fresh random per tick attempt
+                    let r = rand::random::<u32>();
                     let x_offset = (r & 0xF) as usize;
                     let z_offset = (r >> 8 & 0xF) as usize;
-                    let y_in_section = ((r >> 4) & 0xF) as i32;
-                    let absolute_y = y_base + y_in_section;
+                    let y_in_section = ((r >> 4) & 0xF) as usize;
 
-                    if let Some(block_state_id) = chunk
-                        .section
-                        .get_block_absolute_y(x_offset, absolute_y, z_offset)
-                        && has_random_ticks(block_state_id)
-                    {
-                        ticks.random_ticks.push(ScheduledTick {
+                    // Read directly from the already-locked section palette
+                    let block_state_id = sections[i].get(x_offset, y_in_section, z_offset);
+                    let tick_block = has_random_ticks(block_state_id);
+                    let tick_fluid = has_random_ticking_fluid(block_state_id);
+                    if tick_block || tick_fluid {
+                        let absolute_y = y_base + y_in_section as i32;
+                        ticks.random_ticks.push(RandomTickSample {
                             position: BlockPos::new(
                                 chunk_x_base + x_offset as i32,
                                 absolute_y,
                                 chunk_z_base + z_offset as i32,
                             ),
-                            delay: 0,
-                            priority: TickPriority::Normal,
-                            value: (),
+                            tick_block,
+                            tick_fluid,
                         });
                     }
                 }
             }
+            drop(random_tick_sections);
+            drop(sections);
             ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
             ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
         }

@@ -234,12 +234,11 @@ pub fn generation_work(
     let settings = GenerationSettings::from_dimension(&level.world_gen.dimension);
 
     loop {
-        let (pos, mut cache, stage) = match recv.recv() {
-            Ok(data) => data,
-            Err(_) => {
-                debug!("generation channel closed, exiting");
-                break;
-            }
+        let (pos, mut cache, stage) = if let Ok(data) = recv.recv() {
+            data
+        } else {
+            debug!("generation channel closed, exiting");
+            break;
         };
 
         // Run generation with panic catching
@@ -253,6 +252,7 @@ pub fn generation_work(
                 &level.world_gen.terrain_cache,
                 &level.world_gen.base_router,
                 level.world_gen.dimension,
+                &level.world_gen.global_structure_cache,
             );
             cache // Return cache on success
         }));
@@ -267,7 +267,11 @@ pub fn generation_work(
                 let msg = payload
                     .downcast_ref::<&str>()
                     .copied()
-                    .or_else(|| payload.downcast_ref::<String>().map(|s| s.as_str()))
+                    .or_else(|| {
+                        payload
+                            .downcast_ref::<String>()
+                            .map(std::string::String::as_str)
+                    })
                     .unwrap_or("Unknown panic payload");
 
                 error!("Chunk generation FAILED at {pos:?} ({stage:?}): {msg}");

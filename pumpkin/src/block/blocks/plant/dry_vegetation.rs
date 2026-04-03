@@ -51,6 +51,6 @@ impl PlantBlockBase for DryVegetationBlock {
         block_pos: &BlockPos,
     ) -> bool {
         let block_below = block_accessor.get_block(block_pos).await;
-        block_below.has_tag(&tag::Block::MINECRAFT_DRY_VEGETATION_MAY_PLACE_ON)
+        block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_DRY_VEGETATION)
     }
 }

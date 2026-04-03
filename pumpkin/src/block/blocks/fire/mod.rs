@@ -164,7 +164,7 @@ impl FireBlockBase {
 
     async fn broken(world: &World, block_pos: BlockPos) {
         world
-            .sync_world_event(WorldEvent::FireExtinguished, block_pos, 0)
+            .sync_world_event(WorldEvent::SoundExtinguishFire, block_pos, 0)
             .await;
     }
 }

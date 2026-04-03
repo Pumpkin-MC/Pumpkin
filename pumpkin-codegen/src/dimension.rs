@@ -5,7 +5,10 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
-// helper to turn a hex string like "#78a7ff" into an i32
+/// Parses a CSS-style hex color string (e.g. `"#78a7ff"`) into a signed 32-bit integer.
+///
+/// # Returns
+/// The color as an `i32`, or `None` if the input is not a valid hex color.
 fn parse_hex_color(s: &str) -> Option<i32> {
     if let Some(stripped) = s.strip_prefix('#') {
         i32::from_str_radix(stripped, 16).ok()
@@ -14,20 +17,32 @@ fn parse_hex_color(s: &str) -> Option<i32> {
     }
 }
 
+/// Raw deserialization shape for a single dimension entry from `dimension.json`.
 #[derive(Deserialize)]
 pub struct Dimension {
+    /// Whether this dimension has a skylight source (i.e. is not a cave or the Nether).
     pub has_skylight: bool,
+    /// Whether this dimension has a bedrock ceiling (e.g. the Nether).
     pub has_ceiling: bool,
+    /// Ambient light level added to all blocks, bypassing the normal sky/block-light calculation.
     pub ambient_light: f32,
+    /// Coordinate scale factor mapping a position in this dimension to overworld coordinates.
     pub coordinate_scale: f64,
+    /// Minimum Y level (inclusive) of the buildable/chunk range.
     pub min_y: i32,
+    /// Total height (in blocks) of the buildable/chunk range.
     pub height: i32,
+    /// Maximum Y level usable by mob AI and portals (can be less than `min_y + height`).
     pub logical_height: i32,
+    /// Tag key for blocks that act as infinite burn sources (e.g. `"minecraft:infiniburn_overworld"`).
     pub infiniburn: String,
+    /// Fixed day-time value in this dimension, or `None` if time progresses normally.
     #[serde(rename = "fixed_time")]
     pub fixed_time: Option<i64>,
+    /// Optional bedrock-style visual attributes map (sky color, fog color, etc.).
     #[serde(default)]
     pub attributes: Option<serde_json::Value>,
+    /// Optional timeline resource key controlling day/night progression.
     #[serde(default)]
     pub timelines: Option<String>,
 }
@@ -52,6 +67,7 @@ pub struct Dimension {
 //     }
 // }
 
+/// Generates the `TokenStream` for the `Dimension` struct, its constants, and `from_name` lookup.
 pub fn build() -> TokenStream {
     let dimensions: BTreeMap<String, Dimension> = serde_json::from_str(
         &fs::read_to_string("../assets/dimension.json").expect("Missing dimension.json"),
@@ -77,19 +93,19 @@ pub fn build() -> TokenStream {
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/sky_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
         let fog_color = dim
             .attributes
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/fog_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
         let cloud_color = dim
             .attributes
             .as_ref()
             .and_then(|a| a.get("minecraft:visual/cloud_color"))
             .and_then(|v| v.as_str())
-            .and_then(|s| parse_hex_color(s));
+            .and_then(parse_hex_color);
 
         let fixed_time = if let Some(t) = dim.fixed_time {
             quote! { Some(#t) }
@@ -124,9 +140,21 @@ pub fn build() -> TokenStream {
             format!("minecraft:{name}")
         };
 
-        let sky_color_literal = if let Some(c) = sky_color { quote! { Some(#c) } } else { quote! { None } };
-        let fog_color_literal = if let Some(c) = fog_color { quote! { Some(#c) } } else { quote! { None } };
-        let cloud_color_literal = if let Some(c) = cloud_color { quote! { Some(#c) } } else { quote! { None } };
+        let sky_color_literal = if let Some(c) = sky_color {
+            quote! { Some(#c) }
+        } else {
+            quote! { None }
+        };
+        let fog_color_literal = if let Some(c) = fog_color {
+            quote! { Some(#c) }
+        } else {
+            quote! { None }
+        };
+        let cloud_color_literal = if let Some(c) = cloud_color {
+            quote! { Some(#c) }
+        } else {
+            quote! { None }
+        };
         let timelines_literal = if let Some(t) = timelines.clone() {
             quote! { Some(#t) }
         } else {

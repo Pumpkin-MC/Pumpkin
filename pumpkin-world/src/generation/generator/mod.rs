@@ -22,11 +22,13 @@ pub struct VanillaGenerator {
     pub terrain_cache: TerrainCache,
 
     pub default_block: &'static BlockState,
+
+    pub global_structure_cache: crate::generation::structure::placement::GlobalStructureCache,
 }
 
 impl GeneratorInit for VanillaGenerator {
     fn new(seed: Seed, dimension: Dimension) -> Self {
-        let random_config = GlobalRandomConfig::new(seed.0, false);
+        let random_config = GlobalRandomConfig::new(seed.0);
 
         // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
         // use only the generation settings?
@@ -50,6 +52,8 @@ impl GeneratorInit for VanillaGenerator {
             dimension,
             terrain_cache,
             default_block,
+            global_structure_cache:
+                crate::generation::structure::placement::GlobalStructureCache::new(),
         }
     }
 }

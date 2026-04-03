@@ -3,10 +3,12 @@ use quote::quote;
 use serde_json::Value;
 use std::fs;
 
+/// Reads `placed_feature.json` and emits the complete `build_placed_features()` function `TokenStream`.
 pub fn build() -> TokenStream {
-    let json_content =
-        fs::read_to_string("../assets/placed_feature.json").expect("Failed to read placed_feature.json");
-    let json: Value = serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
+    let json_content = fs::read_to_string("../assets/placed_feature.json")
+        .expect("Failed to read placed_feature.json");
+    let json: Value =
+        serde_json::from_str(&json_content).expect("Failed to parse placed_feature.json");
 
     let entries: Vec<TokenStream> = json
         .as_object()
@@ -36,7 +38,7 @@ pub fn build() -> TokenStream {
             };
             use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
             use pumpkin_util::math::int_provider::{
-                BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider,
+                BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
                 ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
                 WeightedEntry, WeightedListIntProvider,
             };
@@ -51,10 +53,20 @@ pub fn build() -> TokenStream {
     }
 }
 
+/// Converts a single placed-feature JSON value into a `PlacedFeature` token stream.
+///
+/// # Arguments
+/// – `v` – the JSON object for the entry, expected to contain `"feature"` and `"placement"` fields.
 fn value_to_placed_feature(v: &Value) -> TokenStream {
     let feature = value_to_feature(&v["feature"]);
-    let placement_arr = v["placement"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
-    let placement: Vec<TokenStream> = placement_arr.iter().map(value_to_placement_modifier).collect();
+    let placement_arr = v["placement"]
+        .as_array()
+        .map(|a| a.as_slice())
+        .unwrap_or(&[]);
+    let placement: Vec<TokenStream> = placement_arr
+        .iter()
+        .map(value_to_placement_modifier)
+        .collect();
     quote! {
         PlacedFeature {
             feature: #feature,
@@ -63,6 +75,13 @@ fn value_to_placed_feature(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a JSON `"feature"` value into a `Feature` token stream.
+///
+/// # Arguments
+/// - `v` – Either a string (named reference) or object (inline configured feature).
+///
+/// # Returns
+/// `Feature::Named(…)` for string values or `Feature::Inlined(…)` for object values.
 fn value_to_feature(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
@@ -73,18 +92,41 @@ fn value_to_feature(v: &Value) -> TokenStream {
             let cf = value_to_inline_configured_feature(v);
             quote! { Feature::Inlined(Box::new(#cf)) }
         }
-        _ => quote! { Feature::Named(String::new()) },
+        _ => panic!("Wrong feature value"),
     }
 }
 
+/// Converts a single placement-modifier JSON object into its corresponding `PlacementModifier` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with a `"type"` discriminant and modifier-specific fields.
+///
+/// # Returns
+/// A `PlacementModifier` variant token stream, or `compile_error!` for unknown types.
 fn value_to_placement_modifier(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
         "minecraft:biome" => quote! { PlacementModifier::Biome(BiomePlacementModifier) },
         "minecraft:in_square" => quote! { PlacementModifier::InSquare(SquarePlacementModifier) },
-        "minecraft:fixed_placement" => quote! { PlacementModifier::FixedPlacement },
+        "minecraft:fixed_placement" => {
+            let positions = v["positions"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .map(|p| {
+                            let coords = p.as_array().unwrap();
+                            let x = coords[0].as_i64().unwrap_or(0) as i32;
+                            let y = coords[1].as_i64().unwrap_or(0) as i32;
+                            let z = coords[2].as_i64().unwrap_or(0) as i32;
+                            quote! { BlockPos::new(#x, #y, #z) }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            quote! { PlacementModifier::FixedPlacement(vec![#(#positions),*]) }
+        }
         "minecraft:heightmap" => {
-            let heightmap = value_to_height_map(v["heightmap"].as_str().unwrap_or("MOTION_BLOCKING"));
+            let heightmap = value_to_height_map(v["heightmap"].as_str().unwrap());
             quote! {
                 PlacementModifier::Heightmap(HeightmapPlacementModifier {
                     heightmap: #heightmap,
@@ -179,7 +221,9 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
         "minecraft:environment_scan" => {
             let dir = value_to_block_direction(v["direction_of_search"].as_str().unwrap_or("down"));
             let target = value_to_block_predicate(&v["target_condition"]);
-            let allowed = if v["allowed_search_condition"].is_null() || v["allowed_search_condition"].is_object() {
+            let allowed = if v["allowed_search_condition"].is_null()
+                || v["allowed_search_condition"].is_object()
+            {
                 if v["allowed_search_condition"].is_object() {
                     let p = value_to_block_predicate(&v["allowed_search_condition"]);
                     quote! { Some(#p) }
@@ -216,7 +260,29 @@ fn value_to_placement_modifier(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a block-predicate JSON object into its corresponding `BlockPredicate` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with a `"type"` discriminant and predicate-specific fields.
+///
+/// # Returns
+/// A `BlockPredicate` variant token stream, or `compile_error!` for unknown types.
 pub fn value_to_block_predicate(v: &Value) -> TokenStream {
+    // Handle bare string values: "#minecraft:some_tag" is a block-tag predicate,
+    // "true" (or any non-# string) is AlwaysTrue.
+    if let Some(s) = v.as_str() {
+        if let Some(tag) = s.strip_prefix('#') {
+            let tag_ident = quote::format_ident!("{}", tag.to_uppercase().replace([':', '-'], "_"));
+            return quote! {
+                BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
+                    offset: OffsetBlocksBlockPredicate { offset: None },
+                    tag: pumpkin_data::tag::Block::#tag_ident,
+                })
+            };
+        }
+        return quote! { BlockPredicate::AlwaysTrue };
+    }
+
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
         "minecraft:true" | "" => quote! { BlockPredicate::AlwaysTrue },
@@ -233,10 +299,11 @@ pub fn value_to_block_predicate(v: &Value) -> TokenStream {
         "minecraft:matching_block_tag" => {
             let offset = value_to_offset_predicate(&v["offset"]);
             let tag = v["tag"].as_str().unwrap_or("");
+            let tag_ident = quote::format_ident!("{}", tag.to_uppercase().replace([':', '-'], "_"));
             quote! {
                 BlockPredicate::MatchingBlockTag(MatchingBlockTagPredicate {
                     offset: #offset,
-                    tag: #tag.to_string(),
+                    tag: pumpkin_data::tag::Block::#tag_ident,
                 })
             }
         }
@@ -335,6 +402,13 @@ pub fn value_to_block_predicate(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a height-provider JSON object into its corresponding `HeightProvider` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with a `"type"` discriminant and provider-specific fields.
+///
+/// # Returns
+/// A `HeightProvider` variant token stream, or `compile_error!` for unknown types.
 pub fn value_to_height_provider(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
@@ -395,6 +469,13 @@ pub fn value_to_height_provider(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a Y-offset JSON object into its corresponding `YOffset` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with one of the keys `"absolute"`, `"above_bottom"`, or `"below_top"`.
+///
+/// # Returns
+/// A `YOffset` variant token stream; defaults to `YOffset::Absolute(0)` when unrecognized.
 pub fn value_to_y_offset(v: &Value) -> TokenStream {
     if let Some(abs) = v.get("absolute") {
         let val = abs.as_i64().unwrap_or(0) as i16;
@@ -410,6 +491,13 @@ pub fn value_to_y_offset(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts an integer-provider JSON value into its corresponding `IntProvider` token stream.
+///
+/// # Arguments
+/// - `v` – Either a bare JSON number (constant) or an object with a `"type"` discriminant.
+///
+/// # Returns
+/// An `IntProvider` variant token stream; defaults to `IntProvider::Constant(0)` when unrecognized.
 pub fn value_to_int_provider(v: &Value) -> TokenStream {
     match v {
         Value::Number(n) => {
@@ -439,6 +527,12 @@ pub fn value_to_int_provider(v: &Value) -> TokenStream {
                     let src = value_to_int_provider(&v["source"]);
                     quote! { IntProvider::Object(NormalIntProvider::Clamped(ClampedIntProvider { source: Box::new(#src), min_inclusive: #min, max_inclusive: #max })) }
                 }
+                "minecraft:trapezoid" => {
+                    let min = v["min"].as_i64().unwrap_or(0) as i32;
+                    let max = v["max"].as_i64().unwrap_or(0) as i32;
+                    let plateau = v["plateau"].as_i64().unwrap_or(0) as i32;
+                    quote! { IntProvider::Object(NormalIntProvider::Trapezoid(TrapezoidIntProvider { min_inclusive: #min, max_inclusive: #max, plateau: #plateau })) }
+                }
                 "minecraft:clamped_normal" => {
                     let mean = v["mean"].as_f64().unwrap_or(0.0) as f32;
                     let dev = v["deviation"].as_f64().unwrap_or(1.0) as f32;
@@ -450,25 +544,33 @@ pub fn value_to_int_provider(v: &Value) -> TokenStream {
                     let entries: Vec<TokenStream> = v["distribution"]
                         .as_array()
                         .map(|arr| {
-                            arr.iter().map(|e| {
-                                let data = value_to_int_provider(&e["data"]);
-                                let weight = e["weight"].as_i64().unwrap_or(1) as i32;
-                                quote! { WeightedEntry { data: #data, weight: #weight } }
-                            }).collect()
+                            arr.iter()
+                                .map(|e| {
+                                    let data = value_to_int_provider(&e["data"]);
+                                    let weight = e["weight"].as_i64().unwrap_or(1) as i32;
+                                    quote! { WeightedEntry { data: #data, weight: #weight } }
+                                })
+                                .collect()
                         })
                         .unwrap_or_default();
                     quote! { IntProvider::Object(NormalIntProvider::WeightedList(WeightedListIntProvider { distribution: vec![#(#entries),*] })) }
                 }
                 _ => {
-                    let val = v["value"].as_i64().unwrap_or(0) as i32;
-                    quote! { IntProvider::Constant(#val) }
+                    panic!("Unknown Int Provider, Seems like Mojang added a new one")
                 }
             }
         }
-        _ => quote! { IntProvider::Constant(0) },
+        _ => panic!("Unknown Int Provider, Seems like Mojang added a new one"),
     }
 }
 
+/// Converts a SCREAMING_SNAKE_CASE heightmap name into its `HeightMap` token stream.
+///
+/// # Arguments
+/// - `s` – Heightmap name string (e.g. `"MOTION_BLOCKING"`).
+///
+/// # Returns
+/// A `HeightMap` variant token stream; defaults to `HeightMap::MotionBlocking` when unrecognized.
 pub fn value_to_height_map(s: &str) -> TokenStream {
     match s {
         "WORLD_SURFACE_WG" => quote! { HeightMap::WorldSurfaceWg },
@@ -477,10 +579,17 @@ pub fn value_to_height_map(s: &str) -> TokenStream {
         "OCEAN_FLOOR" => quote! { HeightMap::OceanFloor },
         "MOTION_BLOCKING" => quote! { HeightMap::MotionBlocking },
         "MOTION_BLOCKING_NO_LEAVES" => quote! { HeightMap::MotionBlockingNoLeaves },
-        _ => quote! { HeightMap::MotionBlocking },
+        _ => panic!("Unknown Height map"),
     }
 }
 
+/// Converts a lowercase direction string into its `BlockDirection` token stream.
+///
+/// # Arguments
+/// - `s` – Direction name (e.g. `"down"`, `"up"`, `"north"`, etc.).
+///
+/// # Returns
+/// A `BlockDirection` variant token stream; defaults to `BlockDirection::Down` when unrecognized.
 pub fn value_to_block_direction(s: &str) -> TokenStream {
     match s.to_lowercase().as_str() {
         "down" => quote! { BlockDirection::Down },
@@ -489,12 +598,19 @@ pub fn value_to_block_direction(s: &str) -> TokenStream {
         "south" => quote! { BlockDirection::South },
         "west" => quote! { BlockDirection::West },
         "east" => quote! { BlockDirection::East },
-        _ => quote! { BlockDirection::Down },
+        _ => panic!("Unknown Block direction"),
     }
 }
 
+/// Converts an optional offset JSON value into an `OffsetBlocksBlockPredicate` token stream.
+///
+/// # Arguments
+/// - `v` – Either `null`/empty object (no offset) or a 3-element integer array `[x, y, z]`.
+///
+/// # Returns
+/// An `OffsetBlocksBlockPredicate` with `offset: None` or `offset: Some(Vector3::new(x, y, z))`.
 fn value_to_offset_predicate(v: &Value) -> TokenStream {
-    if v.is_null() || v.is_object() && v.as_object().map_or(true, |o| o.is_empty()) {
+    if v.is_null() || v.is_object() && v.as_object().is_none_or(|o| o.is_empty()) {
         quote! { OffsetBlocksBlockPredicate { offset: None } }
     } else if v.is_array() {
         let x = v[0].as_i64().unwrap_or(0) as i32;
@@ -506,6 +622,13 @@ fn value_to_offset_predicate(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a blocks/fluids JSON value into a `MatchingBlocksWrapper` token stream.
+///
+/// # Arguments
+/// - `v` – Either a single string (one block/fluid name) or an array of strings.
+///
+/// # Returns
+/// `MatchingBlocksWrapper::Single(…)` or `MatchingBlocksWrapper::Multiple(…)`.
 fn value_to_matching_blocks_wrapper(v: &Value) -> TokenStream {
     match v {
         Value::String(s) => {
@@ -522,10 +645,18 @@ fn value_to_matching_blocks_wrapper(v: &Value) -> TokenStream {
     }
 }
 
+/// Converts a block-state JSON object into a `BlockStateCodec` token stream.
+///
+/// # Arguments
+/// - `v` – JSON object with a `"Name"` field and optional `"Properties"` map.
+///
+/// # Returns
+/// A `BlockStateCodec` token stream referencing the corresponding `Block` constant and optional property map.
 pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
     let name = v["Name"].as_str().unwrap_or("minecraft:air");
     let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
-    let block_ident = quote::format_ident!("{}", name_stripped.to_uppercase().replace(':', "_").replace('-', "_"));
+    let block_ident =
+        quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
     if let Some(props) = v["Properties"].as_object() {
         let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
         let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();
@@ -549,6 +680,38 @@ pub fn value_to_block_state_codec(v: &Value) -> TokenStream {
     }
 }
 
+pub fn value_to_block_state(v: &Value) -> TokenStream {
+    let name = v["Name"].as_str().unwrap_or("minecraft:air");
+    let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
+    let block_ident =
+        quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
+    if let Some(props) = v["Properties"].as_object() {
+        let keys: Vec<&str> = props.keys().map(|k| k.as_str()).collect();
+        let vals: Vec<&str> = props.values().filter_map(|v| v.as_str()).collect();
+        quote! {
+            {
+                let mut props = std::collections::HashMap::new();
+                #(props.insert(#keys.to_string(), #vals.to_string());)*
+                BlockStateCodec {
+                    name: &pumpkin_data::Block::#block_ident,
+                    properties: Some(props),
+                }.get_state()
+            }
+        }
+    } else {
+        quote! {
+            pumpkin_data::Block::#block_ident.default_state
+        }
+    }
+}
+
+/// Converts a nullable JSON integer into an `Option<i32>` token stream.
+///
+/// # Arguments
+/// - `v` – A JSON number or `null`.
+///
+/// # Returns
+/// `Some(n)` if `v` is a valid integer, or `None` otherwise.
 fn value_to_option_i32(v: &Value) -> TokenStream {
     if v.is_null() {
         quote! { None }

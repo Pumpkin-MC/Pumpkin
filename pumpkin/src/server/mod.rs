@@ -12,12 +12,13 @@ use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
-use crate::{command::dispatcher::CommandDispatcher, entity::player::Player, world::World};
+use crate::{command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World};
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
+use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -29,7 +30,6 @@ use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::lock::LevelLocker;
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
@@ -37,7 +37,7 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::seq::{IndexedRandom, IteratorRandom, SliceRandom};
+use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
 use std::fs;
@@ -249,9 +249,6 @@ impl Server {
         };
         let server = Arc::new(server);
 
-        // Initialize attribute registry for all entities
-        crate::entity::attributes::init_all_attributes();
-
         let server_clone = server.clone();
         tokio::spawn(async move {
             server_clone
@@ -319,6 +316,7 @@ impl Server {
     pub fn get_world_from_dimension(&self, dimension: &Dimension) -> Arc<World> {
         // TODO: this is really bad
         let world_guard = self.worlds.load();
+
         if dimension == &Dimension::OVERWORLD {
             world_guard.first()
         } else if dimension == &Dimension::THE_NETHER {
@@ -420,10 +418,12 @@ impl Server {
             PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
-                #[expect(clippy::if_then_some_else_none)]
                 if world
                     .add_player(player.clone())
                     .is_ok() {
+                    let mut user_cache = self.data.user_cache.write().await;
+                    user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());
+
                     // TODO: Config if we want increase online
                     if let Some(config) = config {
                         // TODO: Config so we can also just ignore this hehe
@@ -795,71 +795,30 @@ impl Server {
         *self.tick_times_nanos.lock().await
     }
 
-    #[expect(clippy::too_many_lines)]
-    #[expect(clippy::option_if_let_else)]
-    pub fn select_entities(
+    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
+    pub fn select_players(
         &self,
         target_selector: &TargetSelector,
         source: Option<&CommandSender>,
-    ) -> Vec<Arc<dyn EntityBase>> {
-        let iter = match &target_selector.selector_type {
-            EntitySelectorType::Source
+    ) -> Vec<Arc<Player>> {
+        let mut players = match &target_selector.selector_type {
+            EntitySelectorType::Source => source
+                .and_then(CommandSender::as_player)
+                .map_or_else(Vec::new, |player| vec![player]),
+            EntitySelectorType::NearestPlayer
             | EntitySelectorType::NearestEntity
-            | EntitySelectorType::NearestPlayer => {
-                // todo: command context, currently the nearest entity is the player itself
-                if let Some(sender) = source {
-                    if let Some(player) = sender.as_player() {
-                        vec![player as Arc<dyn EntityBase>].into_iter()
-                    } else {
-                        vec![].into_iter()
-                    }
-                } else {
-                    vec![].into_iter()
-                }
-            }
-            EntitySelectorType::RandomPlayer => {
-                if let Some(player) = self.get_random_player() {
-                    vec![player as Arc<dyn EntityBase>].into_iter()
-                } else {
-                    vec![].into_iter()
-                }
-            }
-            EntitySelectorType::AllPlayers => self
-                .get_all_players()
-                .into_iter()
-                .map(|p| p as Arc<dyn EntityBase>)
-                .collect::<Vec<_>>()
-                .into_iter(),
-            EntitySelectorType::AllEntities => {
-                let mut entities = Vec::new();
-                for world in self.worlds.load().iter() {
-                    entities.extend(world.entities.load().iter().cloned());
-                    entities.extend(
-                        world
-                            .players
-                            .load()
-                            .iter()
-                            .cloned()
-                            .map(|p| p as Arc<dyn EntityBase>),
-                    );
-                }
-                entities.into_iter()
-            }
-            EntitySelectorType::NamedPlayer(name) => {
-                if let Some(player) = self.get_player_by_name(name) {
-                    vec![player as Arc<dyn EntityBase>].into_iter()
-                } else {
-                    vec![].into_iter()
-                }
-            }
-            EntitySelectorType::Uuid(uuid) => {
-                if let Some(player) = self.get_player_by_uuid(*uuid) {
-                    vec![player as Arc<dyn EntityBase>].into_iter()
-                } else {
-                    vec![].into_iter()
-                }
-            }
+            | EntitySelectorType::RandomPlayer
+            | EntitySelectorType::AllPlayers
+            | EntitySelectorType::AllEntities => self.get_all_players(),
+            EntitySelectorType::NamedPlayer(name) => self
+                .get_player_by_name(name)
+                .map_or_else(Vec::new, |player| vec![player]),
+            EntitySelectorType::Uuid(uuid) => self
+                .get_player_by_uuid(*uuid)
+                .map_or_else(Vec::new, |player| vec![player]),
         };
+
+        let player_type = EntityType::from_name("player").expect("entity type player must exist");
         let type_included = target_selector
             .conditions
             .iter()
@@ -882,53 +841,35 @@ impl Server {
                 }
             })
             .collect::<HashSet<_>>();
-        let type_filtered = iter.filter(|e| {
-            // Filter by entity type
-            (type_excluded.is_empty() || !type_excluded.contains(&e.get_entity().entity_type))
-                && (type_included.is_empty() || type_included.contains(&e.get_entity().entity_type))
+
+        players.retain(|_| {
+            (type_excluded.is_empty() || !type_excluded.contains(player_type))
+                && (type_included.is_empty() || type_included.contains(player_type))
         });
-        let iter = type_filtered;
+
+        let limit = target_selector.get_limit();
+        if limit == 0 {
+            return Vec::new();
+        }
+
         match target_selector
             .get_sort()
             .unwrap_or(EntityFilterSort::Arbitrary)
         {
-            // If the sort is arbitrary, we just return all entities in all worlds
-            EntityFilterSort::Arbitrary => iter.take(target_selector.get_limit()).collect(),
+            EntityFilterSort::Arbitrary => players.into_iter().take(limit).collect(),
             EntityFilterSort::Random => {
-                if target_selector.get_limit() == 0 {
-                    return vec![];
-                } else if target_selector.get_limit() == 1 {
-                    // If the limit is 1, we just return a random entity
-                    return if let Some(entity) = iter.choose(&mut rand::rng()) {
-                        vec![entity]
-                    } else {
-                        vec![]
-                    };
-                }
-                // If the sort is random, we shuffle the entities and then take the limit
-                let mut entities: Vec<_> = iter.collect();
-                entities.shuffle(&mut rand::rng());
-                entities
-                    .into_iter()
-                    .take(target_selector.get_limit())
-                    .collect()
+                players.shuffle(&mut rand::rng());
+                players.into_iter().take(limit).collect()
             }
             EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
-                if target_selector.get_limit() == 0 {
-                    return vec![];
-                }
-                // sort entities first
-                // todo: command context
-                let center = if let Some(source) = source {
-                    source.position().unwrap_or_default()
-                } else {
-                    Vector3::default()
-                };
-                let mut entities = iter.collect::<Vec<_>>();
-                entities.sort_by(|a, b| {
+                let center = source.and_then(CommandSender::position).unwrap_or_default();
+                let nearest_first = target_selector
+                    .get_sort()
+                    .is_none_or(|sort| sort == EntityFilterSort::Nearest);
+                players.sort_by(|a, b| {
                     let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
                     let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
-                    if target_selector.get_sort() == Some(EntityFilterSort::Nearest) {
+                    if nearest_first {
                         a_distance
                             .partial_cmp(&b_distance)
                             .unwrap_or(core::cmp::Ordering::Equal)
@@ -938,10 +879,119 @@ impl Server {
                             .unwrap_or(core::cmp::Ordering::Equal)
                     }
                 });
-                entities
-                    .into_iter()
-                    .take(target_selector.get_limit())
-                    .collect()
+                players.into_iter().take(limit).collect()
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
+    pub fn select_entities(
+        &self,
+        target_selector: &TargetSelector,
+        source: Option<&CommandSender>,
+    ) -> Vec<Arc<dyn EntityBase>> {
+        let all_entities_and_players = || {
+            let mut entities = Vec::new();
+            for world in self.worlds.load().iter() {
+                entities.extend(world.entities.load().iter().cloned());
+                entities.extend(
+                    world
+                        .players
+                        .load()
+                        .iter()
+                        .cloned()
+                        .map(|player| player as Arc<dyn EntityBase>),
+                );
+            }
+            entities
+        };
+        let all_players_as_entities = || {
+            self.get_all_players()
+                .into_iter()
+                .map(|player| player as Arc<dyn EntityBase>)
+                .collect::<Vec<_>>()
+        };
+
+        let mut entities = match &target_selector.selector_type {
+            EntitySelectorType::Source => source
+                .and_then(CommandSender::as_player)
+                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
+            EntitySelectorType::NearestPlayer
+            | EntitySelectorType::RandomPlayer
+            | EntitySelectorType::AllPlayers => all_players_as_entities(),
+            EntitySelectorType::NearestEntity | EntitySelectorType::AllEntities => {
+                all_entities_and_players()
+            }
+            EntitySelectorType::NamedPlayer(name) => self
+                .get_player_by_name(name)
+                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
+            EntitySelectorType::Uuid(uuid) => self
+                .get_player_by_uuid(*uuid)
+                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
+        };
+
+        let type_included = target_selector
+            .conditions
+            .iter()
+            .filter_map(|f| {
+                if let EntityFilter::Type(ValueCondition::Equals(entity_type)) = f {
+                    Some(*entity_type)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+        let type_excluded = target_selector
+            .conditions
+            .iter()
+            .filter_map(|f| {
+                if let EntityFilter::Type(ValueCondition::NotEquals(entity_type)) = f {
+                    Some(*entity_type)
+                } else {
+                    None
+                }
+            })
+            .collect::<HashSet<_>>();
+        entities.retain(|entity| {
+            // Filter by entity type
+            (type_excluded.is_empty() || !type_excluded.contains(&entity.get_entity().entity_type))
+                && (type_included.is_empty()
+                    || type_included.contains(&entity.get_entity().entity_type))
+        });
+
+        let limit = target_selector.get_limit();
+        if limit == 0 {
+            return vec![];
+        }
+
+        match target_selector
+            .get_sort()
+            .unwrap_or(EntityFilterSort::Arbitrary)
+        {
+            EntityFilterSort::Arbitrary => entities.into_iter().take(limit).collect(),
+            EntityFilterSort::Random => {
+                entities.shuffle(&mut rand::rng());
+                entities.into_iter().take(limit).collect()
+            }
+            EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
+                let center = source.and_then(CommandSender::position).unwrap_or_default();
+                let nearest_first = target_selector
+                    .get_sort()
+                    .is_none_or(|sort| sort == EntityFilterSort::Nearest);
+                entities.sort_by(|a, b| {
+                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
+                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
+                    if nearest_first {
+                        a_distance
+                            .partial_cmp(&b_distance)
+                            .unwrap_or(core::cmp::Ordering::Equal)
+                    } else {
+                        b_distance
+                            .partial_cmp(&a_distance)
+                            .unwrap_or(core::cmp::Ordering::Equal)
+                    }
+                });
+                entities.into_iter().take(limit).collect()
             }
         }
     }

@@ -5,11 +5,15 @@ use pumpkin_data::{
 
 use crate::{
     ProtoChunk,
+    biome::BiomeSupplier,
     generation::{
         biome_coords,
+        noise::router::multi_noise_sampler::MultiNoiseSampler,
         structure::structures::{
             StructureGenerator, StructureGeneratorContext, StructurePosition,
-            buried_treasure::BuriedTreasureGenerator, create_chunk_random, igloo::IglooGenerator,
+            buried_treasure::BuriedTreasureGenerator, create_chunk_random,
+            desert_pyramid::DesertPyramidGenerator, igloo::IglooGenerator,
+            nether_fortress::NetherFortressGenerator, nether_fossil::NetherFossilGenerator,
             stronghold::StrongholdGenerator, swamp_hut::SwampHutGenerator,
         },
     },
@@ -38,7 +42,6 @@ pub fn try_generate_structure(
         sea_level,
         min_y: chunk.bottom_y() as i32,
     };
-
     let structure_pos = match key {
         StructureKeys::BuriedTreasure => {
             BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
@@ -49,7 +52,14 @@ pub fn try_generate_structure(
         StructureKeys::Stronghold => {
             StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
         }
+        StructureKeys::Fortress => {
+            NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
+        }
+        StructureKeys::NetherFossil => {
+            NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
+        }
         StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
+        StructureKeys::DesertPyramid => DesertPyramidGenerator.get_structure_position(context),
         // TODO: Implement other structure types
         _ => None,
     };
@@ -74,13 +84,66 @@ pub fn try_generate_structure(
             RegistryKey::WorldgenBiome,
             structure
                 .biomes
-                .strip_prefix("#")
+                .strip_prefix('#')
                 .unwrap_or(structure.biomes),
         )
         .unwrap();
 
         // Check if the biome is allowed for this structure
         if biomes.contains(&current_biome) {
+            return Some(pos);
+        }
+    }
+
+    None
+}
+
+#[must_use]
+pub fn lazily_generate_structure(
+    key: &StructureKeys,
+    structure: &Structure,
+    context: StructureGeneratorContext, // Replaces 5 separate arguments!
+    biome_supplier: &dyn BiomeSupplier,
+    multi_noise_sampler: &mut MultiNoiseSampler,
+) -> Option<StructurePosition> {
+    let structure_pos = match key {
+        StructureKeys::BuriedTreasure => {
+            BuriedTreasureGenerator::get_structure_position(&BuriedTreasureGenerator, context)
+        }
+        StructureKeys::SwampHut => {
+            SwampHutGenerator::get_structure_position(&SwampHutGenerator, context)
+        }
+        StructureKeys::Stronghold => {
+            StrongholdGenerator::get_structure_position(&StrongholdGenerator, context)
+        }
+        StructureKeys::Fortress => {
+            NetherFortressGenerator::get_structure_position(&NetherFortressGenerator, context)
+        }
+        StructureKeys::NetherFossil => {
+            NetherFossilGenerator::get_structure_position(&NetherFossilGenerator, context)
+        }
+        StructureKeys::Igloo => IglooGenerator::get_structure_position(&IglooGenerator, context),
+        StructureKeys::DesertPyramid => DesertPyramidGenerator.get_structure_position(context),
+        // TODO: Implement other structure types
+        _ => None,
+    };
+
+    if let Some(pos) = structure_pos {
+        // Get the biome mathematically, bypassing the chunk boundaries entirely!
+        let biome_x = biome_coords::from_block(pos.start_pos.0.x);
+        let biome_y = biome_coords::from_block(pos.start_pos.0.y);
+        let biome_z = biome_coords::from_block(pos.start_pos.0.z);
+
+        let biome = biome_supplier.biome(biome_x, biome_y, biome_z, multi_noise_sampler);
+
+        if let Some(biomes) = get_tag_ids(
+            RegistryKey::WorldgenBiome,
+            structure
+                .biomes
+                .strip_prefix('#')
+                .unwrap_or(structure.biomes),
+        ) && biomes.contains(&(biome.id as u16))
+        {
             return Some(pos);
         }
     }

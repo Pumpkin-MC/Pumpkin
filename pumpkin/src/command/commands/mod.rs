@@ -1,11 +1,10 @@
+use crate::command::node::dispatcher::CommandDispatcher;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionDefault, PermissionRegistry},
 };
 use tokio::sync::RwLock;
-
-use super::dispatcher::CommandDispatcher;
 
 mod ban;
 mod banip;
@@ -64,13 +63,15 @@ pub async fn default_dispatcher(
     registry: &RwLock<PermissionRegistry>,
     basic_config: &BasicConfiguration,
 ) -> CommandDispatcher {
-    let mut dispatcher = CommandDispatcher::default();
+    let mut dispatcher = crate::command::dispatcher::CommandDispatcher::default();
 
-    register_permissions(registry).await;
+    let mut registry_lock = registry.write().await;
+    let registry = &mut *registry_lock;
+
+    register_permissions(registry);
 
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
-    dispatcher.register(help::init_command_tree(), "minecraft:command.help");
     dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
@@ -91,7 +92,6 @@ pub async fn default_dispatcher(
     dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
     dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
-    dispatcher.register(seed::init_command_tree(), "minecraft:command.seed");
     dispatcher.register(tps::init_command_tree(), "pumpkin:command.tps");
     dispatcher.register(fill::init_command_tree(), "minecraft:command.fill");
     dispatcher.register(
@@ -113,10 +113,6 @@ pub async fn default_dispatcher(
     dispatcher.register(say::init_command_tree(), "minecraft:command.say");
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
     dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
-    dispatcher.register(
-        difficulty::init_command_tree(),
-        "minecraft:command.difficulty",
-    );
     dispatcher.register(
         stopsound::init_command_tree(),
         "minecraft:command.stopsound",
@@ -154,26 +150,30 @@ pub async fn default_dispatcher(
         setidletimeout::init_command_tree(),
         "minecraft:command.setidletimeout",
     );
-    // Four
-    dispatcher.register(stop::init_command_tree(), "minecraft:command.stop");
+
+    let mut dispatcher = {
+        let mut wrapper_dispatcher = CommandDispatcher::new();
+        wrapper_dispatcher.fallback_dispatcher = dispatcher;
+        wrapper_dispatcher
+    };
+
+    difficulty::register(&mut dispatcher, registry);
+    help::register(&mut dispatcher, registry);
+    seed::register(&mut dispatcher, registry);
+    stop::register(&mut dispatcher, registry);
 
     dispatcher
 }
 
-async fn register_permissions(permission_registry: &RwLock<PermissionRegistry>) {
-    let mut registry = permission_registry.write().await;
-
+fn register_permissions(registry: &mut PermissionRegistry) {
     // Register level 0 permissions (allowed by default)
-    register_level_0_permissions(&mut registry);
+    register_level_0_permissions(registry);
 
     // Register level 2 permissions (OP level 2)
-    register_level_2_permissions(&mut registry);
+    register_level_2_permissions(registry);
 
     // Register level 3 permissions (OP level 3)
-    register_level_3_permissions(&mut registry);
-
-    // Register level 4 permissions (OP level 4)
-    register_level_4_permissions(&mut registry);
+    register_level_3_permissions(registry);
 }
 
 fn register_level_0_permissions(registry: &mut PermissionRegistry) {
@@ -182,13 +182,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.pumpkin",
             "Shows information about the Pumpkin server",
-            PermissionDefault::Allow,
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.help",
-            "Lists available commands and their usage",
             PermissionDefault::Allow,
         ))
         .unwrap();
@@ -271,13 +264,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.setblock",
             "Changes a block to another block",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.seed",
-            "Displays the world seed",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
@@ -390,13 +376,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.defaultgamemode",
             "Sets the default game mode for new players",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.difficulty",
-            "Sets the difficulty of the world",
             PermissionDefault::Op(PermissionLvl::Two),
         ))
         .unwrap();
@@ -536,17 +515,6 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
             "minecraft:command.setidletimeout",
             "Sets the time before idle players are kicked",
             PermissionDefault::Op(PermissionLvl::Three),
-        ))
-        .unwrap();
-}
-
-fn register_level_4_permissions(registry: &mut PermissionRegistry) {
-    // Register permissions for commands with PermissionLvl::Four
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.stop",
-            "Stops the server",
-            PermissionDefault::Op(PermissionLvl::Four),
         ))
         .unwrap();
 }

@@ -1,14 +1,14 @@
-use pumpkin_data::tag::{RegistryKey, get_tag_ids};
+use pumpkin_data::tag::{self};
 
 use crate::block::RawBlockState;
 
 pub struct TagMatchRuleTest {
-    pub tag: String,
+    pub tag: tag::Tag,
 }
 
 impl TagMatchRuleTest {
+    #[must_use]
     pub fn test(&self, state: RawBlockState) -> bool {
-        let values = get_tag_ids(RegistryKey::Block, &self.tag).unwrap();
-        values.contains(&state.to_block_id())
+        self.tag.1.contains(&state.to_block_id())
     }
 }

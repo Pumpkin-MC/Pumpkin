@@ -8,7 +8,10 @@
 
 use std::sync::Arc;
 
-use pumpkin_util::{math::position::BlockPos, math::vector3::Vector3, random::RandomGenerator};
+use pumpkin_util::{
+    math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
+    random::RandomGenerator,
+};
 use serde::Deserialize;
 
 use crate::{
@@ -45,11 +48,11 @@ const BASEMENT_DEPTH: i32 = 9;
 const PIVOT_OFFSET_X: i32 = 3;
 const PIVOT_OFFSET_Z: i32 = 5;
 
-/// Offset from dome to shaft entrance (vanilla: OFFSETS_FROM_TOP for middle).
+/// Offset from dome to shaft entrance (vanilla: `OFFSETS_FROM_TOP` for middle).
 const SHAFT_OFFSET_X: i32 = 2;
 const SHAFT_OFFSET_Z: i32 = 4;
 
-/// Offset from dome to basement (vanilla: OFFSETS_FROM_TOP for bottom).
+/// Offset from dome to basement (vanilla: `OFFSETS_FROM_TOP` for bottom).
 const BASEMENT_OFFSET_X: i32 = 0;
 const BASEMENT_OFFSET_Z: i32 = -2;
 
@@ -142,7 +145,13 @@ impl StructurePieceBase for IglooPiece {
         Box::new(self.clone())
     }
 
-    fn place(&mut self, chunk: &mut ProtoChunk, _random: &mut RandomGenerator, _seed: i64) {
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        _chunk_box: &BlockBox,
+    ) {
         let origin = self.shiftable_structure_piece.piece.bounding_box.min;
 
         // Vanilla samples height at the entrance position (3, 0, 5 in template space)

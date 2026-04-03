@@ -4,6 +4,7 @@ use crate::block::blocks::banners::BannerBlock;
 use crate::block::blocks::barrel::BarrelBlock;
 use crate::block::blocks::barrier::BarrierBlock;
 use crate::block::blocks::bed::BedBlock;
+use crate::block::blocks::brewing_stand::BrewingStandBlock;
 use crate::block::blocks::cake::CakeBlock;
 use crate::block::blocks::campfire::CampfireBlock;
 use crate::block::blocks::candle_cakes::CandleCakeBlock;
@@ -14,8 +15,10 @@ use crate::block::blocks::chests::{ChestBlock, CopperChestBlock, TrappedChestBlo
 use crate::block::blocks::chiseled_bookshelf::ChiseledBookshelfBlock;
 use crate::block::blocks::command::CommandBlock;
 use crate::block::blocks::composter::ComposterBlock;
+use crate::block::blocks::conduit::ConduitBlock;
 use crate::block::blocks::dirt_path::DirtPathBlock;
 use crate::block::blocks::doors::DoorBlock;
+use crate::block::blocks::dripstone::DripstoneBlock;
 use crate::block::blocks::end_portal::EndPortalBlock;
 use crate::block::blocks::end_portal_frame::EndPortalFrameBlock;
 use crate::block::blocks::falling::FallingBlock;
@@ -44,6 +47,7 @@ use crate::block::blocks::plant::bamboo::BambooBlock;
 use crate::block::blocks::plant::bamboo_sapling::BambooSaplingBlock;
 use crate::block::blocks::plant::bush::BushBlock;
 use crate::block::blocks::plant::cactus::CactusBlock;
+use crate::block::blocks::plant::cactus_flower::CactusFlowerBlock;
 use crate::block::blocks::plant::crop::beetroot::BeetrootBlock;
 use crate::block::blocks::plant::crop::carrot::CarrotBlock;
 use crate::block::blocks::plant::crop::nether_wart::NetherWartBlock;
@@ -62,15 +66,19 @@ use crate::block::blocks::plant::mushroom_plant::MushroomPlantBlock;
 use crate::block::blocks::plant::nether_sprouts::NetherSproutsBlock;
 use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
-use crate::block::blocks::plant::sea_grass::SeaGrassBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
+use crate::block::blocks::plant::seagrass::SeaGrassBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::spore_blossom::SporeBlossomBlock;
 use crate::block::blocks::plant::sugar_cane::SugarCaneBlock;
 use crate::block::blocks::plant::tall_plant::TallPlantBlock;
+use crate::block::blocks::plant::tall_seagrass::TallSeaGrassBlock;
+use crate::block::blocks::plant::twisting_vines::TwistingVinesBlock;
+use crate::block::blocks::plant::weeping_vines::WeepingVinesBlock;
 use crate::block::blocks::plant::wither_rose::WitherRoseBlock;
 use crate::block::blocks::powder_snow::PowderSnowBlock;
 use crate::block::blocks::pumpkin::PumpkinBlock;
+use crate::block::blocks::redstone::bell::BellBlock;
 use crate::block::blocks::redstone::buttons::ButtonBlock;
 use crate::block::blocks::redstone::comparator::ComparatorBlock;
 use crate::block::blocks::redstone::copper_bulb::CopperBulbBlock;
@@ -120,12 +128,12 @@ use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -185,6 +193,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FenceBlock);
     manager.register(FlowerPotBlock);
     manager.register(FurnaceBlock);
+    manager.register(BrewingStandBlock);
     manager.register(BlastFurnaceBlock);
     manager.register(SmokerBlock);
     manager.register(GlassPaneBlock);
@@ -216,6 +225,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CarrotBlock);
     manager.register(SweetBerryBushBlock);
     manager.register(SeaGrassBlock);
+    manager.register(TallSeaGrassBlock);
     manager.register(KelpBlock);
     manager.register(NetherWartBlock);
     manager.register(WheatBlock);
@@ -261,6 +271,11 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(FungusBlock);
     manager.register(NetherSproutsBlock);
     manager.register(SporeBlossomBlock);
+    manager.register(ConduitBlock);
+    manager.register(DripstoneBlock);
+    manager.register(TwistingVinesBlock);
+    manager.register(WeepingVinesBlock);
+    manager.register(CactusFlowerBlock);
 
     manager.register(FallingBlock);
 
@@ -271,6 +286,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
 
     // Redstone
     manager.register(ButtonBlock);
+    manager.register(BellBlock);
     manager.register(LeverBlock);
     manager.register(ObserverBlock);
     manager.register(TripwireBlock);

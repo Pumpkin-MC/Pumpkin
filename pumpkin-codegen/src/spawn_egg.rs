@@ -4,6 +4,7 @@ use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
+/// Generates the `TokenStream` for `entity_from_egg` and `spawn_egg_ids` helper functions.
 pub fn build() -> TokenStream {
     let eggs: BTreeMap<u16, String> =
         serde_json::from_str(&fs::read_to_string("../assets/spawn_egg.json").unwrap())

@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use pumpkin_data::fluid::{Fluid, FluidState};
-use pumpkin_data::tag::{RegistryKey, get_tag_ids};
+use pumpkin_data::tag::{self};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
@@ -102,15 +102,13 @@ impl MatchingFluidsBlockPredicate {
 
 pub struct MatchingBlockTagPredicate {
     pub offset: OffsetBlocksBlockPredicate,
-    pub tag: String,
+    pub tag: tag::Tag,
 }
 
 impl MatchingBlockTagPredicate {
     pub fn test<T: GenerationCache>(&self, chunk: &T, pos: &BlockPos) -> bool {
-        let block = self.offset.get_raw(chunk, pos);
-        get_tag_ids(RegistryKey::Block, &self.tag)
-            .unwrap()
-            .contains(&block.to_block_id())
+        let state = self.offset.get_raw(chunk, pos);
+        self.tag.1.contains(&state.to_block_id())
     }
 }
 

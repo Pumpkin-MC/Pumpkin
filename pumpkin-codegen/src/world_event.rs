@@ -4,6 +4,7 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
+/// Generates the `TokenStream` for the `WorldEvent` enum with `u16` discriminants.
 pub fn build() -> TokenStream {
     let events: BTreeMap<String, u16> =
         serde_json::from_str(&fs::read_to_string("../assets/world_event.json").unwrap())

@@ -3,7 +3,6 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use crate::entity::attributes::AttributeBuilder;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use pumpkin_data::attributes::Attributes;
@@ -36,7 +35,7 @@ use crate::entity::{
     ai::{
         goal::{
             GoalFuture, active_target::ActiveTargetGoal, chase_player::ChasePlayerGoal,
-            look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal,
+            look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
             melee_attack::MeleeAttackGoal, pick_up_block::PickUpBlockGoal,
             place_block::PlaceBlockGoal, revenge::RevengeGoal, swim::SwimGoal,
             teleport_towards_player::TeleportTowardsPlayerGoal, wander_around::WanderAroundGoal,
@@ -101,7 +100,7 @@ impl EndermanEntity {
                 8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(10, Box::new(PlaceBlockGoal::new(mob_arc.clone())));
             goal_selector.add_goal(11, Box::new(PickUpBlockGoal::new(mob_arc.clone())));
 
@@ -114,16 +113,6 @@ impl EndermanEntity {
         };
 
         mob_arc
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new()
-            .add(Attributes::ATTACK_DAMAGE, 7.0)
-            .add(Attributes::FOLLOW_RANGE, 64.0)
-            .add(Attributes::MOVEMENT_SPEED, 0.3)
-            .add(Attributes::STEP_HEIGHT, 1.0)
-            .add(Attributes::MAX_HEALTH, 40.0)
     }
 
     pub async fn teleport_randomly(&self) -> bool {
@@ -303,7 +292,7 @@ impl EndermanEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_ANGRY,
+                TrackedData::CREEPY,
                 MetaDataType::BOOLEAN,
                 angry,
             )])
@@ -320,7 +309,7 @@ impl EndermanEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_PROVOKED,
+                TrackedData::STARED_AT,
                 MetaDataType::BOOLEAN,
                 provoked,
             )])
@@ -334,7 +323,7 @@ impl EndermanEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_CARRIED_BLOCK,
+                TrackedData::CARRY_STATE,
                 MetaDataType::OPTIONAL_BLOCK_STATE,
                 value,
             )])
@@ -450,30 +439,10 @@ impl Mob for EndermanEntity {
                     .await;
             }
 
-            let pos = entity.pos.load();
-            let world = entity.world.load();
-            let particles = {
-                let mut rng = self.get_random();
-                std::array::from_fn::<_, 2, _>(|_| {
-                    (
-                        Vector3::new(
-                            pos.x + rng.random_range(-0.5..0.5),
-                            pos.y + rng.random_range(0.0..2.9),
-                            pos.z + rng.random_range(-0.5..0.5),
-                        ),
-                        Vector3::new(
-                            (rng.random_range(0.0f32..1.0) - 0.5) * 2.0,
-                            -rng.random_range(0.0f32..1.0),
-                            (rng.random_range(0.0f32..1.0) - 0.5) * 2.0,
-                        ),
-                    )
-                })
-            };
-            for (particle_pos, offset) in particles {
-                world
-                    .spawn_particle(particle_pos, offset, 0.0, 1, Particle::Portal)
-                    .await;
-            }
+            // NOTE: Enderman ambient portal particles are intentionally NOT sent server-side.
+            // The vanilla Minecraft client generates these particles locally in the entity
+            // renderer. Sending them from the server would cause duplicate particles and
+            // massive network overhead (2 packets/tick/enderman = 40 packets/sec/enderman).
         })
     }
 

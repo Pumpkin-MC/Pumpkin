@@ -1,0 +1,22 @@
+interface server {
+    enum difficulty {
+        peaceful,
+        easy,
+        normal,
+        hard,
+    }
+
+    resource server {
+        /// Returns the current difficulty level of the server
+        get-difficulty: func() -> difficulty;
+
+        /// Returns the total number of players connected across all worlds.
+        get-player-count: func() -> u32;
+
+        /// Returns the rolling average Milliseconds Per Tick (MSPT) over the last 100 ticks
+        get-mspt: func() -> f64;
+
+        /// Returns the effective Ticks Per Second (TPS)
+        get-tps: func() -> f64;
+    }
+}

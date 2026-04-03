@@ -2,7 +2,7 @@ use enum_dispatch::enum_dispatch;
 use pumpkin_data::{Block, BlockState};
 use pumpkin_util::{
     math::{clamped_map, floor_div, vector3::Vector3},
-    random::{RandomDeriver, RandomDeriverImpl, RandomImpl},
+    random::{RandomImpl, xoroshiro128::XoroshiroSplitter},
 };
 
 use crate::generation::{
@@ -139,7 +139,7 @@ impl WorldAquiferSampler {
     pub fn new(
         chunk_x: i32,
         chunk_z: i32,
-        random_deriver: &RandomDeriver,
+        random_deriver: &XoroshiroSplitter,
         minimum_y: i8,
         height: u16,
         fluid_level: FluidLevelSampler,
@@ -725,7 +725,7 @@ mod random_positions_and_hypot {
 
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
-        LazyLock::new(|| GlobalRandomConfig::new(SEED, false));
+        LazyLock::new(|| GlobalRandomConfig::new(SEED));
     static PROTO_ROUTER: LazyLock<ProtoNoiseRouters> = LazyLock::new(|| {
         let router_ast = &OVERWORLD_BASE_NOISE_ROUTER;
         ProtoNoiseRouters::generate(router_ast, &RANDOM_CONFIG)

@@ -4,6 +4,7 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
+/// Generates the `TokenStream` for the `ChunkStatus` enum with serde rename attributes.
 pub fn build() -> TokenStream {
     let chunk_status: Vec<String> =
         serde_json::from_str(&fs::read_to_string("../assets/chunk_status.json").unwrap())

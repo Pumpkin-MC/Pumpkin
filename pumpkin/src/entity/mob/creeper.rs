@@ -3,8 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use crate::entity::attributes::AttributeBuilder;
-use pumpkin_data::attributes::Attributes;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     entity::EntityType,
     item::Item,
@@ -14,13 +13,12 @@ use pumpkin_data::{
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
-use pumpkin_world::item::ItemStack;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
-        look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
@@ -74,7 +72,7 @@ impl CreeperEntity {
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(6, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(
                 1,
@@ -92,7 +90,7 @@ impl CreeperEntity {
             .living_entity
             .entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_FUSE_SPEED,
+                TrackedData::FUSE_ID,
                 MetaDataType::INTEGER,
                 VarInt(speed),
             )])
@@ -116,11 +114,6 @@ impl CreeperEntity {
         world.explode(pos, radius * multiplier).await;
         // TODO: spawn area effect cloud with potion effects
         entity.remove().await;
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.25)
     }
 }
 
@@ -237,14 +230,15 @@ impl Mob for CreeperEntity {
             self.ignited.store(true, Ordering::Relaxed);
             entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_IGNITED,
+                    TrackedData::IS_IGNITED,
                     MetaDataType::BOOLEAN,
                     true,
                 )])
                 .await;
 
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                item_stack.damage_item_with_context(1, false);
+                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
+                let _ = item_stack.damage_item(1);
             }
 
             true

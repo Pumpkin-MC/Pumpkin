@@ -14,12 +14,13 @@ use pumpkin_data::{
     composter_increase_chance::get_composter_increase_chance_from_item_id,
     entity::EntityType,
     item::Item,
+    item_stack::ItemStack,
     world::WorldEvent,
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{BlockStateId, item::ItemStack, tick::TickPriority, world::BlockFlags};
+use pumpkin_world::{BlockStateId, tick::TickPriority, world::BlockFlags};
 use rand::RngExt;
 
 #[pumpkin_block("minecraft:composter")]
@@ -79,7 +80,7 @@ impl BlockBehaviour for ComposterBlock {
                 )
                 .await;
                 args.world
-                    .sync_world_event(WorldEvent::ComposterUsed, *args.position, 1)
+                    .sync_world_event(WorldEvent::ComposterFill, *args.position, 1)
                     .await;
             }
 

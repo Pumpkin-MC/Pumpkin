@@ -60,9 +60,11 @@ use super::features::{
     tree::TreeFeature,
     twisting_vines::TwistingVinesFeature,
     underwater_magma::UnderwaterMagmaFeature,
+    vegetation_patch,
     vegetation_patch::VegetationPatchFeature,
     vines::VinesFeature,
     void_start_platform::VoidStartPlatformFeature,
+    waterlogged_vegetation_patch,
     waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
     weeping_vines::WeepingVinesFeature,
 };
@@ -131,7 +133,7 @@ pub enum ConfiguredFeature {
     RandomSelector(RandomFeature),
     SimpleRandomSelector(SimpleRandomFeature),
     RandomBooleanSelector(RandomBooleanFeature),
-    Geode(GeodeFeature),
+    Geode(Box<GeodeFeature>),
     DripstoneCluster(DripstoneClusterFeature),
     LargeDripstone(LargeDripstoneFeature),
     PointedDripstone(SmallDripstoneFeature),
@@ -163,6 +165,24 @@ impl ConfiguredFeature {
                 pos,
             ),
             Self::NetherForestVegetation(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::VegetationPatch(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::WaterloggedVegetationPatch(feature) => feature.generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -258,9 +278,15 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::Tree(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::Tree(feature) => feature.generate(
+                block_registry,
+                chunk,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::RandomSelector(feature) => feature.generate(
                 chunk,
                 block_registry,
@@ -291,9 +317,21 @@ impl ConfiguredFeature {
             Self::Seagrass(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::UnderwaterMagma(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
             Self::SeaPickle(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::Geode(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::Kelp(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
@@ -309,6 +347,18 @@ impl ConfiguredFeature {
             Self::MonsterRoom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::GlowstoneBlob(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::Disk(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             _ => false, // TODO
         }
     }

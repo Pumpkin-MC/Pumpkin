@@ -1,7 +1,7 @@
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::block_properties::{COLLISION_SHAPES, Instrument};
+use crate::block_properties::{COLLISION_SHAPES, NoteblockInstrument};
 use crate::{Block, BlockDirection};
 
 /// Represents a specific state of a block, including its properties and physical behaviors.
@@ -18,7 +18,7 @@ pub struct BlockState {
     /// Cached flags for each of the 6 sides to speed up ambient occlusion and face culling.
     pub side_flags: u8,
     /// The note block instrument produced when this block is placed underneath one.
-    pub instrument: Instrument,
+    pub instrument: NoteblockInstrument,
     /// The light level emitted by this block, ranging from 0 to 15.
     pub luminance: u8,
     /// Defines how the block reacts to being pushed or pulled by a piston.
@@ -141,6 +141,15 @@ impl BlockState {
                 .iter()
                 .any(|(k, v)| k == &"waterlogged" && v == &"true")
         })
+    }
+
+    /// Produce a new state identical to `self` except the waterlogged property
+    /// is set to `true`.  If the block type does not support waterlogging or
+    /// the state was already waterlogged, `None` is returned.
+    #[must_use]
+    pub fn with_waterlogged(&self) -> Option<&'static BlockState> {
+        let block = Block::from_state_id(self.id);
+        block.with_waterlogged(self.id)
     }
 
     pub fn get_block_collision_shapes(&self) -> impl Iterator<Item = BoundingBox> + '_ {

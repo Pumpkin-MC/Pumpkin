@@ -3,16 +3,14 @@ use std::sync::{
     atomic::{AtomicI32, Ordering, Ordering::Relaxed},
 };
 
-use crate::entity::attributes::AttributeBuilder;
-use pumpkin_data::attributes::Attributes;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{entity::EntityType, item::Item};
-use pumpkin_world::item::ItemStack;
 use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
-        escape_danger::EscapeDangerGoal, look_around::LookAroundGoal,
+        escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
@@ -58,17 +56,10 @@ impl ChickenEntity {
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(7, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new()
-            .add(Attributes::MOVEMENT_SPEED, 0.25)
-            .add(Attributes::MAX_HEALTH, 4.0)
     }
 }
 

@@ -6,8 +6,11 @@ use std::fs;
 
 use crate::version::MinecraftVersion;
 
-const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_1_21_11;
+/// The newest protocol version whose registry data is used as the fallback for unknown versions.
+const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
 
+/// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
+/// static registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
     let assets = [
         (MinecraftVersion::V_1_21, "1_21_synced_registries.json"),
@@ -21,6 +24,7 @@ pub(crate) fn build() -> TokenStream {
             MinecraftVersion::V_1_21_11,
             "1_21_11_synced_registries.json",
         ),
+        (MinecraftVersion::V_26_1, "26_1_synced_registries.json"),
     ];
 
     let process_version = |path: &str| -> TokenStream {
@@ -73,7 +77,6 @@ pub(crate) fn build() -> TokenStream {
 
     for (ver, file) in assets {
         let path = format!("../assets/registry/{file}");
-        println!("cargo:rerun-if-changed={path}");
 
         let registries = process_version(&path);
 

@@ -1,10 +1,13 @@
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, entity::EntityType};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::generation::proto_chunk::GenerationCache;
+use crate::{
+    block::entities::mob_spawner::MobSpawnerBlockEntity, generation::proto_chunk::GenerationCache,
+};
 
 /// The three mob types that can appear in a dungeon spawner.
 ///
@@ -143,8 +146,12 @@ impl DungeonFeature {
         }
 
         // TODO: set spawner entity type
-        let _ = DUNGEON_MOBS[random.next_bounded_i32(DUNGEON_MOBS.len() as i32) as usize];
+        let mob = DUNGEON_MOBS[random.next_bounded_i32(DUNGEON_MOBS.len() as i32) as usize];
         chunk.set_block_state(&pos.0, Block::SPAWNER.default_state);
+        let spawner_block_entity = MobSpawnerBlockEntity::new(pos, EntityType::from_name(mob));
+        let mut entity_nbt = NbtCompound::new();
+        spawner_block_entity.write_nbt(&mut entity_nbt);
+        chunk.add_block_entity(&pos.0, entity_nbt);
 
         true
     }

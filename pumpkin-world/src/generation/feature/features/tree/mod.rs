@@ -8,21 +8,21 @@ use trunk::TrunkPlacer;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize};
+use crate::world::BlockRegistryExt;
 
 pub mod decorator;
 pub mod foliage;
 pub mod trunk;
 
 pub struct TreeFeature {
-    pub dirt_provider: BlockStateProvider,
     pub trunk_provider: BlockStateProvider,
     pub trunk_placer: TrunkPlacer,
     pub foliage_provider: BlockStateProvider,
     pub foliage_placer: FoliagePlacer,
     pub minimum_size: FeatureSize,
     pub ignore_vines: bool,
-    pub force_dirt: bool,
     pub decorators: Vec<TreeDecorator>,
+    pub below_trunk_provider: BlockStateProvider,
 }
 
 pub struct TreeNode {
@@ -32,8 +32,10 @@ pub struct TreeNode {
 }
 
 impl TreeFeature {
+    #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
+        block_registry: &dyn BlockRegistryExt,
         chunk: &mut T,
         min_y: i8,
         height: u16,
@@ -42,7 +44,15 @@ impl TreeFeature {
         pos: BlockPos,
     ) -> bool {
         // TODO
-        let log_positions = self.generate_main(chunk, min_y, height, feature_name, random, pos);
+        let log_positions = self.generate_main(
+            block_registry,
+            chunk,
+            min_y,
+            height,
+            feature_name,
+            random,
+            pos,
+        );
 
         for decorator in &self.decorators {
             decorator.generate(chunk, random, &[], &log_positions);
@@ -65,8 +75,10 @@ impl TreeFeature {
                 .contains(&block)
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn generate_main<T: GenerationCache>(
         &self,
+        block_registry: &dyn BlockRegistryExt,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
@@ -82,15 +94,14 @@ impl TreeFeature {
             return vec![];
         }
         let trunk_state = self.trunk_provider.get(random, pos);
-        let dirt_state = self.dirt_provider.get(random, pos);
 
         let (nodes, logs) = self.trunk_placer.generate(
+            block_registry,
             top,
             pos,
             chunk,
             random,
-            self.force_dirt,
-            dirt_state,
+            &self.below_trunk_provider,
             trunk_state,
         );
 

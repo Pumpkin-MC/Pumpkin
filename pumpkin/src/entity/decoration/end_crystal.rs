@@ -19,7 +19,7 @@ impl EndCrystalEntity {
     pub async fn set_show_bottom(&self, show_bottom: bool) {
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_SHOW_BOTTOM,
+                TrackedData::SHOW_BOTTOM,
                 MetaDataType::BOOLEAN,
                 show_bottom,
             )])
