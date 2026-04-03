@@ -1,9 +1,7 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
-use pumpkin_world::{
-    inventory::{Clearable, Inventory, InventoryFuture},
-    item::ItemStack,
-};
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 use tokio::sync::Mutex;
 
 pub struct DoubleInventory {

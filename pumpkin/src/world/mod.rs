@@ -53,6 +53,7 @@ use pumpkin_data::{
     Block,
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
+    item_stack::ItemStack,
     particle::Particle,
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
@@ -121,7 +122,7 @@ use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
+    chunk::io::Dirtiable, inventory::Inventory, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -135,6 +136,8 @@ use tokio::sync::Mutex;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
+pub mod dragon_fight;
+pub mod end_podium;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
@@ -202,6 +205,8 @@ pub struct World {
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     /// POI storage for fast portal lookups
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
+    /// End Dragon fight manager (only present in `THE_END` dimension).
+    pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
 }
 
 impl PartialEq for World {
@@ -244,6 +249,8 @@ impl World {
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),
+            dragon_fight: (dimension == Dimension::THE_END)
+                .then(|| Mutex::new(dragon_fight::DragonFight::new())),
             server,
         }
     }
@@ -780,6 +787,11 @@ impl World {
         let entity_elapsed = entity_start.elapsed();
 
         //self.level.chunk_loading.lock().unwrap().send_change();
+
+        // Tick the End dragon fight (only on THE_END worlds).
+        if let Some(ref fight_mutex) = self.dragon_fight {
+            fight_mutex.lock().await.tick(self).await;
+        }
 
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {

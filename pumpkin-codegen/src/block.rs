@@ -373,7 +373,7 @@ impl ToTokens for BlockPropertyStruct {
                     for (key, value) in props {
                         match *key {
                             #(#from_props_values),*,
-                            _ => {}, // 
+                            _ => {}, //
                         }
                     }
                     block_props

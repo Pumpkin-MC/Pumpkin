@@ -11,6 +11,9 @@ use pumpkin_util::{
 };
 
 use super::noise::perlin::DoublePerlinNoiseSampler;
+use crate::generation::block_predicate::BlockPredicate;
+use crate::generation::proto_chunk::GenerationCache;
+use crate::world::BlockRegistryExt;
 
 pub enum BlockStateProvider {
     Simple(SimpleStateProvider),
@@ -20,6 +23,7 @@ pub enum BlockStateProvider {
     DualNoise(DualNoiseBlockStateProvider),
     Pillar(PillarBlockStateProvider),
     RandomizedInt(RandomizedIntBlockStateProvider),
+    Rule(RuleBasedBlockStateProvider),
 }
 
 impl BlockStateProvider {
@@ -32,8 +36,78 @@ impl BlockStateProvider {
             Self::DualNoise(provider) => provider.get(pos),
             Self::Pillar(provider) => provider.get(pos),
             Self::RandomizedInt(provider) => provider.get(random, pos),
+            // Without chunk context, fall through to fallback (rules cannot be evaluated)
+            Self::Rule(_provider) => todo!(), //provider.get(random, pos),
         }
     }
+
+    pub fn get_with_context<T: GenerationCache>(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> &'static BlockState {
+        match self {
+            Self::Rule(provider) => provider.get(block_registry, chunk, random, pos),
+            _ => self.get(random, pos),
+        }
+    }
+
+    pub fn get_optional<T: GenerationCache>(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Option<&'static BlockState> {
+        match self {
+            Self::Rule(provider) => provider.get_optional(block_registry, chunk, random, pos),
+            _ => Some(self.get(random, pos)),
+        }
+    }
+}
+
+pub struct RuleBasedBlockStateProvider {
+    pub fallback: Option<Box<BlockStateProvider>>,
+    pub rules: Vec<BlockStateRule>,
+}
+
+impl RuleBasedBlockStateProvider {
+    pub fn get<T: GenerationCache>(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> &'static BlockState {
+        if let Some(optional) = self.get_optional(block_registry, chunk, random, pos) {
+            return optional;
+        }
+        GenerationCache::get_block_state(chunk, &pos.0).to_state()
+    }
+    pub fn get_optional<T: GenerationCache>(
+        &self,
+        block_registry: &dyn BlockRegistryExt,
+        chunk: &T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> Option<&'static BlockState> {
+        for rule in &self.rules {
+            if rule.if_true.test(block_registry, chunk, &pos) {
+                return Some(
+                    rule.then
+                        .get_with_context(block_registry, chunk, random, pos),
+                );
+            }
+        }
+        self.fallback.as_ref().map(|f| f.get(random, pos))
+    }
+}
+
+pub struct BlockStateRule {
+    pub if_true: BlockPredicate,
+    pub then: BlockStateProvider,
 }
 
 pub struct RandomizedIntBlockStateProvider {

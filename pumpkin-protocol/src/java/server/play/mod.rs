@@ -1,3 +1,4 @@
+mod attack;
 mod change_game_mode;
 mod chat_command;
 mod chat_message;
@@ -35,6 +36,7 @@ mod update_sign;
 mod use_item;
 mod use_item_on;
 
+pub use attack::*;
 pub use change_game_mode::*;
 pub use chat_command::*;
 pub use chat_message::*;

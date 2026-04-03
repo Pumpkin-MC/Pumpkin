@@ -6,34 +6,40 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::generation::feature::features::tree::{
-    TreeNode,
-    trunk::{TrunkPlacer, giant::GiantTrunkPlacer},
-};
 use crate::generation::proto_chunk::GenerationCache;
+use crate::{
+    generation::{
+        block_state_provider::BlockStateProvider,
+        feature::features::tree::{
+            TreeNode,
+            trunk::{TrunkPlacer, giant::GiantTrunkPlacer},
+        },
+    },
+    world::BlockRegistryExt,
+};
 
 pub struct MegaJungleTrunkPlacer;
 
 impl MegaJungleTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
+        block_registry: &dyn BlockRegistryExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        force_dirt: bool,
-        dirt_state: &BlockState,
+        below_trunk_provider: &BlockStateProvider,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         let (mut nodes, mut trunk_poses) = GiantTrunkPlacer::generate(
+            block_registry,
             placer,
             height,
             start_pos,
             chunk,
             random,
-            force_dirt,
-            dirt_state,
+            below_trunk_provider,
             trunk_block,
         );
         let mut i = height as i32 - 2 - random.next_bounded_i32(4);

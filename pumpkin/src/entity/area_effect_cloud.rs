@@ -10,7 +10,7 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
 type EffectEntry = (&'static StatusEffect, i32, u8, bool, bool, bool);
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 
 /// The effect cloud entity that is spawned where a lingering potion lands.

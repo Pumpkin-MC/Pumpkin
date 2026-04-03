@@ -1,5 +1,49 @@
 interface %world {
+    enum piston-behavior {
+        normal,
+        destroy,
+        block,
+        ignore,
+        push-only
+    }
+
+    flags block-flags {
+        notify-neighbors,
+        notify-listeners,
+        force-state,
+        skip-drops,
+        moved,
+        skip-redstone-wire-state-replacement,
+        skip-block-entity-replaced-callback,
+        skip-block-added-callback,
+    }
+
+    record block-state {
+        id: u16,
+        luminance: u8,
+        opacity: u8,
+        hardness: f32,
+        is-air: bool,
+        is-liquid: bool,
+        is-solid: bool,
+        is-full-cube: bool,
+        piston-behavior: piston-behavior,
+        has-random-ticks: bool,
+    }
+
+    record block-pos {
+        x: s32,
+        y: s32,
+        z: s32,
+    }
+
     resource %world {
-        get-id: func () -> string;
+        get-id: func() -> string;
+        
+        get-block-state-id: func(pos: block-pos) -> u16;
+
+        get-block-state: func(pos: block-pos) -> block-state;
+
+        set-block-state: func(pos: block-pos, state: u16, update-flags: block-flags);
     }
 }
