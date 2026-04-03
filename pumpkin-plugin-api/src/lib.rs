@@ -40,8 +40,9 @@ pub mod command {
 }
 
 pub use wit::pumpkin::plugin::{
+    command as command_wit, common,
     context::{Context, Server},
-    permission, text,
+    permission, server, text, world,
 };
 
 pub mod logging;
