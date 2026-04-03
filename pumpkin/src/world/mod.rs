@@ -67,7 +67,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{
 };
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
-use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
+use pumpkin_protocol::java::client::play::{CPlayerSpawnPosition, CSystemChatMessage};
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
@@ -484,6 +484,11 @@ impl World {
         let players = self.players.load();
         let recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
         Self::broadcast_java_grouped(packet, recipients_by_version).await;
+    }
+
+    pub async fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
+        let packet = CSystemChatMessage::new(message, overlay);
+        self.broadcast_packet_all(&packet).await;
     }
 
     pub async fn broadcast_message(
@@ -1394,6 +1399,40 @@ impl World {
         }
         // TODO this.level.canSpawnEntitiesInChunk(chunkPos)
         spawn_for_chunk(self, chunk_pos, chunk, spawn_state, spawn_list).await;
+    }
+
+    pub async fn set_time_of_day(&self, time: i64) {
+        let mut level_time = self.level_time.lock().await;
+        level_time.set_time(time);
+        level_time.send_time(self).await;
+    }
+
+    pub async fn is_raining(&self) -> bool {
+        self.weather.lock().await.raining
+    }
+
+    pub async fn set_raining(&self, raining: bool) {
+        let mut weather = self.weather.lock().await;
+        if weather.raining != raining {
+            let thunder = weather.thundering;
+            weather
+                .set_weather_parameters(self, 0, 0, raining, thunder)
+                .await;
+        }
+    }
+
+    pub async fn is_thundering(&self) -> bool {
+        self.weather.lock().await.thundering
+    }
+
+    pub async fn set_thundering(&self, thundering: bool) {
+        let mut weather = self.weather.lock().await;
+        if weather.thundering != thundering {
+            let raining = weather.raining;
+            weather
+                .set_weather_parameters(self, 0, 0, raining, thundering)
+                .await;
+        }
     }
 
     /// Gets the y position of the first non air block from the top down

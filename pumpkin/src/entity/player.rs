@@ -83,6 +83,7 @@ use crate::block::blocks::bed::BedBlock;
 use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
+use crate::data::SaveJSONConfiguration;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
@@ -2117,6 +2118,114 @@ impl Player {
     pub async fn set_health(&self, health: f32) {
         self.living_entity.set_health(health).await;
         self.send_health().await;
+    }
+
+    pub async fn set_max_health(&self, max_health: f32) {
+        self.living_entity.set_max_health(max_health).await;
+        self.send_health().await;
+    }
+
+    pub async fn set_food_level(&self, food_level: u8) {
+        self.hunger_manager.set_level(food_level);
+        self.send_health().await;
+    }
+
+    pub async fn set_saturation(&self, saturation: f32) {
+        self.hunger_manager.set_saturation(saturation);
+        self.send_health().await;
+    }
+
+    pub fn get_exhaustion(&self) -> f32 {
+        self.hunger_manager.get_exhaustion()
+    }
+
+    pub async fn set_exhaustion(&self, exhaustion: f32) {
+        self.hunger_manager.set_exhaustion(exhaustion);
+        self.send_health().await;
+    }
+
+    pub fn get_absorption(&self) -> f32 {
+        self.living_entity.get_absorption()
+    }
+
+    pub async fn set_absorption(&self, absorption: f32) {
+        self.living_entity.set_absorption(absorption).await;
+    }
+
+    pub async fn get_ip(&self) -> String {
+        self.client.address().await.to_string()
+    }
+
+    pub async fn respawn(self: &Arc<Self>) {
+        self.world().respawn_player(self, false).await;
+    }
+
+    pub async fn ban(&self, server: &Server, reason: Option<TextComponent>) {
+        let mut banned_players = server.data.banned_player_list.write().await;
+        let string_reason = reason
+            .clone()
+            .map_or_else(|| "Banned by an operator.".to_string(), pumpkin_util::text::TextComponent::get_text);
+
+        if banned_players
+            .banned_players
+            .iter()
+            .any(|entry| entry.uuid == self.gameprofile.id)
+        {
+            return;
+        }
+
+        banned_players.banned_players.push(
+            crate::data::banlist_serializer::BannedPlayerEntry::new(
+                &self.gameprofile,
+                "Plugin".to_string(),
+                None,
+                string_reason,
+            ),
+        );
+
+        banned_players.save();
+        drop(banned_players);
+
+        let kick_reason = reason.unwrap_or_else(|| {
+            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, [])
+        });
+
+        self.kick(DisconnectReason::Kicked, kick_reason).await;
+    }
+
+    pub async fn ban_ip(&self, server: &Server, reason: Option<TextComponent>) {
+        let mut banned_ips = server.data.banned_ip_list.write().await;
+        let string_reason = reason
+            .clone()
+            .map_or_else(|| "Banned by an operator.".to_string(), pumpkin_util::text::TextComponent::get_text);
+        let target_ip = self.client.address().await.ip();
+
+        if banned_ips.get_entry(&target_ip).is_some() {
+            return;
+        }
+
+        banned_ips
+            .banned_ips
+            .push(crate::data::banlist_serializer::BannedIpEntry::new(
+                target_ip,
+                "Plugin".to_string(),
+                None,
+                string_reason,
+            ));
+
+        banned_ips.save();
+        drop(banned_ips);
+
+        let kick_reason = reason.unwrap_or_else(|| {
+            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, [])
+        });
+
+        let affected = server.get_players_by_ip(target_ip).await;
+        for target in affected {
+            target
+                .kick(DisconnectReason::Kicked, kick_reason.clone())
+                .await;
+        }
     }
 
     pub fn tick_client_load_timeout(&self) {

@@ -3,15 +3,28 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use wasmtime::component::Resource;
 
+use pumpkin_world::world::SimpleWorld;
+
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::pumpkin::plugin::world::{
     BlockFlags as WitBlockFlags, BlockPos as WitBlockPos, BlockState as WitBlockState,
     PistonBehavior as WitPistonBehavior,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     DowncastResourceExt,
-    state::{PluginHostState, WorldResource},
+    state::{PluginHostState, TextComponentResource, WorldResource},
     wit::v0_1_0::pumpkin::{self, plugin::world::World},
 };
+
+fn text_component_from_resource(
+    state: &PluginHostState,
+    text: &Resource<pumpkin::plugin::text::TextComponent>,
+) -> Result<pumpkin_util::text::TextComponent, String> {
+    state
+        .resource_table
+        .get::<TextComponentResource>(&Resource::new_own(text.rep()))
+        .map_err(|_| "invalid text-component resource handle".to_string())
+        .map(|resource| resource.provider.clone())
+}
 
 impl DowncastResourceExt<WorldResource> for Resource<World> {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a WorldResource {
@@ -126,7 +139,75 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         // Update the world
         world_ref
             .provider
+            .clone()
             .set_block_state(&internal_pos, state, internal_flags)
+            .await;
+    }
+
+    async fn get_time_of_day(&mut self, world: Resource<World>) -> u64 {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.get_time_of_day().await as u64
+    }
+
+    async fn set_time_of_day(&mut self, world: Resource<World>, time: u64) {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.set_time_of_day(time as i64).await;
+    }
+
+    async fn get_world_age(&mut self, world: Resource<World>) -> u64 {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.get_world_age().await as u64
+    }
+
+    async fn get_dimension(&mut self, world: Resource<World>) -> String {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.dimension.minecraft_name.to_string()
+    }
+
+    async fn get_top_block_y(&mut self, world: Resource<World>, x: i32, z: i32) -> i32 {
+        let world_ref = world.downcast_ref(self);
+        world_ref
+            .provider
+            .get_top_block(pumpkin_util::math::vector2::Vector2::new(x, z))
+            .await
+    }
+
+    async fn get_motion_blocking_height(&mut self, world: Resource<World>, x: i32, z: i32) -> i32 {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.get_motion_blocking_height(x, z).await
+    }
+
+    async fn is_raining(&mut self, world: Resource<World>) -> bool {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.is_raining().await
+    }
+
+    async fn set_raining(&mut self, world: Resource<World>, raining: bool) {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.set_raining(raining).await;
+    }
+
+    async fn is_thundering(&mut self, world: Resource<World>) -> bool {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.is_thundering().await
+    }
+
+    async fn set_thundering(&mut self, world: Resource<World>, thundering: bool) {
+        let world_ref = world.downcast_ref(self);
+        world_ref.provider.set_thundering(thundering).await;
+    }
+
+    async fn broadcast_system_message(
+        &mut self,
+        world: Resource<World>,
+        message: Resource<pumpkin::plugin::text::TextComponent>,
+        overlay: bool,
+    ) {
+        let message = text_component_from_resource(self, &message).unwrap();
+        let world_ref = world.downcast_ref(self);
+        world_ref
+            .provider
+            .broadcast_system_message(&message, overlay)
             .await;
     }
 
