@@ -227,7 +227,9 @@ impl Context {
         let permission_manager = self.permission_manager.read().await;
 
         // If the player isn't online, we need to find their op level
-        let player_op_level = (self.server.get_player_by_uuid(*player_uuid))
+        let player_op_level = self
+            .server
+            .get_player_by_uuid(*player_uuid)
             .map_or(PermissionLvl::Zero, |player| player.permission_lvl.load());
 
         permission_manager
