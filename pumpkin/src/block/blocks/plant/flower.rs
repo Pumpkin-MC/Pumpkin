@@ -14,7 +14,7 @@ pub struct FlowerBlock;
 
 impl BlockMetadata for FlowerBlock {
     fn ids() -> Box<[u16]> {
-        let mut flowers = tag::Block::C_FLOWERS_SMALL.1.to_vec();
+        let mut flowers = tag::Block::MINECRAFT_SMALL_FLOWERS.1.to_vec();
         flowers.push(Block::GOLDEN_DANDELION.id);
         flowers.into()
     }
