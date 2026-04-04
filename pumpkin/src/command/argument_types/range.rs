@@ -1,6 +1,13 @@
 use pumpkin_util::math::bounds::{DoubleBounds, IntBounds};
 
-use crate::command::{argument_types::{FromStringReader, argument_type::{ArgumentType, JavaClientArgumentType}}, errors::command_syntax_error::CommandSyntaxError, string_reader::StringReader};
+use crate::command::{
+    argument_types::{
+        FromStringReader,
+        argument_type::{ArgumentType, JavaClientArgumentType},
+    },
+    errors::command_syntax_error::CommandSyntaxError,
+    string_reader::StringReader,
+};
 
 /// Parses an inclusive range of `i32`s that can be represented in the following ways:
 /// - `value`: Only includes the integer `value`.
@@ -21,12 +28,7 @@ impl ArgumentType for IntRangeArgumentType {
     }
 
     fn examples(&self) -> Vec<String> {
-        examples!(
-            "8",
-            "2..",
-            "..-3",
-            "-4..5"
-        )
+        examples!("8", "2..", "..-3", "-4..5")
     }
 }
 
@@ -49,14 +51,7 @@ impl ArgumentType for FloatRangeArgumentType {
     }
 
     fn examples(&self) -> Vec<String> {
-        examples!(
-            "8",
-            "8.0",
-            "5..",
-            "..-3.8",
-            "-4.2..5",
-            "0.1..0.2"
-        )
+        examples!("8", "8.0", "5..", "..-3.8", "-4.2..5", "0.1..0.2")
     }
 }
 
@@ -64,7 +59,14 @@ impl ArgumentType for FloatRangeArgumentType {
 mod test {
     use pumpkin_util::math::bounds::{DoubleBounds, IntBounds};
 
-    use crate::command::{argument_types::{SWAPPED_BOUNDS_ERROR_TYPE, argument_type::ArgumentType, range::{FloatRangeArgumentType, IntRangeArgumentType}}, string_reader::StringReader};
+    use crate::command::{
+        argument_types::{
+            SWAPPED_BOUNDS_ERROR_TYPE,
+            argument_type::ArgumentType,
+            range::{FloatRangeArgumentType, IntRangeArgumentType},
+        },
+        string_reader::StringReader,
+    };
 
     #[test]
     fn parse_int_ranges() {
@@ -72,7 +74,11 @@ mod test {
         assert_parse_ok_reset!(&mut reader, IntRangeArgumentType, IntBounds::new(-7, -7));
 
         let mut reader = StringReader::new("3..");
-        assert_parse_ok_reset!(&mut reader, IntRangeArgumentType, IntBounds::new_at_least(3));
+        assert_parse_ok_reset!(
+            &mut reader,
+            IntRangeArgumentType,
+            IntBounds::new_at_least(3)
+        );
 
         let mut reader = StringReader::new("..4");
         assert_parse_ok_reset!(&mut reader, IntRangeArgumentType, IntBounds::new_at_most(4));
@@ -84,39 +90,83 @@ mod test {
         assert_parse_ok_reset!(&mut reader, IntRangeArgumentType, IntBounds::new(0, 0));
 
         let mut reader = StringReader::new("2..1");
-        assert_parse_err_reset!(&mut reader, IntRangeArgumentType, &SWAPPED_BOUNDS_ERROR_TYPE);
+        assert_parse_err_reset!(
+            &mut reader,
+            IntRangeArgumentType,
+            &SWAPPED_BOUNDS_ERROR_TYPE
+        );
     }
 
     #[test]
     fn parse_float_ranges() {
         let mut reader = StringReader::new("-1");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new(-1.0, -1.0));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new(-1.0, -1.0)
+        );
 
         let mut reader = StringReader::new("-1.0");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new(-1.0, -1.0));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new(-1.0, -1.0)
+        );
 
         let mut reader = StringReader::new("0.");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new(0.0, 0.0));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new(0.0, 0.0)
+        );
 
         let mut reader = StringReader::new("3..");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new_at_least(3.0));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new_at_least(3.0)
+        );
 
         let mut reader = StringReader::new("..4");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new_at_most(4.0));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new_at_most(4.0)
+        );
 
         let mut reader = StringReader::new("3..4");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new(3.0, 4.0));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new(3.0, 4.0)
+        );
 
         let mut reader = StringReader::new("0.9");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new(0.9, 0.9));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new(0.9, 0.9)
+        );
 
         let mut reader = StringReader::new("0..9");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new(0.0, 9.0));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new(0.0, 9.0)
+        );
 
         let mut reader = StringReader::new("0...9");
-        assert_parse_ok_reset!(&mut reader, FloatRangeArgumentType, DoubleBounds::new(0.0, 0.9));
+        assert_parse_ok_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            DoubleBounds::new(0.0, 0.9)
+        );
 
         let mut reader = StringReader::new("2..1");
-        assert_parse_err_reset!(&mut reader, FloatRangeArgumentType, &SWAPPED_BOUNDS_ERROR_TYPE);
+        assert_parse_err_reset!(
+            &mut reader,
+            FloatRangeArgumentType,
+            &SWAPPED_BOUNDS_ERROR_TYPE
+        );
     }
 }

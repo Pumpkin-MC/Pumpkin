@@ -178,5 +178,5 @@ pub mod coordinates;
 pub mod core;
 pub mod entity;
 pub mod entity_selector;
-pub mod time;
 pub mod range;
+pub mod time;
