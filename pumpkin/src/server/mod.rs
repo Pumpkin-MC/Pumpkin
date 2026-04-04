@@ -419,7 +419,7 @@ impl Server {
             'after: {
                 player.screen_handler_sync_handler.store_player(player.clone()).await;
                 if world
-                    .add_player(player.clone())
+                    .add_player(&player)
                     .is_ok() {
                     let mut user_cache = self.data.user_cache.write().await;
                     user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());

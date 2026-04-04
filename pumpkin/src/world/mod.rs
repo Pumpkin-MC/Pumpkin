@@ -2067,6 +2067,22 @@ impl World {
 
         player.send_active_effects().await;
         self.send_player_equipment(player).await;
+
+        let msg_comp = TextComponent::translate(
+            translation::MULTIPLAYER_PLAYER_JOINED,
+            [TextComponent::text(player.gameprofile.name.clone())],
+        )
+        .color_named(NamedColor::Yellow);
+        let event = PlayerJoinEvent::new(player.clone(), msg_comp);
+
+        let event = server.plugin_manager.fire(event).await;
+
+        if !event.cancelled {
+            self.broadcast_system_message(&event.join_message, false)
+                .await;
+            // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
+            info!("{}", event.join_message.to_pretty_console());
+        }
     }
 
     async fn send_player_equipment(&self, from: &Player) {
@@ -2863,34 +2879,12 @@ impl World {
     ///
     /// # Arguments
     ///
-    /// * `uuid`: The unique UUID of the player to add.
     /// * `player`: An `Arc<Player>` reference to the player object.
-    pub fn add_player(&self, player: Arc<Player>) -> Result<(), String> {
+    pub fn add_player(&self, player: &Arc<Player>) -> Result<(), String> {
         self.players.rcu(|current_list| {
             let mut new_list = (**current_list).clone();
             new_list.push(player.clone());
             new_list
-        });
-
-        let server = self.server.upgrade().unwrap();
-        let current_players = self.players.load();
-        player.clone().spawn_task(async move {
-            let msg_comp = TextComponent::translate(
-                translation::MULTIPLAYER_PLAYER_JOINED,
-                [TextComponent::text(player.gameprofile.name.clone())],
-            )
-            .color_named(NamedColor::Yellow);
-            let event = PlayerJoinEvent::new(player.clone(), msg_comp);
-
-            let event = server.plugin_manager.fire(event).await;
-
-            if !event.cancelled {
-                for player in current_players.iter() {
-                    player.send_system_message(&event.join_message).await;
-                }
-                // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
-                info!("{}", event.join_message.to_pretty_console());
-            }
         });
         Ok(())
     }
