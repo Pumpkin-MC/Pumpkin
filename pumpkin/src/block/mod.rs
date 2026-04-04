@@ -74,6 +74,7 @@ pub trait BlockBehaviour: Send + Sync {
     fn on_entity_collision<'a>(&'a self, _args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
+
     /// Called when an entity is standing on / walking over the top face of this block.
     fn on_entity_step<'a>(&'a self, _args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
@@ -86,7 +87,8 @@ pub trait BlockBehaviour: Send + Sync {
     fn explode<'a>(&'a self, _args: ExplodeArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
-/// Handles the block event, which is an event specific to a block with an integer ID and data.
+
+    /// Handles the block event, which is an event specific to a block with an integer ID and data.
     ///
     /// returns whether the event was handled successfully
     fn on_synced_block_event<'a>(
@@ -95,7 +97,8 @@ pub trait BlockBehaviour: Send + Sync {
     ) -> BlockFuture<'a, bool> {
         Box::pin(async move { false })
     }
- /// getPlacementState in source code
+
+    /// getPlacementState in source code
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move { args.block.default_state.id })
     }
@@ -111,6 +114,7 @@ pub trait BlockBehaviour: Send + Sync {
     fn can_update_at<'a>(&'a self, _args: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move { false })
     }
+
     /// onBlockAdded in source code
     fn placed<'a>(&'a self, _args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
@@ -146,7 +150,8 @@ pub trait BlockBehaviour: Send + Sync {
     fn on_neighbor_update<'a>(&'a self, _args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
- /// Called if a block state is replaced or it replaces another state
+
+    /// Called if a block state is replaced or it replaces another state
     fn prepare<'a>(&'a self, _args: PrepareArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
@@ -165,7 +170,8 @@ pub trait BlockBehaviour: Send + Sync {
     fn on_state_replaced<'a>(&'a self, _args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async {})
     }
-// --- Redstone/Comparator Methods ---
+
+    // --- Redstone/Comparator Methods ---
 
     /// Sides where redstone connects to
     fn emits_redstone_power<'a>(
@@ -174,14 +180,16 @@ pub trait BlockBehaviour: Send + Sync {
     ) -> BlockFuture<'a, bool> {
         Box::pin(async move { false })
     }
-/// Weak redstone power, aka. block that should be powered needs to be directly next to the source block
+
+    /// Weak redstone power, aka. block that should be powered needs to be directly next to the source block
     fn get_weak_redstone_power<'a>(
         &'a self,
         _args: GetRedstonePowerArgs<'a>,
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move { 0 })
     }
-/// Strong redstone power. this can power a block that then gives power
+
+    /// Strong redstone power. this can power a block that then gives power
     fn get_strong_redstone_power<'a>(
         &'a self,
         _args: GetRedstonePowerArgs<'a>,
@@ -466,7 +474,7 @@ impl BlockIsReplacing {
     /// Returns true if the block was a water source block.
     pub fn water_source(&self) -> bool {
         match self {
-                // Level 0 means the water is a source block
+            // Level 0 means the water is a source block
             Self::Water(level) => *level == Integer0To15::L0,
             _ => false,
         }
