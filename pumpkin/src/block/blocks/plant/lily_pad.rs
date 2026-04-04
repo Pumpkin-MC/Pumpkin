@@ -1,4 +1,4 @@
-use pumpkin_data::Block;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
@@ -55,9 +55,11 @@ impl BlockBehaviour for LilyPadBlock {
 
 impl PlantBlockBase for LilyPadBlock {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        // TODO: get and use fluids not blocks
         let block = block_accessor.get_block(pos).await;
         let above_fluid = block_accessor.get_block(&pos.up()).await;
-        (block == &Block::WATER || block == &Block::ICE)
-            && (above_fluid != &Block::WATER && above_fluid != &Block::LAVA)
+        (block.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD)
+            || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_LILY_PAD))
+            && above_fluid.is_air()
     }
 }

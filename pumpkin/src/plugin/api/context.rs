@@ -72,7 +72,7 @@ impl Context {
     /// A string representing the path to the data folder.
     #[must_use]
     pub fn get_data_folder(&self) -> PathBuf {
-        let path = Path::new("./plugins").join(&self.metadata.name);
+        let path = Path::new("plugins").join(&self.metadata.name);
         if !path.exists() {
             fs::create_dir_all(&path).unwrap();
         }
@@ -227,7 +227,9 @@ impl Context {
         let permission_manager = self.permission_manager.read().await;
 
         // If the player isn't online, we need to find their op level
-        let player_op_level = (self.server.get_player_by_uuid(*player_uuid))
+        let player_op_level = self
+            .server
+            .get_player_by_uuid(*player_uuid)
             .map_or(PermissionLvl::Zero, |player| player.permission_lvl.load());
 
         permission_manager

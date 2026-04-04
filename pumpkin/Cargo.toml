@@ -77,7 +77,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 chrono.workspace = true
-time = { workspace = true, features = ["parsing", "macros"] }
+time = { workspace = true, features = ["parsing", "macros", "local-offset"] }
 
 # plugins
 libloading.workspace = true
@@ -95,6 +95,8 @@ wasmparser = { workspace = true }
 
 postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
+
+bitflags = { workspace = true }
 
 [dev-dependencies]
 tempfile.workspace = true

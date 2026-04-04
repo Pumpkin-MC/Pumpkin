@@ -4,14 +4,14 @@ use super::{Controls, Goal};
 use crate::entity::{ai::goal::GoalFuture, mob::Mob};
 use rand::RngExt;
 
-pub struct LookAroundGoal {
+pub struct RandomLookAroundGoal {
     goal_control: Controls,
     delta_x: f64,
     delta_z: f64,
     look_time: i32,
 }
 
-impl Default for LookAroundGoal {
+impl Default for RandomLookAroundGoal {
     fn default() -> Self {
         Self {
             goal_control: Controls::MOVE | Controls::LOOK,
@@ -22,7 +22,7 @@ impl Default for LookAroundGoal {
     }
 }
 
-impl Goal for LookAroundGoal {
+impl Goal for RandomLookAroundGoal {
     fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async { mob.get_random().random::<f32>() < 0.02 })
     }

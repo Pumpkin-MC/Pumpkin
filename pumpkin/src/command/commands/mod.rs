@@ -171,6 +171,15 @@ fn register_permissions(registry: &mut PermissionRegistry) {
 
     // Register level 3 permissions (OP level 3)
     register_level_3_permissions(registry);
+
+    // Register our entity selector permission as well.
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.selector",
+            "Allows a player to use selector variables",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
 }
 
 fn register_level_0_permissions(registry: &mut PermissionRegistry) {
