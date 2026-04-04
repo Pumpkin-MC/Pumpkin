@@ -96,7 +96,7 @@ impl BlockBehaviour for PistonBlock {
                 .offset(props.facing.to_block_direction().to_offset());
             let (block_to_check, block_to_check_state_id) =
                 args.world.get_block_and_state_id(&pos).await;
-            if &Block::PISTON_HEAD == block_to_check || &Block::MOVING_PISTON == block_to_check {
+            if &Block::PISTON_HEAD == block_to_check {
                 let head_props =
                     PistonHeadProperties::from_state_id(block_to_check_state_id, block_to_check);
 
@@ -107,6 +107,10 @@ impl BlockBehaviour for PistonBlock {
                     return;
                 }
 
+                args.world
+                    .break_block(&pos, None, BlockFlags::SKIP_DROPS)
+                    .await;
+            } else if &Block::MOVING_PISTON == block_to_check {
                 args.world
                     .break_block(&pos, None, BlockFlags::SKIP_DROPS)
                     .await;
