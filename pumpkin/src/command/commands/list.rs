@@ -83,13 +83,11 @@ fn get_player_names_and_ids(players: &[Arc<Player>]) -> TextComponent {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry
-        .register_permission(Permission::new(
-            PERMISSION,
-            DESCRIPTION,
-            PermissionDefault::Allow,
-        ))
-        .expect("Permission should have registered successfully");
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Allow,
+    ));
 
     dispatcher.register(
         command("list", DESCRIPTION)
