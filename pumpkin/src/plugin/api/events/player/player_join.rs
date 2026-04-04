@@ -6,7 +6,7 @@ use crate::entity::player::Player;
 
 use super::PlayerEvent;
 
-/// An event that occurs when a player joins the game.
+/// An event that occurs when a player is spawned and joined the game.
 ///
 /// This event contains information about the player joining and a message to display upon joining.
 #[cancellable]

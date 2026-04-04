@@ -6,6 +6,7 @@ pub mod bamboo;
 pub mod bamboo_sapling;
 pub mod bush;
 pub mod cactus;
+pub mod cactus_flower;
 pub mod crop;
 pub mod dry_vegetation;
 pub mod flower;
@@ -26,13 +27,14 @@ pub mod spore_blossom;
 pub mod sugar_cane;
 pub mod tall_plant;
 pub mod tall_seagrass;
+pub mod twisting_vines;
 pub mod weeping_vines;
 pub mod wither_rose;
 
 trait PlantBlockBase {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos).await;
-        block.has_tag(&tag::Block::MINECRAFT_DIRT) || block == &Block::FARMLAND
+        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_VEGETATION)
     }
 
     async fn get_state_for_neighbor_update(

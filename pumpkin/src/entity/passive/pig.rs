@@ -1,14 +1,12 @@
 use std::sync::{Arc, Weak};
 
-use crate::entity::attributes::AttributeBuilder;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        escape_danger::EscapeDangerGoal, look_around::LookAroundGoal,
+        escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
         wander_around::WanderAroundGoal,
     },
@@ -47,17 +45,10 @@ impl PigEntity {
                 7,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new()
-            .add(Attributes::MOVEMENT_SPEED, 0.25)
-            .add(Attributes::MAX_HEALTH, 10.0)
     }
 }
 

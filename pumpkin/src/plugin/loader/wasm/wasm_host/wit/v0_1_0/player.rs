@@ -331,6 +331,46 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn respawn(&mut self, player: Resource<Player>) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.respawn().await;
+        Ok(())
+    }
+
+    async fn ban(
+        &mut self,
+        player: Resource<Player>,
+        reason: Option<Resource<pumpkin::plugin::text::TextComponent>>,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        let Some(server) = self.server.as_ref() else {
+            return Err("server not available".to_string());
+        };
+        let reason = match reason {
+            Some(r) => Some(text_component_from_resource(self, &r)?),
+            None => None,
+        };
+        player.ban(server, reason).await;
+        Ok(())
+    }
+
+    async fn ban_ip(
+        &mut self,
+        player: Resource<Player>,
+        reason: Option<Resource<pumpkin::plugin::text::TextComponent>>,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        let Some(server) = self.server.as_ref() else {
+            return Err("server not available".to_string());
+        };
+        let reason = match reason {
+            Some(r) => Some(text_component_from_resource(self, &r)?),
+            None => None,
+        };
+        player.ban_ip(server, reason).await;
+        Ok(())
+    }
+
     async fn get_selected_slot(&mut self, player: Resource<Player>) -> Result<u8, String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.inventory.get_selected_slot())
@@ -371,9 +411,25 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.living_entity.health.load())
     }
 
+    async fn set_health(&mut self, player: Resource<Player>, health: f32) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.set_health(health).await;
+        Ok(())
+    }
+
     async fn get_max_health(&mut self, player: Resource<Player>) -> Result<f32, String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.living_entity.get_max_health())
+    }
+
+    async fn set_max_health(
+        &mut self,
+        player: Resource<Player>,
+        max_health: f32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.set_max_health(max_health).await;
+        Ok(())
     }
 
     async fn get_food_level(&mut self, player: Resource<Player>) -> Result<u8, String> {
@@ -381,9 +437,55 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.hunger_manager.level.load())
     }
 
+    async fn set_food_level(&mut self, player: Resource<Player>, level: u8) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.set_food_level(level).await;
+        Ok(())
+    }
+
     async fn get_saturation(&mut self, player: Resource<Player>) -> Result<f32, String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.hunger_manager.saturation.load())
+    }
+
+    async fn set_saturation(
+        &mut self,
+        player: Resource<Player>,
+        saturation: f32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.set_saturation(saturation).await;
+        Ok(())
+    }
+
+    async fn get_exhaustion(&mut self, player: Resource<Player>) -> Result<f32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_exhaustion())
+    }
+
+    async fn set_exhaustion(
+        &mut self,
+        player: Resource<Player>,
+        exhaustion: f32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.set_exhaustion(exhaustion).await;
+        Ok(())
+    }
+
+    async fn get_absorption(&mut self, player: Resource<Player>) -> Result<f32, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_absorption())
+    }
+
+    async fn set_absorption(
+        &mut self,
+        player: Resource<Player>,
+        absorption: f32,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.set_absorption(absorption).await;
+        Ok(())
     }
 
     async fn get_experience_level(&mut self, player: Resource<Player>) -> Result<i32, String> {
@@ -468,9 +570,29 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.get_entity().sneaking.load(Ordering::Relaxed))
     }
 
+    async fn set_sneaking(
+        &mut self,
+        player: Resource<Player>,
+        sneaking: bool,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.get_entity().set_sneaking(sneaking).await;
+        Ok(())
+    }
+
     async fn is_sprinting(&mut self, player: Resource<Player>) -> Result<bool, String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.get_entity().sprinting.load(Ordering::Relaxed))
+    }
+
+    async fn set_sprinting(
+        &mut self,
+        player: Resource<Player>,
+        sprinting: bool,
+    ) -> Result<(), String> {
+        let player = player_from_resource(self, &player)?;
+        player.get_entity().set_sprinting(sprinting).await;
+        Ok(())
     }
 
     async fn is_on_ground(&mut self, player: Resource<Player>) -> Result<bool, String> {
@@ -528,6 +650,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         };
         player.send_abilities_update().await;
         Ok(())
+    }
+
+    async fn get_ip(&mut self, player: Resource<Player>) -> Result<String, String> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_ip().await)
     }
 
     async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {

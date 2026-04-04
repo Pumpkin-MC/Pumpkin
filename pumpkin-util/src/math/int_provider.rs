@@ -20,6 +20,8 @@ pub enum NormalIntProvider {
     /// Wraps another provider and clamps its output to a specified range.
     #[serde(rename = "minecraft:clamped")]
     Clamped(ClampedIntProvider),
+    #[serde(rename = "minecraft:trapezoid")]
+    Trapezoid(TrapezoidIntProvider),
     /// Returns values from a normal (Gaussian) distribution, clamped to a specified inclusive range.
     #[serde(rename = "minecraft:clamped_normal")]
     ClampedNormal(ClampedNormalIntProvider),
@@ -54,6 +56,11 @@ impl ToTokens for NormalIntProvider {
             Self::ClampedNormal(clamped_normal) => {
                 tokens.extend(quote! {
                     NormalIntProvider::ClampedNormal(#clamped_normal)
+                });
+            }
+            Self::Trapezoid(trapezoid) => {
+                tokens.extend(quote! {
+                    NormalIntProvider::Trapezoid(#trapezoid)
                 });
             }
             Self::WeightedList(weighted_list) => {
@@ -103,6 +110,7 @@ impl IntProvider {
                 NormalIntProvider::Uniform(uniform) => uniform.get_min(),
                 NormalIntProvider::BiasedToBottom(biased) => biased.get_min(),
                 NormalIntProvider::Clamped(clamped) => clamped.get_min(),
+                NormalIntProvider::Trapezoid(trapezoid) => trapezoid.get_min(),
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get_min(),
                 NormalIntProvider::WeightedList(weighted_list) => weighted_list.get_min(),
             },
@@ -126,6 +134,9 @@ impl IntProvider {
                 NormalIntProvider::Clamped(clamped) => clamped.get(random),
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get(random),
                 NormalIntProvider::WeightedList(weighted_list) => weighted_list.get(random),
+                NormalIntProvider::Trapezoid(trapezoid_int_provider) => {
+                    trapezoid_int_provider.get(random)
+                }
             },
             Self::Constant(i) => *i,
         }
@@ -145,6 +156,9 @@ impl IntProvider {
                 NormalIntProvider::Clamped(clamped) => clamped.get_max(),
                 NormalIntProvider::ClampedNormal(clamped_normal) => clamped_normal.get_max(),
                 NormalIntProvider::WeightedList(weighted_list) => weighted_list.get_max(),
+                NormalIntProvider::Trapezoid(trapezoid_int_provider) => {
+                    trapezoid_int_provider.get_max()
+                }
             },
             Self::Constant(i) => *i,
         }
@@ -354,6 +368,91 @@ impl ClampedIntProvider {
     #[must_use]
     pub fn get_max(&self) -> i32 {
         self.max_inclusive.min(self.source.get_max())
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct TrapezoidIntProvider {
+    /// The minimum value (inclusive) to clamp to.
+    pub min_inclusive: i32,
+    /// The maximum value (inclusive) to clamp to.
+    pub max_inclusive: i32,
+    pub plateau: i32,
+}
+
+impl ToTokens for TrapezoidIntProvider {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let min_inclusive = LitInt::new(&self.min_inclusive.to_string(), Span::call_site());
+        let max_inclusive = LitInt::new(&self.max_inclusive.to_string(), Span::call_site());
+        let plateau = LitInt::new(&self.plateau.to_string(), Span::call_site());
+        tokens.extend(quote! {
+            TrapezoidIntProvider {
+                min_inclusive: #min_inclusive,
+                max_inclusive: #max_inclusive,
+                plateau: #plateau
+            }
+        });
+    }
+}
+
+impl TrapezoidIntProvider {
+    /// Creates a new clamped provider with the specified source and range.
+    ///
+    /// # Arguments
+    /// - `min_inclusive` – The minimum value (inclusive) to clamp to.
+    /// - `max_inclusive` – The maximum value (inclusive) to clamp to.
+    ///
+    /// # Returns
+    /// A new `ClampedIntProvider` instance.
+    #[must_use]
+    pub const fn new(min_inclusive: i32, max_inclusive: i32, plateau: i32) -> Self {
+        Self {
+            min_inclusive,
+            max_inclusive,
+            plateau,
+        }
+    }
+
+    /// Returns the minimum value after clamping.
+    ///
+    /// # Returns
+    /// The larger of the source's minimum and the clamp minimum.
+    #[must_use]
+    pub const fn get_min(&self) -> i32 {
+        self.min_inclusive
+    }
+
+    /// Generates a random value from the source and clamps it to the configured range.
+    ///
+    /// # Arguments
+    /// - `random` – The random number generator to use.
+    ///
+    /// # Returns
+    /// A random integer from the source provider, clamped to [`min_inclusive`, `max_inclusive`].
+    pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
+        if self.plateau == 0 && self.max_inclusive == -self.min_inclusive {
+            return random.next_bounded_i32(self.max_inclusive + 1)
+                - random.next_bounded_i32(self.max_inclusive + 1);
+        }
+        let range = self.max_inclusive - self.min_inclusive;
+        if self.plateau == range {
+            return random.next_bounded_i32(self.max_inclusive - self.min_inclusive + 1)
+                + self.min_inclusive;
+        }
+        let plateau_start = (range - self.plateau) / 2;
+        let plateau_end = range - plateau_start;
+        self.min_inclusive
+            + random.next_bounded_i32(plateau_end + 1)
+            + random.next_bounded_i32(plateau_start + 1)
+    }
+
+    /// Returns the maximum value after clamping.
+    ///
+    /// # Returns
+    /// The smaller of the source's maximum and the clamp maximum.
+    #[must_use]
+    pub const fn get_max(&self) -> i32 {
+        self.max_inclusive
     }
 }
 

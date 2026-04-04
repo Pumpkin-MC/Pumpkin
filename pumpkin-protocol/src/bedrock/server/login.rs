@@ -15,7 +15,7 @@ pub struct SLogin {
 
 impl PacketRead for SLogin {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        const MAX_TOKEN_SIZE: usize = 256 * 1024; // 256KB limit
+        const MAX_TOKEN_SIZE: usize = 2000 * 1024; // 2MB limit
 
         let protocol_version = i32::read_be(reader)?;
 

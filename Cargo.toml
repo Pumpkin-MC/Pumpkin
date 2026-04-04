@@ -90,7 +90,7 @@ debug = true
 strip = false
 
 [workspace.dependencies]
-tokio = { version = "1.50", default-features = false }
+tokio = { version = "1.51", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
 
 

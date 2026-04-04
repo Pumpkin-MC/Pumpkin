@@ -381,9 +381,7 @@ impl ToTokens for MaterialConditionStruct {
                     "floor" => quote!(
                         pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor
                     ),
-                    _ => quote!(
-                        pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor
-                    ),
+                    _ => quote!(panic!("Unknown surface type")),
                 };
 
                 tokens.extend(quote!(

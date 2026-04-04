@@ -4,7 +4,9 @@ use pumpkin_data::packet::clientbound::PLAY_SET_ENTITY_MOTION;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
-use crate::{ClientPacket, VarInt, WritingError, codec::velocity::Velocity, ser::NetworkWriteExt};
+use crate::{
+    ClientPacket, VarInt, WritingError, codec::lp_vector_3d::LpVector3d, ser::NetworkWriteExt,
+};
 
 /// Updates the velocity of an entity.
 ///
@@ -15,7 +17,7 @@ pub struct CEntityVelocity {
     /// The Entity ID of the entity whose velocity is being set
     pub entity_id: VarInt,
     /// The velocity vector
-    pub velocity: Velocity,
+    pub velocity: LpVector3d,
 }
 
 impl CEntityVelocity {
@@ -23,7 +25,7 @@ impl CEntityVelocity {
     pub const fn new(entity_id: VarInt, velocity: Vector3<f64>) -> Self {
         Self {
             entity_id,
-            velocity: Velocity(velocity),
+            velocity: LpVector3d(velocity),
         }
     }
 }
@@ -56,7 +58,7 @@ mod tests {
     use super::CEntityVelocity;
     use crate::{
         ClientPacket, VarInt,
-        codec::velocity::{Velocity, encode_legacy_velocity_component},
+        codec::lp_vector_3d::{LpVector3d, encode_legacy_velocity_component},
     };
 
     fn encode_packet(version: MinecraftVersion) -> Vec<u8> {
@@ -95,7 +97,7 @@ mod tests {
 
         // Ensure the packed bytes can still be decoded back to a velocity.
         let mut cursor = std::io::Cursor::new(&encoded[1..]);
-        let decoded = Velocity::read(&mut cursor).unwrap();
+        let decoded = LpVector3d::read(&mut cursor).unwrap();
         assert!(decoded.0.x.is_finite());
         assert!(decoded.0.y.is_finite());
         assert!(decoded.0.z.is_finite());

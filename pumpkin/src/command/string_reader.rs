@@ -122,6 +122,16 @@ impl<'a> StringReader<'a> {
         self.string[self.byte_cursor..].chars().next()
     }
 
+    /// Peeks a [`char`], where the cursor is at, with an offset,
+    /// specified in bytes, without advancing.
+    #[must_use]
+    pub fn peek_with_offset(&self, offset: usize) -> Option<char> {
+        if self.byte_cursor + offset > self.string.len() {
+            return None;
+        }
+        self.string[(self.byte_cursor + offset)..].chars().next()
+    }
+
     /// Reads a [`char`], where the cursor is at, before advancing.
     #[must_use = "to skip a character use `skip()` instead"]
     pub fn read(&mut self) -> Option<char> {
