@@ -113,19 +113,17 @@ async fn can_survive(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
 }
 
 async fn get_scaffolding_height(world: &dyn BlockAccessor, pos: &BlockPos) -> u8 {
-    let mut height = 0;
     let mut current = pos.down();
 
-    while height < 7 {
+    for height in 0..7 {
         let block = world.get_block(&current).await;
         if block != &Block::SCAFFOLDING {
-            break;
+            return height;
         }
-        height += 1;
         current = current.down();
     }
 
-    height
+    7
 }
 
 async fn compute_distance(world: &dyn BlockAccessor, pos: &BlockPos) -> u8 {
