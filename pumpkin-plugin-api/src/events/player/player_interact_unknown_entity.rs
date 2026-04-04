@@ -1,6 +1,4 @@
-use crate::wit::pumpkin::plugin::event::{
-    Event, EventType, PlayerInteractUnknownEntityEventData,
-};
+use crate::wit::pumpkin::plugin::event::{Event, EventType, PlayerInteractUnknownEntityEventData};
 
 use super::super::FromIntoEvent;
 

@@ -13,9 +13,9 @@ use crate::plugin::{
                 PlayerEggThrowEventData, PlayerExpChangeEventData, PlayerFishEventData,
                 PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
                 PlayerInteractActionType as WasmPlayerInteractActionType,
-                PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData,
-                PlayerJoinEventData, PlayerLeaveEventData, PlayerLoginEventData,
-                PlayerMoveEventData, PlayerPermissionCheckEventData, PlayerTeleportEventData,
+                PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
+                PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
+                PlayerPermissionCheckEventData, PlayerTeleportEventData,
             },
         },
     },
@@ -74,9 +74,7 @@ const fn to_wasm_player_interact_action_type(action: ActionType) -> WasmPlayerIn
     }
 }
 
-const fn from_wasm_player_interact_action_type(
-    action: WasmPlayerInteractActionType,
-) -> ActionType {
+const fn from_wasm_player_interact_action_type(action: WasmPlayerInteractActionType) -> ActionType {
     match action {
         WasmPlayerInteractActionType::Interact => ActionType::Interact,
         WasmPlayerInteractActionType::Attack => ActionType::Attack,
