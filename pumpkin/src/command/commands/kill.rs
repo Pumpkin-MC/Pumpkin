@@ -6,6 +6,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use pumpkin_data::translation;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::PermissionLvl;
 use pumpkin_util::text::TextComponent;
 
 const DESCRIPTION: &str = "Kills all target entities.";
@@ -74,7 +75,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,
-        PermissionDefault::Allow,
+        PermissionDefault::Op(PermissionLvl::Four),
     ));
 
     dispatcher.register(
