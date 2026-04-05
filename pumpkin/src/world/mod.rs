@@ -1615,16 +1615,22 @@ impl World {
             let mut abilities = player.abilities.lock().await;
             abilities.set_for_gamemode(player.gamemode.load());
         };
-        let mut metadata = EntityMetadata::default();
+        let mut metadata = EntityMetadata::new();
 
         metadata.set(entity_data_key::WIDTH, MetadataValue::Float(0.6));
         metadata.set(entity_data_key::HEIGHT, MetadataValue::Float(1.8));
 
         // This is super important, otherwise the client will float by default
-        metadata.set_flag(entity_data_flag::HAS_GRAVITY);
+        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::HAS_GRAVITY as u8);
+        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::CLIMB as u8);
+        // Player-specific: survival has collision
+        metadata.set_flag(
+            entity_data_key::FLAGS,
+            entity_data_flag::HAS_COLLISION as u8,
+        );
 
         // Prevents the client from showing air buddles on hud even when not in water
-        metadata.set_flag(entity_data_flag::BREATHING);
+        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::BREATHING as u8);
         let actor_data = CSetActorData {
             actor_runtime_id: VarULong(runtime_id),
             metadata,

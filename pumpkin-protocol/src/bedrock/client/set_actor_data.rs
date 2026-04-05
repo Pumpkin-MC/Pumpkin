@@ -20,28 +20,46 @@ pub struct CSetActorData {
     pub tick: VarULong,
 }
 
-#[derive(Default)]
 pub struct EntityMetadata(pub HashMap<u32, MetadataValue>);
+
+impl Default for EntityMetadata {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EntityMetadata {
+    #[must_use]
+    pub fn new() -> Self {
+        let mut map = HashMap::new();
+        map.insert(entity_data_key::FLAGS, MetadataValue::Long(0));
+        map.insert(entity_data_key::FLAGS_TWO, MetadataValue::Long(0));
+        map.insert(entity_data_key::PLAYER_FLAGS, MetadataValue::Byte(0));
+        Self(map)
+    }
+}
 
 impl EntityMetadata {
     pub fn set(&mut self, key: u32, value: MetadataValue) {
         self.0.insert(key, value);
     }
 
-    pub fn set_flag(&mut self, flag_index: u32) {
-        let (key, index) = if flag_index < 64 {
-            (entity_data_key::FLAGS, flag_index)
+    pub fn set_flag(&mut self, key: u32, index: u8) {
+        if key == entity_data_key::PLAYER_FLAGS {
+            let current_value = match self.0.get(&key) {
+                Some(MetadataValue::Byte(v)) => *v,
+                _ => 0,
+            };
+            self.0
+                .insert(key, MetadataValue::Byte(current_value | (1i8 << index)));
         } else {
-            (entity_data_key::FLAGS_TWO, flag_index - 64)
-        };
-
-        let current_value = match self.0.get(&key) {
-            Some(MetadataValue::Long(v)) => *v,
-            _ => 0,
-        };
-
-        self.0
-            .insert(key, MetadataValue::Long(current_value | (1 << index)));
+            let current_value = match self.0.get(&key) {
+                Some(MetadataValue::Long(v)) => *v,
+                _ => 0,
+            };
+            self.0
+                .insert(key, MetadataValue::Long(current_value | (1i64 << index)));
+        }
     }
 }
 
@@ -264,6 +282,12 @@ pub mod entity_data_key {
     pub const ENTER_BED_POSITION: u32 = 133;
     pub const SEAT_THIRD_PERSON_CAMERA_RADIUS: u32 = 134;
     pub const SEAT_CAMERA_RELAX_DISTANCE_SMOOTHING: u32 = 135;
+    pub const AIM_ASSIST_PRIORITY_PRESET_ID: u32 = 136;
+    pub const AIM_ASSIST_PRIORITY_CATEGORY_ID: u32 = 137;
+    pub const AIM_ASSIST_PRIORITY_ACTOR_ID: u32 = 138;
+    pub const ARROW_SHOOTER_ID: u32 = 139;
+    pub const FIREWORK_DIRECTION: u32 = 140;
+    pub const FIREWORK_SHOOTER_ID: u32 = 141;
 }
 
 pub mod entity_data_flag {
