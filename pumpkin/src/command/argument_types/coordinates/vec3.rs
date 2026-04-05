@@ -1,11 +1,11 @@
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::coordinates::Coordinates;
+use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
-use crate::command::context::command_context::CommandContext;
 
 pub const INCOMPLETE_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::ARGUMENT_POS3D_INCOMPLETE);
@@ -56,12 +56,18 @@ impl ArgumentType for Vec3ArgumentType {
 
 impl Vec3ArgumentType {
     /// Returns a [`CommandContext`]'s parsed three-dimensional vector as a set of [`Coordinates`].
-    pub fn get_coordinates(context: &CommandContext, name: &str) -> Result<Coordinates, CommandSyntaxError> {
+    pub fn get_coordinates(
+        context: &CommandContext,
+        name: &str,
+    ) -> Result<Coordinates, CommandSyntaxError> {
         Ok(*context.get_argument(name)?)
     }
 
     /// Returns a [`CommandContext`]'s parsed three-dimensional vector and resolves it to a [`Vector3`].
-    pub fn get_vector3(context: &CommandContext, name: &str) -> Result<Vector3<f64>, CommandSyntaxError> {
+    pub fn get_vector3(
+        context: &CommandContext,
+        name: &str,
+    ) -> Result<Vector3<f64>, CommandSyntaxError> {
         Ok(Self::get_coordinates(context, name)?.resolve(context.source.as_ref()))
     }
 }
