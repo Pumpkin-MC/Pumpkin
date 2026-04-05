@@ -75,7 +75,6 @@ pub async fn default_dispatcher(
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
-    dispatcher.register(random::init_command_tree(), "minecraft:command.random");
     // Two
     dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
@@ -157,6 +156,7 @@ pub async fn default_dispatcher(
     difficulty::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
+    random::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
@@ -204,13 +204,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.msg",
             "Sends a private message to another player",
-            PermissionDefault::Allow,
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.random",
-            "Generates a random value or rolls it publicly",
             PermissionDefault::Allow,
         ))
         .unwrap();
