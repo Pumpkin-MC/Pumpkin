@@ -1,0 +1,12 @@
+{
+  "bogged": "entity.bogged.hurt",
+  "drowned": "entity.drowned.hurt",
+  "enderman": "entity.enderman.hurt",
+  "husk": "entity.husk.hurt",
+  "parched": "entity.parched.hurt",
+  "skeleton": "entity.skeleton.hurt",
+  "stray": "entity.stray.hurt",
+  "wither_skeleton": "entity.wither_skeleton.hurt",
+  "zombie": "entity.zombie.hurt",
+  "zombie_villager": "entity.zombie_villager.hurt"
+}
