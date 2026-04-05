@@ -1,51 +1,45 @@
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::entity_selector::EntitySelector;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use pumpkin_data::translation;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-use crate::command::args::entities::EntitiesArgumentConsumer;
-use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, require};
-use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
-use crate::entity::EntityBase;
-use crate::server::Server;
-use CommandError::InvalidConsumption;
-
-const NAMES: [&str; 1] = ["kill"];
 const DESCRIPTION: &str = "Kills all target entities.";
 
-const ARG_TARGET: &str = "target";
+const PERMISSION: &str = "minecraft:command.kill";
 
-struct Executor;
+const ARG_TARGETS: &str = "targets";
 
-impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
+struct TargetsExecutor;
+
+impl CommandExecutor for TargetsExecutor {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Entities(targets)) = args.get(&ARG_TARGET) else {
-                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-            };
+            let selector: &EntitySelector = context.get_argument(ARG_TARGETS)?;
+            let targets = selector.find_entities(&context.source).await?;
 
             let target_count = targets.len();
-            for target in targets {
-                target.kill(&**target).await;
+            for target in &targets {
+                target.kill(target.as_ref()).await;
             }
 
             let msg = if target_count == 1 {
                 TextComponent::translate(
-                    "commands.kill.success.single",
+                    translation::COMMANDS_KILL_SUCCESS_SINGLE,
                     [targets[0].get_display_name().await],
                 )
             } else {
                 TextComponent::translate(
-                    "commands.kill.success.multiple",
+                    translation::COMMANDS_KILL_SUCCESS_MULTIPLE,
                     [TextComponent::text(target_count.to_string())],
                 )
             };
 
-            sender.send_message(msg).await;
+            context.source.send_feedback(msg, true).await;
 
             Ok(target_count as i32)
         })
@@ -55,21 +49,20 @@ impl CommandExecutor for Executor {
 struct SelfExecutor;
 
 impl CommandExecutor for SelfExecutor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        _server: &'a Server,
-        _args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let target = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+            let target = context.source.entity_or_err()?;
             target.kill(&*target).await;
 
-            sender
-                .send_message(TextComponent::translate(
-                    "commands.kill.success.single",
-                    [target.get_display_name().await],
-                ))
+            context
+                .source
+                .send_feedback(
+                    TextComponent::translate(
+                        translation::COMMANDS_KILL_SUCCESS_SINGLE,
+                        [target.get_display_name().await],
+                    ),
+                    true,
+                )
                 .await;
 
             Ok(1)
@@ -77,9 +70,17 @@ impl CommandExecutor for SelfExecutor {
     }
 }
 
-#[expect(clippy::redundant_closure_for_method_calls)] // causes lifetime issues
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_TARGET, EntitiesArgumentConsumer).execute(Executor))
-        .then(require(|sender| sender.is_player()).execute(SelfExecutor))
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Allow,
+    ));
+
+    dispatcher.register(
+        command("kill", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(argument(ARG_TARGETS, EntityArgumentType::Entities).executes(TargetsExecutor))
+            .executes(SelfExecutor),
+    );
 }
