@@ -14,7 +14,7 @@ pub struct FlowerBlock;
 
 impl BlockMetadata for FlowerBlock {
     fn ids() -> Box<[u16]> {
-        tag::Block::C_FLOWERS_SMALL.1.into()
+        tag::Block::MINECRAFT_SMALL_FLOWERS.1.into()
     }
 }
 
