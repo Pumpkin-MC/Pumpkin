@@ -2294,7 +2294,16 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     map.insert(
         "large_basalt_columns".to_string(),
         ConfiguredFeature::BasaltColumns(
-            crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {},
+            crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {
+                height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    min_inclusive: 5i32,
+                    max_inclusive: 10i32,
+                })),
+                reach: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    min_inclusive: 2i32,
+                    max_inclusive: 3i32,
+                })),
+            },
         ),
     );
     map.insert(
@@ -3609,7 +3618,13 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     map.insert(
         "small_basalt_columns".to_string(),
         ConfiguredFeature::BasaltColumns(
-            crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {},
+            crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {
+                height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                    min_inclusive: 1i32,
+                    max_inclusive: 4i32,
+                })),
+                reach: IntProvider::Constant(1i32),
+            },
         ),
     );
     map.insert(
