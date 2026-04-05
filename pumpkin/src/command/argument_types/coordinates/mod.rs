@@ -4,14 +4,24 @@ use crate::command::errors::error_types::{
     CommandErrorType, READER_EXPECTED_DOUBLE, READER_EXPECTED_INT,
 };
 use crate::command::string_reader::StringReader;
+use crate::world::World;
 use pumpkin_data::translation;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::{Axis, Vector3};
 
+pub mod block_pos;
 pub mod vec3;
 
 pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::ARGUMENT_POS_MIXED);
+
+pub const NOT_LOADED_ERROR_TYPE: CommandErrorType<0> =
+    CommandErrorType::new(translation::ARGUMENT_POS_UNLOADED);
+pub const OUT_OF_WORLD_ERROR_TYPE: CommandErrorType<0> =
+    CommandErrorType::new(translation::ARGUMENT_POS_OUTOFWORLD);
+pub const OUT_OF_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
+    CommandErrorType::new(translation::ARGUMENT_POS_OUTOFBOUNDS);
 
 /// Represents a single world coordinate.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -293,6 +303,61 @@ impl Coordinates {
                 0.0
             };
             Ok(number)
+        }
+    }
+
+    // BlockPos methods
+
+    /// Converts these [`Coordinates`] to a [`BlockPos`] containing the position represented
+    /// by the `Coordinates`.
+    ///
+    /// # Arguments
+    /// * `source` - The [`CommandSource`] used to resolve the position of these `Coordinates`.
+    ///
+    /// # Returns
+    /// The `BlockPos` containing the position represented by these `Coordinates`.
+    #[must_use]
+    pub fn to_block_pos(&self, source: &CommandSource) -> BlockPos {
+        BlockPos::floored_v(self.resolve(source))
+    }
+
+    /// Converts these [`Coordinates`] to a loaded [`BlockPos`] (in the provided source's world) if one can be found.
+    ///
+    /// # Arguments
+    /// * `source` - The [`CommandSource`] used to resolve the position of these `Coordinates`.
+    ///   It also decides the world to check the load status in.
+    ///
+    /// # Returns
+    /// The loaded `BlockPos` containing the position represented by these `Coordinates`, wrapped in an `Ok`,
+    /// or an `Err` with the appropriate [`CommandSyntaxError`] if it could not be resolved.
+    pub fn try_to_loaded_block_pos(
+        &self,
+        source: &CommandSource,
+    ) -> Result<BlockPos, CommandSyntaxError> {
+        self.try_to_loaded_block_pos_in_world(source, source.world())
+    }
+
+    /// Converts these [`Coordinates`] to a loaded [`BlockPos`], in the provided world, if one can be found.
+    ///
+    /// # Arguments
+    /// * `source` - The [`CommandSource`] used to resolve the position of these `Coordinates`.
+    /// * `world` - The world to check the load status in.
+    ///
+    /// # Returns
+    /// The loaded `BlockPos` containing the position represented by these `Coordinates`, wrapped in an `Ok`,
+    /// or an `Err` with the appropriate [`CommandSyntaxError`] if it could not be resolved.
+    pub fn try_to_loaded_block_pos_in_world(
+        &self,
+        source: &CommandSource,
+        world: &World,
+    ) -> Result<BlockPos, CommandSyntaxError> {
+        let pos = self.to_block_pos(source);
+        if world.level.try_get_chunk(&pos.chunk_position()).is_none() {
+            Err(NOT_LOADED_ERROR_TYPE.create_without_context())
+        } else if !world.is_in_build_limit(pos) {
+            Err(OUT_OF_BOUNDS_ERROR_TYPE.create_without_context())
+        } else {
+            Ok(pos)
         }
     }
 }
