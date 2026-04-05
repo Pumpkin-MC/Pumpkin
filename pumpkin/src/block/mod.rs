@@ -450,7 +450,6 @@ pub async fn calc_block_breaking(
     let hardness = state.hardness;
     #[expect(clippy::float_cmp)]
     if hardness == -1.0 {
-        // unbreakable
         return 0.0;
     }
     let i = if player.can_harvest(state, block).await {
