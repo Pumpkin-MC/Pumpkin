@@ -181,7 +181,7 @@ impl JavaClient {
         ];
 
         // optionally include timeline/dimension_type if there are any tags to send
-        if self.version.load().protocol_version() >= MinecraftVersion::V_1_21_11.protocol_version()
+        if self.version.load().protocol_version() >= MinecraftVersion::V_26_1.protocol_version()
             && let Some(map) = pumpkin_data::tag::get_registry_key_tags(
                 self.version.load(),
                 pumpkin_data::tag::RegistryKey::Timeline,

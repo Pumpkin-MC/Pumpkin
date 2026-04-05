@@ -26,6 +26,7 @@ use crate::world::bossbar::{BossbarColor, BossbarDivisions};
 use crate::{entity::player::Player, server::Server};
 
 pub use entity_anchor::EntityAnchor;
+use pumpkin_data::advancement::Advancement;
 
 pub mod block;
 pub mod bool;
@@ -137,6 +138,7 @@ pub enum Arg<'a> {
     DamageType(DamageType),
     Effect(&'static StatusEffect),
     Enchantment(&'static Enchantment),
+    Advancement(&'static Advancement),
     EntityAnchor(EntityAnchor),
 }
 

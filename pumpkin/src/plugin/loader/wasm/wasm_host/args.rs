@@ -41,6 +41,7 @@ pub enum OwnedArg {
     Effect(&'static pumpkin_data::effect::StatusEffect),
     Enchantment(&'static pumpkin_data::Enchantment),
     EntityAnchor(crate::command::args::EntityAnchor),
+    Advancement(&'static pumpkin_data::Advancement),
 }
 
 impl OwnedArg {
@@ -78,6 +79,7 @@ impl OwnedArg {
             Arg::Effect(e) => Self::Effect(e),
             Arg::Enchantment(e) => Self::Enchantment(e),
             Arg::EntityAnchor(a) => Self::EntityAnchor(*a),
+            Arg::Advancement(a) => Self::Advancement(a)
         }
     }
 }

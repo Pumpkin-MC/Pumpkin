@@ -57,6 +57,7 @@ mod transfer;
 mod weather;
 mod whitelist;
 mod worldborder;
+mod advancement;
 
 #[must_use]
 pub async fn default_dispatcher(
@@ -159,6 +160,7 @@ pub async fn default_dispatcher(
     setidletimeout::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
 
+    advancement::register(&mut dispatcher, registry);
     dispatcher
 }
 
