@@ -133,6 +133,19 @@ interface event {
         cancelled: bool
     }
 
+    enum player-interact-action-type {
+        interact,
+        attack,
+        interact-at,
+    }
+
+    record player-interact-unknown-entity-event-data {
+        player: player,
+        entity-id: s32,
+        action: player-interact-action-type,
+        cancelled: bool
+    }
+
     record block-redstone-event-data {
         target-world: %world,
         state-id: u16,
@@ -221,6 +234,7 @@ interface event {
         player-custom-payload-event,
         player-fish-event,
         player-egg-throw-event,
+        player-interact-unknown-entity-event,
         block-redstone-event,
         block-break-event,
         block-burn-event,
@@ -249,6 +263,7 @@ interface event {
         player-custom-payload-event(player-custom-payload-event-data),
         player-fish-event(player-fish-event-data),
         player-egg-throw-event(player-egg-throw-event-data),
+        player-interact-unknown-entity-event(player-interact-unknown-entity-event-data),
         block-redstone-event(block-redstone-event-data),
         block-break-event(block-break-event-data),
         block-burn-event(block-burn-event-data),
