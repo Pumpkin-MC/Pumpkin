@@ -72,7 +72,6 @@ pub async fn default_dispatcher(
 
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
-    dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
     // Two
@@ -155,6 +154,7 @@ pub async fn default_dispatcher(
 
     difficulty::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
+    list::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
@@ -188,13 +188,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.pumpkin",
             "Shows information about the Pumpkin server",
-            PermissionDefault::Allow,
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.list",
-            "Lists players that are currently online",
             PermissionDefault::Allow,
         ))
         .unwrap();
