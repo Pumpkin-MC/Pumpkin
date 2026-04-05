@@ -1,7 +1,7 @@
+use crate::block::blocks::plant::flower::EyeblossomType;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, RandomTickArgs, UseWithItemArgs};
 use pumpkin_data::Block;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::flower_pot_transformations::get_potted_item;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::world::BlockFlags;
@@ -48,28 +48,9 @@ impl BlockBehaviour for FlowerPotBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if (args.world.dimension.eq(&Dimension::OVERWORLD)
-                || args.world.dimension.eq(&Dimension::OVERWORLD_CAVES))
-                && args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
-                && args.world.level_time.lock().await.time_of_day % 24000 > 14500
-            {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::POTTED_OPEN_EYEBLOSSOM.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-            }
-            if args.block.eq(&Block::POTTED_OPEN_EYEBLOSSOM)
-                && args.world.level_time.lock().await.time_of_day % 24000 <= 14500
-            {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::POTTED_CLOSED_EYEBLOSSOM.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
+            if let Some(eyeblossom) = EyeblossomType::from_block(args.block) {
+                eyeblossom
+                    .try_change_state(args.world, args.position, true, true)
                     .await;
             }
         })
