@@ -75,7 +75,6 @@ pub async fn default_dispatcher(
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
     // Two
-    dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
         worldborder::init_command_tree(),
         "minecraft:command.worldborder",
@@ -154,6 +153,7 @@ pub async fn default_dispatcher(
 
     difficulty::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
+    kill::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
@@ -210,13 +210,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
 #[expect(clippy::too_many_lines)]
 fn register_level_2_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Two
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.kill",
-            "Kills entities (players, mobs, items, etc.)",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
     registry
         .register_permission(Permission::new(
             "minecraft:command.worldborder",
