@@ -132,6 +132,11 @@ mod entity_status;
 #[path = "generated/entity_type.rs"]
 mod entity_type;
 
+#[cfg(feature = "entity_hurt_sound")]
+#[rustfmt::skip]
+#[path = "generated/entity_hurt_sound.rs"]
+mod entity_hurt_sound;
+
 #[cfg(feature = "spawn_egg")]
 #[rustfmt::skip]
 #[path = "generated/spawn_egg.rs"]
@@ -152,6 +157,8 @@ pub use enchantment::*;
 
 #[cfg(feature = "entity")]
 pub mod entity {
+    #[cfg(feature = "entity_hurt_sound")]
+    pub use super::entity_hurt_sound::*;
     #[cfg(feature = "entity_pose")]
     pub use super::entity_pose::*;
     #[cfg(feature = "entity_status")]
