@@ -1,4 +1,5 @@
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
+use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
@@ -68,6 +69,14 @@ impl ArgumentType for TimeArgumentType {
 
     fn examples(&self) -> Vec<String> {
         examples!("12d", "14s", "789", "450t")
+    }
+}
+
+impl TimeArgumentType {
+    /// Returns a [`CommandContext`]'s parsed time argument in the form
+    /// of its duration, in ticks.
+    pub fn get(context: &CommandContext, name: &str) -> Result<i32, CommandSyntaxError> {
+        Ok(*context.get_argument(name)?)
     }
 }
 
