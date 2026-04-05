@@ -51,10 +51,10 @@ async fn register_player_event(
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
-        player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent, player_join::PlayerJoinEvent,
-        player_leave::PlayerLeaveEvent, player_login::PlayerLoginEvent, player_move::PlayerMoveEvent,
-        player_permission_check::PlayerPermissionCheckEvent,
-        player_teleport::PlayerTeleportEvent,
+        player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
+        player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+        player_login::PlayerLoginEvent, player_move::PlayerMoveEvent,
+        player_permission_check::PlayerPermissionCheckEvent, player_teleport::PlayerTeleportEvent,
     };
 
     match event_type {
