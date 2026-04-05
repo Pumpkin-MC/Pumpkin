@@ -64,21 +64,27 @@ pub async fn io_read_work(
     debug!("io read thread start");
     let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
     let dimension = &level.world_gen.dimension;
-    let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
 
     // Cleaner loop and async recv
     while let Ok(pos) = recv.recv().await {
-        // Lock handling
-        tokio::task::block_in_place(|| {
-            let mut data = lock.0.lock().unwrap();
-            while data.contains_key(&pos) {
-                data = lock.1.wait(data).unwrap();
+        // Lock handling: async-native wait using tokio::sync::Notify
+        loop {
+            let notified = lock.1.notified();
+            {
+                let data = lock.0.lock().unwrap();
+                if !data.contains_key(&pos) {
+                    break;
+                }
             }
-        });
+            notified.await;
+        }
+
+        // Channel creation moved INSIDE the loop so every chunk gets a clean state.
+        let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1);
 
         level
             .chunk_saver
-            .fetch_chunks(&level.level_folder, &[pos], t_send.clone())
+            .fetch_chunks(&level.level_folder, &[pos], t_send)
             .await;
 
         let data = match t_recv.recv().await {
@@ -209,7 +215,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                     if *rc == 1 {
                         entry.remove();
                         drop(data);
-                        lock.1.notify_all();
+                        lock.1.notify_waiters();
                     } else {
                         *rc -= 1;
                     }
