@@ -43,6 +43,8 @@ impl ArgumentType for FloatArgumentType {
     }
 }
 
+impl_copy_get!(FloatArgumentType, f32);
+
 impl FloatArgumentType {
     /// Constructs a new [`FloatArgumentType`] with no minimum or maximum bounds.
     #[must_use]

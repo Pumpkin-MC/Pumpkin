@@ -1,5 +1,6 @@
 use pumpkin_protocol::java::client::play::StringProtoArgBehavior;
 
+use crate::command::context::command_context::CommandContext;
 use crate::command::{
     argument_types::argument_type::{ArgumentType, JavaClientArgumentType},
     errors::command_syntax_error::CommandSyntaxError,
@@ -46,6 +47,13 @@ impl ArgumentType for StringArgumentType {
             Self::QuotablePhrase => examples!("\"quoted phrase\"", "word", "\"\""),
             Self::GreedyPhrase => examples!("word", "words with spaces", "\"and symbols\""),
         }
+    }
+}
+
+impl StringArgumentType {
+    /// Returns a [`CommandContext`]'s parsed `String` argument as a string slice.
+    pub fn get<'a>(context: &'a CommandContext, name: &str) -> Result<&'a str, CommandSyntaxError> {
+        Ok(context.get_argument::<String>(name)?.as_str())
     }
 }
 
