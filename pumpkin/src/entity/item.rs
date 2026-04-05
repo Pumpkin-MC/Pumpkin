@@ -346,8 +346,15 @@ impl ItemEntity {
             || entity.touching_lava.load(Ordering::SeqCst)
             || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
 
-        if velocity_dirty {
+        // Always sync position while the item is moving to prevent client-server desync.
+        // Without this, items appear to float at their spawn point on the client while the
+        // server has them on the ground, making pickup impossible.
+        let moved = entity.pos.load().sub(&entity.last_pos.load()).length_squared() > 1.0e-8;
+
+        if velocity_dirty || moved {
             entity.send_pos_rot().await;
+        }
+        if velocity_dirty {
             entity.send_velocity().await;
         }
     }
