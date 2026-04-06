@@ -1,6 +1,5 @@
 use crate::command::argument_builder::{ArgumentBuilder, argument, command};
 use crate::command::argument_types::entity::EntityArgumentType;
-use crate::command::argument_types::entity_selector::EntitySelector;
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
@@ -20,8 +19,7 @@ struct TargetsExecutor;
 impl CommandExecutor for TargetsExecutor {
     fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let selector: &EntitySelector = context.get_argument(ARG_TARGETS)?;
-            let targets = selector.find_entities(&context.source).await?;
+            let targets = EntityArgumentType::get_entities(context, ARG_TARGETS).await?;
 
             let target_count = targets.len();
             for target in &targets {
