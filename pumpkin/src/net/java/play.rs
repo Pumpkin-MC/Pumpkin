@@ -808,9 +808,11 @@ impl JavaClient {
                 debug!("todo");
             }
             Action::StartFlyingElytra => {
-                let fall_flying = entity.check_fall_flying();
-                if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
-                    entity.set_fall_flying(fall_flying).await;
+                if !player.abilities.lock().await.flying {
+                    let fall_flying = entity.check_fall_flying();
+                    if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
+                        entity.set_fall_flying(fall_flying).await;
+                    }
                 }
             }
             // <= 1.21.5
@@ -1648,6 +1650,12 @@ impl JavaClient {
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
         if flying {
             player.living_entity.fall_distance.store(0.0);
+            drop(abilities);
+            let entity = player.get_entity();
+            if entity.fall_flying.load(Ordering::Relaxed) {
+                entity.set_fall_flying(false).await;
+            }
+            abilities = player.abilities.lock().await;
         }
         abilities.flying = flying;
     }
