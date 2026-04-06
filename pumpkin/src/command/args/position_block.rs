@@ -34,9 +34,9 @@ impl ArgumentConsumer for BlockPosArgumentConsumer {
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let x_str_opt = args.pop();
-        let y_str_opt = args.pop();
-        let z_str_opt = args.pop();
+        let x_str_opt = args.pop().map(|arg| arg.value);
+        let y_str_opt = args.pop().map(|arg| arg.value);
+        let z_str_opt = args.pop().map(|arg| arg.value);
 
         let (Some(x_str), Some(y_str), Some(z_str)) = (x_str_opt, y_str_opt, z_str_opt) else {
             return Box::pin(async move { None });

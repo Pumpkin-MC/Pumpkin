@@ -98,15 +98,19 @@ pub async fn send_c_commands_packet(
             .map(|i| i.try_into().expect("i32 limit reached for ids"));
 
         // TODO:
+        //
         // As stated in the previous TODO, after
         // we can get a reference to an Arc of Server,
         // we can add the permission checking.
         //
-        // Luckily, for now the new dispatcher
-        // only has the /help commands which
-        // is accessible to everyone by default.
-        let satisfies_requirements = true;
+        // Right now, we incorrectly assume that
+        // requirements are always satisfied. Hopefully
+        // this can be fixed once the `/op` and `/deop` commands
+        // are reimplemented with the Arcs, after which we can uncomment
+        // the following line instead of the current one:
+        //
         // let satisfies_requirements = node.requirements().evaluate(&source).await;
+        let satisfies_requirements = true;
 
         match node {
             AttachedNode::Root(_) => {

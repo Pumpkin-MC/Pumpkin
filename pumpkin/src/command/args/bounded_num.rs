@@ -31,7 +31,7 @@ where
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop();
+        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
         let result: Option<Arg<'a>> = s_opt
             // Replace args.pop()?.parse::<T>().ok()?

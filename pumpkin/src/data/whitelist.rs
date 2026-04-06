@@ -16,9 +16,7 @@ pub struct WhitelistConfig {
 impl WhitelistConfig {
     #[must_use]
     pub fn is_whitelisted(&self, profile: &GameProfile) -> bool {
-        self.whitelist
-            .iter()
-            .any(|entry| entry.uuid == profile.id && entry.name == profile.name)
+        self.whitelist.iter().any(|entry| entry.uuid == profile.id)
     }
 }
 

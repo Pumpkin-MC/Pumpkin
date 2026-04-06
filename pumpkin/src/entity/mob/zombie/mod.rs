@@ -1,13 +1,11 @@
 use super::{Mob, MobEntity};
 use crate::entity::ai::goal::destroy_egg::DestroyEggGoal;
-use crate::entity::ai::goal::look_around::LookAroundGoal;
+use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
-use crate::entity::attributes::AttributeBuilder;
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 use std::sync::{Arc, Weak};
 
@@ -40,26 +38,28 @@ impl ZombieEntityBase {
                 8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
             goal_selector.add_goal(3, ZombieAttackGoal::new(1.0, false));
 
             target_selector.add_goal(
                 2,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
             );
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::VILLAGER, true),
+            );
+            target_selector.add_goal(
+                3,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::IRON_GOLEM, true),
+            );
+            target_selector.add_goal(
+                5,
+                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::TURTLE, true),
+            );
         };
 
         mob_arc
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new()
-            .add(Attributes::MAX_HEALTH, 20.0)
-            .add(Attributes::MOVEMENT_SPEED, 0.23)
-            .add(Attributes::ATTACK_DAMAGE, 3.0)
-            .add(Attributes::FOLLOW_RANGE, 35.0)
-            .add(Attributes::ARMOR, 2.0)
     }
 }
 

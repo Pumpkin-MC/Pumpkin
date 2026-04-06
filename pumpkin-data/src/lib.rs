@@ -5,6 +5,9 @@
 #[path = "generated/item.rs"]
 pub mod item;
 
+#[cfg(feature = "item")]
+pub mod item_stack;
+
 #[cfg(feature = "packet")]
 #[rustfmt::skip]
 #[path = "generated/packet.rs"]

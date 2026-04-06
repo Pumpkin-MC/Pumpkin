@@ -1,7 +1,7 @@
 use std::{any::Any, pin::Pin, sync::Arc};
 
-use pumpkin_data::screen::WindowType;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{screen::WindowType, tag};
 use pumpkin_world::{block::entities::PropertyDelegate, inventory::Inventory};
 
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     screen_handler::{ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture, ScreenProperty},
 };
 
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 pub struct BrewingScreenHandler {
     inventory: Arc<dyn Inventory>,
@@ -122,10 +122,7 @@ impl ScreenHandler for BrewingScreenHandler {
                     .is_some();
 
                 // Check if item is brewing fuel (for slot 4)
-                let is_fuel = stack
-                    .get_item()
-                    .is_tagged_with("minecraft:brewing_fuel")
-                    .is_some_and(|b| b);
+                let is_fuel = stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL);
 
                 if has_potion_contents {
                     // Try to insert into potion slots (0-2)

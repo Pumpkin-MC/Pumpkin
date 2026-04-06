@@ -22,9 +22,9 @@ use tracing::warn;
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
+use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
-use crate::entity::attributes::{AttributeInstance, DEFAULT_ATTRIBUTE_REGISTRY};
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
@@ -37,6 +37,7 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
@@ -54,7 +55,6 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;
@@ -134,21 +134,17 @@ impl LivingEntity {
         } else {
             0.8
         };
-        let entity_type_id = entity.entity_type.id;
         let mut max_health: f32 = 20.0; // Overridden by attribute base below
         Self {
             // Populate local attribute instances from the default registry and get initial vars
             attributes: {
                 let mut m = std::collections::HashMap::new();
-                let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
 
-                if let Some(overrides) = reg.get_overrides_for_entity(entity_type_id) {
-                    for (attr_id, base) in overrides {
-                        if attr_id == Attributes::MAX_HEALTH.id {
-                            max_health = base as f32;
-                        }
-                        m.insert(attr_id, AttributeInstance::new(base));
+                for (attr, base) in entity.entity_type.attributes {
+                    if attr.id == Attributes::MAX_HEALTH.id {
+                        max_health = *base as f32;
                     }
+                    m.insert(attr.id, AttributeInstance::new(*base));
                 }
                 std::sync::RwLock::new(m)
             },
@@ -351,8 +347,14 @@ impl LivingEntity {
         let mut map = self.attributes.write().unwrap();
 
         let inst = map.entry(attribute.id).or_insert_with(|| {
-            let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
-            let base = reg.get_base_value(self.entity.entity_type.id, attribute);
+            let base = self
+                .entity
+                .entity_type
+                .attributes
+                .iter()
+                .find(|a| a.0.id == attribute.id)
+                .unwrap()
+                .1;
             AttributeInstance::new(base)
         });
 
@@ -377,8 +379,13 @@ impl LivingEntity {
         }
 
         // Fall back to registry base value if no local instance exists
-        let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
-        reg.get_base_value(self.entity.entity_type.id, attribute)
+        self.entity
+            .entity_type
+            .attributes
+            .iter()
+            .find(|a| a.0.id == attribute.id)
+            .unwrap()
+            .1
     }
 
     /// Update or insert the base value for an attribute on this entity.
@@ -1531,7 +1538,7 @@ impl LivingEntity {
             let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
-                    (pumpkin_world::item::DamageResult::Untouched, None)
+                    (pumpkin_data::item_stack::DamageResult::Untouched, None)
                 } else {
                     // Items without `EquippableImpl` component take damage freely.
                     // Items with `damage_on_hurt: false` (e.g. elytra) are exempt from armor hit durability.
@@ -1544,18 +1551,18 @@ impl LivingEntity {
                     if takes_damage {
                         // Base armor durability damage.
                         let result = stack.damage_item(armor_damage);
-                        let changed = result != pumpkin_world::item::DamageResult::Untouched;
+                        let changed = result != pumpkin_data::item_stack::DamageResult::Untouched;
                         (result, changed.then_some(stack.clone()))
                     } else {
                         // Equippable items can opt out of on-hurt durability loss (e.g. elytra).
-                        (pumpkin_world::item::DamageResult::Untouched, None)
+                        (pumpkin_data::item_stack::DamageResult::Untouched, None)
                     }
                 }
             };
 
             if let Some(updated_stack) = updated_stack_opt {
                 // Broadcast break status before clearing the slot.
-                if slot_result == pumpkin_world::item::DamageResult::Broken {
+                if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
                         .send_entity_status(&self.entity, super::equipment_break_status(slot))

@@ -72,11 +72,9 @@ pub async fn default_dispatcher(
 
     // Zero
     dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
-    dispatcher.register(list::init_command_tree(), "minecraft:command.list");
     dispatcher.register(me::init_command_tree(), "minecraft:command.me");
     dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
     // Two
-    dispatcher.register(kill::init_command_tree(), "minecraft:command.kill");
     dispatcher.register(
         worldborder::init_command_tree(),
         "minecraft:command.worldborder",
@@ -114,10 +112,6 @@ pub async fn default_dispatcher(
     dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
     dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
     dispatcher.register(
-        difficulty::init_command_tree(),
-        "minecraft:command.difficulty",
-    );
-    dispatcher.register(
         stopsound::init_command_tree(),
         "minecraft:command.stopsound",
     );
@@ -150,10 +144,6 @@ pub async fn default_dispatcher(
         "minecraft:command.whitelist",
     );
     dispatcher.register(transfer::init_command_tree(), "minecraft:command.transfer");
-    dispatcher.register(
-        setidletimeout::init_command_tree(),
-        "minecraft:command.setidletimeout",
-    );
 
     let mut dispatcher = {
         let mut wrapper_dispatcher = CommandDispatcher::new();
@@ -161,8 +151,12 @@ pub async fn default_dispatcher(
         wrapper_dispatcher
     };
 
+    difficulty::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
+    kill::register(&mut dispatcher, registry);
+    list::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
+    setidletimeout::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
 
     dispatcher
@@ -177,6 +171,15 @@ fn register_permissions(registry: &mut PermissionRegistry) {
 
     // Register level 3 permissions (OP level 3)
     register_level_3_permissions(registry);
+
+    // Register our entity selector permission as well.
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.selector",
+            "Allows a player to use selector variables",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
 }
 
 fn register_level_0_permissions(registry: &mut PermissionRegistry) {
@@ -185,13 +188,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "pumpkin:command.pumpkin",
             "Shows information about the Pumpkin server",
-            PermissionDefault::Allow,
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.list",
-            "Lists players that are currently online",
             PermissionDefault::Allow,
         ))
         .unwrap();
@@ -214,13 +210,6 @@ fn register_level_0_permissions(registry: &mut PermissionRegistry) {
 #[expect(clippy::too_many_lines)]
 fn register_level_2_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Two
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.kill",
-            "Kills entities (players, mobs, items, etc.)",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
     registry
         .register_permission(Permission::new(
             "minecraft:command.worldborder",
@@ -384,13 +373,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
     registry
         .register_permission(Permission::new(
-            "minecraft:command.difficulty",
-            "Sets the difficulty of the world",
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
             "minecraft:command.data",
             "Query and modify data of entities and blocks",
             PermissionDefault::Op(PermissionLvl::Two),
@@ -419,7 +401,6 @@ fn register_level_2_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
 }
 
-#[expect(clippy::too_many_lines)]
 fn register_level_3_permissions(registry: &mut PermissionRegistry) {
     // Register permissions for commands with PermissionLvl::Three
     registry
@@ -517,13 +498,6 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.transfer",
             "Transfers the player to another server",
-            PermissionDefault::Op(PermissionLvl::Three),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.setidletimeout",
-            "Sets the time before idle players are kicked",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();

@@ -19,6 +19,7 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
@@ -50,7 +51,6 @@ use pumpkin_util::math::{
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::item::ItemStack;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::pin::Pin;
@@ -1599,7 +1599,26 @@ impl Entity {
                 let source_axis = source_portal.as_ref().map(|p| p.axis);
                 drop(portal_manager);
 
-                let (teleport_pos, new_yaw) = if let Some(dest_result) =
+                let is_end_portal = dest_world.dimension == Dimension::THE_END
+                    || self.world.load().dimension == Dimension::THE_END;
+
+                let (teleport_pos, new_yaw) = if is_end_portal {
+                    if dest_world.dimension == Dimension::THE_END {
+                        // Entering the End: spawn on the obsidian platform at (100, 50, 0)
+                        (Vector3::new(100.5f64, 50.0f64, 0.5f64), None)
+                    } else {
+                        // Leaving the End through the exit portal: return to overworld spawn
+                        let info = dest_world.level_info.load();
+                        (
+                            Vector3::new(
+                                f64::from(info.spawn_x) + 0.5,
+                                f64::from(info.spawn_y),
+                                f64::from(info.spawn_z) + 0.5,
+                            ),
+                            None,
+                        )
+                    }
+                } else if let Some(dest_result) =
                     NetherPortal::search_for_portal(&dest_world, target_pos).await
                 {
                     let base_pos = source_portal.as_ref().map_or_else(

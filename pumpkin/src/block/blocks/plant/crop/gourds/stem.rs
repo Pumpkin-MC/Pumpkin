@@ -134,6 +134,10 @@ impl BlockBehaviour for StemBlock {
 impl PlantBlockBase for StemBlock {
     async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         let block = block_accessor.get_block(pos).await;
-        block == &Block::FARMLAND
+        if block == &Block::PUMPKIN_STEM {
+            block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_PUMPKIN_STEM)
+        } else {
+            block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_MELON_STEM)
+        }
     }
 }

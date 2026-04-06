@@ -1,6 +1,5 @@
 use fancy::FancyTrunkPlacer;
-use pumpkin_data::tag;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -9,12 +8,14 @@ use pumpkin_util::{
 use straight::StraightTrunkPlacer;
 
 use super::{TreeFeature, TreeNode};
+use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::trunk::{
     bending::BendingTrunkPlacer, cherry::CherryTrunkPlacer, dark_oak::DarkOakTrunkPlacer,
     forking::ForkingTrunkPlacer, giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
     upwards_branching::UpwardsBranchingTrunkPlacer,
 };
 use crate::generation::proto_chunk::GenerationCache;
+use crate::world::BlockRegistryExt;
 
 pub mod bending;
 pub mod cherry;
@@ -42,18 +43,15 @@ impl TrunkPlacer {
 
     pub fn set_dirt<T: GenerationCache>(
         &self,
+        block_registry: &dyn BlockRegistryExt,
         chunk: &mut T,
+        random: &mut RandomGenerator,
         pos: &BlockPos,
-        force_dirt: bool,
-        dirt_state: &BlockState,
+        below_trunk_provider: &BlockStateProvider,
     ) {
-        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
-        if force_dirt
-            || !(tag::Block::MINECRAFT_DIRT.1.contains(&block)
-                && block != Block::GRASS_BLOCK
-                && block != Block::MYCELIUM)
+        if let Some(state) = below_trunk_provider.get_optional(block_registry, chunk, random, *pos)
         {
-            chunk.set_block_state(&pos.0, dirt_state);
+            chunk.set_block_state(&pos.0, state);
         }
     }
 
@@ -87,22 +85,22 @@ impl TrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
+        block_registry: &dyn BlockRegistryExt,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        force_dirt: bool,
-        dirt_state: &BlockState,
+        below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         self.r#type.generate(
+            block_registry,
             self,
             height,
             start_pos,
             chunk,
             random,
-            force_dirt,
-            dirt_state,
+            below_trunk_provider,
             trunk_state,
         )
     }
@@ -124,74 +122,75 @@ impl TrunkType {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
+        block_registry: &dyn BlockRegistryExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        force_dirt: bool,
-        dirt_state: &BlockState,
+        below_trunk_provider: &BlockStateProvider,
         trunk_state: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         match self {
             Self::Straight(_) => StraightTrunkPlacer::generate(
+                block_registry,
                 placer,
                 height,
                 start_pos,
                 chunk,
-                force_dirt,
-                dirt_state,
+                random,
+                below_trunk_provider,
                 trunk_state,
             ),
             Self::Forking(_) => (vec![], vec![]), // TODO
             Self::Giant(_) => GiantTrunkPlacer::generate(
+                block_registry,
                 placer,
                 height,
                 start_pos,
                 chunk,
                 random,
-                force_dirt,
-                dirt_state,
+                below_trunk_provider,
                 trunk_state,
             ),
             Self::MegaJungle(_) => MegaJungleTrunkPlacer::generate(
+                block_registry,
                 placer,
                 height,
                 start_pos,
                 chunk,
                 random,
-                force_dirt,
-                dirt_state,
+                below_trunk_provider,
                 trunk_state,
             ),
             Self::DarkOak(_) => DarkOakTrunkPlacer::generate(
+                block_registry,
                 placer,
                 height,
                 start_pos,
                 chunk,
                 random,
-                force_dirt,
-                dirt_state,
+                below_trunk_provider,
                 trunk_state,
             ),
             Self::Fancy(_) => FancyTrunkPlacer::generate(
+                block_registry,
                 placer,
                 height,
                 start_pos,
                 chunk,
                 random,
-                force_dirt,
-                dirt_state,
+                below_trunk_provider,
                 trunk_state,
             ),
             Self::Bending(bending) => bending.generate(
+                block_registry,
                 placer,
                 height,
                 start_pos,
                 chunk,
                 random,
-                force_dirt,
-                dirt_state,
+                below_trunk_provider,
                 trunk_state,
             ),
             Self::UpwardsBranching(_) => (vec![], vec![]), // TODO
