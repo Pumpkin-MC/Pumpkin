@@ -626,6 +626,7 @@ version = "0.1.0-dev+26.1"
 dependencies = [
  "heck",
  "indexmap",
+ "md5",
  "proc-macro2",
  "pumpkin-nbt",
  "pumpkin-util",

@@ -583,7 +583,7 @@ impl ProtoChunk {
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(
                 settings.sea_level,
-                Block::from_registry_key(settings.default_fluid.name).unwrap(),
+                Block::from_state_id(settings.default_fluid.id),
             ),
             FluidLevel::new(-54, &Block::LAVA),
         ));

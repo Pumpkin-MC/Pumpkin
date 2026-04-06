@@ -199,18 +199,19 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
 
         match self.data.operation {
             BinaryOperation::Add => {
-                array.iter_mut().enumerate().for_each(|(index, value)| {
-                    let pos = mapper.at(index, Some(sample_options));
-                    let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
-                        &mut component_stack[..=self.input2_index],
-                        &pos,
-                        sample_options,
-                    );
-                    *value += density2;
-                });
+                let mut scratch = vec![0.0f64; array.len()];
+                ChunkNoiseFunctionComponent::fill_from_stack(
+                    &mut component_stack[..=self.input2_index],
+                    &mut scratch,
+                    mapper,
+                    sample_options,
+                );
+                for (a, b) in array.iter_mut().zip(scratch.iter()) {
+                    *a += b;
+                }
             }
             BinaryOperation::Mul => {
-                array.iter_mut().enumerate().for_each(|(index, value)| {
+                for (index, value) in array.iter_mut().enumerate() {
                     if *value != 0.0 {
                         let pos = mapper.at(index, Some(sample_options));
                         let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
@@ -220,12 +221,13 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                         );
                         *value *= density2;
                     }
-                });
+                }
             }
             BinaryOperation::Min => {
                 let input2_min = component_stack[self.input2_index].min();
-                array.iter_mut().enumerate().for_each(|(index, value)| {
-                    if *value > input2_min {
+                for (index, value) in array.iter_mut().enumerate() {
+                    if *value >= input2_min {
+                        // NOTE: vanilla is v < min ? v : min(v, compute)
                         let pos = mapper.at(index, Some(sample_options));
                         let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
                             &mut component_stack[..=self.input2_index],
@@ -234,12 +236,13 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                         );
                         *value = value.min(density2);
                     }
-                });
+                }
             }
             BinaryOperation::Max => {
                 let input2_max = component_stack[self.input2_index].max();
-                array.iter_mut().enumerate().for_each(|(index, value)| {
-                    if *value < input2_max {
+                for (index, value) in array.iter_mut().enumerate() {
+                    if *value <= input2_max {
+                        // NOTE: vanilla is v > max ? v : max(v, compute)
                         let pos = mapper.at(index, Some(sample_options));
                         let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
                             &mut component_stack[..=self.input2_index],
@@ -248,7 +251,7 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                         );
                         *value = value.max(density2);
                     }
-                });
+                }
             }
         }
     }

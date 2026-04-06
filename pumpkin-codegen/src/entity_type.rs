@@ -84,16 +84,23 @@ impl ToTokens for NamedEntityType<'_> {
         let entity = self.1;
         let id = LitInt::new(&entity.id.to_string(), proc_macro2::Span::call_site());
 
-        let attribute_tokens = entity.attributes.as_ref().map(|vec| {
-            vec.iter().map(|map| {
-                let (key, value) = map.iter().next().unwrap(); 
-                let key = key.strip_prefix("minecraft:").unwrap_or(key);
-                // Replace dots with underscores and uppercase for Enum naming (e.g. generic.max_health -> GENERIC_MAX_HEALTH)
-                let enum_variant = format_ident!("{}", key.replace('.', "_").to_uppercase());
+        let attribute_tokens = entity
+            .attributes
+            .as_ref()
+            .map(|vec| {
+                vec.iter()
+                    .map(|map| {
+                        let (key, value) = map.iter().next().unwrap();
+                        let key = key.strip_prefix("minecraft:").unwrap_or(key);
+                        // Replace dots with underscores and uppercase for Enum naming (e.g. generic.max_health -> GENERIC_MAX_HEALTH)
+                        let enum_variant =
+                            format_ident!("{}", key.replace('.', "_").to_uppercase());
 
-                quote! { (Attributes::#enum_variant, #value) }
-            }).collect::<Vec<_>>()
-        }).unwrap_or_default();
+                        quote! { (Attributes::#enum_variant, #value) }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
         let attributes_field = quote! { &[#(#attribute_tokens),*] };
 
