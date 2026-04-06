@@ -327,8 +327,8 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearFile<S> {
         header.size = chunk_raw.len() as u32;
         header.timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as u32;
+            .map(|d| d.as_secs() as u32)
+            .unwrap_or(0);
 
         // We update the data buffer
         self.chunks_data[index] = Some(chunk_raw);
