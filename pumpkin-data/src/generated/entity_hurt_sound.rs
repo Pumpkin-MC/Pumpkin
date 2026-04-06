@@ -1,7 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use crate::entity::EntityType;
 use crate::sound::Sound;
-
 pub const fn hurt_sound_for_entity_type(entity_type: &'static EntityType) -> Option<Sound> {
     match entity_type.id {
         id if id == EntityType::BOGGED.id => Some(Sound::EntityBoggedHurt),

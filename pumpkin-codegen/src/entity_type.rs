@@ -14,6 +14,8 @@ pub struct EntityType {
     /// Numeric registry ID for this entity type.
     pub id: u16,
     pub attributes: Option<Vec<BTreeMap<String, f64>>>,
+    /// Static hurt sound event name when it is safely derivable from extracted entity data.
+    pub hurt_sound: Option<String>,
     /// Whether this entity can be attacked by players or other entities.
     pub attackable: Option<bool>,
     /// Whether this entity is classified as a mob (affects spawning mechanics).

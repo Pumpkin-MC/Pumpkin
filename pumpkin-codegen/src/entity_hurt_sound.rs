@@ -4,13 +4,19 @@ use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-/// Generates a narrow entity-type -> hurt sound lookup from `entity_hurt_sound.json`.
-pub fn build() -> TokenStream {
-    let sounds: BTreeMap<String, String> =
-        serde_json::from_str(&fs::read_to_string("../assets/entity_hurt_sound.json").unwrap())
-            .expect("Failed to parse entity_hurt_sound.json");
+use crate::entity_type::EntityType;
 
-    let lookup_arms = sounds.into_iter().map(|(entity_name, sound_name)| {
+/// Generates a narrow entity-type -> hurt sound lookup from the `hurt_sound` field in
+/// `entities.json`.
+pub fn build() -> TokenStream {
+    let entities: BTreeMap<String, EntityType> =
+        serde_json::from_str(&fs::read_to_string("../assets/entities.json").unwrap())
+            .expect("Failed to parse entities.json");
+
+    let lookup_arms = entities
+        .into_iter()
+        .filter_map(|(entity_name, entity)| entity.hurt_sound.map(|sound_name| (entity_name, sound_name)))
+        .map(|(entity_name, sound_name)| {
         let entity_ident = format_ident!("{}", entity_name.to_uppercase());
         let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
 
