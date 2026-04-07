@@ -187,6 +187,7 @@ pub struct InterpolatedNoiseSampler {
     data: &'static InterpolatedNoiseSamplerData,
     fractions: [f64; 16],
     max_value: f64,
+    y_multiplier: f64,
 }
 
 impl InterpolatedNoiseSampler {
@@ -201,7 +202,9 @@ impl InterpolatedNoiseSampler {
         let upper_noise = OctavePerlinNoiseSampler::new(random, big_start, &big_amplitudes, true);
         let noise = OctavePerlinNoiseSampler::new(random, little_start, &little_amplitudes, true);
 
-        let max_value = lower_noise.get_total_amplitude(data.scaled_y_scale * data.y_factor + 2.0);
+        let y_multiplier =
+            data.scaled_y_scale * data.xz_factor / data.y_factor * 684.412;
+        let max_value = lower_noise.get_total_amplitude(y_multiplier + 2.0);
 
         let fractions = array::from_fn(|index| {
             let mut o = 1.0;
@@ -218,6 +221,7 @@ impl InterpolatedNoiseSampler {
             data,
             fractions,
             max_value,
+            y_multiplier,
         }
     }
 }
@@ -236,15 +240,17 @@ impl NoiseFunctionComponentRange for InterpolatedNoiseSampler {
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for InterpolatedNoiseSampler {
     fn sample(&self, pos: &Vector3<i32>) -> f64 {
-        let d = pos.x as f64 * self.data.scaled_xz_scale * self.data.xz_factor;
-        let e = pos.y as f64 * self.data.scaled_y_scale * self.data.y_factor;
-        let f = pos.z as f64 * self.data.scaled_xz_scale * self.data.xz_factor;
+        let xz_multiplier = self.data.scaled_xz_scale * 684.412;
+
+        let d = pos.x as f64 * xz_multiplier;
+        let e = pos.y as f64 * self.y_multiplier;
+        let f = pos.z as f64 * xz_multiplier;
 
         let g = d / self.data.xz_factor;
         let h = e / self.data.y_factor;
         let i = f / self.data.xz_factor;
 
-        let j = self.data.scaled_y_scale * self.data.y_factor * self.data.smear_scale_multiplier;
+        let j = self.y_multiplier * self.data.smear_scale_multiplier;
         let k = j / self.data.y_factor;
 
         // It's ok the the fractions are more than this; zip will cut it short
