@@ -101,10 +101,118 @@ impl pumpkin::plugin::command::Host for PluginHostState {}
 impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
     async fn get_value(
         &mut self,
-        _consumed_args: Resource<ConsumedArgs>,
-        _key: String,
+        consumed_args: Resource<ConsumedArgs>,
+        key: String,
     ) -> wasmtime::Result<Arg> {
-        todo!("Implement internal argument retrieval from ConsumedArgs")
+        use crate::plugin::loader::wasm::wasm_host::args::OwnedArg;
+
+        let resource = self
+            .resource_table
+            .get::<ConsumedArgsResource>(&Resource::new_own(consumed_args.rep()))
+            .map_err(wasmtime::Error::from)?;
+
+        let Some(owned_arg) = resource.provider.get(&key).cloned() else {
+            return Ok(Arg::Simple(String::new()));
+        };
+
+        Ok(match owned_arg {
+            OwnedArg::Simple(s) => Arg::Simple(s),
+            OwnedArg::Msg(s) => Arg::Msg(s),
+            OwnedArg::Bool(b) => Arg::Bool(b),
+            OwnedArg::Item(s) => Arg::Item(s),
+            OwnedArg::ItemPredicate(s) => Arg::ItemPredicate(s),
+            OwnedArg::ResourceLocation(s) => Arg::ResourceLocation(s),
+            OwnedArg::Block(s) => Arg::Block(s),
+            OwnedArg::BlockPredicate(s) => Arg::BlockPredicate(s),
+            OwnedArg::Time(t) => Arg::Time(t),
+            OwnedArg::Num(n) => {
+                use crate::command::args::bounded_num::{NotInBounds, Number};
+                let convert_num = |n: Number| match n {
+                    Number::F64(v) => pumpkin::plugin::command::Number::Float64(v),
+                    Number::F32(v) => pumpkin::plugin::command::Number::Float32(v),
+                    Number::I32(v) => pumpkin::plugin::command::Number::Int32(v),
+                    Number::I64(v) => pumpkin::plugin::command::Number::Int64(v),
+                };
+                Arg::Num(n.map(convert_num).map_err(|e| match e {
+                    NotInBounds::LowerBound(a, b) => pumpkin::plugin::command::NotInBounds::LowerBound((convert_num(a), convert_num(b))),
+                    NotInBounds::UpperBound(a, b) => pumpkin::plugin::command::NotInBounds::UpperBound((convert_num(a), convert_num(b))),
+                }))
+            }
+            OwnedArg::BlockPos(p) => Arg::BlockPos((p.0.x, p.0.y, p.0.z)),
+            OwnedArg::Pos3D(v) => Arg::Pos3d((v.x, v.y, v.z)),
+            OwnedArg::Pos2D(v) => Arg::Pos2d((v.x, v.y)),
+            OwnedArg::Rotation(a, b, c, d) => Arg::Rotation((a, b, c, d)),
+            OwnedArg::GameMode(g) => Arg::GameMode(match g {
+                pumpkin_util::GameMode::Survival => pumpkin::plugin::command::Gamemode::Survival,
+                pumpkin_util::GameMode::Creative => pumpkin::plugin::command::Gamemode::Creative,
+                pumpkin_util::GameMode::Adventure => pumpkin::plugin::command::Gamemode::Adventure,
+                pumpkin_util::GameMode::Spectator => pumpkin::plugin::command::Gamemode::Spectator,
+            }),
+            OwnedArg::Difficulty(d) => Arg::Difficulty(match d {
+                pumpkin_util::Difficulty::Peaceful => pumpkin::plugin::command::Difficulty::Peaceful,
+                pumpkin_util::Difficulty::Easy => pumpkin::plugin::command::Difficulty::Easy,
+                pumpkin_util::Difficulty::Normal => pumpkin::plugin::command::Difficulty::Normal,
+                pumpkin_util::Difficulty::Hard => pumpkin::plugin::command::Difficulty::Hard,
+            }),
+            OwnedArg::Players(players) => {
+                let mut resources = Vec::new();
+                for p in players {
+                    if let Ok(r) = self.add_player(p) {
+                        resources.push(r);
+                    }
+                }
+                Arg::Players(resources)
+            }
+            OwnedArg::Particle(p) => Arg::Particle(format!("{p:?}")),
+            OwnedArg::TextComponent(t) => {
+                let r = self
+                    .resource_table
+                    .push(TextComponentResource { provider: t })
+                    .map_err(wasmtime::Error::from)?;
+                Arg::TextComponent(wasmtime::component::Resource::new_own(r.rep()))
+            }
+            OwnedArg::BossbarColor(c) => Arg::BossbarColor(match c {
+                crate::world::bossbar::BossbarColor::Pink => pumpkin::plugin::command::BossbarColor::Pink,
+                crate::world::bossbar::BossbarColor::Blue => pumpkin::plugin::command::BossbarColor::Blue,
+                crate::world::bossbar::BossbarColor::Red => pumpkin::plugin::command::BossbarColor::Red,
+                crate::world::bossbar::BossbarColor::Green => pumpkin::plugin::command::BossbarColor::Green,
+                crate::world::bossbar::BossbarColor::Yellow => pumpkin::plugin::command::BossbarColor::Yellow,
+                crate::world::bossbar::BossbarColor::Purple => pumpkin::plugin::command::BossbarColor::Purple,
+                crate::world::bossbar::BossbarColor::White => pumpkin::plugin::command::BossbarColor::White,
+            }),
+            OwnedArg::BossbarStyle(s) => Arg::BossbarStyle(match s {
+                crate::world::bossbar::BossbarDivisions::NoDivision => pumpkin::plugin::command::BossbarStyle::NoDivision,
+                crate::world::bossbar::BossbarDivisions::Notches6 => pumpkin::plugin::command::BossbarStyle::Notches6,
+                crate::world::bossbar::BossbarDivisions::Notches10 => pumpkin::plugin::command::BossbarStyle::Notches10,
+                crate::world::bossbar::BossbarDivisions::Notches12 => pumpkin::plugin::command::BossbarStyle::Notches12,
+                crate::world::bossbar::BossbarDivisions::Notches20 => pumpkin::plugin::command::BossbarStyle::Notches20,
+            }),
+            OwnedArg::SoundCategory(s) => Arg::SoundCategory(match s {
+                pumpkin_data::sound::SoundCategory::Master => pumpkin::plugin::command::SoundCategory::Master,
+                pumpkin_data::sound::SoundCategory::Music => pumpkin::plugin::command::SoundCategory::Music,
+                pumpkin_data::sound::SoundCategory::Records => pumpkin::plugin::command::SoundCategory::Records,
+                pumpkin_data::sound::SoundCategory::Weather => pumpkin::plugin::command::SoundCategory::Weather,
+                pumpkin_data::sound::SoundCategory::Blocks => pumpkin::plugin::command::SoundCategory::Blocks,
+                pumpkin_data::sound::SoundCategory::Hostile => pumpkin::plugin::command::SoundCategory::Hostile,
+                pumpkin_data::sound::SoundCategory::Neutral => pumpkin::plugin::command::SoundCategory::Neutral,
+                pumpkin_data::sound::SoundCategory::Players => pumpkin::plugin::command::SoundCategory::Players,
+                pumpkin_data::sound::SoundCategory::Ambient => pumpkin::plugin::command::SoundCategory::Ambient,
+                pumpkin_data::sound::SoundCategory::Voice => pumpkin::plugin::command::SoundCategory::Voice,
+                pumpkin_data::sound::SoundCategory::Ui => pumpkin::plugin::command::SoundCategory::Master,
+            }),
+            OwnedArg::DamageType(d) => Arg::DamageType(format!("{d:?}")),
+            OwnedArg::Effect(e) => Arg::Effect(e.minecraft_name.to_string()),
+            OwnedArg::Enchantment(e) => Arg::Enchantment(e.name.to_string()),
+            OwnedArg::EntityAnchor(a) => Arg::EntityAnchor(match a {
+                crate::command::args::EntityAnchor::Eyes => pumpkin::plugin::command::EntityAnchor::Eyes,
+                crate::command::args::EntityAnchor::Feet => pumpkin::plugin::command::EntityAnchor::Feet,
+            }),
+            // These types don't have direct WIT resource mappings yet
+            OwnedArg::Entities(_) | OwnedArg::Entity(_)
+            | OwnedArg::GameProfiles(_) | OwnedArg::CommandTree(_) => {
+                Arg::Simple(String::new())
+            }
+        })
     }
 
     async fn drop(&mut self, rep: Resource<ConsumedArgs>) -> wasmtime::Result<()> {
