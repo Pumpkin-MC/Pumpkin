@@ -391,14 +391,7 @@ impl JavaClient {
             }
 
             'cancelled: {
-                self.enqueue_packet(&CPlayerPosition::new(
-                    player.teleport_id_count.load(Ordering::Relaxed).into(),
-                    player.living_entity.entity.pos.load(),
-                    Vector3::new(0.0, 0.0, 0.0),
-                    player.living_entity.entity.yaw.load(),
-                    player.living_entity.entity.pitch.load(),
-                    Vec::new(),
-                )).await;
+                self.force_tp(player, player.living_entity.entity.pos.load()).await;
             }
         }}
     }
