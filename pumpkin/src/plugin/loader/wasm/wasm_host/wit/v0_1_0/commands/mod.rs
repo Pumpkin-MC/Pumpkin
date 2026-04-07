@@ -99,6 +99,7 @@ impl PluginHostState {
 impl pumpkin::plugin::command::Host for PluginHostState {}
 
 impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
+    #[expect(clippy::too_many_lines)]
     async fn get_value(
         &mut self,
         consumed_args: Resource<ConsumedArgs>,
@@ -224,7 +225,8 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                 }
             }),
             OwnedArg::SoundCategory(s) => Arg::SoundCategory(match s {
-                pumpkin_data::sound::SoundCategory::Master => {
+                pumpkin_data::sound::SoundCategory::Master
+                | pumpkin_data::sound::SoundCategory::Ui => {
                     pumpkin::plugin::command::SoundCategory::Master
                 }
                 pumpkin_data::sound::SoundCategory::Music => {
@@ -253,9 +255,6 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                 }
                 pumpkin_data::sound::SoundCategory::Voice => {
                     pumpkin::plugin::command::SoundCategory::Voice
-                }
-                pumpkin_data::sound::SoundCategory::Ui => {
-                    pumpkin::plugin::command::SoundCategory::Master
                 }
             }),
             OwnedArg::DamageType(d) => Arg::DamageType(format!("{d:?}")),
