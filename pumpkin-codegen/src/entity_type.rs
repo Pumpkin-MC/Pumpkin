@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, fs};
 
+use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use pumpkin_util::HeightMap;
 use quote::{ToTokens, format_ident, quote};
@@ -195,6 +196,7 @@ pub fn build() -> TokenStream {
             .expect("Failed to parse entities.json");
 
     let mut consts = TokenStream::new();
+    let mut hurt_sound_lookup_arms = TokenStream::new();
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
 
@@ -209,6 +211,13 @@ pub fn build() -> TokenStream {
             pub const #upper_name: EntityType = #entity_tokens;
         });
 
+        if let Some(sound_name) = entity.hurt_sound.as_ref() {
+            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
+            hurt_sound_lookup_arms.extend(quote! {
+                id if id == EntityType::#upper_name.id => Some(Sound::#sound_ident),
+            });
+        }
+
         type_from_raw_id_arms.extend(quote! {
             #id_lit => Some(&Self::#upper_name),
         });
@@ -222,6 +231,8 @@ pub fn build() -> TokenStream {
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use crate::attributes::Attributes;
+        #[cfg(feature = "entity_hurt_sound")]
+        use crate::sound::Sound;
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
         use std::hash::Hash;
@@ -394,6 +405,15 @@ pub fn build() -> TokenStream {
                 }
             }
         }
+
+        #[cfg(feature = "entity_hurt_sound")]
+        pub const fn hurt_sound_for_entity_type(entity_type: &'static EntityType) -> Option<Sound> {
+            match entity_type.id {
+                #hurt_sound_lookup_arms
+                _ => None,
+            }
+        }
+
         impl IDSetContent for EntityType {
             fn registry_id(&self) -> u16 {
                 Taggable::registry_id(self)

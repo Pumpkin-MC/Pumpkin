@@ -1,6 +1,8 @@
 /* This file is generated. Do not edit manually. */
 use crate::attributes::Attributes;
 use crate::data_component_impl::IDSetContent;
+#[cfg(feature = "entity_hurt_sound")]
+use crate::sound::Sound;
 use crate::tag::RegistryKey;
 use crate::tag::Taggable;
 use pumpkin_util::HeightMap;
@@ -9161,6 +9163,22 @@ impl EntityType {
             "zombified_piglin" => Some(&Self::ZOMBIFIED_PIGLIN),
             _ => None,
         }
+    }
+}
+#[cfg(feature = "entity_hurt_sound")]
+pub const fn hurt_sound_for_entity_type(entity_type: &'static EntityType) -> Option<Sound> {
+    match entity_type.id {
+        id if id == EntityType::BOGGED.id => Some(Sound::EntityBoggedHurt),
+        id if id == EntityType::DROWNED.id => Some(Sound::EntityDrownedHurt),
+        id if id == EntityType::ENDERMAN.id => Some(Sound::EntityEndermanHurt),
+        id if id == EntityType::HUSK.id => Some(Sound::EntityHuskHurt),
+        id if id == EntityType::PARCHED.id => Some(Sound::EntityParchedHurt),
+        id if id == EntityType::SKELETON.id => Some(Sound::EntitySkeletonHurt),
+        id if id == EntityType::STRAY.id => Some(Sound::EntityStrayHurt),
+        id if id == EntityType::WITHER_SKELETON.id => Some(Sound::EntityWitherSkeletonHurt),
+        id if id == EntityType::ZOMBIE.id => Some(Sound::EntityZombieHurt),
+        id if id == EntityType::ZOMBIE_VILLAGER.id => Some(Sound::EntityZombieVillagerHurt),
+        _ => None,
     }
 }
 impl IDSetContent for EntityType {
