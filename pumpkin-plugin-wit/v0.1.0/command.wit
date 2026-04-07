@@ -98,7 +98,7 @@ interface command {
     }
 
     variant command-sender-type {
-        rcon(list<string>),
+        rcon,
         console,
         player(player),
         command-block(tuple<command-block-entity, %world>),

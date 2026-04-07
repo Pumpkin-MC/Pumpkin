@@ -22,8 +22,8 @@ pub mod world;
 bindgen!({
     path: "../pumpkin-plugin-wit/v0.1.0",
     world: "plugin",
-    imports: { default: async },
-    exports: { default: async },
+    imports: { default: async | trappable },
+    exports: { default: async | trappable},
 });
 
 struct PluginHostComponent;
