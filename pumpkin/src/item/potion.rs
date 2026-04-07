@@ -1,7 +1,7 @@
 use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_world::item::ItemStack;
+use pumpkin_data::item_stack::ItemStack;
 
 /// Utilities for reading potion contents from an `ItemStack` and applying effects.
 pub struct PotionContents;

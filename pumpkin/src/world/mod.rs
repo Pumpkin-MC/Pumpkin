@@ -53,6 +53,7 @@ use pumpkin_data::{
     Block,
     entity::{EntityStatus, EntityType},
     fluid::Fluid,
+    item_stack::ItemStack,
     particle::Particle,
     sound::{Sound, SoundCategory},
     world::{RAW, WorldEvent},
@@ -66,7 +67,7 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{
 };
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
-use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
+use pumpkin_protocol::java::client::play::{CPlayerSpawnPosition, CSystemChatMessage};
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
@@ -121,7 +122,7 @@ use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldFuture};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, block::entities::BlockEntity,
-    chunk::io::Dirtiable, inventory::Inventory, item::ItemStack, world::SimpleWorld,
+    chunk::io::Dirtiable, inventory::Inventory, world::SimpleWorld,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -135,6 +136,8 @@ use tokio::sync::Mutex;
 pub mod border;
 pub mod bossbar;
 pub mod custom_bossbar;
+pub mod dragon_fight;
+pub mod end_podium;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
@@ -202,6 +205,8 @@ pub struct World {
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     /// POI storage for fast portal lookups
     pub portal_poi: Mutex<portal::PortalPoiStorage>,
+    /// End Dragon fight manager (only present in `THE_END` dimension).
+    pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
 }
 
 impl PartialEq for World {
@@ -244,6 +249,8 @@ impl World {
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),
+            dragon_fight: (dimension == Dimension::THE_END)
+                .then(|| Mutex::new(dragon_fight::DragonFight::new())),
             server,
         }
     }
@@ -477,6 +484,11 @@ impl World {
         let players = self.players.load();
         let recipients_by_version = Self::collect_java_recipients_by_version(players.iter());
         Self::broadcast_java_grouped(packet, recipients_by_version).await;
+    }
+
+    pub async fn broadcast_system_message(&self, message: &TextComponent, overlay: bool) {
+        let packet = CSystemChatMessage::new(message, overlay);
+        self.broadcast_packet_all(&packet).await;
     }
 
     pub async fn broadcast_message(
@@ -780,6 +792,11 @@ impl World {
         let entity_elapsed = entity_start.elapsed();
 
         //self.level.chunk_loading.lock().unwrap().send_change();
+
+        // Tick the End dragon fight (only on THE_END worlds).
+        if let Some(ref fight_mutex) = self.dragon_fight {
+            fight_mutex.lock().await.tick(self).await;
+        }
 
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
@@ -1384,6 +1401,40 @@ impl World {
         spawn_for_chunk(self, chunk_pos, chunk, spawn_state, spawn_list).await;
     }
 
+    pub async fn set_time_of_day(&self, time: i64) {
+        let mut level_time = self.level_time.lock().await;
+        level_time.set_time(time);
+        level_time.send_time(self).await;
+    }
+
+    pub async fn is_raining(&self) -> bool {
+        self.weather.lock().await.raining
+    }
+
+    pub async fn set_raining(&self, raining: bool) {
+        let mut weather = self.weather.lock().await;
+        if weather.raining != raining {
+            let thunder = weather.thundering;
+            weather
+                .set_weather_parameters(self, 0, 0, raining, thunder)
+                .await;
+        }
+    }
+
+    pub async fn is_thundering(&self) -> bool {
+        self.weather.lock().await.thundering
+    }
+
+    pub async fn set_thundering(&self, thundering: bool) {
+        let mut weather = self.weather.lock().await;
+        if weather.thundering != thundering {
+            let raining = weather.raining;
+            weather
+                .set_weather_parameters(self, 0, 0, raining, thundering)
+                .await;
+        }
+    }
+
     /// Gets the y position of the first non air block from the top down
     pub async fn get_top_block(&self, position: Vector2<i32>) -> i32 {
         for y in (self.dimension.min_y..self.dimension.height).rev() {
@@ -1564,16 +1615,22 @@ impl World {
             let mut abilities = player.abilities.lock().await;
             abilities.set_for_gamemode(player.gamemode.load());
         };
-        let mut metadata = EntityMetadata::default();
+        let mut metadata = EntityMetadata::new();
 
         metadata.set(entity_data_key::WIDTH, MetadataValue::Float(0.6));
         metadata.set(entity_data_key::HEIGHT, MetadataValue::Float(1.8));
 
         // This is super important, otherwise the client will float by default
-        metadata.set_flag(entity_data_flag::HAS_GRAVITY);
+        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::HAS_GRAVITY as u8);
+        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::CLIMB as u8);
+        // Player-specific: survival has collision
+        metadata.set_flag(
+            entity_data_key::FLAGS,
+            entity_data_flag::HAS_COLLISION as u8,
+        );
 
         // Prevents the client from showing air buddles on hud even when not in water
-        metadata.set_flag(entity_data_flag::BREATHING);
+        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::BREATHING as u8);
         let actor_data = CSetActorData {
             actor_runtime_id: VarULong(runtime_id),
             metadata,
@@ -2016,6 +2073,22 @@ impl World {
 
         player.send_active_effects().await;
         self.send_player_equipment(player).await;
+
+        let msg_comp = TextComponent::translate(
+            translation::MULTIPLAYER_PLAYER_JOINED,
+            [TextComponent::text(player.gameprofile.name.clone())],
+        )
+        .color_named(NamedColor::Yellow);
+        let event = PlayerJoinEvent::new(player.clone(), msg_comp);
+
+        let event = server.plugin_manager.fire(event).await;
+
+        if !event.cancelled {
+            self.broadcast_system_message(&event.join_message, false)
+                .await;
+            // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
+            info!("{}", event.join_message.to_pretty_console());
+        }
     }
 
     async fn send_player_equipment(&self, from: &Player) {
@@ -2589,6 +2662,26 @@ impl World {
             .cloned()
     }
 
+    /// Retrieves an entity by their unique UUID.
+    ///
+    /// This function searches the world's entities for one with the specified UUID.
+    /// If found, it returns an `Arc<dyn EntityBase>` reference to that entity. Otherwise, it returns `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `id`: The UUID of the entity to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
+    pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
+        self.entities
+            .load()
+            .iter()
+            .find(|p| p.get_entity().entity_uuid == id)
+            .cloned()
+    }
+
     /// Gets a list of players whose location equals the given position in the world.
     ///
     /// It iterates through the players in the world and checks their location. If the player's location matches the
@@ -2720,6 +2813,70 @@ impl World {
             .map(|p| p.1.clone())
     }
 
+    /// Adds entities to the provided [`Vec`] that satisfy a particular condition and are
+    /// present in the provided [`BoundingBox`].
+    ///
+    /// # Arguments
+    ///
+    /// * `list`: The `Vec` to add to.
+    /// * `max_list_capacity`: The maximum capacity of `list` for adding entities. If this limit is reached, no more
+    ///   entities will be added to the list. If `list` already reaches this limit, nothing happens.
+    /// * `bounding_box`: The bounding box to filter any added entities.
+    /// * `predicate`: A predicate function, which has to be `true` for an entity to be added to the list.
+    pub fn extend_entities_in_box_where(
+        &self,
+        list: &mut Vec<Arc<dyn EntityBase>>,
+        max_list_capacity: usize,
+        bounding_box: BoundingBox,
+        predicate: impl Fn(&dyn EntityBase) -> bool,
+    ) {
+        self.extend_entities_where(list, max_list_capacity, |e| {
+            bounding_box.intersects(&e.get_entity().bounding_box.load()) && predicate(e)
+        });
+    }
+
+    /// Adds entities to the provided [`Vec`] that satisfy a particular condition.
+    ///
+    /// # Arguments
+    ///
+    /// * `list`: The `Vec` to add to.
+    /// * `max_list_capacity`: The maximum capacity of `list` for adding entities. If this limit is reached, no more
+    ///   entities will be added to the list. If `list` already reaches this limit, nothing happens.
+    /// * `predicate`: A predicate function, which has to be `true` for an entity to be added to the list.
+    pub fn extend_entities_where(
+        &self,
+        list: &mut Vec<Arc<dyn EntityBase>>,
+        max_list_capacity: usize,
+        predicate: impl Fn(&dyn EntityBase) -> bool,
+    ) {
+        if list.len() >= max_list_capacity {
+            return;
+        }
+        // Loop the players.
+        for player in self.players.load().iter() {
+            if !predicate(player.as_ref()) {
+                continue;
+            }
+            // We add the player to the list.
+            list.push(player.clone());
+            // Check if the list is too big.
+            if list.len() > max_list_capacity {
+                return;
+            }
+        }
+        // Same with entities.
+        for entity in self.entities.load().iter() {
+            if !predicate(entity.as_ref()) {
+                continue;
+            }
+            list.push(entity.clone());
+            if list.len() > max_list_capacity {
+                return;
+            }
+            // TODO: Implement ender dragon handling
+        }
+    }
+
     /// Adds a player to the world and broadcasts a join message if enabled.
     ///
     /// This function takes a player's UUID and an `Arc<Player>` reference.
@@ -2728,34 +2885,12 @@ impl World {
     ///
     /// # Arguments
     ///
-    /// * `uuid`: The unique UUID of the player to add.
     /// * `player`: An `Arc<Player>` reference to the player object.
-    pub fn add_player(&self, player: Arc<Player>) -> Result<(), String> {
+    pub fn add_player(&self, player: &Arc<Player>) -> Result<(), String> {
         self.players.rcu(|current_list| {
             let mut new_list = (**current_list).clone();
             new_list.push(player.clone());
             new_list
-        });
-
-        let server = self.server.upgrade().unwrap();
-        let current_players = self.players.load();
-        player.clone().spawn_task(async move {
-            let msg_comp = TextComponent::translate(
-                translation::MULTIPLAYER_PLAYER_JOINED,
-                [TextComponent::text(player.gameprofile.name.clone())],
-            )
-            .color_named(NamedColor::Yellow);
-            let event = PlayerJoinEvent::new(player.clone(), msg_comp);
-
-            let event = server.plugin_manager.fire(event).await;
-
-            if !event.cancelled {
-                for player in current_players.iter() {
-                    player.send_system_message(&event.join_message).await;
-                }
-                // TODO: Switch to structured logging, e.g. info!(player = %name, "connected")
-                info!("{}", event.join_message.to_pretty_console());
-            }
         });
         Ok(())
     }

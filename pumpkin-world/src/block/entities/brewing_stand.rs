@@ -9,13 +9,13 @@ use std::sync::{
 
 use crate::block::entities::PropertyDelegate;
 use crate::inventory::Inventory;
-use crate::item::ItemStack;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::data_component_impl::DataComponentImpl;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::Taggable;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -294,20 +294,14 @@ impl crate::inventory::Inventory for BrewingStandBlockEntity {
             // Slot 3 - ingredient (must be tagged as brewable)
             3 => {
                 // Check if item is a valid brewing ingredient
-                if let Some(is_brewing_fuel) =
-                    stack.get_item().is_tagged_with("minecraft:brewing_fuel")
-                    && is_brewing_fuel
-                {
+                if stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL) {
                     return false; // Fuel should not go in ingredient slot
                 }
                 // Allow any item that's not fuel (ingredient validation happens during brewing)
                 true
             }
             // Slot 4 - fuel
-            4 => stack
-                .get_item()
-                .is_tagged_with("minecraft:brewing_fuel")
-                .is_some_and(|b| b),
+            4 => stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL),
             _ => false,
         }
     }
@@ -422,8 +416,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 if !fuel_stack.is_empty()
                     && fuel_stack
                         .get_item()
-                        .is_tagged_with("minecraft:brewing_fuel")
-                        .is_some_and(|b| b)
+                        .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
                 {
                     self.fuel.store(20, Ordering::Relaxed);
                     fuel_stack.decrement(1);

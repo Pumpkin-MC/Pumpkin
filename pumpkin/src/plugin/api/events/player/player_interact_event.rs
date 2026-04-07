@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use crate::entity::player::Player;
 use pumpkin_data::Block;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::item::ItemStack;
 use tokio::sync::Mutex;
 
 use super::PlayerEvent;

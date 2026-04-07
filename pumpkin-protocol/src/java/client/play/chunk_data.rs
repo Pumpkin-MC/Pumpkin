@@ -61,8 +61,10 @@ impl ClientPacket for CChunkData<'_> {
             for (block_palette, biome_palette) in block_sections.iter().zip(biome_sections.iter()) {
                 let non_empty_block_count = block_palette.non_air_block_count() as i16;
                 blocks_and_biomes_buf.write_i16_be(non_empty_block_count)?;
-                // TODO: New in 26.1, fluid count
-                blocks_and_biomes_buf.write_i16_be(0)?;
+                if version >= &MinecraftVersion::V_26_1 {
+                    // TODO: New in 26.1, fluid count
+                    blocks_and_biomes_buf.write_i16_be(0)?;
+                }
 
                 let mut block_network = block_palette.convert_network();
                 match &mut block_network.palette {

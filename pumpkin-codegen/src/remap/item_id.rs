@@ -58,7 +58,11 @@ pub fn build() -> TokenStream {
         value: "../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt",
         child: Some(&node_1_21_7),
     };
-
+    let node_1_21_11 = MappingNode {
+        version: MinecraftVersion::V_1_21_11,
+        value: "../assets/viaversion/data/mappings-1.21.11to26.1.nbt",
+        child: Some(&node_1_21_9),
+    };
     let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
         version: MinecraftVersion::V_26_1,
         remapper: |first, second| match (first, second) {
@@ -82,7 +86,7 @@ pub fn build() -> TokenStream {
         },
     };
 
-    let all_mappings = remapper.process(&node_1_21_9);
+    let all_mappings = remapper.process(&node_1_21_11);
     let mapping_size = all_mappings
         .iter()
         .map(|(_, mapping)| mapping.as_ref().map(|x| x.len()).unwrap_or(0))

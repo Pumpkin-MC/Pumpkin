@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::entity::ai::pathfinder::{
-    node::{Node, PathType, Target},
+    node::{Node, PATH_TYPE_COUNT, PathType, Target},
     pathfinding_context::PathfindingContext,
 };
 
@@ -15,7 +15,8 @@ pub trait NodeEvaluator {
     fn get_neighbors(
         &mut self,
         current: &Node,
-    ) -> impl std::future::Future<Output = Vec<Node>> + Send;
+        out: &mut Vec<Node>,
+    ) -> impl std::future::Future<Output = ()> + Send;
     fn get_path_type_of_mob(
         &mut self,
         context: &mut PathfindingContext,
@@ -37,7 +38,7 @@ pub trait NodeEvaluator {
     fn can_walk_over_fences(&self) -> bool;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct MobData {
     pub position: Vector3<f64>,
     pub width: f32,
@@ -49,21 +50,13 @@ pub struct MobData {
     pub avoids_fire: bool,
     pub avoids_water: bool,
     pub on_ground: bool,
-    pub path_type_malus: HashMap<PathType, f32>,
+    pub path_type_malus: [Option<f32>; PATH_TYPE_COUNT],
 }
 
 impl MobData {
     #[must_use]
-    pub fn new_zombie(position: Vector3<f64>, on_ground: bool) -> Self {
-        let mut path_type_malus = HashMap::new();
-
-        path_type_malus.insert(PathType::DangerFire, 16.0);
-        path_type_malus.insert(PathType::DamageFire, -1.0);
-        path_type_malus.insert(PathType::Water, 8.0);
-        path_type_malus.insert(PathType::Lava, -1.0);
-        path_type_malus.insert(PathType::DangerOther, 8.0);
-
-        Self {
+    pub const fn new_zombie(position: Vector3<f64>, on_ground: bool) -> Self {
+        let mut data = Self {
             position,
             width: 0.6,
             height: 1.95,
@@ -74,12 +67,25 @@ impl MobData {
             avoids_fire: true,
             avoids_water: false,
             on_ground,
-            path_type_malus,
-        }
+            path_type_malus: [None; PATH_TYPE_COUNT],
+        };
+
+        data.set_pathfinding_malus(PathType::DangerFire, 16.0);
+        data.set_pathfinding_malus(PathType::DamageFire, -1.0);
+        data.set_pathfinding_malus(PathType::Water, 8.0);
+        data.set_pathfinding_malus(PathType::Lava, -1.0);
+        data.set_pathfinding_malus(PathType::DangerOther, 8.0);
+
+        data
     }
 
     #[must_use]
-    pub fn new(position: Vector3<f64>, width: f32, height: f32, max_step_height: f32) -> Self {
+    pub const fn new(
+        position: Vector3<f64>,
+        width: f32,
+        height: f32,
+        max_step_height: f32,
+    ) -> Self {
         Self {
             position,
             width,
@@ -91,20 +97,17 @@ impl MobData {
             avoids_fire: true,
             avoids_water: false,
             on_ground: true,
-            path_type_malus: HashMap::new(),
+            path_type_malus: [None; PATH_TYPE_COUNT],
         }
     }
 
     #[must_use]
     pub fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
-        self.path_type_malus
-            .get(&path_type)
-            .copied()
-            .unwrap_or_else(|| path_type.get_malus())
+        self.path_type_malus[path_type as usize].unwrap_or_else(|| path_type.get_malus())
     }
 
-    pub fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
-        self.path_type_malus.insert(path_type, malus);
+    pub const fn set_pathfinding_malus(&mut self, path_type: PathType, malus: f32) {
+        self.path_type_malus[path_type as usize] = Some(malus);
     }
 
     #[must_use]
@@ -130,7 +133,7 @@ impl MobData {
 pub struct BaseNodeEvaluator {
     pub context: Option<PathfindingContext>,
     pub mob_data: Option<MobData>,
-    pub nodes: HashMap<i32, Node>,
+    pub nodes: HashMap<Vector3<i32>, Node>,
     pub entity_width: i32,
     pub entity_height: i32,
     pub entity_depth: i32, // Same as width?
@@ -164,13 +167,11 @@ impl BaseNodeEvaluator {
     }
 
     pub fn get_node(&mut self, pos: BlockPos) -> Node {
-        let hash = Node::create_hash(pos);
-
-        if let Some(node) = self.nodes.get(&hash) {
-            node.clone()
+        if let Some(node) = self.nodes.get(&pos.0) {
+            *node
         } else {
             let node = Node::new(pos);
-            self.nodes.insert(hash, node.clone());
+            self.nodes.insert(pos.0, node);
             node
         }
     }

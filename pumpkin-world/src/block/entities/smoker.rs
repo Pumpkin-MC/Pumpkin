@@ -1,5 +1,5 @@
 use crate::inventory::Inventory;
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::{block_properties::BlockProperties, item_stack::ItemStack};
 
 use std::{
     array::from_fn,
@@ -18,7 +18,7 @@ use crate::{
     block::entities::furnace_like_block_entity::CookingBlockEntityBase,
     impl_block_entity_for_cooking, impl_clearable_for_cooking, impl_cooking_block_entity_base,
     impl_experience_container_for_cooking, impl_inventory_for_cooking,
-    impl_property_delegate_for_cooking, item::ItemStack,
+    impl_property_delegate_for_cooking,
 };
 
 pub struct SmokerBlockEntity {

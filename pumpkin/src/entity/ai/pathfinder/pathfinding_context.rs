@@ -1,5 +1,5 @@
 use pumpkin_data::{
-    Block,
+    Block, BlockState,
     fluid::Fluid,
     tag::{self, Taggable},
 };
@@ -66,9 +66,10 @@ impl PathfindingContext {
     pub async fn compute_path_type_from_state(&self, pos: Vector3<i32>) -> PathType {
         let block_pos = pos.as_blockpos();
 
-        let block = self.world.get_block(&block_pos).await;
+        // Single async chunk lookup, then derive block & state from static arrays
         let state_id = self.world.get_block_state_id(&block_pos).await;
-        let state = self.world.get_block_state(&block_pos).await;
+        let block = Block::from_state_id(state_id);
+        let state = BlockState::from_id(state_id);
 
         if block.id == Block::AIR.id
             || block.id == Block::VOID_AIR.id
@@ -230,7 +231,8 @@ impl PathfindingContext {
         }
 
         let block_pos = pos.as_blockpos();
-        let state = self.world.get_block_state(&block_pos).await;
+        let state_id = self.world.get_block_state_id(&block_pos).await;
+        let state = BlockState::from_id(state_id);
         let has_collision = state.is_full_cube();
 
         self.collision_cache.insert(pos, has_collision);

@@ -10,7 +10,7 @@ use std::{
     },
 };
 
-use pumpkin_data::recipes::CookingRecipeKind;
+use pumpkin_data::{item_stack::ItemStack, recipes::CookingRecipeKind};
 use pumpkin_util::math::position::BlockPos;
 use tokio::sync::Mutex;
 
@@ -18,7 +18,7 @@ use crate::{
     block::entities::furnace_like_block_entity::CookingBlockEntityBase,
     impl_block_entity_for_cooking, impl_clearable_for_cooking, impl_cooking_block_entity_base,
     impl_experience_container_for_cooking, impl_inventory_for_cooking,
-    impl_property_delegate_for_cooking, item::ItemStack,
+    impl_property_delegate_for_cooking,
 };
 
 pub struct FurnaceBlockEntity {

@@ -191,21 +191,13 @@ impl ToTokens for BlockStateCodecStruct {
     /// Emits a `BlockBlueprint` literal, stripping the `minecraft:` namespace prefix from the block name.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let name = &self.name.strip_prefix("minecraft:").unwrap_or(&self.name);
-
-        let props_gen = if let Some(props) = &self.properties {
-            let keys = props.keys();
-            let values = props.values();
-            quote!(Some(&[#((#keys, #values)),*]))
-        } else {
-            quote!(None)
-        };
-
-        tokens.extend(quote!(
-            BlockBlueprint {
-                name: #name,
-                properties: #props_gen,
-            }
-        ));
+        let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
+        let block_ident =
+            quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
+        // TODO: use props
+        tokens.extend(quote! {
+            crate::Block::#block_ident.default_state
+        });
     }
 }
 
@@ -313,9 +305,14 @@ impl ToTokens for MaterialConditionStruct {
                 true_at_and_below,
                 false_at_and_above,
             } => {
+                // Pre calc for speed :D
+                let bytes = md5::compute(random_name.as_bytes());
+                let lo = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
+                let hi = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
                 tokens.extend(quote!(
                     MaterialCondition::VerticalGradient(VerticalGradientMaterialCondition {
-                        random_name: #random_name,
+                        random_lo: #lo,
+                        random_hi: #hi,
                         true_at_and_below: #true_at_and_below,
                         false_at_and_above: #false_at_and_above,
                     })
@@ -381,9 +378,7 @@ impl ToTokens for MaterialConditionStruct {
                     "floor" => quote!(
                         pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor
                     ),
-                    _ => quote!(
-                        pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor
-                    ),
+                    _ => quote!(panic!("Unknown surface type")),
                 };
 
                 tokens.extend(quote!(
@@ -452,6 +447,7 @@ pub fn build() -> TokenStream {
     quote!(
         use crate::dimension::Dimension;
         use crate::chunk::DoublePerlinNoiseParameters;
+        use crate::BlockState;
 
         use std::{cell::RefCell, num::NonZeroUsize};
         use pumpkin_util::random::RandomDeriver;
@@ -459,20 +455,15 @@ pub fn build() -> TokenStream {
         use crate::biome::Biome;
         use pumpkin_util::y_offset::Absolute;
 
-        pub struct BlockBlueprint {
-            pub name: &'static str,
-            pub properties: Option<&'static [(&'static str, &'static str)]>,
-        }
-
         pub struct GenerationSettings {
             pub aquifers_enabled: bool,
             pub ore_veins_enabled: bool,
             pub legacy_random_source: bool,
             pub sea_level: i32,
-            pub default_fluid: BlockBlueprint,
+            pub default_fluid: &'static BlockState,
             pub shape: GenerationShapeConfig,
             pub surface_rule: MaterialRule,
-            pub default_block: BlockBlueprint,
+            pub default_block: &'static BlockState,
         }
 
         pub struct GenerationShapeConfig {
@@ -524,7 +515,7 @@ pub fn build() -> TokenStream {
         }
 
         pub struct BlockMaterialRule {
-            pub result_state: BlockBlueprint,
+            pub result_state: &'static BlockState,
         }
 
         pub struct SequenceMaterialRule {
@@ -557,7 +548,8 @@ pub fn build() -> TokenStream {
         }
 
         pub struct VerticalGradientMaterialCondition {
-            pub random_name: &'static str,
+            pub random_lo: u64,
+            pub random_hi: u64,
             pub true_at_and_below: YOffset,
             pub false_at_and_above: YOffset,
         }

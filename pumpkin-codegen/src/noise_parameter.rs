@@ -12,9 +12,12 @@ pub fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut match_variants = TokenStream::new();
 
-    for (name, parameter) in &json {
-        let raw_name = format!("minecraft:{name}");
-        let simple_id = name;
+    for (raw_name, parameter) in &json {
+        let name = raw_name
+            .strip_prefix("minecraft:")
+            .unwrap()
+            .replace("/", "_");
+        let simple_id = name.clone();
         let name = format_ident!("{}", name.to_uppercase());
         let first_octave = parameter.first_octave;
         let amplitudes = &parameter.amplitudes;
