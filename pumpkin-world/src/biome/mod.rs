@@ -60,7 +60,6 @@ mod test {
 
     use crate::{
         GlobalRandomConfig, ProtoChunk,
-        block::to_state_from_blueprint,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
         generation::noise::router::{
             multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -107,7 +106,7 @@ mod test {
         let surface_settings = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
 
         //let _terrain_cache = TerrainCache::from_random(&random_config);
-        let default_block = to_state_from_blueprint(&surface_settings.default_block);
+        let default_block = surface_settings.default_block;
 
         for data in expected_data {
             let chunk_x = data.x;

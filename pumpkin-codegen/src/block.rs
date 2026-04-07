@@ -564,7 +564,7 @@ pub struct Block {
     /// Registry name without the `minecraft:` namespace prefix.
     pub name: String,
     /// Translation key for the block's display name.
-    pub translation_key: String,
+    // pub translation_key: String,
     /// Mining hardness; affects how long the block takes to break.
     pub hardness: f32,
     /// Blast resistance against explosions.

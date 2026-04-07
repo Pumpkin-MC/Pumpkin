@@ -3,8 +3,6 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use crate::entity::attributes::AttributeBuilder;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     entity::EntityType,
@@ -20,7 +18,7 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         active_target::ActiveTargetGoal, creeper_ignite::CreeperIgniteGoal,
-        look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
@@ -74,7 +72,7 @@ impl CreeperEntity {
                 6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(6, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(6, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(
                 1,
@@ -116,11 +114,6 @@ impl CreeperEntity {
         world.explode(pos, radius * multiplier).await;
         // TODO: spawn area effect cloud with potion effects
         entity.remove().await;
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.25)
     }
 }
 

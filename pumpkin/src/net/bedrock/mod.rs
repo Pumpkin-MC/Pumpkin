@@ -407,7 +407,8 @@ impl BedrockClient {
                 debug!("received nack, client is missing packets");
             }
             0x80..0x8d => {
-                self.handle_frame_set(server, FrameSet::read(reader)?).await;
+                self.handle_frame_set(server, FrameSet::read(reader)?)
+                    .await?;
             }
             id => {
                 warn!("Bedrock: Received unknown packet header {id}");
@@ -418,13 +419,18 @@ impl BedrockClient {
 
     const fn handle_ack(_ack: &Ack) {}
 
-    async fn handle_frame_set(self: &Arc<Self>, server: &Arc<Server>, frame_set: FrameSet) {
+    async fn handle_frame_set(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        frame_set: FrameSet,
+    ) -> Result<(), Error> {
         // TODO: Send all ACKs in short intervals in batches
         self.send_ack(&Ack::new(vec![frame_set.sequence.0])).await;
         // TODO
         for frame in frame_set.frames {
-            self.handle_frame(server, frame).await.unwrap();
+            self.handle_frame(server, frame).await?;
         }
+        Ok(())
     }
 
     async fn handle_frame(

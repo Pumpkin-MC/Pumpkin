@@ -1,14 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
-use crate::entity::attributes::AttributeBuilder;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -54,22 +49,19 @@ impl BatEntity {
         self.set_roosting_metadata(roosting).await;
     }
 
-    async fn set_roosting_metadata(&self, roosting: bool) {
-        let flags: u8 = if roosting { ROOSTING_FLAG } else { 0 };
-        self.mob_entity
-            .living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::ID_FLAGS,
-                MetaDataType::BYTE,
-                flags,
-            )])
-            .await;
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new().add(Attributes::MAX_HEALTH, 6.0)
+    #[expect(clippy::unused_async)]
+    async fn set_roosting_metadata(&self, _roosting: bool) {
+        // TODO
+        // let flags: u8 = if roosting { ROOSTING_FLAG } else { 0 };
+        // self.mob_entity
+        //     .living_entity
+        //     .entity
+        //     .send_meta_data(&[Metadata::new(
+        //         TrackedData::ID_FLAGS,
+        //         MetaDataType::BYTE,
+        //         flags,
+        //     )])
+        //     .await;
     }
 }
 

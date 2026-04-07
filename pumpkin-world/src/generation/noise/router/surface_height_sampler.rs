@@ -62,8 +62,6 @@ pub struct SurfaceHeightEstimateSampler<'a> {
 }
 
 impl<'a> SurfaceHeightEstimateSampler<'a> {
-    const NOTCHIAN_SAMPLE_CUTOFF: f64 = 0.390625;
-
     pub fn estimate_height(&mut self, block_x: i32, block_z: i32) -> i32 {
         let biome_aligned_x = biome_coords::to_block(biome_coords::from_block(block_x));
         let biome_aligned_z = biome_coords::to_block(biome_coords::from_block(block_z));
@@ -81,23 +79,13 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
     fn calculate_height_estimate(&mut self, aligned_x: i32, aligned_z: i32) -> i32 {
         let sample_options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
-
-        // preliminarySurfaceLevel (FindTopSurface) returns the surface Y directly.
-        // Sample at y=0 — FindTopSurface ignores the incoming Y and computes its own.
         let pos = Vector3::new(aligned_x, 0, aligned_z);
         let surface_y = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut self.component_stack,
             &pos,
             &sample_options,
         );
-
-        // FindTopSurface returns lowerBound as f64 when no solid block found,
-        // which is below minimum_y — treat that as "no surface"
-        if surface_y <= self.minimum_y as f64 {
-            i32::MAX
-        } else {
-            surface_y as i32
-        }
+        surface_y.floor() as i32
     }
 
     #[must_use]

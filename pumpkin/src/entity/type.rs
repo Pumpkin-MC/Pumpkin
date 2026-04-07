@@ -5,6 +5,7 @@ use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
+use crate::entity::mob::blaze::BlazeEntity;
 use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
 use crate::{
     entity::{
@@ -59,6 +60,7 @@ pub async fn from_type(
         id if id == EntityType::CREEPER.id => CreeperEntity::new(entity).await,
         id if id == EntityType::ENDERMAN.id => EndermanEntity::new(entity).await,
 
+        id if id == EntityType::BLAZE.id => BlazeEntity::new(entity).await,
         id if id == EntityType::CAT.id => CatEntity::new(entity).await,
         id if id == EntityType::CHICKEN.id => ChickenEntity::new(entity).await,
         id if id == EntityType::COW.id => CowEntity::new(entity).await,
@@ -80,10 +82,10 @@ pub async fn from_type(
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity).await,
         // Fallback Entity
         _ => {
-            if entity_type.max_health.is_some() {
-                Arc::new(LivingEntity::new(entity))
-            } else {
+            if entity_type.attributes.is_empty() {
                 Arc::new(entity)
+            } else {
+                Arc::new(LivingEntity::new(entity))
             }
         }
     };

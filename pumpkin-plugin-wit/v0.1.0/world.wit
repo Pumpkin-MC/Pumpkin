@@ -1,4 +1,7 @@
 interface %world {
+    use common.{position};
+    use text.{text-component};
+
     enum piston-behavior {
         normal,
         destroy,
@@ -39,11 +42,33 @@ interface %world {
 
     resource %world {
         get-id: func() -> string;
-        
+
         get-block-state-id: func(pos: block-pos) -> u16;
 
         get-block-state: func(pos: block-pos) -> block-state;
 
         set-block-state: func(pos: block-pos, state: u16, update-flags: block-flags);
+
+        get-time-of-day: func() -> u64;
+
+        set-time-of-day: func(time: u64);
+
+        get-world-age: func() -> u64;
+
+        get-dimension: func() -> string;
+
+        get-top-block-y: func(x: s32, z: s32) -> s32;
+
+        get-motion-blocking-height: func(x: s32, z: s32) -> s32;
+
+        is-raining: func() -> bool;
+
+        set-raining: func(raining: bool);
+
+        is-thundering: func() -> bool;
+
+        set-thundering: func(thundering: bool);
+
+        broadcast-system-message: func(message: text-component, overlay: bool);
     }
 }

@@ -576,9 +576,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
         }
-        "minecraft:fossil" => {
-            quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
-        }
         "minecraft:lake" => {
             quote! { ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {}) }
         }
@@ -892,7 +889,6 @@ fn value_to_rule_test(v: &Value) -> TokenStream {
         "minecraft:random_block_match" => {
             let block = v["block"].as_str().unwrap_or("minecraft:stone");
             let prob = v["probability"].as_f64().unwrap_or(0.5) as f32;
-            let name_stripped = block.strip_prefix("minecraft:").unwrap_or(block);
             let block_ident =
                 quote::format_ident!("{}", block.to_uppercase().replace([':', '-'], "_"));
             quote! { RuleTest::RandomBlockMatch(RandomBlockMatchRuleTest { block: pumpkin_data::Block::#block_ident, probability: #prob }) }
