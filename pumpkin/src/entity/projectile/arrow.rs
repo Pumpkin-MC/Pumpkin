@@ -390,12 +390,12 @@ impl EntityBase for ArrowEntity {
                         let bonus = (rand::random::<u32>() % (damage / 2 + 2) as u32) as i32;
                         damage = damage.saturating_add(bonus);
                     }
+                    target
+                        .damage(&*target, damage as f32, DamageType::ARROW)
+                        .await;
 
-                    if let Some(living) = target.get_living_entity() {
-                        // Apply damage to target
-                        living
-                            .damage(living, damage as f32, DamageType::ARROW)
-                            .await;
+                    if target.get_living_entity().is_some() {
+                        // TODO: knockback
 
                         // Play hit sound
                         let sound_packet = CSoundEffect::new(
