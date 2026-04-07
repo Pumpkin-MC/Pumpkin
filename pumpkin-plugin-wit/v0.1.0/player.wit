@@ -3,6 +3,7 @@ interface player {
     use %world.{%world};
     use permission.{permission-level};
     use text.{text-component};
+    use gui.{gui};
 
     record player-abilities {
         invulnerable:       bool,
@@ -45,6 +46,8 @@ interface player {
         teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>);
         kick: func (message: text-component);
         respawn: func ();
+
+        open-gui: func (gui-ref: gui);
 
         ban: func (reason: option<text-component>);
         ban-ip: func (reason: option<text-component>);

@@ -2902,6 +2902,40 @@ impl Player {
         }
     }
 
+    pub async fn open_handled_screen_direct(
+        &self,
+        screen_handler: Arc<Mutex<dyn ScreenHandler>>,
+        title: TextComponent,
+    ) {
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handled_screen().await;
+        }
+
+        let screen_handler_temp = screen_handler.lock().await;
+        self.client
+            .enqueue_packet(&COpenScreen::new(
+                screen_handler_temp.sync_id().into(),
+                (screen_handler_temp
+                    .window_type()
+                    .expect("Can't open PlayerScreenHandler") as i32)
+                    .into(),
+                &title,
+            ))
+            .await;
+        drop(screen_handler_temp);
+        self.on_screen_handler_opened(screen_handler.clone()).await;
+        *self.current_screen_handler.lock().await = screen_handler;
+        self.open_container_pos.store(None);
+    }
+
     pub async fn on_slot_click(&self, packet: SClickSlot) {
         self.update_last_action_time();
         let screen_handler = self.current_screen_handler.lock().await;

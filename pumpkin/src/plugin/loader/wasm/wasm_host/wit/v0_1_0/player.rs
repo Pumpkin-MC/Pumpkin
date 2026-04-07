@@ -1,12 +1,17 @@
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 
+use crate::plugin::api::gui::PluginScreenHandler;
 use crate::{
     entity::{EntityBase, player::TitleMode},
     net::DisconnectReason,
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt,
-        state::{PlayerResource, PluginHostState, TextComponentResource, WorldResource},
+        state::{
+            GuiResource, PlayerResource, PluginHostState, TextComponentResource, WorldResource,
+        },
         wit::v0_1_0::{
             events::{
                 from_wasm_game_mode, from_wasm_position, to_wasm_game_mode, to_wasm_position,
@@ -330,6 +335,32 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn respawn(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         player.respawn().await;
+        Ok(())
+    }
+
+    async fn open_gui(
+        &mut self,
+        player: Resource<Player>,
+        gui: Resource<pumpkin::plugin::gui::Gui>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let gui_res = self
+            .resource_table
+            .get::<GuiResource>(&Resource::new_own(gui.rep()))
+            .map_err(|_| wasmtime::Error::msg("invalid gui resource handle"))?;
+        let gui = gui_res.provider.lock().await;
+
+        player.increment_screen_handler_sync_id();
+        let sync_id = player.screen_handler_sync_id.load(Ordering::Relaxed);
+        let screen_handler = Arc::new(Mutex::new(PluginScreenHandler::new(
+            sync_id,
+            gui.window_type,
+            &gui.inventory,
+        )));
+
+        player
+            .open_handled_screen_direct(screen_handler, gui.title.clone())
+            .await;
         Ok(())
     }
 

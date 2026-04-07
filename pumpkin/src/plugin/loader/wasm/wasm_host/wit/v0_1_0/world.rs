@@ -20,7 +20,7 @@ impl PluginHostState {
             .map_err(wasmtime::Error::from)
     }
 
-    fn get_text_provider(
+    pub(crate) fn get_text_provider(
         &self,
         res: &Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<pumpkin_util::text::TextComponent> {
@@ -218,6 +218,14 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .broadcast_system_message(&msg, overlay)
             .await;
         Ok(())
+    }
+
+    async fn get_scoreboard(
+        &mut self,
+        world: Resource<World>,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::Scoreboard>> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        self.add_scoreboard(world_provider)
     }
 
     async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {

@@ -1,6 +1,7 @@
 interface %world {
     use common.{position};
     use text.{text-component};
+    use scoreboard.{scoreboard};
 
     enum piston-behavior {
         normal,
@@ -32,6 +33,10 @@ interface %world {
         is-full-cube: bool,
         piston-behavior: piston-behavior,
         has-random-ticks: bool,
+    }
+
+    record block-state-id {
+        id: u16,
     }
 
     record block-pos {
@@ -70,5 +75,7 @@ interface %world {
         set-thundering: func(thundering: bool);
 
         broadcast-system-message: func(message: text-component, overlay: bool);
+
+        get-scoreboard: func() -> scoreboard;
     }
 }
