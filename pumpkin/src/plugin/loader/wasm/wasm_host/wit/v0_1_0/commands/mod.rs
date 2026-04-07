@@ -134,8 +134,18 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                     Number::I64(v) => pumpkin::plugin::command::Number::Int64(v),
                 };
                 Arg::Num(n.map(convert_num).map_err(|e| match e {
-                    NotInBounds::LowerBound(a, b) => pumpkin::plugin::command::NotInBounds::LowerBound((convert_num(a), convert_num(b))),
-                    NotInBounds::UpperBound(a, b) => pumpkin::plugin::command::NotInBounds::UpperBound((convert_num(a), convert_num(b))),
+                    NotInBounds::LowerBound(a, b) => {
+                        pumpkin::plugin::command::NotInBounds::LowerBound((
+                            convert_num(a),
+                            convert_num(b),
+                        ))
+                    }
+                    NotInBounds::UpperBound(a, b) => {
+                        pumpkin::plugin::command::NotInBounds::UpperBound((
+                            convert_num(a),
+                            convert_num(b),
+                        ))
+                    }
                 }))
             }
             OwnedArg::BlockPos(p) => Arg::BlockPos((p.0.x, p.0.y, p.0.z)),
@@ -149,7 +159,9 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                 pumpkin_util::GameMode::Spectator => pumpkin::plugin::command::Gamemode::Spectator,
             }),
             OwnedArg::Difficulty(d) => Arg::Difficulty(match d {
-                pumpkin_util::Difficulty::Peaceful => pumpkin::plugin::command::Difficulty::Peaceful,
+                pumpkin_util::Difficulty::Peaceful => {
+                    pumpkin::plugin::command::Difficulty::Peaceful
+                }
                 pumpkin_util::Difficulty::Easy => pumpkin::plugin::command::Difficulty::Easy,
                 pumpkin_util::Difficulty::Normal => pumpkin::plugin::command::Difficulty::Normal,
                 pumpkin_util::Difficulty::Hard => pumpkin::plugin::command::Difficulty::Hard,
@@ -172,46 +184,96 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                 Arg::TextComponent(wasmtime::component::Resource::new_own(r.rep()))
             }
             OwnedArg::BossbarColor(c) => Arg::BossbarColor(match c {
-                crate::world::bossbar::BossbarColor::Pink => pumpkin::plugin::command::BossbarColor::Pink,
-                crate::world::bossbar::BossbarColor::Blue => pumpkin::plugin::command::BossbarColor::Blue,
-                crate::world::bossbar::BossbarColor::Red => pumpkin::plugin::command::BossbarColor::Red,
-                crate::world::bossbar::BossbarColor::Green => pumpkin::plugin::command::BossbarColor::Green,
-                crate::world::bossbar::BossbarColor::Yellow => pumpkin::plugin::command::BossbarColor::Yellow,
-                crate::world::bossbar::BossbarColor::Purple => pumpkin::plugin::command::BossbarColor::Purple,
-                crate::world::bossbar::BossbarColor::White => pumpkin::plugin::command::BossbarColor::White,
+                crate::world::bossbar::BossbarColor::Pink => {
+                    pumpkin::plugin::command::BossbarColor::Pink
+                }
+                crate::world::bossbar::BossbarColor::Blue => {
+                    pumpkin::plugin::command::BossbarColor::Blue
+                }
+                crate::world::bossbar::BossbarColor::Red => {
+                    pumpkin::plugin::command::BossbarColor::Red
+                }
+                crate::world::bossbar::BossbarColor::Green => {
+                    pumpkin::plugin::command::BossbarColor::Green
+                }
+                crate::world::bossbar::BossbarColor::Yellow => {
+                    pumpkin::plugin::command::BossbarColor::Yellow
+                }
+                crate::world::bossbar::BossbarColor::Purple => {
+                    pumpkin::plugin::command::BossbarColor::Purple
+                }
+                crate::world::bossbar::BossbarColor::White => {
+                    pumpkin::plugin::command::BossbarColor::White
+                }
             }),
             OwnedArg::BossbarStyle(s) => Arg::BossbarStyle(match s {
-                crate::world::bossbar::BossbarDivisions::NoDivision => pumpkin::plugin::command::BossbarStyle::NoDivision,
-                crate::world::bossbar::BossbarDivisions::Notches6 => pumpkin::plugin::command::BossbarStyle::Notches6,
-                crate::world::bossbar::BossbarDivisions::Notches10 => pumpkin::plugin::command::BossbarStyle::Notches10,
-                crate::world::bossbar::BossbarDivisions::Notches12 => pumpkin::plugin::command::BossbarStyle::Notches12,
-                crate::world::bossbar::BossbarDivisions::Notches20 => pumpkin::plugin::command::BossbarStyle::Notches20,
+                crate::world::bossbar::BossbarDivisions::NoDivision => {
+                    pumpkin::plugin::command::BossbarStyle::NoDivision
+                }
+                crate::world::bossbar::BossbarDivisions::Notches6 => {
+                    pumpkin::plugin::command::BossbarStyle::Notches6
+                }
+                crate::world::bossbar::BossbarDivisions::Notches10 => {
+                    pumpkin::plugin::command::BossbarStyle::Notches10
+                }
+                crate::world::bossbar::BossbarDivisions::Notches12 => {
+                    pumpkin::plugin::command::BossbarStyle::Notches12
+                }
+                crate::world::bossbar::BossbarDivisions::Notches20 => {
+                    pumpkin::plugin::command::BossbarStyle::Notches20
+                }
             }),
             OwnedArg::SoundCategory(s) => Arg::SoundCategory(match s {
-                pumpkin_data::sound::SoundCategory::Master => pumpkin::plugin::command::SoundCategory::Master,
-                pumpkin_data::sound::SoundCategory::Music => pumpkin::plugin::command::SoundCategory::Music,
-                pumpkin_data::sound::SoundCategory::Records => pumpkin::plugin::command::SoundCategory::Records,
-                pumpkin_data::sound::SoundCategory::Weather => pumpkin::plugin::command::SoundCategory::Weather,
-                pumpkin_data::sound::SoundCategory::Blocks => pumpkin::plugin::command::SoundCategory::Blocks,
-                pumpkin_data::sound::SoundCategory::Hostile => pumpkin::plugin::command::SoundCategory::Hostile,
-                pumpkin_data::sound::SoundCategory::Neutral => pumpkin::plugin::command::SoundCategory::Neutral,
-                pumpkin_data::sound::SoundCategory::Players => pumpkin::plugin::command::SoundCategory::Players,
-                pumpkin_data::sound::SoundCategory::Ambient => pumpkin::plugin::command::SoundCategory::Ambient,
-                pumpkin_data::sound::SoundCategory::Voice => pumpkin::plugin::command::SoundCategory::Voice,
-                pumpkin_data::sound::SoundCategory::Ui => pumpkin::plugin::command::SoundCategory::Master,
+                pumpkin_data::sound::SoundCategory::Master => {
+                    pumpkin::plugin::command::SoundCategory::Master
+                }
+                pumpkin_data::sound::SoundCategory::Music => {
+                    pumpkin::plugin::command::SoundCategory::Music
+                }
+                pumpkin_data::sound::SoundCategory::Records => {
+                    pumpkin::plugin::command::SoundCategory::Records
+                }
+                pumpkin_data::sound::SoundCategory::Weather => {
+                    pumpkin::plugin::command::SoundCategory::Weather
+                }
+                pumpkin_data::sound::SoundCategory::Blocks => {
+                    pumpkin::plugin::command::SoundCategory::Blocks
+                }
+                pumpkin_data::sound::SoundCategory::Hostile => {
+                    pumpkin::plugin::command::SoundCategory::Hostile
+                }
+                pumpkin_data::sound::SoundCategory::Neutral => {
+                    pumpkin::plugin::command::SoundCategory::Neutral
+                }
+                pumpkin_data::sound::SoundCategory::Players => {
+                    pumpkin::plugin::command::SoundCategory::Players
+                }
+                pumpkin_data::sound::SoundCategory::Ambient => {
+                    pumpkin::plugin::command::SoundCategory::Ambient
+                }
+                pumpkin_data::sound::SoundCategory::Voice => {
+                    pumpkin::plugin::command::SoundCategory::Voice
+                }
+                pumpkin_data::sound::SoundCategory::Ui => {
+                    pumpkin::plugin::command::SoundCategory::Master
+                }
             }),
             OwnedArg::DamageType(d) => Arg::DamageType(format!("{d:?}")),
             OwnedArg::Effect(e) => Arg::Effect(e.minecraft_name.to_string()),
             OwnedArg::Enchantment(e) => Arg::Enchantment(e.name.to_string()),
             OwnedArg::EntityAnchor(a) => Arg::EntityAnchor(match a {
-                crate::command::args::EntityAnchor::Eyes => pumpkin::plugin::command::EntityAnchor::Eyes,
-                crate::command::args::EntityAnchor::Feet => pumpkin::plugin::command::EntityAnchor::Feet,
+                crate::command::args::EntityAnchor::Eyes => {
+                    pumpkin::plugin::command::EntityAnchor::Eyes
+                }
+                crate::command::args::EntityAnchor::Feet => {
+                    pumpkin::plugin::command::EntityAnchor::Feet
+                }
             }),
             // These types don't have direct WIT resource mappings yet
-            OwnedArg::Entities(_) | OwnedArg::Entity(_)
-            | OwnedArg::GameProfiles(_) | OwnedArg::CommandTree(_) => {
-                Arg::Simple(String::new())
-            }
+            OwnedArg::Entities(_)
+            | OwnedArg::Entity(_)
+            | OwnedArg::GameProfiles(_)
+            | OwnedArg::CommandTree(_) => Arg::Simple(String::new()),
         })
     }
 
