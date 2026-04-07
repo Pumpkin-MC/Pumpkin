@@ -201,7 +201,7 @@ impl InterpolatedNoiseSampler {
         let upper_noise = OctavePerlinNoiseSampler::new(random, big_start, &big_amplitudes, true);
         let noise = OctavePerlinNoiseSampler::new(random, little_start, &little_amplitudes, true);
 
-        let max_value = lower_noise.get_total_amplitude(data.scaled_y_scale + 2.0);
+        let max_value = lower_noise.get_total_amplitude(data.scaled_y_scale * data.y_factor + 2.0);
 
         let fractions = array::from_fn(|index| {
             let mut o = 1.0;
@@ -236,15 +236,15 @@ impl NoiseFunctionComponentRange for InterpolatedNoiseSampler {
 
 impl StaticIndependentChunkNoiseFunctionComponentImpl for InterpolatedNoiseSampler {
     fn sample(&self, pos: &Vector3<i32>) -> f64 {
-        let d = pos.x as f64 * self.data.scaled_xz_scale;
-        let e = pos.y as f64 * self.data.scaled_y_scale;
-        let f = pos.z as f64 * self.data.scaled_xz_scale;
+        let d = pos.x as f64 * self.data.scaled_xz_scale * self.data.xz_factor;
+        let e = pos.y as f64 * self.data.scaled_y_scale * self.data.y_factor;
+        let f = pos.z as f64 * self.data.scaled_xz_scale * self.data.xz_factor;
 
         let g = d / self.data.xz_factor;
         let h = e / self.data.y_factor;
         let i = f / self.data.xz_factor;
 
-        let j = self.data.scaled_y_scale * self.data.smear_scale_multiplier;
+        let j = self.data.scaled_y_scale * self.data.y_factor * self.data.smear_scale_multiplier;
         let k = j / self.data.y_factor;
 
         // It's ok the the fractions are more than this; zip will cut it short
