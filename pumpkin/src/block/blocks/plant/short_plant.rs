@@ -1,4 +1,4 @@
-use rand::RngExt;
+use rand::{rng, RngExt};
 use pumpkin_data::{Block, Enchantment};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -29,10 +29,19 @@ impl BlockBehaviour for ShortPlantBlock {
                 return;
             }
 
+            let _seed_number = 1;
+            if held.get_enchantment_level(&Enchantment::FORTUNE) == 1 {
+                let _seed_number = rng().random_range(1..=3);
+            } else if held.get_enchantment_level(&Enchantment::FORTUNE) == 2 {
+                let _seed_number = rng().random_range(1..=5);
+            } else if held.get_enchantment_level(&Enchantment::FORTUNE) == 3 {
+                let _seed_number = rng().random_range(1..=7);
+            }
+
             drop(held);
             if rand::rng().random_bool(0.125) {
                 _args.world
-                    .drop_stack(_args.position, ItemStack::new(1, &Item::WHEAT_SEEDS))
+                    .drop_stack(_args.position, ItemStack::new(_seed_number, &Item::WHEAT_SEEDS))
                     .await;
             }
 
