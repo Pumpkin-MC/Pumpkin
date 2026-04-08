@@ -87,10 +87,10 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
-        Ok(server
+        server
             .get_player_by_name(&name)
             .map(|player| self.add_player(player))
-            .transpose()?)
+            .transpose()
     }
 
     async fn get_player_by_uuid(
@@ -107,10 +107,10 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
-        Ok(server
+        server
             .get_player_by_uuid(uuid)
             .map(|player| self.add_player(player))
-            .transpose()?)
+            .transpose()
     }
 
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
