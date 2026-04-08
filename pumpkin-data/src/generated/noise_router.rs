@@ -5,6 +5,10 @@ pub struct NoiseData {
     pub xz_scale: f64,
     pub y_scale: f64,
 }
+pub struct FindTopSurfaceData {
+    pub lower_bound: i32,
+    pub cell_height: i32,
+}
 pub struct ShiftedNoiseData {
     pub xz_scale: f64,
     pub y_scale: f64,
@@ -106,6 +110,7 @@ pub enum UnaryOperation {
     HalfNegative,
     QuarterNegative,
     Squeeze,
+    Invert,
 }
 pub struct UnaryData {
     pub operation: UnaryOperation,
@@ -134,6 +139,13 @@ impl UnaryData {
             UnaryOperation::Squeeze => {
                 let clamped = density.clamp(-1.0, 1.0);
                 clamped / 2.0 - clamped * clamped * clamped / 24.0
+            }
+            UnaryOperation::Invert => {
+                if density == 0.0 {
+                    f64::INFINITY
+                } else {
+                    1.0 / density
+                }
             }
         }
     }
@@ -180,6 +192,11 @@ pub enum BaseNoiseFunctionComponent {
     BlendOffset,
     BlendDensity {
         input_index: usize,
+    },
+    FindTopSurface {
+        density_index: usize,
+        upper_bound_index: usize,
+        data: &'static FindTopSurfaceData,
     },
     EndIslands,
     Noise {
@@ -274,6 +291,10 @@ pub struct BaseNoiseRouters {
 pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
     noise: BaseNoiseRouter {
         full_component_stack: &[
+            BaseNoiseFunctionComponent::Constant { value: 0.64f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: 0.1171875f64,
+            },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
                     from_y: -64f64,
@@ -281,6 +302,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     from_value: 0f64,
                     to_value: 1f64,
                 },
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.1171875f64,
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.078125f64,
             },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
@@ -290,6 +317,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     to_value: 0f64,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 0.078125f64 },
+            BaseNoiseFunctionComponent::Constant { value: 4f64 },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
                     from_y: -64f64,
@@ -299,41 +328,46 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::BlendOffset,
+            BaseNoiseFunctionComponent::Constant { value: 1f64 },
+            BaseNoiseFunctionComponent::Constant { value: -1f64 },
             BaseNoiseFunctionComponent::BlendAlpha,
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 4usize,
+                input_index: 12usize,
                 wrapper: WrapperType::CacheOnce,
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 5usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -1f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 6usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 1f64,
-                },
-            },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 3usize,
-                argument2_index: 7usize,
+                argument1_index: 11usize,
+                argument2_index: 13usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 10usize,
+                argument2_index: 14usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 9usize,
+                argument2_index: 15usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.5037500262260437f64,
             },
             BaseNoiseFunctionComponent::ShiftA {
                 noise_id: DoublePerlinNoiseParameters::OFFSET,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 9usize,
+                input_index: 18usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 10usize,
+                input_index: 19usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
@@ -341,17 +375,17 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 noise_id: DoublePerlinNoiseParameters::OFFSET,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 13usize,
+                input_index: 22usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 14usize,
+                input_index: 23usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
-                shift_x_index: 11usize,
-                shift_y_index: 12usize,
-                shift_z_index: 15usize,
+                shift_x_index: 20usize,
+                shift_y_index: 21usize,
+                shift_z_index: 24usize,
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
@@ -359,13 +393,13 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 16usize,
+                input_index: 25usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
-                shift_x_index: 11usize,
-                shift_y_index: 12usize,
-                shift_z_index: 15usize,
+                shift_x_index: 20usize,
+                shift_y_index: 21usize,
+                shift_z_index: 24usize,
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
@@ -373,13 +407,20 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 18usize,
+                input_index: 27usize,
                 wrapper: WrapperType::CacheFlat,
             },
+            BaseNoiseFunctionComponent::Constant { value: -3f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.3333333333333333f64,
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.6666666666666666f64,
+            },
             BaseNoiseFunctionComponent::ShiftedNoise {
-                shift_x_index: 11usize,
-                shift_y_index: 12usize,
-                shift_z_index: 15usize,
+                shift_x_index: 20usize,
+                shift_y_index: 21usize,
+                shift_z_index: 24usize,
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
@@ -387,45 +428,45 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 20usize,
+                input_index: 32usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 21usize,
+                input_index: 33usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 22usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.6666666666666666f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 31usize,
+                argument2_index: 34usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 23usize,
+                input_index: 35usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 24usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.3333333333333333f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 30usize,
+                argument2_index: 36usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 25usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -3f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 29usize,
+                argument2_index: 37usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Spline {
                 spline: &SplineRepr::Standard {
-                    location_function_index: 17usize,
+                    location_function_index: 26usize,
                     points: &[
                         SplinePoint {
                             location: -1.1f32,
@@ -455,12 +496,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.16f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -483,7 +524,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -506,7 +547,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -551,7 +592,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -587,7 +628,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -623,7 +664,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -657,7 +698,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -695,12 +736,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.15f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -723,7 +764,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -746,7 +787,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -791,7 +832,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -827,7 +868,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -863,7 +904,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -897,7 +938,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -935,12 +976,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.1f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -963,7 +1004,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -986,7 +1027,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1031,7 +1072,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1067,7 +1108,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1103,7 +1144,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1137,7 +1178,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1175,12 +1216,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 0.25f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1208,7 +1249,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1234,7 +1275,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1262,7 +1303,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1298,7 +1339,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1336,7 +1377,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1370,7 +1411,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1404,7 +1445,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1414,7 +1455,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 38usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -1467,7 +1508,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1477,7 +1518,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 38usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -1530,7 +1571,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.58f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1564,7 +1605,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1602,12 +1643,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 1f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1635,7 +1676,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1661,7 +1702,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1687,7 +1728,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1721,7 +1762,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1755,7 +1796,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1789,7 +1830,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1823,7 +1864,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1833,7 +1874,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 38usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -1886,7 +1927,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1896,7 +1937,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 38usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -1949,7 +1990,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.58f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -1983,7 +2024,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -2021,45 +2062,46 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     ],
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 27usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.5037500262260437f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 17usize,
+                argument2_index: 39usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 28usize,
-                argument2_index: 5usize,
+                argument1_index: 40usize,
+                argument2_index: 13usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 8usize,
-                argument2_index: 29usize,
+                argument1_index: 16usize,
+                argument2_index: 41usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 30usize,
+                input_index: 42usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 31usize,
+                input_index: 43usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 2usize,
-                argument2_index: 32usize,
+                argument1_index: 8usize,
+                argument2_index: 44usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: -0f64 },
             BaseNoiseFunctionComponent::Spline {
                 spline: &SplineRepr::Standard {
-                    location_function_index: 17usize,
+                    location_function_index: 26usize,
                     points: &[
                         SplinePoint {
                             location: -0.11f32,
@@ -2069,12 +2111,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 0.03f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.19999999f32,
@@ -2089,7 +2131,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: 1f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.01f32,
@@ -2116,7 +2158,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.78f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.19999999f32,
@@ -2131,7 +2173,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: 1f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.01f32,
@@ -2158,7 +2200,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5775f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.19999999f32,
@@ -2173,7 +2215,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: 1f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.01f32,
@@ -2209,12 +2251,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 0.65f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.19999999f32,
@@ -2224,7 +2266,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: 0.44999996f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.01f32,
@@ -2247,7 +2289,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: 1f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.01f32,
@@ -2274,7 +2316,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.78f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.19999999f32,
@@ -2289,7 +2331,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: 1f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.01f32,
@@ -2316,7 +2358,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5775f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.19999999f32,
@@ -2331,7 +2373,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: 1f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.01f32,
@@ -2367,33 +2409,33 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     ],
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 34usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 46usize,
+                argument2_index: 47usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 4usize,
-                argument2_index: 35usize,
+                argument1_index: 12usize,
+                argument2_index: 48usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 36usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 21usize,
+                argument2_index: 49usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 37usize,
+                input_index: 50usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 38usize,
+                input_index: 51usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Noise {
@@ -2404,28 +2446,30 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 40usize,
+                input_index: 53usize,
                 data: &UnaryData {
                     operation: UnaryOperation::HalfNegative,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 39usize,
-                argument2_index: 41usize,
+                argument1_index: 52usize,
+                argument2_index: 54usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 33usize,
-                argument2_index: 42usize,
+                argument1_index: 45usize,
+                argument2_index: 55usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 10f64 },
+            BaseNoiseFunctionComponent::Constant { value: -10f64 },
             BaseNoiseFunctionComponent::Spline {
                 spline: &SplineRepr::Standard {
-                    location_function_index: 17usize,
+                    location_function_index: 26usize,
                     points: &[
                         SplinePoint {
                             location: -0.19f32,
@@ -2435,12 +2479,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.15f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.6f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2459,7 +2503,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -2478,7 +2522,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2497,7 +2541,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.25f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2516,7 +2560,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -2535,7 +2579,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.03f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2559,7 +2603,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -2569,7 +2613,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -2596,7 +2640,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -2606,7 +2650,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -2642,12 +2686,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.1f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.6f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2666,7 +2710,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -2685,7 +2729,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2704,7 +2748,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.25f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2723,7 +2767,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -2742,7 +2786,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.03f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2766,7 +2810,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -2776,7 +2820,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -2803,7 +2847,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -2813,7 +2857,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -2849,12 +2893,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 0.03f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.6f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2873,7 +2917,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -2892,7 +2936,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2911,7 +2955,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.25f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2930,7 +2974,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -2949,7 +2993,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.03f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -2973,7 +3017,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -2983,7 +3027,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -3010,7 +3054,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -3020,7 +3064,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -3056,12 +3100,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 0.06f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 28usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.6f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -3080,7 +3124,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -3099,7 +3143,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -3118,7 +3162,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.25f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -3137,7 +3181,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -3156,7 +3200,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.03f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 33usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -3175,12 +3219,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.05f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.45f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.2f32,
@@ -3212,12 +3256,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.45f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.2f32,
@@ -3249,12 +3293,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.7f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.2f32,
@@ -3286,12 +3330,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 38usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.7f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 33usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.2f32,
@@ -3332,71 +3376,73 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     ],
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 44usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -10f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 58usize,
+                argument2_index: 59usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 4usize,
-                argument2_index: 45usize,
+                argument1_index: 12usize,
+                argument2_index: 60usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 46usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 10f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 57usize,
+                argument2_index: 61usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 47usize,
+                input_index: 62usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 48usize,
+                input_index: 63usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 43usize,
-                argument2_index: 49usize,
+                argument1_index: 56usize,
+                argument2_index: 64usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 50usize,
+                input_index: 65usize,
                 data: &UnaryData {
                     operation: UnaryOperation::QuarterNegative,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 51usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 4f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 7usize,
+                argument2_index: 66usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                 data: &InterpolatedNoiseSamplerData {
-                    scaled_xz_scale: 171.103f64,
-                    scaled_y_scale: 85.5515f64,
+                    scaled_xz_scale: 0.25f64,
+                    scaled_y_scale: 0.25f64,
                     xz_factor: 80f64,
                     y_factor: 160f64,
                     smear_scale_multiplier: 8f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 52usize,
-                argument2_index: 53usize,
+                argument1_index: 67usize,
+                argument2_index: 68usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 5f64 },
+            BaseNoiseFunctionComponent::Constant { value: 0.37f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::CAVE_ENTRANCE,
@@ -3404,11 +3450,11 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 0.5f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 55usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.37f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 71usize,
+                argument2_index: 72usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::ClampedYGradient {
@@ -3420,12 +3466,13 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 56usize,
-                argument2_index: 57usize,
+                argument1_index: 73usize,
+                argument2_index: 74usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: -0.05f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_ROUGHNESS_MODULATOR,
@@ -3433,20 +3480,21 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 1f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 59usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -0.05f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 76usize,
+                argument2_index: 77usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 60usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.05f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 76usize,
+                argument2_index: 78usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: -0.4f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_ROUGHNESS,
@@ -3455,27 +3503,27 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 62usize,
+                input_index: 81usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 63usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.4f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 80usize,
+                argument2_index: 82usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 61usize,
-                argument2_index: 64usize,
+                argument1_index: 79usize,
+                argument2_index: 83usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 65usize,
+                input_index: 84usize,
                 wrapper: WrapperType::CacheOnce,
             },
             BaseNoiseFunctionComponent::Noise {
@@ -3486,29 +3534,33 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 67usize,
+                input_index: 86usize,
                 wrapper: WrapperType::CacheOnce,
             },
             BaseNoiseFunctionComponent::WeirdScaled {
-                input_index: 68usize,
+                input_index: 87usize,
                 data: &WeirdScaledData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_1,
                     mapper: WeirdScaledMapper::Tunnels,
                 },
             },
             BaseNoiseFunctionComponent::WeirdScaled {
-                input_index: 68usize,
+                input_index: 87usize,
                 data: &WeirdScaledData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_3D_2,
                     mapper: WeirdScaledMapper::Tunnels,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 69usize,
-                argument2_index: 70usize,
+                argument1_index: 88usize,
+                argument2_index: 89usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Max,
                 },
+            },
+            BaseNoiseFunctionComponent::Constant { value: -0.0765f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.011499999999999996f64,
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
@@ -3517,62 +3569,62 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 1f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 72usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -0.011499999999999996f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 73usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.0765f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 92usize,
+                argument2_index: 93usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 71usize,
-                argument2_index: 74usize,
+                argument1_index: 91usize,
+                argument2_index: 94usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 90usize,
+                argument2_index: 95usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Clamp {
-                input_index: 75usize,
+                input_index: 96usize,
                 data: &ClampData {
                     min_value: -1f64,
                     max_value: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 66usize,
-                argument2_index: 76usize,
+                argument1_index: 85usize,
+                argument2_index: 97usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 58usize,
-                argument2_index: 77usize,
+                argument1_index: 75usize,
+                argument2_index: 98usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Min,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 78usize,
+                input_index: 99usize,
                 wrapper: WrapperType::CacheOnce,
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 79usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 5f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 70usize,
+                argument2_index: 100usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 54usize,
-                argument2_index: 80usize,
+                argument1_index: 69usize,
+                argument2_index: 101usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Min,
                 },
@@ -3585,18 +3637,19 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 82usize,
+                input_index: 103usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Square,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 83usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 4f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 7usize,
+                argument2_index: 104usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 0.27f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::CAVE_CHEESE,
@@ -3604,58 +3657,60 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 0.6666666666666666f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 85usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.27f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 106usize,
+                argument2_index: 107usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Clamp {
-                input_index: 86usize,
+                input_index: 108usize,
                 data: &ClampData {
                     min_value: -1f64,
                     max_value: 1f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 54usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -0.64f64,
+            BaseNoiseFunctionComponent::Constant { value: 1.5f64 },
+            BaseNoiseFunctionComponent::Constant { value: -0.64f64 },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 111usize,
+                argument2_index: 69usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 88usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 1.5f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 110usize,
+                argument2_index: 112usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Clamp {
-                input_index: 89usize,
+                input_index: 113usize,
                 data: &ClampData {
                     min_value: 0f64,
                     max_value: 0.5f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 87usize,
-                argument2_index: 90usize,
+                argument1_index: 109usize,
+                argument2_index: 114usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 84usize,
-                argument2_index: 91usize,
+                argument1_index: 105usize,
+                argument2_index: 115usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 92usize,
-                argument2_index: 79usize,
+                argument1_index: 116usize,
+                argument2_index: 100usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Min,
                 },
@@ -3668,11 +3723,16 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::WeirdScaled {
-                input_index: 94usize,
+                input_index: 118usize,
                 data: &WeirdScaledData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D,
                     mapper: WeirdScaledMapper::Caves,
                 },
+            },
+            BaseNoiseFunctionComponent::Constant { value: 0.083f64 },
+            BaseNoiseFunctionComponent::Constant { value: -0.95f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.35000000000000003f64,
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
@@ -3681,38 +3741,39 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 1f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 96usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -0.35000000000000003f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 97usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.95f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Wrapper {
-                input_index: 98usize,
-                wrapper: WrapperType::CacheOnce,
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 99usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 0.083f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 122usize,
+                argument2_index: 123usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 95usize,
-                argument2_index: 100usize,
+                argument1_index: 121usize,
+                argument2_index: 124usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
+            BaseNoiseFunctionComponent::Wrapper {
+                input_index: 125usize,
+                wrapper: WrapperType::CacheOnce,
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 120usize,
+                argument2_index: 126usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 119usize,
+                argument2_index: 127usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Constant { value: 8f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::SPAGHETTI_2D_ELEVATION,
@@ -3720,18 +3781,18 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 0f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 102usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 8f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 129usize,
+                argument2_index: 130usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 103usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 21usize,
+                argument2_index: 131usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::ClampedYGradient {
@@ -3743,59 +3804,60 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 104usize,
-                argument2_index: 105usize,
+                argument1_index: 132usize,
+                argument2_index: 133usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 106usize,
+                input_index: 134usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 107usize,
-                argument2_index: 99usize,
+                argument1_index: 135usize,
+                argument2_index: 126usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 108usize,
+                input_index: 136usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Cube,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 101usize,
-                argument2_index: 109usize,
+                argument1_index: 128usize,
+                argument2_index: 137usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Max,
                 },
             },
             BaseNoiseFunctionComponent::Clamp {
-                input_index: 110usize,
+                input_index: 138usize,
                 data: &ClampData {
                     min_value: -1f64,
                     max_value: 1f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 111usize,
-                argument2_index: 66usize,
+                argument1_index: 139usize,
+                argument2_index: 85usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 93usize,
-                argument2_index: 112usize,
+                argument1_index: 117usize,
+                argument2_index: 140usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Min,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 2f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::PILLAR,
@@ -3803,11 +3865,11 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 0.3f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 114usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 2f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 142usize,
+                argument2_index: 143usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
@@ -3817,27 +3879,28 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 1f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 116usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -1f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 117usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -1f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 11usize,
+                argument2_index: 145usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 115usize,
-                argument2_index: 118usize,
+                argument1_index: 11usize,
+                argument2_index: 146usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 144usize,
+                argument2_index: 147usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Constant { value: 0.55f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::PILLAR_THICKNESS,
@@ -3845,121 +3908,121 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 1f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 120usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 0.55f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 149usize,
+                argument2_index: 150usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 121usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.55f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 149usize,
+                argument2_index: 151usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 122usize,
+                input_index: 152usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Cube,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 119usize,
-                argument2_index: 123usize,
+                argument1_index: 148usize,
+                argument2_index: 153usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 124usize,
+                input_index: 154usize,
                 wrapper: WrapperType::CacheOnce,
             },
             BaseNoiseFunctionComponent::Constant { value: -1000000f64 },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 125usize,
-                when_in_range_index: 126usize,
-                when_out_range_index: 125usize,
+                input_index: 155usize,
+                when_in_range_index: 156usize,
+                when_out_range_index: 155usize,
                 data: &RangeChoiceData {
                     min_inclusive: -1000000f64,
                     max_exclusive: 0.03f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 113usize,
-                argument2_index: 127usize,
+                argument1_index: 141usize,
+                argument2_index: 157usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Max,
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 54usize,
-                when_in_range_index: 81usize,
-                when_out_range_index: 128usize,
+                input_index: 69usize,
+                when_in_range_index: 102usize,
+                when_out_range_index: 158usize,
                 data: &RangeChoiceData {
                     min_inclusive: -1000000f64,
                     max_exclusive: 1.5625f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 129usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.078125f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 6usize,
+                argument2_index: 159usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 5usize,
+                argument2_index: 160usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 4usize,
+                argument2_index: 161usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 3usize,
+                argument2_index: 162usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 2usize,
+                argument2_index: 163usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 1usize,
-                argument2_index: 130usize,
+                argument2_index: 164usize,
                 data: &BinaryData {
-                    operation: BinaryOperation::Mul,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 131usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.078125f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 132usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.1171875f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Binary {
-                argument1_index: 0usize,
-                argument2_index: 133usize,
-                data: &BinaryData {
-                    operation: BinaryOperation::Mul,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 134usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.1171875f64,
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::BlendDensity {
-                input_index: 135usize,
+                input_index: 165usize,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 136usize,
+                input_index: 166usize,
                 wrapper: WrapperType::Interpolated,
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 137usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 0.64f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 0usize,
+                argument2_index: 167usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 138usize,
+                input_index: 168usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Squeeze,
                 },
@@ -3979,21 +4042,24 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 1f64,
                 },
             },
-            BaseNoiseFunctionComponent::Constant { value: -1f64 },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 140usize,
-                when_in_range_index: 141usize,
-                when_out_range_index: 142usize,
+                input_index: 170usize,
+                when_in_range_index: 171usize,
+                when_out_range_index: 11usize,
                 data: &RangeChoiceData {
                     min_inclusive: -60f64,
                     max_exclusive: 321f64,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 143usize,
+                input_index: 172usize,
                 wrapper: WrapperType::Interpolated,
             },
             BaseNoiseFunctionComponent::Constant { value: 64f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.07500000000000001f64,
+            },
+            BaseNoiseFunctionComponent::Constant { value: -0.025f64 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::NOODLE_THICKNESS,
@@ -4001,31 +4067,31 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 1f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 146usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -0.025f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 176usize,
+                argument2_index: 177usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 147usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.07500000000000001f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 175usize,
+                argument2_index: 178usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 140usize,
-                when_in_range_index: 148usize,
-                when_out_range_index: 12usize,
+                input_index: 170usize,
+                when_in_range_index: 179usize,
+                when_out_range_index: 21usize,
                 data: &RangeChoiceData {
                     min_inclusive: -60f64,
                     max_exclusive: 321f64,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 149usize,
+                input_index: 180usize,
                 wrapper: WrapperType::Interpolated,
             },
             BaseNoiseFunctionComponent::Noise {
@@ -4036,20 +4102,20 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 140usize,
-                when_in_range_index: 151usize,
-                when_out_range_index: 12usize,
+                input_index: 170usize,
+                when_in_range_index: 182usize,
+                when_out_range_index: 21usize,
                 data: &RangeChoiceData {
                     min_inclusive: -60f64,
                     max_exclusive: 321f64,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 152usize,
+                input_index: 183usize,
                 wrapper: WrapperType::Interpolated,
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 153usize,
+                input_index: 184usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
@@ -4062,71 +4128,71 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 140usize,
-                when_in_range_index: 155usize,
-                when_out_range_index: 12usize,
+                input_index: 170usize,
+                when_in_range_index: 186usize,
+                when_out_range_index: 21usize,
                 data: &RangeChoiceData {
                     min_inclusive: -60f64,
                     max_exclusive: 321f64,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 156usize,
+                input_index: 187usize,
                 wrapper: WrapperType::Interpolated,
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 157usize,
+                input_index: 188usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 154usize,
-                argument2_index: 158usize,
+                argument1_index: 185usize,
+                argument2_index: 189usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Max,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 159usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 1.5f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 110usize,
+                argument2_index: 190usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 150usize,
-                argument2_index: 160usize,
+                argument1_index: 181usize,
+                argument2_index: 191usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 144usize,
-                when_in_range_index: 145usize,
-                when_out_range_index: 161usize,
+                input_index: 173usize,
+                when_in_range_index: 174usize,
+                when_out_range_index: 192usize,
                 data: &RangeChoiceData {
                     min_inclusive: -1000000f64,
                     max_exclusive: 0f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 139usize,
-                argument2_index: 162usize,
+                argument1_index: 169usize,
+                argument2_index: 193usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Min,
                 },
             },
             BaseNoiseFunctionComponent::Beardifier,
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 163usize,
-                argument2_index: 164usize,
+                argument1_index: 194usize,
+                argument2_index: 195usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 165usize,
+                input_index: 196usize,
                 wrapper: WrapperType::CellCache,
             },
             BaseNoiseFunctionComponent::Noise {
@@ -4165,17 +4231,20 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 140usize,
-                when_in_range_index: 171usize,
-                when_out_range_index: 12usize,
+                input_index: 170usize,
+                when_in_range_index: 202usize,
+                when_out_range_index: 21usize,
                 data: &RangeChoiceData {
                     min_inclusive: -60f64,
                     max_exclusive: 51f64,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 172usize,
+                input_index: 203usize,
                 wrapper: WrapperType::Interpolated,
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.07999999821186066f64,
             },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
@@ -4185,20 +4254,20 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 140usize,
-                when_in_range_index: 174usize,
-                when_out_range_index: 12usize,
+                input_index: 170usize,
+                when_in_range_index: 206usize,
+                when_out_range_index: 21usize,
                 data: &RangeChoiceData {
                     min_inclusive: -60f64,
                     max_exclusive: 51f64,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 175usize,
+                input_index: 207usize,
                 wrapper: WrapperType::Interpolated,
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 176usize,
+                input_index: 208usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
@@ -4211,36 +4280,36 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 140usize,
-                when_in_range_index: 178usize,
-                when_out_range_index: 12usize,
+                input_index: 170usize,
+                when_in_range_index: 210usize,
+                when_out_range_index: 21usize,
                 data: &RangeChoiceData {
                     min_inclusive: -60f64,
                     max_exclusive: 51f64,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 179usize,
+                input_index: 211usize,
                 wrapper: WrapperType::Interpolated,
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 180usize,
+                input_index: 212usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 177usize,
-                argument2_index: 181usize,
+                argument1_index: 209usize,
+                argument2_index: 213usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Max,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 182usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.07999999821186066f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 205usize,
+                argument2_index: 214usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Noise {
@@ -4251,19 +4320,25 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
         ],
-        barrier_noise: 167usize,
-        fluid_level_floodedness_noise: 168usize,
-        fluid_level_spread_noise: 169usize,
-        lava_noise: 170usize,
-        erosion: 19usize,
-        depth: 33usize,
-        final_density: 166usize,
-        vein_toggle: 173usize,
-        vein_ridged: 183usize,
-        vein_gap: 184usize,
+        barrier_noise: 198usize,
+        fluid_level_floodedness_noise: 199usize,
+        fluid_level_spread_noise: 200usize,
+        lava_noise: 201usize,
+        erosion: 28usize,
+        depth: 45usize,
+        final_density: 197usize,
+        vein_toggle: 204usize,
+        vein_ridged: 215usize,
+        vein_gap: 216usize,
     },
     surface_estimator: BaseSurfaceEstimator {
         full_component_stack: &[
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.390625f64,
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: 0.1171875f64,
+            },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
                     from_y: -64f64,
@@ -4271,6 +4346,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     from_value: 0f64,
                     to_value: 1f64,
                 },
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.1171875f64,
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.078125f64,
             },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
@@ -4280,6 +4361,11 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     to_value: 0f64,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 0.078125f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.703125f64,
+            },
+            BaseNoiseFunctionComponent::Constant { value: 4f64 },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
                     from_y: -64f64,
@@ -4289,41 +4375,46 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::BlendOffset,
+            BaseNoiseFunctionComponent::Constant { value: 1f64 },
+            BaseNoiseFunctionComponent::Constant { value: -1f64 },
             BaseNoiseFunctionComponent::BlendAlpha,
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 4usize,
+                input_index: 13usize,
                 wrapper: WrapperType::CacheOnce,
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 5usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -1f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 6usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 1f64,
-                },
-            },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 3usize,
-                argument2_index: 7usize,
+                argument1_index: 12usize,
+                argument2_index: 14usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 11usize,
+                argument2_index: 15usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 10usize,
+                argument2_index: 16usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.5037500262260437f64,
             },
             BaseNoiseFunctionComponent::ShiftA {
                 noise_id: DoublePerlinNoiseParameters::OFFSET,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 9usize,
+                input_index: 19usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 10usize,
+                input_index: 20usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
@@ -4331,17 +4422,17 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 noise_id: DoublePerlinNoiseParameters::OFFSET,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 13usize,
+                input_index: 23usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 14usize,
+                input_index: 24usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
-                shift_x_index: 11usize,
-                shift_y_index: 12usize,
-                shift_z_index: 15usize,
+                shift_x_index: 21usize,
+                shift_y_index: 22usize,
+                shift_z_index: 25usize,
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
@@ -4349,13 +4440,13 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 16usize,
+                input_index: 26usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
-                shift_x_index: 11usize,
-                shift_y_index: 12usize,
-                shift_z_index: 15usize,
+                shift_x_index: 21usize,
+                shift_y_index: 22usize,
+                shift_z_index: 25usize,
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
@@ -4363,13 +4454,20 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 18usize,
+                input_index: 28usize,
                 wrapper: WrapperType::CacheFlat,
             },
+            BaseNoiseFunctionComponent::Constant { value: -3f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.3333333333333333f64,
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.6666666666666666f64,
+            },
             BaseNoiseFunctionComponent::ShiftedNoise {
-                shift_x_index: 11usize,
-                shift_y_index: 12usize,
-                shift_z_index: 15usize,
+                shift_x_index: 21usize,
+                shift_y_index: 22usize,
+                shift_z_index: 25usize,
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
@@ -4377,45 +4475,45 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 20usize,
+                input_index: 33usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 21usize,
+                input_index: 34usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 22usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.6666666666666666f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 32usize,
+                argument2_index: 35usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 23usize,
+                input_index: 36usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 24usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.3333333333333333f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 31usize,
+                argument2_index: 37usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 25usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -3f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 30usize,
+                argument2_index: 38usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Spline {
                 spline: &SplineRepr::Standard {
-                    location_function_index: 17usize,
+                    location_function_index: 27usize,
                     points: &[
                         SplinePoint {
                             location: -1.1f32,
@@ -4445,12 +4543,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.16f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4473,7 +4571,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4496,7 +4594,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4541,7 +4639,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4577,7 +4675,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4613,7 +4711,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4647,7 +4745,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4685,12 +4783,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.15f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4713,7 +4811,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4736,7 +4834,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4781,7 +4879,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4817,7 +4915,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4853,7 +4951,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4887,7 +4985,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4925,12 +5023,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.1f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4953,7 +5051,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -4976,7 +5074,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5021,7 +5119,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5057,7 +5155,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5093,7 +5191,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5127,7 +5225,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5165,12 +5263,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 0.25f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5198,7 +5296,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5224,7 +5322,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5252,7 +5350,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5288,7 +5386,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5326,7 +5424,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5360,7 +5458,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5394,7 +5492,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5404,7 +5502,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 39usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -5457,7 +5555,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5467,7 +5565,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 39usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -5520,7 +5618,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.58f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5554,7 +5652,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5592,12 +5690,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 1f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5625,7 +5723,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5651,7 +5749,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5677,7 +5775,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5711,7 +5809,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5745,7 +5843,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5779,7 +5877,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5813,7 +5911,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5823,7 +5921,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 39usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -5876,7 +5974,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5886,7 +5984,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 39usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -5939,7 +6037,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.58f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -5973,7 +6071,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -6011,45 +6109,51 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     ],
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 27usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.5037500262260437f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 18usize,
+                argument2_index: 40usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 28usize,
-                argument2_index: 5usize,
+                argument1_index: 41usize,
+                argument2_index: 14usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 8usize,
-                argument2_index: 29usize,
+                argument1_index: 17usize,
+                argument2_index: 42usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 30usize,
+                input_index: 43usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 31usize,
+                input_index: 44usize,
                 wrapper: WrapperType::CacheFlat,
             },
+            BaseNoiseFunctionComponent::Wrapper {
+                input_index: 45usize,
+                wrapper: WrapperType::Cache2D,
+            },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 2usize,
-                argument2_index: 32usize,
+                argument1_index: 9usize,
+                argument2_index: 46usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 10f64 },
+            BaseNoiseFunctionComponent::Constant { value: -10f64 },
             BaseNoiseFunctionComponent::Spline {
                 spline: &SplineRepr::Standard {
-                    location_function_index: 17usize,
+                    location_function_index: 27usize,
                     points: &[
                         SplinePoint {
                             location: -0.19f32,
@@ -6059,12 +6163,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.15f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.6f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6083,7 +6187,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -6102,7 +6206,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6121,7 +6225,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.25f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6140,7 +6244,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -6159,7 +6263,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.03f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6183,7 +6287,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -6193,7 +6297,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -6220,7 +6324,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -6230,7 +6334,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -6266,12 +6370,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: -0.1f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.6f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6290,7 +6394,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -6309,7 +6413,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6328,7 +6432,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.25f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6347,7 +6451,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -6366,7 +6470,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.03f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6390,7 +6494,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -6400,7 +6504,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -6427,7 +6531,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -6437,7 +6541,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -6473,12 +6577,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 0.03f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.6f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6497,7 +6601,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -6516,7 +6620,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6535,7 +6639,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.25f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6554,7 +6658,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -6573,7 +6677,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.03f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6597,7 +6701,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -6607,7 +6711,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -6634,7 +6738,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.9f32,
@@ -6644,7 +6748,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.69f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: 0f32,
@@ -6680,12 +6784,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                         SplinePoint {
                             location: 0.06f32,
                             value: &SplineRepr::Standard {
-                                location_function_index: 19usize,
+                                location_function_index: 29usize,
                                 points: &[
                                     SplinePoint {
                                         location: -0.6f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6704,7 +6808,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.5f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -6723,7 +6827,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6742,7 +6846,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.25f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6761,7 +6865,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.05f32,
@@ -6780,7 +6884,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.03f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 21usize,
+                                            location_function_index: 34usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.2f32,
@@ -6799,12 +6903,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.05f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.45f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.2f32,
@@ -6836,12 +6940,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: 0.45f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.2f32,
@@ -6873,12 +6977,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.7f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.2f32,
@@ -6910,12 +7014,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 39usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -0.7f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 21usize,
+                                                        location_function_index: 34usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -0.2f32,
@@ -6956,113 +7060,181 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     ],
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 34usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -10f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 49usize,
+                argument2_index: 50usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 4usize,
-                argument2_index: 35usize,
+                argument1_index: 13usize,
+                argument2_index: 51usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 36usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 10f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 48usize,
+                argument2_index: 52usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 37usize,
+                input_index: 53usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 38usize,
+                input_index: 54usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 39usize,
+                input_index: 55usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 33usize,
-                argument2_index: 40usize,
+                argument1_index: 47usize,
+                argument2_index: 56usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 41usize,
+                input_index: 57usize,
                 data: &UnaryData {
                     operation: UnaryOperation::QuarterNegative,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 42usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 4f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 8usize,
+                argument2_index: 58usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 43usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.703125f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 7usize,
+                argument2_index: 59usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Clamp {
-                input_index: 44usize,
+                input_index: 60usize,
                 data: &ClampData {
                     min_value: -64f64,
                     max_value: 64f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 45usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.078125f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 6usize,
+                argument2_index: 61usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 5usize,
+                argument2_index: 62usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 4usize,
+                argument2_index: 63usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 3usize,
+                argument2_index: 64usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 2usize,
+                argument2_index: 65usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 1usize,
+                argument2_index: 66usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 0usize,
+                argument2_index: 67usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Constant { value: 128f64 },
+            BaseNoiseFunctionComponent::Constant { value: -128f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: 0.2734375f64,
+            },
+            BaseNoiseFunctionComponent::Unary {
+                input_index: 56usize,
+                data: &UnaryData {
+                    operation: UnaryOperation::Invert,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 71usize,
+                argument2_index: 72usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 12usize,
                 argument2_index: 46usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 47usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.078125f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 48usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.1171875f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 73usize,
+                argument2_index: 74usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 0usize,
-                argument2_index: 49usize,
+                argument1_index: 70usize,
+                argument2_index: 75usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 50usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.1171875f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 69usize,
+                argument2_index: 76usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Clamp {
+                input_index: 77usize,
+                data: &ClampData {
+                    min_value: -40f64,
+                    max_value: 320f64,
+                },
+            },
+            BaseNoiseFunctionComponent::FindTopSurface {
+                density_index: 68usize,
+                upper_bound_index: 78usize,
+                data: &FindTopSurfaceData {
+                    lower_bound: -64i32,
+                    cell_height: 8i32,
                 },
             },
         ],
@@ -7163,31 +7335,43 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 },
             },
             BaseNoiseFunctionComponent::BlendOffset,
+            BaseNoiseFunctionComponent::Constant { value: 1f64 },
+            BaseNoiseFunctionComponent::Constant { value: -1f64 },
             BaseNoiseFunctionComponent::BlendAlpha,
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 17usize,
+                input_index: 19usize,
                 wrapper: WrapperType::CacheOnce,
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 18usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -1f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 19usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 1f64,
-                },
-            },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 16usize,
+                argument1_index: 18usize,
                 argument2_index: 20usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 17usize,
+                argument2_index: 21usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 16usize,
+                argument2_index: 22usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.5037500262260437f64,
+            },
+            BaseNoiseFunctionComponent::Constant { value: -3f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.3333333333333333f64,
+            },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.6666666666666666f64,
             },
             BaseNoiseFunctionComponent::Unary {
                 input_index: 8usize,
@@ -7195,31 +7379,31 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     operation: UnaryOperation::Abs,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 22usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.6666666666666666f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 27usize,
+                argument2_index: 28usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 23usize,
+                input_index: 29usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 24usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.3333333333333333f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 26usize,
+                argument2_index: 30usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 25usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: -3f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 25usize,
+                argument2_index: 31usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Spline {
@@ -7259,7 +7443,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7282,7 +7466,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7305,7 +7489,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7350,7 +7534,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7386,7 +7570,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7422,7 +7606,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7456,7 +7640,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7499,7 +7683,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7522,7 +7706,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7545,7 +7729,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7590,7 +7774,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7626,7 +7810,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7662,7 +7846,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7696,7 +7880,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7739,7 +7923,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7762,7 +7946,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7785,7 +7969,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7830,7 +8014,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7866,7 +8050,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7902,7 +8086,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7936,7 +8120,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -7979,7 +8163,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8007,7 +8191,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8033,7 +8217,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8061,7 +8245,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8097,7 +8281,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8135,7 +8319,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8169,7 +8353,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8203,7 +8387,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8213,7 +8397,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 32usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -8266,7 +8450,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8276,7 +8460,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 32usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -8329,7 +8513,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.58f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8363,7 +8547,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8406,7 +8590,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.85f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8434,7 +8618,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8460,7 +8644,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8486,7 +8670,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.35f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8520,7 +8704,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: -0.1f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8554,7 +8738,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.2f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8588,7 +8772,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.4f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8622,7 +8806,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.45f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8632,7 +8816,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 32usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -8685,7 +8869,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.55f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8695,7 +8879,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                                 SplinePoint {
                                                     location: -0.4f32,
                                                     value: &SplineRepr::Standard {
-                                                        location_function_index: 26usize,
+                                                        location_function_index: 32usize,
                                                         points: &[
                                                             SplinePoint {
                                                                 location: -1f32,
@@ -8748,7 +8932,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.58f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8782,7 +8966,7 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                                     SplinePoint {
                                         location: 0.7f32,
                                         value: &SplineRepr::Standard {
-                                            location_function_index: 26usize,
+                                            location_function_index: 32usize,
                                             points: &[
                                                 SplinePoint {
                                                     location: -1f32,
@@ -8820,38 +9004,38 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     ],
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 27usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.5037500262260437f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 24usize,
+                argument2_index: 33usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 28usize,
-                argument2_index: 18usize,
+                argument1_index: 34usize,
+                argument2_index: 20usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 21usize,
-                argument2_index: 29usize,
+                argument1_index: 23usize,
+                argument2_index: 35usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 30usize,
+                input_index: 36usize,
                 wrapper: WrapperType::Cache2D,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 31usize,
+                input_index: 37usize,
                 wrapper: WrapperType::CacheFlat,
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 15usize,
-                argument2_index: 32usize,
+                argument2_index: 38usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
@@ -8861,13 +9045,15 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
         vegetation: 10usize,
         continents: 12usize,
         erosion: 14usize,
-        depth: 33usize,
+        depth: 39usize,
         ridges: 8usize,
     },
 };
 pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
     noise: BaseNoiseRouter {
         full_component_stack: &[
+            BaseNoiseFunctionComponent::Constant { value: 0.64f64 },
+            BaseNoiseFunctionComponent::Constant { value: 2.5f64 },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
                     from_y: -8f64,
@@ -8876,6 +9062,8 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     to_value: 1f64,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: -2.5f64 },
+            BaseNoiseFunctionComponent::Constant { value: 0.9375f64 },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
                     from_y: 104f64,
@@ -8884,101 +9072,102 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     to_value: 0f64,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: -0.9375f64 },
             BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                 data: &InterpolatedNoiseSamplerData {
-                    scaled_xz_scale: 171.103f64,
-                    scaled_y_scale: 256.6545f64,
+                    scaled_xz_scale: 0.25f64,
+                    scaled_y_scale: 0.28125f64,
                     xz_factor: 80f64,
                     y_factor: 60f64,
                     smear_scale_multiplier: 8f64,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 2usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.9375f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 6usize,
+                argument2_index: 7usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 5usize,
+                argument2_index: 8usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 4usize,
+                argument2_index: 9usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 3usize,
+                argument2_index: 10usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 2usize,
+                argument2_index: 11usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 1usize,
-                argument2_index: 3usize,
+                argument2_index: 12usize,
                 data: &BinaryData {
-                    operation: BinaryOperation::Mul,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 4usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.9375f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 5usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -2.5f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Binary {
-                argument1_index: 0usize,
-                argument2_index: 6usize,
-                data: &BinaryData {
-                    operation: BinaryOperation::Mul,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 7usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 2.5f64,
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::BlendDensity {
-                input_index: 8usize,
+                input_index: 13usize,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 9usize,
+                input_index: 14usize,
                 wrapper: WrapperType::Interpolated,
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 10usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 0.64f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 0usize,
+                argument2_index: 15usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 11usize,
+                input_index: 16usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Squeeze,
                 },
             },
             BaseNoiseFunctionComponent::Beardifier,
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 12usize,
-                argument2_index: 13usize,
+                argument1_index: 17usize,
+                argument2_index: 18usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 14usize,
+                input_index: 19usize,
                 wrapper: WrapperType::CellCache,
             },
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
         ],
-        barrier_noise: 16usize,
-        fluid_level_floodedness_noise: 16usize,
-        fluid_level_spread_noise: 16usize,
-        lava_noise: 16usize,
-        erosion: 16usize,
-        depth: 16usize,
-        final_density: 15usize,
-        vein_toggle: 16usize,
-        vein_ridged: 16usize,
-        vein_gap: 16usize,
+        barrier_noise: 21usize,
+        fluid_level_floodedness_noise: 21usize,
+        fluid_level_spread_noise: 21usize,
+        lava_noise: 21usize,
+        erosion: 21usize,
+        depth: 21usize,
+        final_density: 20usize,
+        vein_toggle: 21usize,
+        vein_ridged: 21usize,
+        vein_gap: 21usize,
     },
     surface_estimator: BaseSurfaceEstimator {
         full_component_stack: &[BaseNoiseFunctionComponent::Constant { value: 0f64 }],
@@ -8986,51 +9175,29 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
     multi_noise: BaseMultiNoiseRouter {
         full_component_stack: &[
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
-            BaseNoiseFunctionComponent::ShiftA {
-                noise_id: DoublePerlinNoiseParameters::OFFSET,
-            },
-            BaseNoiseFunctionComponent::Wrapper {
-                input_index: 1usize,
-                wrapper: WrapperType::Cache2D,
-            },
-            BaseNoiseFunctionComponent::Wrapper {
-                input_index: 2usize,
-                wrapper: WrapperType::CacheFlat,
-            },
-            BaseNoiseFunctionComponent::ShiftB {
-                noise_id: DoublePerlinNoiseParameters::OFFSET,
-            },
-            BaseNoiseFunctionComponent::Wrapper {
-                input_index: 4usize,
-                wrapper: WrapperType::Cache2D,
-            },
-            BaseNoiseFunctionComponent::Wrapper {
-                input_index: 5usize,
-                wrapper: WrapperType::CacheFlat,
-            },
             BaseNoiseFunctionComponent::ShiftedNoise {
-                shift_x_index: 3usize,
+                shift_x_index: 0usize,
                 shift_y_index: 0usize,
-                shift_z_index: 6usize,
+                shift_z_index: 0usize,
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: DoublePerlinNoiseParameters::TEMPERATURE,
+                    noise_id: DoublePerlinNoiseParameters::NETHER_TEMPERATURE,
                 },
             },
             BaseNoiseFunctionComponent::ShiftedNoise {
-                shift_x_index: 3usize,
+                shift_x_index: 0usize,
                 shift_y_index: 0usize,
-                shift_z_index: 6usize,
+                shift_z_index: 0usize,
                 data: &ShiftedNoiseData {
                     xz_scale: 0.25f64,
                     y_scale: 0f64,
-                    noise_id: DoublePerlinNoiseParameters::VEGETATION,
+                    noise_id: DoublePerlinNoiseParameters::NETHER_VEGETATION,
                 },
             },
         ],
-        temperature: 7usize,
-        vegetation: 8usize,
+        temperature: 1usize,
+        vegetation: 2usize,
         continents: 0usize,
         erosion: 0usize,
         depth: 0usize,
@@ -9040,6 +9207,10 @@ pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
 pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
     noise: BaseNoiseRouter {
         full_component_stack: &[
+            BaseNoiseFunctionComponent::Constant { value: 0.64f64 },
+            BaseNoiseFunctionComponent::Constant {
+                value: -0.234375f64,
+            },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
                     from_y: 4f64,
@@ -9048,6 +9219,8 @@ pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     to_value: 1f64,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 0.234375f64 },
+            BaseNoiseFunctionComponent::Constant { value: -23.4375f64 },
             BaseNoiseFunctionComponent::ClampedYGradient {
                 data: &ClampedYGradientData {
                     from_y: 56f64,
@@ -9056,175 +9229,105 @@ pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     to_value: 0f64,
                 },
             },
+            BaseNoiseFunctionComponent::Constant { value: 23.4375f64 },
             BaseNoiseFunctionComponent::EndIslands,
             BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                 data: &InterpolatedNoiseSamplerData {
-                    scaled_xz_scale: 171.103f64,
-                    scaled_y_scale: 171.103f64,
+                    scaled_xz_scale: 0.25f64,
+                    scaled_y_scale: 0.5f64,
                     xz_factor: 80f64,
                     y_factor: 160f64,
                     smear_scale_multiplier: 4f64,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 2usize,
-                argument2_index: 3usize,
+                argument1_index: 7usize,
+                argument2_index: 8usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Add,
                 },
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 4usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 23.4375f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 6usize,
+                argument2_index: 9usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 5usize,
+                argument2_index: 10usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 4usize,
+                argument2_index: 11usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 3usize,
+                argument2_index: 12usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Add,
+                },
+            },
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 2usize,
+                argument2_index: 13usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
                 argument1_index: 1usize,
-                argument2_index: 5usize,
+                argument2_index: 14usize,
                 data: &BinaryData {
-                    operation: BinaryOperation::Mul,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 6usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -23.4375f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 7usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.234375f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Binary {
-                argument1_index: 0usize,
-                argument2_index: 8usize,
-                data: &BinaryData {
-                    operation: BinaryOperation::Mul,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 9usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.234375f64,
+                    operation: BinaryOperation::Add,
                 },
             },
             BaseNoiseFunctionComponent::BlendDensity {
-                input_index: 10usize,
+                input_index: 15usize,
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 11usize,
+                input_index: 16usize,
                 wrapper: WrapperType::Interpolated,
             },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 12usize,
-                data: &LinearData {
-                    operation: LinearOperation::Mul,
-                    argument: 0.64f64,
+            BaseNoiseFunctionComponent::Binary {
+                argument1_index: 0usize,
+                argument2_index: 17usize,
+                data: &BinaryData {
+                    operation: BinaryOperation::Mul,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 13usize,
+                input_index: 18usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Squeeze,
                 },
             },
             BaseNoiseFunctionComponent::Constant { value: 0f64 },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 2usize,
+                input_index: 7usize,
                 wrapper: WrapperType::Cache2D,
             },
         ],
-        barrier_noise: 15usize,
-        fluid_level_floodedness_noise: 15usize,
-        fluid_level_spread_noise: 15usize,
-        lava_noise: 15usize,
-        erosion: 16usize,
-        depth: 15usize,
-        final_density: 14usize,
-        vein_toggle: 15usize,
-        vein_ridged: 15usize,
-        vein_gap: 15usize,
+        barrier_noise: 20usize,
+        fluid_level_floodedness_noise: 20usize,
+        fluid_level_spread_noise: 20usize,
+        lava_noise: 20usize,
+        erosion: 21usize,
+        depth: 20usize,
+        final_density: 19usize,
+        vein_toggle: 20usize,
+        vein_ridged: 20usize,
+        vein_gap: 20usize,
     },
     surface_estimator: BaseSurfaceEstimator {
-        full_component_stack: &[
-            BaseNoiseFunctionComponent::ClampedYGradient {
-                data: &ClampedYGradientData {
-                    from_y: 4f64,
-                    to_y: 32f64,
-                    from_value: 0f64,
-                    to_value: 1f64,
-                },
-            },
-            BaseNoiseFunctionComponent::ClampedYGradient {
-                data: &ClampedYGradientData {
-                    from_y: 56f64,
-                    to_y: 312f64,
-                    from_value: 1f64,
-                    to_value: 0f64,
-                },
-            },
-            BaseNoiseFunctionComponent::EndIslands,
-            BaseNoiseFunctionComponent::Wrapper {
-                input_index: 2usize,
-                wrapper: WrapperType::Cache2D,
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 3usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.703125f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 4usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 23.4375f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Binary {
-                argument1_index: 1usize,
-                argument2_index: 5usize,
-                data: &BinaryData {
-                    operation: BinaryOperation::Mul,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 6usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -23.4375f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 7usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: 0.234375f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Binary {
-                argument1_index: 0usize,
-                argument2_index: 8usize,
-                data: &BinaryData {
-                    operation: BinaryOperation::Mul,
-                },
-            },
-            BaseNoiseFunctionComponent::Linear {
-                input_index: 9usize,
-                data: &LinearData {
-                    operation: LinearOperation::Add,
-                    argument: -0.234375f64,
-                },
-            },
-        ],
+        full_component_stack: &[BaseNoiseFunctionComponent::Constant { value: 0f64 }],
     },
     multi_noise: BaseMultiNoiseRouter {
         full_component_stack: &[

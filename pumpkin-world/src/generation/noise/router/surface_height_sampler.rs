@@ -62,8 +62,6 @@ pub struct SurfaceHeightEstimateSampler<'a> {
 }
 
 impl<'a> SurfaceHeightEstimateSampler<'a> {
-    const NOTCHIAN_SAMPLE_CUTOFF: f64 = 0.390625;
-
     pub fn estimate_height(&mut self, block_x: i32, block_z: i32) -> i32 {
         let biome_aligned_x = biome_coords::to_block(biome_coords::from_block(block_x));
         let biome_aligned_z = biome_coords::to_block(biome_coords::from_block(block_z));
@@ -79,33 +77,15 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
     }
 
     fn calculate_height_estimate(&mut self, aligned_x: i32, aligned_z: i32) -> i32 {
-        let mut low = self.minimum_y;
-        let mut high = self.maximum_y;
-        let mut result = i32::MAX;
-
         let sample_options =
             ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
-
-        while low <= high {
-            let mid = low + ((high - low) / 2);
-            let stepped_mid = mid - (mid % self.y_level_step_count as i32);
-
-            let pos = Vector3::new(aligned_x, stepped_mid, aligned_z);
-            let density = ChunkNoiseFunctionComponent::sample_from_stack(
-                &mut self.component_stack,
-                &pos,
-                &sample_options,
-            );
-
-            if density > Self::NOTCHIAN_SAMPLE_CUTOFF {
-                result = stepped_mid;
-                low = stepped_mid + self.y_level_step_count as i32;
-            } else {
-                high = stepped_mid - self.y_level_step_count as i32;
-            }
-        }
-
-        result
+        let pos = Vector3::new(aligned_x, 0, aligned_z);
+        let surface_y = ChunkNoiseFunctionComponent::sample_from_stack(
+            &mut self.component_stack,
+            &pos,
+            &sample_options,
+        );
+        surface_y.floor() as i32
     }
 
     #[must_use]

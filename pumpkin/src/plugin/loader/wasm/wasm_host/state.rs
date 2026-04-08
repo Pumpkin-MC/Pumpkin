@@ -4,6 +4,7 @@ use std::{
 };
 
 use pumpkin_util::text::TextComponent;
+use tokio::sync::Mutex;
 use wasmtime::component::ResourceTable;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
@@ -16,9 +17,11 @@ use crate::{
     entity::player::Player,
     plugin::{
         Context,
+        api::gui::PluginGui,
         loader::wasm::wasm_host::{WasmPlugin, args::OwnedArg},
     },
     server::Server,
+    world::World,
 };
 
 pub struct WasmResource<T> {
@@ -28,6 +31,9 @@ pub struct WasmResource<T> {
 pub type ServerResource = WasmResource<Arc<Server>>;
 pub type ContextResource = WasmResource<Arc<Context>>;
 pub type PlayerResource = WasmResource<Arc<Player>>;
+pub type WorldResource = WasmResource<Arc<World>>;
+pub type ScoreboardResource = WasmResource<Arc<World>>;
+pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
 pub type TextComponentResource = WasmResource<TextComponent>;
 pub type CommandResource = WasmResource<CommandTree>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
@@ -82,6 +88,30 @@ impl PluginHostState {
         provider: Arc<Player>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(PlayerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_world<T>(
+        &mut self,
+        provider: Arc<World>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(WorldResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_scoreboard<T>(
+        &mut self,
+        provider: Arc<World>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(ScoreboardResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_gui<T>(
+        &mut self,
+        provider: Arc<Mutex<PluginGui>>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(GuiResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

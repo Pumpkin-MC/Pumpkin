@@ -26,7 +26,7 @@ impl ArgumentConsumer for TextComponentArgConsumer {
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop();
+        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
         let Some(s) = s_opt else {
             return Box::pin(async move { None });
@@ -61,11 +61,7 @@ impl FindArg<'_> for TextComponentArgConsumer {
 }
 
 fn parse_text_component(input: &str) -> Option<TextComponent> {
-    let result = serde_json::from_str(input);
-    if let Err(e) = result {
-        debug!("Failed to parse text component: {e}");
-        None
-    } else {
-        result.unwrap()
-    }
+    serde_json::from_str(input)
+        .map_err(|e| debug!("Failed to parse text component: {e}"))
+        .ok()
 }

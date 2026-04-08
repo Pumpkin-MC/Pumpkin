@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
@@ -12,39 +11,309 @@ use crate::plugin::loader::wasm::wasm_host::{
 };
 
 use pumpkin_util::text::{
+    TextComponent as InternalTextComponent,
     click::ClickEvent,
     color::{self, Color},
     hover::HoverEvent,
 };
 
-impl pumpkin::plugin::text::Host for PluginHostState {}
+// --- Trapping Helpers ---
+impl PluginHostState {
+    fn get_text_ref(
+        &self,
+        res: &Resource<TextComponent>,
+    ) -> wasmtime::Result<&TextComponentResource> {
+        self.resource_table
+            .get::<TextComponentResource>(&Resource::new_own(res.rep()))
+            .map_err(wasmtime::Error::from)
+    }
 
-// TODO - Change the pumpkin_util::text::TextComponent to use &mut self instead of self for the builder pattern.
-// right now we have to do a bunch of cloning due to the fact that the builder pattern doesn't accept &mut self.
-impl DowncastResourceExt<TextComponentResource> for Resource<TextComponent> {
+    fn get_text_mut(
+        &mut self,
+        res: &Resource<TextComponent>,
+    ) -> wasmtime::Result<&mut TextComponentResource> {
+        self.resource_table
+            .get_mut::<TextComponentResource>(&Resource::new_own(res.rep()))
+            .map_err(wasmtime::Error::from)
+    }
+
+    fn take_text(
+        &mut self,
+        res: &Resource<TextComponent>,
+    ) -> wasmtime::Result<TextComponentResource> {
+        self.resource_table
+            .delete::<TextComponentResource>(Resource::new_own(res.rep()))
+            .map_err(wasmtime::Error::from)
+    }
+}
+
+impl DowncastResourceExt<TextComponentResource> for wasmtime::component::Resource<TextComponent> {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a TextComponentResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid text-component resource handle")
-            .downcast_ref::<TextComponentResource>()
-            .expect("resource type mismatch")
+            .expect("invalid handle")
+            .downcast_ref()
+            .expect("type mismatch")
     }
 
     fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut TextComponentResource {
         state
             .resource_table
             .get_any_mut(self.rep())
-            .expect("invalid text-component resource handle")
-            .downcast_mut::<TextComponentResource>()
-            .expect("resource type mismatch")
+            .expect("invalid handle")
+            .downcast_mut()
+            .expect("type mismatch")
     }
 
     fn consume(self, state: &mut PluginHostState) -> TextComponentResource {
         state
             .resource_table
-            .delete::<TextComponentResource>(Resource::new_own(self.rep()))
-            .expect("invalid text-component resource handle")
+            .delete(wasmtime::component::Resource::new_own(self.rep()))
+            .expect("invalid handle")
+    }
+}
+
+impl pumpkin::plugin::text::Host for PluginHostState {}
+
+impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
+    async fn text(&mut self, plain: String) -> wasmtime::Result<Resource<TextComponent>> {
+        let tc = InternalTextComponent::text(plain);
+        self.add_text_component(tc)
+            .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
+    }
+
+    async fn translate(
+        &mut self,
+        key: String,
+        with: Vec<Resource<TextComponent>>,
+    ) -> wasmtime::Result<Resource<TextComponent>> {
+        let mut components = Vec::with_capacity(with.len());
+        for r in with {
+            components.push(self.take_text(&r)?.provider);
+        }
+        let tc = InternalTextComponent::translate(key, components);
+        self.add_text_component(tc)
+            .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
+    }
+
+    async fn add_child(
+        &mut self,
+        text_component: Resource<TextComponent>,
+        child: Resource<TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let child_tc = self.take_text(&child)?.provider;
+        let parent = self.get_text_mut(&text_component)?;
+        // Cloning here as noted in your TODO until builder pattern supports &mut self
+        parent.provider = parent.provider.clone().add_child(child_tc);
+        Ok(())
+    }
+
+    async fn add_text(
+        &mut self,
+        text_component: Resource<TextComponent>,
+        text: String,
+    ) -> wasmtime::Result<()> {
+        let parent = self.get_text_mut(&text_component)?;
+        parent.provider = parent.provider.clone().add_text(text);
+        Ok(())
+    }
+
+    async fn get_text(
+        &mut self,
+        text_component: Resource<TextComponent>,
+    ) -> wasmtime::Result<String> {
+        Ok(self
+            .get_text_ref(&text_component)?
+            .provider
+            .clone()
+            .get_text())
+    }
+
+    async fn encode(
+        &mut self,
+        text_component: Resource<TextComponent>,
+    ) -> wasmtime::Result<Vec<u8>> {
+        Ok(self
+            .get_text_ref(&text_component)?
+            .provider
+            .encode()
+            .into_vec())
+    }
+
+    async fn color_named(
+        &mut self,
+        res: Resource<TextComponent>,
+        color: NamedColor,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.color =
+            Some(Color::Named(map_named_color(color)));
+        Ok(())
+    }
+
+    async fn color_rgb(
+        &mut self,
+        res: Resource<TextComponent>,
+        color: RgbColor,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.color =
+            Some(Color::Rgb(color::RGBColor::new(color.r, color.g, color.b)));
+        Ok(())
+    }
+
+    async fn bold(&mut self, res: Resource<TextComponent>, value: bool) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.bold = Some(value);
+        Ok(())
+    }
+
+    async fn italic(&mut self, res: Resource<TextComponent>, value: bool) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.italic = Some(value);
+        Ok(())
+    }
+
+    async fn underlined(
+        &mut self,
+        res: Resource<TextComponent>,
+        value: bool,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.underlined = Some(value);
+        Ok(())
+    }
+
+    async fn strikethrough(
+        &mut self,
+        res: Resource<TextComponent>,
+        value: bool,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.strikethrough = Some(value);
+        Ok(())
+    }
+
+    async fn obfuscated(
+        &mut self,
+        res: Resource<TextComponent>,
+        value: bool,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.obfuscated = Some(value);
+        Ok(())
+    }
+
+    async fn insertion(
+        &mut self,
+        res: Resource<TextComponent>,
+        text: String,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.insertion = Some(text);
+        Ok(())
+    }
+
+    async fn font(&mut self, res: Resource<TextComponent>, font: String) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.font = Some(font);
+        Ok(())
+    }
+
+    async fn shadow_color(
+        &mut self,
+        res: Resource<TextComponent>,
+        color: ArgbColor,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.shadow_color =
+            Some(color::ARGBColor::new(color.a, color.r, color.g, color.b));
+        Ok(())
+    }
+
+    async fn click_open_url(
+        &mut self,
+        res: Resource<TextComponent>,
+        url: String,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.click_event = Some(ClickEvent::OpenUrl {
+            url: Cow::Owned(url),
+        });
+        Ok(())
+    }
+
+    async fn click_run_command(
+        &mut self,
+        res: Resource<TextComponent>,
+        command: String,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.click_event = Some(ClickEvent::RunCommand {
+            command: Cow::Owned(command),
+        });
+        Ok(())
+    }
+
+    async fn click_suggest_command(
+        &mut self,
+        res: Resource<TextComponent>,
+        command: String,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.click_event = Some(ClickEvent::SuggestCommand {
+            command: Cow::Owned(command),
+        });
+        Ok(())
+    }
+
+    async fn click_copy_to_clipboard(
+        &mut self,
+        res: Resource<TextComponent>,
+        text: String,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.click_event = Some(ClickEvent::CopyToClipboard {
+            value: Cow::Owned(text),
+        });
+        Ok(())
+    }
+
+    async fn hover_show_text(
+        &mut self,
+        res: Resource<TextComponent>,
+        text: Resource<TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let hover_tc = self.take_text(&text)?.provider;
+        self.get_text_mut(&res)?.provider.0.style.hover_event = Some(HoverEvent::ShowText {
+            value: vec![hover_tc.0],
+        });
+        Ok(())
+    }
+
+    async fn hover_show_item(
+        &mut self,
+        res: Resource<TextComponent>,
+        item: String,
+    ) -> wasmtime::Result<()> {
+        self.get_text_mut(&res)?.provider.0.style.hover_event = Some(HoverEvent::ShowItem {
+            id: Cow::Owned(item),
+            count: None,
+        });
+        Ok(())
+    }
+
+    async fn hover_show_entity(
+        &mut self,
+        res: Resource<TextComponent>,
+        entity_type: String,
+        id: String,
+        name: Option<Resource<TextComponent>>,
+    ) -> wasmtime::Result<()> {
+        let name_val = match name {
+            Some(r) => Some(vec![self.take_text(&r)?.provider.0]),
+            None => None,
+        };
+        self.get_text_mut(&res)?.provider.0.style.hover_event = Some(HoverEvent::ShowEntity {
+            id: Cow::Owned(entity_type),
+            uuid: Cow::Owned(id),
+            name: name_val,
+        });
+        Ok(())
+    }
+
+    async fn drop(&mut self, rep: Resource<TextComponent>) -> wasmtime::Result<()> {
+        self.resource_table
+            .delete::<TextComponentResource>(Resource::new_own(rep.rep()))
+            .map_err(wasmtime::Error::from)?;
+        Ok(())
     }
 }
 
@@ -66,227 +335,5 @@ const fn map_named_color(color: NamedColor) -> color::NamedColor {
         NamedColor::LightPurple => color::NamedColor::LightPurple,
         NamedColor::Yellow => color::NamedColor::Yellow,
         NamedColor::White => color::NamedColor::White,
-    }
-}
-
-impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
-    async fn text(&mut self, plain: String) -> Resource<TextComponent> {
-        let tc = pumpkin_util::text::TextComponent::text(plain);
-        self.add_text_component(tc).unwrap()
-    }
-
-    async fn translate(
-        &mut self,
-        key: String,
-        with: Vec<Resource<TextComponent>>,
-    ) -> Resource<TextComponent> {
-        let with: Vec<pumpkin_util::text::TextComponent> =
-            with.into_iter().map(|r| r.consume(self).provider).collect();
-        let tc = pumpkin_util::text::TextComponent::translate(key, with);
-        self.add_text_component(tc).unwrap()
-    }
-
-    async fn add_child(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        child: Resource<TextComponent>,
-    ) {
-        let child = child.consume(self).provider;
-        let parent = &mut text_component.downcast_mut(self).provider;
-        *parent = parent.clone().add_child(child);
-    }
-
-    async fn add_text(&mut self, text_component: Resource<TextComponent>, text: String) {
-        let parent = &mut text_component.downcast_mut(self).provider;
-        *parent = parent.clone().add_text(text);
-    }
-
-    async fn get_text(&mut self, text_component: Resource<TextComponent>) -> String {
-        text_component
-            .downcast_ref(self)
-            .provider
-            .clone()
-            .get_text()
-    }
-
-    async fn encode(&mut self, text_component: Resource<TextComponent>) -> Vec<u8> {
-        text_component
-            .downcast_ref(self)
-            .provider
-            .encode()
-            .into_vec()
-    }
-
-    async fn color_named(&mut self, text_component: Resource<TextComponent>, color: NamedColor) {
-        text_component.downcast_mut(self).provider.0.style.color =
-            Some(Color::Named(map_named_color(color)));
-    }
-
-    async fn color_rgb(&mut self, text_component: Resource<TextComponent>, color: RgbColor) {
-        text_component.downcast_mut(self).provider.0.style.color =
-            Some(Color::Rgb(color::RGBColor::new(color.r, color.g, color.b)));
-    }
-
-    async fn bold(&mut self, text_component: Resource<TextComponent>, value: bool) {
-        text_component.downcast_mut(self).provider.0.style.bold = Some(value);
-    }
-
-    async fn italic(&mut self, text_component: Resource<TextComponent>, value: bool) {
-        text_component.downcast_mut(self).provider.0.style.italic = Some(value);
-    }
-
-    async fn underlined(&mut self, text_component: Resource<TextComponent>, value: bool) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .underlined = Some(value);
-    }
-
-    async fn strikethrough(&mut self, text_component: Resource<TextComponent>, value: bool) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .strikethrough = Some(value);
-    }
-
-    async fn obfuscated(&mut self, text_component: Resource<TextComponent>, value: bool) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .obfuscated = Some(value);
-    }
-
-    async fn insertion(&mut self, text_component: Resource<TextComponent>, text: String) {
-        text_component.downcast_mut(self).provider.0.style.insertion = Some(text);
-    }
-
-    async fn font(&mut self, text_component: Resource<TextComponent>, font: String) {
-        text_component.downcast_mut(self).provider.0.style.font = Some(font);
-    }
-
-    async fn shadow_color(&mut self, text_component: Resource<TextComponent>, color: ArgbColor) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .shadow_color = Some(color::ARGBColor::new(color.a, color.r, color.g, color.b));
-    }
-
-    async fn click_open_url(&mut self, text_component: Resource<TextComponent>, url: String) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .click_event = Some(ClickEvent::OpenUrl {
-            url: Cow::Owned(url),
-        });
-    }
-
-    async fn click_run_command(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        command: String,
-    ) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .click_event = Some(ClickEvent::RunCommand {
-            command: Cow::Owned(command),
-        });
-    }
-
-    async fn click_suggest_command(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        command: String,
-    ) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .click_event = Some(ClickEvent::SuggestCommand {
-            command: Cow::Owned(command),
-        });
-    }
-
-    async fn click_copy_to_clipboard(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        text: String,
-    ) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .click_event = Some(ClickEvent::CopyToClipboard {
-            value: Cow::Owned(text),
-        });
-    }
-
-    async fn hover_show_text(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        text: Resource<TextComponent>,
-    ) {
-        let hover_tc = text.consume(self).provider;
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .hover_event = Some(HoverEvent::ShowText {
-            value: vec![hover_tc.0],
-        });
-    }
-
-    async fn hover_show_item(&mut self, text_component: Resource<TextComponent>, item: String) {
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .hover_event = Some(HoverEvent::ShowItem {
-            id: Cow::Owned(item),
-            count: None,
-        });
-    }
-
-    async fn hover_show_entity(
-        &mut self,
-        text_component: Resource<TextComponent>,
-        entity_type: String,
-        id: String,
-        name: Option<Resource<TextComponent>>,
-    ) {
-        let name = name.map(|r| vec![r.consume(self).provider.0]);
-        text_component
-            .downcast_mut(self)
-            .provider
-            .0
-            .style
-            .hover_event = Some(HoverEvent::ShowEntity {
-            id: Cow::Owned(entity_type),
-            uuid: Cow::Owned(id),
-            name,
-        });
-    }
-
-    async fn drop(&mut self, rep: Resource<TextComponent>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<TextComponentResource>(Resource::new_own(rep.rep()));
-        Ok(())
     }
 }

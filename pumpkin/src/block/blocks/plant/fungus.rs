@@ -49,11 +49,9 @@ impl PlantBlockBase for FungusBlock {
 }
 #[must_use]
 pub fn supports_fungus(block: &Block) -> bool {
-    block.has_tag(&tag::Block::MINECRAFT_DIRT)
-        || block == &Block::FARMLAND
-        || block == &Block::WARPED_NYLIUM
-        || block == &Block::CRIMSON_NYLIUM
-        || block == &Block::SOUL_SOIL
-        || block == &Block::MUD
-        || block == &Block::MUDDY_MANGROVE_ROOTS
+    if block == &Block::WARPED_FUNGUS {
+        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WARPED_FUNGUS)
+    } else {
+        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CRIMSON_FUNGUS)
+    }
 }

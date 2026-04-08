@@ -12,6 +12,28 @@ pub struct ItemRecipe {
     ingredient: &'static [&'static Item],
     to: &'static Item,
 }
+impl PotionRecipe {
+    pub fn from(&self) -> &'static Potion {
+        self.from
+    }
+    pub fn ingredient(&self) -> &'static [&'static Item] {
+        self.ingredient
+    }
+    pub fn to(&self) -> &'static Potion {
+        self.to
+    }
+}
+impl ItemRecipe {
+    pub fn from(&self) -> &'static Item {
+        self.from
+    }
+    pub fn ingredient(&self) -> &'static [&'static Item] {
+        self.ingredient
+    }
+    pub fn to(&self) -> &'static Item {
+        self.to
+    }
+}
 pub const ITEM_RECIPES: [ItemRecipe; 2usize] = [
     ItemRecipe {
         from: &Item::POTION,

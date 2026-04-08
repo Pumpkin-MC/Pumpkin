@@ -8,29 +8,56 @@ use crate::plugin::loader::wasm::wasm_host::{
     },
 };
 
+impl PluginHostState {
+    fn get_server_res(&self, res: &Resource<Server>) -> wasmtime::Result<&ServerResource> {
+        self.resource_table
+            .get::<ServerResource>(&Resource::new_own(res.rep()))
+            .map_err(wasmtime::Error::from)
+    }
+}
+
 impl pumpkin::plugin::server::Host for PluginHostState {}
 
 impl pumpkin::plugin::server::HostServer for PluginHostState {
-    async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<ServerResource>(Resource::new_own(rep.rep()));
-        Ok(())
-    }
+    async fn get_difficulty(&mut self, res: Resource<Server>) -> wasmtime::Result<Difficulty> {
+        let resource = self.get_server_res(&res)?;
 
-    async fn get_difficulty(&mut self, server: Resource<Server>) -> Difficulty {
-        let resource: &ServerResource = self
-            .resource_table
-            .get_any_mut(server.rep())
-            .expect("invalid server resource handle")
-            .downcast_ref::<ServerResource>()
-            .expect("resource type mismatch");
-
-        match resource.provider.get_difficulty() {
+        Ok(match resource.provider.get_difficulty() {
             pumpkin_util::Difficulty::Peaceful => Difficulty::Peaceful,
             pumpkin_util::Difficulty::Easy => Difficulty::Easy,
             pumpkin_util::Difficulty::Normal => Difficulty::Normal,
             pumpkin_util::Difficulty::Hard => Difficulty::Hard,
-        }
+        })
+    }
+
+    async fn get_player_count(&mut self, _res: Resource<Server>) -> wasmtime::Result<u32> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        Ok(server.get_player_count() as u32)
+    }
+
+    async fn get_mspt(&mut self, _res: Resource<Server>) -> wasmtime::Result<f64> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        Ok(server.get_mspt())
+    }
+
+    async fn get_tps(&mut self, _res: Resource<Server>) -> wasmtime::Result<f64> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        Ok(server.get_tps())
+    }
+
+    async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
+        self.resource_table
+            .delete::<ServerResource>(Resource::new_own(rep.rep()))
+            .map_err(wasmtime::Error::from)?;
+        Ok(())
     }
 }

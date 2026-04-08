@@ -423,7 +423,7 @@ pub struct KnownPack<'a> {
     pub version: &'a str,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum NumberFormat {
     /// Show nothing.
     Blank,

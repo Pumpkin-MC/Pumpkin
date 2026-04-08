@@ -142,7 +142,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
                     }
                     world.clone().spawn_from_type(entity_type, spawn_pos).await;
                     world
-                        .sync_world_event(WorldEvent::SpawnerSpawnsMob, self.position, 0)
+                        .sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0)
                         .await;
                     update_spawns = true;
                 }

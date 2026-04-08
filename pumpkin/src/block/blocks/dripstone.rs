@@ -11,7 +11,7 @@ use crate::{
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
-        BlockProperties, PointedDripstoneLikeProperties, Thickness, VerticalDirection,
+        BlockProperties, DripstoneThickness, PointedDripstoneLikeProperties, VerticalDirection,
     },
 };
 use pumpkin_util::math::position::BlockPos;
@@ -112,21 +112,21 @@ impl BlockBehaviour for DripstoneBlock {
             }
             let mut dripstone_props =
                 PointedDripstoneLikeProperties::from_state_id(args.state_id, args.block);
-            if dripstone_props.thickness != Thickness::TipMerge {
+            if dripstone_props.thickness != DripstoneThickness::TipMerge {
                 return args.state_id;
             }
             match dripstone_props.vertical_direction {
                 VerticalDirection::Up => {
                     let block_above = args.world.get_block(&args.position.up()).await;
                     if block_above != &Block::POINTED_DRIPSTONE {
-                        dripstone_props.thickness = Thickness::Tip;
+                        dripstone_props.thickness = DripstoneThickness::Tip;
                         return dripstone_props.to_state_id(args.block);
                     }
                 }
                 VerticalDirection::Down => {
                     let block_below = args.world.get_block(&args.position.down()).await;
                     if block_below != &Block::POINTED_DRIPSTONE {
-                        dripstone_props.thickness = Thickness::Tip;
+                        dripstone_props.thickness = DripstoneThickness::Tip;
                         return dripstone_props.to_state_id(args.block);
                     }
                 }
@@ -138,28 +138,65 @@ impl BlockBehaviour for DripstoneBlock {
 async fn update_stalagmite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {
     let block_above = world.get_block(&tip_pos.up()).await;
     if block_above == &Block::POINTED_DRIPSTONE {
-        modify_dripstone_thickness_to(world, tip_pos, Thickness::TipMerge).await;
-        modify_dripstone_thickness_to(world, &tip_pos.up(), Thickness::TipMerge).await;
+        modify_dripstone_thickness_to(world, tip_pos, DripstoneThickness::TipMerge).await;
+        modify_dripstone_thickness_to(world, &tip_pos.up(), DripstoneThickness::TipMerge).await;
     } else {
-        modify_dripstone_thickness_to(world, tip_pos, Thickness::Tip).await;
+        modify_dripstone_thickness_to(world, tip_pos, DripstoneThickness::Tip).await;
     }
     match stalagmite_len {
         2 => {
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(1), Thickness::Frustum).await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.down_height(1),
+                DripstoneThickness::Frustum,
+            )
+            .await;
         }
         3 => {
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(1), Thickness::Frustum).await;
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(2), Thickness::Base).await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.down_height(1),
+                DripstoneThickness::Frustum,
+            )
+            .await;
+            modify_dripstone_thickness_to(world, &tip_pos.down_height(2), DripstoneThickness::Base)
+                .await;
         }
         4 => {
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(1), Thickness::Frustum).await;
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(2), Thickness::Middle).await;
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(3), Thickness::Base).await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.down_height(1),
+                DripstoneThickness::Frustum,
+            )
+            .await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.down_height(2),
+                DripstoneThickness::Middle,
+            )
+            .await;
+            modify_dripstone_thickness_to(world, &tip_pos.down_height(3), DripstoneThickness::Base)
+                .await;
         }
         5 => {
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(1), Thickness::Frustum).await;
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(2), Thickness::Middle).await;
-            modify_dripstone_thickness_to(world, &tip_pos.down_height(3), Thickness::Middle).await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.down_height(1),
+                DripstoneThickness::Frustum,
+            )
+            .await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.down_height(2),
+                DripstoneThickness::Middle,
+            )
+            .await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.down_height(3),
+                DripstoneThickness::Middle,
+            )
+            .await;
         }
         _ => {}
     }
@@ -168,28 +205,53 @@ async fn update_stalagmite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &Blo
 async fn update_stalactite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {
     let block_below = world.get_block(&tip_pos.down()).await;
     if block_below == &Block::POINTED_DRIPSTONE {
-        modify_dripstone_thickness_to(world, tip_pos, Thickness::TipMerge).await;
-        modify_dripstone_thickness_to(world, &tip_pos.down(), Thickness::TipMerge).await;
+        modify_dripstone_thickness_to(world, tip_pos, DripstoneThickness::TipMerge).await;
+        modify_dripstone_thickness_to(world, &tip_pos.down(), DripstoneThickness::TipMerge).await;
     } else {
-        modify_dripstone_thickness_to(world, tip_pos, Thickness::Tip).await;
+        modify_dripstone_thickness_to(world, tip_pos, DripstoneThickness::Tip).await;
     }
     match stalagmite_len {
         2 => {
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(1), Thickness::Frustum).await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.up_height(1),
+                DripstoneThickness::Frustum,
+            )
+            .await;
         }
         3 => {
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(1), Thickness::Frustum).await;
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(2), Thickness::Base).await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.up_height(1),
+                DripstoneThickness::Frustum,
+            )
+            .await;
+            modify_dripstone_thickness_to(world, &tip_pos.up_height(2), DripstoneThickness::Base)
+                .await;
         }
         4 => {
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(1), Thickness::Frustum).await;
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(2), Thickness::Middle).await;
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(3), Thickness::Base).await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.up_height(1),
+                DripstoneThickness::Frustum,
+            )
+            .await;
+            modify_dripstone_thickness_to(world, &tip_pos.up_height(2), DripstoneThickness::Middle)
+                .await;
+            modify_dripstone_thickness_to(world, &tip_pos.up_height(3), DripstoneThickness::Base)
+                .await;
         }
         5 => {
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(1), Thickness::Frustum).await;
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(2), Thickness::Middle).await;
-            modify_dripstone_thickness_to(world, &tip_pos.up_height(3), Thickness::Middle).await;
+            modify_dripstone_thickness_to(
+                world,
+                &tip_pos.up_height(1),
+                DripstoneThickness::Frustum,
+            )
+            .await;
+            modify_dripstone_thickness_to(world, &tip_pos.up_height(2), DripstoneThickness::Middle)
+                .await;
+            modify_dripstone_thickness_to(world, &tip_pos.up_height(3), DripstoneThickness::Middle)
+                .await;
         }
         _ => {}
     }
@@ -320,7 +382,7 @@ fn can_support_dripstone(support_block: &Block) -> bool {
 async fn modify_dripstone_thickness_to(
     world: &Arc<World>,
     pos: &BlockPos,
-    new_thickness: Thickness,
+    new_thickness: DripstoneThickness,
 ) {
     let (block, support_block_state_id) = world.get_block_and_state_id(pos).await;
 

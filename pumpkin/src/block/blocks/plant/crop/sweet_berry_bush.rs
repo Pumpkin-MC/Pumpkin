@@ -15,14 +15,13 @@ use pumpkin_data::{
     damage::DamageType,
     entity::EntityType,
     item::Item,
-    tag::{self, Taggable},
+    item_stack::ItemStack,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{
     BlockStateId,
-    item::ItemStack,
     world::{BlockAccessor, BlockFlags},
 };
 use rand::RngExt;
@@ -150,11 +149,6 @@ impl BlockBehaviour for SweetBerryBushBlock {
 }
 
 impl PlantBlockBase for SweetBerryBushBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(pos).await;
-        block.has_tag(&tag::Block::MINECRAFT_DIRT)
-    }
-
     async fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,

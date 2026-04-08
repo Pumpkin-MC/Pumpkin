@@ -1,12 +1,10 @@
 use std::sync::{Arc, Weak};
 
-use crate::entity::attributes::AttributeBuilder;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity, NBTStorage,
-    ai::goal::{look_around::LookAroundGoal, look_at_entity::LookAtEntityGoal},
+    ai::goal::{look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal},
     mob::{Mob, MobEntity},
 };
 
@@ -32,20 +30,10 @@ impl IronGolemEntity {
                 8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new()
-            .add(Attributes::ATTACK_DAMAGE, 15.0)
-            .add(Attributes::KNOCKBACK_RESISTANCE, 1.0)
-            .add(Attributes::MOVEMENT_SPEED, 0.25)
-            .add(Attributes::STEP_HEIGHT, 1.0)
-            .add(Attributes::MAX_HEALTH, 100.0)
     }
 }
 

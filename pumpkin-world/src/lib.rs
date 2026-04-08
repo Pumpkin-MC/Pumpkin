@@ -12,7 +12,6 @@ pub mod data;
 pub mod dimension;
 pub mod generation;
 pub mod inventory;
-pub mod item;
 pub mod level;
 pub mod lighting;
 pub mod lock;
@@ -24,7 +23,7 @@ pub mod world_info;
 pub type BlockId = u16;
 pub type BlockStateId = u16;
 
-pub const CURRENT_MC_VERSION: &str = "1.21.11";
+pub const CURRENT_MC_VERSION: &str = "26.1";
 
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 924;
@@ -81,7 +80,7 @@ pub fn bench_create_and_populate_noise(
     let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
         FluidLevel::new(
             settings.sea_level,
-            Block::from_registry_key(settings.default_fluid.name).unwrap(),
+            Block::from_state_id(settings.default_fluid.id),
         ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
     ));
@@ -211,7 +210,7 @@ pub fn bench_create_and_populate_noise_with_surface(
     let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
         FluidLevel::new(
             settings.sea_level,
-            Block::from_registry_key(settings.default_fluid.name).unwrap(),
+            Block::from_state_id(settings.default_fluid.id),
         ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
     ));

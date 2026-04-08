@@ -7,7 +7,7 @@ use std::{
 use heck::ToShoutySnakeCase;
 
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use serde::Deserialize;
 use syn::Ident;
 
@@ -246,6 +246,9 @@ impl LinearOperation {
 /// Single-argument transformation applied to a density value.
 #[derive(Deserialize, Hash, Copy, Clone)]
 enum UnaryOperation {
+    /// Returns the reciprocal (1/x) of the value.
+    #[serde(rename(deserialize = "INVERT"))]
+    Invert,
     /// Returns the absolute value.
     #[serde(rename(deserialize = "ABS"))]
     Abs,
@@ -270,6 +273,11 @@ impl UnaryOperation {
     /// Emits the token stream for this unary operation variant.
     fn into_token_stream(self) -> TokenStream {
         match self {
+            Self::Invert => {
+                quote! {
+                    UnaryOperation::Invert
+                }
+            }
             Self::Abs => {
                 quote! {
                     UnaryOperation::Abs
@@ -496,6 +504,16 @@ struct LinearData {
     max_value: HashableF64,
 }
 
+#[derive(Deserialize, Hash)]
+struct FindTopSurfaceData {
+    /// Lower Y bound to stop searching at.
+    #[serde(rename(deserialize = "lowerBound"))]
+    lower_bound: i32,
+    /// Step size between Y levels when searching.
+    #[serde(rename(deserialize = "cellHeight"))]
+    cell_height: i32,
+}
+
 /// Deserialized parameters for a unary density function transformation.
 #[derive(Deserialize, Hash)]
 struct UnaryData {
@@ -559,6 +577,16 @@ enum DensityFunctionRepr {
     BlendDensity {
         /// The inner density function to blend.
         input: Box<Self>,
+    },
+    FindTopSurface {
+        /// The density function to test for solidity.
+        density: Box<Self>,
+        /// The density function providing the upper Y bound.
+        #[serde(rename(deserialize = "upperBound"))]
+        upper_bound: Box<Self>,
+        /// Lower bound and step size parameters.
+        #[serde(flatten)]
+        data: FindTopSurfaceData,
     },
     /// End-islands noise sampler, seeded at runtime.
     EndIslands,
@@ -743,6 +771,28 @@ impl DensityFunctionRepr {
                 quote! {
                     BaseNoiseFunctionComponent::Spline {
                         spline: &#spline_repr,
+                    }
+                }
+            }
+            Self::FindTopSurface {
+                density,
+                upper_bound,
+                data,
+            } => {
+                let density_index = density.get_index_for_component(stack, hash_to_index_map);
+                let upper_bound_index =
+                    upper_bound.get_index_for_component(stack, hash_to_index_map);
+                let lower_bound = data.lower_bound;
+                let cell_height = data.cell_height;
+
+                quote! {
+                    BaseNoiseFunctionComponent::FindTopSurface {
+                        density_index: #density_index,
+                        upper_bound_index: #upper_bound_index,
+                        data: &FindTopSurfaceData {
+                            lower_bound: #lower_bound,
+                            cell_height: #cell_height,
+                        },
                     }
                 }
             }
@@ -1045,8 +1095,8 @@ struct NoiseRouterRepr {
     /// Density function for terrain ridge shaping.
     ridges: DensityFunctionRepr,
     /// Preliminary surface density used for above-surface checks (without jaggedness).
-    #[serde(rename(deserialize = "initialDensityWithoutJaggedness"))]
-    initial_density_without_jaggedness: DensityFunctionRepr,
+    #[serde(rename(deserialize = "preliminarySurfaceLevel"))]
+    preliminary_surface_level: DensityFunctionRepr,
     /// Final solid/air density used for block placement.
     #[serde(rename(deserialize = "finalDensity"))]
     final_density: DensityFunctionRepr,
@@ -1106,7 +1156,7 @@ impl NoiseRouterRepr {
         let mut surface_component_stack = Vec::new();
         let mut surface_lookup_map = BTreeMap::new();
         let _ = self
-            .initial_density_without_jaggedness
+            .preliminary_surface_level
             .get_index_for_component(&mut surface_component_stack, &mut surface_lookup_map);
 
         let mut multinoise_component_stack = Vec::new();
@@ -1207,6 +1257,11 @@ pub fn build() -> TokenStream {
             pub noise_id: DoublePerlinNoiseParameters,
             pub xz_scale: f64,
             pub y_scale: f64,
+        }
+
+        pub struct FindTopSurfaceData {
+            pub lower_bound: i32,
+            pub cell_height: i32,
         }
 
         pub struct ShiftedNoiseData {
@@ -1322,6 +1377,7 @@ pub fn build() -> TokenStream {
             HalfNegative,
             QuarterNegative,
             Squeeze,
+            Invert,  // new in 26.1
         }
 
         pub struct UnaryData {
@@ -1353,6 +1409,9 @@ pub fn build() -> TokenStream {
                         let clamped = density.clamp(-1.0, 1.0);
                         clamped / 2.0 - clamped * clamped * clamped / 24.0
                     }
+                    UnaryOperation::Invert => {
+                        if density == 0.0 { f64::INFINITY } else { 1.0 / density }
+                    },
                 }
             }
         }
@@ -1405,6 +1464,11 @@ pub fn build() -> TokenStream {
             BlendOffset,
             BlendDensity {
                 input_index: usize,
+            },
+            FindTopSurface {
+                density_index: usize,
+                upper_bound_index: usize,
+                data: &'static FindTopSurfaceData,
             },
             EndIslands,
             Noise {

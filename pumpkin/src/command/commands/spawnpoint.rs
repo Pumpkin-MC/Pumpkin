@@ -132,7 +132,7 @@ async fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: Block
 
     sender
         .send_message(TextComponent::translate(
-            translation::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE,
+            translation::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE_NEW,
             [
                 TextComponent::text(pos.0.x.to_string()),
                 TextComponent::text(pos.0.y.to_string()),

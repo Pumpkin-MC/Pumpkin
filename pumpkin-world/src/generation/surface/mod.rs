@@ -237,7 +237,6 @@ impl SurfaceMaterialCondition {
         context: &mut MaterialRuleContext,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) -> bool {
-        // TODO
         context.block_pos_y >= estimate_surface_height(context, surface_height_estimate_sampler)
     }
 }
@@ -361,11 +360,6 @@ pub fn test_vertical_gradient(
         .false_at_and_above
         .get_y(context.min_y as i16, context.height);
 
-    let splitter = context
-        .random_deriver
-        .split_string(condition.random_name)
-        .next_splitter();
-
     let block_y = context.block_pos_y;
     if block_y <= true_at {
         return true;
@@ -373,6 +367,10 @@ pub fn test_vertical_gradient(
     if block_y >= false_at {
         return false;
     }
+    let splitter = context
+        .random_deriver
+        .from_lo_and_hi(condition.random_lo, condition.random_hi)
+        .next_splitter();
     let mapped = pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
     let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
     random.next_f32() < mapped

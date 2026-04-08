@@ -1,5 +1,5 @@
-use crate::item::ItemStack;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use std::any::Any;
 use std::pin::Pin;

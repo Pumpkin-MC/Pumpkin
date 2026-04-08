@@ -190,7 +190,7 @@ impl CommandExecutor for ListExecutor {
                 return Ok(0);
             }
 
-            let mut bossbars_text = TextComponent::text("");
+            let mut bossbars_text = TextComponent::empty();
             for (i, bossbar) in bossbars.iter().enumerate() {
                 if i == 0 {
                     bossbars_text = bossbars_text.add_child(bossbar_prefix(

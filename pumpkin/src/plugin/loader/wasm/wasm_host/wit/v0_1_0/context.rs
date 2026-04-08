@@ -5,7 +5,7 @@ use crate::plugin::loader::wasm::wasm_host::{
     DowncastResourceExt,
     state::{CommandResource, ContextResource, PluginHostState},
     wit::v0_1_0::{
-        events::WasmPluginV0_1_0EventHandler,
+        events::{ToFromV0_1_0WasmEvent, WasmPluginV0_1_0EventHandler},
         pumpkin::{
             self,
             plugin::{
@@ -18,6 +18,202 @@ use crate::plugin::loader::wasm::wasm_host::{
         },
     },
 };
+
+macro_rules! register_host_event {
+    ($resource:expr, $handler:expr, $priority:expr, $blocking:expr, $event_ty:ty) => {
+        $resource
+            .provider
+            .register_event::<$event_ty, _>(Arc::clone($handler), $priority, $blocking)
+            .await
+    };
+}
+
+async fn register_typed_event<E: crate::plugin::Payload + ToFromV0_1_0WasmEvent + 'static>(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+) {
+    register_host_event!(resource, handler, priority, blocking, E);
+}
+
+async fn register_player_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::player::{
+        changed_main_hand::PlayerChangedMainHandEvent, egg_throw::PlayerEggThrowEvent,
+        exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent, item_held::PlayerItemHeldEvent,
+        player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
+        player_command_send::PlayerCommandSendEvent,
+        player_custom_payload::PlayerCustomPayloadEvent,
+        player_gamemode_change::PlayerGamemodeChangeEvent, player_join::PlayerJoinEvent,
+        player_leave::PlayerLeaveEvent, player_login::PlayerLoginEvent,
+        player_move::PlayerMoveEvent, player_permission_check::PlayerPermissionCheckEvent,
+        player_teleport::PlayerTeleportEvent,
+    };
+
+    match event_type {
+        EventType::PlayerJoinEvent => {
+            register_typed_event::<PlayerJoinEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerLeaveEvent => {
+            register_typed_event::<PlayerLeaveEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerLoginEvent => {
+            register_typed_event::<PlayerLoginEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerChatEvent => {
+            register_typed_event::<PlayerChatEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerCommandSendEvent => {
+            register_typed_event::<PlayerCommandSendEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerPermissionCheckEvent => {
+            register_typed_event::<PlayerPermissionCheckEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::PlayerMoveEvent => {
+            register_typed_event::<PlayerMoveEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerTeleportEvent => {
+            register_typed_event::<PlayerTeleportEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerChangeWorldEvent => {
+            register_typed_event::<PlayerChangeWorldEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerExpChangeEvent => {
+            register_typed_event::<PlayerExpChangeEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerItemHeldEvent => {
+            register_typed_event::<PlayerItemHeldEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerChangedMainHandEvent => {
+            register_typed_event::<PlayerChangedMainHandEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::PlayerGamemodeChangeEvent => {
+            register_typed_event::<PlayerGamemodeChangeEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
+        EventType::PlayerCustomPayloadEvent => {
+            register_typed_event::<PlayerCustomPayloadEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerFishEvent => {
+            register_typed_event::<PlayerFishEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::PlayerEggThrowEvent => {
+            register_typed_event::<PlayerEggThrowEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        _ => unreachable!("non-player event should not be routed to register_player_event"),
+    }
+}
+
+impl PluginHostState {
+    fn get_context(&self, res: &Resource<Context>) -> wasmtime::Result<&ContextResource> {
+        self.resource_table
+            .get::<ContextResource>(&Resource::new_own(res.rep()))
+            .map_err(wasmtime::Error::from)
+    }
+
+    fn take_command(&mut self, res: &Resource<Command>) -> wasmtime::Result<CommandResource> {
+        self.resource_table
+            .delete::<CommandResource>(Resource::new_own(res.rep()))
+            // Convert ResourceTableError -> wasmtime::Error
+            .map_err(wasmtime::Error::from)
+    }
+}
+
+async fn register_world_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::world::spawn_change::SpawnChangeEvent;
+
+    match event_type {
+        EventType::SpawnChangeEvent => {
+            register_typed_event::<SpawnChangeEvent>(resource, handler, priority, blocking).await;
+        }
+        _ => unreachable!("non-world event should not be routed to register_world_event"),
+    }
+}
+
+async fn register_block_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::block::{
+        block_break::BlockBreakEvent, block_burn::BlockBurnEvent,
+        block_can_build::BlockCanBuildEvent, block_grow::BlockGrowEvent,
+        block_place::BlockPlaceEvent, block_redstone::BlockRedstoneEvent,
+    };
+
+    match event_type {
+        EventType::BlockRedstoneEvent => {
+            register_typed_event::<BlockRedstoneEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockBreakEvent => {
+            register_typed_event::<BlockBreakEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockBurnEvent => {
+            register_typed_event::<BlockBurnEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockCanBuildEvent => {
+            register_typed_event::<BlockCanBuildEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockGrowEvent => {
+            register_typed_event::<BlockGrowEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::BlockPlaceEvent => {
+            register_typed_event::<BlockPlaceEvent>(resource, handler, priority, blocking).await;
+        }
+        _ => unreachable!("non-block event should not be routed to register_block_event"),
+    }
+}
+async fn register_server_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::server::{
+        server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent,
+    };
+
+    match event_type {
+        EventType::ServerCommandEvent => {
+            register_typed_event::<ServerCommandEvent>(resource, handler, priority, blocking).await;
+        }
+        EventType::ServerBroadcastEvent => {
+            register_typed_event::<ServerBroadcastEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        _ => unreachable!("non-server event should not be routed to register_server_event"),
+    }
+}
 
 impl DowncastResourceExt<ContextResource> for Resource<Context> {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a ContextResource {
@@ -56,14 +252,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_type: EventType,
         event_priority: EventPriority,
         blocking: bool,
-    ) {
-        let resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-
+    ) -> wasmtime::Result<()> {
+        // Updated return type
         let priority = match event_priority {
             EventPriority::Highest => crate::plugin::EventPriority::Highest,
             EventPriority::High => crate::plugin::EventPriority::High,
@@ -72,33 +262,38 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             EventPriority::Lowest => crate::plugin::EventPriority::Lowest,
         };
 
+        // Use ? to trap if the plugin was dropped or the context handle is dead
         let plugin = self
             .plugin
             .as_ref()
-            .expect("plugin should always be initialized here")
+            .ok_or_else(|| wasmtime::Error::msg("Plugin state uninitialized"))?
             .upgrade()
-            .expect("plugin has been dropped");
+            .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
 
+        let resource = self.get_context(&context)?;
         let handler = Arc::new(WasmPluginV0_1_0EventHandler { handler_id, plugin });
 
         match event_type {
-            EventType::PlayerJoinEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::player_join::PlayerJoinEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
+            event_type @ (EventType::ServerCommandEvent | EventType::ServerBroadcastEvent) => {
+                register_server_event(resource, &handler, priority, blocking, event_type).await;
             }
-            EventType::PlayerLeaveEvent => {
-                resource
-                    .provider
-                    .register_event::<crate::plugin::player::player_leave::PlayerLeaveEvent, _>(
-                        handler, priority, blocking,
-                    )
-                    .await;
+            event_type @ EventType::SpawnChangeEvent => {
+                register_world_event(resource, &handler, priority, blocking, event_type).await;
+            }
+            event_type @ (EventType::BlockRedstoneEvent
+            | EventType::BlockBreakEvent
+            | EventType::BlockBurnEvent
+            | EventType::BlockCanBuildEvent
+            | EventType::BlockGrowEvent
+            | EventType::BlockPlaceEvent) => {
+                register_block_event(resource, &handler, priority, blocking, event_type).await;
+            }
+            event_type => {
+                register_player_event(resource, &handler, priority, blocking, event_type).await;
             }
         }
+
+        Ok(())
     }
 
     async fn register_command(
@@ -106,44 +301,37 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         context: Resource<Context>,
         command: Resource<Command>,
         permission: String,
-    ) {
-        let command = self
-            .resource_table
-            .delete::<CommandResource>(Resource::new_own(command.rep()))
-            .expect("invalid command resource handle")
-            .provider;
+    ) -> wasmtime::Result<()> {
+        // Updated return type
+        // Use your helpers to safely take/get resources
+        let command_res = self.take_command(&command)?;
+        let context_res = self.get_context(&context)?;
 
-        let context_resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-
-        context_resource
+        context_res
             .provider
-            .register_command(command, permission)
+            .register_command(command_res.provider, permission)
             .await;
+        Ok(())
     }
 
     async fn register_permission(
         &mut self,
         context: Resource<Context>,
         permission: Permission,
-    ) -> Result<(), String> {
-        let mut children: HashMap<String, bool> = HashMap::with_capacity(permission.children.len());
+    ) -> wasmtime::Result<Result<(), String>> {
+        let mut children = HashMap::with_capacity(permission.children.len());
         for child in permission.children {
             children.insert(child.node, child.value);
         }
 
-        let permission = pumpkin_util::permission::Permission {
+        let util_permission = pumpkin_util::permission::Permission {
             node: permission.node,
             description: permission.description,
             default: match permission.default {
                 PermissionDefault::Deny => pumpkin_util::permission::PermissionDefault::Deny,
                 PermissionDefault::Allow => pumpkin_util::permission::PermissionDefault::Allow,
-                PermissionDefault::Op(permission_level) => {
-                    pumpkin_util::permission::PermissionDefault::Op(match permission_level {
+                PermissionDefault::Op(lvl) => {
+                    pumpkin_util::permission::PermissionDefault::Op(match lvl {
                         PermissionLevel::Zero => pumpkin_util::permission::PermissionLvl::Zero,
                         PermissionLevel::One => pumpkin_util::permission::PermissionLvl::One,
                         PermissionLevel::Two => pumpkin_util::permission::PermissionLvl::Two,
@@ -155,26 +343,31 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             children,
         };
 
-        context
-            .downcast_mut(self)
+        let context_res = self
+            .resource_table
+            .get_mut::<ContextResource>(&Resource::new_own(context.rep()))?;
+        Ok(context_res
             .provider
-            .register_permission(permission)
-            .await
+            .register_permission(util_permission)
+            .await)
     }
 
-    async fn get_data_folder(&mut self, context: Resource<Context>) -> String {
-        context
-            .downcast_ref(self)
+    async fn get_data_folder(&mut self, context: Resource<Context>) -> wasmtime::Result<String> {
+        Ok(self
+            .get_context(&context)?
             .provider
             .get_data_folder()
             .to_string_lossy()
-            .into_owned()
+            .into_owned())
     }
 
-    async fn get_server(&mut self, context: Resource<Context>) -> Resource<Server> {
-        let server_provider = context.downcast_ref(self).provider.server.clone();
+    async fn get_server(
+        &mut self,
+        context: Resource<Context>,
+    ) -> wasmtime::Result<Resource<Server>> {
+        let server_provider = self.get_context(&context)?.provider.server.clone();
         self.add_server(server_provider)
-            .expect("failed to add server resource")
+            .map_err(|_| wasmtime::Error::msg("failed to add server resource"))
     }
 
     async fn drop(&mut self, rep: Resource<Context>) -> wasmtime::Result<()> {
