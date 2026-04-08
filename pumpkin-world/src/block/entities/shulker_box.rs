@@ -1,3 +1,4 @@
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -14,13 +15,10 @@ use tokio::sync::Mutex;
 
 use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerFuture};
 use crate::inventory::InventoryFuture;
-use crate::world::SimpleWorld;
-use crate::{
-    inventory::{
-        split_stack, {Clearable, Inventory},
-    },
-    item::ItemStack,
+use crate::inventory::{
+    split_stack, {Clearable, Inventory},
 };
+use crate::world::SimpleWorld;
 
 use super::BlockEntity;
 

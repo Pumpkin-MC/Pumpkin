@@ -160,9 +160,11 @@ impl ChunkData {
 
         // Assemble the ChunkSections
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
+        let random_tick_sections = ChunkSections::build_random_tick_sections_cache(&block_palettes);
         let section = ChunkSections {
             count: block_palettes.len(),
             block_sections: RwLock::new(block_palettes.into_boxed_slice()),
+            random_tick_sections: RwLock::new(random_tick_sections),
             biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
             min_y,
         };
@@ -330,6 +332,16 @@ impl ChunkEntityData {
         let mut map = FxHashMap::default();
         for entity_nbt in chunk_entity_data.entities {
             let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
+                if uuid.len() != 4 {
+                    debug!(
+                        "Entity in chunk {},{} has invalid UUID array length {}: {:?}",
+                        position.x,
+                        position.y,
+                        uuid.len(),
+                        entity_nbt
+                    );
+                    continue;
+                }
                 Uuid::from_u128(
                     (uuid[0] as u128) << 96
                         | (uuid[1] as u128) << 64

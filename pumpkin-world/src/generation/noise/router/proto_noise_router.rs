@@ -8,7 +8,12 @@ use pumpkin_data::{
 };
 use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
 
-use crate::{GlobalRandomConfig, generation::noise::perlin::DoublePerlinNoiseSampler};
+use crate::{
+    GlobalRandomConfig,
+    generation::noise::{
+        perlin::DoublePerlinNoiseSampler, router::find_top_surface::FindTopSurface,
+    },
+};
 
 use super::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
@@ -45,6 +50,7 @@ pub enum DependentProtoNoiseFunctionComponent {
     Binary(Binary),
     ShiftedNoise(ShiftedNoise),
     WeirdScaled(WeirdScaled),
+    FindTopSurface(FindTopSurface),
     Clamp(Clamp),
     RangeChoice(RangeChoice),
     Spline(SplineFunction),
@@ -148,6 +154,24 @@ impl ProtoNoiseRouters {
                     ProtoNoiseFunctionComponent::Dependent(
                         DependentProtoNoiseFunctionComponent::Spline(SplineFunction::new(
                             spline, &stack,
+                        )),
+                    )
+                }
+                BaseNoiseFunctionComponent::FindTopSurface {
+                    density_index,
+                    upper_bound_index,
+                    data,
+                } => {
+                    let min_value = data.lower_bound as f64;
+                    let max_value = stack[*upper_bound_index].max().max(min_value);
+
+                    ProtoNoiseFunctionComponent::Dependent(
+                        DependentProtoNoiseFunctionComponent::FindTopSurface(FindTopSurface::new(
+                            *density_index,
+                            *upper_bound_index,
+                            min_value,
+                            max_value,
+                            data,
                         )),
                     )
                 }
@@ -387,6 +411,13 @@ impl ProtoNoiseRouters {
                         | UnaryOperation::Cube
                         | UnaryOperation::QuarterNegative
                         | UnaryOperation::HalfNegative => (applied_min_value, applied_max_value),
+                        UnaryOperation::Invert => {
+                            if arg1_min < 0.0 && arg1_max > 0.0 {
+                                (f64::NEG_INFINITY, f64::INFINITY)
+                            } else {
+                                (applied_max_value, applied_min_value)
+                            }
+                        }
                     };
 
                     ProtoNoiseFunctionComponent::Dependent(

@@ -82,10 +82,12 @@ pub fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
     let mut minecraft_name_to_type = TokenStream::new();
+    let mut id_to_type = TokenStream::new();
 
     for (name, effect) in effects {
         let format_name = format_ident!("{}", name.to_shouty_snake_case());
         let id = effect.id;
+        let u16_id = effect.id as u16;
         let color = effect.color;
         let translation_key = effect.translation_key;
         let category = effect.category.to_tokens();
@@ -107,13 +109,13 @@ pub fn build() -> TokenStream {
         name_to_type.extend(quote! { #name => Some(&Self::#format_name), });
 
         minecraft_name_to_type.extend(quote! { #minecraft_name => Some(&Self::#format_name), });
+        id_to_type.extend(quote! { #u16_id => Some(&Self::#format_name), })
     }
 
     quote! {
         use std::hash::{Hash, Hasher};
-        use crate::attributes::Attributes;
-        use crate::data_component_impl::Operation;
-
+        use crate::{attributes::Attributes, data_component_impl::{Operation, IDSetContent}};
+        #[derive(Clone, Debug)]
         pub struct StatusEffect {
             pub minecraft_name: &'static str,
             pub id: u8,
@@ -163,9 +165,29 @@ pub fn build() -> TokenStream {
             }
             pub fn from_minecraft_name(name: &str) -> Option<&'static Self> {
                 match name {
-                    #name_to_type
+                    #minecraft_name_to_type
                     _ => None
                 }
+            }
+        }
+        impl IDSetContent for StatusEffect {
+            fn registry_id(&self) -> u16 {
+                self.id as u16
+            }
+
+            fn from_id(id: u16) -> Option<&'static Self> {
+                match id {
+                    #id_to_type
+                    _ => None
+                }
+            }
+
+            fn from_str(name: &str) -> Option<&'static Self> {
+                StatusEffect::from_minecraft_name(name)
+            }
+
+            fn to_string(&self) -> String {
+                self.minecraft_name.to_string()
             }
         }
     }

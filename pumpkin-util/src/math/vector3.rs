@@ -90,7 +90,7 @@ impl<T: Copy> Vector3<T> {
     }
 }
 
-impl<T: Math + PartialOrd + Copy> Vector3<T> {
+impl<T> Vector3<T> {
     /// Creates a new `Vector3` with the given components.
     ///
     /// # Arguments
@@ -104,7 +104,9 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Self { x, y, z }
     }
+}
 
+impl<T: Math + PartialOrd + Copy> Vector3<T> {
     /// Calculates the squared length (magnitude) of the vector.
     ///
     /// # Returns
@@ -342,6 +344,40 @@ impl<T: Math + PartialOrd + Copy> Vector3<T> {
             && self.y <= max_y
             && self.z >= min_z
             && self.z <= max_z
+    }
+
+    /// Computes the dot product of this vector with the given coordinates.
+    ///
+    /// # Arguments
+    /// - `x` – The X coordinate to dot with.
+    /// - `y` – The Y coordinate to dot with.
+    /// - `z` – The Z coordinate to dot with.
+    ///
+    /// # Returns
+    /// The dot product `self.x * x + self.y * y + self.z * z`.
+    #[inline]
+    #[must_use]
+    pub fn dot(&self, other: &Self) -> T {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    /// Computes the cross product of this vector with the given coordinates.
+    ///
+    /// # Arguments
+    /// - `x` – The X coordinate to cross with.
+    /// - `y` – The Y coordinate to cross with.
+    /// - `z` – The Z coordinate to cross with.
+    ///
+    /// # Returns
+    /// The cross product of both vectors.
+    #[inline]
+    #[must_use]
+    pub fn cross(&self, other: &Self) -> Self {
+        Self::new(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        )
     }
 }
 

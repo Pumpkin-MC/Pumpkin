@@ -45,4 +45,15 @@ impl CUpdateScore {
             number_format,
         }
     }
+
+    #[must_use]
+    pub const fn new_remove(entity_name: String, objective_name: String) -> Self {
+        Self {
+            entity_name,
+            objective_name,
+            value: VarInt(0),
+            display_name: None,
+            number_format: None,
+        }
+    }
 }

@@ -41,6 +41,8 @@ pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -
         || id == Block::DRAGON_EGG.id
         || id == Block::KELP.id
         || id == Block::KELP_PLANT.id
+        || id == Block::SEAGRASS.id
+        || id == Block::TALL_SEAGRASS.id
         || id == Block::LADDER.id
         || id == Block::POINTED_DRIPSTONE.id
         || id == Block::SCAFFOLDING.id

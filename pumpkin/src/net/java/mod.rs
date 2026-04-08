@@ -6,7 +6,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::java::server::play::{
-    SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
+    SAttack, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SMoveVehicle,
     SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
@@ -725,6 +725,10 @@ impl JavaClient {
             }
             id if id == SInteract::to_id(version) => {
                 self.handle_interact(player, SInteract::read(payload, &version)?, server)
+                    .await;
+            }
+            id if id == SAttack::to_id(version) => {
+                self.handle_attack(player, SAttack::read(payload, &version)?, server)
                     .await;
             }
             id if id == SKeepAlive::to_id(version) => {

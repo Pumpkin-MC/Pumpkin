@@ -1,3 +1,4 @@
+use pumpkin_data::item::Item;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
@@ -5,6 +6,7 @@ use pumpkin_data::tracked_data::{TrackedData, TrackedId};
 use pumpkin_inventory::build_equipment_slots;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use std::mem;
@@ -20,9 +22,9 @@ use tracing::warn;
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
+use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
-use crate::entity::attributes::{AttributeInstance, DEFAULT_ATTRIBUTE_REGISTRY};
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
@@ -35,6 +37,7 @@ use pumpkin_data::data_component_impl::{
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
@@ -52,7 +55,6 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
 use rand::RngExt;
 use std::sync::RwLock;
 use tokio::sync::Mutex;
@@ -74,6 +76,7 @@ pub struct LivingEntity {
     pub absorption: AtomicCell<f32>,
     pub item_use_time: AtomicI32,
     pub item_in_use: Mutex<Option<ItemStack>>,
+    pub active_hand: Mutex<Option<Hand>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -131,21 +134,17 @@ impl LivingEntity {
         } else {
             0.8
         };
-        let entity_type_id = entity.entity_type.id;
         let mut max_health: f32 = 20.0; // Overridden by attribute base below
         Self {
             // Populate local attribute instances from the default registry and get initial vars
             attributes: {
                 let mut m = std::collections::HashMap::new();
-                let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
 
-                if let Some(overrides) = reg.get_overrides_for_entity(entity_type_id) {
-                    for (attr_id, base) in overrides {
-                        if attr_id == Attributes::MAX_HEALTH.id {
-                            max_health = base as f32;
-                        }
-                        m.insert(attr_id, AttributeInstance::new(base));
+                for (attr, base) in entity.entity_type.attributes {
+                    if attr.id == Attributes::MAX_HEALTH.id {
+                        max_health = *base as f32;
                     }
+                    m.insert(attr.id, AttributeInstance::new(*base));
                 }
                 std::sync::RwLock::new(m)
             },
@@ -159,6 +158,7 @@ impl LivingEntity {
             dead: AtomicBool::new(false),
             item_use_time: AtomicI32::new(0),
             item_in_use: Mutex::new(None),
+            active_hand: Mutex::new(None),
             livings_flags: AtomicU8::new(0),
             active_effects: Mutex::new(HashMap::new()),
             entity_equipment: Arc::new(Mutex::new(EntityEquipment::new())),
@@ -211,10 +211,10 @@ impl LivingEntity {
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
-    pub async fn set_active_hand(&self, hand: Hand, stack: ItemStack) {
-        self.item_use_time
-            .store(stack.get_max_use_time(), Ordering::Relaxed);
+    pub async fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
+        self.item_use_time.store(duration, Ordering::Relaxed);
         *self.item_in_use.lock().await = Some(stack);
+        *self.active_hand.lock().await = Some(hand);
         self.set_living_flag(Self::USING_ITEM_FLAG, true).await;
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left)
             .await;
@@ -231,7 +231,7 @@ impl LivingEntity {
         self.livings_flags.store(b, Ordering::Relaxed);
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_LIVING_FLAGS,
+                TrackedData::LIVING_ENTITY_FLAGS,
                 MetaDataType::BYTE,
                 b,
             )])
@@ -240,6 +240,7 @@ impl LivingEntity {
 
     pub async fn clear_active_hand(&self) {
         *self.item_in_use.lock().await = None;
+        *self.active_hand.lock().await = None;
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
@@ -259,7 +260,7 @@ impl LivingEntity {
         // tell everyone entities health changed
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_HEALTH,
+                TrackedData::HEALTH_ID,
                 MetaDataType::FLOAT,
                 clamped,
             )])
@@ -331,6 +332,7 @@ impl LivingEntity {
             v1_21_7: 17u8,
             v1_21_9: 17u8,
             v1_21_11: 17u8,
+            v26_1: 17u8, // ?
         })
     }
 
@@ -344,8 +346,14 @@ impl LivingEntity {
         let mut map = self.attributes.write().unwrap();
 
         let inst = map.entry(attribute.id).or_insert_with(|| {
-            let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
-            let base = reg.get_base_value(self.entity.entity_type.id, attribute);
+            let base = self
+                .entity
+                .entity_type
+                .attributes
+                .iter()
+                .find(|a| a.0.id == attribute.id)
+                .unwrap()
+                .1;
             AttributeInstance::new(base)
         });
 
@@ -370,8 +378,13 @@ impl LivingEntity {
         }
 
         // Fall back to registry base value if no local instance exists
-        let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
-        reg.get_base_value(self.entity.entity_type.id, attribute)
+        self.entity
+            .entity_type
+            .attributes
+            .iter()
+            .find(|a| a.0.id == attribute.id)
+            .unwrap()
+            .1
     }
 
     /// Update or insert the base value for an attribute on this entity.
@@ -1274,10 +1287,7 @@ impl LivingEntity {
 
             // Plays the death sound
             world
-                .send_entity_status(
-                    &self.entity,
-                    EntityStatus::PlayDeathSoundOrAddProjectileHitParticles,
-                )
+                .send_entity_status(&self.entity, EntityStatus::Death)
                 .await;
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
@@ -1468,7 +1478,7 @@ impl LivingEntity {
                 self.entity
                     .world
                     .load()
-                    .send_entity_status(&self.entity, EntityStatus::UseTotemOfUndying)
+                    .send_entity_status(&self.entity, EntityStatus::ProtectedFromDeath)
                     .await;
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
@@ -1527,7 +1537,7 @@ impl LivingEntity {
             let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
-                    (pumpkin_world::item::DamageResult::Untouched, None)
+                    (pumpkin_data::item_stack::DamageResult::Untouched, None)
                 } else {
                     // Items without `EquippableImpl` component take damage freely.
                     // Items with `damage_on_hurt: false` (e.g. elytra) are exempt from armor hit durability.
@@ -1540,18 +1550,18 @@ impl LivingEntity {
                     if takes_damage {
                         // Base armor durability damage.
                         let result = stack.damage_item(armor_damage);
-                        let changed = result != pumpkin_world::item::DamageResult::Untouched;
+                        let changed = result != pumpkin_data::item_stack::DamageResult::Untouched;
                         (result, changed.then_some(stack.clone()))
                     } else {
                         // Equippable items can opt out of on-hurt durability loss (e.g. elytra).
-                        (pumpkin_world::item::DamageResult::Untouched, None)
+                        (pumpkin_data::item_stack::DamageResult::Untouched, None)
                     }
                 }
             };
 
             if let Some(updated_stack) = updated_stack_opt {
                 // Broadcast break status before clearing the slot.
-                if slot_result == pumpkin_world::item::DamageResult::Broken {
+                if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
                         .send_entity_status(&self.entity, super::equipment_break_status(slot))
@@ -1625,7 +1635,7 @@ impl LivingEntity {
         // Send health metadata
         self.entity
             .send_meta_data(&[Metadata::new(
-                TrackedData::DATA_HEALTH,
+                TrackedData::HEALTH_ID,
                 MetaDataType::FLOAT,
                 max_health,
             )])
@@ -2013,6 +2023,7 @@ impl EntityBase for LivingEntity {
         GRAVITY
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
         caller: Arc<dyn EntityBase>,
@@ -2097,6 +2108,7 @@ impl EntityBase for LivingEntity {
                     && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 0
                 {
                     // Consume item
+                    let mut is_potion = false;
                     if let Some(food) = item.get_data_component::<FoodImpl>()
                         && let Some(player) = caller.get_player()
                     {
@@ -2105,13 +2117,80 @@ impl EntityBase for LivingEntity {
                             .eat(player, food.nutrition as u8, food.saturation)
                             .await;
                     }
+
+                    // Handle potion consumption
+                    if item.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().is_some() {
+                        let effects = crate::item::potion::PotionContents::read_potion_effects(item);
+                        crate::item::potion::PotionContents::apply_effects_to(self, effects, 1.0, crate::item::potion::PotionApplicationSource::Normal).await;
+                        is_potion = true;
+                    }
+
                     if let Some(player) = caller.get_player() {
-                        player
-                            .inventory
-                            .held_item()
-                            .lock()
-                            .await
-                            .decrement_unless_creative(player.gamemode.load(), 1);
+                        // Prefer modifying the exact stack that matches the consumed item:
+                        // 1) selected hotbar (held_item)
+                        // 2) off-hand
+                        // 3) fallback to active_hand if the above didn't match
+                        let mut handled = false;
+
+                        // Check main hand (hotbar selected)
+                        let held_arc = player.inventory.held_item();
+                        {
+                            let mut held_lock = held_arc.lock().await;
+                            if held_lock.are_items_and_components_equal(item) {
+                                if is_potion {
+                                    if player.gamemode.load() != GameMode::Creative {
+                                        held_lock.decrement(1);
+                                        if held_lock.is_empty() {
+                                            *held_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                        }
+                                    }
+                                } else {
+                                    held_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                                }
+                                handled = true;
+                            }
+                        }
+
+                        if !handled {
+                            // Check off-hand
+                            let off_arc = player.inventory.off_hand_item().await;
+                            let mut off_lock = off_arc.lock().await;
+                            if off_lock.are_items_and_components_equal(item) {
+                                if is_potion {
+                                    if player.gamemode.load() != GameMode::Creative {
+                                        off_lock.decrement(1);
+                                        if off_lock.is_empty() {
+                                            *off_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                        }
+                                    }
+                                } else {
+                                    off_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                                }
+
+                                handled = true;
+                            }
+                        }
+
+                        if !handled {
+                            // Use stored active_hand (as a fallback)
+                            let active_hand = *self.active_hand.lock().await;
+                            let hand_to_modify = active_hand.unwrap_or(Hand::Right);
+                            let item_stack = self
+                                .get_stack_in_hand(caller.as_ref(), hand_to_modify)
+                                .await;
+                            let mut item_lock = item_stack.lock().await;
+
+                            if is_potion {
+                                if player.gamemode.load() != GameMode::Creative {
+                                    item_lock.decrement(1);
+                                    if item_lock.is_empty() {
+                                        *item_lock = ItemStack::new(1, &Item::GLASS_BOTTLE);
+                                    }
+                                }
+                            } else {
+                                item_lock.decrement_unless_creative(player.gamemode.load(), 1);
+                            }
+                        }
                     }
 
                     self.clear_active_hand().await;
@@ -2123,12 +2202,13 @@ impl EntityBase for LivingEntity {
             }
             if self.health.load() <= 0.0 {
                 let time = self.death_time.fetch_add(1, Relaxed);
-                if time >= 20 && self.entity.is_alive() {
-                    // Spawn Death particles
+                // Only send death particles once (on the exact tick death_time reaches 20)
+                // and then remove the entity, preventing entity_event spam.
+                if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
                     self.entity
                         .world
                         .load()
-                        .send_entity_status(&self.entity, EntityStatus::AddDeathParticles)
+                        .send_entity_status(&self.entity, EntityStatus::Death)
                         .await;
                     self.entity.remove().await;
                 }

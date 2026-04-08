@@ -21,11 +21,17 @@ impl ContextProvider for CommandSyntaxErrorContext {
 }
 
 /// A struct detailing a syntax error.
+///
+/// Despite its name, this error can
+/// also be caused during command execution.
+///
+/// However, most `CommandSyntaxError`s are thrown during
+/// parsing, which carry an additional detail about where
+/// they  occurred (in the command) compared to the
+/// `CommandSyntaxError`s thrown during command execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandSyntaxError {
     pub error_type: &'static dyn AnyCommandErrorType,
-    // `TextComponent` is very large so for now we are wrapping it in a `Box`.
-    // No idea if this will change later.
     pub message: TextComponent,
     pub context: Option<CommandSyntaxErrorContext>,
 }

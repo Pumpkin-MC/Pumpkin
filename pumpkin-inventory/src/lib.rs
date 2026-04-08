@@ -1,3 +1,4 @@
+pub mod brewing;
 pub mod container_click;
 pub mod crafting;
 pub mod double;

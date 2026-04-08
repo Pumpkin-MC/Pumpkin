@@ -4,7 +4,7 @@ use pumpkin_data::block_properties::{
     BambooLeaves, BambooLikeProperties, BlockProperties, EnumVariants, Integer0To1,
 };
 use pumpkin_data::item::Item;
-use pumpkin_data::tag::Block::MINECRAFT_BAMBOO_PLANTABLE_ON;
+use pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::{self};
 use pumpkin_data::{Block, BlockDirection};
@@ -34,7 +34,7 @@ impl BlockBehaviour for BambooBlock {
                 .get_block_and_state_id(&args.position.down())
                 .await;
 
-            if block_below.has_tag(&MINECRAFT_BAMBOO_PLANTABLE_ON) {
+            if block_below.has_tag(&MINECRAFT_SUPPORTS_BAMBOO) {
                 let mut props = BambooLikeProperties::from_state_id(
                     Block::BAMBOO.default_state.id,
                     &Block::BAMBOO,
@@ -277,7 +277,7 @@ impl PlantBlockBase for BambooBlock {
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         let block = block_accessor.get_block(pos).await;
-        block.has_tag(&tag::Block::MINECRAFT_BAMBOO_PLANTABLE_ON)
+        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_BAMBOO)
     }
 
     async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {

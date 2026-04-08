@@ -1,6 +1,96 @@
 interface player {
+    use common.{hand, item-stack, position, game-mode};
+    use %world.{%world};
+    use permission.{permission-level};
+    use text.{text-component};
+    use gui.{gui};
+
+    record player-abilities {
+        invulnerable:       bool,
+        flying:             bool,
+        allow-flying:       bool,
+        creative:           bool,
+        allow-modify-world: bool,
+        fly-speed:          f32,
+        walk-speed:         f32,
+    }
+
     resource player {
         get-id: func () -> string;
         get-name: func () -> string;
+
+        // Basic state
+        get-position: func () -> position;
+        get-rotation: func () -> tuple<f32, f32>;
+        get-world: func () -> %world;
+        get-gamemode: func () -> game-mode;
+        set-gamemode: func (mode: game-mode) -> bool;
+        get-locale: func () -> string;
+        get-ping: func () -> u32;
+
+        // Permissions & metadata
+        get-permission-level: func () -> permission-level;
+        set-permission-level: func (level: permission-level);
+        has-permission: func (node: string) -> bool;
+        get-display-name: func () -> text-component;
+
+        // Messaging & titles
+        send-system-message: func (text: text-component, overlay: bool);
+        show-title: func (text: text-component);
+        show-subtitle: func (text: text-component);
+        show-actionbar: func (text: text-component);
+        send-title-animation: func (fade-in: s32, stay: s32, fade-out: s32);
+
+        // Teleport & kick
+        teleport: func (position: position, yaw: f32, pitch: f32);
+        teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>);
+        kick: func (message: text-component);
+        respawn: func ();
+
+        open-gui: func (gui-ref: gui);
+
+        ban: func (reason: option<text-component>);
+        ban-ip: func (reason: option<text-component>);
+
+        // Inventory
+        get-selected-slot: func () -> u8;
+        get-item-in-hand: func (hand: hand) -> option<item-stack>;
+        get-inventory-item: func (slot: u8) -> option<item-stack>;
+
+        // Status
+        get-health: func () -> f32;
+        set-health: func (health: f32);
+        get-max-health: func () -> f32;
+        set-max-health: func (max-health: f32);
+        get-food-level: func () -> u8;
+        set-food-level: func (food-level: u8);
+        get-saturation: func () -> f32;
+        set-saturation: func (saturation: f32);
+        get-exhaustion: func () -> f32;
+        set-exhaustion: func (exhaustion: f32);
+        get-absorption: func () -> f32;
+        set-absorption: func (absorption: f32);
+
+        get-experience-level:    func() -> s32;
+        get-experience-progress: func() -> f32;
+        get-experience-points:   func() -> s32;
+        set-experience-level:    func(level: s32);
+        set-experience-progress: func(progress: f32);
+        set-experience-points:   func(points: s32);
+        add-experience-levels:   func(levels: s32);
+        add-experience-points:   func(points: s32);
+
+        is-sneaking:  func() -> bool;
+        set-sneaking: func(sneaking: bool);
+        is-sprinting: func() -> bool;
+        set-sprinting: func(sprinting: bool);
+        is-on-ground: func() -> bool;
+        is-flying:    func() -> bool;
+        set-flying:   func(flying: bool);
+
+        get-abilities: func() -> player-abilities;
+        set-abilities: func(abilities: player-abilities);
+
+        get-ip: func() -> string;
     }
 }

@@ -35,10 +35,15 @@ impl LevelTime {
     }
 
     pub async fn send_time(&self, world: &World) {
+        let advance_time = {
+            let lock = world.level_info.load();
+            lock.game_rules.advance_time
+        };
+
         world
             .broadcast_editioned(
-                &CUpdateTime::new(self.world_age, self.time_of_day, true),
-                &CSetTime::new(self.time_of_day as _),
+                &CUpdateTime::new(self.world_age, self.time_of_day, advance_time),
+                &CSetTime::new(self.time_of_day as _), // TODO do we need to tell bedrock that time is frozen?
             )
             .await;
     }

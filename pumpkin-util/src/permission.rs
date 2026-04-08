@@ -99,6 +99,19 @@ impl PermissionRegistry {
         Ok(())
     }
 
+    /// Registers a new permission in the registry and expects it to be registered.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the permission could not be registered (if one with the same node already exists).
+    ///
+    /// # Parameters
+    /// - `permission`: The `Permission` instance to add.
+    pub fn register_permission_or_panic(&mut self, permission: Permission) {
+        self.register_permission(permission)
+            .expect("Permission should have been registered successfully");
+    }
+
     /// Retrieves a permission node by its name.
     ///
     /// # Parameters

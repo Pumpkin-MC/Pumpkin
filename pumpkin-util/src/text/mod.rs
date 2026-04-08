@@ -12,6 +12,7 @@ use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
 use std::fmt::Formatter;
+use std::sync::LazyLock;
 use style::Style;
 
 pub mod click;
@@ -268,6 +269,19 @@ impl TextComponentBase {
 }
 
 impl TextComponent {
+    /// Creates a new text component without any text content.
+    ///
+    /// Useful to join multiple text components together into one
+    /// by putting them all as a child of an empty text component
+    /// in the required order.
+    ///
+    /// # Returns
+    /// An empty `TextComponent`.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self::text("")
+    }
+
     /// Creates a new text component with plain text content.
     ///
     /// # Arguments
@@ -275,6 +289,7 @@ impl TextComponent {
     ///
     /// # Returns
     /// A new `TextComponent` containing the given text.
+    #[must_use]
     pub fn text<P: Into<Cow<'static, str>>>(plain: P) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::Text { text: plain.into() }),
@@ -291,6 +306,7 @@ impl TextComponent {
     ///
     /// # Returns
     /// A new `TextComponent` that will be translated on the client.
+    #[must_use]
     pub fn translate<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(key: K, with: W) -> Self {
         Self(TextComponentBase {
             content: Box::new(TextContent::Translate {
@@ -312,6 +328,7 @@ impl TextComponent {
     ///
     /// # Returns
     /// A new `TextComponent` with custom translation.
+    #[must_use]
     pub fn custom<K: Into<Cow<'static, str>>, W: Into<Vec<Self>>>(
         namespace: K,
         key: K,
@@ -719,6 +736,15 @@ impl TextComponent {
         self
     }
 
+    /// Wraps a component in square brackets.
+    ///
+    /// # Returns
+    /// The new component.
+    #[must_use]
+    pub fn wrap_in_square_brackets(self) -> Self {
+        Self::translate("chat.square_brackets", [self])
+    }
+
     /// Makes the text bold.
     ///
     /// # Returns
@@ -847,6 +873,52 @@ impl TextComponent {
     pub fn shadow_color(mut self, color: ARGBColor) -> Self {
         self.0.style.shadow_color = Some(color);
         self
+    }
+}
+
+impl TextComponent {
+    /// Joins multiple text components into one with a separator containing a gray comma
+    /// and a space after it.
+    ///
+    /// # Arguments
+    /// - `elements` - The elements to join.
+    ///
+    /// # Returns
+    /// The resultant text component with all the elements joined in it.
+    #[must_use]
+    pub fn join_with_comma(elements: Vec<Self>) -> Self {
+        static DEFAULT_SEPARATOR: LazyLock<TextComponent> = LazyLock::new(|| {
+            TextComponent::text(", ").color(Color::Named(color::NamedColor::Gray))
+        });
+
+        Self::join(elements, &DEFAULT_SEPARATOR)
+    }
+
+    /// Joins multiple text components into one with the given separator text component.
+    /// Use [`TextComponent::join_with_comma`] instead if you just want to join text components with
+    /// a comma in between.
+    ///
+    /// # Arguments
+    /// - `elements` - The elements to join.
+    /// - `separator` - The separator to use for joining the elements provided.
+    ///
+    /// # Returns
+    /// The resultant text component with all the elements joined in it.
+    #[must_use]
+    pub fn join(elements: Vec<Self>, separator: &Self) -> Self {
+        let mut result = Self::empty();
+        let mut first = true;
+
+        for element in elements {
+            if !first {
+                result = result.add_child(separator.clone());
+            }
+
+            result = result.add_child(element);
+            first = false;
+        }
+
+        result
     }
 }
 

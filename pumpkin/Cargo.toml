@@ -4,6 +4,7 @@ version.workspace = true
 description = "Empowering everyone to host fast and efficient Minecraft servers."
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 
 [package.metadata.tauri-winres]
 # FileDescription is handled as the Program name by Windows!
@@ -75,8 +76,8 @@ base64.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
-# Remove time in favor of chrono?
-time = { workspace = true, features = ["parsing", "macros"] }
+chrono.workspace = true
+time = { workspace = true, features = ["parsing", "macros", "local-offset"] }
 
 # plugins
 libloading.workspace = true
@@ -84,6 +85,10 @@ rustc-hash.workspace = true
 
 # Task handling
 tokio-util = { workspace = true, features = ["rt"] }
+
+# System details & Rustc version
+sysinfo = "0.38"
+rustc_version_runtime = "0.1.*"
 
 flate2.workspace = true
 console-subscriber = { workspace = true, optional = true }
@@ -94,6 +99,8 @@ wasmparser = { workspace = true }
 
 postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
+
+bitflags = { workspace = true }
 
 [dev-dependencies]
 tempfile.workspace = true
