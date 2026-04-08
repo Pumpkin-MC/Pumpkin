@@ -211,18 +211,18 @@ impl BlockBehaviour for DropperBlock {
                     );
                     args.world.spawn_entity(item_entity).await;
                     args.world
-                        .sync_world_event(WorldEvent::DispenserDispenses, *args.position, 0)
+                        .sync_world_event(WorldEvent::SoundDispenserDispense, *args.position, 0)
                         .await;
                     args.world
                         .sync_world_event(
-                            WorldEvent::DispenserActivated,
+                            WorldEvent::SoundDispenserProjectileLaunch,
                             *args.position,
                             to_data3d(props.facing),
                         )
                         .await;
                 } else {
                     args.world
-                        .sync_world_event(WorldEvent::DispenserFails, *args.position, 0)
+                        .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0)
                         .await;
                 }
             }

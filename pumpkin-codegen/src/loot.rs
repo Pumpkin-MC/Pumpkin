@@ -63,11 +63,7 @@ pub struct LootPoolStruct {
 impl ToTokens for LootPoolStruct {
     /// Emits a `LootPool { … }` struct literal token stream for code generation.
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let entries_tokens: Vec<_> = self
-            .entries
-            .iter()
-            .map(ToTokens::to_token_stream)
-            .collect();
+        let entries_tokens: Vec<_> = self.entries.iter().map(ToTokens::to_token_stream).collect();
         let rolls = &self.rolls;
         let bonus_rolls = &self.bonus_rolls;
         let conditions_tokens = if let Some(conds) = &self.conditions {

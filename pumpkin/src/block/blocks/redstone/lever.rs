@@ -7,7 +7,7 @@ use crate::block::{
 };
 use pumpkin_data::{
     Block, BlockDirection, HorizontalFacingExt,
-    block_properties::{BlockFace, BlockProperties, LeverLikeProperties},
+    block_properties::{AttachFace, BlockProperties, LeverLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -126,9 +126,9 @@ impl WallMountedBlock for LeverBlock {
     fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
         let props = LeverLikeProperties::from_state_id(state_id, block);
         match props.face {
-            BlockFace::Floor => BlockDirection::Up,
-            BlockFace::Ceiling => BlockDirection::Down,
-            BlockFace::Wall => props.facing.to_block_direction(),
+            AttachFace::Floor => BlockDirection::Up,
+            AttachFace::Ceiling => BlockDirection::Down,
+            AttachFace::Wall => props.facing.to_block_direction(),
         }
     }
 }
@@ -154,9 +154,9 @@ pub trait LeverLikePropertiesExt {
 impl LeverLikePropertiesExt for LeverLikeProperties {
     fn get_direction(&self) -> BlockDirection {
         match self.face {
-            BlockFace::Ceiling => BlockDirection::Down,
-            BlockFace::Floor => BlockDirection::Up,
-            BlockFace::Wall => self.facing.to_block_direction(),
+            AttachFace::Ceiling => BlockDirection::Down,
+            AttachFace::Floor => BlockDirection::Up,
+            AttachFace::Wall => self.facing.to_block_direction(),
         }
     }
 }

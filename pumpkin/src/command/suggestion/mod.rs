@@ -86,7 +86,7 @@ impl SuggestionText {
     /// we don't allocate a new string every time we want to
     /// compare two [`SuggestionText`]s.
     #[must_use]
-    const fn cached_text(&self) -> &String {
+    pub const fn cached_text(&self) -> &String {
         match self {
             Self::Text(text) => text,
             Self::Integer { cached_text, .. } => cached_text,

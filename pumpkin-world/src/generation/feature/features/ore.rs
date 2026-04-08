@@ -1,13 +1,13 @@
 use core::f32;
 
-use pumpkin_data::BlockDirection;
+use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_util::{
     math::{lerp, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::{block::BlockStateCodec, generation::rule::RuleTest, world::BlockRegistryExt};
 use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
+use crate::{generation::rule::RuleTest, world::BlockRegistryExt};
 
 pub struct OreFeature {
     pub size: i32,
@@ -17,7 +17,7 @@ pub struct OreFeature {
 
 pub struct OreTarget {
     pub target: RuleTest,
-    pub state: BlockStateCodec,
+    pub state: &'static BlockState,
 }
 
 impl OreFeature {
@@ -185,7 +185,7 @@ impl OreFeature {
 
                         for target in &self.targets {
                             if self.should_place(chunk, block_state, random, target, &mutable_pos) {
-                                chunk.set_block_state(&pos_vec, target.state.get_state());
+                                chunk.set_block_state(&pos_vec, target.state);
                                 placed_blocks_count += 1;
                                 break; // Equivalent to 'continue block11;'
                             }

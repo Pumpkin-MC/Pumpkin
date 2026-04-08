@@ -60,9 +60,11 @@ use super::features::{
     tree::TreeFeature,
     twisting_vines::TwistingVinesFeature,
     underwater_magma::UnderwaterMagmaFeature,
+    vegetation_patch,
     vegetation_patch::VegetationPatchFeature,
     vines::VinesFeature,
     void_start_platform::VoidStartPlatformFeature,
+    waterlogged_vegetation_patch,
     waterlogged_vegetation_patch::WaterloggedVegetationPatchFeature,
     weeping_vines::WeepingVinesFeature,
 };
@@ -171,6 +173,24 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::VegetationPatch(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::WaterloggedVegetationPatch(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::PointedDripstone(feature) => feature.generate(chunk, random, pos),
             Self::CoralMushroom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
@@ -258,9 +278,15 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
-            Self::Tree(feature) => {
-                feature.generate(chunk, min_y, height, feature_name, random, pos)
-            }
+            Self::Tree(feature) => feature.generate(
+                block_registry,
+                chunk,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::RandomSelector(feature) => feature.generate(
                 chunk,
                 block_registry,
@@ -321,6 +347,27 @@ impl ConfiguredFeature {
             Self::MonsterRoom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::GlowstoneBlob(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
+            Self::Disk(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
+            Self::BasaltColumns(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::ForestRock(feature) => feature.generate(chunk, random, pos),
             _ => false, // TODO
         }

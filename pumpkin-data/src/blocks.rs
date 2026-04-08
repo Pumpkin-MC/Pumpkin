@@ -14,14 +14,12 @@ use std::hash::{Hash, Hasher};
 /// This struct contains the base properties shared by all instances of a block
 /// Data-driven attributes like `hardness` and `blast_resistance` are defined here,
 /// while specific orientations or variations are stored in the associated `BlockState`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block {
     /// The numeric ID used for internal registry mapping.
     pub id: u16,
     /// The unique namespaced ID (e.g., "`diamond_ore`").
     pub name: &'static str,
-    /// The key used for client-side localization (e.g., "`block.minecraft.diamond_ore`").
-    pub translation_key: &'static str,
     /// How hard the block is to break. A value of -1.0 indicates an unbreakable block (e.g., Bedrock).
     pub hardness: f32,
     /// The block's resistance to explosions.
@@ -114,6 +112,39 @@ impl Block {
                 .into_iter()
                 .any(|(key, value)| key == "waterlogged" && value == "true")
         })
+    }
+
+    /// Returns a new [`BlockState`] reference for the given `state_id` with the
+    /// `waterlogged` property forced to `true` if the block supports that
+    /// property.  If the state is already waterlogged or the block does not
+    /// expose a `waterlogged` property then `None` is returned.
+    #[must_use]
+    pub fn with_waterlogged(&self, state_id: u16) -> Option<&'static BlockState> {
+        // Check if already waterlogged
+        if self.is_waterlogged(state_id) {
+            return Some(BlockState::from_id(state_id));
+        }
+
+        // Modify the property list if available
+        if let Some(props_source) = self.properties(state_id) {
+            let mut props: Vec<(&str, &str)> = props_source
+                .to_props()
+                .iter()
+                .map(|(k, v)| (*k, *v))
+                .collect();
+
+            // Look for an existing waterlogged key or add one
+            if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
+                props[idx] = ("waterlogged", "true");
+            } else {
+                props.push(("waterlogged", "true"));
+            }
+
+            let new_state_id = self.from_properties(&props).to_state_id(self);
+            return Some(BlockState::from_id(new_state_id));
+        }
+
+        None
     }
 
     /// Returns whether this block is solid (based on default state)

@@ -308,8 +308,7 @@ impl WorldAquiferSampler {
             sample_options,
         );
 
-        self.levels[index] = Some(sampled);
-        self.levels[index].as_ref().unwrap()
+        self.levels[index].insert(sampled)
     }
 
     fn get_fluid_level(

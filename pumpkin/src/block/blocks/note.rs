@@ -3,13 +3,11 @@ use crate::block::{
     BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
     UseWithItemArgs,
 };
-use pumpkin_data::block_properties::Axis;
+use pumpkin_data::block_properties::{Axis, NoteblockInstrument};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
     Block,
-    block_properties::{
-        BlockProperties, EnumVariants, Instrument, Integer0To24, NoteBlockLikeProperties,
-    },
+    block_properties::{BlockProperties, EnumVariants, Integer0To24, NoteBlockLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -53,7 +51,7 @@ impl NoteBlock {
         let below_instrument = if is_base_block(below_instrument) {
             below_instrument
         } else {
-            Instrument::Harp
+            NoteblockInstrument::Harp
         };
         note_props.instrument = below_instrument;
         note_props.to_state_id(block)
@@ -176,51 +174,55 @@ impl BlockBehaviour for NoteBlock {
     }
 }
 
-const fn convert_instrument_to_sound(instrument: Instrument) -> Sound {
+const fn convert_instrument_to_sound(instrument: NoteblockInstrument) -> Sound {
     match instrument {
-        Instrument::Harp => Sound::BlockNoteBlockHarp,
-        Instrument::Basedrum => Sound::BlockNoteBlockBasedrum,
-        Instrument::Snare => Sound::BlockNoteBlockSnare,
-        Instrument::Hat => Sound::BlockNoteBlockHat,
-        Instrument::Bass => Sound::BlockNoteBlockBass,
-        Instrument::Flute => Sound::BlockNoteBlockFlute,
-        Instrument::Bell => Sound::BlockNoteBlockBell,
-        Instrument::Guitar => Sound::BlockNoteBlockGuitar,
-        Instrument::Chime => Sound::BlockNoteBlockChime,
-        Instrument::Xylophone => Sound::BlockNoteBlockXylophone,
-        Instrument::IronXylophone => Sound::BlockNoteBlockIronXylophone,
-        Instrument::CowBell => Sound::BlockNoteBlockCowBell,
-        Instrument::Didgeridoo => Sound::BlockNoteBlockDidgeridoo,
-        Instrument::Bit => Sound::BlockNoteBlockBit,
-        Instrument::Banjo => Sound::BlockNoteBlockBanjo,
-        Instrument::Pling => Sound::BlockNoteBlockPling,
-        Instrument::Zombie => Sound::BlockNoteBlockImitateZombie,
-        Instrument::Skeleton => Sound::BlockNoteBlockImitateSkeleton,
-        Instrument::Creeper => Sound::BlockNoteBlockImitateCreeper,
-        Instrument::Dragon => Sound::BlockNoteBlockImitateEnderDragon,
-        Instrument::WitherSkeleton => Sound::BlockNoteBlockImitateWitherSkeleton,
-        Instrument::Piglin => Sound::BlockNoteBlockImitatePiglin,
-        Instrument::CustomHead => Sound::UiButtonClick,
+        NoteblockInstrument::Harp => Sound::BlockNoteBlockHarp,
+        NoteblockInstrument::Basedrum => Sound::BlockNoteBlockBasedrum,
+        NoteblockInstrument::Snare => Sound::BlockNoteBlockSnare,
+        NoteblockInstrument::Hat => Sound::BlockNoteBlockHat,
+        NoteblockInstrument::Bass => Sound::BlockNoteBlockBass,
+        NoteblockInstrument::Flute => Sound::BlockNoteBlockFlute,
+        NoteblockInstrument::Bell => Sound::BlockNoteBlockBell,
+        NoteblockInstrument::Guitar => Sound::BlockNoteBlockGuitar,
+        NoteblockInstrument::Chime => Sound::BlockNoteBlockChime,
+        NoteblockInstrument::Xylophone => Sound::BlockNoteBlockXylophone,
+        NoteblockInstrument::IronXylophone => Sound::BlockNoteBlockIronXylophone,
+        NoteblockInstrument::CowBell => Sound::BlockNoteBlockCowBell,
+        NoteblockInstrument::Didgeridoo => Sound::BlockNoteBlockDidgeridoo,
+        NoteblockInstrument::Bit => Sound::BlockNoteBlockBit,
+        NoteblockInstrument::Banjo => Sound::BlockNoteBlockBanjo,
+        NoteblockInstrument::Pling => Sound::BlockNoteBlockPling,
+        NoteblockInstrument::Zombie => Sound::BlockNoteBlockImitateZombie,
+        NoteblockInstrument::Skeleton => Sound::BlockNoteBlockImitateSkeleton,
+        NoteblockInstrument::Creeper => Sound::BlockNoteBlockImitateCreeper,
+        NoteblockInstrument::Dragon => Sound::BlockNoteBlockImitateEnderDragon,
+        NoteblockInstrument::WitherSkeleton => Sound::BlockNoteBlockImitateWitherSkeleton,
+        NoteblockInstrument::Piglin => Sound::BlockNoteBlockImitatePiglin,
+        NoteblockInstrument::CustomHead => Sound::UiButtonClick,
+        NoteblockInstrument::Trumpet => Sound::BlockNoteBlockTrumpet,
+        NoteblockInstrument::TrumpetExposed => Sound::BlockNoteBlockTrumpetExposed,
+        NoteblockInstrument::TrumpetOxidized => Sound::BlockNoteBlockTrumpetOxidized,
+        NoteblockInstrument::TrumpetWeathered => Sound::BlockNoteBlockTrumpetWeathered,
     }
 }
 
-const fn is_base_block(instrument: Instrument) -> bool {
+const fn is_base_block(instrument: NoteblockInstrument) -> bool {
     matches!(
         instrument,
-        Instrument::Harp
-            | Instrument::Basedrum
-            | Instrument::Snare
-            | Instrument::Hat
-            | Instrument::Bass
-            | Instrument::Flute
-            | Instrument::Bell
-            | Instrument::Guitar
-            | Instrument::Chime
-            | Instrument::Xylophone
-            | Instrument::IronXylophone
-            | Instrument::CowBell
-            | Instrument::Didgeridoo
-            | Instrument::Bit
-            | Instrument::Banjo
+        NoteblockInstrument::Harp
+            | NoteblockInstrument::Basedrum
+            | NoteblockInstrument::Snare
+            | NoteblockInstrument::Hat
+            | NoteblockInstrument::Bass
+            | NoteblockInstrument::Flute
+            | NoteblockInstrument::Bell
+            | NoteblockInstrument::Guitar
+            | NoteblockInstrument::Chime
+            | NoteblockInstrument::Xylophone
+            | NoteblockInstrument::IronXylophone
+            | NoteblockInstrument::CowBell
+            | NoteblockInstrument::Didgeridoo
+            | NoteblockInstrument::Bit
+            | NoteblockInstrument::Banjo
     )
 }

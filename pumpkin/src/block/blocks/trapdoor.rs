@@ -4,7 +4,7 @@ use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs, OnNeighborUpdateA
 use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
-use pumpkin_data::block_properties::{BlockHalf, BlockProperties};
+use pumpkin_data::block_properties::{BlockProperties, Half};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -98,11 +98,11 @@ impl BlockBehaviour for TrapDoorBlock {
             trapdoor_props.facing = facing;
 
             trapdoor_props.half = match args.direction {
-                BlockDirection::Up => BlockHalf::Top,
-                BlockDirection::Down => BlockHalf::Bottom,
+                BlockDirection::Up => Half::Top,
+                BlockDirection::Down => Half::Bottom,
                 _ => match args.use_item_on.cursor_pos.y {
-                    0.0..0.5 => BlockHalf::Bottom,
-                    _ => BlockHalf::Top,
+                    0.0..0.5 => Half::Bottom,
+                    _ => Half::Top,
                 },
             };
 

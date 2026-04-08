@@ -52,8 +52,8 @@ struct SpawnGroups {
 }
 
 /// A single entity spawner entry within a spawn group, as defined in `biome.json`.
-#[expect(non_snake_case)]
 #[derive(Deserialize, Hash, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 struct Spawner {
     /// Namespaced entity type ID (e.g. `"minecraft:zombie"`).
     r#type: String,

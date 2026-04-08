@@ -10,34 +10,46 @@ use pumpkin_util::{
 };
 
 use super::TrunkPlacer;
-use crate::generation::feature::features::tree::{TreeFeature, TreeNode};
 use crate::generation::proto_chunk::GenerationCache;
+use crate::{
+    generation::{
+        block_state_provider::BlockStateProvider,
+        feature::features::tree::{TreeFeature, TreeNode},
+    },
+    world::BlockRegistryExt,
+};
 
 pub struct FancyTrunkPlacer;
 
 impl FancyTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
+        block_registry: &dyn BlockRegistryExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        force_dirt: bool,
-        dirt_state: &BlockState,
+        below_trunk_provider: &BlockStateProvider,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
         let j = height as i32 + 2;
         let k = ((j as f64) * 0.618).floor() as i32;
 
-        placer.set_dirt(chunk, &start_pos.down(), force_dirt, dirt_state);
+        placer.set_dirt(
+            block_registry,
+            chunk,
+            random,
+            &start_pos.down(),
+            below_trunk_provider,
+        );
 
         let l = ((1.382 + (1.0 * (j as f64) / 13.0).powf(2.0)).floor() as i32).min(1);
         let m = start_pos.0.y + k;
         let mut list: Vec<BranchPosition> = Vec::new();
         let mut logs = Vec::new();
 
-        list.push(BranchPosition::new(start_pos, m));
+        list.push(BranchPosition::new(start_pos.up_height(k), m));
 
         for n in (0..=(j - 5)).rev() {
             let f = Self::should_generate_branch(j, n);

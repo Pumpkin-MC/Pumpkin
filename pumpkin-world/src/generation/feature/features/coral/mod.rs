@@ -2,7 +2,7 @@ use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
-    tag::{self, RegistryKey, get_tag_ids},
+    tag,
 };
 use pumpkin_util::{
     math::position::BlockPos,
@@ -34,7 +34,7 @@ impl CoralFeature {
         if random.next_f32() < 0.25 {
             chunk.set_block_state(
                 &pos.0,
-                Self::get_random_tag_entry("minecraft:corals", random),
+                Self::get_random_tag_entry(tag::Block::MINECRAFT_CORALS, random),
             );
         } else if random.next_f32() < 0.05 {
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
@@ -51,7 +51,8 @@ impl CoralFeature {
             {
                 continue;
             }
-            let wall_coral = Self::get_random_tag_entry_block("minecraft:wall_corals", random);
+            let wall_coral =
+                Self::get_random_tag_entry_block(tag::Block::MINECRAFT_WALL_CORALS, random);
             let original_props = &wall_coral
                 .properties(wall_coral.default_state.id)
                 .unwrap()
@@ -77,13 +78,19 @@ impl CoralFeature {
         true
     }
 
-    pub fn get_random_tag_entry(tag: &str, random: &mut RandomGenerator) -> &'static BlockState {
+    pub fn get_random_tag_entry(
+        tag: tag::Tag,
+        random: &mut RandomGenerator,
+    ) -> &'static BlockState {
         let block = Self::get_random_tag_entry_block(tag, random);
         block.default_state
     }
 
-    pub fn get_random_tag_entry_block(tag: &str, random: &mut RandomGenerator) -> &'static Block {
-        let values = get_tag_ids(RegistryKey::Block, tag).unwrap();
+    pub fn get_random_tag_entry_block(
+        tag: tag::Tag,
+        random: &mut RandomGenerator,
+    ) -> &'static Block {
+        let values = tag.1;
         let value = values[random.next_bounded_i32(values.len() as i32) as usize];
         Block::from_id(value)
     }

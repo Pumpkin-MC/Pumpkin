@@ -9,7 +9,7 @@ use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
 
 use crate::{
     ClientPacket, VarInt,
-    codec::velocity::Velocity,
+    codec::lp_vector_3d::LpVector3d,
     ser::{NetworkWriteExt, WritingError},
 };
 
@@ -19,7 +19,7 @@ pub struct CSpawnEntity {
     pub entity_uuid: uuid::Uuid,
     pub r#type: VarInt,
     pub position: Vector3<f64>,
-    pub velocity: Velocity,
+    pub velocity: LpVector3d,
     pub pitch: u8,    // angle
     pub yaw: u8,      // angle
     pub head_yaw: u8, // angle
@@ -49,7 +49,7 @@ impl CSpawnEntity {
             yaw: (yaw.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8,
             head_yaw: (head_yaw.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8,
             data,
-            velocity: Velocity(velocity),
+            velocity: LpVector3d(velocity),
         }
     }
 }
@@ -100,7 +100,7 @@ impl ClientPacket for CSpawnEntity {
 #[cfg(test)]
 mod tests {
     use super::CSpawnEntity;
-    use crate::{ClientPacket, VarInt, codec::velocity::encode_legacy_velocity_component};
+    use crate::{ClientPacket, VarInt, codec::lp_vector_3d::encode_legacy_velocity_component};
     use pumpkin_util::version::MinecraftVersion;
 
     fn legacy_tail(velocity: pumpkin_util::math::vector3::Vector3<f64>) -> [u8; 6] {
