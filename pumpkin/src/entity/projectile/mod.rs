@@ -11,6 +11,7 @@ use std::{
 };
 pub mod arrow;
 pub mod egg;
+pub mod eye_of_ender;
 pub mod firework_rocket;
 pub mod lingering_potion;
 pub mod snowball;
