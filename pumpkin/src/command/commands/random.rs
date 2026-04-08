@@ -1,11 +1,9 @@
 use std::{
     collections::HashMap,
-    pin::Pin,
     sync::{Arc, LazyLock},
 };
 
-use pumpkin_data::world::SAY_COMMAND;
-use pumpkin_protocol::java::client::play::SuggestionProviders;
+use pumpkin_data::{translation, world::SAY_COMMAND};
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionDefault, PermissionRegistry},
@@ -16,23 +14,26 @@ use pumpkin_world::world_info::RandomSequence;
 use rand::RngExt;
 use tokio::sync::Mutex;
 
+use crate::command::dispatcher::CommandError::{
+    CommandFailed, InvalidConsumption, PermissionDenied,
+};
+use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{
-    argument_builder::{ArgumentBuilder, argument, command, literal},
-    argument_types::{
-        argument_type::{ArgumentType, JavaClientArgumentType},
-        core::{bool::BoolArgumentType, long::LongArgumentType, string::StringArgumentType},
+    CommandError, CommandExecutor, CommandResult, CommandSender,
+    args::{
+        Arg, ConsumedArgs,
+        bool::BoolArgConsumer,
+        bounded_num::{BoundedNumArgumentConsumer, Number},
+        resource_location::ResourceLocationArgumentConsumer,
+        simple::SimpleArgConsumer,
     },
-    context::command_context::CommandContext,
-    dispatcher::CommandError,
-    errors::{
-        command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext},
-        error_types::{self, LiteralCommandErrorType},
+    tree::{
+        CommandTree, RawArg,
+        builder::{argument, literal},
     },
-    node::{CommandExecutor, CommandExecutorResult, dispatcher::CommandDispatcher},
-    suggestion::suggestions::{Suggestions, SuggestionsBuilder},
-    tree::RawArg,
 };
 
+const NAMES: [&str; 1] = ["random"];
 const DESCRIPTION: &str = "Generates a random integer, or controls random sequences.";
 const PERMISSION: &str = "minecraft:command.random";
 
@@ -42,91 +43,30 @@ const ARG_SEED: &str = "seed";
 const ARG_INCLUDE_WORLD_SEED: &str = "includeWorldSeed";
 const ARG_INCLUDE_SEQUENCE_ID: &str = "includeSequenceId";
 
-const RANDOM_COMMAND_FAILED: LiteralCommandErrorType =
-    LiteralCommandErrorType::new("random command failed");
-const PERMISSION_DENIED: LiteralCommandErrorType = LiteralCommandErrorType::new(
-    "I'm sorry, but you do not have permission to perform this command. Please contact the server administrator if you believe this is an error.",
-);
-
-#[derive(Clone, Copy)]
-struct SequenceArgumentType;
-
-impl ArgumentType for SequenceArgumentType {
-    type Item = String;
-
-    fn parse(
-        &self,
-        reader: &mut crate::command::string_reader::StringReader,
-    ) -> Result<String, CommandSyntaxError> {
-        let start = reader.cursor();
-
-        while let Some(c) = reader.peek() {
-            if c.is_whitespace() {
-                break;
-            }
-            reader.skip();
-        }
-
-        let end = reader.cursor();
-        let input = reader.string();
-        let raw_arg = RawArg {
-            value: &input[start..end],
-            start,
-            end,
-            input,
-        };
-
-        validate_sequence_name(raw_arg).map(ToOwned::to_owned)
-    }
-
-    fn list_suggestions(
-        &self,
-        context: &CommandContext,
-        suggestions_builder: &mut SuggestionsBuilder,
-    ) -> Pin<Box<dyn std::future::Future<Output = Suggestions> + Send>> {
-        let prefix = suggestions_builder.remaining().to_string();
-        let mut builder = suggestions_builder.create_offset(suggestions_builder.start);
-
-        let level_info = context.server().level_info.load();
-        for sequence in level_info
-            .random_sequences
-            .keys()
-            .filter(|sequence| sequence.starts_with(&prefix))
-        {
-            builder = builder.suggest(sequence.as_str());
-        }
-
-        Box::pin(async move { builder.build() })
-    }
-
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
-        JavaClientArgumentType::ResourceLocation
-    }
-
-    fn override_suggestion_providers(&self) -> Option<SuggestionProviders> {
-        Some(SuggestionProviders::AskServer)
-    }
-}
-
 const fn is_valid_namespaced_id_char(c: char) -> bool {
     matches!(c, 'a'..='z' | '0'..='9' | '_' | '-' | '.' | '/' | ':')
 }
 
-fn syntax_expected_separator(raw_arg: RawArg<'_>, local_cursor: usize) -> CommandSyntaxError {
+fn syntax_expected_separator(
+    raw_arg: RawArg<'_>,
+    local_cursor: usize,
+) -> crate::command::errors::command_syntax_error::CommandSyntaxError {
     let mut clamped_local_cursor = local_cursor.min(raw_arg.value.len());
     while clamped_local_cursor > 0 && !raw_arg.value.is_char_boundary(clamped_local_cursor) {
         clamped_local_cursor -= 1;
     }
 
-    let context = CommandSyntaxErrorContext {
+    let context = crate::command::errors::command_syntax_error::CommandSyntaxErrorContext {
         input: raw_arg.input.to_string(),
         cursor: raw_arg.start + clamped_local_cursor,
     };
 
-    error_types::DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR.create(&context)
+    crate::command::errors::error_types::DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR.create(&context)
 }
 
-fn validate_sequence_name(raw_arg: RawArg<'_>) -> Result<&str, CommandSyntaxError> {
+fn validate_sequence_name(
+    raw_arg: RawArg<'_>,
+) -> Result<&str, crate::command::errors::command_syntax_error::CommandSyntaxError> {
     let value = raw_arg.value;
     if value.is_empty() {
         return Err(syntax_expected_separator(raw_arg, 0));
@@ -192,36 +132,44 @@ impl InclusiveRange {
             let min = if min_raw.is_empty() {
                 i32::MIN
             } else {
-                parse_i32_range_bound(min_raw, "minimum")?
+                parse_i32_range_bound(min_raw)?
             };
             let max = if max_raw.is_empty() {
                 i32::MAX
             } else {
-                parse_i32_range_bound(max_raw, "maximum")?
+                parse_i32_range_bound(max_raw)?
             };
 
             (min, max)
         } else {
-            let value = parse_i32_range_bound(range, "value")?;
+            let value = parse_i32_range_bound(range)?;
             (value, value)
         };
 
         let range_size = i64::from(max) - i64::from(min) + 1;
-        if !(2..=2_147_483_646).contains(&range_size) {
-            return Err(CommandError::CommandFailed(TextComponent::text(format!(
-                "The range '{range}' is invalid. Its size must be between 2 and 2147483646."
-            ))));
+        if range_size < 2 {
+            return Err(CommandFailed(TextComponent::translate(
+                translation::COMMANDS_RANDOM_ERROR_RANGE_TOO_SMALL,
+                [],
+            )));
+        }
+        if range_size > 2_147_483_646 {
+            return Err(CommandFailed(TextComponent::translate(
+                translation::COMMANDS_RANDOM_ERROR_RANGE_TOO_LARGE,
+                [],
+            )));
         }
 
         Ok(Self { min, max })
     }
 }
 
-fn parse_i32_range_bound(raw: &str, bound_name: &str) -> Result<i32, CommandError> {
+fn parse_i32_range_bound(raw: &str) -> Result<i32, CommandError> {
     raw.parse::<i32>().map_err(|_| {
-        CommandError::CommandFailed(TextComponent::text(format!(
-            "Invalid {bound_name} bound '{raw}'. Expected a 32-bit integer."
-        )))
+        CommandFailed(TextComponent::translate(
+            translation::PARSING_INT_INVALID,
+            [TextComponent::text(raw.to_string())],
+        ))
     })
 }
 
@@ -446,134 +394,123 @@ fn usize_to_i32_saturating(value: usize) -> i32 {
     i32::try_from(value).unwrap_or(i32::MAX)
 }
 
-fn command_failed(message: TextComponent) -> CommandSyntaxError {
-    CommandSyntaxError::create_without_context(&RANDOM_COMMAND_FAILED, message)
-}
-
-fn command_error_to_syntax(error: CommandError) -> CommandSyntaxError {
-    match error {
-        CommandError::CommandFailed(message) => command_failed(message),
-        CommandError::SyntaxError(error) => error,
-        CommandError::PermissionDenied => PERMISSION_DENIED.create_without_context(),
-        CommandError::InvalidConsumption(argument) => error_types::DISPATCHER_PARSE_EXCEPTION
-            .create_without_context(TextComponent::text(format!(
-                "Could not parse argument: {argument:?}"
-            ))),
-        CommandError::InvalidRequirement => error_types::DISPATCHER_PARSE_EXCEPTION
-            .create_without_context(TextComponent::text("Command requirement failed")),
-    }
-}
-
-fn require_level_two(context: &CommandContext) -> Result<(), CommandSyntaxError> {
-    if context.source.output.has_permission_lvl(PermissionLvl::Two) {
+fn require_level_two(sender: &CommandSender) -> Result<(), CommandError> {
+    if sender.has_permission_lvl(PermissionLvl::Two) {
         Ok(())
     } else {
-        Err(PERMISSION_DENIED.create_without_context())
+        Err(PermissionDenied)
     }
 }
 
-fn get_optional_argument<'a, T: 'static>(
-    context: &'a CommandContext,
-    name: &str,
-) -> Result<Option<&'a T>, CommandSyntaxError> {
-    if context.arguments.contains_key(name) {
-        context.get_argument(name).map(Some)
-    } else {
-        Ok(None)
+fn parse_range_arg(args: &ConsumedArgs<'_>) -> Result<InclusiveRange, CommandError> {
+    let Some(Arg::Simple(range)) = args.get(ARG_RANGE) else {
+        return Err(InvalidConsumption(Some(ARG_RANGE.into())));
+    };
+
+    InclusiveRange::parse(range)
+}
+
+fn parse_sequence_arg<'a>(args: &'a ConsumedArgs<'a>) -> Result<&'a str, CommandError> {
+    let Some(Arg::ResourceLocation(sequence)) = args.get(ARG_SEQUENCE) else {
+        return Err(InvalidConsumption(Some(ARG_SEQUENCE.into())));
+    };
+
+    let raw_arg = RawArg {
+        value: sequence,
+        start: 0,
+        end: sequence.len(),
+        input: sequence,
+    };
+    validate_sequence_name(raw_arg).map_err(CommandError::SyntaxError)
+}
+
+fn parse_optional_seed(args: &ConsumedArgs<'_>) -> Result<Option<i64>, CommandError> {
+    match args.get(ARG_SEED) {
+        None => Ok(None),
+        Some(Arg::Num(Ok(Number::I64(seed)))) => Ok(Some(*seed)),
+        _ => Err(InvalidConsumption(Some(ARG_SEED.into()))),
     }
 }
 
-fn parse_range_arg(context: &CommandContext) -> Result<InclusiveRange, CommandSyntaxError> {
-    let range = context.get_argument::<String>(ARG_RANGE)?;
-    InclusiveRange::parse(range).map_err(command_error_to_syntax)
-}
-
-fn parse_sequence_arg<'a>(context: &'a CommandContext) -> Result<&'a str, CommandSyntaxError> {
-    context
-        .get_argument::<String>(ARG_SEQUENCE)
-        .map(String::as_str)
+fn parse_optional_bool(args: &ConsumedArgs<'_>, name: &str) -> Result<Option<bool>, CommandError> {
+    match args.get(name) {
+        None => Ok(None),
+        Some(Arg::Bool(value)) => Ok(Some(*value)),
+        _ => Err(InvalidConsumption(Some(name.into()))),
+    }
 }
 
 fn parse_reset_parameters(
-    context: &CommandContext,
-) -> Result<Option<SequenceParameters>, CommandSyntaxError> {
-    let Some(seed) = get_optional_argument::<i64>(context, ARG_SEED)? else {
+    args: &ConsumedArgs<'_>,
+) -> Result<Option<SequenceParameters>, CommandError> {
+    let Some(seed) = parse_optional_seed(args)? else {
         return Ok(None);
     };
 
-    let include_world_seed =
-        *get_optional_argument::<bool>(context, ARG_INCLUDE_WORLD_SEED)?.unwrap_or(&true);
-    let include_sequence_id =
-        *get_optional_argument::<bool>(context, ARG_INCLUDE_SEQUENCE_ID)?.unwrap_or(&true);
+    let include_world_seed = parse_optional_bool(args, ARG_INCLUDE_WORLD_SEED)?.unwrap_or(true);
+    let include_sequence_id = parse_optional_bool(args, ARG_INCLUDE_SEQUENCE_ID)?.unwrap_or(true);
 
     Ok(Some(SequenceParameters {
-        seed: *seed,
+        seed,
         include_world_seed,
         include_sequence_id,
     }))
 }
 
-const fn seed_argument_type() -> LongArgumentType {
-    LongArgumentType::any()
+const fn seed_consumer() -> BoundedNumArgumentConsumer<i64> {
+    BoundedNumArgumentConsumer::new().name(ARG_SEED)
 }
 
 impl CommandExecutor for DrawExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
         Box::pin(async move {
-            let range = parse_range_arg(context)?;
+            let range = parse_range_arg(args)?;
 
             let sequence = if self.uses_sequence {
-                require_level_two(context)?;
-                Some(parse_sequence_arg(context)?)
+                require_level_two(sender)?;
+                Some(parse_sequence_arg(args)?)
             } else {
                 None
             };
 
             let result = if let Some(sequence_id) = sequence {
-                sample_sequence_value(context.server(), sequence_id, range).await
+                sample_sequence_value(server, sequence_id, range).await
             } else {
                 rand::rng().random_range(range.min..=range.max)
             };
 
             match self.mode {
                 DrawMode::Value => {
-                    let message = sequence.map_or_else(
-                        || {
-                            TextComponent::text(format!(
-                                "Random value ({0}..{1}): {result}",
-                                range.min, range.max
-                            ))
-                        },
-                        |sequence_id| {
-                            TextComponent::text(format!(
-                                "Random value ({0}..{1}, sequence {sequence_id}): {result}",
-                                range.min, range.max
-                            ))
-                        },
-                    );
-
-                    context.source.send_message(message).await;
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::COMMANDS_RANDOM_SAMPLE_SUCCESS,
+                            [TextComponent::text(result.to_string())],
+                        ))
+                        .await;
                 }
                 DrawMode::Roll => {
-                    let message = sequence.map_or_else(
-                        || {
-                            TextComponent::text(format!(
-                                "rolled {result} (from {} to {})",
-                                range.min, range.max
-                            ))
-                        },
-                        |sequence_id| {
-                            TextComponent::text(format!(
-                                "rolled {result} (from {} to {}, sequence {sequence_id})",
-                                range.min, range.max
-                            ))
-                        },
+                    let message = TextComponent::translate(
+                        translation::COMMANDS_RANDOM_ROLL,
+                        [
+                            TextComponent::text(sender.to_string()),
+                            TextComponent::text(result.to_string()),
+                            TextComponent::text(range.min.to_string()),
+                            TextComponent::text(range.max.to_string()),
+                        ],
                     );
 
-                    let sender_name = TextComponent::text(context.source.output.to_string());
-                    context
-                        .server()
-                        .broadcast_message(&message, &sender_name, SAY_COMMAND, None)
+                    server
+                        .broadcast_message(
+                            &message,
+                            &TextComponent::text(sender.to_string()),
+                            SAY_COMMAND,
+                            None,
+                        )
                         .await;
                 }
             }
@@ -584,41 +521,37 @@ impl CommandExecutor for DrawExecutor {
 }
 
 impl CommandExecutor for ResetExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
         Box::pin(async move {
-            require_level_two(context)?;
+            require_level_two(sender)?;
 
-            let parameter_override = parse_reset_parameters(context)?;
+            let parameter_override = parse_reset_parameters(args)?;
 
             match self.target {
                 ResetTarget::All => {
-                    let (reset_count, defaults) =
-                        reset_all_sequences(context.server(), parameter_override).await;
-                    context
-                        .source
-                        .send_message(TextComponent::text(format!(
-                            "Reset {reset_count} random sequence(s). Defaults are now seed={}, includeWorldSeed={}, includeSequenceId={}.",
-                            defaults.seed, defaults.include_world_seed, defaults.include_sequence_id
-                        )))
+                    let (reset_count, _) = reset_all_sequences(server, parameter_override).await;
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::COMMANDS_RANDOM_RESET_ALL_SUCCESS,
+                            [TextComponent::text(reset_count.to_string())],
+                        ))
                         .await;
                     Ok(reset_count)
                 }
                 ResetTarget::Sequence => {
-                    let sequence_id = parse_sequence_arg(context)?;
-                    if sequence_id == "*" {
-                        return Err(command_failed(TextComponent::text(
-                            "Sequence name '*' is reserved for resetting all sequences.",
-                        )));
-                    }
+                    let sequence_id = parse_sequence_arg(args)?;
 
-                    let parameters =
-                        reset_sequence(context.server(), sequence_id, parameter_override).await;
-                    context
-                        .source
-                        .send_message(TextComponent::text(format!(
-                            "Reset random sequence '{sequence_id}' with seed={}, includeWorldSeed={}, includeSequenceId={}.",
-                            parameters.seed, parameters.include_world_seed, parameters.include_sequence_id
-                        )))
+                    let _ = reset_sequence(server, sequence_id, parameter_override).await;
+                    sender
+                        .send_message(TextComponent::translate(
+                            translation::COMMANDS_RANDOM_RESET_SUCCESS,
+                            [TextComponent::text(sequence_id.to_string())],
+                        ))
                         .await;
 
                     Ok(1)
@@ -628,6 +561,95 @@ impl CommandExecutor for ResetExecutor {
     }
 }
 
+pub fn init_command_tree() -> CommandTree {
+    CommandTree::new(NAMES, DESCRIPTION)
+        .then(
+            literal("value").then(
+                argument(ARG_RANGE, SimpleArgConsumer)
+                    .execute(DrawExecutor {
+                        mode: DrawMode::Value,
+                        uses_sequence: false,
+                    })
+                    .then(
+                        argument(ARG_SEQUENCE, ResourceLocationArgumentConsumer).execute(
+                            DrawExecutor {
+                                mode: DrawMode::Value,
+                                uses_sequence: true,
+                            },
+                        ),
+                    ),
+            ),
+        )
+        .then(
+            literal("roll").then(
+                argument(ARG_RANGE, SimpleArgConsumer)
+                    .execute(DrawExecutor {
+                        mode: DrawMode::Roll,
+                        uses_sequence: false,
+                    })
+                    .then(
+                        argument(ARG_SEQUENCE, ResourceLocationArgumentConsumer).execute(
+                            DrawExecutor {
+                                mode: DrawMode::Roll,
+                                uses_sequence: true,
+                            },
+                        ),
+                    ),
+            ),
+        )
+        .then(
+            literal("reset")
+                .then(
+                    literal("*")
+                        .execute(ResetExecutor {
+                            target: ResetTarget::All,
+                        })
+                        .then(
+                            argument(ARG_SEED, seed_consumer())
+                                .execute(ResetExecutor {
+                                    target: ResetTarget::All,
+                                })
+                                .then(
+                                    argument(ARG_INCLUDE_WORLD_SEED, BoolArgConsumer)
+                                        .execute(ResetExecutor {
+                                            target: ResetTarget::All,
+                                        })
+                                        .then(
+                                            argument(ARG_INCLUDE_SEQUENCE_ID, BoolArgConsumer)
+                                                .execute(ResetExecutor {
+                                                    target: ResetTarget::All,
+                                                }),
+                                        ),
+                                ),
+                        ),
+                )
+                .then(
+                    argument(ARG_SEQUENCE, ResourceLocationArgumentConsumer)
+                        .execute(ResetExecutor {
+                            target: ResetTarget::Sequence,
+                        })
+                        .then(
+                            argument(ARG_SEED, seed_consumer())
+                                .execute(ResetExecutor {
+                                    target: ResetTarget::Sequence,
+                                })
+                                .then(
+                                    argument(ARG_INCLUDE_WORLD_SEED, BoolArgConsumer)
+                                        .execute(ResetExecutor {
+                                            target: ResetTarget::Sequence,
+                                        })
+                                        .then(
+                                            argument(ARG_INCLUDE_SEQUENCE_ID, BoolArgConsumer)
+                                                .execute(ResetExecutor {
+                                                    target: ResetTarget::Sequence,
+                                                }),
+                                        ),
+                                ),
+                        ),
+                ),
+        )
+}
+
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
@@ -635,91 +657,9 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
         PermissionDefault::Allow,
     ));
 
-    dispatcher.register(
-        command("random", DESCRIPTION)
-            .requires(PERMISSION)
-            .then(
-                literal("value").then(
-                    argument(ARG_RANGE, StringArgumentType::SingleWord)
-                        .executes(DrawExecutor {
-                            mode: DrawMode::Value,
-                            uses_sequence: false,
-                        })
-                        .then(argument(ARG_SEQUENCE, SequenceArgumentType).executes(
-                            DrawExecutor {
-                                mode: DrawMode::Value,
-                                uses_sequence: true,
-                            },
-                        )),
-                ),
-            )
-            .then(
-                literal("roll").then(
-                    argument(ARG_RANGE, StringArgumentType::SingleWord)
-                        .executes(DrawExecutor {
-                            mode: DrawMode::Roll,
-                            uses_sequence: false,
-                        })
-                        .then(argument(ARG_SEQUENCE, SequenceArgumentType).executes(
-                            DrawExecutor {
-                                mode: DrawMode::Roll,
-                                uses_sequence: true,
-                            },
-                        )),
-                ),
-            )
-            .then(
-                literal("reset")
-                    .then(
-                        literal("*")
-                            .executes(ResetExecutor {
-                                target: ResetTarget::All,
-                            })
-                            .then(
-                                argument(ARG_SEED, seed_argument_type())
-                                    .executes(ResetExecutor {
-                                        target: ResetTarget::All,
-                                    })
-                                    .then(
-                                        argument(ARG_INCLUDE_WORLD_SEED, BoolArgumentType)
-                                            .executes(ResetExecutor {
-                                                target: ResetTarget::All,
-                                            })
-                                            .then(
-                                                argument(ARG_INCLUDE_SEQUENCE_ID, BoolArgumentType)
-                                                    .executes(ResetExecutor {
-                                                        target: ResetTarget::All,
-                                                    }),
-                                            ),
-                                    ),
-                            ),
-                    )
-                    .then(
-                        argument(ARG_SEQUENCE, SequenceArgumentType)
-                            .executes(ResetExecutor {
-                                target: ResetTarget::Sequence,
-                            })
-                            .then(
-                                argument(ARG_SEED, seed_argument_type())
-                                    .executes(ResetExecutor {
-                                        target: ResetTarget::Sequence,
-                                    })
-                                    .then(
-                                        argument(ARG_INCLUDE_WORLD_SEED, BoolArgumentType)
-                                            .executes(ResetExecutor {
-                                                target: ResetTarget::Sequence,
-                                            })
-                                            .then(
-                                                argument(ARG_INCLUDE_SEQUENCE_ID, BoolArgumentType)
-                                                    .executes(ResetExecutor {
-                                                        target: ResetTarget::Sequence,
-                                                    }),
-                                            ),
-                                    ),
-                            ),
-                    ),
-            ),
-    );
+    dispatcher
+        .fallback_dispatcher
+        .register(init_command_tree(), PERMISSION);
 }
 
 #[cfg(test)]
