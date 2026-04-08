@@ -32,6 +32,7 @@ pub fn get_world_gen(seed: Seed, dimension: Dimension) -> Box<VanillaGenerator> 
 
 pub struct GlobalRandomConfig {
     pub seed: u64,
+    pub legacy_random_source: bool,
     base_random_deriver: XoroshiroSplitter,
     aquifer_random_deriver: XoroshiroSplitter,
     pub ore_random_deriver: XoroshiroSplitter,
@@ -39,7 +40,7 @@ pub struct GlobalRandomConfig {
 
 impl GlobalRandomConfig {
     #[must_use]
-    pub fn new(seed: u64) -> Self {
+    pub fn new(seed: u64, legacy_random_source: bool) -> Self {
         let random_deriver = Xoroshiro::from_seed(seed).next_splitter();
 
         let aquifer_deriver = random_deriver
@@ -48,6 +49,7 @@ impl GlobalRandomConfig {
         let ore_deriver = random_deriver.split_string("minecraft:ore").next_splitter();
         Self {
             seed,
+            legacy_random_source,
             base_random_deriver: random_deriver,
             aquifer_random_deriver: aquifer_deriver,
             ore_random_deriver: ore_deriver,

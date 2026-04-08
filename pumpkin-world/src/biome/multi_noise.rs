@@ -65,7 +65,7 @@ mod test {
         let chunk_x = 0;
         let chunk_z = 0;
 
-        let random_config = GlobalRandomConfig::new(seed);
+        let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 
@@ -111,7 +111,7 @@ mod test {
             read_data_from_file!("../../assets/multi_noise_biome_source_test.json");
 
         let seed = 0;
-        let random_config = GlobalRandomConfig::new(seed);
+        let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 
