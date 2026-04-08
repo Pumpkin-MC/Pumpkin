@@ -1,15 +1,14 @@
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::BlockStateId;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
 use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     blocks::plant::PlantBlockBase,
 };
-
 #[pumpkin_block("minecraft:seagrass")]
 pub struct SeaGrassBlock;
-
 impl BlockBehaviour for SeaGrassBlock {
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
@@ -39,8 +38,29 @@ impl PlantBlockBase for SeaGrassBlock {
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
-        let block = block_accessor.get_block(pos).await;
-        let block_state = block_accessor.get_block_state(pos).await;
-        block_state.is_side_solid(BlockDirection::Up) && block != &Block::MAGMA_BLOCK
+        let (support_block, support_block_state) = block_accessor.get_block_and_state(pos).await;
+        let replacing_block = block_accessor.get_block(&pos.up()).await;
+        if replacing_block != &Block::WATER && replacing_block != &Block::SEAGRASS {
+            return false;
+        }
+        if supports_seagrass(support_block, support_block_state) {
+            return true;
+        }
+        false
     }
+    async fn get_state_for_neighbor_update(
+        &self,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        block_state: BlockStateId,
+    ) -> BlockStateId {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+            return Block::WATER.default_state.id;
+        }
+        block_state
+    }
+}
+#[must_use]
+pub fn supports_seagrass(support_block: &Block, support_block_state: &BlockState) -> bool {
+    support_block_state.is_side_solid(BlockDirection::Up) && support_block != &Block::MAGMA_BLOCK
 }

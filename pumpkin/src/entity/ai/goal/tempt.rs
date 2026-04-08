@@ -27,7 +27,7 @@ impl TemptGoal {
         }
     }
 
-    fn is_tempt_item(&self, stack: &pumpkin_world::item::ItemStack) -> bool {
+    fn is_tempt_item(&self, stack: &pumpkin_data::item_stack::ItemStack) -> bool {
         stack.item_count > 0 && self.tempt_items.iter().any(|i| i.id == stack.item.id)
     }
 

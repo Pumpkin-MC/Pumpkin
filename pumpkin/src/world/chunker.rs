@@ -1,3 +1,4 @@
+use pumpkin_util::math::vector2::Vector2;
 use std::{num::NonZeroU8, sync::Arc};
 
 use pumpkin_protocol::{
@@ -17,6 +18,18 @@ pub fn get_view_distance(player: &Player) -> NonZeroU8 {
         NonZeroU8::new(2).unwrap(),
         server.basic_config.view_distance,
     )
+}
+
+// Checks if the target chunk is within the view distance
+// of the center chunk. Uses Chebyshev distance.
+#[must_use]
+#[inline]
+pub fn is_within_view_distance(
+    center: Vector2<i32>,
+    target: Vector2<i32>,
+    view_distance: i32,
+) -> bool {
+    (target.x - center.x).abs().max((target.y - center.y).abs()) <= view_distance
 }
 
 pub async fn update_position(player: &Arc<Player>) {

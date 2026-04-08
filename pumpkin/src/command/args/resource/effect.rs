@@ -33,7 +33,7 @@ impl ArgumentConsumer for EffectTypeArgumentConsumer {
         _server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let status_effect: Option<&'a str> = args.pop();
+        let status_effect: Option<&'a str> = args.pop().map(|arg| arg.value);
 
         match status_effect {
             Some(name) => Box::pin(async move {

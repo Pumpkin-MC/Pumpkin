@@ -19,9 +19,19 @@ libfuzzer-sys = "0.4"
 [dependencies.pumpkin-protocol]
 path = ".."
 
+[dependencies.pumpkin-util]
+path = "../../pumpkin-util"
+
 [[bin]]
 name = "decoder_java"
 path = "fuzz_targets/decoder_java.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decoder_bedrock"
+path = "fuzz_targets/decoder_bedrock.rs"
 test = false
 doc = false
 bench = false

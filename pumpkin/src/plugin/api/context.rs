@@ -72,7 +72,7 @@ impl Context {
     /// A string representing the path to the data folder.
     #[must_use]
     pub fn get_data_folder(&self) -> PathBuf {
-        let path = Path::new("./plugins").join(&self.metadata.name);
+        let path = Path::new("plugins").join(&self.metadata.name);
         if !path.exists() {
             fs::create_dir_all(&path).unwrap();
         }
@@ -166,20 +166,12 @@ impl Context {
 
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.register(tree, full_permission_node);
+            dispatcher_lock
+                .fallback_dispatcher
+                .register(tree, full_permission_node);
         };
 
-        for world in self.server.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                let command_dispatcher = self.server.command_dispatcher.read().await;
-                client_suggestions::send_c_commands_packet(
-                    player,
-                    &self.server,
-                    &command_dispatcher,
-                )
-                .await;
-            }
-        }
+        self.reload_commands_for_everyone().await;
     }
 
     /// Asynchronously unregisters a command from the server.
@@ -189,20 +181,28 @@ impl Context {
     pub async fn unregister_command(&self, name: &str) {
         {
             let mut dispatcher_lock = self.server.command_dispatcher.write().await;
-            dispatcher_lock.unregister(name);
+            dispatcher_lock.fallback_dispatcher.unregister(name);
         };
 
+        self.reload_commands_for_everyone().await;
+    }
+
+    /// Asynchronously reloads (resends) all commands for all currently online players.
+    pub async fn reload_commands_for_everyone(&self) {
         for world in self.server.worlds.load().iter() {
             for player in world.players.load().iter() {
-                let command_dispatcher = self.server.command_dispatcher.read().await;
-                client_suggestions::send_c_commands_packet(
-                    player,
-                    &self.server,
-                    &command_dispatcher,
-                )
-                .await;
+                self.reload_commands_for(player).await;
             }
         }
+    }
+
+    /// Asynchronously reloads (resends) all commands for a particular player on the server.
+    ///
+    /// # Arguments
+    /// - `player`: The player for which the commands will be reloaded.
+    pub async fn reload_commands_for(&self, player: &Arc<Player>) {
+        let command_dispatcher = self.server.command_dispatcher.read().await;
+        client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher).await;
     }
 
     /// Register a permission for this plugin
@@ -227,7 +227,9 @@ impl Context {
         let permission_manager = self.permission_manager.read().await;
 
         // If the player isn't online, we need to find their op level
-        let player_op_level = (self.server.get_player_by_uuid(*player_uuid))
+        let player_op_level = self
+            .server
+            .get_player_by_uuid(*player_uuid)
             .map_or(PermissionLvl::Zero, |player| player.permission_lvl.load());
 
         permission_manager

@@ -13,7 +13,6 @@ use tracing::{Level, debug, error, info, trace, warn};
 use crate::block::BlockHitResult;
 use crate::block::registry::BlockActionResult;
 use crate::block::{self, BlockIsReplacing};
-use crate::command::CommandSender;
 use crate::entity::EntityBase;
 use crate::entity::equipment_break_status;
 use crate::entity::player::{ChatMode, ChatSession, Player};
@@ -39,6 +38,7 @@ use pumpkin_data::block_properties::{
 use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState, translation};
 use pumpkin_inventory::InventoryError;
@@ -52,7 +52,7 @@ use pumpkin_protocol::java::client::play::{
     CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
 };
 use pumpkin_protocol::java::server::play::{
-    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SChangeGameMode, SChatCommand,
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SChangeGameMode, SChatCommand,
     SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
     SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
     SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
@@ -67,7 +67,6 @@ use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 use pumpkin_world::block::entities::sign::SignBlockEntity;
-use pumpkin_world::item::ItemStack;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
@@ -338,7 +337,11 @@ impl JavaClient {
                     player.jump().await;
                 }
 
-                entity.on_ground.store(packet.collision & FLAG_ON_GROUND != 0, Ordering::Relaxed);
+                let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
+                entity.on_ground.store(new_on_ground, Ordering::Relaxed);
+                if new_on_ground && entity.fall_flying.load(Ordering::Relaxed) {
+                    entity.set_fall_flying(false).await;
+                }
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
@@ -606,13 +609,11 @@ impl JavaClient {
                 // Some commands can take a long time to execute. If they do, they block packet processing for the player.
                 // That's why we will spawn a task instead.
                 server.spawn_task(async move {
-                    server_clone.command_dispatcher.read().await
-                        .handle_command(
-                            &CommandSender::Player(player_clone),
-                            &server_clone,
-                            &command_clone,
-                        )
-                        .await;
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher.handle_command(
+                        &player_clone.get_command_source(&server_clone).await,
+                        &command_clone
+                    ).await;
                 });
 
                 if server.advanced_config.commands.log_console {
@@ -1248,6 +1249,60 @@ impl JavaClient {
         }
     }
 
+    pub async fn handle_attack(&self, player: &Arc<Player>, attack: SAttack, server: &Arc<Server>) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+        let entity_id = attack.entity_id;
+        let player_entity = &player.living_entity.entity;
+        let world = player_entity.world.load_full();
+
+        let config = &server.advanced_config.pvp;
+        if !config.enabled {
+            return;
+        }
+
+        if entity_id.0 == player.entity_id() {
+            self.kick(TextComponent::translate(
+                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                [],
+            ))
+            .await;
+            return;
+        }
+
+        let player_target = world.get_player_by_id(entity_id.0);
+        let target: Option<Arc<dyn EntityBase>> = player_target
+            .as_ref()
+            .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
+            .or_else(|| world.get_entity_by_id(entity_id.0));
+        let Some(target) = target else {
+            self.kick(TextComponent::translate(
+                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                [],
+            ))
+            .await;
+            return;
+        };
+        if let Some(player_victim) = &player_target {
+            if player_victim.living_entity.health.load() <= 0.0 {
+                return;
+            }
+            if config.protect_creative && player_victim.gamemode.load() == GameMode::Creative {
+                world
+                    .play_sound(
+                        Sound::EntityPlayerAttackNodamage,
+                        SoundCategory::Players,
+                        &player_victim.position(),
+                    )
+                    .await;
+                return;
+            }
+        }
+        player.attack(target).await;
+    }
+
     pub async fn handle_interact(
         &self,
         player: &Arc<Player>,
@@ -1531,6 +1586,11 @@ impl JavaClient {
                     player.drop_held_item(true).await;
                 }
                 Status::ReleaseItemInUse => {
+                    let item_in_use = player.living_entity.item_in_use.lock().await.clone();
+                    if let Some(stack) = item_in_use {
+                        server.item_registry.on_stopped_using(&stack, player).await;
+                    }
+
                     player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {
@@ -1640,6 +1700,7 @@ impl JavaClient {
         let off_hand_item = inventory.off_hand_item().await;
         let held_item_empty = held_item.lock().await.is_empty();
         let off_hand_item_empty = off_hand_item.lock().await.is_empty();
+
         let item = if matches!(hand, Hand::Left) {
             held_item
         } else {
@@ -1675,6 +1736,7 @@ impl JavaClient {
                 return Ok(());
             }
         }
+
         let slot_index = if matches!(hand, Hand::Left) {
             inventory.get_selected_slot() as usize
         } else {
@@ -1835,6 +1897,7 @@ impl JavaClient {
             return;
         };
         self.update_sequence(player, use_item.sequence.0);
+
         let item_in_hand = if hand == Hand::Left {
             inventory.held_item()
         } else {
@@ -1914,13 +1977,13 @@ impl JavaClient {
                 {
                     player
                         .living_entity
-                        .set_active_hand(hand, held.clone())
+                        .set_active_hand(hand, held.clone(), held.get_max_use_time())
                         .await;
                 }
             } else {
                 player
                     .living_entity
-                    .set_active_hand(hand, held.clone())
+                    .set_active_hand(hand, held.clone(), held.get_max_use_time())
                     .await;
             }
         }
@@ -2092,7 +2155,6 @@ impl JavaClient {
         packet: SCommandSuggestion,
         server: &Arc<Server>,
     ) {
-        let src = CommandSender::Player(player.clone());
         let Some(cmd) = &packet.command.get(1..) else {
             return;
         };
@@ -2106,7 +2168,7 @@ impl JavaClient {
             .command_dispatcher
             .read()
             .await
-            .find_suggestions(&src, server, cmd)
+            .suggest(cmd, &player.get_command_source(server).await)
             .await;
 
         let response = CCommandSuggestions::new(

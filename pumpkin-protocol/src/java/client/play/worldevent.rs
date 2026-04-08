@@ -60,7 +60,7 @@ impl ClientPacket for CWorldEvent {
         write.write_i32_be(self.event)?;
         write.write_block_pos(&self.location)?;
 
-        let data = if self.event == WorldEvent::BlockBroken as i32 {
+        let data = if self.event == WorldEvent::ParticlesDestroyBlock as i32 {
             u16::try_from(self.data).map_or(self.data, |state_id| {
                 i32::from(remap_block_state_for_version(state_id, *version))
             })

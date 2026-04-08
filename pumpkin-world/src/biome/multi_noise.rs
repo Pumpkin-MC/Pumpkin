@@ -41,7 +41,6 @@ mod test {
     use crate::{
         GlobalRandomConfig, ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
-        block::to_state_from_blueprint,
         generation::{
             noise::router::{
                 multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -80,7 +79,7 @@ mod test {
             chunk_x,
             chunk_z,
             &Dimension::OVERWORLD,
-            to_state_from_blueprint(&surface_config.default_block),
+            surface_config.default_block,
             biome_mixer_seed,
         );
 

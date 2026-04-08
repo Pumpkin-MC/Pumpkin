@@ -74,6 +74,8 @@ pub enum MinecraftVersion {
     V_1_21_7,
     V_1_21_9,
     V_1_21_11,
+    //  26.1: Tiny Takeover
+    V_26_1,
     /// Fallback for unrecognized protocol versions.
     Unknown,
 }
@@ -134,6 +136,7 @@ impl MinecraftVersion {
             Self::V_1_21_7 => 772,
             Self::V_1_21_9 => 773,
             Self::V_1_21_11 => 774,
+            Self::V_26_1 => 775,
             Self::Unknown => -1,
         }
     }
@@ -193,6 +196,7 @@ impl MinecraftVersion {
             772 => Self::V_1_21_7,
             773 => Self::V_1_21_9,
             774 => Self::V_1_21_11,
+            775 => Self::V_26_1,
             _ => Self::Unknown,
         }
     }
@@ -250,6 +254,8 @@ impl std::fmt::Display for MinecraftVersion {
             Self::V_1_21_7 => write!(f, "1.21.7"),
             Self::V_1_21_9 => write!(f, "1.21.9"),
             Self::V_1_21_11 => write!(f, "1.21.11"),
+            Self::V_26_1 => write!(f, "26.1"),
+
             Self::Unknown => write!(f, "unknown"),
         }
     }

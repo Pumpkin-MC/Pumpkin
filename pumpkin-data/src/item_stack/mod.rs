@@ -1,15 +1,16 @@
-use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component::DataComponent::Enchantments;
-use pumpkin_data::data_component_impl::{
+use crate::data_component::DataComponent;
+use crate::data_component::DataComponent::Enchantments;
+use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
     MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, get, get_mut, read_data,
 };
-use pumpkin_data::item::Item;
-use pumpkin_data::recipes::RecipeResultStruct;
-use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, Enchantment};
+use crate::item::Item;
+use crate::recipes::RecipeResultStruct;
+use crate::tag::Taggable;
+use crate::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
+use rand;
 use std::borrow::Cow;
 use std::cmp::{max, min};
 
@@ -108,6 +109,13 @@ impl ItemStack {
         item: &Item::AIR,
         patch: Vec::new(),
     };
+
+    pub fn split_off(&mut self, amount: u8) -> Self {
+        let count = amount.min(self.item_count);
+        let result = self.copy_with_count(count);
+        self.decrement(count);
+        result
+    }
 
     #[must_use]
     pub fn get_max_stack_size(&self) -> u8 {
@@ -260,7 +268,7 @@ impl ItemStack {
     }
 
     #[must_use]
-    pub const fn get_item(&self) -> &Item {
+    pub const fn get_item(&self) -> &'static Item {
         if self.is_empty() {
             &Item::AIR
         } else {
@@ -310,6 +318,9 @@ impl ItemStack {
     pub fn decrement_unless_creative(&mut self, gamemode: GameMode, amount: u8) {
         if gamemode != GameMode::Creative {
             self.item_count = self.item_count.saturating_sub(amount);
+            if self.item_count == 0 {
+                self.clear();
+            }
         }
     }
 
@@ -355,7 +366,8 @@ impl ItemStack {
 
     #[must_use]
     pub fn are_items_and_components_equal(&self, other: &Self) -> bool {
-        if self.item != other.item || self.patch.len() != other.patch.len() {
+        // Items must match
+        if self.item != other.item {
             return false;
         }
         for (id, data) in &self.patch {
@@ -379,6 +391,7 @@ impl ItemStack {
                 return false;
             }
         }
+
         true
     }
 
@@ -401,11 +414,11 @@ impl ItemStack {
                 };
                 match &rule.blocks {
                     IDSet::Tag(tag) => {
-                        if block.has_tag(tag) {
+                        if block.is_tagged_with(tag).unwrap_or(false) {
                             return speed;
                         }
                     }
-                    IDSet::Blocks(blocks) => {
+                    IDSet::IDs(blocks) => {
                         if blocks.contains(&block) {
                             return speed;
                         }
@@ -430,11 +443,11 @@ impl ItemStack {
                 };
                 match &rule.blocks {
                     IDSet::Tag(tag) => {
-                        if block.has_tag(tag) {
+                        if block.is_tagged_with(tag).unwrap_or(false) {
                             return correct;
                         }
                     }
-                    IDSet::Blocks(blocks) => {
+                    IDSet::IDs(blocks) => {
                         if blocks.contains(&block) {
                             return correct;
                         }
@@ -514,8 +527,8 @@ impl From<&RecipeResultStruct> for ItemStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_data::data_component::DataComponent;
-    use pumpkin_data::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
+    use crate::data_component::DataComponent;
+    use crate::data_component_impl::{DataComponentImpl, EnchantmentsImpl, UnbreakableImpl};
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
     fn iron_sword() -> ItemStack {

@@ -2,6 +2,7 @@ use crate::{entity::EntityBaseFuture, server::Server};
 use core::f32;
 use pumpkin_data::data_component_impl::DamageResistantImpl;
 use pumpkin_data::data_component_impl::DamageResistantType;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -9,7 +10,6 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 use std::sync::atomic::Ordering::{AcqRel, Relaxed};
 
 use std::sync::{
@@ -393,7 +393,7 @@ impl EntityBase for ItemEntity {
         Box::pin(async {
             self.entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_STACK,
+                    TrackedData::ITEM,
                     MetaDataType::ITEM_STACK,
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )])

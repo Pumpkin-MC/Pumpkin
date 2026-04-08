@@ -6,6 +6,8 @@ use crate::command::node::attached::NodeId;
 use crate::command::node::dispatcher::{CommandDispatcher, ResultConsumer};
 use crate::command::node::tree::Tree;
 use crate::command::node::{Command, RedirectModifier};
+use crate::server::Server;
+use crate::world::World;
 use pumpkin_util::text::TextComponent;
 use rustc_hash::FxHashMap;
 use std::any::Any;
@@ -65,7 +67,7 @@ pub struct CommandContext<'a> {
     /// The tree this context is related to.
     pub tree: &'a Tree,
 
-    /// The root that this context will use, bound to the tree
+    /// The root that this context will use, bound to the tree.
     /// Not necessarily the root node of the tree, however.
     pub root: NodeId,
 
@@ -170,6 +172,18 @@ impl CommandContext<'_> {
             )))
         })
     }
+
+    /// Gets the server of this context.
+    #[must_use]
+    pub fn server(&self) -> &Arc<Server> {
+        self.source.server()
+    }
+
+    /// Gets the world of this context.
+    #[must_use]
+    pub fn world(&self) -> &Arc<World> {
+        self.source.world()
+    }
 }
 
 /// Represents a linked chain of [`CommandContext`]s, where the previous links to the next as a child.
@@ -226,7 +240,7 @@ impl<'a> ContextChain<'a> {
     ) -> Result<Vec<Arc<CommandSource>>, CommandSyntaxError> {
         let source_modifier = &modifier.modifier;
 
-        if matches!(source_modifier, RedirectModifier::OneSource) {
+        if matches!(source_modifier, RedirectModifier::KeepSource) {
             return Ok(vec![source.clone()]);
         }
 
@@ -422,7 +436,7 @@ impl<'a> CommandContextBuilder<'a> {
             nodes: Vec::new(),
             range: StringRange::at(start),
             child: None,
-            modifier: RedirectModifier::OneSource,
+            modifier: RedirectModifier::KeepSource,
             forks: false,
             command: None,
         }

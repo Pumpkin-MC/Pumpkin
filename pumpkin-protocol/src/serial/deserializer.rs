@@ -1,5 +1,5 @@
 use std::{
-    io::{Error, Read},
+    io::{Error, ErrorKind, Read},
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 
@@ -133,8 +133,22 @@ impl<T: PacketRead, const N: usize> PacketRead for [T; N] {
 
 impl PacketRead for String {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let vec = Vec::read(reader)?;
-        Ok(unsafe { Self::from_utf8_unchecked(vec) })
+        const MAX_STRING_LENGTH: usize = 32767;
+
+        let len = u32::read(reader)? as usize;
+
+        if len > MAX_STRING_LENGTH {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("String length {len} exceeds maximum of {MAX_STRING_LENGTH}"),
+            ));
+        }
+
+        let mut buf = vec![0u8; len];
+        reader.read_exact(&mut buf)?;
+
+        Self::from_utf8(buf)
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "Invalid UTF-8 sequence"))
     }
 }
 

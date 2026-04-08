@@ -57,7 +57,10 @@ impl Slot for FurnaceLikeSlot {
         })
     }
 
-    fn can_insert<'a>(&'a self, stack: &'a pumpkin_world::item::ItemStack) -> BoxFuture<'a, bool> {
+    fn can_insert<'a>(
+        &'a self,
+        stack: &'a pumpkin_data::item_stack::ItemStack,
+    ) -> BoxFuture<'a, bool> {
         Box::pin(async move {
             match self.slot_type {
                 FurnaceLikeSlotType::Top => true,
@@ -109,7 +112,10 @@ impl Slot for FurnaceOutputSlot {
         })
     }
 
-    fn can_insert<'a>(&'a self, _stack: &'a pumpkin_world::item::ItemStack) -> BoxFuture<'a, bool> {
+    fn can_insert<'a>(
+        &'a self,
+        _stack: &'a pumpkin_data::item_stack::ItemStack,
+    ) -> BoxFuture<'a, bool> {
         // Cannot insert items into the output slot
         Box::pin(async move { false })
     }
@@ -117,7 +123,7 @@ impl Slot for FurnaceOutputSlot {
     fn on_take_item<'a>(
         &'a self,
         player: &'a dyn InventoryPlayer,
-        _stack: &'a pumpkin_world::item::ItemStack,
+        _stack: &'a pumpkin_data::item_stack::ItemStack,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             debug!("FurnaceOutputSlot: on_take_item called");

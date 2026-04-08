@@ -15,7 +15,7 @@
     "file_denylist": [],
     "startup": ".\/pumpkin",
     "config": {
-        "files": "{\r\n    \"config\/configuration.toml\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"java_edition_address\": \"java_edition_address = '0.0.0.0:{{server.allocations.default.port}}'\"\r\n        }\r\n    },\r\n    \"config\/features.toml\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"address\": \"address = '0.0.0.0:{{server.allocations.default.port}}'\"\r\n        }\r\n    }\r\n}",
+        "files": "{\r\n    \"config\/configuration.toml\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"java_edition_address\": \"java_edition_address = '0.0.0.0:{{server.build.default.port}}'\"\r\n        }\r\n    },\r\n    \"config\/features.toml\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"address\": \"address = '0.0.0.0:{{server.build.default.port}}'\"\r\n        }\r\n    }\r\n}",
         "startup": "{\r\n    \"done\": \"Server is now running.\"\r\n}",
         "logs": "{}",
         "stop": "stop"

@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use pumpkin_data::recipes::CookingRecipe;
+use pumpkin_data::{item_stack::ItemStack, recipes::CookingRecipe};
 use tokio::sync::Mutex;
 
 use crate::{
     block::entities::{BlockEntity, PropertyDelegate},
     inventory::{Clearable, Inventory},
-    item::ItemStack,
 };
 
 /// Trait for extracting smelting experience from cooking block entities.

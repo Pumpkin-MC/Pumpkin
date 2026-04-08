@@ -1,5 +1,5 @@
 use crate::enchantments::AttributeModifierSlot;
-use heck::ToShoutySnakeCase;
+use heck::{ToPascalCase, ToShoutySnakeCase};
 use proc_macro2::{Span, TokenStream};
 use pumpkin_util::registry::TagType;
 use pumpkin_util::text::TextContent;
@@ -157,13 +157,11 @@ impl ToTokens for ItemComponents {
                             str.strip_prefix("minecraft:").unwrap().to_uppercase()
                         );
                         block_array = quote! {
-                            Blocks(Cow::Borrowed(&[&Block::#ident]))
+                            IDs(Cow::Borrowed(&[&Block::#ident]))
                         }
                     } else if let TagType::Tag(str) = t {
-                        let ident =
-                            format_ident!("{}", str.replace([':', '/'], "_").to_uppercase());
                         block_array = quote! {
-                            Tag(&tag::Block::#ident)
+                            Tag(Cow::Borrowed(#str))
                         }
                     } else {
                         unreachable!();
@@ -183,7 +181,7 @@ impl ToTokens for ItemComponents {
                         });
                     }
                     block_array = quote! {
-                        Blocks(Cow::Borrowed(&[#(#array),*]))
+                        IDs(Cow::Borrowed(&[#(#array),*]))
                     }
                 } else {
                     unreachable!();
@@ -247,9 +245,107 @@ impl ToTokens for ItemComponents {
                 &format!("{:.1}", consumable.consume_seconds.unwrap_or(1.6)),
                 Span::call_site(),
             );
+            let consume_particles = LitBool::new(
+                consumable.has_consume_particles.unwrap_or(true),
+                Span::call_site(),
+            );
+
+            let anim_str = consumable.animation.clone().unwrap_or("eat".to_string());
+            let animation = format_ident!("{}", anim_str.to_pascal_case());
+
+            let sound_id = consumable
+                .sound
+                .clone()
+                .unwrap_or("minecraft:entity.generic.eat".to_string());
+            let variant_name = format_ident!(
+                "{}",
+                sound_id
+                    .strip_prefix("minecraft:")
+                    .unwrap()
+                    .to_pascal_case()
+            );
+            let effects: Vec<ConsumeEffect> =
+                consumable.on_consume_effects.clone().unwrap_or(vec![]);
+            let mut effect_tokens = TokenStream::new();
+
+            for effect in effects {
+                match effect.r#type.as_str() {
+                    "minecraft:clear_all_effects" => {
+                        effect_tokens.extend(quote! { ConsumeEffect::ClearAllEffects, });
+                    }
+                    "minecraft:teleport_randomly" => {
+                        let diameter = effect.diameter.unwrap_or(16.);
+                        effect_tokens
+                            .extend(quote! { ConsumeEffect::TeleportRandomly(#diameter), });
+                    }
+                    "minecraft:play_sound" => {
+                        let sound = format_ident!(
+                            "{}",
+                            effect
+                                .sound
+                                .unwrap()
+                                .strip_prefix("minecraft:")
+                                .unwrap()
+                                .to_pascal_case()
+                        );
+                        effect_tokens
+                            .extend(quote! { ConsumeEffect::PlaySound(IdOr::Id(Sound::#sound)), });
+                    }
+                    "minecraft:apply_effects" => {
+                        let probability = effect.probability.unwrap_or(1.);
+                        if let StringOrStatusEffects::Effects(status_effect_instances) =
+                            effect.effects.unwrap()
+                        {
+                            let mut status_tokens = TokenStream::new();
+
+                            for status in status_effect_instances {
+                                let effect_id = status.id;
+                                let amplifier = status.amplifier.unwrap_or(0);
+                                let duration = status.duration.unwrap_or(1);
+                                let ambient = status.ambient.unwrap_or(false);
+                                let show_particles = status.show_particles.unwrap_or(true);
+                                let show_icon = status.show_icon.unwrap_or(true);
+                                status_tokens.extend(quote! {
+                                    StatusEffectInstance {
+                                        effect_id: Cow::Borrowed(#effect_id),
+                                        amplifier: #amplifier,
+                                        duration: #duration,
+                                        ambient: #ambient,
+                                        show_particles: #show_particles,
+                                        show_icon: #show_icon
+                                    },
+                                });
+                            }
+                            effect_tokens.extend(quote! {
+                                ConsumeEffect::ApplyEffects((Cow::Borrowed(&[#status_tokens]), #probability)),
+                            });
+                        }
+                    }
+                    "minecraft:remove_effects" => {
+                        if let StringOrStatusEffects::String(id) = effect.effects.unwrap() {
+                            let effect_id = format_ident!(
+                                "{}",
+                                id.strip_prefix("minecraft:")
+                                    .unwrap()
+                                    .to_pascal_case()
+                                    .to_uppercase()
+                            );
+
+                            effect_tokens.extend(quote! {
+                                ConsumeEffect::RemoveEffects(IDSet::IDs(Cow::Borrowed(&[&StatusEffect::#effect_id]))),
+                            });
+                        }
+                    }
+                    _ => println!("Unknown CustomEffect type: {}", effect.r#type),
+                }
+            }
 
             tokens.extend(quote! { (Consumable, &ConsumableImpl {
                 consume_seconds: #consume_seconds,
+                animation: ConsumeAnimation::#animation,
+                sound_event: IdOr::Id(Sound::#variant_name),
+                consume_particles: #consume_particles,
+                effects: Cow::Borrowed(&[#effect_tokens])
             }), });
         }
 
@@ -262,7 +358,10 @@ impl ToTokens for ItemComponents {
         }
 
         if let Some(weapon) = &self.weapon {
-            let damage = LitInt::new(&weapon.item_damage_per_attack.to_string(), Span::call_site());
+            let damage = LitInt::new(
+                &weapon.item_damage_per_attack.to_string(),
+                Span::call_site(),
+            );
             tokens.extend(quote! { (Weapon, &WeaponImpl { item_damage_per_attack: #damage }), });
         }
 
@@ -383,16 +482,17 @@ impl ToTokens for ItemComponents {
                 .equip_sound
                 .as_ref()
                 .map(|s| {
-                    let equip_sound = LitStr::new(s, Span::call_site());
-                    quote! { #equip_sound }
+                    let variant_name =
+                        format_ident!("{}", s.strip_prefix("minecraft:").unwrap().to_pascal_case());
+                    quote! { IdOr::Id(Sound::#variant_name) }
                 })
-                .unwrap_or(quote! { "item.armor.equip_generic" });
+                .unwrap_or(quote! { IdOr::Id(Sound::ItemArmorEquipGeneric) });
             let asset_id = equippable
                 .asset_id
                 .as_ref()
                 .map(|s| {
                     let asset_id = LitStr::new(s, Span::call_site());
-                    quote! { Some(#asset_id) }
+                    quote! { Some(Cow::Borrowed(#asset_id)) }
                 })
                 .unwrap_or(quote! { None });
             let camera_overlay = equippable
@@ -400,40 +500,49 @@ impl ToTokens for ItemComponents {
                 .as_ref()
                 .map(|s| {
                     let camera_overlay = LitStr::new(s, Span::call_site());
-                    quote! { Some(#camera_overlay) }
+                    quote! { Some(Cow::Borrowed(#camera_overlay)) }
                 })
                 .unwrap_or(quote! { None });
-            let allowed_entities = equippable
-                .allowed_entities
-                .clone()
-                .map(|list| {
-                    let vec: Vec<_> = list
-                        .into_vec()
-                        .iter()
-                        .map(|reg| {
-                            match reg {
-                                TagType::Item(item) => {
-                                    let ident = format_ident!(
-                                        "{}",
-                                        item.strip_prefix("minecraft:").unwrap().to_uppercase()
-                                    );
-                                    quote! { EntityTypeOrTag::Single(&crate::entity_type::EntityType::#ident) }
-                                },
-                                TagType::Tag(tag) => {
-                                    let ident = format_ident!(
-                                        "{}",
-                                        tag.replace([':', '/'], "_").to_uppercase()
-                                    );
-                                    quote! { EntityTypeOrTag::Tag(&crate::tag::EntityType::#ident) }
-                                }
-                            }
-                        })
-                        .collect();
-                    quote! {
-                        Some(&[#(#vec),*])
+            let mut entities_option = TokenStream::new();
+            if let Some(entities) = equippable.allowed_entities.clone() {
+                let mut allowed_entities = TokenStream::new();
+                match entities {
+                    StringOrList::String(str) => {
+                        if str.starts_with("#") {
+                            let formatted = str.strip_prefix("#minecraft:").unwrap();
+                            allowed_entities.extend(quote! {
+                                IDSet::Tag(Cow::Borrowed(#formatted))
+                            });
+                        } else {
+                            let ident = format_ident!(
+                                "{}",
+                                str.strip_prefix("minecraft:").unwrap().to_uppercase()
+                            );
+                            allowed_entities.extend(quote! {
+                                IDSet::IDs(Cow::Borrowed(&[&crate::entity_type::EntityType::#ident]))
+                            });
+                        }
                     }
-                })
-                .unwrap_or(quote! { None });
+                    StringOrList::List(items) => {
+                        let mut ids = TokenStream::new();
+                        for x in items {
+                            let entity = format_ident!(
+                                "{}",
+                                x.strip_prefix("minecraft:").unwrap().to_uppercase()
+                            );
+                            ids.extend(quote! { &crate::entity_type::EntityType::#entity, });
+                        }
+
+                        allowed_entities.extend(quote! {
+                            IDSet::IDs(Cow::Borrowed(&[#ids]))
+                        });
+                    }
+                }
+
+                entities_option.extend(quote! { Some(#allowed_entities) });
+            } else {
+                entities_option.extend(quote! { None });
+            }
             let dispensable = LitBool::new(equippable.dispensable, Span::call_site());
             let swappable = LitBool::new(equippable.swappable, Span::call_site());
             let damage_on_hurt = LitBool::new(equippable.damage_on_hurt, Span::call_site());
@@ -443,19 +552,18 @@ impl ToTokens for ItemComponents {
                 .shearing_sound
                 .as_ref()
                 .map(|s| {
-                    let shearing_sound = LitStr::new(s, Span::call_site());
-                    quote! {
-                        Some(#shearing_sound)
-                    }
+                    let variant_name =
+                        format_ident!("{}", s.strip_prefix("minecraft:").unwrap().to_pascal_case());
+                    quote! { IdOr::Id(Sound::#variant_name) }
                 })
-                .unwrap_or(quote! { None });
+                .unwrap_or(quote! { IdOr::Id(Sound::ItemShearsSnip) });
 
             tokens.extend(quote! { (Equippable, &EquippableImpl {
                 slot: #slot,
                 equip_sound: #equip_sound,
                 asset_id: #asset_id,
                 camera_overlay: #camera_overlay,
-                allowed_entities: #allowed_entities,
+                allowed_entities: #entities_option,
                 dispensable: #dispensable,
                 swappable: #swappable,
                 damage_on_hurt: #damage_on_hurt,
@@ -549,8 +657,34 @@ const fn _true() -> bool {
 /// Deserialized consumable component describing use duration.
 #[derive(Deserialize, Clone)]
 pub struct Consumable {
-    /// Time in seconds to fully consume the item; defaults to `1.6` if absent.
-    consume_seconds: Option<f32>, // TODO
+    consume_seconds: Option<f32>,
+    has_consume_particles: Option<bool>,
+    animation: Option<String>,
+    sound: Option<String>,
+    on_consume_effects: Option<Vec<ConsumeEffect>>,
+}
+#[derive(Deserialize, Clone)]
+pub struct ConsumeEffect {
+    r#type: String,
+    probability: Option<f32>,
+    diameter: Option<f32>,
+    sound: Option<String>,
+    effects: Option<StringOrStatusEffects>,
+}
+#[derive(Deserialize, Clone)]
+pub struct StatusEffectInstance {
+    pub id: String,
+    pub amplifier: Option<i32>,
+    pub duration: Option<i32>,
+    pub ambient: Option<bool>,
+    pub show_particles: Option<bool>,
+    pub show_icon: Option<bool>,
+}
+#[derive(Deserialize, Clone)]
+#[serde(untagged)]
+pub enum StringOrStatusEffects {
+    String(String),
+    Effects(Vec<StatusEffectInstance>),
 }
 
 /// Deserialized death-protection component (e.g., totem of undying); fields are unimplemented.
@@ -579,6 +713,12 @@ pub struct DamageResistantComponent {
     /// Namespaced damage type tag the item is immune to.
     pub types: String,
 }
+#[derive(Deserialize, Clone)]
+#[serde(untagged)]
+pub enum StringOrList {
+    String(String),
+    List(Vec<String>),
+}
 
 /// Deserialized equippable component describing how an item is worn or equipped.
 #[derive(Deserialize, Clone)]
@@ -591,9 +731,7 @@ pub struct EquippableComponent {
     pub asset_id: Option<String>,
     /// Screen overlay texture shown while equipped, if any.
     pub camera_overlay: Option<String>,
-    /// Entities that can wear this item; all entities allowed when absent.
-    pub allowed_entities: Option<RegistryEntryList>,
-    /// Whether the item can be dispensed into an equipment slot, defaults to `true`.
+    pub allowed_entities: Option<StringOrList>,
     #[serde(default = "_true")]
     pub dispensable: bool,
     /// Whether shift-clicking swaps the item into the equipment slot, defaults to `true`.
@@ -670,9 +808,11 @@ pub fn build() -> TokenStream {
         use std::hash::{Hash, Hasher};
         use crate::{tag, AttributeModifierSlot};
         use crate::attributes::Attributes;
-        use crate::data_component_impl::IDSet::{Blocks, Tag};
+        use crate::data_component_impl::IDSet::{IDs, Tag};
         use crate::data_component::DataComponent;
+        use crate::effect::StatusEffect;
         use crate::Block;
+        use crate::sound::Sound;
 
         #[derive(Clone)]
         pub struct Item {

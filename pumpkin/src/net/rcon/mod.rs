@@ -9,6 +9,7 @@ use tokio::{
 };
 use tracing::{debug, error, info};
 
+use crate::command::CommandSender;
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
 mod packet;
@@ -127,17 +128,16 @@ impl RCONClient {
                     let output_clone = output.clone();
                     let packet_body = packet.get_body().to_owned();
 
+                    let command_source =
+                        CommandSender::Rcon(output_clone).into_source(server).await;
+
                     // Wait task complete before send output
                     let _ = tokio::spawn(async move {
                         server_clone
                             .command_dispatcher
                             .read()
                             .await
-                            .handle_command(
-                                &crate::command::CommandSender::Rcon(output_clone),
-                                &server_clone,
-                                &packet_body,
-                            )
+                            .handle_command(&command_source, &packet_body)
                             .await;
                     })
                     .await;

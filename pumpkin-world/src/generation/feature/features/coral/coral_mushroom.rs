@@ -1,4 +1,5 @@
 use crate::generation::proto_chunk::GenerationCache;
+use pumpkin_data::tag;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
@@ -19,7 +20,7 @@ impl CoralMushroomFeature {
         pos: BlockPos,
     ) -> bool {
         // First lets get a random coral
-        let block = CoralFeature::get_random_tag_entry("minecraft:coral_blocks", random);
+        let block = CoralFeature::get_random_tag_entry(tag::Block::MINECRAFT_CORAL_BLOCKS, random);
 
         let i = random.next_bounded_i32(3) + 3;
         let j = random.next_bounded_i32(3) + 3;
