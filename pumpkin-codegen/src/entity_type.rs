@@ -106,6 +106,13 @@ impl ToTokens for NamedEntityType<'_> {
             quote! { None }
         };
 
+        let hurt_sound = if let Some(sound_name) = entity.hurt_sound.as_ref() {
+            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
+            quote! { Some(Sound::#sound_ident) }
+        } else {
+            quote! { None }
+        };
+
         let spawn_restriction_location = match entity.spawn_restriction.location {
             SpawnLocation::InLava => quote! {SpawnLocation::InLava},
             SpawnLocation::InWater => quote! {SpawnLocation::InWater},
@@ -170,6 +177,7 @@ impl ToTokens for NamedEntityType<'_> {
             EntityType {
                 id: #id,
                 attributes: #attributes_field,
+                hurt_sound: #hurt_sound,
                 attackable: #attackable,
                 mob: #mob,
                 saveable: #saveable,
@@ -196,7 +204,6 @@ pub fn build() -> TokenStream {
             .expect("Failed to parse entities.json");
 
     let mut consts = TokenStream::new();
-    let mut hurt_sound_lookup_arms = TokenStream::new();
     let mut type_from_raw_id_arms = TokenStream::new();
     let mut type_from_name = TokenStream::new();
 
@@ -211,13 +218,6 @@ pub fn build() -> TokenStream {
             pub const #upper_name: EntityType = #entity_tokens;
         });
 
-        if let Some(sound_name) = entity.hurt_sound.as_ref() {
-            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
-            hurt_sound_lookup_arms.extend(quote! {
-                id if id == EntityType::#upper_name.id => Some(Sound::#sound_ident),
-            });
-        }
-
         type_from_raw_id_arms.extend(quote! {
             #id_lit => Some(&Self::#upper_name),
         });
@@ -231,7 +231,6 @@ pub fn build() -> TokenStream {
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use crate::attributes::Attributes;
-        #[cfg(feature = "entity_hurt_sound")]
         use crate::sound::Sound;
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
@@ -241,6 +240,7 @@ pub fn build() -> TokenStream {
         pub struct EntityType {
             pub id: u16,
             pub attributes: &'static [(Attributes, f64)],
+            pub hurt_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
             pub saveable: bool,
@@ -403,14 +403,6 @@ pub fn build() -> TokenStream {
                     #type_from_name
                     _ => None
                 }
-            }
-        }
-
-        #[cfg(feature = "entity_hurt_sound")]
-        pub const fn hurt_sound_for_entity_type(entity_type: &'static EntityType) -> Option<Sound> {
-            match entity_type.id {
-                #hurt_sound_lookup_arms
-                _ => None,
             }
         }
 

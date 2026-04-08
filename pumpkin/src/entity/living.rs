@@ -37,7 +37,7 @@ use pumpkin_data::data_component_impl::{
     DeathProtectionImpl, EquipmentSlot, EquippableImpl, FoodImpl,
 };
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType, hurt_sound_for_entity_type};
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
@@ -128,7 +128,7 @@ impl LivingEntity {
     ];
 
     fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
-        hurt_sound_for_entity_type(entity_type).unwrap_or(Sound::EntityGenericHurt)
+        entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
     }
 
     pub fn new(entity: Entity) -> Self {
