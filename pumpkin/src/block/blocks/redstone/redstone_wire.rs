@@ -138,6 +138,24 @@ impl BlockBehaviour for RedstoneWireBlock {
                     }
                 }
             }
+            for side_dir in BlockDirection::all() {
+                let side_block_pos = args.position.offset(side_dir.to_offset());
+                for dir in BlockDirection::all() {
+                    if dir.opposite() == side_dir {
+                        continue;
+                    }
+                    let side_neighbor_pos = side_block_pos.offset(dir.to_offset());
+                    let side_neighbor_block = args.world.get_block(&side_neighbor_pos).await;
+                    if side_neighbor_block == &Block::REDSTONE_WALL_TORCH
+                        || side_neighbor_block == &Block::PISTON
+                        || side_neighbor_block == &Block::STICKY_PISTON
+                    {
+                        args.world
+                            .update_neighbor(&side_neighbor_pos, &Block::REDSTONE_WIRE)
+                            .await;
+                    }
+                }
+            }
         })
     }
 
