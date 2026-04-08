@@ -202,8 +202,7 @@ impl InterpolatedNoiseSampler {
         let upper_noise = OctavePerlinNoiseSampler::new(random, big_start, &big_amplitudes, true);
         let noise = OctavePerlinNoiseSampler::new(random, little_start, &little_amplitudes, true);
 
-        let y_multiplier =
-            data.scaled_y_scale * data.xz_factor / data.y_factor * 684.412;
+        let y_multiplier = data.scaled_y_scale * data.xz_factor / data.y_factor * 684.412;
         let max_value = lower_noise.get_total_amplitude(y_multiplier + 2.0);
 
         let fractions = array::from_fn(|index| {
