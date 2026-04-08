@@ -62,14 +62,11 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
             continue;
         }
 
-        let new_fluid_state = fluid_impl.get_new_liquid(world, fluid, &side_pos).await;
-
         // Skip if no valid fluid state for this position
-        if new_fluid_state.is_none() {
+        let Some(new_fluid_props) = fluid_impl.get_new_liquid(world, fluid, &side_pos).await else {
             continue;
-        }
+        };
 
-        let new_fluid_props = new_fluid_state.unwrap();
         let new_state_id = new_fluid_props.to_state_id(fluid);
 
         // Holes get distance 0

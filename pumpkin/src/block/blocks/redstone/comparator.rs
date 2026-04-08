@@ -3,7 +3,7 @@ use std::sync::{Arc, atomic::Ordering};
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{
-        BlockProperties, ComparatorLikeProperties, ComparatorMode, HorizontalFacing,
+        BlockProperties, ComparatorLikeProperties, HorizontalFacing, ModeComparator,
     },
     entity::EntityType,
 };
@@ -230,7 +230,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                 true
             } else {
                 let props = ComparatorLikeProperties::from_state_id(state.id, block);
-                i == j && props.mode == ComparatorMode::Compare
+                i == j && props.mode == ModeComparator::Compare
             }
         })
     }
@@ -309,8 +309,8 @@ impl ComparatorBlock {
         block: &Block,
     ) {
         props.mode = match props.mode {
-            ComparatorMode::Compare => ComparatorMode::Subtract,
-            ComparatorMode::Subtract => ComparatorMode::Compare,
+            ModeComparator::Compare => ModeComparator::Subtract,
+            ModeComparator::Subtract => ModeComparator::Compare,
         };
         let state_id = props.to_state_id(block);
         world
@@ -336,7 +336,7 @@ impl ComparatorBlock {
             return 0;
         }
         let props = ComparatorLikeProperties::from_state_id(state.id, block);
-        if props.mode == ComparatorMode::Subtract {
+        if props.mode == ModeComparator::Subtract {
             power - sub_power
         } else {
             power
@@ -380,7 +380,7 @@ impl ComparatorBlock {
                 .store(future_level as u8, Ordering::Relaxed);
         }
         let mut props = ComparatorLikeProperties::from_state_id(state.id, block);
-        if now_level != future_level || props.mode == ComparatorMode::Compare {
+        if now_level != future_level || props.mode == ModeComparator::Compare {
             let future_power = self.has_power(world, pos, state, block).await;
             let now_power = props.powered;
             if now_power && !future_power {

@@ -1,6 +1,8 @@
 pub mod armor_stand;
+pub mod arrow;
 pub mod axe;
 pub mod boat;
+pub mod bow;
 pub mod bucket;
 pub mod dye;
 pub mod egg;
@@ -15,6 +17,7 @@ pub mod ink_sac;
 pub mod mace;
 pub mod minecart;
 pub mod name_tag;
+pub mod potions;
 pub mod shovel;
 pub mod snowball;
 pub mod spawn_egg;
@@ -32,7 +35,10 @@ use crate::item::items::spawn_egg::SpawnEggItem;
 use crate::item::items::wind_charge::WindChargeItem;
 
 use super::registry::ItemRegistry;
+use crate::item::items::potions::{LingeringPotionItem, PotionItem, SplashPotionItem};
+use arrow::ArrowItem;
 use axe::AxeItem;
+use bow::BowItem;
 use bucket::{EmptyBucketItem, FilledBucketItem};
 use dye::DyeItem;
 use egg::EggItem;
@@ -54,6 +60,8 @@ use trident::TridentItem;
 pub fn default_registry() -> Arc<ItemRegistry> {
     let mut manager = ItemRegistry::default();
 
+    manager.register(ArrowItem);
+    manager.register(BowItem);
     manager.register(SnowBallItem);
     manager.register(HoeItem);
     manager.register(EggItem);
@@ -82,6 +90,9 @@ pub fn default_registry() -> Arc<ItemRegistry> {
     manager.register(ArmorStandItem);
     manager.register(WindChargeItem);
     manager.register(BoatItem);
+    manager.register(PotionItem);
+    manager.register(SplashPotionItem);
+    manager.register(LingeringPotionItem);
 
     Arc::new(manager)
 }

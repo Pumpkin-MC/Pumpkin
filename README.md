@@ -112,4 +112,4 @@ Consider joining [our Discord server](https://discord.gg/pumpkinmc) to stay up-t
 
 ## Funding
 
-If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Snowiiii).
+If you want to fund me and help the project, check out my [GitHub sponsors](https://github.com/sponsors/Pumpkin-MC).

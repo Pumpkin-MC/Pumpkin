@@ -33,7 +33,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
         server: &'a Server,
         args: &'b mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let s_opt: Option<&'a str> = args.pop();
+        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
 
         let Some(s) = s_opt else {
             return Box::pin(async move { None });
@@ -43,6 +43,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
             let dispatcher = server.command_dispatcher.read().await;
 
             dispatcher
+                .fallback_dispatcher
                 .get_tree(s)
                 .ok()
                 .map(|tree| Arg::CommandTree(tree.clone()))
@@ -62,6 +63,7 @@ impl ArgumentConsumer for CommandTreeArgumentConsumer {
 
             let dispatcher = server.command_dispatcher.read().await;
             let suggestions = dispatcher
+                .fallback_dispatcher
                 .commands
                 .keys()
                 .filter(|suggestion| suggestion.starts_with(input))

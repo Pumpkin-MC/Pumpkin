@@ -19,7 +19,7 @@ impl BannedPlayerList {
         self.remove_invalid_entries();
         self.banned_players
             .iter()
-            .find(|entry| entry.name == profile.name && entry.uuid == profile.id)
+            .find(|entry| entry.uuid == profile.id)
     }
 
     fn remove_invalid_entries(&mut self) {

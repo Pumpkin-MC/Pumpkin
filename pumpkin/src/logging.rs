@@ -20,6 +20,7 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
 
 use crate::command::CommandSender;
+use crate::command::string_reader::StringReader;
 use crate::command::tree::NodeType;
 use crate::server::Server;
 
@@ -417,6 +418,43 @@ impl Completer for PumpkinCommandCompleter {
 
         handle.block_on(async {
             let dispatcher = server.command_dispatcher.read().await;
+            let source = CommandSender::Console.into_source(server).await;
+
+            // Temporary setups to unify both dispatchers for now:
+
+            {
+                if cmd.trim().is_empty() {
+                    // Give all commands as suggestions.
+
+                    let suggestions: Vec<String> = dispatcher
+                        .get_all_commands()
+                        .keys()
+                        .map(ToString::to_string)
+                        .collect();
+                    return Ok((pos, suggestions));
+                }
+            }
+
+            {
+                let mut reader = StringReader::new(cmd);
+                if reader.peek() == Some('/') {
+                    reader.skip();
+                }
+                let parsed = dispatcher.parse(&mut reader, &source).await;
+                let suggestions = dispatcher.get_completion_suggestions(parsed, pos).await;
+
+                if !suggestions.is_empty() {
+                    let start = suggestions.range.start;
+                    let suggestions = suggestions
+                        .suggestions
+                        .into_iter()
+                        .map(|s| s.text.cached_text().clone())
+                        .collect();
+                    return Ok((start, suggestions));
+                }
+            }
+
+            let dispatcher = &dispatcher.fallback_dispatcher;
             let src = CommandSender::Console;
 
             if parts.is_empty() || (parts.len() == 1 && !ends_with_space) {

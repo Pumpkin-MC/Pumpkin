@@ -203,7 +203,7 @@ impl CommandExecutor for Executor {
                     .add_child(
                         TextComponent::text("[Donate]")
                             .click_event(ClickEvent::OpenUrl {
-                                url: Cow::from("https://github.com/sponsors/Snowiiii"),
+                                url: Cow::from("https://github.com/sponsors/Pumpkin-MC"),
                             })
                             .hover_event(HoverEvent::show_text(TextComponent::text(
                                 "Click to open Donate",

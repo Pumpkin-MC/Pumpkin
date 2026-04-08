@@ -77,14 +77,14 @@ impl JukeboxBlock {
     async fn stop_playing(block: &Block, position: &BlockPos, world: &Arc<World>) {
         Self::set_record_state(false, block, position, world).await;
         world
-            .sync_world_event(WorldEvent::JukeboxStopsPlaying, *position, 0)
+            .sync_world_event(WorldEvent::SoundStopJukeboxSong, *position, 0)
             .await;
     }
 
     /// Starts playing music
     async fn start_playing(position: &BlockPos, world: &Arc<World>, song_id: u32) {
         world
-            .sync_world_event(WorldEvent::JukeboxStartsPlaying, *position, song_id as i32)
+            .sync_world_event(WorldEvent::SoundPlayJukeboxSong, *position, song_id as i32)
             .await;
     }
 }
@@ -186,7 +186,7 @@ impl BlockBehaviour for JukeboxBlock {
             Self::drop_record(args.position, args.world).await;
             // Stop the music
             args.world
-                .sync_world_event(WorldEvent::JukeboxStopsPlaying, *args.position, 0)
+                .sync_world_event(WorldEvent::SoundStopJukeboxSong, *args.position, 0)
                 .await;
         })
     }

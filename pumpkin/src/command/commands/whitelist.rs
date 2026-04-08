@@ -5,11 +5,13 @@ use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
 use crate::command::CommandResult;
-use crate::entity::EntityBase;
 use crate::{
     command::{
         CommandExecutor, CommandSender,
-        args::{Arg, ConsumedArgs, players::PlayersArgumentConsumer},
+        args::{
+            Arg, ConsumedArgs,
+            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
+        },
         dispatcher::CommandError,
         tree::{
             CommandTree,
@@ -181,15 +183,21 @@ impl CommandExecutor for AddExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
+            let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGETS) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
             let mut whitelist = server.data.whitelist_config.write().await;
             let mut successes: i32 = 0;
-            for player in targets {
-                let profile = &player.gameprofile;
-                if whitelist.is_whitelisted(profile) {
+            for profile in targets {
+                if let Some(existing_entry) = whitelist
+                    .whitelist
+                    .iter_mut()
+                    .find(|entry| entry.uuid == profile.id)
+                {
+                    if existing_entry.name != profile.name {
+                        existing_entry.name.clone_from(&profile.name);
+                    }
                     continue;
                 }
                 whitelist
@@ -228,7 +236,7 @@ impl CommandExecutor for RemoveExecutor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let Some(Arg::Players(targets)) = args.get(&ARG_TARGETS) else {
+            let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGETS) else {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
@@ -238,14 +246,14 @@ impl CommandExecutor for RemoveExecutor {
                 let i = whitelist
                     .whitelist
                     .iter()
-                    .position(|entry| entry.uuid == player.gameprofile.id);
+                    .position(|entry| entry.uuid == player.id);
 
                 if let Some(i) = i {
                     whitelist.whitelist.remove(i);
                     sender
                         .send_message(TextComponent::translate(
                             translation::COMMANDS_WHITELIST_REMOVE_SUCCESS,
-                            [player.get_display_name().await],
+                            [TextComponent::text(player.name.clone())],
                         ))
                         .await;
                     successes += 1;
@@ -276,11 +284,27 @@ pub fn init_command_tree() -> CommandTree {
         .then(literal("list").execute(ListExecutor))
         .then(literal("reload").execute(ReloadExecutor))
         .then(
-            literal("add")
-                .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(AddExecutor)),
+            literal("add").then(
+                argument(
+                    ARG_TARGETS,
+                    GameProfilesArgumentConsumer::new(
+                        GameProfileSuggestionMode::NonWhitelistedOnlinePlayers,
+                        false,
+                    ),
+                )
+                .execute(AddExecutor),
+            ),
         )
         .then(
-            literal("remove")
-                .then(argument(ARG_TARGETS, PlayersArgumentConsumer).execute(RemoveExecutor)),
+            literal("remove").then(
+                argument(
+                    ARG_TARGETS,
+                    GameProfilesArgumentConsumer::new(
+                        GameProfileSuggestionMode::WhitelistedNames,
+                        false,
+                    ),
+                )
+                .execute(RemoveExecutor),
+            ),
         )
 }

@@ -42,9 +42,14 @@ pub fn build() -> TokenStream {
         value: "../assets/viaversion/data/mappings-1.21.9to1.21.11.nbt",
         child: Some(&node_1_21_7),
     };
+    let node_1_21_11 = MappingNode {
+        version: MinecraftVersion::V_1_21_11,
+        value: "../assets/viaversion/data/mappings-1.21.11to26.1.nbt",
+        child: Some(&node_1_21_9),
+    };
 
     let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
-        version: MinecraftVersion::V_1_21_11,
+        version: MinecraftVersion::V_26_1,
         remapper: |first, second| match (first, second) {
             (Some(first), Some(second)) => Some(
                 first
@@ -66,7 +71,7 @@ pub fn build() -> TokenStream {
         },
     };
 
-    let all_mappings = remapper.process(&node_1_21_9);
+    let all_mappings = remapper.process(&node_1_21_11);
 
     let mut static_values = TokenStream::new();
     let mut match_arms = TokenStream::new();

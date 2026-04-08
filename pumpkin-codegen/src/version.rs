@@ -73,6 +73,7 @@ pub enum MinecraftVersion {
     V_1_21_7,
     V_1_21_9,
     V_1_21_11,
+    V_26_1,
 }
 
 impl MinecraftVersion {
@@ -131,6 +132,7 @@ impl MinecraftVersion {
             Self::V_1_21_7 => format_ident!("v1_21_7"),
             Self::V_1_21_9 => format_ident!("v1_21_9"),
             Self::V_1_21_11 => format_ident!("v1_21_11"),
+            Self::V_26_1 => format_ident!("v26_1"),
         }
     }
 }
@@ -188,6 +190,7 @@ impl ToTokens for MinecraftVersion {
             Self::V_1_21_7 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_7 },
             Self::V_1_21_9 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_9 },
             Self::V_1_21_11 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_11 },
+            Self::V_26_1 => quote! { pumpkin_util::version::MinecraftVersion::V_26_1 },
         });
     }
 }

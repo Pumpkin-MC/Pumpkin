@@ -81,9 +81,10 @@ impl EntityBase for FallingEntity {
 
             entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
 
-            entity.send_pos_rot().await;
-
-            entity.send_velocity().await;
+            if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+                entity.send_pos_rot().await;
+                entity.send_velocity().await;
+            }
         })
     }
 
@@ -91,7 +92,7 @@ impl EntityBase for FallingEntity {
         Box::pin(async move {
             self.entity
                 .send_meta_data(&[Metadata::new(
-                    TrackedData::DATA_BLOCK_POS,
+                    TrackedData::START_POS,
                     MetaDataType::BLOCK_POS,
                     self.entity.block_pos.load(),
                 )])

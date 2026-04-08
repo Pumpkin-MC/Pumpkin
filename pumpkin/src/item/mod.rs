@@ -1,4 +1,5 @@
 pub mod items;
+pub mod potion;
 pub mod registry;
 
 use std::any::Any;
@@ -11,9 +12,9 @@ use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::item::ItemStack;
 
 pub trait ItemMetadata {
     fn ids() -> Box<[u16]>;
@@ -49,6 +50,20 @@ pub trait ItemBehaviour: Send + Sync {
         _entity: Arc<dyn EntityBase>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async {})
+    }
+
+    fn on_stopped_using<'a>(
+        &'a self,
+        _stack: &'a ItemStack,
+        _player: &'a Player,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        Box::pin(async {})
+    }
+
+    /// Returns the maximum number of ticks this item can be used for.
+    /// Return 0 if the item does not have a behaviour-driven use duration.
+    fn get_use_duration(&self) -> i32 {
+        0
     }
 
     fn can_mine(&self, _player: &Player) -> bool {

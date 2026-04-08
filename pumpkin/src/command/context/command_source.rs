@@ -110,7 +110,9 @@ impl CommandSource {
     /// a server or a world. If there is attempt to fetch the server or a world from
     /// the returned source, there will be a panic!
     #[must_use]
-    pub fn dummy() -> Self {
+    // We use it in tests
+    #[allow(dead_code)]
+    pub(crate) fn dummy() -> Self {
         Self {
             output: CommandSender::Dummy,
             world: None,
@@ -118,7 +120,7 @@ impl CommandSource {
             position: Vector3::default(),
             rotation: Vector2::default(),
             name: String::new(),
-            display_name: TextComponent::text(""),
+            display_name: TextComponent::empty(),
             server: None,
             silent: false,
             command_result_taker: ResultValueTaker::new(),
@@ -137,9 +139,6 @@ impl CommandSource {
         name: String,
         display_name: TextComponent,
         server: Arc<Server>,
-        silent: bool,
-        command_result_taker: ResultValueTaker,
-        entity_anchor: EntityAnchor,
     ) -> Self {
         Self {
             output,
@@ -150,9 +149,9 @@ impl CommandSource {
             name,
             display_name,
             server: Some(server),
-            silent,
-            command_result_taker,
-            entity_anchor,
+            silent: false,
+            command_result_taker: ResultValueTaker(Vec::new()),
+            entity_anchor: EntityAnchor::Feet,
         }
     }
 
@@ -361,8 +360,8 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain a world, but it may not in a unit test.
     #[must_use]
-    pub fn world(&self) -> Arc<World> {
-        self.world.clone().expect("Expected world to exist")
+    pub const fn world(&self) -> &Arc<World> {
+        self.world.as_ref().expect("Expected world to exist")
     }
 
     /// Gets the server as a result:
@@ -370,8 +369,8 @@ impl CommandSource {
     /// - If this source actually contains a server, it returns that.
     /// - If it doesn't, this function **panics**. Ideally, a source should contain the server, but it may not in a unit test.
     #[must_use]
-    pub fn server(&self) -> Arc<Server> {
-        self.server.clone().expect("Expected server to exist")
+    pub const fn server(&self) -> &Arc<Server> {
+        self.server.as_ref().expect("Expected server to exist")
     }
 
     /// Gets the player as an option:
@@ -455,10 +454,9 @@ impl CommandSource {
     /// without reporting command failure directly.
     pub async fn send_error(&self, error: TextComponent) {
         if !self.silent && self.output.should_track_output() {
-            // TODO: Use `TextComponent::empty` instead of `TextComponent::text` when implemented
             self.output
                 .send_message(
-                    TextComponent::text("")
+                    TextComponent::empty()
                         .add_child(error)
                         .color(Color::Named(NamedColor::Red)),
                 )
@@ -474,7 +472,7 @@ impl CommandSource {
     /// server (i.e. this is a dummy [`CommandSource`].)
     #[must_use]
     pub async fn has_permission(&self, permission: &str) -> bool {
-        self.output.has_permission(&self.server(), permission).await
+        self.output.has_permission(self.server(), permission).await
     }
 
     /// Returns whether this source has the permission provided.

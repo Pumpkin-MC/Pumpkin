@@ -1,10 +1,10 @@
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     item::Item,
     tag::{RegistryKey, get_tag_ids},
 };
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::item::ItemStack;
 
 use crate::command::{
     CommandSender,
@@ -36,7 +36,7 @@ impl ArgumentConsumer for ItemArgumentConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let item = args.pop();
+        let item = args.pop().map(|arg| arg.value);
         // TODO: When supporting data components in this argument, do it for ItemPredicateArgumentConsumer as well (both tags and items)
         match item {
             Some(s) => Box::pin(async move { Some(Arg::Item(s)) }),
@@ -113,7 +113,7 @@ impl ArgumentConsumer for ItemPredicateArgumentConsumer {
         _server: &'a Server,
         args: &mut RawArgs<'a>,
     ) -> ConsumeResult<'a> {
-        let item = args.pop();
+        let item = args.pop().map(|arg| arg.value);
         match item {
             Some(s) => Box::pin(async move { Some(Arg::Item(s)) }),
             None => Box::pin(async move { None }),
