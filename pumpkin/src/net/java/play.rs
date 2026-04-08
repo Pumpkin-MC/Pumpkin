@@ -1586,6 +1586,11 @@ impl JavaClient {
                     player.drop_held_item(true).await;
                 }
                 Status::ReleaseItemInUse => {
+                    let item_in_use = player.living_entity.item_in_use.lock().await.clone();
+                    if let Some(stack) = item_in_use {
+                        server.item_registry.on_stopped_using(&stack, player).await;
+                    }
+
                     player.living_entity.clear_active_hand().await;
                 }
                 Status::SwapItem => {
@@ -1972,13 +1977,13 @@ impl JavaClient {
                 {
                     player
                         .living_entity
-                        .set_active_hand(hand, held.clone())
+                        .set_active_hand(hand, held.clone(), held.get_max_use_time())
                         .await;
                 }
             } else {
                 player
                     .living_entity
-                    .set_active_hand(hand, held.clone())
+                    .set_active_hand(hand, held.clone(), held.get_max_use_time())
                     .await;
             }
         }

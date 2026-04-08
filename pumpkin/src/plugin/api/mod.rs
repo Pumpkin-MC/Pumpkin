@@ -1,5 +1,6 @@
 pub mod context;
 pub mod events;
+pub mod gui;
 
 use std::{pin::Pin, sync::Arc};
 

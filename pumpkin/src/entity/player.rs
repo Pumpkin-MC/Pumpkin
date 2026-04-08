@@ -457,6 +457,10 @@ pub struct Player {
     pub client_loaded: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
+    /// Item usage tracking for bows, crossbows, etc.
+    pub using_item: AtomicBool,
+    pub item_use_start_time: AtomicI32,
+    pub using_hand: AtomicCell<Option<Hand>>,
     /// The player's experience level.
     pub experience_level: AtomicI32,
     /// The player's experience progress (`0.0` to `1.0`)
@@ -559,6 +563,10 @@ impl Player {
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
+            // Item usage tracking
+            using_item: AtomicBool::new(false),
+            item_use_start_time: AtomicI32::new(0),
+            using_hand: AtomicCell::new(None),
             // Minecraft has no way to change the default permission level of new players.
             // Minecraft's default permission level is 0.
             permission_lvl: server
@@ -2894,6 +2902,40 @@ impl Player {
         }
     }
 
+    pub async fn open_handled_screen_direct(
+        &self,
+        screen_handler: Arc<Mutex<dyn ScreenHandler>>,
+        title: TextComponent,
+    ) {
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handled_screen().await;
+        }
+
+        let screen_handler_temp = screen_handler.lock().await;
+        self.client
+            .enqueue_packet(&COpenScreen::new(
+                screen_handler_temp.sync_id().into(),
+                (screen_handler_temp
+                    .window_type()
+                    .expect("Can't open PlayerScreenHandler") as i32)
+                    .into(),
+                &title,
+            ))
+            .await;
+        drop(screen_handler_temp);
+        self.on_screen_handler_opened(screen_handler.clone()).await;
+        *self.current_screen_handler.lock().await = screen_handler;
+        self.open_container_pos.store(None);
+    }
+
     pub async fn on_slot_click(&self, packet: SClickSlot) {
         self.update_last_action_time();
         let screen_handler = self.current_screen_handler.lock().await;
@@ -2999,6 +3041,76 @@ impl Player {
             world
                 .broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet)
                 .await;
+        }
+    }
+
+    /// Start using an item (e.g. drawing a bow)
+    pub fn start_using_item(&self, hand: Hand) {
+        self.using_item.store(true, Ordering::Relaxed);
+        self.item_use_start_time
+            .store(self.tick_counter.load(Ordering::Relaxed), Ordering::Relaxed);
+        self.using_hand.store(Some(hand));
+    }
+
+    /// Stop using an item
+    pub fn stop_using_item(&self) {
+        self.using_item.store(false, Ordering::Relaxed);
+        self.using_hand.store(None);
+    }
+
+    /// Get the number of ticks the item has been in use
+    pub fn get_item_use_ticks(&self) -> i32 {
+        if !self.using_item.load(Ordering::Relaxed) {
+            return 0;
+        }
+        self.tick_counter.load(Ordering::Relaxed) - self.item_use_start_time.load(Ordering::Relaxed)
+    }
+
+    /// Find arrow in inventory (main hand, offhand, or inventory slots)
+    pub async fn find_arrow(&self) -> Option<usize> {
+        use pumpkin_data::item::Item;
+        let inventory = self.inventory();
+
+        // Check offhand first
+        let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
+        let item = stack.lock().await;
+        if item.item.id == Item::ARROW.id && item.item_count > 0 {
+            return Some(PlayerInventory::OFF_HAND_SLOT);
+        }
+        drop(item);
+
+        // Check hotbar and main inventory
+        for slot in 0..PlayerInventory::MAIN_SIZE {
+            let stack = inventory.get_stack(slot).await;
+            let item = stack.lock().await;
+            if item.item.id == Item::ARROW.id && item.item_count > 0 {
+                return Some(slot);
+            }
+        }
+
+        None
+    }
+
+    /// Consume one arrow from the specified slot
+    pub async fn consume_arrow(&self, slot: usize) -> bool {
+        let gamemode = self.gamemode.load();
+        if gamemode == GameMode::Creative {
+            return true; // Don't consume in creative
+        }
+
+        let inventory = self.inventory();
+        let stack_arc = inventory.get_stack(slot).await;
+        let mut stack = stack_arc.lock().await;
+        match stack.item_count {
+            2.. => {
+                stack.item_count -= 1;
+                true
+            }
+            1 => {
+                *stack = ItemStack::EMPTY.clone();
+                true
+            }
+            _ => false,
         }
     }
 

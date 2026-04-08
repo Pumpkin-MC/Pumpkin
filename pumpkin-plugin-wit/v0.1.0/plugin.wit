@@ -8,6 +8,8 @@ world plugin {
 
     // This is what the host should provide to the plugin
     import logging;
+    import gui;
+    import scoreboard;
     import server;
     import text;
     import command;
