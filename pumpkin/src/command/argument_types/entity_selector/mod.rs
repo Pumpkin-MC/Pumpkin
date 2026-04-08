@@ -2,9 +2,7 @@ mod option;
 pub mod parser;
 
 use crate::command::argument_types::entity;
-use crate::command::argument_types::entity::{
-    ENTITY_SELECTOR_PERMISSION, NO_ENTITIES_ERROR_TYPE, NO_PLAYERS_ERROR_TYPE,
-};
+use crate::command::argument_types::entity::ENTITY_SELECTOR_PERMISSION;
 use crate::command::argument_types::entity_selector::parser::SELECTORS_NOT_ALLOWED_ERROR_TYPE;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
@@ -84,7 +82,7 @@ impl EntitySelector {
         &self,
         source: &CommandSource,
     ) -> Result<Arc<dyn EntityBase>, CommandSyntaxError> {
-        let list = self.find_optional_entities(source).await?;
+        let list = self.find_entities(source).await?;
         match list.as_slice() {
             [] => Err(entity::NO_ENTITIES_ERROR_TYPE.create_without_context()),
             [entity] => Ok(entity.clone()),
@@ -92,28 +90,14 @@ impl EntitySelector {
         }
     }
 
-    /// Tries to find any entities represented by this selector.
-    /// If none are found, an error is returned.
-    pub async fn find_entities(
-        &self,
-        source: &CommandSource,
-    ) -> Result<Vec<Arc<dyn EntityBase>>, CommandSyntaxError> {
-        let entities = self.find_optional_entities(source).await?;
-        if entities.is_empty() {
-            Err(NO_ENTITIES_ERROR_TYPE.create_without_context())
-        } else {
-            Ok(entities)
-        }
-    }
-
     /// Tries to find any entities represented by this selector. If none are found, an empty `Vec` will still be returned.
-    pub async fn find_optional_entities(
+    pub async fn find_entities(
         &self,
         source: &CommandSource,
     ) -> Result<Vec<Arc<dyn EntityBase>>, CommandSyntaxError> {
         self.check_permissions(source).await?;
         if !self.includes_entities {
-            self.find_optional_players(source)
+            self.find_players(source)
                 .await
                 .map(|v| v.into_iter().map(|p| p as Arc<dyn EntityBase>).collect())
         } else if let Some(name) = self.player_name.as_ref() {
@@ -176,7 +160,7 @@ impl EntitySelector {
         &self,
         source: &CommandSource,
     ) -> Result<Arc<Player>, CommandSyntaxError> {
-        let list = self.find_optional_players(source).await?;
+        let list = self.find_players(source).await?;
         if list.len() == 1 {
             Ok(list.first().unwrap().clone())
         } else {
@@ -185,21 +169,7 @@ impl EntitySelector {
     }
 
     /// Tries to find any players represented by this selector.
-    /// If none are found, an error is returned.
     pub async fn find_players(
-        &self,
-        source: &CommandSource,
-    ) -> Result<Vec<Arc<Player>>, CommandSyntaxError> {
-        let players = self.find_optional_players(source).await?;
-        if players.is_empty() {
-            Err(NO_PLAYERS_ERROR_TYPE.create_without_context())
-        } else {
-            Ok(players)
-        }
-    }
-
-    /// Tries to find any players represented by this selector. If none are found, an empty `Vec` will still be returned.
-    pub async fn find_optional_players(
         &self,
         source: &CommandSource,
     ) -> Result<Vec<Arc<Player>>, CommandSyntaxError> {
