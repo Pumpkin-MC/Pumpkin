@@ -45,7 +45,7 @@ use crate::entity::{
 };
 
 const SPEED_BOOST: f64 = 0.15;
-const ENDERMAN_SPEED_BOOST_ID: &str = "enderman:angry_speed";
+const ENDERMAN_SPEED_BOOST_ID: &str = "minecraft:attacking";
 
 pub const ENDERMAN_EYE_HEIGHT: f64 = 2.55;
 pub const ENDERMAN_BODY_Y_OFFSET: f64 = 1.45;
