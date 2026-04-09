@@ -4,7 +4,8 @@ use crate::plugin::{
         wit::v0_1_0::{
             events::{
                 ToFromV0_1_0WasmEvent, consume_player, consume_text_component, consume_world,
-                from_wasm_entity_type, from_wasm_game_mode, from_wasm_hand, from_wasm_position,
+                from_wasm_entity_interaction_action, from_wasm_entity_type, from_wasm_game_mode,
+                from_wasm_hand, from_wasm_position, to_wasm_entity_interaction_action,
                 to_wasm_entity_type, to_wasm_game_mode, to_wasm_hand, to_wasm_position,
             },
             pumpkin::plugin::event::{
@@ -12,9 +13,9 @@ use crate::plugin::{
                 PlayerChatEventData, PlayerCommandSendEventData, PlayerCustomPayloadEventData,
                 PlayerEggThrowEventData, PlayerExpChangeEventData, PlayerFishEventData,
                 PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
-                PlayerItemHeldEventData, PlayerJoinEventData, PlayerLeaveEventData,
-                PlayerLoginEventData, PlayerMoveEventData, PlayerPermissionCheckEventData,
-                PlayerTeleportEventData,
+                PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
+                PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
+                PlayerPermissionCheckEventData, PlayerTeleportEventData,
             },
         },
     },
@@ -29,6 +30,7 @@ use crate::plugin::{
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent,
         player_leave::PlayerLeaveEvent,
         player_login::PlayerLoginEvent,
@@ -517,6 +519,33 @@ impl ToFromV0_1_0WasmEvent for PlayerEggThrowEvent {
                 hatching: data.hatching,
                 num_hatches: data.num_hatches,
                 hatching_type: from_wasm_entity_type(&data.hatching_type),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerInteractUnknownEntityEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerInteractUnknownEntityEvent(PlayerInteractUnknownEntityEventData {
+            player,
+            entity_id: self.entity_id,
+            action: to_wasm_entity_interaction_action(self.action.clone()),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerInteractUnknownEntityEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                entity_id: data.entity_id,
+                action: from_wasm_entity_interaction_action(data.action),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
