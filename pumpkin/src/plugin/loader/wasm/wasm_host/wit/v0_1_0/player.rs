@@ -201,9 +201,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn get_protocol_version(&mut self, player: Resource<Player>) -> wasmtime::Result<u32> {
         let player = player_from_resource(self, &player)?;
         let protocol = match &player.client {
-            crate::net::ClientPlatform::Java(java) => {
-                java.version.load().protocol_version() as u32
-            }
+            crate::net::ClientPlatform::Java(java) => java.version.load().protocol_version() as u32,
             crate::net::ClientPlatform::Bedrock(_) => CURRENT_BEDROCK_MC_PROTOCOL,
         };
         Ok(protocol)

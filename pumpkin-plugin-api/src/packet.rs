@@ -496,7 +496,10 @@ pub struct PacketWrapper {
 impl PacketWrapper {
     /// Builds a wrapper from a raw packet event.
     pub fn new(event: RawPacketEventData) -> Self {
-        let protocol_version = event.player.as_ref().map(|player| player.get_protocol_version());
+        let protocol_version = event
+            .player
+            .as_ref()
+            .map(|player| player.get_protocol_version());
         Self {
             event,
             protocol_version,
@@ -557,11 +560,9 @@ impl PacketWrapper {
     }
 
     /// Resolves a packet id for the current protocol version.
-    pub fn resolve_packet_id(
-        &self,
-        packet_id: &crate::packet_ids_full::PacketId,
-    ) -> Option<i32> {
-        self.minecraft_version().map(|version| packet_id.to_id(version))
+    pub fn resolve_packet_id(&self, packet_id: &crate::packet_ids_full::PacketId) -> Option<i32> {
+        self.minecraft_version()
+            .map(|version| packet_id.to_id(version))
     }
 
     /// Returns the packet payload bytes.
