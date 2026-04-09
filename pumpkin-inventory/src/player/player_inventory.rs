@@ -290,7 +290,7 @@ impl PlayerInventory {
             }
         }
 
-        for i in 0..Self::HOTBAR_SIZE {
+        if let Some(i) = (0..Self::HOTBAR_SIZE).next() {
             let check_index = (i + selected_slot) % 9;
             return check_index;
         }

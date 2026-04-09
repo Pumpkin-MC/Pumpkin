@@ -189,7 +189,7 @@ pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack)
 /// Type alias for async screen handler operations.
 pub type ScreenHandlerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// Future type that returns an ItemStack (used by quick_move).
+/// Future type that returns an `ItemStack` (used by `quick_move`).
 pub type ItemStackFuture<'a> = ScreenHandlerFuture<'a, ItemStack>;
 
 /// Future type that returns an optional slot index.

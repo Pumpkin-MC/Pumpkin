@@ -58,7 +58,7 @@ use crate::player::player_inventory::PlayerInventory;
 /// (head, chest, legs, feet, off-hand) used by the player screen handler.
 ///
 /// # Returns
-/// A HashMap where keys are slot indices and values are the corresponding [`EquipmentSlot`]s.
+/// A `HashMap` where keys are slot indices and values are the corresponding [`EquipmentSlot`]s.
 #[must_use]
 pub fn build_equipment_slots() -> HashMap<usize, EquipmentSlot> {
     let mut equipment_slots = HashMap::new();
