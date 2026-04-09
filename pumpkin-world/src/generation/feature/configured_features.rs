@@ -368,6 +368,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::BasaltPillar(feature) => feature.generate(chunk, random, pos),
             _ => false, // TODO
         }
     }
