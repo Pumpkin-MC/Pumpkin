@@ -369,6 +369,7 @@ impl ConfiguredFeature {
                 pos,
             ),
             Self::BasaltPillar(feature) => feature.generate(chunk, random, pos),
+            Self::ForestRock(feature) => feature.generate(chunk, random, pos),
             _ => false, // TODO
         }
     }
