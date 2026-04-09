@@ -23,6 +23,7 @@ use crate::{
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::permission::PermissionLvl;
+use pumpkin_world::CURRENT_BEDROCK_MC_PROTOCOL;
 
 fn player_from_resource(
     state: &PluginHostState,
@@ -195,6 +196,17 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn get_ping(&mut self, player: Resource<Player>) -> wasmtime::Result<u32> {
         let player = player_from_resource(self, &player)?;
         Ok(player.ping.load(Ordering::Relaxed))
+    }
+
+    async fn get_protocol_version(&mut self, player: Resource<Player>) -> wasmtime::Result<u32> {
+        let player = player_from_resource(self, &player)?;
+        let protocol = match &player.client {
+            crate::net::ClientPlatform::Java(java) => {
+                java.version.load().protocol_version() as u32
+            }
+            crate::net::ClientPlatform::Bedrock(_) => CURRENT_BEDROCK_MC_PROTOCOL,
+        };
+        Ok(protocol)
     }
 
     async fn get_permission_level(

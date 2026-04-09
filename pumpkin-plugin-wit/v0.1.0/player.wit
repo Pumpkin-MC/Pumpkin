@@ -29,6 +29,8 @@ interface player {
         set-gamemode: func (mode: game-mode) -> bool;
         get-locale: func () -> string;
         get-ping: func () -> u32;
+        /// Returns the network protocol version for this player.
+        get-protocol-version: func () -> u32;
 
         // Permissions & metadata
         get-permission-level: func () -> permission-level;

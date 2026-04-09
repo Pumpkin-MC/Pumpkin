@@ -487,6 +487,109 @@ pub mod codec {
     }
 }
 
+/// Convenience wrapper for raw packet events with version-aware helpers.
+pub struct PacketWrapper {
+    event: RawPacketEventData,
+    protocol_version: Option<u32>,
+}
+
+impl PacketWrapper {
+    /// Builds a wrapper from a raw packet event.
+    pub fn new(event: RawPacketEventData) -> Self {
+        let protocol_version = event.player.as_ref().map(|player| player.get_protocol_version());
+        Self {
+            event,
+            protocol_version,
+        }
+    }
+
+    /// Returns the underlying event data.
+    pub fn event(&self) -> &RawPacketEventData {
+        &self.event
+    }
+
+    /// Returns a mutable reference to the underlying event data.
+    pub fn event_mut(&mut self) -> &mut RawPacketEventData {
+        &mut self.event
+    }
+
+    /// Consumes the wrapper and returns the underlying event data.
+    pub fn into_event(self) -> RawPacketEventData {
+        self.event
+    }
+
+    /// Returns the packet id.
+    pub fn id(&self) -> i32 {
+        self.event.packet.packet.id
+    }
+
+    /// Returns the packet direction.
+    pub fn direction(&self) -> PacketDirection {
+        self.event.packet.direction
+    }
+
+    /// Returns the connection state.
+    pub fn state(&self) -> &ConnectionState {
+        &self.event.packet.state
+    }
+
+    /// Returns `true` if this is a Java connection state.
+    pub fn is_java(&self) -> bool {
+        matches!(self.event.packet.state, ConnectionState::Java(_))
+    }
+
+    /// Returns `true` if this is a Bedrock connection state.
+    pub fn is_bedrock(&self) -> bool {
+        matches!(self.event.packet.state, ConnectionState::Bedrock(_))
+    }
+
+    /// Returns the protocol version number for this player, if available.
+    pub fn protocol_version(&self) -> Option<u32> {
+        self.protocol_version
+    }
+
+    /// Returns the resolved Java Minecraft version, if this is a Java client.
+    pub fn minecraft_version(&self) -> Option<pumpkin_util::version::MinecraftVersion> {
+        let protocol = self.protocol_version?;
+        Some(pumpkin_util::version::MinecraftVersion::from_protocol(
+            protocol,
+        ))
+    }
+
+    /// Resolves a packet id for the current protocol version.
+    pub fn resolve_packet_id(
+        &self,
+        packet_id: &crate::packet_ids_full::PacketId,
+    ) -> Option<i32> {
+        self.minecraft_version().map(|version| packet_id.to_id(version))
+    }
+
+    /// Returns the packet payload bytes.
+    pub fn payload(&self) -> &[u8] {
+        &self.event.packet.packet.payload
+    }
+
+    /// Returns a mutable view of the packet payload bytes.
+    pub fn payload_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.event.packet.packet.payload
+    }
+
+    /// Creates a reader over the current payload.
+    pub fn reader(&self) -> codec::PacketReader<'_> {
+        codec::PacketReader::new(self.payload())
+    }
+
+    /// Replaces the payload bytes.
+    pub fn replace_payload(&mut self, payload: Vec<u8>) {
+        self.event.packet.packet.payload = payload;
+    }
+
+    /// Marks the packet event as cancelled.
+    pub fn cancel(&mut self) {
+        self.event.packet.cancelled = true;
+    }
+}
+
 /// Java edition packet helpers.
 pub mod java {
     use super::{
