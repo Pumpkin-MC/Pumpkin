@@ -292,9 +292,7 @@ pub enum LootConditionStruct {
     AllOf,
     /// Passes with the given probability.
     #[serde(rename = "minecraft:random_chance")]
-    RandomChance {
-        chance: f32,
-    },
+    RandomChance { chance: f32 },
     /// Passes with probability scaled by an enchantment level.
     #[serde(rename = "minecraft:random_chance_with_enchanted_bonus")]
     RandomChanceWithEnchantedBonus,

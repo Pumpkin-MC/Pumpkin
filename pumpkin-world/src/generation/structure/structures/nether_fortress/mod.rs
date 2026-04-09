@@ -117,6 +117,7 @@ impl PieceWeight {
         }
     }
 
+    #[must_use]
     pub const fn can_generate(&self) -> bool {
         self.limit == 0 || self.generated_count < self.limit
     }
@@ -141,6 +142,7 @@ pub enum NetherFortressPieceType {
     CorridorNetherWartsRoom,
 }
 
+#[must_use]
 pub fn get_bridge_piece_weights() -> Vec<PieceWeight> {
     vec![
         PieceWeight::new(NetherFortressPieceType::Bridge, 30, 0, true),
@@ -152,6 +154,7 @@ pub fn get_bridge_piece_weights() -> Vec<PieceWeight> {
     ]
 }
 
+#[must_use]
 pub fn get_corridor_piece_weights() -> Vec<PieceWeight> {
     vec![
         PieceWeight::new(NetherFortressPieceType::SmallCorridor, 25, 0, true),
@@ -187,6 +190,7 @@ impl NetherFortressPiece {
         }
     }
 
+    #[must_use]
     pub const fn is_in_bounds(bb: &BlockBox) -> bool {
         bb.min.y > 10
     }
@@ -595,7 +599,7 @@ impl NetherFortressPiece {
                 orientation,
                 self.piece.chain_length,
             ) {
-                collector.add_piece(p)
+                collector.add_piece(p);
             }
             return;
         }

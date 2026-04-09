@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::Hash, iter::repeat_n};
 
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{has_random_ticks, is_air},
+    block_properties::{has_random_ticks, is_air, is_liquid},
     chunk::Biome,
     fluid::Fluid,
 };
@@ -536,6 +536,25 @@ impl BlockPalette {
                 .iter()
                 .zip(data.counts.iter())
                 .filter_map(|(registry_id, count)| (!is_air(*registry_id)).then_some(*count))
+                .sum(),
+        }
+    }
+
+    #[must_use]
+    pub fn liquid_block_count(&self) -> u16 {
+        match self {
+            Self::Homogeneous(registry_id) => {
+                if is_liquid(*registry_id) {
+                    0
+                } else {
+                    Self::VOLUME as u16
+                }
+            }
+            Self::Heterogeneous(data) => data
+                .palette
+                .iter()
+                .zip(data.counts.iter())
+                .filter_map(|(registry_id, count)| (!is_liquid(*registry_id)).then_some(*count))
                 .sum(),
         }
     }

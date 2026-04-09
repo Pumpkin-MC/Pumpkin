@@ -119,19 +119,16 @@ impl LinearFileHeader {
         }
     }
 
-    fn to_bytes(&self) -> Box<[u8]> {
-        let mut bytes: Vec<u8> = Vec::with_capacity(Self::FILE_HEADER_SIZE);
-
-        bytes.put_u8(self.version as u8);
-        bytes.put_u64(self.newest_timestamp);
-        bytes.put_u8(self.compression_level);
-        bytes.put_u16(self.chunks_count);
-        bytes.put_u32(self.chunks_bytes as u32);
-        bytes.put_u64(self.region_hash);
-
-        // This should be a clear code error if the size of the header is not the expected
-        // so we can unwrap the conversion safely or panic the entire program if not
-        bytes.into_boxed_slice()
+    fn to_bytes(&self) -> [u8; Self::FILE_HEADER_SIZE] {
+        let mut bytes = [0u8; Self::FILE_HEADER_SIZE];
+        let mut buf = bytes.as_mut_slice();
+        buf.put_u8(self.version as u8);
+        buf.put_u64(self.newest_timestamp);
+        buf.put_u8(self.compression_level);
+        buf.put_u16(self.chunks_count);
+        buf.put_u32(self.chunks_bytes as u32);
+        buf.put_u64(self.region_hash);
+        bytes
     }
 }
 

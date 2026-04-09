@@ -2,6 +2,7 @@ use crate::WritingError;
 use crate::codec::bit_set::BitSet;
 use crate::{ClientPacket, VarInt, ser::NetworkWriteExt};
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_CHUNK_WITH_LIGHT;
 use pumpkin_macros::java_packet;
 use pumpkin_nbt::END_ID;
@@ -62,35 +63,40 @@ impl ClientPacket for CChunkData<'_> {
                 let non_empty_block_count = block_palette.non_air_block_count() as i16;
                 blocks_and_biomes_buf.write_i16_be(non_empty_block_count)?;
                 if version >= &MinecraftVersion::V_26_1 {
-                    // TODO: New in 26.1, fluid count
-                    blocks_and_biomes_buf.write_i16_be(0)?;
+                    // New in 26.1, fluid count
+                    let liquid_count = block_palette.liquid_block_count() as i16;
+                    blocks_and_biomes_buf.write_i16_be(liquid_count)?;
                 }
 
                 let mut block_network = block_palette.convert_network();
-                match &mut block_network.palette {
-                    NetworkPalette::Single(registry_id) => {
-                        *registry_id = remap_block_state_for_version(*registry_id, *version);
-                    }
-                    NetworkPalette::Indirect(palette) => {
-                        for registry_id in palette.iter_mut() {
+                if version < &CURRENT_MC_VERSION {
+                    match &mut block_network.palette {
+                        NetworkPalette::Single(registry_id) => {
                             *registry_id = remap_block_state_for_version(*registry_id, *version);
                         }
-                    }
-                    NetworkPalette::Direct => {
-                        let bits_per_entry = usize::from(block_network.bits_per_entry);
-                        let values_per_i64 = 64 / bits_per_entry;
-                        let id_mask = (1u64 << bits_per_entry) - 1;
-
-                        for packed_word in &mut block_network.packed_data {
-                            let mut remapped_word = 0u64;
-                            let packed_word_u64 = *packed_word as u64;
-                            for index in 0..values_per_i64 {
-                                let shift = index * bits_per_entry;
-                                let state_id = ((packed_word_u64 >> shift) & id_mask) as u16;
-                                let remapped_id = remap_block_state_for_version(state_id, *version);
-                                remapped_word |= u64::from(remapped_id) << shift;
+                        NetworkPalette::Indirect(palette) => {
+                            for registry_id in palette.iter_mut() {
+                                *registry_id =
+                                    remap_block_state_for_version(*registry_id, *version);
                             }
-                            *packed_word = remapped_word as i64;
+                        }
+                        NetworkPalette::Direct => {
+                            let bits_per_entry = usize::from(block_network.bits_per_entry);
+                            let values_per_i64 = 64 / bits_per_entry;
+                            let id_mask = (1u64 << bits_per_entry) - 1;
+
+                            for packed_word in &mut block_network.packed_data {
+                                let mut remapped_word = 0u64;
+                                let packed_word_u64 = *packed_word as u64;
+                                for index in 0..values_per_i64 {
+                                    let shift = index * bits_per_entry;
+                                    let state_id = ((packed_word_u64 >> shift) & id_mask) as u16;
+                                    let remapped_id =
+                                        remap_block_state_for_version(state_id, *version);
+                                    remapped_word |= u64::from(remapped_id) << shift;
+                                }
+                                *packed_word = remapped_word as i64;
+                            }
                         }
                     }
                 }

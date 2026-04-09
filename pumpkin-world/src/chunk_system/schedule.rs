@@ -59,7 +59,7 @@ pub struct GenerationSchedule {
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
 
-    /// Tasks that are graph-ready (in_degree == 0) but cannot yet run because
+    /// Tasks that are graph-ready (`in_degree` == 0) but cannot yet run because
     /// one or more of their required neighbor chunks haven't been delivered yet.
     /// Parked here and re-queued by `check_waiting_tasks()` as chunk data arrives.
     waiting_for_chunks: HashSetType<NodeKey>,
