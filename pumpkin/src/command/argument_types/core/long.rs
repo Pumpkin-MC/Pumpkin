@@ -43,6 +43,8 @@ impl ArgumentType for LongArgumentType {
     }
 }
 
+impl_copy_get!(LongArgumentType, i64);
+
 impl LongArgumentType {
     /// Constructs a new [`LongArgumentType`] with no minimum or maximum bounds.
     #[must_use]

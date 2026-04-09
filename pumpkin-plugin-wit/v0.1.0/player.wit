@@ -21,7 +21,8 @@ interface player {
 
         // Basic state
         get-position: func () -> position;
-        get-rotation: func () -> tuple<f32, f32>;
+        get-yaw: func () -> f32;
+        get-pitch: func () -> f32;
         get-world: func () -> %world;
         get-gamemode: func () -> game-mode;
         set-gamemode: func (mode: game-mode) -> bool;
@@ -42,7 +43,7 @@ interface player {
         send-title-animation: func (fade-in: s32, stay: s32, fade-out: s32);
 
         // Teleport & kick
-        teleport: func (position: position, yaw: f32, pitch: f32);
+        teleport: func (position: position, yaw: option<f32>, pitch: option<f32>, %world: %world);
         teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>);
         kick: func (message: text-component);
         respawn: func ();

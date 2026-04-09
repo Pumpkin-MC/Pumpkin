@@ -1,3 +1,14 @@
+//! Generic container screen handler.
+//!
+//! This module provides a generic screen handler for simple containers like:
+//! - Chests (single, double, ender chest)
+//! - Hoppers
+//! - Dispensers/Droppers
+//! - Barrels
+//!
+//! These containers have a simple grid layout with no special behaviors
+//! (no smelting, no crafting, just item storage).
+
 use std::{any::Any, sync::Arc};
 
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
@@ -12,6 +23,9 @@ use crate::{
     slot::NormalSlot,
 };
 
+/// Creates a generic 9x3 container (single chest).
+///
+/// Used for single chests, ender chests, and similar containers.
 pub async fn create_generic_9x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
@@ -28,6 +42,9 @@ pub async fn create_generic_9x3(
     .await
 }
 
+/// Creates a generic 9x6 container (double chest).
+///
+/// Used for double chests and similar large containers.
 pub async fn create_generic_9x6(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
@@ -44,6 +61,9 @@ pub async fn create_generic_9x6(
     .await
 }
 
+/// Creates a generic 3x3 container.
+///
+/// Used for dispensers, droppers, and similar containers.
 pub async fn create_generic_3x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
@@ -60,6 +80,9 @@ pub async fn create_generic_3x3(
     .await
 }
 
+/// Creates a hopper container (5 slots).
+///
+/// Hoppers have a single row of 5 slots.
 pub async fn create_hopper(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
@@ -76,14 +99,31 @@ pub async fn create_hopper(
     .await
 }
 
+/// Generic container screen handler.
+///
+/// Handles simple grid-based containers without special behaviors.
+/// The container grid is followed by the player's inventory (27 slots + 9 hotbar).
 pub struct GenericContainerScreenHandler {
+    /// The container's inventory.
     pub inventory: Arc<dyn Inventory>,
+    /// Number of rows in the container grid.
     pub rows: u8,
+    /// Number of columns in the container grid.
     pub columns: u8,
+    /// Core screen handler behavior (slots, sync ID, listeners).
     behaviour: ScreenHandlerBehaviour,
 }
 
 impl GenericContainerScreenHandler {
+    /// Creates a new generic container screen handler.
+    ///
+    /// # Arguments
+    /// - `screen_type` - The window type for this container
+    /// - `sync_id` - The sync ID for client-server matching
+    /// - `player_inventory` - The player's inventory
+    /// - `inventory` - The container's inventory
+    /// - `rows` - Number of rows in the container
+    /// - `columns` - Number of columns in the container
     async fn new(
         screen_type: WindowType,
         sync_id: u8,
@@ -109,6 +149,7 @@ impl GenericContainerScreenHandler {
         handler
     }
 
+    /// Adds slots for the container's inventory grid.
     fn add_inventory_slots(&mut self) {
         for i in 0..self.rows {
             for j in 0..self.columns {
@@ -122,13 +163,6 @@ impl GenericContainerScreenHandler {
 }
 
 impl ScreenHandler for GenericContainerScreenHandler {
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.default_on_closed(player).await;
-            self.inventory.on_close().await;
-        })
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -141,6 +175,17 @@ impl ScreenHandler for GenericContainerScreenHandler {
         &mut self.behaviour
     }
 
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+        Box::pin(async move {
+            self.default_on_closed(player).await;
+            self.inventory.on_close().await;
+        })
+    }
+
+    /// Quick move logic for generic containers.
+    ///
+    /// - From container: Move to player inventory (end first)
+    /// - From player inventory: Move to container (start first)
     fn quick_move<'a>(
         &'a mut self,
         _player: &'a dyn InventoryPlayer,

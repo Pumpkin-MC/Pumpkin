@@ -16,7 +16,7 @@ use crate::{
             events::{
                 from_wasm_game_mode, from_wasm_position, to_wasm_game_mode, to_wasm_position,
             },
-            pumpkin::{self, plugin::player::Player},
+            pumpkin::{self, plugin::player::Player, plugin::world::World},
         },
     },
 };
@@ -149,9 +149,14 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(to_wasm_position(player.position()))
     }
 
-    async fn get_rotation(&mut self, player: Resource<Player>) -> wasmtime::Result<(f32, f32)> {
+    async fn get_yaw(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
         let player = player_from_resource(self, &player)?;
-        Ok(player.rotation())
+        Ok(player.living_entity.entity.yaw.load())
+    }
+
+    async fn get_pitch(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.living_entity.entity.pitch.load())
     }
 
     async fn get_world(
@@ -295,12 +300,14 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         &mut self,
         player: Resource<Player>,
         position: pumpkin::plugin::common::Position,
-        yaw: f32,
-        pitch: f32,
+        yaw: Option<f32>,
+        pitch: Option<f32>,
+        world: Resource<World>,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
+        let world = world_from_resource(self, &world);
         player
-            .request_teleport(from_wasm_position(position), yaw, pitch)
+            .teleport(from_wasm_position(position), yaw, pitch, world)
             .await;
         Ok(())
     }

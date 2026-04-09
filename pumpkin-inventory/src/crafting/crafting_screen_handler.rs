@@ -1,3 +1,19 @@
+//! Crafting screen handler implementation.
+//!
+//! This module provides screen handlers for crafting mechanics:
+//! - [`CraftingScreenHandler`] - Trait for crafting screen handlers
+//! - [`CraftingTableScreenHandler`] - The 3x3 crafting table UI
+//! - [`ResultSlot`] - The special result slot that shows crafted items
+//!
+//! # Recipe Matching
+//!
+//! Crafting recipes are matched against the items in the crafting grid.
+//! The system supports:
+//! - Shaped recipes (specific patterns)
+//! - Shapeless recipes (any arrangement)
+//! - Transmute recipes (upgrading items)
+//! - Special recipes (like decorated pots)
+
 use std::any::Any;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -21,18 +37,34 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
-/// CraftingResultSlot.java
+/// The result slot in a crafting screen.
 ///
-/// Note: This implementation is different from the original Minecraft code.
-/// Particularly, it does not have a 'result' inventory, we directly store it in the slot.
-/// This slot should be never modified outside. any modifications to it make change in its input.
+/// This special slot displays the output of the current crafting recipe.
+/// Unlike normal slots, it doesn't store items permanently - it calculates
+/// the result dynamically based on the crafting grid contents.
+///
+/// # Note
+///
+/// This implementation differs from vanilla Minecraft. Instead of a separate
+/// result inventory, we directly store the result in the slot. The slot
+/// should never be modified directly - modifications to the crafting grid
+/// automatically update the result.
 pub struct ResultSlot {
+    /// The crafting inventory (grid) that provides recipe input.
     pub inventory: Arc<dyn RecipeInputInventory>,
+    /// Protocol ID for this slot (assigned by screen handler).
     pub id: AtomicU8,
+    /// The cached result item stack.
+    ///
+    /// Updated when the crafting grid changes and a recipe matches.
     pub result: Arc<Mutex<ItemStack>>,
+    /// Cached reference to the last matched recipe for quick re-matching.
     recipe_cache: AtomicCell<Option<&'static CraftingRecipeTypes>>,
 }
 
+/// Checks if a recipe pattern is symmetrical horizontally.
+///
+/// Used to try both orientations when matching shaped recipes.
 fn is_symmetrical_horizontally(pattern: &'static [&'static str]) -> bool {
     let width = pattern.first().map_or(0, |s| s.len());
     for row in pattern {
@@ -48,6 +80,10 @@ fn is_symmetrical_horizontally(pattern: &'static [&'static str]) -> bool {
     true
 }
 
+/// Checks if a crafting recipe matches the current inventory state.
+///
+/// Tries the recipe at all possible positions in the grid and handles
+/// both orientations for asymmetrical recipes.
 #[expect(clippy::too_many_lines)]
 async fn recipe_matches<'a>(
     recipe: &'static CraftingRecipeTypes,
@@ -237,6 +273,7 @@ async fn recipe_matches<'a>(
 impl ResultSlot {
     //fn stat_crafted(&self, _crafted_amount: u8, _player: &dyn InventoryPlayer) {}
 
+    /// Creates a new result slot for the given crafting inventory.
     pub fn new(inventory: Arc<dyn RecipeInputInventory>) -> Self {
         Self {
             inventory,
@@ -312,6 +349,7 @@ impl ResultSlot {
         None
     }
 
+    /// Refills the output slot with the current recipe result.
     async fn refill_output(&self) -> ItemStack {
         let result = self
             .match_recipe()
@@ -452,10 +490,15 @@ impl ScreenHandlerListener for ResultSlot {
     }
 }
 
+/// Trait for crafting screen handlers.
+///
+/// Provides common functionality for crafting UIs including slot setup
+/// and recipe result management.
 // AbstractCraftingScreenHandler.java
 pub trait CraftingScreenHandler<I: RecipeInputInventory>:
     RecipeFinderScreenHandler + ScreenHandler
 {
+    /// Adds the result slot and crafting grid slots to the screen handler.
     fn add_recipe_slots<'a>(
         &'a mut self,
         crafing_inventory: Arc<dyn RecipeInputInventory>,
@@ -479,13 +522,24 @@ pub trait CraftingScreenHandler<I: RecipeInputInventory>:
     }
 }
 
+/// Screen handler for the crafting table.
+///
+/// The crafting table provides a 3x3 crafting grid and displays
+/// the result of the current recipe configuration.
 // CraftingMenu
 pub struct CraftingTableScreenHandler {
+    /// Core screen handler behavior (slots, sync ID, listeners).
     behaviour: ScreenHandlerBehaviour,
+    /// The 3x3 crafting grid inventory.
     crafting_inventory: Arc<dyn RecipeInputInventory>,
 }
 
 impl CraftingTableScreenHandler {
+    /// Creates a new crafting table screen handler.
+    ///
+    /// # Arguments
+    /// - `sync_id` - The sync ID for client-server matching
+    /// - `player_inventory` - The player's inventory
     pub async fn new(sync_id: u8, player_inventory: &Arc<PlayerInventory>) -> Self {
         let crafting_inventory: Arc<dyn RecipeInputInventory> =
             Arc::new(CraftingInventory::new(3, 3));
@@ -510,15 +564,6 @@ impl CraftingTableScreenHandler {
 impl RecipeFinderScreenHandler for CraftingTableScreenHandler {}
 
 impl ScreenHandler for CraftingTableScreenHandler {
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.default_on_closed(player).await;
-            //TODO: this.craftingResultInventory.clear();
-            self.drop_inventory(player, self.crafting_inventory.clone())
-                .await;
-        })
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -531,6 +576,20 @@ impl ScreenHandler for CraftingTableScreenHandler {
         &mut self.behaviour
     }
 
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+        Box::pin(async move {
+            self.default_on_closed(player).await;
+            //TODO: this.craftingResultInventory.clear();
+            self.drop_inventory(player, self.crafting_inventory.clone())
+                .await;
+        })
+    }
+
+    /// Quick move logic for crafting table.
+    ///
+    /// - Result slot (0): Move to player inventory (10-46)
+    /// - Crafting grid (1-9): Move to player inventory
+    /// - Player inventory (10-46): Move to crafting grid first, then shuffle within inventory
     fn quick_move<'a>(
         &'a mut self,
         player: &'a dyn InventoryPlayer,

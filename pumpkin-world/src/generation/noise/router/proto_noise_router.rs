@@ -6,7 +6,7 @@ use pumpkin_data::{
         UnaryOperation,
     },
 };
-use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
+use pumpkin_util::random::{legacy_rand::LegacyRand, xoroshiro128::XoroshiroSplitter};
 
 use crate::{
     GlobalRandomConfig,
@@ -242,10 +242,33 @@ impl ProtoNoiseRouters {
                     shift_z_index,
                     data,
                 } => {
-                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-                        base_random_deriver,
-                        &data.noise_id,
-                    );
+                    // NETHER_TEMPERATURE and NETHER_VEGETATION always use NormalNoise.createLegacyNetherBiome with
+                    // LegacyRandomSource(seed + 0) and LegacyRandomSource(seed + 1)
+                    // respectively, regardless of useLegacyRandomSource.
+                    let sampler = match data.noise_id.id() {
+                        "minecraft:nether/temperature" => {
+                            let mut legacy_rand =
+                                LegacyRand::from_seed(random_config.seed.wrapping_add(0));
+                            DoublePerlinNoiseSampler::from_params(
+                                &mut legacy_rand,
+                                &data.noise_id,
+                                true,
+                            )
+                        }
+                        "minecraft:nether/vegetation" => {
+                            let mut legacy_rand =
+                                LegacyRand::from_seed(random_config.seed.wrapping_add(1));
+                            DoublePerlinNoiseSampler::from_params(
+                                &mut legacy_rand,
+                                &data.noise_id,
+                                true,
+                            )
+                        }
+                        _ => DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                            base_random_deriver,
+                            &data.noise_id,
+                        ),
+                    };
                     ProtoNoiseFunctionComponent::Dependent(
                         DependentProtoNoiseFunctionComponent::ShiftedNoise(ShiftedNoise::new(
                             *shift_x_index,
@@ -443,13 +466,20 @@ impl ProtoNoiseRouters {
                     )
                 }
                 BaseNoiseFunctionComponent::InterpolatedNoiseSampler { data } => {
-                    let mut random_generator = random_config
-                        .base_random_deriver
-                        .split_string("minecraft:terrain");
-
                     ProtoNoiseFunctionComponent::Independent(
                         IndependentProtoNoiseFunctionComponent::InterpolatedNoise(
-                            InterpolatedNoiseSampler::new(data, &mut random_generator),
+                            if random_config.legacy_random_source {
+                                // Use LegacyRandomSource(worldSeed + 0L) for
+                                // legacy dimensions (e.g. the Nether).
+                                let mut legacy_rand =
+                                    LegacyRand::from_seed(random_config.seed.wrapping_add(0));
+                                InterpolatedNoiseSampler::new(data, &mut legacy_rand)
+                            } else {
+                                let mut random_generator = random_config
+                                    .base_random_deriver
+                                    .split_string("minecraft:terrain");
+                                InterpolatedNoiseSampler::new(data, &mut random_generator)
+                            },
                         ),
                     )
                 }

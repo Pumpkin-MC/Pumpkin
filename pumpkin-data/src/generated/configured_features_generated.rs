@@ -2169,7 +2169,9 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     map.insert(
         "forest_rock".to_string(),
         ConfiguredFeature::ForestRock(
-            crate::generation::feature::features::forest_rock::ForestRockFeature {},
+            crate::generation::feature::features::forest_rock::ForestRockFeature {
+                state: pumpkin_data::Block::MOSSY_COBBLESTONE.default_state,
+            },
         ),
     );
     map.insert(
