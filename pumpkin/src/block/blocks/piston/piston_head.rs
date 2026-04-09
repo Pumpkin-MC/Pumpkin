@@ -38,7 +38,7 @@ impl BlockBehaviour for PistonHeadBlock {
             let head_state_id = args.world.get_block_state_id(args.position).await;
             let head_props =
                 PistonHeadProperties::from_state_id(head_state_id, &Block::PISTON_HEAD);
-            if head_props.facing != Facing::Up {
+            if head_props.facing != Facing::Up || args.source_block != &Block::REDSTONE_BLOCK {
                 return;
             }
             let piston_pos = args.position.offset(
