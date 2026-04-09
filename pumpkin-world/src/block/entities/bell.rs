@@ -20,8 +20,9 @@ pub struct BellBlockEntity {
 
 impl BellBlockEntity {
     pub const ID: &'static str = "minecraft:bell";
-    pub fn new(position: BlockPos) -> Self {
-        BellBlockEntity {
+    #[must_use]
+    pub const fn new(position: BlockPos) -> Self {
+        Self {
             position,
             last_side_hit: AtomicCell::new(None),
             ring_ticks: AtomicCell::new(0),
@@ -38,7 +39,7 @@ impl BellBlockEntity {
             self.ringing.store(true);
         }
     }
-    pub fn raiders_hear_bell(&self) -> bool {
+    pub const fn raiders_hear_bell(&self) -> bool {
         //TODO
 
         false

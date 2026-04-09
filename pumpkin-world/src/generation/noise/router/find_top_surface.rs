@@ -17,6 +17,7 @@ pub struct FindTopSurface {
 }
 
 impl FindTopSurface {
+    #[must_use]
     pub const fn new(
         density_index: usize,
         upper_bound_index: usize,

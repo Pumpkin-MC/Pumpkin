@@ -128,7 +128,7 @@ pub struct PillarBlockStateProvider {
 }
 
 impl PillarBlockStateProvider {
-    pub fn get(&self, _pos: BlockPos) -> &'static BlockState {
+    pub const fn get(&self, _pos: BlockPos) -> &'static BlockState {
         // TODO: random axis
         self.state
     }
@@ -191,7 +191,7 @@ pub struct SimpleStateProvider {
 }
 
 impl SimpleStateProvider {
-    pub fn get(&self, _pos: BlockPos) -> &'static BlockState {
+    pub const fn get(&self, _pos: BlockPos) -> &'static BlockState {
         self.state
     }
 }
