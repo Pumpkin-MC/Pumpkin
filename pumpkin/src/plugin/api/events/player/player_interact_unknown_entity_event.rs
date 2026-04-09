@@ -9,7 +9,7 @@ use super::PlayerEvent;
 /// Event that is triggered when a player interacts with an entity that was not found in the world.
 ///
 /// This can occur when the target entity has been removed or is otherwise unknown to the server.
-/// It can be cancelled to prevent the default behavior (e.g., kicking the player).
+/// Plugins can cancel it if they want to override the default handling.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct PlayerInteractUnknownEntityEvent {
