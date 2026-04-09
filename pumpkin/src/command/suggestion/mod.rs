@@ -1,3 +1,4 @@
+pub mod provider;
 pub mod suggestions;
 
 use pumpkin_util::text::TextComponent;
