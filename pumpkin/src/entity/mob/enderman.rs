@@ -7,7 +7,6 @@ use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use pumpkin_data::attributes::Attributes;
 
-
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{
     damage::DamageType,
