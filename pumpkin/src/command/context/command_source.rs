@@ -521,24 +521,28 @@ impl EntityAnchor {
 
     fn transform_position(self, position: Vector3<f64>, entity: &dyn EntityBase) -> Vector3<f64> {
         match self {
-            EntityAnchor::Feet => position,
-            EntityAnchor::Eyes => position.add(&Vector3::new(0.0, entity.get_entity().get_eye_height(), 0.0))
+            Self::Feet => position,
+            Self::Eyes => position.add(&Vector3::new(
+                0.0,
+                entity.get_entity().get_eye_height(),
+                0.0,
+            )),
         }
     }
 
     /// Gets the position of an entity with respect to this anchor.
     pub fn position_at_entity(self, entity: &Arc<dyn EntityBase>) -> Vector3<f64> {
-        self.transform_position(entity.get_entity().pos.load(), entity)
+        self.transform_position(entity.get_entity().pos.load(), entity.as_ref())
     }
 
     /// Gets the position of a source with respect to this anchor.
     #[must_use]
     pub fn position_at_source(self, command_source: &CommandSource) -> Vector3<f64> {
         let pos = command_source.position;
-        command_source.entity
-            .map_or_else(
-                || pos, |e| self.position_at_entity(&e),
-            )
+        command_source
+            .entity
+            .as_ref()
+            .map_or_else(|| pos, |e| self.position_at_entity(e))
     }
 }
 
