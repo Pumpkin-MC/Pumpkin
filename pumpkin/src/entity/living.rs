@@ -25,6 +25,7 @@ use crate::block::OnLandedUponArgs;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
+use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
@@ -125,6 +126,10 @@ impl LivingEntity {
         &Block::POWDER_SNOW,
         &Block::SLIME_BLOCK,
     ];
+
+    fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
+    }
 
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
@@ -1739,6 +1744,14 @@ impl LivingEntity {
     pub fn get_movement(&self) -> Vector3<f64> {
         self.entity.movement.load()
     }
+
+    fn hurt_sound(&self) -> Sound {
+        if self.entity.entity_type == &EntityType::SLIME {
+            SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
+        } else {
+            Self::hurt_sound_for_entity(self.entity.entity_type)
+        }
+    }
 }
 
 impl NBTStorage for LivingEntity {
@@ -1938,7 +1951,7 @@ impl EntityBase for LivingEntity {
             if play_sound {
                 world
                     .play_sound(
-                        Sound::EntityGenericHurt,
+                        self.hurt_sound(),
                         SoundCategory::Players,
                         &self.entity.pos.load(),
                     )
@@ -2342,5 +2355,56 @@ mod tests {
                 "{dt:?} should NOT bypass armor durability"
             );
         }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_zombie_family_sounds() {
+        let cases = [
+            (&EntityType::ZOMBIE, Sound::EntityZombieHurt),
+            (&EntityType::DROWNED, Sound::EntityDrownedHurt),
+            (&EntityType::HUSK, Sound::EntityHuskHurt),
+            (
+                &EntityType::ZOMBIE_VILLAGER,
+                Sound::EntityZombieVillagerHurt,
+            ),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_enderman_hurt_sound() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::ENDERMAN),
+            Sound::EntityEndermanHurt
+        );
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_skeleton_family_sounds() {
+        let cases = [
+            (&EntityType::SKELETON, Sound::EntitySkeletonHurt),
+            (&EntityType::BOGGED, Sound::EntityBoggedHurt),
+            (&EntityType::PARCHED, Sound::EntityParchedHurt),
+            (
+                &EntityType::WITHER_SKELETON,
+                Sound::EntityWitherSkeletonHurt,
+            ),
+            (&EntityType::STRAY, Sound::EntityStrayHurt),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_defaults_to_generic_hurt() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            Sound::EntityGenericHurt
+        );
     }
 }

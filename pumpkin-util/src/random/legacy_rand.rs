@@ -77,6 +77,14 @@ impl GaussianGenerator for LegacyRand {
 }
 
 impl RandomImpl for LegacyRand {
+    fn skip(&mut self, count: i32) {
+        // Advance exactly `count` single LCG steps using `next_i32()`.
+        // `next_i64()` consumes two LCG steps, so we override the default.
+        for _ in 0..count {
+            self.next_i32();
+        }
+    }
+
     fn split(&mut self) -> Self {
         Self::from_seed(self.next_i64() as u64)
     }

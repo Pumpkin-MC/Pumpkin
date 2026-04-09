@@ -571,6 +571,9 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 })
             }
         }
+        "minecraft:basalt_pillar" => {
+            quote! { ConfiguredFeature::BasaltPillar(crate::generation::feature::features::basalt_pillar::BasaltPillarFeature {}) }
+        }
         "minecraft:block_blob" => {
             let state = value_to_block_state_codec(&config["state"]);
             quote! {
@@ -652,9 +655,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:bonus_chest" => {
             quote! { ConfiguredFeature::BonusChest(crate::generation::feature::features::bonus_chest::BonusChestFeature {}) }
-        }
-        "minecraft:basalt_pillar" => {
-            quote! { ConfiguredFeature::BasaltPillar(crate::generation::feature::features::basalt_pillar::BasaltPillarFeature {}) }
         }
         "minecraft:dripstone_cluster" => {
             quote! { ConfiguredFeature::DripstoneCluster(crate::generation::feature::features::drip_stone::cluster::DripstoneClusterFeature {}) }

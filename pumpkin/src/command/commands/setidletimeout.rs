@@ -23,7 +23,7 @@ struct SetIdleTimeoutExecutor;
 impl CommandExecutor for SetIdleTimeoutExecutor {
     fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let minutes: i32 = *context.get_argument(ARG_MINUTES)?;
+            let minutes: i32 = IntegerArgumentType::get(context, ARG_MINUTES)?;
 
             context
                 .server()
