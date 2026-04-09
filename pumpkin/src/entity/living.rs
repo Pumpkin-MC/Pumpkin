@@ -152,24 +152,6 @@ impl LivingEntity {
                     m.insert(attr.id, AttributeInstance::new(*base));
                 }
 
-                // Vanilla Player.createAttributes() overrides these values from
-                // the generic LivingEntity defaults. Since pumpkin-data's
-                // EntityType::PLAYER has an empty attributes list, seed them here.
-                if entity.entity_type == &EntityType::PLAYER {
-                    m.entry(Attributes::MOVEMENT_SPEED.id)
-                        .or_insert(AttributeInstance::new(0.1));
-                    m.entry(Attributes::ATTACK_DAMAGE.id)
-                        .or_insert(AttributeInstance::new(1.0));
-                    m.entry(Attributes::ATTACK_SPEED.id)
-                        .or_insert(AttributeInstance::new(4.0));
-                    m.entry(Attributes::LUCK.id)
-                        .or_insert(AttributeInstance::new(0.0));
-                    m.entry(Attributes::BLOCK_INTERACTION_RANGE.id)
-                        .or_insert(AttributeInstance::new(4.5));
-                    m.entry(Attributes::ENTITY_INTERACTION_RANGE.id)
-                        .or_insert(AttributeInstance::new(3.0));
-                }
-
                 std::sync::RwLock::new(m)
             },
             health: AtomicCell::new(max_health), // Initial health value from attributes
