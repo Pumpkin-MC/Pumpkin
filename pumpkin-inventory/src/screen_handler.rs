@@ -1,3 +1,30 @@
+//! Screen handler module.
+//!
+//! This module defines the core screen handler system for container UIs.
+//! A screen handler manages the server-side state of a container interface,
+//! handling slot layout, click processing, item transfer, and synchronization
+//! with the client.
+//!
+//! # Core Components
+//!
+//! - [`ScreenHandler`] - The main trait for container screen handlers
+//! - [`ScreenHandlerBehaviour`] - Shared state for all screen handlers
+//! - [`InventoryPlayer`] - Interface for player interactions with containers
+//! - [`ScreenProperty`] - Container UI properties (progress bars, etc.)
+//!
+//! # Screen Handler Lifecycle
+//!
+//! 1. Creation - Screen handler is created with slots and sync ID
+//! 2. Opening - Player opens the container, sync handler attaches
+//! 3. Interaction - Click packets are processed, items move between slots
+//! 4. Closing - Container closes, cursor item is dropped/given to player
+//!
+//! # Slot Indexing
+//!
+//! Slots are indexed from 0 within each screen handler. Special values:
+//! - `-1` - Cursor slot (held item)
+//! - `-999` - Outside inventory (drop to world)
+
 use crate::{
     container_click::MouseClick,
     player::player_inventory::PlayerInventory,
@@ -30,8 +57,13 @@ use std::{cmp::max, pin::Pin};
 use tokio::sync::Mutex;
 use tracing::warn;
 
+/// Slot index indicating a click outside the inventory.
 const SLOT_INDEX_OUTSIDE: i32 = -999;
 
+/// A tracked property for container UI elements.
+///
+/// Properties are used to synchronize UI state like furnace progress bars,
+/// enchantment levels, and other visual indicators between server and client.
 pub struct ScreenProperty {
     old_value: i32,
     index: u8,
@@ -39,6 +71,11 @@ pub struct ScreenProperty {
 }
 
 impl ScreenProperty {
+    /// Creates a new screen property.
+    ///
+    /// # Arguments
+    /// - `value` - The property delegate that holds the actual value
+    /// - `index` - The property index for multi-value delegates
     pub fn new(value: Arc<dyn PropertyDelegate>, index: u8) -> Self {
         Self {
             old_value: value.get_property(i32::from(index)),
@@ -47,15 +84,20 @@ impl ScreenProperty {
         }
     }
 
+    /// Gets the current property value.
     #[must_use]
     pub fn get(&self) -> i32 {
         self.value.get_property(i32::from(self.index))
     }
 
+    /// Sets the property value.
     pub fn set(&mut self, value: i32) {
         self.value.set_property(i32::from(self.index), value);
     }
 
+    /// Checks if the value has changed since the last check.
+    ///
+    /// Updates the old value to the current value.
     pub fn has_changed(&mut self) -> bool {
         let value = self.get();
         let has_changed = !value.eq(&self.old_value);
@@ -64,31 +106,64 @@ impl ScreenProperty {
     }
 }
 
+/// Type alias for async player operations.
+/// Type alias for async player operations.
 pub type PlayerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+/// Interface for player interactions with containers.
+///
+/// This trait abstracts the player's ability to:
+/// - Drop items into the world
+/// - Receive inventory packets
+/// - Change equipment
+/// - Receive experience
+///
+/// Implementors are typically player entities that can open containers.
 pub trait InventoryPlayer: Send + Sync {
+    /// Drops an item into the world.
+    ///
+    /// # Arguments
+    /// - `item` - The item to drop
+    /// - `retain_ownership` - If true, the player keeps ownership (for pickup delay)
     fn drop_item(&self, item: ItemStack, retain_ownership: bool) -> PlayerFuture<'_, ()>;
+
+    /// Gets the player's inventory.
     fn get_inventory(&self) -> Arc<PlayerInventory>;
+
+    /// Checks if the player has infinite materials (creative mode).
     fn has_infinite_materials(&self) -> bool;
 
+    /// Sends a full container content packet.
     fn enqueue_inventory_packet<'a>(
         &'a self,
         packet: &'a CSetContainerContent,
     ) -> PlayerFuture<'a, ()>;
+
+    /// Sends a single slot update packet.
     fn enqueue_slot_packet<'a>(&'a self, packet: &'a CSetContainerSlot) -> PlayerFuture<'a, ()>;
+
+    /// Sends a cursor item update packet.
     fn enqueue_cursor_packet<'a>(&'a self, packet: &'a CSetCursorItem) -> PlayerFuture<'a, ()>;
+
+    /// Sends a property update packet.
     fn enqueue_property_packet<'a>(
         &'a self,
         packet: &'a CSetContainerProperty,
     ) -> PlayerFuture<'a, ()>;
+
+    /// Sends a player inventory slot update.
     fn enqueue_slot_set_packet<'a>(
         &'a self,
         packet: &'a CSetPlayerInventory,
     ) -> PlayerFuture<'a, ()>;
+
+    /// Sends a selected slot update.
     fn enqueue_set_held_item_packet<'a>(
         &'a self,
         packet: &'a CSetSelectedSlot,
     ) -> PlayerFuture<'a, ()>;
+
+    /// Sends an equipment change packet.
     fn enqueue_equipment_change<'a>(
         &'a self,
         slot: &'a EquipmentSlot,
@@ -99,6 +174,10 @@ pub trait InventoryPlayer: Send + Sync {
     fn award_experience(&self, amount: i32) -> PlayerFuture<'_, ()>;
 }
 
+/// Gives a stack to the player or drops it if inventory is full.
+///
+/// Tries to insert the stack into the player's inventory first,
+/// and drops it in the world if there's no room.
 pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack) {
     // TODO: Super weird disconnect logic in vanilla, investigate this later
     player
@@ -107,37 +186,62 @@ pub async fn offer_or_drop_stack(player: &dyn InventoryPlayer, stack: ItemStack)
         .await;
 }
 
+/// Type alias for async screen handler operations.
 pub type ScreenHandlerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-// Future returning ItemStack (used by quick_move)
+/// Future type that returns an ItemStack (used by quick_move).
 pub type ItemStackFuture<'a> = ScreenHandlerFuture<'a, ItemStack>;
 
-// Future returning Option<usize>
+/// Future type that returns an optional slot index.
 pub type OptionUsizeFuture<'a> = ScreenHandlerFuture<'a, Option<usize>>;
 
-//ScreenHandler.java
+/// The main trait for container screen handlers.
+///
+/// Screen handlers manage the server-side state of container UIs like chests,
+/// furnaces, crafting tables, etc. They handle:
+/// - Slot layout and management
+/// - Click processing
+/// - Item transfer logic (shift-click)
+/// - Client synchronization
+///
+/// # Implementation
+///
+/// Implementors must provide:
+/// - [`get_behaviour`](ScreenHandler::get_behaviour) and [`get_behaviour_mut`](ScreenHandler::get_behaviour_mut)
+/// - [`quick_move`](ScreenHandler::quick_move) for shift-click behavior
+/// - [`as_any`](ScreenHandler::as_any) for downcasting
+// ScreenHandler.java
 // TODO: Fully implement this
 pub trait ScreenHandler: Send + Sync {
-    // --- Synchronous Methods (Unchanged) ---
+    // --- Synchronous Methods ---
 
+    /// Gets the window type for this screen handler.
     fn window_type(&self) -> Option<WindowType> {
         self.get_behaviour().window_type
     }
 
+    /// Returns this screen handler as an Any reference.
     fn as_any(&self) -> &dyn Any;
 
+    /// Gets the sync ID for this screen handler.
     fn sync_id(&self) -> u8 {
         self.get_behaviour().sync_id
     }
 
+    /// Checks if the player can use this container.
     fn can_use(&self, _player: &dyn InventoryPlayer) -> bool {
         true
     }
 
+    /// Gets a reference to the screen handler behaviour.
     fn get_behaviour(&self) -> &ScreenHandlerBehaviour;
 
+    /// Gets a mutable reference to the screen handler behaviour.
     fn get_behaviour_mut(&mut self) -> &mut ScreenHandlerBehaviour;
 
+    /// Adds a slot to this screen handler.
+    ///
+    /// Assigns an ID and sets up tracking for the slot.
     fn add_slot(&mut self, slot: Arc<dyn Slot>) -> Arc<dyn Slot> {
         let behaviour = self.get_behaviour_mut();
         slot.set_id(behaviour.slots.len());
@@ -148,12 +252,14 @@ pub trait ScreenHandler: Send + Sync {
         slot
     }
 
+    /// Adds hotbar slots (0-8) from the player inventory.
     fn add_player_hotbar_slots(&mut self, player_inventory: &Arc<dyn Inventory>) {
         for i in 0..9 {
             self.add_slot(Arc::new(NormalSlot::new(player_inventory.clone(), i)));
         }
     }
 
+    /// Adds main inventory slots (9-35) from the player inventory.
     fn add_player_inventory_slots(&mut self, player_inventory: &Arc<dyn Inventory>) {
         for i in 0..3 {
             for j in 0..9 {
@@ -165,11 +271,13 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
+    /// Adds all player inventory slots (main + hotbar).
     fn add_player_slots(&mut self, player_inventory: &Arc<dyn Inventory>) {
         self.add_player_inventory_slots(player_inventory);
         self.add_player_hotbar_slots(player_inventory);
     }
 
+    /// Records a received hash for a slot (for sync tracking).
     fn set_received_hash(&mut self, slot: usize, hash: OptionalItemStackHash) {
         let behaviour = self.get_behaviour_mut();
         if slot < behaviour.previous_tracked_stacks.len() {
@@ -183,36 +291,44 @@ pub trait ScreenHandler: Send + Sync {
         }
     }
 
+    /// Records a received stack for a slot (for sync tracking).
     fn set_received_stack(&mut self, slot: usize, stack: ItemStack) {
         let behaviour = self.get_behaviour_mut();
         behaviour.previous_tracked_stacks[slot].set_received_stack(stack);
     }
 
+    /// Records a received cursor hash (for sync tracking).
     fn set_received_cursor_hash(&mut self, hash: OptionalItemStackHash) {
         let behaviour = self.get_behaviour_mut();
         behaviour.previous_cursor_stack.set_received_hash(hash);
     }
 
+    /// Adds a property to track.
     fn add_property(&mut self, property: ScreenProperty) {
         let behaviour = self.get_behaviour_mut();
         behaviour.properties.push(property);
         behaviour.tracked_property_values.push(0);
     }
 
+    /// Adds multiple properties to track.
     fn add_properties(&mut self, properties: Vec<ScreenProperty>) {
         for property in properties {
             self.add_property(property);
         }
     }
 
-    // --- Asynchronous Methods (Refactored) ---
+    // --- Asynchronous Methods ---
 
+    /// Called when the container is closed by the player.
+    ///
+    /// Default implementation drops the cursor item.
     fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
         Box::pin(async move {
             self.default_on_closed(player).await;
         })
     }
 
+    /// Default close behavior - drops the cursor item.
     fn default_on_closed<'a>(
         &'a mut self,
         player: &'a dyn InventoryPlayer,
@@ -230,6 +346,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Drops all items from an inventory into the world.
     fn drop_inventory<'a>(
         &'a self,
         player: &'a dyn InventoryPlayer,
@@ -242,6 +359,9 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Copies tracked slot state from another screen handler.
+    ///
+    /// Used when reopening a container to restore previous state.
     fn copy_shared_slots(
         &mut self,
         other: Arc<Mutex<dyn ScreenHandler>>,
@@ -278,6 +398,9 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Synchronizes the full state to the client.
+    ///
+    /// Captures current slot states and sends a full update packet.
     fn sync_state(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
@@ -315,6 +438,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Adds a listener for slot and property changes.
     fn add_listener(
         &mut self,
         listener: Arc<dyn ScreenHandlerListener>,
@@ -325,6 +449,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Attaches a sync handler and performs initial sync.
     fn update_sync_handler(
         &mut self,
         sync_handler: Arc<SyncHandler>,
@@ -336,6 +461,9 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Sends all updates to the client.
+    ///
+    /// Updates tracked slots and properties.
     fn update_to_client(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             for i in 0..self.get_behaviour().slots.len() {
@@ -363,6 +491,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Updates a tracked property value.
     fn update_tracked_properties(&mut self, idx: i32, value: i32) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
@@ -377,6 +506,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Checks if a property needs to be synced to the client.
     fn check_property_updates(&mut self, idx: i32, value: i32) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
@@ -396,6 +526,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Updates the tracked state of a slot.
     fn update_tracked_slot(
         &mut self,
         slot: usize,
@@ -416,6 +547,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Checks if a slot needs to be synced to the client.
     fn check_slot_updates(&mut self, slot: usize, stack: ItemStack) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
@@ -435,6 +567,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Checks if the cursor stack needs to be synced.
     fn check_cursor_stack_updates(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let behaviour = self.get_behaviour_mut();
@@ -454,6 +587,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Sends all content updates to listeners and sync handler.
     fn send_content_updates(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             let slots_len = self.get_behaviour().slots.len();
@@ -484,22 +618,26 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Checks if a slot index is valid.
     fn is_slot_valid(&self, slot: i32) -> ScreenHandlerFuture<'_, bool> {
         Box::pin(async move {
             slot == -1 || slot == -999 || slot < self.get_behaviour().slots.len() as i32
         })
     }
 
+    /// Disables synchronization (for batch operations).
     fn disable_sync(&mut self) {
         let behaviour = self.get_behaviour_mut();
         behaviour.disable_sync = true;
     }
 
+    /// Re-enables synchronization.
     fn enable_sync(&mut self) {
         let behaviour = self.get_behaviour_mut();
         behaviour.disable_sync = false;
     }
 
+    /// Gets the screen handler slot index for an inventory slot.
     fn get_slot_index<'a>(
         &'a self,
         inventory: &'a Arc<dyn Inventory>,
@@ -513,12 +651,19 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Performs a quick move (shift-click) from a slot.
+    ///
+    /// Must be implemented by concrete screen handlers to define
+    /// where items go when shift-clicked from specific slots.
     fn quick_move<'a>(
         &'a mut self,
         player: &'a dyn InventoryPlayer,
         slot_index: i32,
     ) -> ItemStackFuture<'a>;
 
+    /// Inserts an item into a range of slots.
+    ///
+    /// First tries to stack with existing items, then fills empty slots.
     fn insert_item<'a>(
         &'a mut self,
         stack: &'a mut ItemStack,
@@ -610,6 +755,9 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Handles a slot click event.
+    ///
+    /// Override for custom click handling. Return true to prevent default handling.
     fn handle_slot_click<'a>(
         &'a self,
         _player: &'a dyn InventoryPlayer,
@@ -624,6 +772,7 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Public entry point for slot click handling.
     fn on_slot_click<'a>(
         &'a mut self,
         slot_index: i32,
@@ -637,6 +786,9 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Internal slot click handling implementation.
+    ///
+    /// Handles all click types: pickup, quick move, swap, throw, drag, clone.
     #[expect(clippy::too_many_lines)]
     fn internal_on_slot_click<'a>(
         &'a mut self,
@@ -1053,20 +1205,34 @@ pub trait ScreenHandlerFactory: Send + Sync {
 }
 
 pub struct ScreenHandlerBehaviour {
+    /// Slots in this screen handler (includes both container and player slots).
     pub slots: Vec<Arc<dyn Slot>>,
+    /// Sync ID for client-server matching (matches the window ID in protocol).
     pub sync_id: u8,
+    /// Registered listeners for slot/property changes.
     pub listeners: Vec<Arc<dyn ScreenHandlerListener>>,
+    /// Sync handler for sending updates to the client.
     pub sync_handler: Option<Arc<SyncHandler>>,
+    /// Current tracked stacks for comparison with previous state.
     //TODO: Check if this is needed
     pub tracked_stacks: Vec<ItemStack>,
+    /// The item currently held by the player's cursor (held item).
     pub cursor_stack: Arc<Mutex<ItemStack>>,
+    /// Previous tracked stacks for detecting changes that need syncing.
     pub previous_tracked_stacks: Vec<TrackedStack>,
+    /// Previous cursor stack for detecting cursor changes.
     pub previous_cursor_stack: TrackedStack,
+    /// Revision counter for sync tracking (increments on each change).
     pub revision: AtomicU32,
+    /// Whether sync is temporarily disabled (for batch operations).
     pub disable_sync: bool,
+    /// Container properties (furnace progress, enchantment levels, etc.).
     pub properties: Vec<ScreenProperty>,
+    /// Tracked property values for detecting changes.
     pub tracked_property_values: Vec<i32>,
+    /// The window type for this container ( determines client UI).
     pub window_type: Option<WindowType>,
+    /// Slots selected during a drag operation (for multi-slot distribution).
     pub drag_slots: Vec<u32>,
 }
 

@@ -1,3 +1,23 @@
+//! Player inventory screen handler.
+//!
+//! This module handles the player's inventory screen (opened with E key).
+//! It includes:
+//! - The 2x2 crafting grid (inventory crafting)
+//! - Armor slots (head, chest, legs, feet)
+//! - Main inventory (27 slots)
+//! - Hotbar (9 slots)
+//! - Offhand slot
+//!
+//! # Slot Layout
+//!
+//! The player screen handler uses the following slot indices:
+//! - 0: Crafting result
+//! - 1-4: Crafting grid (2x2)
+//! - 5-8: Armor slots (head, chest, legs, feet)
+//! - 9-35: Main inventory
+//! - 36-44: Hotbar
+//! - 45: Offhand
+
 use super::player_inventory::PlayerInventory;
 use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
@@ -13,8 +33,14 @@ use pumpkin_world::inventory::Inventory;
 use std::any::Any;
 use std::sync::Arc;
 
+/// Screen handler for the player's inventory.
+///
+/// Manages the player's inventory UI including crafting, armor, and
+/// the main inventory. This is the default screen shown when pressing E.
 pub struct PlayerScreenHandler {
+    /// Core screen handler behavior (slots, sync ID, listeners).
     behaviour: ScreenHandlerBehaviour,
+    /// The 2x2 crafting grid inventory.
     crafting_inventory: Arc<dyn RecipeInputInventory>,
 }
 
@@ -24,6 +50,7 @@ impl CraftingScreenHandler<CraftingInventory> for PlayerScreenHandler {}
 
 // TODO: Fully implement this
 impl PlayerScreenHandler {
+    /// Equipment slot order for armor display.
     const EQUIPMENT_SLOT_ORDER: [EquipmentSlot; 4] = [
         EquipmentSlot::HEAD,
         EquipmentSlot::CHEST,
@@ -31,15 +58,25 @@ impl PlayerScreenHandler {
         EquipmentSlot::FEET,
     ];
 
+    /// Checks if a slot index is in the hotbar.
+    ///
+    /// Hotbar slots are 36-44 in the protocol (0-indexed 36-44).
     #[must_use]
     pub fn is_in_hotbar(slot: u8) -> bool {
         (36..=45).contains(&slot)
     }
 
+    /// Gets a slot by its index.
     pub fn get_slot(&self, slot: usize) -> Arc<dyn Slot> {
         self.behaviour.slots[slot].clone()
     }
 
+    /// Creates a new player screen handler.
+    ///
+    /// # Arguments
+    /// - `player_inventory` - The player's inventory
+    /// - `window_type` - The window type (usually None for player inventory)
+    /// - `sync_id` - The synchronization ID
     pub async fn new(
         player_inventory: &Arc<PlayerInventory>,
         window_type: Option<WindowType>,
@@ -57,6 +94,7 @@ impl PlayerScreenHandler {
             .add_recipe_slots(crafting_inventory)
             .await;
 
+        // Add armor slots (head, chest, legs, feet)
         for i in 0..4 {
             player_screen_handler.add_slot(Arc::new(ArmorSlot::new(
                 player_inventory.clone(),
@@ -67,10 +105,11 @@ impl PlayerScreenHandler {
 
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
 
+        // Add main inventory and hotbar
         player_screen_handler.add_player_slots(&player_inventory);
 
-        // Offhand
-        // TODO: public void setStack(ItemStack stack, ItemStack previousStack) { owner.onEquipStack(EquipmentSlot.OFFHAND, previousStack, stack);
+        // Offhand slot (index 40 in player inventory, 45 in screen handler)
+        // TODO: onEquipStack callback for offhand
         player_screen_handler.add_slot(Arc::new(NormalSlot::new(player_inventory.clone(), 40)));
 
         player_screen_handler
@@ -78,15 +117,6 @@ impl PlayerScreenHandler {
 }
 
 impl ScreenHandler for PlayerScreenHandler {
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.default_on_closed(player).await;
-            //TODO: this.craftingResultInventory.clear();
-            self.drop_inventory(player, self.crafting_inventory.clone())
-                .await;
-        })
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -99,9 +129,25 @@ impl ScreenHandler for PlayerScreenHandler {
         &mut self.behaviour
     }
 
-    /// Do quick move (Shift + Click) for the given slot index.
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+        Box::pin(async move {
+            self.default_on_closed(player).await;
+            //TODO: this.craftingResultInventory.clear();
+            self.drop_inventory(player, self.crafting_inventory.clone())
+                .await;
+        })
+    }
+
+    /// Performs quick move (shift-click) for the given slot.
     ///
-    /// Returns the moved stack if successful, or `ItemStack::EMPTY` if nothing changed.
+    /// The quick move logic depends on the source slot:
+    /// - Crafting result (0) -> Player inventory (from end)
+    /// - Crafting grid (1-4) -> Player inventory (from start)
+    /// - Armor slots (5-8) -> Player inventory, unequips
+    /// - Armor items -> Armor slots if empty
+    /// - Offhand items -> Offhand slot if empty
+    /// - Main inventory (9-35) -> Hotbar
+    /// - Hotbar (36-44) -> Main inventory
     fn quick_move<'a>(
         &'a mut self,
         player: &'a dyn InventoryPlayer,
@@ -121,7 +167,7 @@ impl ScreenHandler for PlayerScreenHandler {
                     .get_data_component::<EquippableImpl>()
                     .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
 
-                // Quick move logic
+                // Quick move logic based on source slot
                 let success = if slot_index == 0 {
                     // From crafting result slot (0) -> Player Inventory (9-45, from end)
                     self.insert_item(&mut slot_stack, 9, 45, true).await
