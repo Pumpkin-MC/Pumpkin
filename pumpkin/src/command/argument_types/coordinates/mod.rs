@@ -192,7 +192,8 @@ impl Coordinates {
                 )
             }
             Self::Local { left, up, forward } => {
-                convert_local_coordinates(*left, *up, *forward, source.rotation)
+                let start = source.entity_anchor.position_at_source(source);
+                convert_local_coordinates(*left, *up, *forward, source.rotation).add(&start)
             }
         }
     }
