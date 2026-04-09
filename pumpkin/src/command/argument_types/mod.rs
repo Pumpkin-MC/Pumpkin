@@ -192,3 +192,4 @@ pub mod entity;
 pub mod entity_selector;
 pub mod range;
 pub mod time;
+pub mod game_profile;
