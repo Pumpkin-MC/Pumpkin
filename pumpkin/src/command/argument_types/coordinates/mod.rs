@@ -14,13 +14,6 @@ pub mod vec3;
 pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::ARGUMENT_POS_MIXED);
 
-pub const NOT_LOADED_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_UNLOADED);
-pub const OUT_OF_WORLD_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_OUTOFWORLD);
-pub const OUT_OF_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_OUTOFBOUNDS);
-
 /// Represents a single world coordinate.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WorldCoordinate {
