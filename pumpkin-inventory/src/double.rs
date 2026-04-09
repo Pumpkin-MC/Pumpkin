@@ -22,7 +22,7 @@ use tokio::sync::Mutex;
 pub struct DoubleInventory {
     /// The first inventory (lower slot indices, 0 to first.size()-1).
     first: Arc<dyn Inventory>,
-    /// The second inventory (higher slot indices, first.size() to total-1).
+    /// The second inventory (higher slot indices, `first.size()` to total-1).
     second: Arc<dyn Inventory>,
 }
 

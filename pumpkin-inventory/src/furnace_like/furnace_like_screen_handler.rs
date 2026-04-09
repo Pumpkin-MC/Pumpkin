@@ -59,7 +59,7 @@ impl FurnaceLikeScreenHandler {
     /// - `inventory` - The furnace's inventory (3 slots)
     /// - `property_delegate` - Delegate for accessing furnace properties
     /// - `experience_container` - Container that tracks smelting experience
-    /// - `window_type` - The window type (Furnace, Smoker, or BlastFurnace)
+    /// - `window_type` - The window type (Furnace, Smoker, or `BlastFurnace`)
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
