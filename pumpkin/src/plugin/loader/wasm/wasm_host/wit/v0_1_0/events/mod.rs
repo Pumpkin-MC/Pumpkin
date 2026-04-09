@@ -162,7 +162,9 @@ impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0Eve
                         .await
                         .unwrap();
                 }
-                PluginInstance::V0_2_0(_) => unreachable!("v0.1.0 event handler received a v0.2.0 plugin"),
+                PluginInstance::V0_2_0(_) => {
+                    unreachable!("v0.1.0 event handler received a v0.2.0 plugin")
+                }
             }
         })
     }
@@ -185,7 +187,9 @@ impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0Eve
 
                     *event = E::from_v0_1_0_wasm_event(returned_event, store.data_mut());
                 }
-                PluginInstance::V0_2_0(_) => unreachable!("v0.1.0 event handler received a v0.2.0 plugin"),
+                PluginInstance::V0_2_0(_) => {
+                    unreachable!("v0.1.0 event handler received a v0.2.0 plugin")
+                }
             }
         })
     }

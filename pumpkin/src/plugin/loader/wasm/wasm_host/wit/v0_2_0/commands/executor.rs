@@ -74,7 +74,9 @@ impl CommandExecutor for WasmCommandExecutor {
                         },
                     }
                 }
-                PluginInstance::V0_1_0(_) => unreachable!("v0.2.0 executor received a v0.1.0 plugin"),
+                PluginInstance::V0_1_0(_) => {
+                    unreachable!("v0.2.0 executor received a v0.1.0 plugin")
+                }
             }
         })
     }
