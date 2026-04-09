@@ -575,7 +575,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { ConfiguredFeature::BasaltPillar(crate::generation::feature::features::basalt_pillar::BasaltPillarFeature {}) }
         }
         "minecraft:block_blob" => {
-            let state = value_to_block_state_codec(&config["state"]);
+            let state = value_to_block_state(&config["state"]);
             quote! {
                 ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {
                     state: #state,

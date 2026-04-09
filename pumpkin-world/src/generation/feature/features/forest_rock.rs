@@ -1,13 +1,13 @@
+use crate::generation::proto_chunk::GenerationCache;
+use pumpkin_data::BlockState;
 use pumpkin_data::tag;
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::{block::BlockStateCodec, generation::proto_chunk::GenerationCache};
-
 pub struct ForestRockFeature {
-    pub state: BlockStateCodec,
+    pub state: &'static BlockState,
 }
 
 impl ForestRockFeature {
@@ -35,7 +35,7 @@ impl ForestRockFeature {
             pos = pos.down();
         }
 
-        let block_state = self.state.get_state();
+        let block_state = self.state;
 
         for _ in 0..3 {
             let xr = random.next_bounded_i32(2);

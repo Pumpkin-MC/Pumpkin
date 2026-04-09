@@ -2170,10 +2170,7 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
         "forest_rock".to_string(),
         ConfiguredFeature::ForestRock(
             crate::generation::feature::features::forest_rock::ForestRockFeature {
-                state: BlockStateCodec {
-                    name: &pumpkin_data::Block::MOSSY_COBBLESTONE,
-                    properties: None,
-                },
+                state: pumpkin_data::Block::MOSSY_COBBLESTONE.default_state,
             },
         ),
     );
