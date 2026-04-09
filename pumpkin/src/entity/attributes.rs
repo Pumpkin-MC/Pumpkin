@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use uuid::Uuid;
 
 #[derive(Clone, Debug, Copy)]
 #[repr(i8)]
@@ -16,7 +15,7 @@ pub enum ModifierOperation {
 
 #[derive(Clone, Debug)]
 pub struct Modifier {
-    pub id: Uuid,
+    pub id: String,
     pub amount: f64,
     pub operation: ModifierOperation,
 }
@@ -81,7 +80,7 @@ impl AttributeInstance {
         self.dirty.store(true, Ordering::Relaxed);
     }
 
-    pub fn remove_modifier(&mut self, id: Uuid) {
+    pub fn remove_modifier(&mut self, id: &str) {
         if let Some(pos) = self.modifiers.iter().position(|m| m.id == id) {
             self.modifiers.swap_remove(pos);
         }
@@ -115,7 +114,7 @@ pub async fn send_attribute_updates_for_living(
         if let Some(inst) = living.attributes.read().unwrap().get(&attribute.id) {
             for mod_inst in &inst.modifiers {
                 modifiers.push(JeAttrMod::new(
-                    mod_inst.id.to_string(),
+                    mod_inst.id.clone(),
                     mod_inst.amount,
                     mod_inst.operation as i8,
                 ));

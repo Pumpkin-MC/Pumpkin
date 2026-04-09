@@ -451,7 +451,7 @@ impl LivingEntity {
             if !effect.effect_type.attribute_modifiers.is_empty() {
                 // Apply each attribute modifier into the local AttributeInstance
                 for m in effect.effect_type.attribute_modifiers {
-                    let uuid = Uuid::new_v3(&Uuid::NAMESPACE_OID, m.id.as_bytes());
+                    let id = m.id.to_string();
                     let op = match m.operation {
                         Operation::AddValue => ModifierOperation::Add,
                         Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
@@ -459,7 +459,7 @@ impl LivingEntity {
                     };
                     let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
                     let mod_inst = Modifier {
-                        id: uuid,
+                        id,
                         amount: scaled_amount,
                         operation: op,
                     };
@@ -552,11 +552,11 @@ impl LivingEntity {
             let mut touched_attrs = Vec::new();
 
             for m in effect_type.attribute_modifiers {
-                let uuid = Uuid::new_v3(&Uuid::NAMESPACE_OID, m.id.as_bytes());
+                let id = m.id.to_string();
 
                 // Clean local server state
                 self.update_attribute(m.attribute, |inst| {
-                    inst.modifiers.retain(|mod_inst| mod_inst.id != uuid);
+                    inst.remove_modifier(&id);
                 });
 
                 // Track unique attributes for the packet update
