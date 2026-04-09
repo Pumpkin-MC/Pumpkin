@@ -4,6 +4,7 @@ interface player {
     use permission.{permission-level};
     use text.{text-component};
     use gui.{gui};
+    use packet.{packet, raw-packet};
 
     record player-abilities {
         invulnerable:       bool,
@@ -41,6 +42,10 @@ interface player {
         show-subtitle: func (text: text-component);
         show-actionbar: func (text: text-component);
         send-title-animation: func (fade-in: s32, stay: s32, fade-out: s32);
+        /// Sends a custom payload packet to this player (Java edition, Play state).
+        send-packet: func (packet: packet);
+        /// Sends a raw packet to this player.
+        send-raw-packet: func (packet: raw-packet);
 
         // Teleport & kick
         teleport: func (position: position, yaw: option<f32>, pitch: option<f32>, %world: %world);

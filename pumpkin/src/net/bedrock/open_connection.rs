@@ -16,6 +16,7 @@ impl BedrockClient {
         socket: &UdpSocket,
     ) {
         Self::send_offline_packet(
+            server,
             &COpenConnectionReply1::new(server.server_guid, false, 1400),
             addr,
             socket,
@@ -29,6 +30,7 @@ impl BedrockClient {
         socket: &UdpSocket,
     ) {
         Self::send_offline_packet(
+            server,
             &COpenConnectionReply2::new(server.server_guid, addr, packet.mtu, false),
             addr,
             socket,

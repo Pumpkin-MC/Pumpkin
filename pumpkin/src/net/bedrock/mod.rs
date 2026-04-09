@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     io::{Cursor, Error, Write},
     sync::{
-        Arc,
+        Arc, OnceLock, Weak,
         atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
     },
 };
@@ -59,6 +59,9 @@ pub mod connection;
 pub mod login;
 pub mod open_connection;
 pub mod unconnected;
+use crate::plugin::packet::{
+    BedrockConnectionState, PacketConnectionState, PacketDirection, RawPacketData, RawPacketEvent,
+};
 use crate::{entity::player::Player, net::DisconnectReason, server::Server};
 
 pub struct BedrockClient {
@@ -90,6 +93,8 @@ pub struct BedrockClient {
     close_token: CancellationToken,
     /// Store Fragments until the packet is complete
     compounds: Arc<Mutex<HashMap<u16, Vec<Option<Frame>>>>>,
+    /// Weak reference to the server for packet event hooks.
+    server_ref: OnceLock<Weak<Server>>,
     //input_sequence_number: AtomicU32,
 }
 
@@ -119,8 +124,124 @@ impl BedrockClient {
             output_ordered_index: AtomicU32::new(0),
             compounds: Arc::new(Mutex::new(HashMap::new())),
             close_token: CancellationToken::new(),
+            server_ref: OnceLock::new(),
             //input_sequence_number: AtomicU32::new(0),
         }
+    }
+
+    pub fn set_server_ref(&self, server: &Arc<Server>) {
+        let _ = self.server_ref.set(Arc::downgrade(server));
+    }
+
+    fn server_ref(&self) -> Option<Arc<Server>> {
+        self.server_ref.get().and_then(std::sync::Weak::upgrade)
+    }
+
+    async fn fire_raw_serverbound_packet_event(
+        &self,
+        server: &Arc<Server>,
+        state: BedrockConnectionState,
+        packet_id: i32,
+        payload: Bytes,
+        player: Option<Arc<Player>>,
+    ) -> Option<(i32, Bytes)> {
+        let event = RawPacketEvent::new(
+            player,
+            PacketDirection::Serverbound,
+            PacketConnectionState::Bedrock(state),
+            RawPacketData {
+                id: packet_id,
+                payload,
+            },
+        );
+
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return None;
+        }
+
+        Some((event.packet.id, event.packet.payload))
+    }
+
+    async fn fire_raw_clientbound_packet_event(
+        &self,
+        server: &Arc<Server>,
+        state: BedrockConnectionState,
+        packet_id: i32,
+        payload: Vec<u8>,
+    ) -> Option<Vec<u8>> {
+        let event = RawPacketEvent::new(
+            self.player.lock().await.clone(),
+            PacketDirection::Clientbound,
+            PacketConnectionState::Bedrock(state),
+            RawPacketData {
+                id: packet_id,
+                payload: Bytes::from(payload),
+            },
+        );
+
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return None;
+        }
+
+        let mut packet_buf = Vec::new();
+        match state {
+            BedrockConnectionState::Game => {
+                let write_result = self.network_writer.lock().await.write_game_packet(
+                    event.packet.id as u16,
+                    SubClient::Main,
+                    SubClient::Main,
+                    &event.packet.payload,
+                    &mut packet_buf,
+                );
+                if let Err(err) = write_result {
+                    warn!("Failed to encode game packet: {err}");
+                    return None;
+                }
+            }
+            BedrockConnectionState::Raknet | BedrockConnectionState::Offline => {
+                packet_buf.push(event.packet.id as u8);
+                packet_buf.extend_from_slice(&event.packet.payload);
+            }
+        }
+
+        Some(packet_buf)
+    }
+
+    pub async fn send_raw_game_packet(
+        &self,
+        packet_id: i32,
+        payload: Vec<u8>,
+    ) -> Result<(), Error> {
+        let packet_buf = if let Some(server) = self.server_ref() {
+            match self
+                .fire_raw_clientbound_packet_event(
+                    &server,
+                    BedrockConnectionState::Game,
+                    packet_id,
+                    payload,
+                )
+                .await
+            {
+                Some(packet_buf) => packet_buf,
+                None => return Ok(()),
+            }
+        } else {
+            let mut packet_buf = Vec::new();
+            self.network_writer.lock().await.write_game_packet(
+                packet_id as u16,
+                SubClient::Main,
+                SubClient::Main,
+                &payload,
+                &mut packet_buf,
+            )?;
+            packet_buf
+        };
+
+        self.send_framed_packet_data(packet_buf, RakReliability::Unreliable)
+            .await;
+        Ok(())
     }
 
     pub fn start_outgoing_packet_task(&mut self) {
@@ -235,18 +356,58 @@ impl BedrockClient {
     }
 
     pub async fn send_offline_packet<P: BClientPacket>(
+        server: &Server,
         packet: &P,
         addr: SocketAddr,
         socket: &UdpSocket,
     ) {
+        let mut payload = Vec::new();
+        packet.write_packet(&mut payload).unwrap();
+        let packet_id = P::PACKET_ID;
+
+        let event = RawPacketEvent::new(
+            None,
+            PacketDirection::Clientbound,
+            PacketConnectionState::Bedrock(BedrockConnectionState::Offline),
+            RawPacketData {
+                id: packet_id,
+                payload: Bytes::from(payload),
+            },
+        );
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return;
+        }
+
         let mut data = Vec::new();
-        let writer = &mut data;
-        Self::write_raw_packet(packet, writer).unwrap();
+        data.push(event.packet.id as u8);
+        data.extend_from_slice(&event.packet.payload);
+
         // We dont care if it works, if not the client will try again!
         let _ = socket.send_to(&data, addr).await;
     }
 
     pub async fn send_game_packet<P: BClientPacket>(&self, packet: &P) {
+        let mut payload = Vec::new();
+        packet.write_packet(&mut payload).unwrap();
+
+        if let Some(server) = self.server_ref() {
+            let packet_id = P::PACKET_ID;
+            if let Some(packet_buf) = self
+                .fire_raw_clientbound_packet_event(
+                    &server,
+                    BedrockConnectionState::Game,
+                    packet_id,
+                    payload,
+                )
+                .await
+            {
+                self.send_framed_packet_data(packet_buf, RakReliability::Unreliable)
+                    .await;
+            }
+            return;
+        }
+
         let mut packet_buf = Vec::new();
         self.write_game_packet(packet, &mut packet_buf)
             .await
@@ -261,9 +422,29 @@ impl BedrockClient {
         frame_set: &mut FrameSet,
     ) {
         let mut payload = Vec::new();
-        self.write_game_packet(packet, &mut payload).await.unwrap();
+        packet.write_packet(&mut payload).unwrap();
+        let packet_id = P::PACKET_ID;
 
-        frame_set.frames.push(Frame::new_unreliable(payload));
+        if let Some(server) = self.server_ref() {
+            if let Some(packet_buf) = self
+                .fire_raw_clientbound_packet_event(
+                    &server,
+                    BedrockConnectionState::Game,
+                    packet_id,
+                    payload,
+                )
+                .await
+            {
+                frame_set.frames.push(Frame::new_unreliable(packet_buf));
+            }
+            return;
+        }
+
+        let mut packet_buf = Vec::new();
+        self.write_game_packet(packet, &mut packet_buf)
+            .await
+            .unwrap();
+        frame_set.frames.push(Frame::new_unreliable(packet_buf));
     }
 
     pub async fn send_framed_packet<P: BClientPacket>(
@@ -271,6 +452,25 @@ impl BedrockClient {
         packet: &P,
         reliability: RakReliability,
     ) {
+        let mut payload = Vec::new();
+        packet.write_packet(&mut payload).unwrap();
+        let packet_id = P::PACKET_ID;
+
+        if let Some(server) = self.server_ref() {
+            if let Some(packet_buf) = self
+                .fire_raw_clientbound_packet_event(
+                    &server,
+                    BedrockConnectionState::Raknet,
+                    packet_id,
+                    payload,
+                )
+                .await
+            {
+                self.send_framed_packet_data(packet_buf, reliability).await;
+            }
+            return;
+        }
+
         let mut packet_buf = Vec::new();
         Self::write_raw_packet(packet, &mut packet_buf).unwrap();
         self.send_framed_packet_data(packet_buf, reliability).await;
@@ -380,6 +580,28 @@ impl BedrockClient {
         let mut packet_buf = Vec::new();
         ack.write(&mut packet_buf).unwrap();
 
+        if let Some(server) = self.server_ref() {
+            if let Some(packet_buf) = self
+                .fire_raw_clientbound_packet_event(
+                    &server,
+                    BedrockConnectionState::Raknet,
+                    i32::from(RAKNET_ACK),
+                    packet_buf,
+                )
+                .await
+                && let Err(err) = self
+                    .network_writer
+                    .lock()
+                    .await
+                    .write_packet(&packet_buf, self.address, &self.socket)
+                    .await
+            {
+                warn!("Failed to send packet to client: {err}");
+                self.close().await;
+            }
+            return;
+        }
+
         if let Err(err) = self
             .network_writer
             .lock()
@@ -397,9 +619,32 @@ impl BedrockClient {
         server: &Arc<Server>,
         packet: Bytes,
     ) -> Result<(), Error> {
-        let reader = &mut Cursor::new(packet);
+        let mut reader = Cursor::new(packet);
+        let packet_id = u8::read(&mut reader)?;
+        let payload_bytes = reader.get_ref()[reader.position() as usize..].to_vec();
 
-        match u8::read(reader)? {
+        let player = self.player.lock().await.clone();
+        let Some((packet_id, payload_bytes)) = self
+            .fire_raw_serverbound_packet_event(
+                server,
+                BedrockConnectionState::Raknet,
+                i32::from(packet_id),
+                Bytes::from(payload_bytes),
+                player,
+            )
+            .await
+        else {
+            return Ok(());
+        };
+
+        let Ok(packet_id_u8) = u8::try_from(packet_id) else {
+            warn!("Bedrock: Invalid RakNet packet id {packet_id}");
+            return Ok(());
+        };
+
+        let reader = &mut Cursor::new(payload_bytes);
+
+        match packet_id_u8 {
             RAKNET_ACK => {
                 Self::handle_ack(&Ack::read(reader)?);
             }
@@ -487,8 +732,22 @@ impl BedrockClient {
         server: &Arc<Server>,
         packet: RawPacket,
     ) -> Result<(), Error> {
-        let payload = &mut Cursor::new(&packet.payload);
-        match packet.id {
+        let player = self.player.lock().await.clone();
+        let Some((packet_id, payload_bytes)) = self
+            .fire_raw_serverbound_packet_event(
+                server,
+                BedrockConnectionState::Game,
+                packet.id,
+                packet.payload.clone(),
+                player,
+            )
+            .await
+        else {
+            return Ok(());
+        };
+
+        let payload = &mut Cursor::new(&payload_bytes);
+        match packet_id {
             SRequestNetworkSettings::PACKET_ID => {
                 self.handle_request_network_settings(SRequestNetworkSettings::read(payload)?)
                     .await;
@@ -504,8 +763,15 @@ impl BedrockClient {
                     .await;
             }
             _ => {
-                self.handle_play_packet(self.player.lock().await.as_ref().unwrap(), server, packet)
-                    .await;
+                self.handle_play_packet(
+                    self.player.lock().await.as_ref().unwrap(),
+                    server,
+                    RawPacket {
+                        id: packet_id,
+                        payload: payload_bytes,
+                    },
+                )
+                .await;
             }
         }
         Ok(())
@@ -562,8 +828,24 @@ impl BedrockClient {
         self: &Arc<Self>,
         server: &Arc<Server>,
         packet_id: i32,
-        mut payload: Cursor<Vec<u8>>,
+        payload: Cursor<Vec<u8>>,
     ) -> Result<(), Error> {
+        let payload_bytes = payload.get_ref().clone();
+        let player = self.player.lock().await.clone();
+        let Some((packet_id, payload_bytes)) = self
+            .fire_raw_serverbound_packet_event(
+                server,
+                BedrockConnectionState::Raknet,
+                packet_id,
+                Bytes::from(payload_bytes),
+                player,
+            )
+            .await
+        else {
+            return Ok(());
+        };
+
+        let mut payload = Cursor::new(payload_bytes.to_vec());
         let reader = &mut payload;
         match packet_id {
             // The client sends this multiple times and some arrive after we already made the connection
@@ -603,11 +885,29 @@ impl BedrockClient {
         addr: SocketAddr,
         socket: &UdpSocket,
     ) -> Result<(), Error> {
-        match i32::from(packet_id) {
+        let payload_bytes = payload.get_ref()[payload.position() as usize..].to_vec();
+        let event = RawPacketEvent::new(
+            None,
+            PacketDirection::Serverbound,
+            PacketConnectionState::Bedrock(BedrockConnectionState::Offline),
+            RawPacketData {
+                id: i32::from(packet_id),
+                payload: Bytes::from(payload_bytes),
+            },
+        );
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return Ok(());
+        }
+
+        let packet_id = event.packet.id;
+        let mut payload = Cursor::new(event.packet.payload);
+
+        match packet_id {
             SUnconnectedPing::PACKET_ID => {
                 Self::handle_unconnected_ping(
                     server,
-                    SUnconnectedPing::read(payload)?,
+                    SUnconnectedPing::read(&mut payload)?,
                     addr,
                     socket,
                 )
@@ -616,7 +916,7 @@ impl BedrockClient {
             SOpenConnectionRequest1::PACKET_ID => {
                 Self::handle_open_connection_1(
                     server,
-                    SOpenConnectionRequest1::read(payload)?,
+                    SOpenConnectionRequest1::read(&mut payload)?,
                     addr,
                     socket,
                 )
@@ -625,7 +925,7 @@ impl BedrockClient {
             SOpenConnectionRequest2::PACKET_ID => {
                 Self::handle_open_connection_2(
                     server,
-                    SOpenConnectionRequest2::read(payload)?,
+                    SOpenConnectionRequest2::read(&mut payload)?,
                     addr,
                     socket,
                 )

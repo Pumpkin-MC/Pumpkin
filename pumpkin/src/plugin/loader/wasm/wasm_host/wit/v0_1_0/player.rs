@@ -21,6 +21,7 @@ use crate::{
     },
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::permission::PermissionLvl;
 
 fn player_from_resource(
@@ -293,6 +294,45 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         player.send_title_animation(fade_in, stay, fade_out).await;
+        Ok(())
+    }
+
+    async fn send_packet(
+        &mut self,
+        player: Resource<Player>,
+        packet: pumpkin::plugin::packet::Packet,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player
+            .send_custom_payload(&packet.channel, &packet.data)
+            .await;
+        Ok(())
+    }
+
+    async fn send_raw_packet(
+        &mut self,
+        player: Resource<Player>,
+        packet: pumpkin::plugin::packet::RawPacket,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+
+        match &player.client {
+            crate::net::ClientPlatform::Java(java) => {
+                let mut buf = Vec::new();
+                VarInt(packet.id)
+                    .encode(&mut buf)
+                    .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                buf.extend_from_slice(&packet.payload);
+                java.enqueue_packet_data(buf.into()).await;
+            }
+            crate::net::ClientPlatform::Bedrock(bedrock) => {
+                bedrock
+                    .send_raw_game_packet(packet.id, packet.payload)
+                    .await
+                    .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+            }
+        }
+
         Ok(())
     }
 

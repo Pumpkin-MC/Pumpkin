@@ -6,11 +6,13 @@ use crate::plugin::loader::wasm::wasm_host::{
     wit::v0_1_0::pumpkin::{
         self,
         plugin::{
+            packet::RawPacket as WasmRawPacket,
             player::Player,
             server::{Difficulty, Server},
         },
     },
 };
+use pumpkin_protocol::codec::var_int::VarInt;
 
 impl PluginHostState {
     fn get_server_res(&self, res: &Resource<Server>) -> wasmtime::Result<&ServerResource> {
@@ -111,6 +113,47 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .get_player_by_uuid(uuid)
             .map(|player| self.add_player(player))
             .transpose()
+    }
+
+    async fn broadcast_packet(
+        &mut self,
+        res: Resource<Server>,
+        packet: pumpkin::plugin::packet::Packet,
+    ) -> wasmtime::Result<()> {
+        let resource = self.get_server_res(&res)?;
+        for player in resource.provider.get_all_players() {
+            player
+                .send_custom_payload(&packet.channel, &packet.data)
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn broadcast_raw_packet(
+        &mut self,
+        res: Resource<Server>,
+        packet: WasmRawPacket,
+    ) -> wasmtime::Result<()> {
+        let resource = self.get_server_res(&res)?;
+        for player in resource.provider.get_all_players() {
+            match &player.client {
+                crate::net::ClientPlatform::Java(java) => {
+                    let mut buf = Vec::new();
+                    VarInt(packet.id)
+                        .encode(&mut buf)
+                        .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                    buf.extend_from_slice(&packet.payload);
+                    java.enqueue_packet_data(buf.clone().into()).await;
+                }
+                crate::net::ClientPlatform::Bedrock(bedrock) => {
+                    bedrock
+                        .send_raw_game_packet(packet.id, packet.payload.clone())
+                        .await
+                        .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                }
+            }
+        }
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {

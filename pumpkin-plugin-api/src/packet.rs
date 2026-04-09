@@ -1,0 +1,585 @@
+use crate::{
+    Context, Result, Server,
+    events::{EventHandler, EventPriority, FromIntoEvent, player::PlayerCustomPayloadEvent},
+    wit::pumpkin::plugin::event::PlayerCustomPayloadEventData,
+};
+
+pub use crate::wit::pumpkin::plugin::event::RawPacketEventData;
+pub use crate::wit::pumpkin::plugin::packet::{
+    BedrockState, ConnectionState, JavaState, Packet, PacketDirection, RawPacket,
+};
+
+/// A lightweight packet event wrapper for custom payload packets.
+pub struct PacketEvent<'a> {
+    pub player: &'a crate::wit::pumpkin::plugin::player::Player,
+    pub packet: Packet,
+}
+
+/// Handles incoming custom payload packets.
+pub trait PacketHandler: Send + Sync {
+    fn handle(&self, server: Server, event: PacketEvent<'_>);
+}
+
+struct PacketHandlerWrapper<H> {
+    handler: H,
+    channel: Option<String>,
+}
+
+impl<H: PacketHandler + Send + Sync> EventHandler<PlayerCustomPayloadEvent>
+    for PacketHandlerWrapper<H>
+{
+    fn handle(
+        &self,
+        server: Server,
+        event: PlayerCustomPayloadEventData,
+    ) -> PlayerCustomPayloadEventData {
+        if let Some(channel) = &self.channel
+            && event.channel != *channel
+        {
+            return event;
+        }
+
+        let packet = Packet {
+            channel: event.channel.clone(),
+            data: event.data.clone(),
+        };
+        let packet_event = PacketEvent {
+            player: &event.player,
+            packet,
+        };
+
+        self.handler.handle(server, packet_event);
+        event
+    }
+}
+
+impl Packet {
+    /// Creates a new custom payload packet.
+    pub fn new(channel: impl Into<String>, data: impl Into<Vec<u8>>) -> Self {
+        Self {
+            channel: channel.into(),
+            data: data.into(),
+        }
+    }
+}
+
+impl RawPacket {
+    /// Creates a new raw packet with the given id and payload.
+    pub fn new(id: i32, payload: impl Into<Vec<u8>>) -> Self {
+        Self {
+            id,
+            payload: payload.into(),
+        }
+    }
+}
+
+impl crate::wit::pumpkin::plugin::player::Player {
+    /// Sends a raw packet by id + payload convenience.
+    pub fn send_raw_packet_id(&self, id: i32, payload: impl Into<Vec<u8>>) {
+        let packet = RawPacket::new(id, payload);
+        self.send_raw_packet(&packet);
+    }
+
+    /// Sends a custom payload packet on the given channel.
+    pub fn send_packet_on_channel(&self, channel: impl Into<String>, data: impl Into<Vec<u8>>) {
+        let packet = Packet::new(channel, data);
+        self.send_packet(&packet);
+    }
+}
+
+impl crate::wit::pumpkin::plugin::context::Server {
+    /// Broadcasts a raw packet by id + payload convenience.
+    pub fn broadcast_raw_packet_id(&self, id: i32, payload: impl Into<Vec<u8>>) {
+        let packet = RawPacket::new(id, payload);
+        self.broadcast_raw_packet(&packet);
+    }
+
+    /// Broadcasts a custom payload packet on the given channel.
+    pub fn broadcast_packet_on_channel(
+        &self,
+        channel: impl Into<String>,
+        data: impl Into<Vec<u8>>,
+    ) {
+        let packet = Packet::new(channel, data);
+        self.broadcast_packet(&packet);
+    }
+}
+
+/// Marker type for raw packet events.
+pub struct RawPacketEvent;
+
+impl FromIntoEvent for RawPacketEvent {
+    const EVENT_TYPE: crate::wit::pumpkin::plugin::event::EventType =
+        crate::wit::pumpkin::plugin::event::EventType::RawPacketEvent;
+    type Data = RawPacketEventData;
+
+    fn data_from_event(event: crate::wit::pumpkin::plugin::event::Event) -> Self::Data {
+        match event {
+            crate::wit::pumpkin::plugin::event::Event::RawPacketEvent(data) => data,
+            _ => panic!("unexpected event"),
+        }
+    }
+
+    fn data_into_event(data: Self::Data) -> crate::wit::pumpkin::plugin::event::Event {
+        crate::wit::pumpkin::plugin::event::Event::RawPacketEvent(data)
+    }
+}
+
+/// Filters raw packet events before they reach the handler.
+#[derive(Clone, Default)]
+pub struct RawPacketFilter {
+    pub direction: Option<PacketDirection>,
+    pub state: Option<ConnectionState>,
+    pub packet_id: Option<i32>,
+}
+
+/// Handles incoming raw packet events.
+pub trait RawPacketHandler: Send + Sync {
+    fn handle(&self, server: Server, event: RawPacketEventData) -> RawPacketEventData;
+}
+
+struct RawPacketHandlerWrapper<H> {
+    handler: H,
+    filter: RawPacketFilter,
+}
+
+impl<H: RawPacketHandler + Send + Sync> EventHandler<RawPacketEvent>
+    for RawPacketHandlerWrapper<H>
+{
+    fn handle(&self, server: Server, event: RawPacketEventData) -> RawPacketEventData {
+        if let Some(direction) = self.filter.direction
+            && event.packet.direction != direction
+        {
+            return event;
+        }
+
+        if let Some(state) = &self.filter.state
+            && !connection_state_eq(&event.packet.state, state)
+        {
+            return event;
+        }
+
+        if let Some(packet_id) = self.filter.packet_id
+            && event.packet.packet.id != packet_id
+        {
+            return event;
+        }
+
+        self.handler.handle(server, event)
+    }
+}
+
+fn connection_state_eq(a: &ConnectionState, b: &ConnectionState) -> bool {
+    match (a, b) {
+        (ConnectionState::Java(a), ConnectionState::Java(b)) => matches!(
+            (a, b),
+            (JavaState::Handshake, JavaState::Handshake)
+                | (JavaState::Status, JavaState::Status)
+                | (JavaState::Login, JavaState::Login)
+                | (JavaState::Config, JavaState::Config)
+                | (JavaState::Play, JavaState::Play)
+                | (JavaState::Transfer, JavaState::Transfer)
+        ),
+        (ConnectionState::Bedrock(a), ConnectionState::Bedrock(b)) => matches!(
+            (a, b),
+            (BedrockState::Offline, BedrockState::Offline)
+                | (BedrockState::Raknet, BedrockState::Raknet)
+                | (BedrockState::Game, BedrockState::Game)
+        ),
+        _ => false,
+    }
+}
+
+impl Context {
+    /// Registers a handler for all incoming custom payload packets.
+    pub fn register_packet_handler<H: PacketHandler + Send + Sync + 'static>(
+        &self,
+        handler: H,
+        event_priority: EventPriority,
+    ) -> Result<u32> {
+        let wrapper = PacketHandlerWrapper {
+            handler,
+            channel: None,
+        };
+        self.register_event_handler::<PlayerCustomPayloadEvent, _>(wrapper, event_priority, false)
+    }
+
+    /// Registers a handler for incoming custom payload packets on a specific channel.
+    pub fn register_packet_handler_for_channel<H: PacketHandler + Send + Sync + 'static>(
+        &self,
+        channel: impl Into<String>,
+        handler: H,
+        event_priority: EventPriority,
+    ) -> Result<u32> {
+        let wrapper = PacketHandlerWrapper {
+            handler,
+            channel: Some(channel.into()),
+        };
+        self.register_event_handler::<PlayerCustomPayloadEvent, _>(wrapper, event_priority, false)
+    }
+
+    /// Registers a handler for all raw packet events.
+    pub fn register_raw_packet_handler<H: RawPacketHandler + Send + Sync + 'static>(
+        &self,
+        handler: H,
+        event_priority: EventPriority,
+        blocking: bool,
+    ) -> Result<u32> {
+        self.register_raw_packet_handler_with_filter(
+            RawPacketFilter::default(),
+            handler,
+            event_priority,
+            blocking,
+        )
+    }
+
+    /// Registers a handler for raw packet events with a filter.
+    pub fn register_raw_packet_handler_with_filter<H: RawPacketHandler + Send + Sync + 'static>(
+        &self,
+        filter: RawPacketFilter,
+        handler: H,
+        event_priority: EventPriority,
+        blocking: bool,
+    ) -> Result<u32> {
+        let wrapper = RawPacketHandlerWrapper { handler, filter };
+        self.register_event_handler::<RawPacketEvent, _>(wrapper, event_priority, blocking)
+    }
+}
+
+/// Small packet codec helpers for raw packet parsing and construction.
+pub mod codec {
+    use std::{string::String, vec, vec::Vec};
+
+    /// Read errors when decoding a packet payload.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum PacketReadError {
+        UnexpectedEof,
+        VarIntTooLong,
+        StringTooLong,
+        InvalidUtf8,
+    }
+
+    /// A lightweight reader over a packet payload.
+    pub struct PacketReader<'a> {
+        buf: &'a [u8],
+        pos: usize,
+    }
+
+    impl<'a> PacketReader<'a> {
+        /// Creates a new reader over the given payload bytes.
+        pub fn new(buf: &'a [u8]) -> Self {
+            Self { buf, pos: 0 }
+        }
+
+        /// Returns how many bytes are still unread.
+        pub fn remaining(&self) -> usize {
+            self.buf.len().saturating_sub(self.pos)
+        }
+
+        /// Returns the current cursor position.
+        pub fn position(&self) -> usize {
+            self.pos
+        }
+
+        fn read_exact(&mut self, len: usize) -> Result<&'a [u8], PacketReadError> {
+            let end = self
+                .pos
+                .checked_add(len)
+                .ok_or(PacketReadError::UnexpectedEof)?;
+            let slice = self
+                .buf
+                .get(self.pos..end)
+                .ok_or(PacketReadError::UnexpectedEof)?;
+            self.pos = end;
+            Ok(slice)
+        }
+
+        /// Reads a single byte.
+        pub fn read_u8(&mut self) -> Result<u8, PacketReadError> {
+            Ok(*self.read_exact(1)?.first().unwrap())
+        }
+
+        /// Reads a boolean (0 = false, otherwise true).
+        pub fn read_bool(&mut self) -> Result<bool, PacketReadError> {
+            Ok(self.read_u8()? != 0)
+        }
+
+        /// Reads a big-endian u16.
+        pub fn read_u16(&mut self) -> Result<u16, PacketReadError> {
+            let bytes = self.read_exact(2)?;
+            Ok(u16::from_be_bytes([bytes[0], bytes[1]]))
+        }
+
+        /// Reads a big-endian i32.
+        pub fn read_i32(&mut self) -> Result<i32, PacketReadError> {
+            let bytes = self.read_exact(4)?;
+            Ok(i32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+        }
+
+        /// Reads a big-endian i64.
+        pub fn read_i64(&mut self) -> Result<i64, PacketReadError> {
+            let bytes = self.read_exact(8)?;
+            Ok(i64::from_be_bytes([
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            ]))
+        }
+
+        /// Reads a VarInt.
+        pub fn read_varint(&mut self) -> Result<i32, PacketReadError> {
+            let mut num_read = 0u32;
+            let mut result: i32 = 0;
+
+            loop {
+                let byte = self.read_u8()?;
+                let value = i32::from(byte & 0x7F);
+                result |= value << (7 * num_read);
+                num_read += 1;
+                if num_read > 5 {
+                    return Err(PacketReadError::VarIntTooLong);
+                }
+                if (byte & 0x80) == 0 {
+                    return Ok(result);
+                }
+            }
+        }
+
+        /// Reads a VarLong.
+        pub fn read_varlong(&mut self) -> Result<i64, PacketReadError> {
+            let mut num_read = 0u32;
+            let mut result: i64 = 0;
+
+            loop {
+                let byte = self.read_u8()?;
+                let value = i64::from(byte & 0x7F);
+                result |= value << (7 * num_read);
+                num_read += 1;
+                if num_read > 10 {
+                    return Err(PacketReadError::VarIntTooLong);
+                }
+                if (byte & 0x80) == 0 {
+                    return Ok(result);
+                }
+            }
+        }
+
+        /// Reads a byte slice of length `len`.
+        pub fn read_bytes(&mut self, len: usize) -> Result<&'a [u8], PacketReadError> {
+            self.read_exact(len)
+        }
+
+        /// Reads a UUID as 16 raw bytes.
+        pub fn read_uuid_bytes(&mut self) -> Result<[u8; 16], PacketReadError> {
+            let bytes = self.read_exact(16)?;
+            Ok([
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14],
+                bytes[15],
+            ])
+        }
+
+        /// Reads a length-prefixed UTF-8 string.
+        /// `max_len` is the maximum allowed character length to guard against abuse.
+        pub fn read_string(&mut self, max_len: usize) -> Result<String, PacketReadError> {
+            let len =
+                usize::try_from(self.read_varint()?).map_err(|_| PacketReadError::StringTooLong)?;
+            if len > max_len {
+                return Err(PacketReadError::StringTooLong);
+            }
+            let bytes = self.read_exact(len)?;
+            core::str::from_utf8(bytes)
+                .map(|s| s.to_string())
+                .map_err(|_| PacketReadError::InvalidUtf8)
+        }
+    }
+
+    /// A lightweight writer to build packet payloads.
+    pub struct PacketWriter {
+        buf: Vec<u8>,
+    }
+
+    impl PacketWriter {
+        /// Creates an empty writer.
+        pub fn new() -> Self {
+            Self { buf: vec![] }
+        }
+
+        /// Returns the underlying buffer.
+        pub fn into_inner(self) -> Vec<u8> {
+            self.buf
+        }
+
+        /// Writes a single byte.
+        pub fn write_u8(&mut self, value: u8) {
+            self.buf.push(value);
+        }
+
+        /// Writes a boolean as 0/1.
+        pub fn write_bool(&mut self, value: bool) {
+            self.buf.push(if value { 1 } else { 0 });
+        }
+
+        /// Writes a big-endian u16.
+        pub fn write_u16(&mut self, value: u16) {
+            self.buf.extend_from_slice(&value.to_be_bytes());
+        }
+
+        /// Writes a big-endian i32.
+        pub fn write_i32(&mut self, value: i32) {
+            self.buf.extend_from_slice(&value.to_be_bytes());
+        }
+
+        /// Writes a big-endian i64.
+        pub fn write_i64(&mut self, value: i64) {
+            self.buf.extend_from_slice(&value.to_be_bytes());
+        }
+
+        /// Writes a VarInt.
+        pub fn write_varint(&mut self, mut value: i32) {
+            loop {
+                let mut temp = (value & 0x7F) as u8;
+                value = ((value as u32) >> 7) as i32;
+                if value != 0 {
+                    temp |= 0x80;
+                }
+                self.buf.push(temp);
+                if value == 0 {
+                    break;
+                }
+            }
+        }
+
+        /// Writes a VarLong.
+        pub fn write_varlong(&mut self, mut value: i64) {
+            loop {
+                let mut temp = (value & 0x7F) as u8;
+                value = ((value as u64) >> 7) as i64;
+                if value != 0 {
+                    temp |= 0x80;
+                }
+                self.buf.push(temp);
+                if value == 0 {
+                    break;
+                }
+            }
+        }
+
+        /// Writes a byte slice.
+        pub fn write_bytes(&mut self, bytes: &[u8]) {
+            self.buf.extend_from_slice(bytes);
+        }
+
+        /// Writes a UUID as 16 raw bytes.
+        pub fn write_uuid_bytes(&mut self, bytes: &[u8; 16]) {
+            self.buf.extend_from_slice(bytes);
+        }
+
+        /// Writes a length-prefixed UTF-8 string.
+        pub fn write_string(&mut self, value: &str) {
+            self.write_varint(value.len() as i32);
+            self.buf.extend_from_slice(value.as_bytes());
+        }
+    }
+
+    impl Default for PacketWriter {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+}
+
+/// Java edition packet helpers.
+pub mod java {
+    use super::{
+        RawPacket,
+        codec::{PacketReadError, PacketReader, PacketWriter},
+    };
+
+    /// Parsed form of the serverbound chat message packet (Java, Play state).
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ServerboundChatMessage {
+        pub message: String,
+        pub timestamp: i64,
+        pub salt: i64,
+        pub signature: Option<Vec<u8>>,
+        pub message_count: i32,
+        /// Fixed 20-bit bitset represented as 3 raw bytes.
+        pub acknowledged: [u8; 3],
+        /// Optional checksum (present in newer protocol revisions).
+        pub checksum: Option<u8>,
+    }
+
+    impl ServerboundChatMessage {
+        /// Decodes a serverbound chat message payload.
+        pub fn decode(payload: &[u8]) -> Result<Self, PacketReadError> {
+            let mut reader = PacketReader::new(payload);
+            let message = reader.read_string(256)?;
+            let timestamp = reader.read_i64()?;
+            let salt = reader.read_i64()?;
+
+            let has_signature = reader.read_bool()?;
+            let signature = if has_signature {
+                let len = usize::try_from(reader.read_varint()?)
+                    .map_err(|_| PacketReadError::StringTooLong)?;
+                if len > 256 {
+                    return Err(PacketReadError::StringTooLong);
+                }
+                Some(reader.read_bytes(len)?.to_vec())
+            } else {
+                None
+            };
+
+            let message_count = reader.read_varint()?;
+            let ack_bytes = reader.read_bytes(3)?;
+            let acknowledged = [ack_bytes[0], ack_bytes[1], ack_bytes[2]];
+
+            let checksum = if reader.remaining() >= 1 {
+                Some(reader.read_u8()?)
+            } else {
+                None
+            };
+
+            Ok(Self {
+                message,
+                timestamp,
+                salt,
+                signature,
+                message_count,
+                acknowledged,
+                checksum,
+            })
+        }
+
+        /// Encodes this message into a packet payload.
+        pub fn encode(&self) -> Vec<u8> {
+            let mut writer = PacketWriter::new();
+            writer.write_string(&self.message);
+            writer.write_i64(self.timestamp);
+            writer.write_i64(self.salt);
+
+            match &self.signature {
+                Some(sig) => {
+                    writer.write_bool(true);
+                    writer.write_varint(sig.len() as i32);
+                    writer.write_bytes(sig);
+                }
+                None => {
+                    writer.write_bool(false);
+                }
+            }
+
+            writer.write_varint(self.message_count);
+            writer.write_bytes(&self.acknowledged);
+
+            if let Some(checksum) = self.checksum {
+                writer.write_u8(checksum);
+            }
+
+            writer.into_inner()
+        }
+
+        /// Builds a raw packet with the provided packet id.
+        pub fn to_raw_packet(&self, id: i32) -> RawPacket {
+            RawPacket::new(id, self.encode())
+        }
+    }
+}

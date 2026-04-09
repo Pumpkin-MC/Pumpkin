@@ -22,6 +22,7 @@ use crate::{
 };
 
 pub mod block;
+pub mod packet;
 pub mod player;
 pub mod server;
 pub mod world;

@@ -1,6 +1,7 @@
 interface event {
     use common.{block-position, game-mode, hand, position};
     use player.{player};
+    use packet.{raw-packet-event};
     use text.{text-component};
     use %world.{%world};
 
@@ -204,6 +205,11 @@ interface event {
         cancelled: bool
     }
 
+    record raw-packet-event-data {
+        player: option<player>,
+        packet: raw-packet-event,
+    }
+
     enum event-type {
         player-join-event,
         player-leave-event,
@@ -230,6 +236,7 @@ interface event {
         server-command-event,
         spawn-change-event,
         server-broadcast-event,
+        raw-packet-event,
     }
 
     variant event {
@@ -258,5 +265,6 @@ interface event {
         server-command-event(server-command-event-data),
         spawn-change-event(spawn-change-event-data),
         server-broadcast-event(server-broadcast-event-data),
+        raw-packet-event(raw-packet-event-data),
     }
 }

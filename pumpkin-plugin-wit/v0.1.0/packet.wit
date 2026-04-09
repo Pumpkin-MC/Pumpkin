@@ -1,0 +1,48 @@
+interface packet {
+    /// A minimal plugin message packet payload (Java custom payload).
+    record packet {
+        /// The channel identifier (e.g. `myplugin:test`).
+        channel: string,
+        /// Raw payload bytes.
+        data: list<u8>,
+    }
+
+    /// Raw packet payload with an explicit ID.
+    record raw-packet {
+        id: s32,
+        payload: list<u8>,
+    }
+
+    enum packet-direction {
+        serverbound,
+        clientbound,
+    }
+
+    enum java-state {
+        handshake,
+        status,
+        login,
+        config,
+        play,
+        transfer,
+    }
+
+    enum bedrock-state {
+        offline,
+        raknet,
+        game,
+    }
+
+    variant connection-state {
+        java(java-state),
+        bedrock(bedrock-state),
+    }
+
+    /// A raw packet event payload used by the event system.
+    record raw-packet-event {
+        direction: packet-direction,
+        state: connection-state,
+        packet: raw-packet,
+        cancelled: bool,
+    }
+}

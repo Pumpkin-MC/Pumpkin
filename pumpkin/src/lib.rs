@@ -445,6 +445,7 @@ impl PumpkinServer {
 
                         tasks.spawn(async move {
                             let mut java_client = JavaClient::new(connection, client_addr, client_id);
+                            java_client.set_server_ref(&server_clone);
                             java_client.start_outgoing_packet_task();
                             let login_result = java_client.handle_login_sequence(&server_clone).await;
 
@@ -462,6 +463,7 @@ impl PumpkinServer {
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
                                     if let ClientPlatform::Java(client) = &player.client {
+                                        client.set_player_ref(&player);
                                         client.progress_player_packets(&player, &server_clone).await;
                                         // Close when done
                                         client.close();
@@ -512,6 +514,7 @@ impl PumpkinServer {
                                     *master_client_id_counter += 1;
 
                                     let mut platform = BedrockClient::new(self.udp_socket.clone().unwrap(), client_addr, be_clients);
+                                    platform.set_server_ref(&self.server);
                                     platform.handle_connection_request(packet).await;
                                     platform.start_outgoing_packet_task();
 

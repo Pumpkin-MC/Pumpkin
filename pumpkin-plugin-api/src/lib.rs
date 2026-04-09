@@ -32,6 +32,8 @@ use crate::{
 
 pub mod commands;
 pub mod events;
+pub mod packet;
+pub mod packet_ids_full;
 
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{
@@ -42,7 +44,7 @@ pub mod command {
 pub use wit::pumpkin::plugin::{
     command as command_wit, common,
     context::{Context, Server},
-    gui, permission, scoreboard, server, text, world,
+    gui, packet as packet_wit, permission, scoreboard, server, text, world,
 };
 
 pub mod logging;

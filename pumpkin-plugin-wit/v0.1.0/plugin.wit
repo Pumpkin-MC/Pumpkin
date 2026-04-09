@@ -15,6 +15,7 @@ world plugin {
     import command;
     import context;
     import i18n;
+    import packet;
 
     // This is what the plugin should provide
     export init-plugin: func();

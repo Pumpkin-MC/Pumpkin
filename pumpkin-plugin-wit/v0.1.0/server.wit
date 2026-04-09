@@ -1,5 +1,6 @@
 interface server {
     use player.{player};
+    use packet.{packet, raw-packet};
 
     enum difficulty {
         peaceful,
@@ -29,5 +30,10 @@ interface server {
 
         /// Searches for a player by their UUID across all worlds.
         get-player-by-uuid: func(id: string) -> option<player>;
+
+        /// Sends a custom payload packet to all online players (Java edition, Play state).
+        broadcast-packet: func(packet: packet);
+        /// Sends a raw packet to all online players.
+        broadcast-raw-packet: func(packet: raw-packet);
     }
 }
