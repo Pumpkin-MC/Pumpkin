@@ -33,10 +33,12 @@ pub struct PluginRuntime {
     engine: Engine,
     cache_dir: std::path::PathBuf,
     linker_v0_1_0: wasmtime::component::Linker<PluginHostState>,
+    linker_v0_2_0: wasmtime::component::Linker<PluginHostState>,
 }
 
 pub enum PluginInstance {
     V0_1_0(wit::v0_1_0::Plugin),
+    V0_2_0(wit::v0_2_0::Plugin),
 }
 
 pub struct WasmPlugin {
@@ -60,11 +62,14 @@ impl PluginRuntime {
 
         let linker_v0_1_0 =
             wit::v0_1_0::setup_linker(&engine).map_err(PluginInitError::LinkerSetupFailed)?;
+        let linker_v0_2_0 =
+            wit::v0_2_0::setup_linker(&engine).map_err(PluginInitError::LinkerSetupFailed)?;
 
         Ok(Self {
             engine,
             cache_dir: path,
             linker_v0_1_0,
+            linker_v0_2_0,
         })
     }
 
@@ -75,16 +80,14 @@ impl PluginRuntime {
         let wasm_bytes = std::fs::read(&path)?;
 
         let api_version = probe_api_version_from_bytes(&wasm_bytes)?;
-
-        if api_version != "0.1.0" {
-            return Err(PluginInitError::ApiVersionMismatch(api_version));
-        }
-
         let component = load_component(&self.engine, &wasm_bytes, path.as_ref(), &self.cache_dir)?;
 
         let (wasm_plugin, metadata) = match api_version.as_str() {
             "0.1.0" => {
                 wit::v0_1_0::init_plugin(&self.engine, &self.linker_v0_1_0, component).await?
+            }
+            "0.2.0" => {
+                wit::v0_2_0::init_plugin(&self.engine, &self.linker_v0_2_0, component).await?
             }
             _ => return Err(PluginInitError::ApiVersionMismatch(api_version)),
         };
@@ -173,6 +176,10 @@ impl WasmPlugin {
                 let context = store.data_mut().add_context(context)?;
                 plugin.call_on_load(&mut *store, context).await
             }
+            PluginInstance::V0_2_0(ref plugin) => {
+                let context = store.data_mut().add_context(context)?;
+                plugin.call_on_load(&mut *store, context).await
+            }
         }
     }
 
@@ -184,6 +191,10 @@ impl WasmPlugin {
 
         match self.plugin_instance {
             PluginInstance::V0_1_0(ref plugin) => {
+                let context = store.data_mut().add_context(context)?;
+                plugin.call_on_unload(&mut *store, context).await
+            }
+            PluginInstance::V0_2_0(ref plugin) => {
                 let context = store.data_mut().add_context(context)?;
                 plugin.call_on_unload(&mut *store, context).await
             }

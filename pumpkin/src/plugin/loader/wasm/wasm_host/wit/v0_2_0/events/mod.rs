@@ -14,7 +14,7 @@ use crate::{
         loader::wasm::wasm_host::{
             PluginInstance, WasmPlugin,
             state::{PlayerResource, PluginHostState, TextComponentResource, WorldResource},
-            wit::{self, v0_1_0::pumpkin},
+            wit::{self, v0_2_0::pumpkin},
         },
     },
     server::Server,
@@ -28,19 +28,19 @@ pub mod world;
 
 impl pumpkin::plugin::event::Host for PluginHostState {}
 
-pub struct WasmPluginV0_1_0EventHandler {
+pub struct WasmPluginV0_2_0EventHandler {
     pub handler_id: u32,
     pub plugin: Arc<WasmPlugin>,
 }
 
-pub trait ToFromV0_1_0WasmEvent {
-    fn to_v0_1_0_wasm_event(
+pub trait ToFromV0_2_0WasmEvent {
+    fn to_v0_2_0_wasm_event(
         &self,
         state: &mut PluginHostState,
-    ) -> wit::v0_1_0::pumpkin::plugin::event::Event;
+    ) -> wit::v0_2_0::pumpkin::plugin::event::Event;
 
-    fn from_v0_1_0_wasm_event(
-        event: wit::v0_1_0::pumpkin::plugin::event::Event,
+    fn from_v0_2_0_wasm_event(
+        event: wit::v0_2_0::pumpkin::plugin::event::Event,
         state: &mut PluginHostState,
     ) -> Self;
 }
@@ -149,20 +149,20 @@ pub(super) fn consume_world(
         .provider
 }
 
-impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0EventHandler {
+impl<E: Payload + ToFromV0_2_0WasmEvent> EventHandler<E> for WasmPluginV0_2_0EventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            let event = event.to_v0_1_0_wasm_event(store.data_mut());
+            let event = event.to_v0_2_0_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
-                PluginInstance::V0_1_0(ref plugin) => {
+                PluginInstance::V0_2_0(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
                     plugin
                         .call_handle_event(&mut *store, self.handler_id, server, &event)
                         .await
                         .unwrap();
                 }
-                PluginInstance::V0_2_0(_) => unreachable!("v0.1.0 event handler received a v0.2.0 plugin"),
+                PluginInstance::V0_1_0(_) => unreachable!("v0.2.0 event handler received a v0.1.0 plugin"),
             }
         })
     }
@@ -174,18 +174,18 @@ impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0Eve
     ) -> BoxFuture<'a, ()> {
         Box::pin(async {
             let mut store = self.plugin.store.lock().await;
-            let wasm_event = event.to_v0_1_0_wasm_event(store.data_mut());
+            let wasm_event = event.to_v0_2_0_wasm_event(store.data_mut());
             match self.plugin.plugin_instance {
-                PluginInstance::V0_1_0(ref plugin) => {
+                PluginInstance::V0_2_0(ref plugin) => {
                     let server = store.data_mut().add_server(server.clone()).unwrap();
                     let returned_event = plugin
                         .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
                         .await
                         .unwrap();
 
-                    *event = E::from_v0_1_0_wasm_event(returned_event, store.data_mut());
+                    *event = E::from_v0_2_0_wasm_event(returned_event, store.data_mut());
                 }
-                PluginInstance::V0_2_0(_) => unreachable!("v0.1.0 event handler received a v0.2.0 plugin"),
+                PluginInstance::V0_1_0(_) => unreachable!("v0.2.0 event handler received a v0.1.0 plugin"),
             }
         })
     }

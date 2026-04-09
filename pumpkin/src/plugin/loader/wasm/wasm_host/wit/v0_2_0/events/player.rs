@@ -1,9 +1,9 @@
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
-        wit::v0_1_0::{
+        wit::v0_2_0::{
             events::{
-                ToFromV0_1_0WasmEvent, consume_player, consume_text_component, consume_world,
+                ToFromV0_2_0WasmEvent, consume_player, consume_text_component, consume_world,
                 from_wasm_entity_type, from_wasm_game_mode, from_wasm_hand, from_wasm_position,
                 to_wasm_entity_type, to_wasm_game_mode, to_wasm_hand, to_wasm_position,
             },
@@ -12,9 +12,10 @@ use crate::plugin::{
                 PlayerChatEventData, PlayerCommandSendEventData, PlayerCustomPayloadEventData,
                 PlayerEggThrowEventData, PlayerExpChangeEventData, PlayerFishEventData,
                 PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
-                PlayerItemHeldEventData, PlayerJoinEventData, PlayerLeaveEventData,
-                PlayerLoginEventData, PlayerMoveEventData, PlayerPermissionCheckEventData,
-                PlayerTeleportEventData,
+                PlayerInteractActionType as WasmPlayerInteractActionType,
+                PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
+                PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
+                PlayerPermissionCheckEventData, PlayerTeleportEventData,
             },
         },
     },
@@ -29,6 +30,7 @@ use crate::plugin::{
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent,
         player_leave::PlayerLeaveEvent,
         player_login::PlayerLoginEvent,
@@ -38,6 +40,7 @@ use crate::plugin::{
     },
 };
 use bytes::Bytes;
+use pumpkin_protocol::java::server::play::ActionType;
 
 const fn to_wasm_fish_state(state: PlayerFishState) -> WasmPlayerFishState {
     match state {
@@ -63,8 +66,24 @@ const fn from_wasm_fish_state(state: WasmPlayerFishState) -> PlayerFishState {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerJoinEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+const fn to_wasm_player_interact_action_type(action: ActionType) -> WasmPlayerInteractActionType {
+    match action {
+        ActionType::Interact => WasmPlayerInteractActionType::Interact,
+        ActionType::Attack => WasmPlayerInteractActionType::Attack,
+        ActionType::InteractAt => WasmPlayerInteractActionType::InteractAt,
+    }
+}
+
+const fn from_wasm_player_interact_action_type(action: WasmPlayerInteractActionType) -> ActionType {
+    match action {
+        WasmPlayerInteractActionType::Interact => ActionType::Interact,
+        WasmPlayerInteractActionType::Attack => ActionType::Attack,
+        WasmPlayerInteractActionType::InteractAt => ActionType::InteractAt,
+    }
+}
+
+impl ToFromV0_2_0WasmEvent for PlayerJoinEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -79,7 +98,7 @@ impl ToFromV0_1_0WasmEvent for PlayerJoinEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerJoinEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -91,8 +110,8 @@ impl ToFromV0_1_0WasmEvent for PlayerJoinEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerLeaveEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerLeaveEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -107,7 +126,7 @@ impl ToFromV0_1_0WasmEvent for PlayerLeaveEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerLeaveEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -119,8 +138,8 @@ impl ToFromV0_1_0WasmEvent for PlayerLeaveEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerLoginEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerLoginEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -135,7 +154,7 @@ impl ToFromV0_1_0WasmEvent for PlayerLoginEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerLoginEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -147,8 +166,8 @@ impl ToFromV0_1_0WasmEvent for PlayerLoginEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerChatEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerChatEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -171,7 +190,7 @@ impl ToFromV0_1_0WasmEvent for PlayerChatEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerChatEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -188,8 +207,8 @@ impl ToFromV0_1_0WasmEvent for PlayerChatEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerCommandSendEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerCommandSendEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -201,7 +220,7 @@ impl ToFromV0_1_0WasmEvent for PlayerCommandSendEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerCommandSendEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -213,8 +232,8 @@ impl ToFromV0_1_0WasmEvent for PlayerCommandSendEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerPermissionCheckEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerPermissionCheckEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -226,7 +245,7 @@ impl ToFromV0_1_0WasmEvent for PlayerPermissionCheckEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerPermissionCheckEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -238,8 +257,8 @@ impl ToFromV0_1_0WasmEvent for PlayerPermissionCheckEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerMoveEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerMoveEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -252,7 +271,7 @@ impl ToFromV0_1_0WasmEvent for PlayerMoveEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerMoveEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -265,8 +284,8 @@ impl ToFromV0_1_0WasmEvent for PlayerMoveEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerTeleportEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerTeleportEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -279,7 +298,7 @@ impl ToFromV0_1_0WasmEvent for PlayerTeleportEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerTeleportEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -292,8 +311,8 @@ impl ToFromV0_1_0WasmEvent for PlayerTeleportEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerChangeWorldEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerChangeWorldEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -315,7 +334,7 @@ impl ToFromV0_1_0WasmEvent for PlayerChangeWorldEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerChangeWorldEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -331,8 +350,8 @@ impl ToFromV0_1_0WasmEvent for PlayerChangeWorldEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerExpChangeEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerExpChangeEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -343,7 +362,7 @@ impl ToFromV0_1_0WasmEvent for PlayerExpChangeEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerExpChangeEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -354,8 +373,8 @@ impl ToFromV0_1_0WasmEvent for PlayerExpChangeEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerItemHeldEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerItemHeldEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -368,7 +387,7 @@ impl ToFromV0_1_0WasmEvent for PlayerItemHeldEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerItemHeldEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -381,8 +400,8 @@ impl ToFromV0_1_0WasmEvent for PlayerItemHeldEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerChangedMainHandEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerChangedMainHandEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -393,7 +412,7 @@ impl ToFromV0_1_0WasmEvent for PlayerChangedMainHandEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerChangedMainHandEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -404,8 +423,8 @@ impl ToFromV0_1_0WasmEvent for PlayerChangedMainHandEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerGamemodeChangeEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerGamemodeChangeEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -418,7 +437,7 @@ impl ToFromV0_1_0WasmEvent for PlayerGamemodeChangeEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerGamemodeChangeEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -431,8 +450,8 @@ impl ToFromV0_1_0WasmEvent for PlayerGamemodeChangeEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerCustomPayloadEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerCustomPayloadEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -444,7 +463,7 @@ impl ToFromV0_1_0WasmEvent for PlayerCustomPayloadEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerCustomPayloadEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -456,8 +475,8 @@ impl ToFromV0_1_0WasmEvent for PlayerCustomPayloadEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerFishEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerFishEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -474,7 +493,7 @@ impl ToFromV0_1_0WasmEvent for PlayerFishEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerFishEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -493,8 +512,8 @@ impl ToFromV0_1_0WasmEvent for PlayerFishEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for PlayerEggThrowEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromV0_2_0WasmEvent for PlayerEggThrowEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
             .add_player(self.player.clone())
             .expect("failed to add player resource");
@@ -509,7 +528,7 @@ impl ToFromV0_1_0WasmEvent for PlayerEggThrowEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::PlayerEggThrowEvent(data) => Self {
                 player: consume_player(state, &data.player),
@@ -517,6 +536,33 @@ impl ToFromV0_1_0WasmEvent for PlayerEggThrowEvent {
                 hatching: data.hatching,
                 num_hatches: data.num_hatches,
                 hatching_type: from_wasm_entity_type(&data.hatching_type),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_2_0WasmEvent for PlayerInteractUnknownEntityEvent {
+    fn to_v0_2_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerInteractUnknownEntityEvent(PlayerInteractUnknownEntityEventData {
+            player,
+            entity_id: self.entity_id,
+            action: to_wasm_player_interact_action_type(self.action.clone()),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_2_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerInteractUnknownEntityEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                entity_id: data.entity_id,
+                action: from_wasm_player_interact_action_type(data.action),
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

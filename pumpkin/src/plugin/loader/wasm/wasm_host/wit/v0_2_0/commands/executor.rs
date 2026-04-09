@@ -9,7 +9,7 @@ use crate::{
     command::{CommandExecutor, dispatcher::CommandError},
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt, PluginInstance, WasmPlugin,
-        wit::v0_1_0::pumpkin::plugin::command::CommandError as CommandErrorWit,
+        wit::v0_2_0::pumpkin::plugin::command::CommandError as CommandErrorWit,
     },
     server::Server,
 };
@@ -35,7 +35,7 @@ impl CommandExecutor for WasmCommandExecutor {
             let args_resource = store.data_mut().add_consumed_args(args).unwrap();
 
             match self.plugin.plugin_instance {
-                PluginInstance::V0_1_0(ref plugin) => {
+                PluginInstance::V0_2_0(ref plugin) => {
                     let result = plugin
                         .call_handle_command(
                             &mut *store,
@@ -74,7 +74,7 @@ impl CommandExecutor for WasmCommandExecutor {
                         },
                     }
                 }
-                PluginInstance::V0_2_0(_) => unreachable!("v0.1.0 executor received a v0.2.0 plugin"),
+                PluginInstance::V0_1_0(_) => unreachable!("v0.2.0 executor received a v0.1.0 plugin"),
             }
         })
     }

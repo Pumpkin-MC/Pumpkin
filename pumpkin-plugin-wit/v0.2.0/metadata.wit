@@ -1,0 +1,15 @@
+/// Plugin metadata describing the plugin and its compatibility.
+interface metadata {
+    record plugin-metadata {
+        /// Name of the plugin.
+        name: string,
+        /// Plugin version (semver).
+        version: string,
+        /// Plugin authors.
+        authors: list<string>,
+        /// Short description of the plugin.
+        description: string,
+    }
+
+    get-metadata: func() -> plugin-metadata;
+}

@@ -4,8 +4,8 @@ use wasmtime::component::Resource;
 use crate::plugin::loader::wasm::wasm_host::{
     DowncastResourceExt,
     state::{CommandResource, ContextResource, PluginHostState},
-    wit::v0_1_0::{
-        events::{ToFromV0_1_0WasmEvent, WasmPluginV0_1_0EventHandler},
+    wit::v0_2_0::{
+        events::{ToFromV0_2_0WasmEvent, WasmPluginV0_2_0EventHandler},
         pumpkin::{
             self,
             plugin::{
@@ -28,9 +28,9 @@ macro_rules! register_host_event {
     };
 }
 
-async fn register_typed_event<E: crate::plugin::Payload + ToFromV0_1_0WasmEvent + 'static>(
+async fn register_typed_event<E: crate::plugin::Payload + ToFromV0_2_0WasmEvent + 'static>(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginV0_2_0EventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
 ) {
@@ -39,7 +39,7 @@ async fn register_typed_event<E: crate::plugin::Payload + ToFromV0_1_0WasmEvent 
 
 async fn register_player_event(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginV0_2_0EventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
     event_type: EventType,
@@ -50,10 +50,11 @@ async fn register_player_event(
         player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
-        player_gamemode_change::PlayerGamemodeChangeEvent, player_join::PlayerJoinEvent,
-        player_leave::PlayerLeaveEvent, player_login::PlayerLoginEvent,
-        player_move::PlayerMoveEvent, player_permission_check::PlayerPermissionCheckEvent,
-        player_teleport::PlayerTeleportEvent,
+        player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
+        player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+        player_login::PlayerLoginEvent, player_move::PlayerMoveEvent,
+        player_permission_check::PlayerPermissionCheckEvent, player_teleport::PlayerTeleportEvent,
     };
 
     match event_type {
@@ -121,13 +122,19 @@ async fn register_player_event(
             register_typed_event::<PlayerEggThrowEvent>(resource, handler, priority, blocking)
                 .await;
         }
+        EventType::PlayerInteractUnknownEntityEvent => {
+            register_typed_event::<PlayerInteractUnknownEntityEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
         _ => unreachable!("non-player event should not be routed to register_player_event"),
     }
 }
 
 async fn register_world_event(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginV0_2_0EventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
     event_type: EventType,
@@ -144,7 +151,7 @@ async fn register_world_event(
 
 async fn register_block_event(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginV0_2_0EventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
     event_type: EventType,
@@ -179,7 +186,7 @@ async fn register_block_event(
 }
 async fn register_server_event(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginV0_2_0EventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
     event_type: EventType,
@@ -254,7 +261,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .expect("plugin has been dropped");
 
         let resource = context.downcast_ref(self);
-        let handler = Arc::new(WasmPluginV0_1_0EventHandler { handler_id, plugin });
+        let handler = Arc::new(WasmPluginV0_2_0EventHandler { handler_id, plugin });
 
         match event_type {
             event_type @ (EventType::ServerCommandEvent | EventType::ServerBroadcastEvent) => {
