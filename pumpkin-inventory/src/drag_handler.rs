@@ -1,3 +1,16 @@
+//! Item drag handler.
+//!
+//! This module handles the logic for dragging items across multiple inventory slots.
+//! When a player clicks and drags with an item, they can distribute it across
+//! multiple slots.
+//!
+//! Drag types:
+//! - Left click drag - Evenly distributes items across slots
+//! - Right click drag - Places one item in each slot
+//! - Middle click drag (creative) - Creates full stacks in each slot (creative only)
+//!
+//! Note: This implementation is currently disabled/commented out pending completion.
+
 /*
 #[derive(Debug, Default)]
 pub struct DragHandler(RwLock<HashMap<u64, Arc<Mutex<Drag>>>>);
