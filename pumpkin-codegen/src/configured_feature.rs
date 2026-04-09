@@ -582,7 +582,10 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 })
             }
         }
-
+        "minecraft:freeze_top_layer" => {
+            quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) }
+        }
+        
         // All TODO/empty features
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
@@ -598,9 +601,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:spike" => {
             quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
-        }
-        "minecraft:freeze_top_layer" => {
-            quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) }
         }
         "minecraft:vines" => {
             quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) }
