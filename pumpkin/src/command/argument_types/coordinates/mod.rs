@@ -324,13 +324,16 @@ fn convert_local_coordinates(
     forward: f64,
     rotation: Vector2<f32>,
 ) -> Vector3<f64> {
-    let y = (rotation.y + 90.0).to_radians() as f64;
+    let pitch = rotation.x;
+    let yaw = rotation.y;
+
+    let y = (yaw + 90.0).to_radians() as f64;
     let y_cos = y.cos();
     let y_sin = y.sin();
-    let x = (-rotation.x).to_radians() as f64;
+    let x = (-pitch).to_radians() as f64;
     let x_cos = x.cos();
     let x_sin = x.sin();
-    let x_up = (-rotation.x + 90.0).to_radians() as f64;
+    let x_up = (-pitch + 90.0).to_radians() as f64;
     let x_up_cos = x_up.cos();
     let x_up_sin = x_up.sin();
 
