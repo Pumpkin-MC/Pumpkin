@@ -535,7 +535,7 @@ impl ToFromV0_1_0WasmEvent for PlayerInteractUnknownEntityEvent {
         Event::PlayerInteractUnknownEntityEvent(PlayerInteractUnknownEntityEventData {
             player,
             entity_id: self.entity_id,
-            action: to_wasm_entity_interaction_action(self.action.clone()),
+            action: to_wasm_entity_interaction_action(&self.action),
             cancelled: self.cancelled,
         })
     }
