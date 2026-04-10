@@ -43,6 +43,8 @@ impl ArgumentType for DoubleArgumentType {
     }
 }
 
+impl_copy_get!(DoubleArgumentType, f64);
+
 impl DoubleArgumentType {
     /// Constructs a new [`DoubleArgumentType`] with no minimum or maximum bounds.
     #[must_use]

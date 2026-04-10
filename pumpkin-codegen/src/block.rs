@@ -492,6 +492,9 @@ impl PistonBehavior {
 impl BlockState {
     /// Bit flag indicating this state is an air block.
     const IS_AIR: u16 = 1 << 0;
+
+    const IS_LIQUID: u16 = 1 << 5;
+
     /// Bit flag indicating this state receives random tick events.
     const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
@@ -503,6 +506,10 @@ impl BlockState {
     /// Returns `true` if this state is an air variant.
     pub const fn is_air(&self) -> bool {
         self.state_flags & Self::IS_AIR != 0
+    }
+
+    pub const fn is_liquid(&self) -> bool {
+        self.state_flags & Self::IS_LIQUID != 0
     }
 
     /// Emits the `BlockState { … }` struct literal token stream for code generation.
@@ -763,6 +770,7 @@ pub fn build() -> TokenStream {
 
     let mut random_tick_states = Vec::new();
     let mut air_states = Vec::new();
+    let mut liquid_states = Vec::new();
 
     let mut constants_list = Vec::new();
     let mut block_from_name_entries = Vec::new();
@@ -857,6 +865,10 @@ pub fn build() -> TokenStream {
             if state.is_air() {
                 let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
                 air_states.push(state_id);
+            }
+            if state.is_liquid() {
+                let state_id = LitInt::new(&state.id.to_string(), Span::call_site());
+                liquid_states.push(state_id);
             }
 
             let mut matched_be_id = 1;
@@ -961,6 +973,7 @@ pub fn build() -> TokenStream {
     let shapes = blocks_assets.shapes.iter().map(ToTokens::to_token_stream);
 
     let air_state_ids = quote! { #(#air_states)|* };
+    let liquid_state_ids = quote! { #(#liquid_states)|* };
 
     let block_props = block_properties.iter().map(ToTokens::to_token_stream);
     let properties = property_enums.values().map(ToTokens::to_token_stream);
@@ -1058,6 +1071,11 @@ pub fn build() -> TokenStream {
         #[inline(always)]
         pub fn is_air(state_id: u16) -> bool {
             matches!(state_id, #air_state_ids)
+        }
+
+         #[inline(always)]
+        pub fn is_liquid(state_id: u16) -> bool {
+            matches!(state_id, #liquid_state_ids)
         }
 
         #[inline(always)]

@@ -1,22 +1,62 @@
+//! Container click handling.
+//!
+//! This module processes inventory click packets from the client and converts
+//! them into structured click events. It handles all click types:
+//! - Mouse clicks (left/right)
+//! - Shift-clicks
+//! - Hotbar key presses
+//! - Drop actions (Q key or clicking outside)
+//! - Drag operations (click and drag across slots)
+//! - Double-clicks (pickup all)
+//!
+//! # Click Types
+//!
+//! The client sends a mode and button value that are decoded into
+//! [`ClickType`] variants. See the Minecraft protocol documentation
+//! for packet format details.
+
 use crate::InventoryError;
 use pumpkin_protocol::java::server::play::SlotActionType;
 
+/// A parsed container click event.
+///
+/// Contains the slot being clicked and the type of click action.
 #[derive(Debug)]
 pub struct Click {
+    /// The slot being clicked (or outside the inventory).
     pub slot: Slot,
+    /// The type of click action (mouse click, shift-click, drag, etc.).
     pub click_type: ClickType,
 }
 
+/// Button values for normal mouse clicks.
 const BUTTON_CLICK_LEFT: i8 = 0;
 const BUTTON_CLICK_RIGHT: i8 = 1;
 
+/// Key code for offhand swap (F key by default).
 const KEY_CLICK_OFFHAND: i8 = 40;
+
+/// Hotbar slot key range (1-9 keys).
 const KEY_CLICK_HOTBAR_START: i8 = 0;
 const KEY_CLICK_HOTBAR_END: i8 = 9;
 
+/// Slot index indicating a click outside the inventory.
 const SLOT_INDEX_OUTSIDE: i16 = -999;
 
 impl Click {
+    /// Parses a slot action into a click event.
+    ///
+    /// # Arguments
+    /// - `mode` - The action type from the protocol
+    /// - `button` - The button value from the protocol
+    /// - `slot` - The slot index (-999 for outside)
+    ///
+    /// # Returns
+    /// The parsed click or an error if invalid.
+    ///
+    /// # Errors
+    /// Returns [`InventoryError::InvalidSlot`] or [`InventoryError::InvalidPacket`]
+    /// for malformed input.
     pub fn new(mode: &SlotActionType, button: i8, slot: i16) -> Result<Self, InventoryError> {
         match mode {
             SlotActionType::Pickup => Self::new_normal_click(button, slot),
@@ -111,36 +151,54 @@ impl Click {
     }
 }
 
+/// The type of click action.
 #[derive(Debug)]
 pub enum ClickType {
+    /// Normal mouse click (left or right).
     MouseClick(MouseClick),
+    /// Shift-click to quick-move an item.
     ShiftClick,
+    /// Hotbar key press (1-9 or offhand swap).
     KeyClick(KeyClick),
+    /// Creative mode middle-click (pick block).
     CreativePickItem,
+    /// Drop item (Q key or drop click).
     DropType(DropType),
+    /// Drag items across multiple slots.
     MouseDrag { drag_state: MouseDragState },
+    /// Double-click to gather items.
     DoubleClick,
 }
+
+/// Normal mouse button clicks.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MouseClick {
     Left,
     Right,
 }
 
+/// Hotbar key clicks.
 #[derive(Debug)]
 pub enum KeyClick {
+    /// Hotbar slot index (0-8).
     Slot(u8),
+    /// Swap with offhand.
     Offhand,
 }
+
+/// A slot reference - either a specific slot or outside the inventory.
 #[derive(Debug, Copy, Clone)]
 pub enum Slot {
     Normal(usize),
     OutsideInventory,
 }
 
+/// Drop action types.
 #[derive(Debug)]
 pub enum DropType {
+    /// Drop a single item (Ctrl+Q).
     SingleItem,
+    /// Drop the full stack (Q).
     FullStack,
 }
 
@@ -154,15 +212,24 @@ impl DropType {
     }
 }
 
+/// Mouse drag button types.
 #[derive(Debug, PartialEq, Eq)]
 pub enum MouseDragType {
+    /// Left button drag - even distribution.
     Left,
+    /// Right button drag - one item per slot.
     Right,
+    /// Middle button drag - create full stacks (creative only).
     Middle,
 }
+
+/// Drag operation state.
 #[derive(PartialEq, Eq, Debug)]
 pub enum MouseDragState {
+    /// Start of drag - button determines drag type.
     Start(MouseDragType),
+    /// Adding a slot to the drag.
     AddSlot(usize),
+    /// End of drag - apply to all selected slots.
     End,
 }

@@ -1,3 +1,11 @@
+//! Furnace-like slot implementations.
+//!
+//! This module provides specialized slot types for furnace-like containers.
+//! Furnaces have three slots with specific behaviors:
+//! - Input slot (top): Accepts any smeltable item
+//! - Fuel slot (bottom): Only accepts fuel items (coal, charcoal, etc.)
+//! - Output slot: Cannot receive items, awards experience when items are taken
+
 use std::sync::{Arc, atomic::AtomicU8};
 
 use pumpkin_data::{fuels::is_fuel, item::Item};
@@ -12,13 +20,19 @@ use crate::{
     slot::{BoxFuture, Slot},
 };
 
+/// Type of furnace slot.
 #[derive(Debug, Clone, Copy)]
 pub enum FurnaceLikeSlotType {
+    /// Input slot (top) - accepts items to smelt.
     Top = 0,
+    /// Fuel slot (bottom) - accepts fuel items.
     Bottom = 1,
 }
 
-/// Slot for furnace input (top) and fuel (bottom)
+/// Slot for furnace input or fuel.
+///
+/// The input slot accepts any item, while the fuel slot only accepts
+/// valid fuel items (and empty buckets for lava fuel).
 pub struct FurnaceLikeSlot {
     pub inventory: Arc<dyn Inventory>,
     pub slot_type: FurnaceLikeSlotType,
@@ -27,6 +41,11 @@ pub struct FurnaceLikeSlot {
 }
 
 impl FurnaceLikeSlot {
+    /// Creates a new furnace slot.
+    ///
+    /// # Arguments
+    /// - `inventory` - The furnace's inventory
+    /// - `slot_type` - Whether this is the input (Top) or fuel (Bottom) slot
     pub fn new(inventory: Arc<dyn Inventory>, slot_type: FurnaceLikeSlotType) -> Self {
         Self {
             inventory,
@@ -51,12 +70,10 @@ impl Slot for FurnaceLikeSlot {
             .store(id as u8, std::sync::atomic::Ordering::Relaxed);
     }
 
-    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            self.inventory.mark_dirty();
-        })
-    }
-
+    /// Restricts inserts based on slot type.
+    ///
+    /// - Top slot: accepts any item (smeltables)
+    /// - Bottom slot: only accepts fuel items and buckets
     fn can_insert<'a>(
         &'a self,
         stack: &'a pumpkin_data::item_stack::ItemStack,
@@ -70,9 +87,19 @@ impl Slot for FurnaceLikeSlot {
             }
         })
     }
+
+    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.inventory.mark_dirty();
+        })
+    }
 }
 
-/// Output slot for furnace that awards experience when items are taken
+/// Output slot for furnace-like containers.
+///
+/// This slot cannot receive items directly (items are placed here by smelting).
+/// When items are taken from this slot, the player receives experience
+/// based on the smelting recipes used.
 pub struct FurnaceOutputSlot {
     pub inventory: Arc<dyn Inventory>,
     pub experience_container: Arc<dyn ExperienceContainer>,
@@ -80,6 +107,11 @@ pub struct FurnaceOutputSlot {
 }
 
 impl FurnaceOutputSlot {
+    /// Creates a new furnace output slot.
+    ///
+    /// # Arguments
+    /// - `inventory` - The furnace's inventory
+    /// - `experience_container` - Container that tracks accumulated experience
     pub fn new(
         inventory: Arc<dyn Inventory>,
         experience_container: Arc<dyn ExperienceContainer>,
@@ -106,20 +138,7 @@ impl Slot for FurnaceOutputSlot {
             .store(id as u8, std::sync::atomic::Ordering::Relaxed);
     }
 
-    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            self.inventory.mark_dirty();
-        })
-    }
-
-    fn can_insert<'a>(
-        &'a self,
-        _stack: &'a pumpkin_data::item_stack::ItemStack,
-    ) -> BoxFuture<'a, bool> {
-        // Cannot insert items into the output slot
-        Box::pin(async move { false })
-    }
-
+    /// Awards experience when items are taken from this slot.
     fn on_take_item<'a>(
         &'a self,
         player: &'a dyn InventoryPlayer,
@@ -135,6 +154,21 @@ impl Slot for FurnaceOutputSlot {
                 player.award_experience(experience).await;
             }
             self.mark_dirty().await;
+        })
+    }
+
+    /// Output slot cannot receive inserted items.
+    fn can_insert<'a>(
+        &'a self,
+        _stack: &'a pumpkin_data::item_stack::ItemStack,
+    ) -> BoxFuture<'a, bool> {
+        // Cannot insert items into the output slot
+        Box::pin(async move { false })
+    }
+
+    fn mark_dirty(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.inventory.mark_dirty();
         })
     }
 }

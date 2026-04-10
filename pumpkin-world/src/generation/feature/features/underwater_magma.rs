@@ -62,7 +62,7 @@ impl UnderwaterMagmaFeature {
         }
 
         // No open horizontal faces
-        for dir in BlockDirection::horizontal().iter() {
+        for dir in &BlockDirection::horizontal() {
             let neighbour = target.offset(dir.to_offset());
             let n_id = GenerationCache::get_block_state(chunk, &neighbour.0).to_block_id();
             if n_id == Block::WATER || n_id == Block::AIR {

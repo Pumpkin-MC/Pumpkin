@@ -1,4 +1,6 @@
 interface server {
+    use player.{player};
+
     enum difficulty {
         peaceful,
         easy,
@@ -18,5 +20,14 @@ interface server {
 
         /// Returns the effective Ticks Per Second (TPS)
         get-tps: func() -> f64;
+
+        /// Returns all online players from all worlds on the server.
+        get-all-players: func() -> list<player>;
+
+        /// Searches for a player by their name across all worlds.
+        get-player-by-name: func(name: string) -> option<player>;
+
+        /// Searches for a player by their UUID across all worlds.
+        get-player-by-uuid: func(id: string) -> option<player>;
     }
 }

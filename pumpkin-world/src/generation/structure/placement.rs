@@ -20,7 +20,7 @@ use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 /// This prevents chunk generation deadlocks by allowing chunks to query a pre-calculated
 /// mathematical layout in `O(1)` time instead of triggering cascading chunk loads.
 pub struct GlobalStructureCache {
-    /// A cached list of mathematically predicted (chunk_x, chunk_z) coordinates.
+    /// A cached list of mathematically predicted (`chunk_x`, `chunk_z`) coordinates.
     stronghold_chunks: OnceLock<Vec<(i32, i32)>>,
 }
 impl GlobalStructureCache {
@@ -30,6 +30,12 @@ impl GlobalStructureCache {
         Self {
             stronghold_chunks: OnceLock::new(),
         }
+    }
+
+    pub fn get_stronghold_chunks(&self) -> &[(i32, i32)] {
+        self.stronghold_chunks
+            .get()
+            .map_or(&[], std::vec::Vec::as_slice)
     }
 
     /// Retrieves the list of chunk coordinates for Concentric Ring structures.

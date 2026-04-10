@@ -1,10 +1,14 @@
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::entity_selector::EntitySelector;
 use crate::command::argument_types::entity_selector::parser::EntitySelectorParser;
+use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::entity::EntityBase;
+use crate::entity::player::Player;
 use pumpkin_data::translation;
+use std::sync::Arc;
 
 /// A [`CommandErrorType`] to tell that no entities could be found.
 pub const NO_ENTITIES_ERROR_TYPE: CommandErrorType<0> =
@@ -100,5 +104,75 @@ impl EntityArgumentType {
         } else {
             Ok(selector)
         }
+    }
+
+    /// Tries to get a single entity from a parsed argument of the provided [`CommandContext`].
+    pub async fn get_entity(
+        context: &CommandContext<'_>,
+        name: &str,
+    ) -> Result<Arc<dyn EntityBase>, CommandSyntaxError> {
+        context
+            .get_argument::<EntitySelector>(name)?
+            .find_single_entity(context.source.as_ref())
+            .await
+    }
+
+    /// Tries to get at least 1 entity from a parsed argument of the provided [`CommandContext`].
+    pub async fn get_entities(
+        context: &CommandContext<'_>,
+        name: &str,
+    ) -> Result<Vec<Arc<dyn EntityBase>>, CommandSyntaxError> {
+        let entities = Self::get_optional_entities(context, name).await?;
+        if entities.is_empty() {
+            Err(NO_ENTITIES_ERROR_TYPE.create_without_context())
+        } else {
+            Ok(entities)
+        }
+    }
+
+    /// Tries to get any number of entities from a parsed argument of the provided [`CommandContext`].
+    pub async fn get_optional_entities(
+        context: &CommandContext<'_>,
+        name: &str,
+    ) -> Result<Vec<Arc<dyn EntityBase>>, CommandSyntaxError> {
+        context
+            .get_argument::<EntitySelector>(name)?
+            .find_entities(context.source.as_ref())
+            .await
+    }
+
+    /// Tries to get a single player from a parsed argument of the provided [`CommandContext`].
+    pub async fn get_player(
+        context: &CommandContext<'_>,
+        name: &str,
+    ) -> Result<Arc<Player>, CommandSyntaxError> {
+        context
+            .get_argument::<EntitySelector>(name)?
+            .find_single_player(context.source.as_ref())
+            .await
+    }
+
+    /// Tries to get at least 1 player from a parsed argument of the provided [`CommandContext`].
+    pub async fn get_players(
+        context: &CommandContext<'_>,
+        name: &str,
+    ) -> Result<Vec<Arc<Player>>, CommandSyntaxError> {
+        let players = Self::get_optional_players(context, name).await?;
+        if players.is_empty() {
+            Err(NO_PLAYERS_ERROR_TYPE.create_without_context())
+        } else {
+            Ok(players)
+        }
+    }
+
+    /// Tries to get any number of players from a parsed argument of the provided [`CommandContext`].
+    pub async fn get_optional_players(
+        context: &CommandContext<'_>,
+        name: &str,
+    ) -> Result<Vec<Arc<Player>>, CommandSyntaxError> {
+        context
+            .get_argument::<EntitySelector>(name)?
+            .find_players(context.source.as_ref())
+            .await
     }
 }

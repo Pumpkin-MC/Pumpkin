@@ -1,3 +1,14 @@
+//! Crafting inventory implementation.
+//!
+//! This module provides a temporary inventory for crafting grids.
+//! Crafting inventories are used for:
+//! - The 2x2 crafting grid in the player inventory
+//! - The 3x3 crafting grid in crafting tables
+//! - Other recipe-based crafting mechanisms
+//!
+//! Unlike regular inventories, crafting grids are typically cleared when
+//! the container closes, and their contents are used up when crafting.
+
 use std::sync::Arc;
 use std::{any::Any, pin::Pin};
 
@@ -9,14 +20,41 @@ use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
 
 use super::recipes::RecipeInputInventory;
 
+/// A temporary inventory for crafting grids.
+///
+/// Crafting inventories hold items arranged in a grid pattern for crafting recipes.
+/// The grid dimensions can vary (2x2 for player inventory, 3x3 for crafting table).
+///
+/// # Usage
+///
+/// When a player places items in the crafting grid, they are stored here.
+/// When the crafting result is taken, the ingredients are consumed from this inventory.
 #[derive(Clone)]
 pub struct CraftingInventory {
+    /// Width of the crafting grid (typically 2 or 3).
     pub width: u8,
+    /// Height of the crafting grid (typically 2 or 3).
     pub height: u8,
+    /// Items in the crafting grid, stored row by row.
     pub items: Vec<Arc<Mutex<ItemStack>>>,
 }
 
 impl CraftingInventory {
+    /// Creates a new crafting inventory with the given dimensions.
+    ///
+    /// # Arguments
+    /// - `width` - Grid width (e.g., 2 for player crafting, 3 for crafting table)
+    /// - `height` - Grid height (e.g., 2 for player crafting, 3 for crafting table)
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// // 2x2 player inventory crafting grid
+    /// let player_crafting = CraftingInventory::new(2, 2);
+    ///
+    /// // 3x3 crafting table grid
+    /// let table_crafting = CraftingInventory::new(3, 3);
+    /// ```
     #[must_use]
     pub fn new(width: u8, height: u8) -> Self {
         Self {
