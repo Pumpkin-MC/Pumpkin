@@ -588,6 +588,10 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:ice_spike" => {
             quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
         }
+        "minecraft:iceberg" => {
+            let state = value_to_block_state_codec(&config["state"]);
+            quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature { main_block: #state }) }
+        }
         
         // All TODO/empty features
         "minecraft:fossil" => {
@@ -616,9 +620,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:blue_ice" => {
             quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) }
-        }
-        "minecraft:iceberg" => {
-            quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature {}) }
         }
         "minecraft:end_platform" => {
             quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }

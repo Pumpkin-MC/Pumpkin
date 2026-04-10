@@ -2273,13 +2273,23 @@ fn build_configured_features() -> std::collections::HashMap<String, ConfiguredFe
     map.insert(
         "iceberg_blue".to_string(),
         ConfiguredFeature::Iceberg(
-            crate::generation::feature::features::iceberg::IcebergFeature {},
+            crate::generation::feature::features::iceberg::IcebergFeature {
+                main_block: BlockStateCodec {
+                    name: &pumpkin_data::Block::BLUE_ICE,
+                    properties: None,
+                },
+            },
         ),
     );
     map.insert(
         "iceberg_packed".to_string(),
         ConfiguredFeature::Iceberg(
-            crate::generation::feature::features::iceberg::IcebergFeature {},
+            crate::generation::feature::features::iceberg::IcebergFeature {
+                main_block: BlockStateCodec {
+                    name: &pumpkin_data::Block::PACKED_ICE,
+                    properties: None,
+                },
+            },
         ),
     );
     map . insert ("jungle_bush" . to_string () , ConfiguredFeature :: Tree (Box :: new (TreeFeature { trunk_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("axis" . to_string () , "y" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: JUNGLE_LOG , properties : Some (props) , } . get_state () } }) , trunk_placer : TrunkPlacer { base_height : 1u8 , height_rand_a : 0u8 , height_rand_b : 0u8 , r#type : TrunkType :: Straight (StraightTrunkPlacer) , } , foliage_provider : BlockStateProvider :: Simple (SimpleStateProvider { state : { let mut props = std :: collections :: HashMap :: new () ; props . insert ("distance" . to_string () , "7" . to_string ()) ; props . insert ("persistent" . to_string () , "false" . to_string ()) ; props . insert ("waterlogged" . to_string () , "false" . to_string ()) ; BlockStateCodec { name : & pumpkin_data :: Block :: OAK_LEAVES , properties : Some (props) , } . get_state () } }) , foliage_placer : FoliagePlacer { radius : IntProvider :: Constant (2i32) , offset : IntProvider :: Constant (1i32) , r#type : FoliageType :: Bush (BushFoliagePlacer { height : 2i32 }) } , minimum_size : FeatureSize { min_clipped_height : None , r#type : FeatureSizeType :: TwoLayersFeatureSize (TwoLayersFeatureSize { limit : 0u8 , lower_size : 0u8 , upper_size : 0u8 , }) } , ignore_vines : false , below_trunk_provider : BlockStateProvider :: Rule (RuleBasedBlockStateProvider { fallback : None , rules : vec ! [BlockStateRule { if_true : BlockPredicate :: Not (NotBlockPredicate { predicate : Box :: new (BlockPredicate :: MatchingBlockTag (MatchingBlockTagPredicate { offset : OffsetBlocksBlockPredicate { offset : None } , tag : pumpkin_data :: tag :: Block :: MINECRAFT_CANNOT_REPLACE_BELOW_TREE_TRUNK , })) , }) , then : BlockStateProvider :: Simple (SimpleStateProvider { state : pumpkin_data :: Block :: DIRT . default_state }) }] , }) , decorators : vec ! [] , }))) ;
