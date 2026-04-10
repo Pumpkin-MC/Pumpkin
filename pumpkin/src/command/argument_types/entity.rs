@@ -41,7 +41,8 @@ pub const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
 /// - [`EntityArgumentType::Players`], for any number of players.
 ///
 /// Though this argument type does parse an `EntitySelector`, it should not be used directly.
-/// Instead, use one of these helpers accepting a [`CommandContext`] and your argument's name:
+/// Instead, use one of these associated functions accepting a [`CommandContext`]
+/// and your argument's name:
 /// - [`EntityArgumentType::get_entity`]
 /// - [`EntityArgumentType::get_entities`]
 /// - [`EntityArgumentType::get_player`]
