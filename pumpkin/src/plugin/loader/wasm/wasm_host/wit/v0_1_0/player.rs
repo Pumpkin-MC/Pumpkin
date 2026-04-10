@@ -258,6 +258,14 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let component = text_component_from_resource(self, &text);
         let player = player_from_resource(self, &player)?;
+        if self.should_defer_effects() {
+            self.defer_effect(crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerSystemMessage {
+                player,
+                text: component,
+                overlay,
+            });
+            return Ok(());
+        }
         player.send_system_message_raw(&component, overlay).await;
         Ok(())
     }
@@ -313,6 +321,14 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         packet: pumpkin::plugin::packet::Packet,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
+        if self.should_defer_effects() {
+            self.defer_effect(crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerCustomPayload {
+                player,
+                channel: packet.channel,
+                data: packet.data,
+            });
+            return Ok(());
+        }
         player
             .send_custom_payload(&packet.channel, &packet.data)
             .await;
@@ -325,6 +341,14 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         packet: pumpkin::plugin::packet::RawPacket,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
+        if self.should_defer_effects() {
+            self.defer_effect(crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerRawPacket {
+                player,
+                id: packet.id,
+                payload: packet.payload,
+            });
+            return Ok(());
+        }
 
         match &player.client {
             crate::net::ClientPlatform::Java(java) => {

@@ -153,16 +153,24 @@ pub(super) fn consume_world(
 impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0EventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            let event = event.to_v0_1_0_wasm_event(store.data_mut());
-            match self.plugin.plugin_instance {
-                PluginInstance::V0_1_0(ref plugin) => {
-                    let server = store.data_mut().add_server(server.clone()).unwrap();
-                    plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &event)
-                        .await
-                        .unwrap();
+            let effects = {
+                let mut store = self.plugin.store.lock().await;
+                store.data_mut().begin_event_dispatch();
+                let event = event.to_v0_1_0_wasm_event(store.data_mut());
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1_0(ref plugin) => {
+                        let server = store.data_mut().add_server(server.clone()).unwrap();
+                        plugin
+                            .call_handle_event(&mut *store, self.handler_id, server, &event)
+                            .await
+                            .unwrap();
+                    }
                 }
+                store.data_mut().finish_event_dispatch()
+            };
+
+            for effect in effects {
+                effect.execute().await.unwrap();
             }
         })
     }
@@ -173,18 +181,26 @@ impl<E: Payload + ToFromV0_1_0WasmEvent> EventHandler<E> for WasmPluginV0_1_0Eve
         event: &'a mut E,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            let wasm_event = event.to_v0_1_0_wasm_event(store.data_mut());
-            match self.plugin.plugin_instance {
-                PluginInstance::V0_1_0(ref plugin) => {
-                    let server = store.data_mut().add_server(server.clone()).unwrap();
-                    let returned_event = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
-                        .await
-                        .unwrap();
+            let effects = {
+                let mut store = self.plugin.store.lock().await;
+                store.data_mut().begin_event_dispatch();
+                let wasm_event = event.to_v0_1_0_wasm_event(store.data_mut());
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1_0(ref plugin) => {
+                        let server = store.data_mut().add_server(server.clone()).unwrap();
+                        let returned_event = plugin
+                            .call_handle_event(&mut *store, self.handler_id, server, &wasm_event)
+                            .await
+                            .unwrap();
 
-                    *event = E::from_v0_1_0_wasm_event(returned_event, store.data_mut());
+                        *event = E::from_v0_1_0_wasm_event(returned_event, store.data_mut());
+                    }
                 }
+                store.data_mut().finish_event_dispatch()
+            };
+
+            for effect in effects {
+                effect.execute().await.unwrap();
             }
         })
     }

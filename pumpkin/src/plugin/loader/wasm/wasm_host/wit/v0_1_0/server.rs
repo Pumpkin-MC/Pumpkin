@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use uuid::Uuid;
 use wasmtime::component::Resource;
 
@@ -121,6 +123,14 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         packet: pumpkin::plugin::packet::Packet,
     ) -> wasmtime::Result<()> {
         let resource = self.get_server_res(&res)?;
+        if self.should_defer_effects() {
+            self.defer_effect(crate::plugin::loader::wasm::wasm_host::state::PendingEffect::ServerBroadcastCustomPayload {
+                server: Arc::clone(&resource.provider),
+                channel: packet.channel,
+                data: packet.data,
+            });
+            return Ok(());
+        }
         for player in resource.provider.get_all_players() {
             player
                 .send_custom_payload(&packet.channel, &packet.data)
@@ -135,6 +145,14 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         packet: WasmRawPacket,
     ) -> wasmtime::Result<()> {
         let resource = self.get_server_res(&res)?;
+        if self.should_defer_effects() {
+            self.defer_effect(crate::plugin::loader::wasm::wasm_host::state::PendingEffect::ServerBroadcastRawPacket {
+                server: Arc::clone(&resource.provider),
+                id: packet.id,
+                payload: packet.payload,
+            });
+            return Ok(());
+        }
         for player in resource.provider.get_all_players() {
             match &player.client {
                 crate::net::ClientPlatform::Java(java) => {

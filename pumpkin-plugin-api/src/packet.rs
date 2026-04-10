@@ -74,13 +74,32 @@ impl RawPacket {
 }
 
 impl crate::wit::pumpkin::plugin::player::Player {
+    /// Sends a system message to this player.
+    ///
+    /// When called while a WASM event is being processed, the host may defer the
+    /// actual send until the current event returns to avoid recursive packet hooks.
+    pub fn send_system_message_text(
+        &self,
+        text: impl Into<crate::text::TextComponent>,
+        overlay: bool,
+    ) {
+        let text = text.into();
+        self.send_system_message(text, overlay);
+    }
+
     /// Sends a raw packet by id + payload convenience.
+    ///
+    /// When called while a WASM event is being processed, the host may defer the
+    /// actual send until the current event returns to avoid recursive packet hooks.
     pub fn send_raw_packet_id(&self, id: i32, payload: impl Into<Vec<u8>>) {
         let packet = RawPacket::new(id, payload);
         self.send_raw_packet(&packet);
     }
 
     /// Sends a custom payload packet on the given channel.
+    ///
+    /// When called while a WASM event is being processed, the host may defer the
+    /// actual send until the current event returns to avoid recursive packet hooks.
     pub fn send_packet_on_channel(&self, channel: impl Into<String>, data: impl Into<Vec<u8>>) {
         let packet = Packet::new(channel, data);
         self.send_packet(&packet);
@@ -89,12 +108,18 @@ impl crate::wit::pumpkin::plugin::player::Player {
 
 impl crate::wit::pumpkin::plugin::context::Server {
     /// Broadcasts a raw packet by id + payload convenience.
+    ///
+    /// When called while a WASM event is being processed, the host may defer the
+    /// actual send until the current event returns to avoid recursive packet hooks.
     pub fn broadcast_raw_packet_id(&self, id: i32, payload: impl Into<Vec<u8>>) {
         let packet = RawPacket::new(id, payload);
         self.broadcast_raw_packet(&packet);
     }
 
     /// Broadcasts a custom payload packet on the given channel.
+    ///
+    /// When called while a WASM event is being processed, the host may defer the
+    /// actual send until the current event returns to avoid recursive packet hooks.
     pub fn broadcast_packet_on_channel(
         &self,
         channel: impl Into<String>,
@@ -623,6 +648,50 @@ impl PacketWrapper {
     /// Marks the packet event as cancelled.
     pub fn cancel(&mut self) {
         self.event.packet.cancelled = true;
+    }
+
+    /// Sends a system-message reply to the packet sender, if the event has a player.
+    ///
+    /// In packet events this is executed through the host's deferred effect queue,
+    /// so it is safe to call from inside raw packet handlers.
+    pub fn reply_system_message(
+        &self,
+        text: impl Into<crate::text::TextComponent>,
+        overlay: bool,
+    ) -> bool {
+        let Some(player) = self.event.player.as_ref() else {
+            return false;
+        };
+        player.send_system_message_text(text, overlay);
+        true
+    }
+
+    /// Sends a raw packet reply to the packet sender, if the event has a player.
+    ///
+    /// In packet events this is executed through the host's deferred effect queue,
+    /// so it is safe to call from inside raw packet handlers.
+    pub fn reply_raw_packet(&self, id: i32, payload: impl Into<Vec<u8>>) -> bool {
+        let Some(player) = self.event.player.as_ref() else {
+            return false;
+        };
+        player.send_raw_packet_id(id, payload);
+        true
+    }
+
+    /// Sends a custom payload reply to the packet sender, if the event has a player.
+    ///
+    /// In packet events this is executed through the host's deferred effect queue,
+    /// so it is safe to call from inside raw packet handlers.
+    pub fn reply_packet_on_channel(
+        &self,
+        channel: impl Into<String>,
+        data: impl Into<Vec<u8>>,
+    ) -> bool {
+        let Some(player) = self.event.player.as_ref() else {
+            return false;
+        };
+        player.send_packet_on_channel(channel, data);
+        true
     }
 }
 
