@@ -1271,11 +1271,11 @@ impl JavaClient {
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
             .or_else(|| world.get_entity_by_id(entity_id.0));
         let Some(target) = target else {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                [],
-            ))
-            .await;
+            debug!(
+                "Player id {} attacked entity id {}, which was not found.",
+                player.entity_id(),
+                entity_id.0
+            );
             return;
         };
         if let Some(player_victim) = &player_target {
@@ -1394,16 +1394,11 @@ impl JavaClient {
 
                 'after: {
                     if event.action == ActionType::Attack {
-                        error!(
+                        warn!(
                             "Player id {} interacted with entity id {}, which was not found.",
                             player.entity_id(),
                             event.entity_id
                         );
-                        self.kick(TextComponent::translate(
-                            translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                            [],
-                        ))
-                        .await;
                     }
                 }
             }}
