@@ -177,7 +177,7 @@ impl PluginHostState {
         }
     }
 
-    pub fn begin_event_dispatch(&mut self) {
+    pub const fn begin_event_dispatch(&mut self) {
         self.event_dispatch_depth += 1;
     }
 
@@ -189,7 +189,8 @@ impl PluginHostState {
         Vec::new()
     }
 
-    pub fn should_defer_effects(&self) -> bool {
+    #[must_use]
+    pub const fn should_defer_effects(&self) -> bool {
         self.event_dispatch_depth > 0
     }
 
