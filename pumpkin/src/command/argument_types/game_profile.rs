@@ -51,8 +51,9 @@ impl GameProfileResult {
 
 /// An argument type to parse one or more [`GameProfile`]s.
 ///
-/// The intermediate object returned by this argument type can
-/// be resolved during command execution, successfully or not.
+/// Use [`GameProfileArgumentType::get`] to automatically get a `Vec` of
+/// [`GameProfile`]s for an argument by providing a [`CommandContext`] and the
+/// argument's name.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct GameProfileArgumentType;
 
