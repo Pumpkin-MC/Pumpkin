@@ -11,6 +11,7 @@ use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, TextComponentResource, WorldResource},
     wit::v0_1_0::pumpkin::{self, plugin::world::World},
 };
+use crate::world::explosion::Explosion;
 
 // --- Trapping Helpers ---
 impl PluginHostState {
@@ -226,6 +227,120 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::Scoreboard>> {
         let world_provider = self.get_world_res(&world)?.provider.clone();
         self.add_scoreboard(world_provider)
+    }
+
+    async fn play_sound(
+        &mut self,
+        world: Resource<World>,
+        sound: String,
+        category: pumpkin::plugin::world::SoundCategory,
+        pos: pumpkin::plugin::common::Position,
+        volume: f32,
+        pitch: f32,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get_world_res(&world)?;
+        let sound_data = pumpkin_data::sound::Sound::from_name(&sound)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound}")))?;
+        let internal_category = match category {
+            pumpkin::plugin::world::SoundCategory::Master => {
+                pumpkin_data::sound::SoundCategory::Master
+            }
+            pumpkin::plugin::world::SoundCategory::Music => {
+                pumpkin_data::sound::SoundCategory::Music
+            }
+            pumpkin::plugin::world::SoundCategory::Records => {
+                pumpkin_data::sound::SoundCategory::Records
+            }
+            pumpkin::plugin::world::SoundCategory::Weather => {
+                pumpkin_data::sound::SoundCategory::Weather
+            }
+            pumpkin::plugin::world::SoundCategory::Blocks => {
+                pumpkin_data::sound::SoundCategory::Blocks
+            }
+            pumpkin::plugin::world::SoundCategory::Hostile => {
+                pumpkin_data::sound::SoundCategory::Hostile
+            }
+            pumpkin::plugin::world::SoundCategory::Neutral => {
+                pumpkin_data::sound::SoundCategory::Neutral
+            }
+            pumpkin::plugin::world::SoundCategory::Players => {
+                pumpkin_data::sound::SoundCategory::Players
+            }
+            pumpkin::plugin::world::SoundCategory::Ambient => {
+                pumpkin_data::sound::SoundCategory::Ambient
+            }
+            pumpkin::plugin::world::SoundCategory::Voice => {
+                pumpkin_data::sound::SoundCategory::Voice
+            }
+        };
+
+        world_ref
+            .provider
+            .play_sound_raw(
+                sound_data as u16,
+                internal_category,
+                &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                volume,
+                pitch,
+            )
+            .await;
+        Ok(())
+    }
+
+    async fn spawn_particle(
+        &mut self,
+        world: Resource<World>,
+        particle: String,
+        pos: pumpkin::plugin::common::Position,
+        offset: pumpkin::plugin::common::Position,
+        max_speed: f32,
+        count: i32,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get_world_res(&world)?;
+        let particle_data = pumpkin_data::particle::Particle::from_name(&particle)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle}")))?;
+
+        world_ref
+            .provider
+            .spawn_particle(
+                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                pumpkin_util::math::vector3::Vector3::new(
+                    offset.0 as f32,
+                    offset.1 as f32,
+                    offset.2 as f32,
+                ),
+                max_speed,
+                count,
+                particle_data,
+            )
+            .await;
+        Ok(())
+    }
+
+    async fn create_explosion(
+        &mut self,
+        world: Resource<World>,
+        pos: pumpkin::plugin::common::Position,
+        power: f32,
+        _create_fire: bool,
+        _interaction: pumpkin::plugin::world::ExplosionInteraction,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get_world_res(&world)?;
+        // Currently Explosion only supports power and position in this codebase
+        let explosion = Explosion::new(
+            power,
+            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+        );
+        explosion.explode(&world_ref.provider).await;
+        Ok(())
+    }
+
+    async fn get_sea_level(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
+        Ok(self.get_world_res(&world)?.provider.sea_level)
+    }
+
+    async fn get_min_y(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
+        Ok(self.get_world_res(&world)?.provider.min_y)
     }
 
     async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {

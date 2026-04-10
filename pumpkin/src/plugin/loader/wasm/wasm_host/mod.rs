@@ -182,6 +182,16 @@ impl WasmPlugin {
     ) -> Result<Result<(), String>, wasmtime::Error> {
         let mut store = self.store.lock().await;
 
+        if let Some(weak_plugin) = &store.data().plugin
+            && let Some(plugin) = weak_plugin.upgrade()
+        {
+            context
+                .server
+                .task_scheduler
+                .cancel_all_tasks(&plugin)
+                .await;
+        }
+
         match self.plugin_instance {
             PluginInstance::V0_1_0(ref plugin) => {
                 let context = store.data_mut().add_context(context)?;

@@ -51,13 +51,15 @@ use tokio_util::task::TaskTracker;
 
 mod connection_cache;
 mod key_store;
+pub mod scheduler;
 pub mod seasonal_events;
 pub mod tick_rate_manager;
 pub mod ticker;
 
-use super::command::args::entities::{
+use crate::command::args::entities::{
     EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
 };
+use crate::server::scheduler::TaskScheduler;
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -115,6 +117,8 @@ pub struct Server {
     pub server_guid: u64,
     /// Player idle timeout in minutes (0 = disabled)
     pub player_idle_timeout: AtomicI32,
+    /// Manages scheduled tasks (e.g. from plugins)
+    pub task_scheduler: Arc<TaskScheduler>,
     tasks: TaskTracker,
 
     // world stuff which maybe should be put into a struct
@@ -240,6 +244,7 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             tasks: TaskTracker::new(),
+            task_scheduler: Arc::new(TaskScheduler::new()),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
@@ -732,6 +737,8 @@ impl Server {
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
         let mut set = JoinSet::new();
+
+        self.task_scheduler.tick(self).await;
 
         for world in self.worlds.load().iter() {
             let world = world.clone();

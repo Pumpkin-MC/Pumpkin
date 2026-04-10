@@ -363,7 +363,7 @@ impl Cache {
                     &dimension,
                     noise_router,
                     global_structure_cache,
-                )
+                );
             }
             StagedChunkEnum::StructureReferences => self.chunks[mid]
                 .get_proto_chunk_mut()

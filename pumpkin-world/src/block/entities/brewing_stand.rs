@@ -74,7 +74,7 @@ impl BrewingStandBlockEntity {
             }
 
             // Check item recipes first (potion -> splash potion, splash -> lingering)
-            for recipe in ITEM_RECIPES.iter() {
+            for recipe in &ITEM_RECIPES {
                 if slot.get_item().id == recipe.from().id
                     && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
                 {
@@ -87,7 +87,7 @@ impl BrewingStandBlockEntity {
                 slot.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
                 && let Some(potion_id) = pc.potion_id
             {
-                for recipe in POTION_RECIPES.iter() {
+                for recipe in &POTION_RECIPES {
                     if recipe.from().id as i32 == potion_id
                         && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
                     {
@@ -114,7 +114,7 @@ impl BrewingStandBlockEntity {
             let mut new_stack_opt: Option<ItemStack> = None;
 
             // Try item recipes first (potion -> splash/lingering)
-            for recipe in ITEM_RECIPES.iter() {
+            for recipe in &ITEM_RECIPES {
                 if slot.get_item().id == recipe.from().id
                     && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
                 {
@@ -143,7 +143,7 @@ impl BrewingStandBlockEntity {
                     .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
                 && let Some(potion_id) = pc.potion_id
             {
-                for recipe in POTION_RECIPES.iter() {
+                for recipe in &POTION_RECIPES {
                     if recipe.from().id as i32 == potion_id
                         && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
                     {

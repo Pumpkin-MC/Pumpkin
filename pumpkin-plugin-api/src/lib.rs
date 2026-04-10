@@ -27,13 +27,18 @@
 //! ```
 
 use crate::{
-    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber, text::TextComponent,
+    commands::COMMAND_HANDLERS, events::EVENT_HANDLERS, logging::WitSubscriber,
+    scheduler::TASK_HANDLERS, text::TextComponent,
 };
 
 pub mod commands;
 pub mod events;
+<<<<<<< master
 pub mod packet;
 pub mod packet_ids_full;
+=======
+pub mod scheduler;
+>>>>>>> master
 
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{
@@ -133,6 +138,12 @@ impl wit::Guest for Component {
                 &format!("no handler registered for command id {command_id}"),
             )))
         }
+    }
+
+    /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
+    fn handle_task(handler_id: u32, server: Server) {
+        let mut handlers = TASK_HANDLERS.lock().unwrap();
+        handlers.handle(handler_id, server);
     }
 }
 
