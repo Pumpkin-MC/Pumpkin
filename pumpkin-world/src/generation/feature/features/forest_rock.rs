@@ -41,7 +41,7 @@ impl ForestRockFeature {
             let xr = random.next_bounded_i32(2);
             let yr = random.next_bounded_i32(2);
             let zr = random.next_bounded_i32(2);
-            let threshold = (xr + yr + zr) as f32 * 0.333_f32 + 0.5_f32;
+            let threshold = (xr + yr + zr) as f32 * 0.333f32 + 0.5f32;
             let threshold_sq = threshold * threshold;
 
             let start = BlockPos::new(pos.0.x - xr, pos.0.y - yr, pos.0.z - zr);

@@ -370,6 +370,9 @@ impl ConfiguredFeature {
             ),
             Self::BasaltPillar(feature) => feature.generate(chunk, random, pos),
             Self::ForestRock(feature) => feature.generate(chunk, random, pos),
+            Self::FreezeTopLayer(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
             Self::IceSpike(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
