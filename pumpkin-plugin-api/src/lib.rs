@@ -33,12 +33,9 @@ use crate::{
 
 pub mod commands;
 pub mod events;
-<<<<<<< master
 pub mod packet;
 pub mod packet_ids_full;
-=======
 pub mod scheduler;
->>>>>>> master
 
 pub mod command {
     pub use crate::wit::pumpkin::plugin::command::{
