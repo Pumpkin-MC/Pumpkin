@@ -9,6 +9,7 @@ use std::{
     process::{Command, Stdio},
 };
 
+mod advancement;
 mod attributes;
 mod biome;
 mod bitsets;
@@ -57,7 +58,6 @@ mod tracked_data;
 mod translations;
 mod version;
 mod world_event;
-mod advancement;
 
 /// Output directory where all generated Rust source files are written.
 pub const OUT_DIR: &str = "../pumpkin-data/src/generated";
@@ -70,7 +70,7 @@ pub fn main() {
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
 
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
-        (advancement::build,"advancement.rs"),
+        (advancement::build, "advancement.rs"),
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
         (particle::build, "particle.rs"),

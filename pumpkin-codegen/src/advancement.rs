@@ -2,31 +2,33 @@ use std::{collections::BTreeMap, fs};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
-use pumpkin_util::text::TextComponent;
-use quote::{format_ident, quote, ToTokens};
-use serde::{Deserialize, Deserializer, Serialize};
 use pumpkin_util::resource_location::ResourceLocation;
+use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::TextContent::Translate;
+use quote::{ToTokens, format_ident, quote};
+use serde::{Deserialize, Deserializer, Serialize};
 
-#[derive(Deserialize,Default)]
+#[derive(Deserialize, Default)]
 pub struct Advancement {
-    pub parent : Option<ResourceLocation>,
+    pub parent: Option<ResourceLocation>,
     #[serde(default)]
-    pub display : Option<AdvancementDisplay>,
-    // pub criteria : Vec<AdvancementCriterion>,
-    //pub rewards : AdvancementRewards,
-    #[serde(default,rename="sends_telemetry_event")]
+    pub display: Option<AdvancementDisplay>,
+    //pub criteria : Vec<Criterion>,
+    #[serde(default)]
+    pub rewards : AdvancementRewards,
+    #[serde(default, rename = "sends_telemetry_event")]
     pub sends_telemetry: bool,
 }
 
 #[derive(Deserialize)]
 struct DisplayIcon {
     id: ResourceLocation,
-    #[serde(default)]
-    count: Option<u8>,
 }
 
-fn deserialize_icon_id<'de, D>(deserializer: D) -> Result<ResourceLocation, D::Error> where D: Deserializer<'de>,{
+fn deserialize_icon_id<'de, D>(deserializer: D) -> Result<ResourceLocation, D::Error>
+where
+    D: Deserializer<'de>,
+{
     let icon = DisplayIcon::deserialize(deserializer)?;
     Ok(icon.id)
 }
@@ -39,48 +41,30 @@ pub struct AdvancementDisplay {
     pub item_icon: ResourceLocation,
     #[serde(default, rename = "frame")]
     pub frame_type: FrameType,
-    #[serde(default)]
-    pub flags: i32,
     #[serde(default, rename = "background")]
     pub background_texture: Option<ResourceLocation>,
     #[serde(default)]
-    pub x: f32,
+    pub show_toast: bool,
     #[serde(default)]
-    pub y: f32,
+    pub hidden: bool,
+    #[serde(default)]
+    pub announce_to_chat: bool,
 }
 
-impl AdvancementDisplay {
-    #[must_use]
-    pub fn new(
-        title: TextComponent,
-        description: TextComponent,
-        item_icon: ResourceLocation,
-        frame_type: FrameType,
-        flags: i32,
-        background_texture: Option<ResourceLocation>,
-        x: f32,
-        y: f32,
-    ) -> Self {
-        Self {
-            title,
-            description,
-            item_icon,
-            frame_type,
-            flags,
-            background_texture,
-            x,
-            y,
-        }
-    }
+fn as_translate(text: &TextComponent) -> TokenStream {
+    let Translate { translate, with: _ } = text.0.content.as_ref() else {
+        panic!()
+    };
+    quote! { TextComponent::translate(#translate,[]) }
 }
 
-fn as_optional_translate(text: &TextComponent) -> TokenStream{
-    match text {
-        Some(name) => {
-            let Translate { translate, with: _ } = name.0.content.as_ref() else { panic!() };
-            quote! { TextComponent::translate(#translate,[]) }
-        }
-        None => quote! { None }
+fn token_option<D>(option: &Option<D>) -> TokenStream
+where
+    D: ToTokens,
+{
+    match option {
+        Some(x) => quote! { Some(#x) },
+        None => quote! { None },
     }
 }
 
@@ -88,30 +72,30 @@ impl ToTokens for AdvancementDisplay {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let item_icon = &self.item_icon;
         let frame_type = &self.frame_type;
-        let flags = self.flags;
-        let background_texture = &self.background_texture;
-        let x = self.x;
-        let y = self.y;
-        let title = as_optional_translate(&self.title);
-        let description = as_optional_translate(&self.description);
+        let announce_to_chat = &self.announce_to_chat;
+        let show_toast = &self.show_toast;
+        let hidden = &self.hidden;
+        let background_texture = token_option(&self.background_texture);
+        let title = as_translate(&self.title);
+        let description = as_translate(&self.description);
 
         tokens.extend(quote! {
             AdvancementDisplay {
                 title: #title,
                 description: #description,
-                item_icon: #item_icon,
+                item_icon: ItemStack::new(1,Item::from_registry_key(#item_icon).unwrap()),
                 frame_type: #frame_type,
-                flags: #flags,
+                announce_to_chat: #announce_to_chat,
+                show_toast: #show_toast,
+                hidden: #hidden,
                 background_texture: #background_texture,
-                x: #x,
-                y: #y,
             }
         });
     }
 }
 
-#[derive(Clone, Copy, Deserialize,Serialize,Default)]
-#[repr(i32)]
+#[derive(Clone, Copy, Deserialize, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum FrameType {
     #[default]
     Task = 0,
@@ -131,17 +115,37 @@ impl ToTokens for FrameType {
 }
 
 
+#[derive(Deserialize,Default)]
+pub struct AdvancementRewards {
+    #[serde(default)]
+    experience: u32,
+    //loot: Vec<ResourceLocation> TODO,
+    #[serde(default)]
+    recipes: Vec<ResourceLocation>,
+    //functions: Option<Function> TODO
+}
+
+impl ToTokens for AdvancementRewards {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let experience = self.experience;
+        let recipes = self.recipes.iter().map(|recipe| {
+            quote! {
+                //Recipe::from_id(#recipe)
+            }
+        });
+        tokens.extend(quote! {
+            AdvancementReward {
+                experience: #experience,
+                recipes: &[#(#recipes),*],
+            }
+        })
+    }
+}
+
 #[derive(Serialize)]
 pub struct AdvancementProgress<'a> {
     pub id: ResourceLocation,
     pub progress: &'a [Criteria],
-}
-
-impl<'a> AdvancementProgress<'a> {
-    #[must_use]
-    pub fn new(id: ResourceLocation, progress: &'a [Criteria]) -> Self {
-        Self { id, progress }
-    }
 }
 
 #[derive(Serialize)]
@@ -150,19 +154,7 @@ pub struct Criteria {
     pub achieve_date: Option<i64>,
 }
 
-impl Criteria {
-    #[must_use]
-    pub fn new(criterion_id: ResourceLocation, achieve_date: Option<i64>) -> Self {
-        Self {
-            criterion_id,
-            achieve_date,
-        }
-    }
-}
-
 pub(crate) fn build() -> TokenStream {
-    println!("cargo:rerun-if-changed=../assets/advancements.json");
-
     let advancements: BTreeMap<String, Advancement> =
         serde_json::from_str(&fs::read_to_string("../assets/advancements.json").unwrap())
             .expect("Failed to parse advancements.json");
@@ -175,35 +167,34 @@ pub(crate) fn build() -> TokenStream {
         let raw_name = minecraft_name.strip_prefix("minecraft:").unwrap();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
 
-        let parent = match &advancement.parent {
-            Some(parent) => quote! { Some(#parent) },
-            None => quote! { None }
-        };
+        let parent = token_option(&advancement.parent);
         let send_telemetry = advancement.sends_telemetry;
-        let display = advancement.display;
+        let display = token_option(&advancement.display);
+        let reward = advancement.rewards;
         variants.extend([quote! {
             pub const #format_name: Self = Self {
                 id: #raw_name,
                 parent : #parent,
                 send_telemetry : #send_telemetry,
-                display_name : #display,
+                display : #display,
+                reward : #reward,
             };
         }]);
         name_to_type.extend(quote! { #raw_name => Some(&Self::#format_name), });
         minecraft_name_to_type.extend(quote! { #minecraft_name => Some(&Self::#format_name), });
     }
 
-
-
     quote! {
         use pumpkin_util::text::TextComponent;
         use crate::item_stack::ItemStack;
+        use crate::item::Item;
+        use crate::advancement_data::*;
 
         pub struct Advancement {
             pub id : &'static str,
             pub parent : Option<&'static str>,
             pub send_telemetry : bool,
-            pub display : Option<TextComponent>
+            pub display : Option<AdvancementDisplay>
         }
 
         impl Advancement {
@@ -222,18 +213,6 @@ pub(crate) fn build() -> TokenStream {
                     _ => None
                 }
             }
-        }
-
-        #[derive(Serialize)]
-        pub struct AdvancementDisplay {
-            pub title: TextComponent,
-            pub description: TextComponent,
-            pub icon: ItemStack,
-            pub frame_type: FrameType,
-            pub flags: i32,
-            pub background_texture: Option<ResourceLocation>,
-            pub x: f32,
-            pub y: f32,
         }
     }
 }

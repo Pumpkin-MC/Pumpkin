@@ -10,7 +10,7 @@ use pumpkin_data::Advancement;
 #[java_packet(PLAY_UPDATE_ADVANCEMENTS)]
 pub struct CUpdateAdvancements<'a> {
     pub reset: bool,
-    pub advancement: &'a [Advancement<'a>],
+    pub advancement: &'a [Advancement],
     pub progress: &'a [AdvancementProgress<'a>],
     pub identifiers: &'a [ResourceLocation],
     pub show_advancements: bool,
@@ -20,7 +20,7 @@ impl<'a> CUpdateAdvancements<'a> {
     #[must_use]
     pub fn new(
         reset: bool,
-        advancement: &'a [Advancement<'a>],
+        advancement: &'a [Advancement],
         progress: &'a [AdvancementProgress<'a>],
         identifiers: &'a [ResourceLocation],
         show_advancements: bool,

@@ -60,6 +60,9 @@ pub mod sound {
 pub mod advancement;
 
 #[cfg(feature = "advancement")]
+pub mod advancement_data;
+
+#[cfg(feature = "advancement")]
 pub use advancement::*;
 
 #[cfg(feature = "recipes")]
