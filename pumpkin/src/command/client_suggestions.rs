@@ -3,7 +3,7 @@ use pumpkin_protocol::{
     java::client::play::{CCommands, ProtoNode, ProtoNodeType},
 };
 use std::sync::Arc;
-
+use pumpkin_protocol::java::client::play::SuggestionProviders;
 use super::tree::{Node, NodeType};
 use crate::server::Server;
 use crate::{
@@ -151,7 +151,11 @@ pub async fn send_c_commands_packet(
                         name: &argument_attached_node.meta.name,
                         is_executable: argument_attached_node.owned.command.is_some(),
                         parser: arg_type.client_side_parser(),
-                        override_suggestion_type: arg_type.override_suggestion_providers(),
+                        override_suggestion_type: if argument_attached_node.meta.suggestion_provider.is_some() {
+                            Some(SuggestionProviders::AskServer)
+                        } else {
+                            arg_type.override_suggestion_providers()
+                        },
                         redirect_target,
                         restricted: !satisfies_requirements,
                     },
