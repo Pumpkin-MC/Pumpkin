@@ -2873,6 +2873,8 @@ version = "0.1.0"
 dependencies = [
  "postcard",
  "pumpkin-util",
+ "serde",
+ "serde_json",
  "tracing",
  "tracing-serde-structured",
  "wit-bindgen 0.55.0",

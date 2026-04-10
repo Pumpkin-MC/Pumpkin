@@ -565,6 +565,18 @@ impl PacketWrapper {
             .map(|version| packet_id.to_id(version))
     }
 
+    /// Resolves a Java packet id by `phase` and `name` for this player's protocol version.
+    pub fn java_packet_id(&self, phase: &str, name: &str) -> Option<i32> {
+        let version = self.minecraft_version()?;
+        java::catalog::java_packet_catalog().get_id(version, self.direction(), phase, name)
+    }
+
+    /// Resolves a Java packet `(phase, name)` by raw packet id for this player's protocol version.
+    pub fn java_packet_name(&self) -> Option<java::catalog::JavaPacketName> {
+        let version = self.minecraft_version()?;
+        java::catalog::java_packet_catalog().get_name(version, self.direction(), self.id())
+    }
+
     /// Returns the packet payload bytes.
     pub fn payload(&self) -> &[u8] {
         &self.event.packet.packet.payload
@@ -593,10 +605,244 @@ impl PacketWrapper {
 
 /// Java edition packet helpers.
 pub mod java {
+    use std::{
+        collections::BTreeMap,
+        sync::OnceLock,
+    };
+
     use super::{
+        PacketDirection,
         RawPacket,
         codec::{PacketReadError, PacketReader, PacketWriter},
     };
+    use pumpkin_util::version::MinecraftVersion;
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    struct VersionPacketAsset {
+        #[allow(dead_code)]
+        version: u32,
+        serverbound: BTreeMap<String, BTreeMap<String, i32>>,
+        clientbound: BTreeMap<String, BTreeMap<String, i32>>,
+    }
+
+    /// A packet descriptor exposed by the Java packet catalog.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct JavaPacketDescriptor {
+        pub phase: String,
+        pub name: String,
+        pub id: i32,
+    }
+
+    /// A resolved packet name pair `(phase, name)`.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct JavaPacketName {
+        pub phase: String,
+        pub name: String,
+    }
+
+    #[derive(Debug, Default)]
+    struct VersionPackets {
+        serverbound: BTreeMap<String, BTreeMap<String, i32>>,
+        clientbound: BTreeMap<String, BTreeMap<String, i32>>,
+        reverse_serverbound: BTreeMap<i32, JavaPacketName>,
+        reverse_clientbound: BTreeMap<i32, JavaPacketName>,
+    }
+
+    /// Version-aware catalog for all Java packet ids shipped with Pumpkin.
+    #[derive(Debug, Default)]
+    pub struct JavaPacketCatalog {
+        versions: BTreeMap<MinecraftVersion, VersionPackets>,
+    }
+
+    impl JavaPacketCatalog {
+        fn load_embedded() -> Self {
+            let mut catalog = Self::default();
+
+            for (version, json) in [
+                (
+                    MinecraftVersion::V_1_21,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/1_21_packets.json"
+                    )),
+                ),
+                (
+                    MinecraftVersion::V_1_21_2,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/1_21_2_packets.json"
+                    )),
+                ),
+                (
+                    MinecraftVersion::V_1_21_4,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/1_21_4_packets.json"
+                    )),
+                ),
+                (
+                    MinecraftVersion::V_1_21_5,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/1_21_5_packets.json"
+                    )),
+                ),
+                (
+                    MinecraftVersion::V_1_21_6,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/1_21_6_packets.json"
+                    )),
+                ),
+                (
+                    MinecraftVersion::V_1_21_7,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/1_21_7_packets.json"
+                    )),
+                ),
+                (
+                    MinecraftVersion::V_1_21_9,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/1_21_9_packets.json"
+                    )),
+                ),
+                (
+                    MinecraftVersion::V_1_21_11,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/1_21_11_packets.json"
+                    )),
+                ),
+                (
+                    MinecraftVersion::V_26_1,
+                    include_str!(concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../assets/packet/26_1_packets.json"
+                    )),
+                ),
+            ] {
+                let parsed: VersionPacketAsset = serde_json::from_str(json).unwrap_or_else(|err| {
+                    panic!("failed to parse embedded packet asset for {version}: {err}")
+                });
+
+                let mut version_packets = VersionPackets {
+                    serverbound: parsed.serverbound,
+                    clientbound: parsed.clientbound,
+                    reverse_serverbound: BTreeMap::new(),
+                    reverse_clientbound: BTreeMap::new(),
+                };
+
+                for (phase, packets) in &version_packets.serverbound {
+                    for (name, id) in packets {
+                        version_packets.reverse_serverbound.insert(
+                            *id,
+                            JavaPacketName {
+                                phase: phase.clone(),
+                                name: name.clone(),
+                            },
+                        );
+                    }
+                }
+
+                for (phase, packets) in &version_packets.clientbound {
+                    for (name, id) in packets {
+                        version_packets.reverse_clientbound.insert(
+                            *id,
+                            JavaPacketName {
+                                phase: phase.clone(),
+                                name: name.clone(),
+                            },
+                        );
+                    }
+                }
+
+                catalog.versions.insert(version, version_packets);
+            }
+
+            catalog
+        }
+
+        fn direction_map(
+            packets: &VersionPackets,
+            direction: PacketDirection,
+        ) -> &BTreeMap<String, BTreeMap<String, i32>> {
+            match direction {
+                PacketDirection::Serverbound => &packets.serverbound,
+                PacketDirection::Clientbound => &packets.clientbound,
+            }
+        }
+
+        fn reverse_direction_map(
+            packets: &VersionPackets,
+            direction: PacketDirection,
+        ) -> &BTreeMap<i32, JavaPacketName> {
+            match direction {
+                PacketDirection::Serverbound => &packets.reverse_serverbound,
+                PacketDirection::Clientbound => &packets.reverse_clientbound,
+            }
+        }
+
+        /// Resolves a packet id for `(version, direction, phase, name)`.
+        pub fn get_id(
+            &self,
+            version: MinecraftVersion,
+            direction: PacketDirection,
+            phase: &str,
+            name: &str,
+        ) -> Option<i32> {
+            let packets = self.versions.get(&version)?;
+            let phase_packets = Self::direction_map(packets, direction).get(phase)?;
+            phase_packets.get(name).copied()
+        }
+
+        /// Resolves packet `(phase, name)` by `(version, direction, id)`.
+        pub fn get_name(
+            &self,
+            version: MinecraftVersion,
+            direction: PacketDirection,
+            id: i32,
+        ) -> Option<JavaPacketName> {
+            let packets = self.versions.get(&version)?;
+            Self::reverse_direction_map(packets, direction).get(&id).cloned()
+        }
+
+        /// Returns every packet descriptor for `(version, direction)`.
+        pub fn list(
+            &self,
+            version: MinecraftVersion,
+            direction: PacketDirection,
+        ) -> Vec<JavaPacketDescriptor> {
+            let Some(packets) = self.versions.get(&version) else {
+                return Vec::new();
+            };
+
+            Self::direction_map(packets, direction)
+                .iter()
+                .flat_map(|(phase, names)| {
+                    names.iter().map(|(name, id)| JavaPacketDescriptor {
+                        phase: phase.clone(),
+                        name: name.clone(),
+                        id: *id,
+                    })
+                })
+                .collect()
+        }
+    }
+
+    pub mod catalog {
+        pub use super::{JavaPacketCatalog, JavaPacketDescriptor, JavaPacketName};
+        use super::OnceLock;
+
+        static JAVA_PACKET_CATALOG: OnceLock<JavaPacketCatalog> = OnceLock::new();
+
+        /// Returns the global Java packet catalog that includes all supported versions.
+        pub fn java_packet_catalog() -> &'static JavaPacketCatalog {
+            JAVA_PACKET_CATALOG.get_or_init(JavaPacketCatalog::load_embedded)
+        }
+    }
 
     /// Parsed form of the serverbound chat message packet (Java, Play state).
     #[derive(Debug, Clone, PartialEq, Eq)]
