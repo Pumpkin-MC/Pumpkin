@@ -5,7 +5,7 @@ use serde::Deserialize;
 use crate::random::RandomImpl;
 
 /// Represents a loot table used to generate items or rewards.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct LootTable {
     /// The type of loot table (e.g., `Entity`, `Block`, `Chest`).
     pub r#type: LootTableType,
@@ -16,7 +16,7 @@ pub struct LootTable {
 }
 
 /// Defines a loot pool containing entries, rolls, and conditions.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct LootPool {
     /// Entries contained in this loot pool.
     pub entries: &'static [LootPoolEntry],
@@ -38,35 +38,42 @@ pub struct ItemEntry {
 }
 
 /// Represents an alternative loot entry, which chooses one of its children.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AlternativeEntry {
     /// Child entries for this alternative.
     pub children: &'static [LootPoolEntry],
 }
 
-/// Types of entries that can exist in a loot pool.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
+pub struct TagEntry {
+    pub name: &'static str,
+    pub expand: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct SequenceEntry {
+    pub children: &'static [LootPoolEntry],
+}
+
+#[derive(Clone, Debug)]
+pub struct GroupEntry {
+    pub children: &'static [LootPoolEntry],
+}
+
+#[derive(Clone, Debug)]
 pub enum LootPoolEntryTypes {
-    /// Empty entry; no item is generated.
     Empty,
-    /// Entry that generates a specific item.
     Item(ItemEntry),
-    /// Entry that references another loot table.
     LootTable,
-    /// Dynamic entry, resolved at runtime.
     Dynamic,
-    /// Entry that references a tag.
-    Tag,
-    /// Entry that provides alternatives.
+    Tag(TagEntry),
     Alternatives(AlternativeEntry),
-    /// Entry that executes sequentially.
-    Sequence,
-    /// Entry that groups multiple entries.
-    Group,
+    Sequence(SequenceEntry),
+    Group(GroupEntry),
 }
 
 /// Conditions that can modify whether loot entries are applied.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum LootCondition {
     /// Inverts the result of another condition.
     Inverted,
@@ -75,7 +82,7 @@ pub enum LootCondition {
     /// Passes only if all the given conditions are met.
     AllOf,
     /// Passes based on a random chance.
-    RandomChance,
+    RandomChance { chance: f32 },
     /// Passes based on a random chance modified by item enchantments.
     RandomChanceWithEnchantedBonus,
     /// Checks properties of the entity (e.g. type, attributes).
@@ -181,7 +188,7 @@ pub enum LootFunctionBonusParameter {
 }
 
 /// Single entry in a loot pool with optional conditions and functions.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct LootPoolEntry {
     /// The type of entry.
     pub content: LootPoolEntryTypes,

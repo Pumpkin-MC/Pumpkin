@@ -16,7 +16,6 @@ use pumpkin_data::{
     entity::EntityType,
     item::Item,
     item_stack::ItemStack,
-    tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -150,11 +149,6 @@ impl BlockBehaviour for SweetBerryBushBlock {
 }
 
 impl PlantBlockBase for SweetBerryBushBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(pos).await;
-        block.has_tag(&tag::Block::MINECRAFT_DIRT)
-    }
-
     async fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,

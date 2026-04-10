@@ -30,7 +30,6 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::entity::attributes::AttributeBuilder;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
@@ -86,6 +85,7 @@ use crate::block::blocks::bed::BedBlock;
 use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
+use crate::data::SaveJSONConfiguration;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
@@ -461,6 +461,10 @@ pub struct Player {
     pub client_loaded: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
+    /// Item usage tracking for bows, crossbows, etc.
+    pub using_item: AtomicBool,
+    pub item_use_start_time: AtomicI32,
+    pub using_hand: AtomicCell<Option<Hand>>,
     /// The player's experience level.
     pub experience_level: AtomicI32,
     /// The player's experience progress (`0.0` to `1.0`)
@@ -564,6 +568,10 @@ impl Player {
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
+            // Item usage tracking
+            using_item: AtomicBool::new(false),
+            item_use_start_time: AtomicI32::new(0),
+            using_hand: AtomicCell::new(None),
             // Minecraft has no way to change the default permission level of new players.
             // Minecraft's default permission level is 0.
             permission_lvl: server
@@ -601,11 +609,6 @@ impl Player {
             screen_handler_sync_handler: Arc::new(SyncHandler::new()),
             advancements: PlayerAdvancement::new()
         }
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.1)
     }
 
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
@@ -2131,6 +2134,116 @@ impl Player {
         self.send_health().await;
     }
 
+    pub async fn set_max_health(&self, max_health: f32) {
+        self.living_entity.set_max_health(max_health).await;
+        self.send_health().await;
+    }
+
+    pub async fn set_food_level(&self, food_level: u8) {
+        self.hunger_manager.set_level(food_level);
+        self.send_health().await;
+    }
+
+    pub async fn set_saturation(&self, saturation: f32) {
+        self.hunger_manager.set_saturation(saturation);
+        self.send_health().await;
+    }
+
+    pub fn get_exhaustion(&self) -> f32 {
+        self.hunger_manager.get_exhaustion()
+    }
+
+    pub async fn set_exhaustion(&self, exhaustion: f32) {
+        self.hunger_manager.set_exhaustion(exhaustion);
+        self.send_health().await;
+    }
+
+    pub fn get_absorption(&self) -> f32 {
+        self.living_entity.get_absorption()
+    }
+
+    pub async fn set_absorption(&self, absorption: f32) {
+        self.living_entity.set_absorption(absorption).await;
+    }
+
+    pub async fn get_ip(&self) -> String {
+        self.client.address().await.to_string()
+    }
+
+    pub async fn respawn(self: &Arc<Self>) {
+        self.world().respawn_player(self, false).await;
+    }
+
+    pub async fn ban(&self, server: &Server, reason: Option<TextComponent>) {
+        let mut banned_players = server.data.banned_player_list.write().await;
+        let string_reason = reason.clone().map_or_else(
+            || "Banned by an operator.".to_string(),
+            pumpkin_util::text::TextComponent::get_text,
+        );
+
+        if banned_players
+            .banned_players
+            .iter()
+            .any(|entry| entry.uuid == self.gameprofile.id)
+        {
+            return;
+        }
+
+        banned_players.banned_players.push(
+            crate::data::banlist_serializer::BannedPlayerEntry::new(
+                &self.gameprofile,
+                "Plugin".to_string(),
+                None,
+                string_reason,
+            ),
+        );
+
+        banned_players.save();
+        drop(banned_players);
+
+        let kick_reason = reason.unwrap_or_else(|| {
+            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, [])
+        });
+
+        self.kick(DisconnectReason::Kicked, kick_reason).await;
+    }
+
+    pub async fn ban_ip(&self, server: &Server, reason: Option<TextComponent>) {
+        let mut banned_ips = server.data.banned_ip_list.write().await;
+        let string_reason = reason.clone().map_or_else(
+            || "Banned by an operator.".to_string(),
+            pumpkin_util::text::TextComponent::get_text,
+        );
+        let target_ip = self.client.address().await.ip();
+
+        if banned_ips.get_entry(&target_ip).is_some() {
+            return;
+        }
+
+        banned_ips
+            .banned_ips
+            .push(crate::data::banlist_serializer::BannedIpEntry::new(
+                target_ip,
+                "Plugin".to_string(),
+                None,
+                string_reason,
+            ));
+
+        banned_ips.save();
+        drop(banned_ips);
+
+        let kick_reason = reason.unwrap_or_else(|| {
+            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, [])
+        });
+
+        let affected = server.get_players_by_ip(target_ip).await;
+        for target in affected {
+            target
+                .kick(DisconnectReason::Kicked, kick_reason.clone())
+                .await;
+        }
+    }
+
     pub fn tick_client_load_timeout(&self) {
         if !self.client_loaded.load(Ordering::Relaxed) {
             let timeout = self.client_loaded_timeout.load(Ordering::Relaxed);
@@ -2795,6 +2908,40 @@ impl Player {
         }
     }
 
+    pub async fn open_handled_screen_direct(
+        &self,
+        screen_handler: Arc<Mutex<dyn ScreenHandler>>,
+        title: TextComponent,
+    ) {
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handled_screen().await;
+        }
+
+        let screen_handler_temp = screen_handler.lock().await;
+        self.client
+            .enqueue_packet(&COpenScreen::new(
+                screen_handler_temp.sync_id().into(),
+                (screen_handler_temp
+                    .window_type()
+                    .expect("Can't open PlayerScreenHandler") as i32)
+                    .into(),
+                &title,
+            ))
+            .await;
+        drop(screen_handler_temp);
+        self.on_screen_handler_opened(screen_handler.clone()).await;
+        *self.current_screen_handler.lock().await = screen_handler;
+        self.open_container_pos.store(None);
+    }
+
     pub async fn on_slot_click(&self, packet: SClickSlot) {
         self.update_last_action_time();
         let screen_handler = self.current_screen_handler.lock().await;
@@ -2900,6 +3047,76 @@ impl Player {
             world
                 .broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet)
                 .await;
+        }
+    }
+
+    /// Start using an item (e.g. drawing a bow)
+    pub fn start_using_item(&self, hand: Hand) {
+        self.using_item.store(true, Ordering::Relaxed);
+        self.item_use_start_time
+            .store(self.tick_counter.load(Ordering::Relaxed), Ordering::Relaxed);
+        self.using_hand.store(Some(hand));
+    }
+
+    /// Stop using an item
+    pub fn stop_using_item(&self) {
+        self.using_item.store(false, Ordering::Relaxed);
+        self.using_hand.store(None);
+    }
+
+    /// Get the number of ticks the item has been in use
+    pub fn get_item_use_ticks(&self) -> i32 {
+        if !self.using_item.load(Ordering::Relaxed) {
+            return 0;
+        }
+        self.tick_counter.load(Ordering::Relaxed) - self.item_use_start_time.load(Ordering::Relaxed)
+    }
+
+    /// Find arrow in inventory (main hand, offhand, or inventory slots)
+    pub async fn find_arrow(&self) -> Option<usize> {
+        use pumpkin_data::item::Item;
+        let inventory = self.inventory();
+
+        // Check offhand first
+        let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
+        let item = stack.lock().await;
+        if item.item.id == Item::ARROW.id && item.item_count > 0 {
+            return Some(PlayerInventory::OFF_HAND_SLOT);
+        }
+        drop(item);
+
+        // Check hotbar and main inventory
+        for slot in 0..PlayerInventory::MAIN_SIZE {
+            let stack = inventory.get_stack(slot).await;
+            let item = stack.lock().await;
+            if item.item.id == Item::ARROW.id && item.item_count > 0 {
+                return Some(slot);
+            }
+        }
+
+        None
+    }
+
+    /// Consume one arrow from the specified slot
+    pub async fn consume_arrow(&self, slot: usize) -> bool {
+        let gamemode = self.gamemode.load();
+        if gamemode == GameMode::Creative {
+            return true; // Don't consume in creative
+        }
+
+        let inventory = self.inventory();
+        let stack_arc = inventory.get_stack(slot).await;
+        let mut stack = stack_arc.lock().await;
+        match stack.item_count {
+            2.. => {
+                stack.item_count -= 1;
+                true
+            }
+            1 => {
+                *stack = ItemStack::EMPTY.clone();
+                true
+            }
+            _ => false,
         }
     }
 

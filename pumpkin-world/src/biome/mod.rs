@@ -60,7 +60,6 @@ mod test {
 
     use crate::{
         GlobalRandomConfig, ProtoChunk,
-        block::to_state_from_blueprint,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
         generation::noise::router::{
             multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -73,7 +72,7 @@ mod test {
     #[test]
     fn biome_desert() {
         let seed = 13579;
-        let random_config = GlobalRandomConfig::new(seed);
+        let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
@@ -101,13 +100,13 @@ mod test {
             read_data_from_file!("../../assets/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
-        let random_config = GlobalRandomConfig::new(seed);
+        let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
         let surface_settings = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
 
         //let _terrain_cache = TerrainCache::from_random(&random_config);
-        let default_block = to_state_from_blueprint(&surface_settings.default_block);
+        let default_block = surface_settings.default_block;
 
         for data in expected_data {
             let chunk_x = data.x;

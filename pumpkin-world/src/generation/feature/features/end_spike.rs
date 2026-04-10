@@ -47,7 +47,7 @@ impl EndSpikeFeature {
         let mut spikes = self.spikes.clone();
         if spikes.is_empty() {
             let mut sizes: Vec<i32> = (0..10).collect();
-            for i in (1..10_usize).rev() {
+            for i in (1..10usize).rev() {
                 let j = random.next_bounded_i32(i as i32 + 1) as usize;
                 sizes.swap(i, j);
             }
@@ -129,9 +129,9 @@ impl EndSpikeFeature {
 
         // Iron-bar cage for guarded spikes: 5x5 walls + open top frame at dy=3.
         if spike.guarded {
-            for dy in 0_i32..=3 {
-                for dx in -2_i32..=2 {
-                    for dz in -2_i32..=2 {
+            for dy in 0i32..=3 {
+                for dx in -2i32..=2 {
+                    for dz in -2i32..=2 {
                         // Only place on perimeter walls and the top frame
                         let on_x_wall = dx.abs() == 2;
                         let on_z_wall = dz.abs() == 2;

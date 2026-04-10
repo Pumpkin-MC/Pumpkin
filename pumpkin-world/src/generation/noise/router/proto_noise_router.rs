@@ -6,9 +6,14 @@ use pumpkin_data::{
         UnaryOperation,
     },
 };
-use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
+use pumpkin_util::random::{legacy_rand::LegacyRand, xoroshiro128::XoroshiroSplitter};
 
-use crate::{GlobalRandomConfig, generation::noise::perlin::DoublePerlinNoiseSampler};
+use crate::{
+    GlobalRandomConfig,
+    generation::noise::{
+        perlin::DoublePerlinNoiseSampler, router::find_top_surface::FindTopSurface,
+    },
+};
 
 use super::{
     chunk_density_function::ChunkNoiseFunctionSampleOptions,
@@ -45,6 +50,7 @@ pub enum DependentProtoNoiseFunctionComponent {
     Binary(Binary),
     ShiftedNoise(ShiftedNoise),
     WeirdScaled(WeirdScaled),
+    FindTopSurface(FindTopSurface),
     Clamp(Clamp),
     RangeChoice(RangeChoice),
     Spline(SplineFunction),
@@ -151,6 +157,24 @@ impl ProtoNoiseRouters {
                         )),
                     )
                 }
+                BaseNoiseFunctionComponent::FindTopSurface {
+                    density_index,
+                    upper_bound_index,
+                    data,
+                } => {
+                    let min_value = data.lower_bound as f64;
+                    let max_value = stack[*upper_bound_index].max().max(min_value);
+
+                    ProtoNoiseFunctionComponent::Dependent(
+                        DependentProtoNoiseFunctionComponent::FindTopSurface(FindTopSurface::new(
+                            *density_index,
+                            *upper_bound_index,
+                            min_value,
+                            max_value,
+                            data,
+                        )),
+                    )
+                }
                 BaseNoiseFunctionComponent::EndIslands => ProtoNoiseFunctionComponent::Independent(
                     IndependentProtoNoiseFunctionComponent::EndIsland(EndIsland::new(
                         random_config.seed,
@@ -218,10 +242,33 @@ impl ProtoNoiseRouters {
                     shift_z_index,
                     data,
                 } => {
-                    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
-                        base_random_deriver,
-                        &data.noise_id,
-                    );
+                    // NETHER_TEMPERATURE and NETHER_VEGETATION always use NormalNoise.createLegacyNetherBiome with
+                    // LegacyRandomSource(seed + 0) and LegacyRandomSource(seed + 1)
+                    // respectively, regardless of useLegacyRandomSource.
+                    let sampler = match data.noise_id.id() {
+                        "minecraft:nether/temperature" => {
+                            let mut legacy_rand =
+                                LegacyRand::from_seed(random_config.seed.wrapping_add(0));
+                            DoublePerlinNoiseSampler::from_params(
+                                &mut legacy_rand,
+                                &data.noise_id,
+                                true,
+                            )
+                        }
+                        "minecraft:nether/vegetation" => {
+                            let mut legacy_rand =
+                                LegacyRand::from_seed(random_config.seed.wrapping_add(1));
+                            DoublePerlinNoiseSampler::from_params(
+                                &mut legacy_rand,
+                                &data.noise_id,
+                                true,
+                            )
+                        }
+                        _ => DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+                            base_random_deriver,
+                            &data.noise_id,
+                        ),
+                    };
                     ProtoNoiseFunctionComponent::Dependent(
                         DependentProtoNoiseFunctionComponent::ShiftedNoise(ShiftedNoise::new(
                             *shift_x_index,
@@ -387,6 +434,13 @@ impl ProtoNoiseRouters {
                         | UnaryOperation::Cube
                         | UnaryOperation::QuarterNegative
                         | UnaryOperation::HalfNegative => (applied_min_value, applied_max_value),
+                        UnaryOperation::Invert => {
+                            if arg1_min < 0.0 && arg1_max > 0.0 {
+                                (f64::NEG_INFINITY, f64::INFINITY)
+                            } else {
+                                (applied_max_value, applied_min_value)
+                            }
+                        }
                     };
 
                     ProtoNoiseFunctionComponent::Dependent(
@@ -412,13 +466,20 @@ impl ProtoNoiseRouters {
                     )
                 }
                 BaseNoiseFunctionComponent::InterpolatedNoiseSampler { data } => {
-                    let mut random_generator = random_config
-                        .base_random_deriver
-                        .split_string("minecraft:terrain");
-
                     ProtoNoiseFunctionComponent::Independent(
                         IndependentProtoNoiseFunctionComponent::InterpolatedNoise(
-                            InterpolatedNoiseSampler::new(data, &mut random_generator),
+                            if random_config.legacy_random_source {
+                                // Use LegacyRandomSource(worldSeed + 0L) for
+                                // legacy dimensions (e.g. the Nether).
+                                let mut legacy_rand =
+                                    LegacyRand::from_seed(random_config.seed.wrapping_add(0));
+                                InterpolatedNoiseSampler::new(data, &mut legacy_rand)
+                            } else {
+                                let mut random_generator = random_config
+                                    .base_random_deriver
+                                    .split_string("minecraft:terrain");
+                                InterpolatedNoiseSampler::new(data, &mut random_generator)
+                            },
                         ),
                     )
                 }

@@ -1,14 +1,11 @@
 use pumpkin_data::{
     BlockState,
-    chunk_gen_settings::{
-        BlockBlueprint, ConditionMaterialRule, MaterialRule, SequenceMaterialRule,
-    },
+    chunk_gen_settings::{ConditionMaterialRule, MaterialRule, SequenceMaterialRule},
 };
 
 use super::MaterialRuleContext;
 use crate::{
     ProtoChunk,
-    block::to_state_from_blueprint,
     generation::{
         noise::router::surface_height_sampler::SurfaceHeightEstimateSampler,
         surface::test_condition,
@@ -23,7 +20,7 @@ pub fn try_apply_material_rule(
 ) -> Option<&'static BlockState> {
     match rule {
         MaterialRule::Badlands(_badlands) => Some(BadLandsMaterialRule::try_apply(context)),
-        MaterialRule::Block(block) => Some(BlockMaterialRule::try_apply(&block.result_state)),
+        MaterialRule::Block(block) => Some(BlockMaterialRule::try_apply(block.result_state)),
         MaterialRule::Sequence(sequence) => {
             try_apply_sequence(sequence, chunk, context, surface_height_estimate_sampler)
         }
@@ -48,8 +45,8 @@ impl BadLandsMaterialRule {
 pub struct BlockMaterialRule;
 
 impl BlockMaterialRule {
-    pub fn try_apply(blueprint: &BlockBlueprint) -> &'static BlockState {
-        to_state_from_blueprint(blueprint)
+    pub const fn try_apply(state: &'static BlockState) -> &'static BlockState {
+        state
     }
 }
 

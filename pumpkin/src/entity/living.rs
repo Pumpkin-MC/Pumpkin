@@ -22,9 +22,10 @@ use tracing::warn;
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
+use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
-use crate::entity::attributes::{AttributeInstance, DEFAULT_ATTRIBUTE_REGISTRY};
+use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::{EntityBaseFuture, NbtFuture};
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
@@ -126,6 +127,10 @@ impl LivingEntity {
         &Block::SLIME_BLOCK,
     ];
 
+    fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
+    }
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -134,21 +139,17 @@ impl LivingEntity {
         } else {
             0.8
         };
-        let entity_type_id = entity.entity_type.id;
         let mut max_health: f32 = 20.0; // Overridden by attribute base below
         Self {
             // Populate local attribute instances from the default registry and get initial vars
             attributes: {
                 let mut m = std::collections::HashMap::new();
-                let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
 
-                if let Some(overrides) = reg.get_overrides_for_entity(entity_type_id) {
-                    for (attr_id, base) in overrides {
-                        if attr_id == Attributes::MAX_HEALTH.id {
-                            max_health = base as f32;
-                        }
-                        m.insert(attr_id, AttributeInstance::new(base));
+                for (attr, base) in entity.entity_type.attributes {
+                    if attr.id == Attributes::MAX_HEALTH.id {
+                        max_health = *base as f32;
                     }
+                    m.insert(attr.id, AttributeInstance::new(*base));
                 }
                 std::sync::RwLock::new(m)
             },
@@ -215,9 +216,8 @@ impl LivingEntity {
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
-    pub async fn set_active_hand(&self, hand: Hand, stack: ItemStack) {
-        self.item_use_time
-            .store(stack.get_max_use_time(), Ordering::Relaxed);
+    pub async fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
+        self.item_use_time.store(duration, Ordering::Relaxed);
         *self.item_in_use.lock().await = Some(stack);
         *self.active_hand.lock().await = Some(hand);
         self.set_living_flag(Self::USING_ITEM_FLAG, true).await;
@@ -351,8 +351,14 @@ impl LivingEntity {
         let mut map = self.attributes.write().unwrap();
 
         let inst = map.entry(attribute.id).or_insert_with(|| {
-            let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
-            let base = reg.get_base_value(self.entity.entity_type.id, attribute);
+            let base = self
+                .entity
+                .entity_type
+                .attributes
+                .iter()
+                .find(|a| a.0.id == attribute.id)
+                .unwrap()
+                .1;
             AttributeInstance::new(base)
         });
 
@@ -377,8 +383,13 @@ impl LivingEntity {
         }
 
         // Fall back to registry base value if no local instance exists
-        let reg = DEFAULT_ATTRIBUTE_REGISTRY.read().unwrap();
-        reg.get_base_value(self.entity.entity_type.id, attribute)
+        self.entity
+            .entity_type
+            .attributes
+            .iter()
+            .find(|a| a.0.id == attribute.id)
+            .unwrap()
+            .1
     }
 
     /// Update or insert the base value for an attribute on this entity.
@@ -1733,6 +1744,14 @@ impl LivingEntity {
     pub fn get_movement(&self) -> Vector3<f64> {
         self.entity.movement.load()
     }
+
+    fn hurt_sound(&self) -> Sound {
+        if self.entity.entity_type == &EntityType::SLIME {
+            SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
+        } else {
+            Self::hurt_sound_for_entity(self.entity.entity_type)
+        }
+    }
 }
 
 impl NBTStorage for LivingEntity {
@@ -1932,7 +1951,7 @@ impl EntityBase for LivingEntity {
             if play_sound {
                 world
                     .play_sound(
-                        Sound::EntityGenericHurt,
+                        self.hurt_sound(),
                         SoundCategory::Players,
                         &self.entity.pos.load(),
                     )
@@ -2336,5 +2355,56 @@ mod tests {
                 "{dt:?} should NOT bypass armor durability"
             );
         }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_zombie_family_sounds() {
+        let cases = [
+            (&EntityType::ZOMBIE, Sound::EntityZombieHurt),
+            (&EntityType::DROWNED, Sound::EntityDrownedHurt),
+            (&EntityType::HUSK, Sound::EntityHuskHurt),
+            (
+                &EntityType::ZOMBIE_VILLAGER,
+                Sound::EntityZombieVillagerHurt,
+            ),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_enderman_hurt_sound() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::ENDERMAN),
+            Sound::EntityEndermanHurt
+        );
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_uses_skeleton_family_sounds() {
+        let cases = [
+            (&EntityType::SKELETON, Sound::EntitySkeletonHurt),
+            (&EntityType::BOGGED, Sound::EntityBoggedHurt),
+            (&EntityType::PARCHED, Sound::EntityParchedHurt),
+            (
+                &EntityType::WITHER_SKELETON,
+                Sound::EntityWitherSkeletonHurt,
+            ),
+            (&EntityType::STRAY, Sound::EntityStrayHurt),
+        ];
+
+        for (entity_type, expected) in cases {
+            assert_eq!(LivingEntity::hurt_sound_for_entity(entity_type), expected);
+        }
+    }
+
+    #[test]
+    fn hurt_sound_for_entity_defaults_to_generic_hurt() {
+        assert_eq!(
+            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            Sound::EntityGenericHurt
+        );
     }
 }

@@ -72,7 +72,7 @@ impl StructurePieceBase for CorridorBalconyPiece {
 
         // In Java: `i` is 1 for EAST/SOUTH facing, 5 for WEST/NORTH.
         let i = match self.piece.piece.facing {
-            Some(BlockDirection::West) | Some(BlockDirection::North) => 5,
+            Some(BlockDirection::West | BlockDirection::North) => 5,
             _ => 1,
         };
 

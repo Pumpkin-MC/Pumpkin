@@ -26,10 +26,12 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub mod bat;
+pub mod blaze;
 pub mod creeper;
 pub mod enderman;
 pub mod silverfish;
 pub mod skeleton;
+pub mod slime;
 pub mod zombie;
 
 pub struct MobEntity {

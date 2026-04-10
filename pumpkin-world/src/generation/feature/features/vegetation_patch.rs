@@ -25,7 +25,7 @@ pub struct VegetationPatchFeature {
 
 impl VegetationPatchFeature {
     /// Returns the block direction that points "into" the surface (down for floor, up for ceiling).
-    pub(crate) fn surface_direction(&self) -> pumpkin_data::BlockDirection {
+    pub(crate) const fn surface_direction(&self) -> pumpkin_data::BlockDirection {
         match self.surface {
             VerticalSurfaceType::Floor => pumpkin_data::BlockDirection::Down,
             VerticalSurfaceType::Ceiling => pumpkin_data::BlockDirection::Up,

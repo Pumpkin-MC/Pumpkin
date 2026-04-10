@@ -6,16 +6,16 @@ use pumpkin_data::{
 use pumpkin_world::{
     GlobalRandomConfig, ProtoNoiseRouters, bench_create_and_populate_biome,
     bench_create_and_populate_noise, bench_create_and_populate_noise_with_surface,
-    block::to_state_from_blueprint, generation::proto_chunk::TerrainCache,
+    generation::proto_chunk::TerrainCache,
 };
 
 fn bench_terrain_gen(c: &mut Criterion) {
     let seed = 0;
-    let random_config = GlobalRandomConfig::new(seed);
+    let random_config = GlobalRandomConfig::new(seed, false);
     let base_router = ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
     let surface_config = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
     let terrain_cache = TerrainCache::from_random(&random_config);
-    let default_state = to_state_from_blueprint(&surface_config.default_block);
+    let default_state = surface_config.default_block;
 
     c.bench_function("overworld biome", |b| {
         b.iter(|| {

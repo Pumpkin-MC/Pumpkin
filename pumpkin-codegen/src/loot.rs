@@ -131,6 +131,90 @@ impl ToTokens for AlternativeEntryStruct {
     }
 }
 
+#[derive(Deserialize, Clone, Debug)]
+pub struct SequenceEntryStruct {
+    /// Child entries evaluated in order until the first condition failure.
+    children: Vec<LootPoolEntryStruct>,
+}
+
+impl ToTokens for SequenceEntryStruct {
+    /// Emits a `SequenceEntry { … }` struct literal token stream for code generation.
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let children = self.children.iter().map(ToTokens::to_token_stream);
+
+        tokens.extend(quote! {
+            SequenceEntry {
+                children: &[#(#children),*],
+            }
+        });
+    }
+}
+
+/// Deserialized group loot entry that evaluates all children regardless of individual success.
+#[derive(Deserialize, Clone, Debug)]
+pub struct GroupEntryStruct {
+    /// Child entries all evaluated unconditionally.
+    children: Vec<LootPoolEntryStruct>,
+}
+
+impl ToTokens for GroupEntryStruct {
+    /// Emits a `GroupEntry { … }` struct literal token stream for code generation.
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let children = self.children.iter().map(ToTokens::to_token_stream);
+
+        tokens.extend(quote! {
+            GroupEntry {
+                children: &[#(#children),*],
+            }
+        });
+    }
+}
+
+/// Deserialized dynamic loot entry holding the dynamic drop's namespaced key.
+#[derive(Deserialize, Clone, Debug)]
+pub struct DynamicEntryStruct {
+    /// Namespaced key identifying the dynamic drop type (e.g., `"minecraft:contents"`).
+    name: String,
+}
+
+impl ToTokens for DynamicEntryStruct {
+    /// Emits a `DynamicEntry { … }` struct literal token stream for code generation.
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = LitStr::new(&self.name, Span::call_site());
+
+        tokens.extend(quote! {
+            DynamicEntry {
+                name: #name,
+            }
+        });
+    }
+}
+
+/// Deserialized tag loot entry holding the item tag's namespaced key.
+#[derive(Deserialize, Clone, Debug)]
+pub struct TagEntryStruct {
+    /// Namespaced item tag key (e.g., `"minecraft:planks"`).
+    name: String,
+    /// If `true`, yields one random item from the tag instead of all items.
+    #[serde(default)]
+    expand: bool,
+}
+
+impl ToTokens for TagEntryStruct {
+    /// Emits a `TagEntry { … }` struct literal token stream for code generation.
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let name = LitStr::new(&self.name, Span::call_site());
+        let expand = self.expand;
+
+        tokens.extend(quote! {
+            TagEntry {
+                name: #name,
+                expand: #expand,
+            }
+        });
+    }
+}
+
 /// Deserialized variant of a loot pool entry, tagged by the `"type"` field.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
@@ -141,28 +225,27 @@ pub enum LootPoolEntryTypesStruct {
     /// Yields a specific item.
     #[serde(rename = "minecraft:item")]
     Item(ItemEntryStruct),
-    /// References another loot table.
+    /// References another loot table by namespaced key.
     #[serde(rename = "minecraft:loot_table")]
     LootTable,
     /// Yields dynamically determined drops (e.g., shulker box contents).
     #[serde(rename = "minecraft:dynamic")]
-    Dynamic,
-    /// Yields all items in a tag.
+    Dynamic(DynamicEntryStruct),
+    /// Yields all items (or one random item) in an item tag.
     #[serde(rename = "minecraft:tag")]
-    Tag,
+    Tag(TagEntryStruct),
     /// Tries each child entry until one succeeds.
     #[serde(rename = "minecraft:alternatives")]
     Alternatives(AlternativeEntryStruct),
     /// Evaluates all children in order, stopping on the first failure.
     #[serde(rename = "minecraft:sequence")]
-    Sequence,
+    Sequence(SequenceEntryStruct),
     /// Evaluates all children regardless of individual success.
     #[serde(rename = "minecraft:group")]
-    Group,
+    Group(GroupEntryStruct),
 }
 
 impl ToTokens for LootPoolEntryTypesStruct {
-    /// Emits the matching `LootPoolEntryTypes::*` token stream for code generation.
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Empty => {
@@ -174,20 +257,21 @@ impl ToTokens for LootPoolEntryTypesStruct {
             Self::LootTable => {
                 tokens.extend(quote! { LootPoolEntryTypes::LootTable });
             }
-            Self::Dynamic => {
+            Self::Dynamic(entry) => {
+                // TODO
                 tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
             }
-            Self::Tag => {
-                tokens.extend(quote! { LootPoolEntryTypes::Tag });
+            Self::Tag(entry) => {
+                tokens.extend(quote! { LootPoolEntryTypes::Tag(#entry) });
             }
             Self::Alternatives(alt) => {
                 tokens.extend(quote! { LootPoolEntryTypes::Alternatives(#alt) });
             }
-            Self::Sequence => {
-                tokens.extend(quote! { LootPoolEntryTypes::Sequence });
+            Self::Sequence(seq) => {
+                tokens.extend(quote! { LootPoolEntryTypes::Sequence(#seq) });
             }
-            Self::Group => {
-                tokens.extend(quote! { LootPoolEntryTypes::Group });
+            Self::Group(grp) => {
+                tokens.extend(quote! { LootPoolEntryTypes::Group(#grp) });
             }
         }
     }
@@ -208,7 +292,7 @@ pub enum LootConditionStruct {
     AllOf,
     /// Passes with the given probability.
     #[serde(rename = "minecraft:random_chance")]
-    RandomChance,
+    RandomChance { chance: f32 },
     /// Passes with probability scaled by an enchantment level.
     #[serde(rename = "minecraft:random_chance_with_enchanted_bonus")]
     RandomChanceWithEnchantedBonus,
@@ -268,7 +352,9 @@ impl ToTokens for LootConditionStruct {
             Self::Inverted => quote! { LootCondition::Inverted },
             Self::AnyOf => quote! { LootCondition::AnyOf },
             Self::AllOf => quote! { LootCondition::AllOf },
-            Self::RandomChance => quote! { LootCondition::RandomChance },
+            Self::RandomChance { chance } => {
+                quote! { LootCondition::RandomChance { chance: #chance } }
+            }
             Self::RandomChanceWithEnchantedBonus => {
                 quote! { LootCondition::RandomChanceWithEnchantedBonus }
             }

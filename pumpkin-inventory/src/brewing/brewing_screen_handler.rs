@@ -1,7 +1,19 @@
+//! Brewing stand screen handler.
+//!
+//! This module implements the screen handler for brewing stands.
+//! Brewing stands have 5 slots:
+//! - Slots 0-2: Potion bottles (output/input)
+//! - Slot 3: Brewing ingredient
+//! - Slot 4: Fuel (blaze powder)
+//!
+//! The brewing stand has two tracked properties:
+//! - Brew time (0-400): Progress of the current brewing operation
+//! - Fuel time (0-20): Amount of fuel remaining
+
 use std::{any::Any, pin::Pin, sync::Arc};
 
-use pumpkin_data::screen::WindowType;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{screen::WindowType, tag};
 use pumpkin_world::{block::entities::PropertyDelegate, inventory::Inventory};
 
 use crate::{
@@ -11,13 +23,29 @@ use crate::{
 
 use pumpkin_data::item_stack::ItemStack;
 
+/// Screen handler for the brewing stand.
+///
+/// Manages the brewing stand's 5 slots and tracks brewing progress
+/// and fuel levels.
 pub struct BrewingScreenHandler {
+    /// The brewing stand's inventory (5 slots: 0-2 potions, 3 ingredient, 4 fuel).
     inventory: Arc<dyn Inventory>,
+    /// Core screen handler behavior (slots, sync ID, listeners).
     behaviour: ScreenHandlerBehaviour,
+    /// Delegate for accessing brew time and fuel time properties.
+    ///
+    /// Property 0: Brew time (0-400), Property 1: Fuel time (0-20).
     _property_delegate: Arc<dyn PropertyDelegate>,
 }
 
 impl BrewingScreenHandler {
+    /// Creates a new brewing stand screen handler.
+    ///
+    /// # Arguments
+    /// - `sync_id` - The sync ID for client-server matching
+    /// - `player_inventory` - The player's inventory
+    /// - `inventory` - The brewing stand's inventory (5 slots)
+    /// - `property_delegate` - Delegate for accessing brew time and fuel properties
     pub async fn new(
         sync_id: u8,
         player_inventory: Arc<PlayerInventory>,
@@ -28,10 +56,10 @@ impl BrewingScreenHandler {
         impl crate::screen_handler::ScreenHandlerListener for BrewingScreenListener {
             fn on_property_update<'a>(
                 &'a self,
-                screen_handler: &'a crate::screen_handler::ScreenHandlerBehaviour,
+                screen_handler: &'a ScreenHandlerBehaviour,
                 property: u8,
                 value: i32,
-            ) -> Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+            ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
                 Box::pin(async move {
                     if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
                         sync_handler
@@ -90,11 +118,17 @@ impl ScreenHandler for BrewingScreenHandler {
         Box::pin(async move { self.default_on_closed(player).await })
     }
 
+    /// Quick move logic for brewing stand.
+    ///
+    /// - Potions (0-2) -> Player inventory
+    /// - Ingredient (3) -> Player inventory
+    /// - Fuel (4) -> Player inventory
+    /// - From player: potions -> potion slots, fuel -> fuel slot, else -> ingredient slot
     fn quick_move<'a>(
         &'a mut self,
         _player: &'a dyn crate::screen_handler::InventoryPlayer,
         slot_index: i32,
-    ) -> Pin<Box<dyn std::future::Future<Output = ItemStack> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = ItemStack> + Send + 'a>> {
         Box::pin(async move {
             let mut stack_left = ItemStack::EMPTY.clone();
 
@@ -122,10 +156,7 @@ impl ScreenHandler for BrewingScreenHandler {
                     .is_some();
 
                 // Check if item is brewing fuel (for slot 4)
-                let is_fuel = stack
-                    .get_item()
-                    .is_tagged_with("minecraft:brewing_fuel")
-                    .is_some_and(|b| b);
+                let is_fuel = stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL);
 
                 if has_potion_contents {
                     // Try to insert into potion slots (0-2)
@@ -155,6 +186,9 @@ impl ScreenHandler for BrewingScreenHandler {
     }
 }
 
+/// Creates a new brewing stand screen handler.
+///
+/// Factory function used by the server when a player opens a brewing stand.
 pub async fn create_brewing(
     sync_id: u8,
     player_inventory: Arc<PlayerInventory>,

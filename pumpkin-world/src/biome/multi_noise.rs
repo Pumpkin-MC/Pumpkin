@@ -41,7 +41,6 @@ mod test {
     use crate::{
         GlobalRandomConfig, ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
-        block::to_state_from_blueprint,
         generation::{
             noise::router::{
                 multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
@@ -66,7 +65,7 @@ mod test {
         let chunk_x = 0;
         let chunk_z = 0;
 
-        let random_config = GlobalRandomConfig::new(seed);
+        let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 
@@ -80,7 +79,7 @@ mod test {
             chunk_x,
             chunk_z,
             &Dimension::OVERWORLD,
-            to_state_from_blueprint(&surface_config.default_block),
+            surface_config.default_block,
             biome_mixer_seed,
         );
 
@@ -112,7 +111,7 @@ mod test {
             read_data_from_file!("../../assets/multi_noise_biome_source_test.json");
 
         let seed = 0;
-        let random_config = GlobalRandomConfig::new(seed);
+        let random_config = GlobalRandomConfig::new(seed, false);
         let noise_router =
             ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
 

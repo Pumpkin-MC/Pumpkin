@@ -6,9 +6,10 @@ use pumpkin_data::noise_router::{
 };
 
 use super::noise::router::proto_noise_router::ProtoNoiseRouters;
-use crate::block::to_state_from_blueprint;
 use crate::generation::proto_chunk::TerrainCache;
 use crate::generation::{GlobalRandomConfig, Seed};
+
+pub mod structure_finder;
 
 pub trait GeneratorInit {
     fn new(seed: Seed, dimension: Dimension) -> Self;
@@ -28,7 +29,9 @@ pub struct VanillaGenerator {
 
 impl GeneratorInit for VanillaGenerator {
     fn new(seed: Seed, dimension: Dimension) -> Self {
-        let random_config = GlobalRandomConfig::new(seed.0);
+        let generation_settings = GenerationSettings::from_dimension(&dimension);
+        let random_config =
+            GlobalRandomConfig::new(seed.0, generation_settings.legacy_random_source);
 
         // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
         // use only the generation settings?
@@ -42,9 +45,8 @@ impl GeneratorInit for VanillaGenerator {
             unreachable!()
         };
         let terrain_cache = TerrainCache::from_random(&random_config);
-        let generation_settings = GenerationSettings::from_dimension(&dimension);
 
-        let default_block = to_state_from_blueprint(&generation_settings.default_block);
+        let default_block = generation_settings.default_block;
         let base_router = ProtoNoiseRouters::generate(&base, &random_config);
         Self {
             random_config,

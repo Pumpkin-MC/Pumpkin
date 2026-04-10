@@ -6,13 +6,14 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::java::server::play::{
-    SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
+    SAttack, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SMoveVehicle,
-    SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction,
-    SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation,
-    SPlayerRotation, SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
+    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
+    SRecipeBookSeenRecipe, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
+    SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -727,6 +728,10 @@ impl JavaClient {
                 self.handle_interact(player, SInteract::read(payload, &version)?, server)
                     .await;
             }
+            id if id == SAttack::to_id(version) => {
+                self.handle_attack(player, SAttack::read(payload, &version)?, server)
+                    .await;
+            }
             id if id == SKeepAlive::to_id(version) => {
                 self.handle_keep_alive(player, SKeepAlive::read(payload, &version)?)
                     .await;
@@ -851,6 +856,24 @@ impl JavaClient {
                     Bytes::from(payload.data),
                 );
                 server.plugin_manager.fire(event).await;
+            }
+            id if id == SRecipeBookChangeSettings::to_id(version) => {
+                self.handle_recipe_book_change_settings(
+                    player,
+                    SRecipeBookChangeSettings::read(payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SRecipeBookSeenRecipe::to_id(version) => {
+                self.handle_recipe_book_seen_recipe(
+                    player,
+                    SRecipeBookSeenRecipe::read(payload, &version)?,
+                )
+                .await;
+            }
+            id if id == SPlaceRecipe::to_id(version) => {
+                self.handle_place_recipe(player, SPlaceRecipe::read(payload, &version)?)
+                    .await;
             }
             _ => {
                 warn!("Failed to handle player packet id {}", packet.id);

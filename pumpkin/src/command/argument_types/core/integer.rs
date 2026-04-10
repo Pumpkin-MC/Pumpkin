@@ -43,6 +43,8 @@ impl ArgumentType for IntegerArgumentType {
     }
 }
 
+impl_copy_get!(IntegerArgumentType, i32);
+
 impl IntegerArgumentType {
     /// Constructs a new [`IntegerArgumentType`] with no minimum or maximum bounds.
     #[must_use]

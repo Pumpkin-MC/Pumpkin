@@ -6,27 +6,31 @@ use pumpkin_util::translation::{Locale as UtilLocale, add_translation_file, get_
 use std::str::FromStr;
 
 impl Host for PluginHostState {
-    async fn translate(&mut self, key: String, locale: WitLocale) -> String {
+    async fn translate(&mut self, key: String, locale: WitLocale) -> wasmtime::Result<String> {
         let util_locale = wit_to_util_locale(locale);
-        get_translation(&key, util_locale)
+        Ok(get_translation(&key, util_locale))
     }
 
-    async fn load_translations(&mut self, namespace: String, json: String, locale: WitLocale) {
+    async fn load_translations(
+        &mut self,
+        namespace: String,
+        json: String,
+        locale: WitLocale,
+    ) -> wasmtime::Result<()> {
         let util_locale = wit_to_util_locale(locale);
         add_translation_file(namespace, json, util_locale);
+        Ok(())
     }
 }
 
 /// Converts a WIT Locale to a pumpkin-util Locale.
 fn wit_to_util_locale(wit: WitLocale) -> UtilLocale {
-    // WIT names are kebab-case (e.g., AfZa -> af-za in .wit, but in generated Rust it might vary)
-    // We can use the debug representation or a custom mapping.
-    // Given the amount of variants, we use a string-based approach if possible.
+    // WIT variants like EnUs often debug to "EnUs".
+    // We convert to lowercase and handle potential format differences.
     let s = format!("{wit:?}").to_lowercase();
-    // pumpkin-util::Locale::from_str expects "af_za" or similar.
-    // WIT might generate "AfZa" or "af_za" depending on bindgen config.
-    // Let's assume standard bindgen which might produce "AfZa".
-    // We'll replace kebab-case if necessary.
-    let s = s.replace('-', "_");
+
+    // Most translation systems expect underscores (en_us) rather than nothing or dashes.
+    // If the WIT Debug format is "EnUs", lowercase is "enus".
+    // We might need a smarter mapping if your util expects specifically "en_us".
     UtilLocale::from_str(&s).unwrap_or(UtilLocale::EnUs)
 }

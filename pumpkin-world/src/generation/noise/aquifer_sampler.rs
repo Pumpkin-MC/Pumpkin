@@ -308,8 +308,7 @@ impl WorldAquiferSampler {
             sample_options,
         );
 
-        self.levels[index] = Some(sampled);
-        self.levels[index].as_ref().unwrap()
+        self.levels[index].insert(sampled)
     }
 
     fn get_fluid_level(
@@ -725,7 +724,7 @@ mod random_positions_and_hypot {
 
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
-        LazyLock::new(|| GlobalRandomConfig::new(SEED));
+        LazyLock::new(|| GlobalRandomConfig::new(SEED, false));
     static PROTO_ROUTER: LazyLock<ProtoNoiseRouters> = LazyLock::new(|| {
         let router_ast = &OVERWORLD_BASE_NOISE_ROUTER;
         ProtoNoiseRouters::generate(router_ast, &RANDOM_CONFIG)

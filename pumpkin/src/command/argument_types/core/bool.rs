@@ -24,6 +24,8 @@ impl ArgumentType for BoolArgumentType {
     }
 }
 
+impl_copy_get!(BoolArgumentType, bool);
+
 #[cfg(test)]
 mod test {
     use crate::command::{

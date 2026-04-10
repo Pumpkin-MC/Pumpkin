@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, fs};
 
+use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use pumpkin_util::HeightMap;
 use quote::{ToTokens, format_ident, quote};
@@ -13,8 +14,9 @@ use crate::loot::LootTableStruct;
 pub struct EntityType {
     /// Numeric registry ID for this entity type.
     pub id: u16,
-    /// Base maximum health points, if defined.
-    pub max_health: Option<f32>,
+    pub attributes: Option<Vec<BTreeMap<String, f64>>>,
+    /// Static hurt sound event name when it is safely derivable from extracted entity data.
+    pub hurt_sound: Option<String>,
     /// Whether this entity can be attacked by players or other entities.
     pub attackable: Option<bool>,
     /// Whether this entity is classified as a mob (affects spawning mechanics).
@@ -85,14 +87,35 @@ impl ToTokens for NamedEntityType<'_> {
         let entity = self.1;
         let id = LitInt::new(&entity.id.to_string(), proc_macro2::Span::call_site());
 
-        let max_health = if let Some(mh) = entity.max_health {
-            quote! { Some(#mh) }
+        let attribute_tokens = entity
+            .attributes
+            .as_ref()
+            .map(|vec| {
+                vec.iter()
+                    .map(|map| {
+                        let (key, value) = map.iter().next().unwrap();
+                        let key = key.strip_prefix("minecraft:").unwrap_or(key);
+                        // Replace dots with underscores and uppercase for Enum naming (e.g. generic.max_health -> GENERIC_MAX_HEALTH)
+                        let enum_variant =
+                            format_ident!("{}", key.replace('.', "_").to_uppercase());
+
+                        quote! { (Attributes::#enum_variant, #value) }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let attributes_field = quote! { &[#(#attribute_tokens),*] };
+
+        let attackable = if let Some(a) = entity.attackable {
+            quote! { Some(#a) }
         } else {
             quote! { None }
         };
 
-        let attackable = if let Some(a) = entity.attackable {
-            quote! { Some(#a) }
+        let hurt_sound = if let Some(sound_name) = entity.hurt_sound.as_ref() {
+            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
+            quote! { Some(Sound::#sound_ident) }
         } else {
             quote! { None }
         };
@@ -160,7 +183,8 @@ impl ToTokens for NamedEntityType<'_> {
         tokens.extend(quote! {
             EntityType {
                 id: #id,
-                max_health: #max_health,
+                attributes: #attributes_field,
+                hurt_sound: #hurt_sound,
                 attackable: #attackable,
                 mob: #mob,
                 saveable: #saveable,
@@ -213,6 +237,8 @@ pub fn build() -> TokenStream {
         use crate::data_component_impl::IDSetContent;
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
+        use crate::attributes::Attributes;
+        use crate::sound::Sound;
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
         use std::hash::Hash;
@@ -220,7 +246,8 @@ pub fn build() -> TokenStream {
         #[derive(Debug, Clone)]
         pub struct EntityType {
             pub id: u16,
-            pub max_health: Option<f32>,
+            pub attributes: &'static [(Attributes, f64)],
+            pub hurt_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
             pub saveable: bool,
@@ -385,6 +412,7 @@ pub fn build() -> TokenStream {
                 }
             }
         }
+
         impl IDSetContent for EntityType {
             fn registry_id(&self) -> u16 {
                 Taggable::registry_id(self)

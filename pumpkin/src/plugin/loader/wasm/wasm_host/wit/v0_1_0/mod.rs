@@ -11,10 +11,13 @@ pub mod common;
 pub mod context;
 pub mod entity;
 pub mod events;
+pub mod gui;
 pub mod i18n;
 pub mod logging;
 pub mod permission;
 pub mod player;
+pub mod scheduler;
+pub mod scoreboard;
 pub mod server;
 pub mod text;
 pub mod world;
@@ -22,8 +25,8 @@ pub mod world;
 bindgen!({
     path: "../pumpkin-plugin-wit/v0.1.0",
     world: "plugin",
-    imports: { default: async },
-    exports: { default: async },
+    imports: { default: async | trappable },
+    exports: { default: async | trappable},
 });
 
 struct PluginHostComponent;

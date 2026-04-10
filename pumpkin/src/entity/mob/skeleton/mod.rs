@@ -1,13 +1,11 @@
 use std::sync::{Arc, Weak};
 
-use crate::entity::attributes::AttributeBuilder;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        active_target::ActiveTargetGoal, look_around::LookAroundGoal,
+        active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal,
     },
     mob::{Mob, MobEntity},
@@ -41,7 +39,7 @@ impl SkeletonEntityBase {
                 8,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 8.0),
             );
-            goal_selector.add_goal(8, Box::new(LookAroundGoal::default()));
+            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(
                 2,
@@ -50,11 +48,6 @@ impl SkeletonEntityBase {
         };
 
         mob_arc
-    }
-
-    #[must_use]
-    pub fn create_attributes() -> AttributeBuilder {
-        AttributeBuilder::new().add(Attributes::MOVEMENT_SPEED, 0.25)
     }
 }
 

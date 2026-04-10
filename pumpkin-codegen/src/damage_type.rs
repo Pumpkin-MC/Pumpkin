@@ -113,6 +113,8 @@ pub fn build() -> TokenStream {
     }
 
     quote! {
+        use crate::tag::{RegistryKey, Tag, Taggable};
+
         #[derive(Clone, Copy, Debug, PartialEq)]
         pub struct DamageType {
             pub death_message_type: DeathMessageType,
@@ -158,6 +160,21 @@ pub fn build() -> TokenStream {
                 }
             }
 
+        }
+
+        impl Taggable for DamageType {
+            #[inline]
+            fn tag_key() -> RegistryKey {
+                RegistryKey::DamageType
+            }
+            #[inline]
+            fn registry_key(&self) -> &str {
+                self.message_id
+            }
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                self.id as u16
+            }
         }
     }
 }
