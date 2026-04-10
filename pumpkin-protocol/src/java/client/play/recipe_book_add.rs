@@ -45,19 +45,19 @@ pub struct CRecipeBookAdd {
 
 impl CRecipeBookAdd {
     #[must_use]
-    pub fn new(replace: bool) -> Self {
+    pub const fn new(replace: bool) -> Self {
         Self { replace }
     }
 }
 
-fn item_id_versioned(item: &Item, version: &MinecraftVersion) -> i32 {
-    remap_item_id_for_version(item.id, *version) as i32
+fn item_id_versioned(item: &Item, version: MinecraftVersion) -> i32 {
+    remap_item_id_for_version(item.id, version) as i32
 }
 
 fn write_item_slot_display(
     write: &mut impl Write,
     item: &Item,
-    version: &MinecraftVersion,
+    version: MinecraftVersion,
 ) -> Result<(), WritingError> {
     write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM))?;
     write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
@@ -77,7 +77,7 @@ fn write_any_fuel_slot_display(write: &mut impl Write) -> Result<(), WritingErro
 fn write_ingredient_slot_display(
     write: &mut impl Write,
     ingredient: &RecipeIngredientTypes,
-    version: &MinecraftVersion,
+    version: MinecraftVersion,
 ) -> Result<(), WritingError> {
     match ingredient {
         RecipeIngredientTypes::Simple(id) => {
@@ -118,17 +118,17 @@ fn write_ingredient_slot_display(
     Ok(())
 }
 
-/// Write a single Ingredient as a HolderSet<Item> for craftingRequirements.
+/// Write a single Ingredient as a `HolderSet`<Item> for craftingRequirements.
 ///
 /// Vanilla wire format for `ByteBufCodecs.holderSet(Registries.ITEM)`:
-///   VarInt(0)     -> named tag reference (followed by ResourceLocation)
+///   VarInt(0)     -> named tag reference (followed by `ResourceLocation`)
 ///   VarInt(n + 1) -> direct list of n item IDs
 ///
 /// So an empty/absent ingredient writes VarInt(1), one item writes VarInt(2) + id, etc.
 fn write_ingredient_holderset(
     write: &mut impl Write,
     ingredient: Option<&RecipeIngredientTypes>,
-    version: &MinecraftVersion,
+    version: MinecraftVersion,
 ) -> Result<(), WritingError> {
     match ingredient {
         // Empty ingredient slot -> direct list of 0 items -> VarInt(0 + 1) = VarInt(1)
@@ -173,7 +173,7 @@ fn write_ingredient_holderset(
 fn write_crafting_requirements(
     write: &mut impl Write,
     slots: &[Option<&RecipeIngredientTypes>],
-    version: &MinecraftVersion,
+    version: MinecraftVersion,
 ) -> Result<(), WritingError> {
     write.write_bool(true)?; // present
     write.write_var_int(&VarInt(slots.len() as i32))?;
@@ -186,7 +186,7 @@ fn write_crafting_requirements(
 fn write_result_slot_display(
     write: &mut impl Write,
     result: &RecipeResultStruct,
-    version: &MinecraftVersion,
+    version: MinecraftVersion,
 ) -> Result<(), WritingError> {
     let key = result.id.strip_prefix("minecraft:").unwrap_or(result.id);
     if let Some(item) = Item::from_registry_key(key) {
@@ -197,23 +197,22 @@ fn write_result_slot_display(
     Ok(())
 }
 
-fn crafting_category(cat: &RecipeCategoryTypes) -> i32 {
+const fn crafting_category(cat: &RecipeCategoryTypes) -> i32 {
     match cat {
         RecipeCategoryTypes::Equipment => CATEGORY_CRAFTING_EQUIPMENT,
-        RecipeCategoryTypes::Building => CATEGORY_CRAFTING_BUILDING,
+        RecipeCategoryTypes::Building | RecipeCategoryTypes::Blocks => CATEGORY_CRAFTING_BUILDING,
         RecipeCategoryTypes::Restone => CATEGORY_CRAFTING_REDSTONE,
-        RecipeCategoryTypes::Food => CATEGORY_CRAFTING_MISC,
-        RecipeCategoryTypes::Blocks => CATEGORY_CRAFTING_BUILDING,
-        RecipeCategoryTypes::Misc => CATEGORY_CRAFTING_MISC,
+        RecipeCategoryTypes::Food | RecipeCategoryTypes::Misc => CATEGORY_CRAFTING_MISC,
     }
 }
 
-/// Write a single RecipeDisplayEntry + flags byte.
+/// Write a single `RecipeDisplayEntry` + flags byte.
 /// Returns `Ok(true)` if written, `Ok(false)` if skipped (special recipe).
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 fn write_entry(
     write: &mut impl Write,
     display_id: i32,
-    version: &MinecraftVersion,
+    version: MinecraftVersion,
     crafting_table: &Item,
     furnace: &Item,
     blast_furnace: &Item,
@@ -267,17 +266,17 @@ fn write_entry(
                 // (Ingredient cannot be empty, so empty slots must be excluded)
                 {
                     let mut slots: Vec<Option<&RecipeIngredientTypes>> = Vec::new();
-                    for row in pattern.iter() {
+                    for row in *pattern {
                         for ch in row.chars() {
-                            if ch != ' ' {
-                                if let Some((_, ing)) = key.iter().find(|(k, _)| *k == ch) {
-                                    slots.push(Some(ing));
-                                }
+                            if ch != ' '
+                                && let Some((_, ing)) = key.iter().find(|(k, _)| *k == ch)
+                            {
+                                slots.push(Some(ing));
                             }
                         }
                     }
                     write_crafting_requirements(write, &slots, version)?;
-                }
+                };
                 // flags: 0 (no notification, no highlight)
                 write.write_u8(0)?;
             }
@@ -309,7 +308,7 @@ fn write_entry(
                     let slots: Vec<Option<&RecipeIngredientTypes>> =
                         ingredients.iter().map(Some).collect();
                     write_crafting_requirements(write, &slots, version)?;
-                }
+                };
                 // flags
                 write.write_u8(0)?;
             }
@@ -421,7 +420,7 @@ impl ClientPacket for CRecipeBookAdd {
             let written = write_entry(
                 &mut write,
                 display_id,
-                version,
+                *version,
                 crafting_table,
                 furnace,
                 blast_furnace,
@@ -453,7 +452,7 @@ impl ClientPacket for CRecipeBookAdd {
             write_entry(
                 &mut write,
                 display_id,
-                version,
+                *version,
                 crafting_table,
                 furnace,
                 blast_furnace,

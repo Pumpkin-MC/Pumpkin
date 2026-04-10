@@ -7,8 +7,9 @@ use pumpkin_util::version::MinecraftVersion;
 use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 
 /// Sent by the server to update the player's recipe book open/filter state.
-/// Wire format: 4 TypeSettings pairs (crafting, furnace, blast_furnace, smoker),
-/// each pair is (is_open: bool, is_filtering: bool).
+///
+/// Wire format: 4 `TypeSettings` pairs (crafting, furnace, `blast_furnace`, smoker),
+/// each pair is (`is_open`: bool, `is_filtering`: bool).
 #[java_packet(PLAY_RECIPE_BOOK_SETTINGS)]
 pub struct CRecipeBookSettings {
     pub crafting_open: bool,
@@ -23,7 +24,7 @@ pub struct CRecipeBookSettings {
 
 impl CRecipeBookSettings {
     #[must_use]
-    pub fn default_closed() -> Self {
+    pub const fn default_closed() -> Self {
         Self {
             crafting_open: false,
             crafting_filtering: false,

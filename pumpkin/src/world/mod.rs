@@ -2076,7 +2076,9 @@ impl World {
         player.send_active_effects().await;
         self.send_player_equipment(player).await;
 
-        if let crate::net::ClientPlatform::Java(java_client) = &player.client {
+        if let crate::net::ClientPlatform::Java(java_client) = &player.client
+            && server.advanced_config.recipe.send_recipes
+        {
             java_client
                 .send_packet_now(&CRecipeBookSettings::default_closed())
                 .await;

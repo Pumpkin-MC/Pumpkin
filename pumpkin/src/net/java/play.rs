@@ -1,4 +1,4 @@
-﻿use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
@@ -863,6 +863,7 @@ impl JavaClient {
         }
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn handle_recipe_book_change_settings(
         &self,
         _player: &Arc<Player>,
@@ -871,6 +872,7 @@ impl JavaClient {
         // Client is updating its recipe book filter/open state; no server action needed.
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn handle_recipe_book_seen_recipe(
         &self,
         _player: &Arc<Player>,
@@ -879,15 +881,13 @@ impl JavaClient {
         // Client acknowledged a recipe display; no server action needed.
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle_place_recipe(&self, player: &Arc<Player>, packet: SPlaceRecipe) {
         use pumpkin_data::recipes::{
-            CookingRecipeType, CraftingRecipeTypes, RecipeIngredientTypes, RECIPES_COOKING,
-            RECIPES_CRAFTING,
+            CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING,
+            RecipeIngredientTypes,
         };
         use pumpkin_data::screen::WindowType;
-
-        let target_id = packet.recipe_display_id.0 as usize;
-        let use_max = packet.use_max_items;
 
         // Take `amount` items matching `ingredient` from inventory, committing to one item type.
         async fn take_n_ingredient(
@@ -957,6 +957,9 @@ impl JavaClient {
             0
         }
 
+        let target_id = packet.recipe_display_id.0 as usize;
+        let use_max = packet.use_max_items;
+
         // Count crafting display IDs.
         let crafting_display_count = RECIPES_CRAFTING
             .iter()
@@ -1002,12 +1005,11 @@ impl JavaClient {
                 CraftingRecipeTypes::CraftingShaped { pattern, key, .. } => {
                     for (row, row_str) in pattern.iter().enumerate() {
                         for (col, ch) in row_str.chars().enumerate() {
-                            if ch != ' ' {
-                                if let Some(ing) =
+                            if ch != ' '
+                                && let Some(ing) =
                                     key.iter().find_map(|(k, v)| (*k == ch).then_some(v))
-                                {
-                                    ingredient_slots[row * grid_width + col] = Some(ing);
-                                }
+                            {
+                                ingredient_slots[row * grid_width + col] = Some(ing);
                             }
                         }
                     }
@@ -1017,7 +1019,9 @@ impl JavaClient {
                         ingredient_slots[i] = Some(ing);
                     }
                 }
-                CraftingRecipeTypes::CraftingTransmute { input, material, .. } => {
+                CraftingRecipeTypes::CraftingTransmute {
+                    input, material, ..
+                } => {
                     ingredient_slots[0] = Some(input);
                     ingredient_slots[1] = Some(material);
                 }
@@ -1094,8 +1098,7 @@ impl JavaClient {
             // Fill each grid slot with exactly `amount_to_craft` matching items.
             for (idx, ing) in ingredient_slots.iter().enumerate() {
                 let Some(ingredient) = ing else { continue };
-                let taken =
-                    take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
+                let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
                 if !taken.is_empty() {
                     crafting_inv.set_stack(idx, taken).await;
                 }
@@ -1108,9 +1111,7 @@ impl JavaClient {
             };
 
             match handler.window_type() {
-                Some(WindowType::Furnace)
-                | Some(WindowType::BlastFurnace)
-                | Some(WindowType::Smoker) => {}
+                Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker) => {}
                 _ => return,
             }
 
@@ -1147,8 +1148,7 @@ impl JavaClient {
             };
 
             if amount_to_craft > 0 {
-                let taken =
-                    take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
+                let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
                 if !taken.is_empty() {
                     furnace_inv.set_stack(0, taken).await;
                 }
