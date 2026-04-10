@@ -35,10 +35,10 @@ pub const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
 /// Represents an argument type used to select entities.
 ///
 /// The following variants of this argument type are:
-/// - [`EntityArgumentType::Entity`]: for a single entity.
-/// - [`EntityArgumentType::Entities`]: for any number of entities.
-/// - [`EntityArgumentType::Player`]: for a single player.
-/// - [`EntityArgumentType::Players`]: for any number of players.
+/// - [`EntityArgumentType::Entity`], for a single entity.
+/// - [`EntityArgumentType::Entities`], for any number of entities.
+/// - [`EntityArgumentType::Player`], for a single player.
+/// - [`EntityArgumentType::Players`], for any number of players.
 ///
 /// Though this argument type does parse an `EntitySelector`, it should not be used directly.
 /// Instead, use one of these helpers accepting a [`CommandContext`] and your argument's name:
