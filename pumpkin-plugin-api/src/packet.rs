@@ -605,14 +605,10 @@ impl PacketWrapper {
 
 /// Java edition packet helpers.
 pub mod java {
-    use std::{
-        collections::BTreeMap,
-        sync::OnceLock,
-    };
+    use std::{collections::BTreeMap, sync::OnceLock};
 
     use super::{
-        PacketDirection,
-        RawPacket,
+        PacketDirection, RawPacket,
         codec::{PacketReadError, PacketReader, PacketWriter},
     };
     use pumpkin_util::version::MinecraftVersion;
@@ -806,7 +802,9 @@ pub mod java {
             id: i32,
         ) -> Option<JavaPacketName> {
             let packets = self.versions.get(&version)?;
-            Self::reverse_direction_map(packets, direction).get(&id).cloned()
+            Self::reverse_direction_map(packets, direction)
+                .get(&id)
+                .cloned()
         }
 
         /// Returns every packet descriptor for `(version, direction)`.
@@ -833,8 +831,8 @@ pub mod java {
     }
 
     pub mod catalog {
-        pub use super::{JavaPacketCatalog, JavaPacketDescriptor, JavaPacketName};
         use super::OnceLock;
+        pub use super::{JavaPacketCatalog, JavaPacketDescriptor, JavaPacketName};
 
         static JAVA_PACKET_CATALOG: OnceLock<JavaPacketCatalog> = OnceLock::new();
 

@@ -6,7 +6,12 @@ fn catalog_resolves_ids_for_supported_versions() {
     let catalog = java_packet_catalog();
 
     assert_eq!(
-        catalog.get_id(MinecraftVersion::V_1_21, PacketDirection::Serverbound, "play", "chat"),
+        catalog.get_id(
+            MinecraftVersion::V_1_21,
+            PacketDirection::Serverbound,
+            "play",
+            "chat"
+        ),
         Some(0x06)
     );
     assert_eq!(
@@ -28,7 +33,12 @@ fn catalog_resolves_ids_for_supported_versions() {
         Some(0x08)
     );
     assert_eq!(
-        catalog.get_id(MinecraftVersion::V_26_1, PacketDirection::Serverbound, "play", "chat"),
+        catalog.get_id(
+            MinecraftVersion::V_26_1,
+            PacketDirection::Serverbound,
+            "play",
+            "chat"
+        ),
         Some(0x09)
     );
 }
@@ -50,8 +60,10 @@ fn catalog_lists_all_packets_for_direction() {
     let catalog = java_packet_catalog();
     let packets = catalog.list(MinecraftVersion::V_26_1, PacketDirection::Serverbound);
 
-    assert!(packets.iter().any(|packet| {
-        packet.phase == "play" && packet.name == "chat" && packet.id == 0x09
-    }));
+    assert!(
+        packets
+            .iter()
+            .any(|packet| { packet.phase == "play" && packet.name == "chat" && packet.id == 0x09 })
+    );
     assert!(packets.len() > 20);
 }
