@@ -67,7 +67,9 @@ use pumpkin_protocol::bedrock::client::set_actor_data::{
 };
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
-use pumpkin_protocol::java::client::play::{CPlayerSpawnPosition, CSystemChatMessage};
+use pumpkin_protocol::java::client::play::{
+    CPlayerSpawnPosition, CRecipeBookAdd, CRecipeBookSettings, CSystemChatMessage,
+};
 use pumpkin_protocol::java::client::play::{CSetEntityMetadata, Metadata};
 use pumpkin_protocol::{
     BClientPacket, ClientPacket, IdOr, SoundEvent,
@@ -2073,6 +2075,17 @@ impl World {
 
         player.send_active_effects().await;
         self.send_player_equipment(player).await;
+
+        if let crate::net::ClientPlatform::Java(java_client) = &player.client
+            && server.advanced_config.recipe.send_recipes
+        {
+            java_client
+                .send_packet_now(&CRecipeBookSettings::default_closed())
+                .await;
+            java_client
+                .send_packet_now(&CRecipeBookAdd::new(true))
+                .await;
+        }
 
         let msg_comp = TextComponent::translate(
             translation::MULTIPLAYER_PLAYER_JOINED,
