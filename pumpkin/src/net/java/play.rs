@@ -984,7 +984,7 @@ impl JavaClient {
         chat_message: &SChatMessage,
     ) -> Result<(), ChatError> {
         // Check for oversized messages
-        if chat_message.message.len() > 256 {
+        if chat_message.message.encode_utf16().count() > 256 {
             return Err(ChatError::OversizedMessage);
         }
         // Check for illegal characters
