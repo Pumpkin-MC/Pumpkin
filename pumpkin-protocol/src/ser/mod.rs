@@ -160,7 +160,7 @@ impl<R: Read> NetworkReadExt for R {
             String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))?;
 
         // Treat `bound` as the maximum number of UTF-16 characters allowed.
-        // If we're able to find the (bound + 1)th UTF-16 character, the message is too big.
+        // If we're able to find the (bound + 1)th UTF-16 character, the string is too big.
         if string.encode_utf16().nth(bound).is_some() {
             return Err(ReadingError::TooLarge(
                 "string has too many UTF-16 characters".to_string(),
