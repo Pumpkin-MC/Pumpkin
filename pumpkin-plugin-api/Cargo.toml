@@ -4,6 +4,7 @@ name = "pumpkin-plugin-api"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+build = "build.rs"
 
 [dependencies]
 wit-bindgen = { workspace = true }

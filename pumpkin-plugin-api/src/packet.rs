@@ -577,6 +577,29 @@ impl PacketWrapper {
         java::catalog::java_packet_catalog().get_name(version, self.direction(), self.id())
     }
 
+    /// Resolves the generated typed packet key for this packet.
+    pub fn java_packet_key(&self) -> Option<java::typed::JavaPacketKey> {
+        let name = self.java_packet_name()?;
+        java::typed::JavaPacketKey::from_parts(self.direction(), &name.phase, &name.name)
+    }
+
+    /// Resolves a packet id for the current version using a generated typed key.
+    pub fn java_packet_id_for_key(&self, key: java::typed::JavaPacketKey) -> Option<i32> {
+        let version = self.minecraft_version()?;
+        Some(key.id_for_version(version))
+    }
+
+    /// Decodes payload using the schema registered for this packet key.
+    pub fn decode_java_registered_schema(
+        &self,
+    ) -> Option<Result<java::SchemaFieldMap, java::schema::PacketSchemaError>> {
+        let key = self.java_packet_key()?;
+        let registry = java::schema::java_packet_schema_registry();
+        let guard = registry.read().ok()?;
+        let schema = guard.get(key)?;
+        Some(schema.decode(self.payload()))
+    }
+
     /// Returns the packet payload bytes.
     pub fn payload(&self) -> &[u8] {
         &self.event.packet.packet.payload
@@ -636,6 +659,9 @@ pub mod java {
         pub phase: String,
         pub name: String,
     }
+
+    /// Shared map type for schema decoded fields.
+    pub type SchemaFieldMap = std::collections::BTreeMap<String, schema::FieldValue>;
 
     #[derive(Debug, Default)]
     struct VersionPackets {
@@ -839,6 +865,207 @@ pub mod java {
         /// Returns the global Java packet catalog that includes all supported versions.
         pub fn java_packet_catalog() -> &'static JavaPacketCatalog {
             JAVA_PACKET_CATALOG.get_or_init(JavaPacketCatalog::load_embedded)
+        }
+    }
+
+    /// Generated typed packet keys covering all Java packets in Pumpkin's supported versions.
+    pub mod typed {
+        include!(concat!(env!("OUT_DIR"), "/generated_java_packet_keys.rs"));
+    }
+
+    /// Field-level schema helpers for packet parsing/encoding.
+    pub mod schema {
+        use std::{
+            collections::BTreeMap,
+            sync::{OnceLock, RwLock},
+        };
+
+        use super::{PacketReadError, PacketReader, PacketWriter, typed::JavaPacketKey};
+
+        /// Supported primitive field types for schema-based parsing.
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub enum FieldType {
+            U8,
+            Bool,
+            U16,
+            I32,
+            I64,
+            VarInt,
+            VarLong,
+            String { max_len: usize },
+            Bytes { len: usize },
+            UuidBytes,
+        }
+
+        /// Parsed value for a schema field.
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub enum FieldValue {
+            U8(u8),
+            Bool(bool),
+            U16(u16),
+            I32(i32),
+            I64(i64),
+            VarInt(i32),
+            VarLong(i64),
+            String(String),
+            Bytes(Vec<u8>),
+            UuidBytes([u8; 16]),
+        }
+
+        /// A single schema field definition.
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct Field {
+            pub name: String,
+            pub kind: FieldType,
+        }
+
+        /// Schema for a single packet payload.
+        #[derive(Debug, Clone, PartialEq, Eq, Default)]
+        pub struct PacketSchema {
+            fields: Vec<Field>,
+        }
+
+        /// Errors for schema decode/encode operations.
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub enum PacketSchemaError {
+            Decode(PacketReadError),
+            MissingField(String),
+            WrongType { field: String },
+        }
+
+        impl PacketSchema {
+            /// Creates an empty schema.
+            pub fn new() -> Self {
+                Self::default()
+            }
+
+            /// Appends a field to the schema.
+            pub fn field(mut self, name: impl Into<String>, kind: FieldType) -> Self {
+                self.fields.push(Field {
+                    name: name.into(),
+                    kind,
+                });
+                self
+            }
+
+            /// Returns immutable schema fields.
+            pub fn fields(&self) -> &[Field] {
+                &self.fields
+            }
+
+            /// Decodes payload bytes according to this schema.
+            pub fn decode(
+                &self,
+                payload: &[u8],
+            ) -> Result<BTreeMap<String, FieldValue>, PacketSchemaError> {
+                let mut reader = PacketReader::new(payload);
+                let mut out = BTreeMap::new();
+
+                for field in &self.fields {
+                    let value = match field.kind {
+                        FieldType::U8 => {
+                            FieldValue::U8(reader.read_u8().map_err(PacketSchemaError::Decode)?)
+                        }
+                        FieldType::Bool => {
+                            FieldValue::Bool(reader.read_bool().map_err(PacketSchemaError::Decode)?)
+                        }
+                        FieldType::U16 => {
+                            FieldValue::U16(reader.read_u16().map_err(PacketSchemaError::Decode)?)
+                        }
+                        FieldType::I32 => {
+                            FieldValue::I32(reader.read_i32().map_err(PacketSchemaError::Decode)?)
+                        }
+                        FieldType::I64 => {
+                            FieldValue::I64(reader.read_i64().map_err(PacketSchemaError::Decode)?)
+                        }
+                        FieldType::VarInt => FieldValue::VarInt(
+                            reader.read_varint().map_err(PacketSchemaError::Decode)?,
+                        ),
+                        FieldType::VarLong => FieldValue::VarLong(
+                            reader.read_varlong().map_err(PacketSchemaError::Decode)?,
+                        ),
+                        FieldType::String { max_len } => FieldValue::String(
+                            reader
+                                .read_string(max_len)
+                                .map_err(PacketSchemaError::Decode)?,
+                        ),
+                        FieldType::Bytes { len } => FieldValue::Bytes(
+                            reader
+                                .read_bytes(len)
+                                .map_err(PacketSchemaError::Decode)?
+                                .to_vec(),
+                        ),
+                        FieldType::UuidBytes => FieldValue::UuidBytes(
+                            reader
+                                .read_uuid_bytes()
+                                .map_err(PacketSchemaError::Decode)?,
+                        ),
+                    };
+                    out.insert(field.name.clone(), value);
+                }
+
+                Ok(out)
+            }
+
+            /// Encodes values according to this schema.
+            pub fn encode(
+                &self,
+                values: &BTreeMap<String, FieldValue>,
+            ) -> Result<Vec<u8>, PacketSchemaError> {
+                let mut writer = PacketWriter::new();
+
+                for field in &self.fields {
+                    let value = values
+                        .get(&field.name)
+                        .ok_or_else(|| PacketSchemaError::MissingField(field.name.clone()))?;
+                    match (&field.kind, value) {
+                        (FieldType::U8, FieldValue::U8(v)) => writer.write_u8(*v),
+                        (FieldType::Bool, FieldValue::Bool(v)) => writer.write_bool(*v),
+                        (FieldType::U16, FieldValue::U16(v)) => writer.write_u16(*v),
+                        (FieldType::I32, FieldValue::I32(v)) => writer.write_i32(*v),
+                        (FieldType::I64, FieldValue::I64(v)) => writer.write_i64(*v),
+                        (FieldType::VarInt, FieldValue::VarInt(v)) => writer.write_varint(*v),
+                        (FieldType::VarLong, FieldValue::VarLong(v)) => writer.write_varlong(*v),
+                        (FieldType::String { .. }, FieldValue::String(v)) => writer.write_string(v),
+                        (FieldType::Bytes { .. }, FieldValue::Bytes(v)) => writer.write_bytes(v),
+                        (FieldType::UuidBytes, FieldValue::UuidBytes(v)) => {
+                            writer.write_uuid_bytes(v)
+                        }
+                        _ => {
+                            return Err(PacketSchemaError::WrongType {
+                                field: field.name.clone(),
+                            });
+                        }
+                    }
+                }
+
+                Ok(writer.into_inner())
+            }
+        }
+
+        /// Global registry for packet schemas keyed by generated packet key.
+        #[derive(Debug, Default)]
+        pub struct JavaPacketSchemaRegistry {
+            inner: BTreeMap<JavaPacketKey, PacketSchema>,
+        }
+
+        impl JavaPacketSchemaRegistry {
+            /// Registers or replaces a schema for a key.
+            pub fn register(&mut self, key: JavaPacketKey, schema: PacketSchema) {
+                self.inner.insert(key, schema);
+            }
+
+            /// Gets a schema for a key.
+            pub fn get(&self, key: JavaPacketKey) -> Option<&PacketSchema> {
+                self.inner.get(&key)
+            }
+        }
+
+        static GLOBAL_SCHEMA_REGISTRY: OnceLock<RwLock<JavaPacketSchemaRegistry>> = OnceLock::new();
+
+        /// Returns the global schema registry.
+        pub fn java_packet_schema_registry() -> &'static RwLock<JavaPacketSchemaRegistry> {
+            GLOBAL_SCHEMA_REGISTRY.get_or_init(|| RwLock::new(JavaPacketSchemaRegistry::default()))
         }
     }
 
