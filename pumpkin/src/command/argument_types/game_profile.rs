@@ -4,6 +4,7 @@ use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgu
 use crate::command::argument_types::entity::ONLY_PLAYERS_ALLOWED_ERROR_TYPE;
 use crate::command::argument_types::entity_selector::EntitySelector;
 use crate::command::argument_types::entity_selector::parser::EntitySelectorParser;
+use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
@@ -22,7 +23,7 @@ pub enum GameProfileResult {
 
 impl GameProfileResult {
     /// Resolves this result with the help of a [`CommandSource`].
-    pub async fn resolve(self, source: &CommandSource) -> Result<Vec<GameProfile>, CommandSyntaxError> {
+    pub async fn resolve(&self, source: &CommandSource) -> Result<Vec<GameProfile>, CommandSyntaxError> {
         let players = match self {
             Self::Selector(selector) => selector.find_players(source).await,
             Self::Name(name) => source.server()
@@ -32,7 +33,7 @@ impl GameProfileResult {
                         |p| Ok(vec![p])
                     ),
             Self::Uuid(uuid) => source.server()
-                .get_player_by_uuid(uuid)
+                .get_player_by_uuid(*uuid)
                 .map_or_else(
                     || Err(UNKNOWN_PLAYER_ERROR_TYPE.create_without_context()),
                     |p| Ok(vec![p])
@@ -104,5 +105,11 @@ impl GameProfileArgumentType {
                 Ok(GameProfileResult::Name(string.to_owned()))
             }
         }
+    }
+
+    /// Tries to get any number of [`GameProfile`]s from a parsed argument of the provided [`CommandContext`].
+    pub async fn get(context: &CommandContext<'_>, name: &str) -> Result<Vec<GameProfile>, CommandSyntaxError> {
+        context.get_argument::<GameProfileResult>(name)?
+            .resolve(context.source.as_ref()).await
     }
 }
