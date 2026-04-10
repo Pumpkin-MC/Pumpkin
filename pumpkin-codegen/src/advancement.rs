@@ -55,7 +55,7 @@ fn as_translate(text: &TextComponent) -> TokenStream {
     let Translate { translate, with: _ } = text.0.content.as_ref() else {
         panic!()
     };
-    quote! { TextComponent::translate(#translate,[]) }
+    quote! { #translate }
 }
 
 fn token_option<D>(option: &Option<D>) -> TokenStream
@@ -70,7 +70,7 @@ where
 
 impl ToTokens for AdvancementDisplay {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let item_icon = &self.item_icon;
+        let item_icon = format_ident!("{}", self.item_icon.strip_prefix("minecraft:").unwrap().to_uppercase());
         let frame_type = &self.frame_type;
         let announce_to_chat = &self.announce_to_chat;
         let show_toast = &self.show_toast;
@@ -83,7 +83,7 @@ impl ToTokens for AdvancementDisplay {
             AdvancementDisplay {
                 title: #title,
                 description: #description,
-                item_icon: ItemStack::new(1,Item::from_registry_key(#item_icon).unwrap()),
+                item_icon: ItemStack::new(1,&Item::#item_icon),
                 frame_type: #frame_type,
                 announce_to_chat: #announce_to_chat,
                 show_toast: #show_toast,
@@ -194,7 +194,8 @@ pub(crate) fn build() -> TokenStream {
             pub id : &'static str,
             pub parent : Option<&'static str>,
             pub send_telemetry : bool,
-            pub display : Option<AdvancementDisplay>
+            pub display : Option<AdvancementDisplay>,
+            pub reward : AdvancementReward,
         }
 
         impl Advancement {
