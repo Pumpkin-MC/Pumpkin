@@ -364,13 +364,13 @@ impl RequiredArgumentBuilder {
 
     /// Sets the [`SuggestionProvider`] of this builder for the `ArgumentDetachedNode`.
     #[must_use]
-    pub fn suggest(self, provider: impl SuggestionProvider + 'static) -> Self {
-        self.suggest_arc(Arc::new(provider))
+    pub fn suggests(self, provider: impl SuggestionProvider + 'static) -> Self {
+        self.suggests_arc(Arc::new(provider))
     }
 
     /// Sets the [`SuggestionProvider`] of this builder for the `ArgumentDetachedNode`.
     #[must_use]
-    pub fn suggest_arc(mut self, provider: Arc<dyn SuggestionProvider>) -> Self {
+    pub fn suggests_arc(mut self, provider: Arc<dyn SuggestionProvider>) -> Self {
         self.suggestion_provider = Some(provider);
         self
     }
