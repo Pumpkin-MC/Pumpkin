@@ -32,7 +32,7 @@ pub const NOT_SINGLE_PLAYER_ERROR_TYPE: CommandErrorType<0> =
 
 pub const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
 
-/// Represents an argument type parsing an [`EntitySelector`]. This argument type is used
+/// Represents an argument type parsing a [`TargetSelector`]. This argument type is used
 /// to target entities.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EntityArgumentType {
