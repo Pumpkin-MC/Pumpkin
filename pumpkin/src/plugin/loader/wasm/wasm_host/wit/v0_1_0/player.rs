@@ -259,11 +259,13 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let component = text_component_from_resource(self, &text);
         let player = player_from_resource(self, &player)?;
         if self.should_defer_effects() {
-            self.defer_effect(crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerSystemMessage {
-                player,
-                text: component,
-                overlay,
-            });
+            self.defer_effect(
+                crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerSystemMessage {
+                    player,
+                    text: component,
+                    overlay,
+                },
+            );
             return Ok(());
         }
         player.send_system_message_raw(&component, overlay).await;
@@ -322,11 +324,13 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         if self.should_defer_effects() {
-            self.defer_effect(crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerCustomPayload {
-                player,
-                channel: packet.channel,
-                data: packet.data,
-            });
+            self.defer_effect(
+                crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerCustomPayload {
+                    player,
+                    channel: packet.channel,
+                    data: packet.data,
+                },
+            );
             return Ok(());
         }
         player
@@ -342,11 +346,13 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         if self.should_defer_effects() {
-            self.defer_effect(crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerRawPacket {
-                player,
-                id: packet.id,
-                payload: packet.payload,
-            });
+            self.defer_effect(
+                crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerRawPacket {
+                    player,
+                    id: packet.id,
+                    payload: packet.payload,
+                },
+            );
             return Ok(());
         }
 
