@@ -156,18 +156,15 @@ impl<R: Read> NetworkReadExt for R {
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {
         let bytes_len = self.get_var_uint()?.0 as usize;
         let data = self.read_boxed_slice(bytes_len)?;
-        let string = String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))?;
+        let string =
+            String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))?;
 
-        // Treat bound as the maximum number of UTF-16 characters allowed.
-
-        // 1. Check number of bytes
-        if bytes_len > bound * 2 {
-            return Err(ReadingError::TooLarge("string has too many bytes".to_string()));
-        }
-
-        // 2. Count number of UTF-16 characters
-        if string.encode_utf16().count() > bound {
-            return Err(ReadingError::TooLarge("string has too many UTF-16 characters".to_string()));
+        // Treat `bound` as the maximum number of UTF-16 characters allowed.
+        // If we're able to find the (bound + 1)th UTF-16 character, the message is too big.
+        if string.encode_utf16().nth(bound).is_some() {
+            return Err(ReadingError::TooLarge(
+                "string has too many UTF-16 characters".to_string(),
+            ));
         }
 
         Ok(string)
