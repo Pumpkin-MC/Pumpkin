@@ -1,3 +1,23 @@
+//! Inventory synchronization handler.
+//!
+//! This module handles the synchronization of inventory state between the server
+//! and connected clients. It ensures that players see the correct items in slots,
+//! cursor items, and container properties (like furnace progress).
+//!
+//! # Synchronization
+//!
+//! The sync handler manages:
+//! - Full container content updates (sent when opening a container or on major changes)
+//! - Individual slot updates (sent when a single slot changes)
+//! - Cursor item updates (the item being held by the mouse cursor)
+//! - Property updates (container-specific data like furnace burn time)
+//!
+//! # Revision Tracking
+//!
+//! Each synchronization message includes a revision number to ensure the client
+//! and server stay in sync. If the client detects a desync, it can request a full
+//! resynchronization.
+
 use std::sync::Arc;
 
 use pumpkin_data::item_stack::ItemStack;
@@ -14,7 +34,18 @@ use tokio::sync::Mutex;
 
 use crate::screen_handler::{InventoryPlayer, ScreenHandlerBehaviour};
 
+/// Handles inventory synchronization to a specific player.
+///
+/// The sync handler stores a reference to the player and sends inventory
+/// update packets when container state changes. It manages:
+/// - Full content synchronization
+/// - Incremental slot updates
+/// - Cursor item tracking
+/// - Property (UI element) updates
 pub struct SyncHandler {
+    /// The player to synchronize inventory updates with.
+    ///
+    /// None until `store_player` is called to attach a player.
     player: Mutex<Option<Arc<dyn InventoryPlayer>>>,
 }
 
@@ -25,6 +56,7 @@ impl Default for SyncHandler {
 }
 
 impl SyncHandler {
+    /// Creates a new sync handler with no player attached.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -32,10 +64,24 @@ impl SyncHandler {
         }
     }
 
+    /// Stores the player to synchronize with.
+    ///
+    /// Must be called before any sync operations.
     pub async fn store_player(&self, player: Arc<dyn InventoryPlayer>) {
         self.player.lock().await.replace(player);
     }
 
+    /// Sends a full container content update.
+    ///
+    /// This sends all slots, the cursor item, and properties to the client.
+    /// Used for initial sync and recovery from desync.
+    ///
+    /// # Arguments
+    /// - `screen_handler` - The screen handler to sync
+    /// - `stacks` - All slot contents
+    /// - `cursor_stack` - The item held by the cursor
+    /// - `properties` - Container property values
+    /// - `next_revision` - The new revision number
     pub async fn update_state(
         &self,
         screen_handler: &ScreenHandlerBehaviour,
@@ -70,6 +116,15 @@ impl SyncHandler {
         }
     }
 
+    /// Updates a single slot on the client.
+    ///
+    /// More efficient than full sync for single-slot changes.
+    ///
+    /// # Arguments
+    /// - `screen_handler` - The screen handler
+    /// - `slot` - The slot index that changed
+    /// - `stack` - The new stack in that slot
+    /// - `next_revision` - The new revision number
     pub async fn update_slot(
         &self,
         screen_handler: &ScreenHandlerBehaviour,
@@ -89,6 +144,13 @@ impl SyncHandler {
         }
     }
 
+    /// Updates the cursor item on the client.
+    ///
+    /// Sent when the player's held (cursor) item changes.
+    ///
+    /// # Arguments
+    /// - `screen_handler` - The screen handler
+    /// - `stack` - The new cursor item
     pub async fn update_cursor_stack(
         &self,
         _screen_handler: &ScreenHandlerBehaviour,
@@ -103,6 +165,14 @@ impl SyncHandler {
         }
     }
 
+    /// Updates a container property on the client.
+    ///
+    /// Used for UI elements like furnace progress bars.
+    ///
+    /// # Arguments
+    /// - `screen_handler` - The screen handler
+    /// - `property` - The property index
+    /// - `value` - The new property value
     pub async fn update_property(
         &self,
         screen_handler: &ScreenHandlerBehaviour,
@@ -121,29 +191,45 @@ impl SyncHandler {
     }
 }
 
-// TrackedSlot in vanilla
+/// Tracks the last known state of a slot for sync purposes.
+///
+/// Used to detect when a slot has changed and needs to be synced to the client.
+/// Stores either the full stack or a hash for comparison.
 #[derive(Clone)]
 pub struct TrackedStack {
+    /// The full item stack last sent to the client.
+    ///
+    /// Set when sending full stack data. Cleared when only sending a hash.
     pub received_stack: Option<ItemStack>,
+    /// The hash of the item stack last sent to the client.
+    ///
+    /// Used for lightweight comparison to detect changes.
     pub received_hash: Option<OptionalItemStackHash>,
 }
 
 impl TrackedStack {
+    /// An empty tracked stack with no known state.
     pub const EMPTY: Self = Self {
         received_stack: None,
         received_hash: None,
     };
 
+    /// Records that we sent this stack to the client.
     pub fn set_received_stack(&mut self, stack: ItemStack) {
         self.received_stack = Some(stack);
         self.received_hash = None;
     }
 
+    /// Records that we sent this hash to the client.
     pub fn set_received_hash(&mut self, hash: OptionalItemStackHash) {
         self.received_hash = Some(hash);
         self.received_stack = None;
     }
 
+    /// Checks if the actual stack matches our tracked state.
+    ///
+    /// Updates the tracked state to the actual stack if they match.
+    //FIX Methods named `is_*` normally take self by reference or no self. Consider choosing a less ambiguous name.
     pub fn is_in_sync(&mut self, actual_stack: &ItemStack) -> bool {
         if let Some(stack) = &self.received_stack {
             return stack.are_equal(actual_stack);

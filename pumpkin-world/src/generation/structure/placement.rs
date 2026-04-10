@@ -32,6 +32,13 @@ impl GlobalStructureCache {
         }
     }
 
+    pub fn get_stronghold_chunks(&self) -> &[(i32, i32)] {
+        self.stronghold_chunks
+            .get()
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
     /// Retrieves the list of chunk coordinates for Concentric Ring structures.
     /// If the cache is empty, it calculates the 128 ring positions mathematically.
     #[allow(clippy::cast_precision_loss)]

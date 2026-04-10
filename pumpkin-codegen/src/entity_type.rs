@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, fs};
 
+use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use pumpkin_util::HeightMap;
 use quote::{ToTokens, format_ident, quote};
@@ -14,6 +15,8 @@ pub struct EntityType {
     /// Numeric registry ID for this entity type.
     pub id: u16,
     pub attributes: Option<Vec<BTreeMap<String, f64>>>,
+    /// Static hurt sound event name when it is safely derivable from extracted entity data.
+    pub hurt_sound: Option<String>,
     /// Whether this entity can be attacked by players or other entities.
     pub attackable: Option<bool>,
     /// Whether this entity is classified as a mob (affects spawning mechanics).
@@ -110,6 +113,13 @@ impl ToTokens for NamedEntityType<'_> {
             quote! { None }
         };
 
+        let hurt_sound = if let Some(sound_name) = entity.hurt_sound.as_ref() {
+            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
+            quote! { Some(Sound::#sound_ident) }
+        } else {
+            quote! { None }
+        };
+
         let spawn_restriction_location = match entity.spawn_restriction.location {
             SpawnLocation::InLava => quote! {SpawnLocation::InLava},
             SpawnLocation::InWater => quote! {SpawnLocation::InWater},
@@ -174,6 +184,7 @@ impl ToTokens for NamedEntityType<'_> {
             EntityType {
                 id: #id,
                 attributes: #attributes_field,
+                hurt_sound: #hurt_sound,
                 attackable: #attackable,
                 mob: #mob,
                 saveable: #saveable,
@@ -227,6 +238,7 @@ pub fn build() -> TokenStream {
         use crate::tag::Taggable;
         use crate::tag::RegistryKey;
         use crate::attributes::Attributes;
+        use crate::sound::Sound;
         use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
         use std::hash::Hash;
@@ -235,6 +247,7 @@ pub fn build() -> TokenStream {
         pub struct EntityType {
             pub id: u16,
             pub attributes: &'static [(Attributes, f64)],
+            pub hurt_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
             pub saveable: bool,
@@ -399,6 +412,7 @@ pub fn build() -> TokenStream {
                 }
             }
         }
+
         impl IDSetContent for EntityType {
             fn registry_id(&self) -> u16 {
                 Taggable::registry_id(self)
