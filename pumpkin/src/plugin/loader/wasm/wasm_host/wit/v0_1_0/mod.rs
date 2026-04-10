@@ -16,6 +16,7 @@ pub mod i18n;
 pub mod logging;
 pub mod permission;
 pub mod player;
+pub mod scheduler;
 pub mod scoreboard;
 pub mod server;
 pub mod text;
