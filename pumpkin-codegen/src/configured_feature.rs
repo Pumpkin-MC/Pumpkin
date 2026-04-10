@@ -585,6 +585,9 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:freeze_top_layer" => {
             quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) }
         }
+        "minecraft:ice_spike" => {
+            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
+        }
         "minecraft:iceberg" => {
             let state = value_to_block_state_codec(&config["state"]);
             quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature { main_block: #state }) }
