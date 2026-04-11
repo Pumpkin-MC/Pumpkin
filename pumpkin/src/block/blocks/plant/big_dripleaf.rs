@@ -3,10 +3,11 @@ use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, CanPlaceAtArgs,
     GetStateForNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
 };
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
     BigDripleafLikeProperties, BlockProperties, HorizontalFacing, LadderLikeProperties,
 };
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -149,7 +150,7 @@ impl PlantBlockBase for BigDripleafBlock {
             return true;
         }
 
-        supports_dripleaf(support_block)
+        support_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_BIG_DRIPLEAF)
     }
 
     async fn get_state_for_neighbor_update(
@@ -167,16 +168,4 @@ impl PlantBlockBase for BigDripleafBlock {
         }
         block_state
     }
-}
-fn supports_dripleaf(support_block: &Block) -> bool {
-    support_block == &Block::CLAY
-        || support_block == &Block::COARSE_DIRT
-        || support_block == &Block::DIRT
-        || support_block == &Block::FARMLAND
-        || support_block == &Block::GRASS_BLOCK
-        || support_block == &Block::MOSS_BLOCK
-        || support_block == &Block::MUD
-        || support_block == &Block::MYCELIUM
-        || support_block == &Block::PODZOL
-        || support_block == &Block::ROOTED_DIRT
 }
