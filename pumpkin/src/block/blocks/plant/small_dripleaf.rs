@@ -3,10 +3,11 @@ use crate::block::{
     BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     PlacedArgs,
 };
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{
     BlockProperties, DoubleBlockHalf, SmallDripleafLikeProperties,
 };
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
@@ -132,16 +133,8 @@ impl PlantBlockBase for SmallDripleafBlock {
     }
 }
 fn supports_small_dripleaf(support_block: &Block, underwater: bool) -> bool {
-    if support_block == &Block::CLAY || support_block == &Block::MOSS_BLOCK {
+    if support_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SMALL_DRIPLEAF) {
         return true;
     }
-    underwater
-        && (support_block == &Block::COARSE_DIRT
-            || support_block == &Block::DIRT
-            || support_block == &Block::FARMLAND
-            || support_block == &Block::GRASS_BLOCK
-            || support_block == &Block::MUD
-            || support_block == &Block::MYCELIUM
-            || support_block == &Block::PODZOL
-            || support_block == &Block::ROOTED_DIRT)
+    underwater && support_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_BIG_DRIPLEAF)
 }
