@@ -80,16 +80,15 @@ impl ToTokens for AdvancementDisplay {
         let description = as_translate(&self.description);
 
         tokens.extend(quote! {
-            AdvancementDisplay {
-                title: #title,
-                description: #description,
-                item_icon: ItemStack::new(1,&Item::#item_icon),
-                frame_type: #frame_type,
-                announce_to_chat: #announce_to_chat,
-                show_toast: #show_toast,
-                hidden: #hidden,
-                background_texture: #background_texture,
-            }
+            AdvancementDisplay::new(#title,
+                #description,
+                ItemStack::new(1,&Item::#item_icon),
+                #frame_type,
+                #background_texture,
+                #announce_to_chat,
+                #show_toast,
+                #hidden,
+            )
         });
     }
 }
@@ -142,18 +141,6 @@ impl ToTokens for AdvancementRewards {
     }
 }
 
-#[derive(Serialize)]
-pub struct AdvancementProgress<'a> {
-    pub id: ResourceLocation,
-    pub progress: &'a [Criteria],
-}
-
-#[derive(Serialize)]
-pub struct Criteria {
-    pub criterion_id: ResourceLocation,
-    pub achieve_date: Option<i64>,
-}
-
 pub(crate) fn build() -> TokenStream {
     let advancements: BTreeMap<String, Advancement> =
         serde_json::from_str(&fs::read_to_string("../assets/advancements.json").unwrap())
@@ -169,7 +156,10 @@ pub(crate) fn build() -> TokenStream {
 
         let parent = token_option(&advancement.parent);
         let send_telemetry = advancement.sends_telemetry;
-        let display = token_option(&advancement.display);
+        let display = match &advancement.display {
+            Some(x) => quote! { Some(&#x) },
+            None => quote! { None },
+        };
         let reward = advancement.rewards;
         variants.extend([quote! {
             pub const #format_name: Self = Self {
@@ -177,7 +167,7 @@ pub(crate) fn build() -> TokenStream {
                 parent : #parent,
                 send_telemetry : #send_telemetry,
                 display : #display,
-                reward : #reward,
+                reward : &#reward,
             };
         }]);
         name_to_type.extend(quote! { #raw_name => Some(&Self::#format_name), });
@@ -194,8 +184,8 @@ pub(crate) fn build() -> TokenStream {
             pub id : &'static str,
             pub parent : Option<&'static str>,
             pub send_telemetry : bool,
-            pub display : Option<AdvancementDisplay>,
-            pub reward : AdvancementReward,
+            pub display : Option<&'static AdvancementDisplay>,
+            pub reward : &'static AdvancementReward,
         }
 
         impl Advancement {
@@ -210,7 +200,7 @@ pub(crate) fn build() -> TokenStream {
 
             pub fn from_minecraft_name(name: &str) -> Option<&'static Self> {
                 match name {
-                    #name_to_type
+                    #minecraft_name_to_type
                     _ => None
                 }
             }
