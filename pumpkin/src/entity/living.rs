@@ -357,8 +357,7 @@ impl LivingEntity {
                 .attributes
                 .iter()
                 .find(|a| a.0.id == attribute.id)
-                .map(|a| a.1)
-                .unwrap_or(attribute.default_value);
+                .map_or(attribute.default_value, |a| a.1);
             AttributeInstance::new(base)
         });
 
@@ -388,8 +387,7 @@ impl LivingEntity {
             .attributes
             .iter()
             .find(|a| a.0.id == attribute.id)
-            .map(|a| a.1)
-            .unwrap_or(attribute.default_value)
+            .map_or(attribute.default_value, |a| a.1)
     }
 
     /// Update or insert the base value for an attribute on this entity.
