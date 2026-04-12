@@ -106,9 +106,7 @@ async fn handle_packet(
 
                     // Ignore all errors since we don't want the query handler to crash
                     // Protocol also ignores all errors and just doesn't respond
-                    let _ = socket
-                        .send_to(response.encode().await.as_slice(), addr)
-                        .await;
+                    let _ = socket.send_to(response.encode().as_slice(), addr).await;
 
                     clients.write().await.insert(challenge_token, addr);
                 }
@@ -171,9 +169,7 @@ async fn handle_packet(
                             players,
                         };
 
-                        let _ = socket
-                            .send_to(response.encode().await.as_slice(), addr)
-                            .await;
+                        let _ = socket.send_to(response.encode().as_slice(), addr).await;
                     } else {
                         let response = CBasicStatus {
                             session_id: packet.session_id,
@@ -191,9 +187,7 @@ async fn handle_packet(
                             host_ip: CString::new(bound_addr.ip().to_string())?,
                         };
 
-                        let _ = socket
-                            .send_to(response.encode().await.as_slice(), addr)
-                            .await;
+                        let _ = socket.send_to(response.encode().as_slice(), addr).await;
                     }
                 }
             }
