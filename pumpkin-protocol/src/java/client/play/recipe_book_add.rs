@@ -26,10 +26,18 @@ const SLOT_DISPLAY_ANY_FUEL: i32 = 1;
 //   26.1+:          minecraft:item=4, minecraft:composite=10
 // Source: https://minecraft.wiki/w/Java_Edition_protocol/Recipes
 const fn slot_display_item(version: MinecraftVersion) -> i32 {
-    if version.protocol_version() < 775 { 2 } else { 4 }
+    if version.protocol_version() < 775 {
+        2
+    } else {
+        4
+    }
 }
 const fn slot_display_composite(version: MinecraftVersion) -> i32 {
-    if version.protocol_version() < 775 { 7 } else { 10 }
+    if version.protocol_version() < 775 {
+        7
+    } else {
+        10
+    }
 }
 
 // RecipeBookCategory IDs
