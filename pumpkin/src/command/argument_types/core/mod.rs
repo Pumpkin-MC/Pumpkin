@@ -10,6 +10,7 @@ pub mod double;
 pub mod float;
 pub mod integer;
 pub mod long;
+pub mod resource_location;
 pub mod string;
 
 /// Helper method for parsing with a reader and returning an [`Err`] if outside the range.

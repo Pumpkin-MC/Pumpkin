@@ -269,7 +269,7 @@ impl CommandDispatcher {
         let Some(key) = parts.next() else {
             return Vec::new();
         };
-        let raw_args: RawArgs<'a> = parts
+        let mut raw_args: RawArgs<'a> = parts
             .rev()
             .map(|value| RawArg {
                 value,
@@ -288,16 +288,8 @@ impl CommandDispatcher {
         // try paths and collect the nodes that fail
         // todo: make this more fine-grained
         for path in tree.iter_paths() {
-            let mut path_raw_args = raw_args.clone();
-            match Self::try_find_suggestions_on_path(
-                src,
-                server,
-                &path,
-                tree,
-                &mut path_raw_args,
-                cmd,
-            )
-            .await
+            match Self::try_find_suggestions_on_path(src, server, &path, tree, &mut raw_args, cmd)
+                .await
             {
                 Err(InvalidConsumption(s)) => {
                     debug!(

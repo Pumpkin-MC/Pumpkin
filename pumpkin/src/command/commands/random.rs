@@ -6,6 +6,7 @@ use std::{
 use pumpkin_data::{translation, world::SAY_COMMAND};
 use pumpkin_util::{
     PermissionLvl,
+    math::bounds::IntBounds,
     permission::{Permission, PermissionDefault, PermissionRegistry},
     random::{RandomImpl, xoroshiro128::Xoroshiro},
     text::TextComponent,
@@ -14,27 +15,28 @@ use pumpkin_world::world_info::RandomSequence;
 use rand::RngExt;
 use tokio::sync::Mutex;
 
-#[cfg(test)]
-use crate::command::dispatcher::CommandError;
 use crate::command::{
     argument_builder::{ArgumentBuilder, argument, command, literal},
     argument_types::{
-        argument_type::{ArgumentType, JavaClientArgumentType},
-        core::{bool::BoolArgumentType, long::LongArgumentType, string::StringArgumentType},
+        core::{
+            bool::BoolArgumentType, long::LongArgumentType,
+            resource_location::ResourceLocationArgumentType,
+        },
+        range::IntRangeArgumentType,
     },
-    context::{command_context::CommandContext, command_source::CommandSource},
+    context::command_context::CommandContext,
     errors::{
         command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext},
         error_types,
     },
     node::{CommandExecutor, CommandExecutorResult, dispatcher::CommandDispatcher},
-    string_reader::StringReader,
     tree::RawArg,
 };
-use pumpkin_protocol::java::client::play::StringProtoArgBehavior;
 
 const DESCRIPTION: &str = "Generates a random integer, or controls random sequences.";
 const PERMISSION: &str = "minecraft:command.random";
+const PERMISSION_SEQUENCE: &str = "minecraft:command.random.sequence";
+const PERMISSION_RESET: &str = "minecraft:command.random.reset";
 
 const ARG_RANGE: &str = "range";
 const ARG_SEQUENCE: &str = "sequence";
@@ -112,127 +114,21 @@ enum ResetTarget {
 #[derive(Clone, Copy)]
 struct ResetExecutor {
     target: ResetTarget,
+    mode: ResetMode,
+}
+
+#[derive(Clone, Copy)]
+enum ResetMode {
+    Defaults,
+    SeedOnly,
+    SeedAndWorldSeed,
+    Full,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 struct InclusiveRange {
     min: i32,
     max: i32,
-}
-
-struct RangeArgumentType;
-
-impl ArgumentType for RangeArgumentType {
-    type Item = (i32, i32);
-
-    fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
-        let start = reader.cursor();
-
-        let min = if reader.peek() == Some('.') {
-            None
-        } else {
-            Some(reader.read_int()?)
-        };
-
-        let has_separator = reader.peek() == Some('.') && reader.peek_with_offset(1) == Some('.');
-
-        let (min, max) = if has_separator {
-            reader.expect('.')?;
-            reader.expect('.')?;
-
-            let max = match reader.peek() {
-                None => None,
-                Some(c) if c.is_whitespace() => None,
-                _ => Some(reader.read_int()?),
-            };
-
-            (min.unwrap_or(i32::MIN), max.unwrap_or(i32::MAX))
-        } else {
-            let Some(value) = min else {
-                reader.set_cursor(start);
-                return Err(error_types::READER_EXPECTED_INT.create(reader));
-            };
-
-            (value, value)
-        };
-
-        let range_size = i64::from(max) - i64::from(min) + 1;
-        if range_size < 2 {
-            return Err(
-                error_types::DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                    TextComponent::translate(
-                        translation::COMMANDS_RANDOM_ERROR_RANGE_TOO_SMALL,
-                        [],
-                    ),
-                ),
-            );
-        }
-        if range_size > 2_147_483_646 {
-            return Err(
-                error_types::DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                    TextComponent::translate(
-                        translation::COMMANDS_RANDOM_ERROR_RANGE_TOO_LARGE,
-                        [],
-                    ),
-                ),
-            );
-        }
-
-        Ok((min, max))
-    }
-
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
-        JavaClientArgumentType::String(StringProtoArgBehavior::SingleWord)
-    }
-}
-
-impl InclusiveRange {
-    #[cfg(test)]
-    fn parse(range: &str) -> Result<Self, CommandError> {
-        let (min, max) = if let Some((min_raw, max_raw)) = range.split_once("..") {
-            let min = if min_raw.is_empty() {
-                i32::MIN
-            } else {
-                parse_i32_range_bound(min_raw)?
-            };
-            let max = if max_raw.is_empty() {
-                i32::MAX
-            } else {
-                parse_i32_range_bound(max_raw)?
-            };
-
-            (min, max)
-        } else {
-            let value = parse_i32_range_bound(range)?;
-            (value, value)
-        };
-
-        let range_size = i64::from(max) - i64::from(min) + 1;
-        if range_size < 2 {
-            return Err(CommandError::CommandFailed(TextComponent::translate(
-                translation::COMMANDS_RANDOM_ERROR_RANGE_TOO_SMALL,
-                [],
-            )));
-        }
-        if range_size > 2_147_483_646 {
-            return Err(CommandError::CommandFailed(TextComponent::translate(
-                translation::COMMANDS_RANDOM_ERROR_RANGE_TOO_LARGE,
-                [],
-            )));
-        }
-
-        Ok(Self { min, max })
-    }
-}
-
-#[cfg(test)]
-fn parse_i32_range_bound(raw: &str) -> Result<i32, CommandError> {
-    raw.parse::<i32>().map_err(|_| {
-        CommandError::CommandFailed(TextComponent::translate(
-            translation::PARSING_INT_INVALID,
-            [TextComponent::text(raw.to_string())],
-        ))
-    })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -456,19 +352,32 @@ fn usize_to_i32_saturating(value: usize) -> i32 {
     i32::try_from(value).unwrap_or(i32::MAX)
 }
 
-fn get_optional_argument<'a, T: 'static>(
-    context: &'a CommandContext,
-    name: &str,
-) -> Result<Option<&'a T>, CommandSyntaxError> {
-    if context.arguments.contains_key(name) {
-        context.get_argument(name).map(Some)
-    } else {
-        Ok(None)
+fn validate_random_range(min: i32, max: i32) -> Result<(), CommandSyntaxError> {
+    let range_size = i64::from(max) - i64::from(min) + 1;
+    if range_size < 2 {
+        return Err(
+            error_types::DISPATCHER_PARSE_EXCEPTION.create_without_context(
+                TextComponent::translate(translation::COMMANDS_RANDOM_ERROR_RANGE_TOO_SMALL, []),
+            ),
+        );
     }
+    if range_size > 2_147_483_646 {
+        return Err(
+            error_types::DISPATCHER_PARSE_EXCEPTION.create_without_context(
+                TextComponent::translate(translation::COMMANDS_RANDOM_ERROR_RANGE_TOO_LARGE, []),
+            ),
+        );
+    }
+
+    Ok(())
 }
 
 fn parse_range_arg(context: &CommandContext) -> Result<InclusiveRange, CommandSyntaxError> {
-    let &(min, max) = context.get_argument::<(i32, i32)>(ARG_RANGE)?;
+    let bounds = context.get_argument::<IntBounds>(ARG_RANGE)?;
+    let min = bounds.min().unwrap_or(i32::MIN);
+    let max = bounds.max().unwrap_or(i32::MAX);
+    validate_random_range(min, max)?;
+
     Ok(InclusiveRange { min, max })
 }
 
@@ -486,31 +395,42 @@ fn parse_sequence_arg<'a>(context: &'a CommandContext) -> Result<&'a str, Comman
 
 fn parse_reset_parameters(
     context: &CommandContext,
+    mode: ResetMode,
 ) -> Result<Option<SequenceParameters>, CommandSyntaxError> {
-    let Some(seed) = get_optional_argument::<i64>(context, ARG_SEED)? else {
-        return Ok(None);
-    };
-
-    let include_world_seed =
-        *get_optional_argument::<bool>(context, ARG_INCLUDE_WORLD_SEED)?.unwrap_or(&true);
-    let include_sequence_id =
-        *get_optional_argument::<bool>(context, ARG_INCLUDE_SEQUENCE_ID)?.unwrap_or(&true);
-
-    Ok(Some(SequenceParameters {
-        seed: *seed,
-        include_world_seed,
-        include_sequence_id,
-    }))
+    match mode {
+        ResetMode::Defaults => Ok(None),
+        ResetMode::SeedOnly => {
+            let seed = *context.get_argument::<i64>(ARG_SEED)?;
+            Ok(Some(SequenceParameters {
+                seed,
+                include_world_seed: true,
+                include_sequence_id: true,
+            }))
+        }
+        ResetMode::SeedAndWorldSeed => {
+            let seed = *context.get_argument::<i64>(ARG_SEED)?;
+            let include_world_seed = *context.get_argument::<bool>(ARG_INCLUDE_WORLD_SEED)?;
+            Ok(Some(SequenceParameters {
+                seed,
+                include_world_seed,
+                include_sequence_id: true,
+            }))
+        }
+        ResetMode::Full => {
+            let seed = *context.get_argument::<i64>(ARG_SEED)?;
+            let include_world_seed = *context.get_argument::<bool>(ARG_INCLUDE_WORLD_SEED)?;
+            let include_sequence_id = *context.get_argument::<bool>(ARG_INCLUDE_SEQUENCE_ID)?;
+            Ok(Some(SequenceParameters {
+                seed,
+                include_world_seed,
+                include_sequence_id,
+            }))
+        }
+    }
 }
 
 const fn seed_argument_type() -> LongArgumentType {
     LongArgumentType::any()
-}
-
-fn level_two_requirement(
-    source: &CommandSource,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send + '_>> {
-    Box::pin(async move { source.output.has_permission_lvl(PermissionLvl::Two) })
 }
 
 impl CommandExecutor for DrawExecutor {
@@ -571,7 +491,7 @@ impl CommandExecutor for DrawExecutor {
 impl CommandExecutor for ResetExecutor {
     fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
-            let parameter_override = parse_reset_parameters(context)?;
+            let parameter_override = parse_reset_parameters(context, self.mode)?;
 
             match self.target {
                 ResetTarget::All => {
@@ -605,11 +525,22 @@ impl CommandExecutor for ResetExecutor {
     }
 }
 
+#[expect(clippy::too_many_lines)]
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,
         PermissionDefault::Allow,
+    ));
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION_SEQUENCE,
+        "Uses named random sequences in the /random command.",
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION_RESET,
+        "Resets and updates random sequence state.",
+        PermissionDefault::Op(PermissionLvl::Two),
     ));
 
     dispatcher.register(
@@ -617,14 +548,14 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
             .requires(PERMISSION)
             .then(
                 literal("value").then(
-                    argument(ARG_RANGE, RangeArgumentType)
+                    argument(ARG_RANGE, IntRangeArgumentType)
                         .executes(DrawExecutor {
                             mode: DrawMode::Value,
                             uses_sequence: false,
                         })
                         .then(
-                            argument(ARG_SEQUENCE, StringArgumentType::SingleWord)
-                                .requires(level_two_requirement)
+                            argument(ARG_SEQUENCE, ResourceLocationArgumentType)
+                                .requires(PERMISSION_SEQUENCE)
                                 .executes(DrawExecutor {
                                     mode: DrawMode::Value,
                                     uses_sequence: true,
@@ -634,14 +565,14 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
             )
             .then(
                 literal("roll").then(
-                    argument(ARG_RANGE, RangeArgumentType)
+                    argument(ARG_RANGE, IntRangeArgumentType)
                         .executes(DrawExecutor {
                             mode: DrawMode::Roll,
                             uses_sequence: false,
                         })
                         .then(
-                            argument(ARG_SEQUENCE, StringArgumentType::SingleWord)
-                                .requires(level_two_requirement)
+                            argument(ARG_SEQUENCE, ResourceLocationArgumentType)
+                                .requires(PERMISSION_SEQUENCE)
                                 .executes(DrawExecutor {
                                     mode: DrawMode::Roll,
                                     uses_sequence: true,
@@ -651,50 +582,58 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
             )
             .then(
                 literal("reset")
-                    .requires(level_two_requirement)
+                    .requires(PERMISSION_RESET)
                     .then(
                         literal("*")
                             .executes(ResetExecutor {
                                 target: ResetTarget::All,
+                                mode: ResetMode::Defaults,
                             })
                             .then(
                                 argument(ARG_SEED, seed_argument_type())
                                     .executes(ResetExecutor {
                                         target: ResetTarget::All,
+                                        mode: ResetMode::SeedOnly,
                                     })
                                     .then(
                                         argument(ARG_INCLUDE_WORLD_SEED, BoolArgumentType)
                                             .executes(ResetExecutor {
                                                 target: ResetTarget::All,
+                                                mode: ResetMode::SeedAndWorldSeed,
                                             })
                                             .then(
                                                 argument(ARG_INCLUDE_SEQUENCE_ID, BoolArgumentType)
                                                     .executes(ResetExecutor {
                                                         target: ResetTarget::All,
+                                                        mode: ResetMode::Full,
                                                     }),
                                             ),
                                     ),
                             ),
                     )
                     .then(
-                        argument(ARG_SEQUENCE, StringArgumentType::SingleWord)
+                        argument(ARG_SEQUENCE, ResourceLocationArgumentType)
                             .executes(ResetExecutor {
                                 target: ResetTarget::Sequence,
+                                mode: ResetMode::Defaults,
                             })
                             .then(
                                 argument(ARG_SEED, seed_argument_type())
                                     .executes(ResetExecutor {
                                         target: ResetTarget::Sequence,
+                                        mode: ResetMode::SeedOnly,
                                     })
                                     .then(
                                         argument(ARG_INCLUDE_WORLD_SEED, BoolArgumentType)
                                             .executes(ResetExecutor {
                                                 target: ResetTarget::Sequence,
+                                                mode: ResetMode::SeedAndWorldSeed,
                                             })
                                             .then(
                                                 argument(ARG_INCLUDE_SEQUENCE_ID, BoolArgumentType)
                                                     .executes(ResetExecutor {
                                                         target: ResetTarget::Sequence,
+                                                        mode: ResetMode::Full,
                                                     }),
                                             ),
                                     ),
@@ -706,56 +645,8 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
 
 #[cfg(test)]
 mod test {
-    use super::{
-        CommandError, InclusiveRange, SequenceParameters, derive_sequence_seed,
-        validate_sequence_name,
-    };
+    use super::{SequenceParameters, derive_sequence_seed, validate_sequence_name};
     use crate::command::{errors::error_types, tree::RawArg};
-
-    #[test]
-    fn parse_valid_closed_range() {
-        let range = InclusiveRange::parse("1..10").expect("range should parse");
-        assert_eq!(range.min, 1);
-        assert_eq!(range.max, 10);
-    }
-
-    #[test]
-    fn parse_valid_open_lower_bound_range() {
-        let range = InclusiveRange::parse("..-2147483647").expect("range should parse");
-        assert_eq!(range.min, i32::MIN);
-        assert_eq!(range.max, -2_147_483_647);
-    }
-
-    #[test]
-    fn parse_valid_open_upper_bound_range() {
-        let range = InclusiveRange::parse("2147483646..").expect("range should parse");
-        assert_eq!(range.min, 2_147_483_646);
-        assert_eq!(range.max, i32::MAX);
-    }
-
-    #[test]
-    fn reject_single_value_range() {
-        assert!(matches!(
-            InclusiveRange::parse("5"),
-            Err(CommandError::CommandFailed(_))
-        ));
-    }
-
-    #[test]
-    fn reject_reversed_range() {
-        assert!(matches!(
-            InclusiveRange::parse("10..1"),
-            Err(CommandError::CommandFailed(_))
-        ));
-    }
-
-    #[test]
-    fn reject_too_large_range_size() {
-        assert!(matches!(
-            InclusiveRange::parse("-2147483648..2147483647"),
-            Err(CommandError::CommandFailed(_))
-        ));
-    }
 
     #[test]
     fn derived_seed_depends_on_sequence_id_when_enabled() {
