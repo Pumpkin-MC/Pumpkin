@@ -17,11 +17,20 @@ const RECIPE_DISPLAY_SHAPELESS: i32 = 0;
 const RECIPE_DISPLAY_SHAPED: i32 = 1;
 const RECIPE_DISPLAY_FURNACE: i32 = 2;
 
-// Slot Display type IDs
+// Slot Display type IDs (stable across all supported versions)
 const SLOT_DISPLAY_EMPTY: i32 = 0;
 const SLOT_DISPLAY_ANY_FUEL: i32 = 1;
-const SLOT_DISPLAY_ITEM: i32 = 4;
-const SLOT_DISPLAY_COMPOSITE: i32 = 10;
+
+// Slot Display type IDs that changed in 26.1:
+//   1.21.5–1.21.11: minecraft:item=2, minecraft:composite=7
+//   26.1+:          minecraft:item=4, minecraft:composite=10
+// Source: https://minecraft.wiki/w/Java_Edition_protocol/Recipes
+const fn slot_display_item(version: MinecraftVersion) -> i32 {
+    if version.protocol_version() < 775 { 2 } else { 4 }
+}
+const fn slot_display_composite(version: MinecraftVersion) -> i32 {
+    if version.protocol_version() < 775 { 7 } else { 10 }
+}
 
 // RecipeBookCategory IDs
 const CATEGORY_CRAFTING_BUILDING: i32 = 0;
@@ -59,7 +68,7 @@ fn write_item_slot_display(
     item: &Item,
     version: MinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM))?;
+    write.write_var_int(&VarInt(slot_display_item(version)))?;
     write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
     Ok(())
 }
@@ -107,7 +116,7 @@ fn write_ingredient_slot_display(
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
-                write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE))?;
+                write.write_var_int(&VarInt(slot_display_composite(version)))?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
                     write_item_slot_display(write, item, version)?;
