@@ -1,11 +1,13 @@
 use crate::block::blocks::plant::PlantBlockBase;
-use crate::block::blocks::plant::big_dripleaf_stem::handle_big_dripleaf_breaking;
+use crate::block::blocks::plant::big_dripleaf_stem::{
+    BigDripleafStemLikeProperties, handle_big_dripleaf_breaking,
+};
 use crate::block::{
     BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     OnPlaceArgs, PlacedArgs,
 };
 use pumpkin_data::block_properties::{
-    BigDripleafLikeProperties, BlockProperties, HorizontalFacing, LadderLikeProperties,
+    BigDripleafLikeProperties, BlockProperties, HorizontalFacing,
 };
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
@@ -74,7 +76,7 @@ impl BlockBehaviour for BigDripleafBlock {
                     &Block::BIG_DRIPLEAF,
                 );
                 let mut dripleaf_stem_props =
-                    LadderLikeProperties::default(&Block::BIG_DRIPLEAF_STEM);
+                    BigDripleafStemLikeProperties::default(&Block::BIG_DRIPLEAF_STEM);
 
                 dripleaf_stem_props.facing = old_dripleaf_props.facing;
                 dripleaf_stem_props.waterlogged = old_dripleaf_props.waterlogged;

@@ -18,6 +18,8 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 #[pumpkin_block("minecraft:big_dripleaf_stem")]
 pub struct BigDripleafStemBlock;
 
+pub type BigDripleafStemLikeProperties = LadderLikeProperties;
+
 impl BlockBehaviour for BigDripleafStemBlock {
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
@@ -58,7 +60,8 @@ impl PlantBlockBase for BigDripleafStemBlock {
         if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
             let block = block_accessor.get_block(block_pos).await;
 
-            let dripleaf_stem_props = LadderLikeProperties::from_state_id(block_state, block);
+            let dripleaf_stem_props =
+                BigDripleafStemLikeProperties::from_state_id(block_state, block);
             if dripleaf_stem_props.waterlogged {
                 return Block::WATER.default_state.id;
             }
@@ -72,7 +75,7 @@ pub async fn handle_big_dripleaf_breaking(world: &Arc<World>, position: &BlockPo
     let (support_block, support_state_id) = world.get_block_and_state_id(&support_pos).await;
     if support_block == &Block::BIG_DRIPLEAF_STEM {
         let dripleaf_stem_props =
-            LadderLikeProperties::from_state_id(support_state_id, support_block);
+            BigDripleafStemLikeProperties::from_state_id(support_state_id, support_block);
 
         let mut dripleaf_props = BigDripleafLikeProperties::default(&Block::BIG_DRIPLEAF);
         dripleaf_props.facing = dripleaf_stem_props.facing;
