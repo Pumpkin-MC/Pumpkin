@@ -1,25 +1,83 @@
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::blocks::plant::big_dripleaf_stem::{
     BigDripleafStemLikeProperties, handle_big_dripleaf_breaking,
 };
+use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{
     BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnPlaceArgs, PlacedArgs,
+    OnEntityCollisionArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
+use crate::entity::EntityBase;
+use crate::entity::ai::pathfinder::node::Coordinate;
+use crate::world::World;
 use pumpkin_data::block_properties::{
-    BigDripleafLikeProperties, BlockProperties, HorizontalFacing,
+    BigDripleafLikeProperties, BlockProperties, HorizontalFacing, Tilt,
 };
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockState, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
+use rand::RngExt;
 
 #[pumpkin_block("minecraft:big_dripleaf")]
 pub struct BigDripleafBlock;
 
 impl BlockBehaviour for BigDripleafBlock {
+    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let props = BigDripleafLikeProperties::from_state_id(args.state.id, args.block);
+            if props.tilt == Tilt::None && can_entity_tilt(args.position, args.entity) {
+                set_tilt_and_schedule_tick(
+                    args.state,
+                    args.world,
+                    args.position,
+                    Tilt::Unstable,
+                    None,
+                )
+                .await;
+            }
+        })
+    }
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let state = args.world.get_block_state(args.position).await;
+            if block_receives_redstone_power(args.world, args.position).await {
+                reset_tilt(state, args.world, args.position).await;
+            } else {
+                let props =
+                    BigDripleafLikeProperties::from_state_id(state.id, &Block::BIG_DRIPLEAF);
+
+                if props.tilt == Tilt::Unstable {
+                    set_tilt_and_schedule_tick(
+                        state,
+                        args.world,
+                        args.position,
+                        Tilt::Partial,
+                        Some(Sound::BlockBigDripleafTiltDown),
+                    )
+                    .await;
+                } else if props.tilt == Tilt::Partial {
+                    set_tilt_and_schedule_tick(
+                        state,
+                        args.world,
+                        args.position,
+                        Tilt::Full,
+                        Some(Sound::BlockBigDripleafTiltDown),
+                    )
+                    .await;
+                } else if props.tilt == Tilt::Full {
+                    reset_tilt(state, args.world, args.position).await;
+                }
+            }
+        })
+    }
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
             <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
@@ -95,6 +153,64 @@ impl BlockBehaviour for BigDripleafBlock {
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move { handle_big_dripleaf_breaking(args.world, args.position).await })
     }
+}
+async fn set_tilt_and_schedule_tick(
+    state: &BlockState,
+    world: &Arc<World>,
+    pos: &BlockPos,
+    tilt: Tilt,
+    sound_wrapper: Option<Sound>,
+) {
+    set_tilt(state, world, pos, tilt).await;
+    if let Some(tilt_sound) = sound_wrapper {
+        play_tilt_sound(world, pos, tilt_sound).await;
+    }
+    let tick_delay = match tilt {
+        Tilt::None => -1,
+        Tilt::Unstable | Tilt::Partial => 10,
+        Tilt::Full => 100,
+    };
+    if tick_delay != -1 {
+        world
+            .schedule_block_tick(
+                &Block::BIG_DRIPLEAF,
+                *pos,
+                tick_delay as u8,
+                pumpkin_world::tick::TickPriority::Normal,
+            )
+            .await;
+    }
+}
+async fn play_tilt_sound(world: &Arc<World>, pos: &BlockPos, tilt_sound: Sound) {
+    let pitch = rand::rng().random_range(0.8f32..1.2f32);
+    let v = pos.as_vector3();
+    let position = Vector3::new(v.x as f64, v.y as f64, v.z as f64);
+    world
+        .play_sound_fine(tilt_sound, SoundCategory::Blocks, &position, 1f32, pitch)
+        .await;
+}
+async fn reset_tilt(state: &BlockState, world: &Arc<World>, pos: &BlockPos) {
+    set_tilt(state, world, pos, Tilt::None).await;
+    let props = BigDripleafLikeProperties::from_state_id(state.id, &Block::BIG_DRIPLEAF);
+    if props.tilt != Tilt::None {
+        play_tilt_sound(world, pos, Sound::BlockBigDripleafTiltUp).await;
+    }
+}
+async fn set_tilt(state: &BlockState, world: &Arc<World>, pos: &BlockPos, new_tilt: Tilt) {
+    let mut props = BigDripleafLikeProperties::from_state_id(state.id, &Block::BIG_DRIPLEAF);
+    props.tilt = new_tilt;
+    world
+        .set_block_state(
+            pos,
+            props.to_state_id(&Block::BIG_DRIPLEAF),
+            BlockFlags::NOTIFY_ALL,
+        )
+        .await;
+    //todo gamevents?
+}
+fn can_entity_tilt<T: EntityBase + ?Sized>(pos: &BlockPos, entity: &T) -> bool {
+    entity.get_entity().on_ground.load(Ordering::Relaxed)
+        && entity.get_entity().pos.load().y > pos.as_vector3().y as f64 + 0.6875f64
 }
 fn get_dripleaf_facing_dir(state_id: BlockStateId) -> HorizontalFacing {
     let dripleaf_props = BigDripleafLikeProperties::from_state_id(state_id, &Block::BIG_DRIPLEAF);
