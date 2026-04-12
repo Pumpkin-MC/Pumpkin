@@ -494,10 +494,10 @@ impl CommandDispatcher {
         for child in children {
             let mut builder = SuggestionsBuilder::new(truncated_input, start);
 
-            let future: Pin<Box<dyn Future<Output = Suggestions> + Send>> =
+            let future: Option<Pin<Box<dyn Future<Output = Suggestions> + Send>>> =
                 match self.tree.classify_id(child) {
-                    NodeIdClassification::Root => Box::pin(async { Suggestions::empty() }),
-                    NodeIdClassification::Literal(literal_node_id) => Box::pin(async move {
+                    NodeIdClassification::Root => Some(Box::pin(async { Suggestions::empty() })),
+                    NodeIdClassification::Literal(literal_node_id) => Some(Box::pin(async move {
                         let node = &self.tree[literal_node_id];
                         if node
                             .meta
@@ -508,8 +508,8 @@ impl CommandDispatcher {
                         } else {
                             Suggestions::empty()
                         }
-                    }),
-                    NodeIdClassification::Command(command_node_id) => Box::pin(async move {
+                    })),
+                    NodeIdClassification::Command(command_node_id) => Some(Box::pin(async move {
                         let node = &self.tree[command_node_id];
                         if node
                             .meta
@@ -520,20 +520,27 @@ impl CommandDispatcher {
                         } else {
                             Suggestions::empty()
                         }
-                    }),
+                    })),
                     NodeIdClassification::Argument(argument_node_id) => {
                         let node = &self.tree[argument_node_id];
                         if let Some(provider) = &node.meta.suggestion_provider {
-                            provider.suggest(&context, builder)
+                            // For custom suggestions sent by the server, we simply
+                            // wait instead of adding the future to join.
+                            provider.suggest(&context, builder).await;
+                            None
                         } else {
-                            node.meta
-                                .argument_type
-                                .list_suggestions(&context, &mut builder)
+                            Some(
+                                node.meta
+                                    .argument_type
+                                    .list_suggestions(&context, &mut builder),
+                            )
                         }
                     }
                 };
 
-            futures.push(future);
+            if let Some(future) = future {
+                futures.push(future);
+            }
         }
 
         let suggestions = future::join_all(futures).await;
