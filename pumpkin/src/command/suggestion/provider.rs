@@ -2,6 +2,8 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use std::pin::Pin;
 
+pub type SuggestionProviderResult<'a> = Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>>;
+
 /// A trait allowing an object to provide suggestions using a
 /// [`CommandContext`] and [`SuggestionsBuilder`].
 pub trait SuggestionProvider: Send + Sync {
@@ -13,9 +15,9 @@ pub trait SuggestionProvider: Send + Sync {
     ///
     /// # Returns
     /// The [`Suggestions`] representing the suggested items.
-    fn suggest(
-        &self,
-        context: &CommandContext,
+    fn suggest<'a>(
+        &'a self,
+        context: &'a CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>>;
+    ) -> SuggestionProviderResult<'a>;
 }
