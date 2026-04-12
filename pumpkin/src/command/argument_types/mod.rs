@@ -190,5 +190,6 @@ pub mod coordinates;
 pub mod core;
 pub mod entity;
 pub mod entity_selector;
+pub mod game_profile;
 pub mod range;
 pub mod time;

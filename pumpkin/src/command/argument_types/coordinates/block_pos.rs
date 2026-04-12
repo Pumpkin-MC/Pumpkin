@@ -40,7 +40,7 @@ impl ArgumentType for BlockPosArgumentType {
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
-        JavaClientArgumentType::Vec3
+        JavaClientArgumentType::BlockPos
     }
 
     fn examples(&self) -> Vec<String> {
