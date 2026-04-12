@@ -2078,6 +2078,7 @@ impl World {
 
         if let crate::net::ClientPlatform::Java(java_client) = &player.client
             && server.advanced_config.recipe.send_recipes
+            && java_client.version.load() >= pumpkin_util::version::MinecraftVersion::V_26_1
         {
             java_client
                 .send_packet_now(&CRecipeBookSettings::default_closed())
