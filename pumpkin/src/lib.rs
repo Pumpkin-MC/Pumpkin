@@ -22,7 +22,7 @@ use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
@@ -172,6 +172,8 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
 
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
 pub static STOP_INTERRUPT: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
+pub static TICKER_THREAD: LazyLock<StdMutex<Option<std::thread::Thread>>> =
+    LazyLock::new(|| StdMutex::new(None));
 pub static SERVER_IS_STOPPING: AtomicBool = AtomicBool::new(false);
 pub static CRASH_REPORT: OnceLock<CrashReport> = OnceLock::new();
 pub static SERVER_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
@@ -179,6 +181,10 @@ pub static SERVER_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 pub fn stop_server() {
     SHOULD_STOP.store(true, Ordering::Relaxed);
     STOP_INTERRUPT.cancel();
+
+    if let Some(ticker_thread) = TICKER_THREAD.lock().unwrap().as_ref() {
+        ticker_thread.unpark();
+    }
 }
 
 pub fn stop_or_exit_server() {
@@ -201,10 +207,49 @@ fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     )
 }
 
+struct TickerThread {
+    join_handle: StdMutex<Option<std::thread::JoinHandle<()>>>,
+}
+
+impl TickerThread {
+    fn spawn(server: Arc<Server>) -> Self {
+        let handle = tokio::runtime::Handle::current();
+        let join_handle = std::thread::Builder::new()
+            .name("tick-loop".to_string())
+            .spawn(move || {
+                Ticker::run(&server, &handle);
+            })
+            .expect("Failed to spawn tick loop thread");
+
+        *TICKER_THREAD.lock().unwrap() = Some(join_handle.thread().clone());
+
+        Self {
+            join_handle: StdMutex::new(Some(join_handle)),
+        }
+    }
+
+    async fn join(&self) {
+        let Some(join_handle) = self.join_handle.lock().unwrap().take() else {
+            return;
+        };
+
+        let result = tokio::task::spawn_blocking(move || join_handle.join())
+            .await
+            .expect("Tick loop join task panicked");
+
+        if result.is_err() {
+            error!("Tick loop thread panicked during shutdown");
+        }
+
+        *TICKER_THREAD.lock().unwrap() = None;
+    }
+}
+
 pub struct PumpkinServer {
     pub server: Arc<Server>,
     pub tcp_listener: Option<TcpListener>,
     pub udp_socket: Option<Arc<UdpSocket>>,
+    ticker_thread: TickerThread,
 }
 
 impl PumpkinServer {
@@ -299,14 +344,6 @@ impl PumpkinServer {
             None
         };
 
-        // Ticker
-        {
-            let ticker_server = server.clone();
-            server.spawn_task(async move {
-                Ticker::run(&ticker_server).await;
-            });
-        };
-
         let udp_socket = if server.basic_config.bedrock_edition {
             Some(Arc::new(
                 UdpSocket::bind(server.basic_config.bedrock_edition_address)
@@ -317,10 +354,13 @@ impl PumpkinServer {
             None
         };
 
+        let ticker_thread = TickerThread::spawn(server.clone());
+
         Self {
             server,
             tcp_listener,
             udp_socket,
+            ticker_thread,
         }
     }
 
@@ -398,6 +438,8 @@ impl PumpkinServer {
 
         tasks.close();
         tasks.wait().await;
+
+        self.ticker_thread.join().await;
 
         self.unload_plugins().await;
 
