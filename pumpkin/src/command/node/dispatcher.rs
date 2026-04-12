@@ -490,6 +490,7 @@ impl CommandDispatcher {
         let mut futures = Vec::with_capacity(capacity);
 
         let context = context.build(truncated_input);
+        let mut provided_suggestions = Vec::new();
 
         for child in children {
             let mut builder = SuggestionsBuilder::new(truncated_input, start);
@@ -526,7 +527,7 @@ impl CommandDispatcher {
                         if let Some(provider) = &node.meta.suggestion_provider {
                             // For custom suggestions sent by the server, we simply
                             // wait instead of adding the future to join.
-                            provider.suggest(&context, builder).await;
+                            provided_suggestions.push(provider.suggest(&context, builder).await);
                             None
                         } else {
                             Some(
@@ -543,7 +544,8 @@ impl CommandDispatcher {
             }
         }
 
-        let suggestions = future::join_all(futures).await;
+        let mut suggestions = future::join_all(futures).await;
+        suggestions.append(&mut provided_suggestions);
         Suggestions::merge(full_input, suggestions)
     }
 
