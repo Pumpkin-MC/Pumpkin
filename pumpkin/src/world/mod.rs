@@ -2986,6 +2986,11 @@ impl World {
             .await;
         entity.init_data_tracker().await;
 
+        self.add_entity_silent(entity).await;
+    }
+
+    pub async fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
+        let base_entity = entity.get_entity();
         let chunk_coordinate = base_entity.block_pos.load().chunk_position();
         let chunk = self.level.get_entity_chunk(chunk_coordinate).await;
         {

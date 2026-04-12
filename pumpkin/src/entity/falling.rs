@@ -124,4 +124,8 @@ impl EntityBase for FallingEntity {
     fn get_gravity(&self) -> f64 {
         0.04
     }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

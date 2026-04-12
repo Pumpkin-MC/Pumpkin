@@ -110,12 +110,12 @@ serde_json = "1.0"
 
 tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = "2"
-aes = "0.8"
+aes = "0.9"
 async-compression = "0.4.41"
 base64 = "0.22.1"
 bitflags = "2.11.0"
 cesu8 = "1.1"
-cfb8 = "0.8"
+cfb8 = "0.9"
 colored = "3.1"
 console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.10.0"
@@ -155,6 +155,7 @@ pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
 rand = "0.10.0"
 rsa = "=0.10.0-rc.17"
+cipher = "0.5.1"
 rustc-hash = "2.1.2"
 rustyline = "18.0.0"
 ruzstd = "0.8.2"

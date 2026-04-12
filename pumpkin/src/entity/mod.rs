@@ -108,7 +108,7 @@ pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
-pub trait EntityBase: Send + Sync + NBTStorage {
+pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// Called every tick for this entity.
     ///
     /// The `caller` parameter is a reference to the entity that initiated the tick.
@@ -128,6 +128,13 @@ pub trait EntityBase: Send + Sync + NBTStorage {
                 self.get_entity().tick(caller, server).await;
             }
         })
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any
+    where
+        Self: Sized,
+    {
+        self
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -279,7 +286,10 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     fn get_entity(&self) -> &Entity;
+
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+
+    fn cast_any(&self) -> &dyn std::any::Any;
 
     fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
         None
@@ -498,7 +508,27 @@ impl Entity {
         Self::from_uuid(Uuid::new_v4(), world, position, entity_type)
     }
 
+    pub fn reserve_ids(count: i32) -> i32 {
+        CURRENT_ID.fetch_add(count, Relaxed)
+    }
+
     pub fn from_uuid(
+        entity_uuid: uuid::Uuid,
+        world: Arc<World>,
+        position: Vector3<f64>,
+        entity_type: &'static EntityType,
+    ) -> Self {
+        Self::from_uuid_with_id(
+            CURRENT_ID.fetch_add(1, Relaxed),
+            entity_uuid,
+            world,
+            position,
+            entity_type,
+        )
+    }
+
+    pub fn from_uuid_with_id(
+        entity_id: i32,
         entity_uuid: uuid::Uuid,
         world: Arc<World>,
         position: Vector3<f64>,
@@ -515,7 +545,7 @@ impl Entity {
         };
 
         Self {
-            entity_id: CURRENT_ID.fetch_add(1, Relaxed),
+            entity_id,
             entity_uuid,
             entity_type,
             on_ground: AtomicBool::new(false),
@@ -2793,6 +2823,10 @@ impl EntityBase for Entity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
