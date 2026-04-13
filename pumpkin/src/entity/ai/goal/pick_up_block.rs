@@ -56,7 +56,7 @@ impl Goal for PickUpBlockGoal {
             let world = entity.world.load();
             let target_pos = BlockPos::new(bx, by, bz);
 
-            let (block, _state_id) = world.get_block_and_state_id(&target_pos).await;
+            let block = world.get_block(&target_pos).await;
 
             if !block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_HOLDABLE) {
                 return;

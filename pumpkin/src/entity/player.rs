@@ -3184,7 +3184,7 @@ impl Player {
             entity_pos.z.floor() as i32,
         );
 
-        let (_, state) = world.get_block_and_state(&fallback_pos).await;
+        let state = world.get_block_state(&fallback_pos).await;
         (!state.is_air()).then_some(fallback_pos)
     }
 

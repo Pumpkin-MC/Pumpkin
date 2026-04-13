@@ -60,10 +60,8 @@ impl BlockBehaviour for LadderBlock {
 }
 
 async fn can_place_at(world: &World, position: &BlockPos) -> bool {
-    let props = LadderLikeProperties::from_state_id(
-        world.get_block_state_id(position).await,
-        world.get_block(position).await,
-    );
+    let (block, state_id) = world.get_block_and_state_id(position).await;
+    let props = LadderLikeProperties::from_state_id(state_id, block);
     let pos;
     let direction;
     match props.r#facing {
