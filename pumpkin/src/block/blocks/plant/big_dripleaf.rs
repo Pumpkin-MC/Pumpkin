@@ -8,7 +8,7 @@ use crate::block::blocks::plant::big_dripleaf_stem::{
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{
     BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    OnEntityCollisionArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+    OnEntityStepArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::node::Coordinate;
@@ -30,7 +30,7 @@ use rand::RngExt;
 pub struct BigDripleafBlock;
 
 impl BlockBehaviour for BigDripleafBlock {
-    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
+    fn on_entity_step<'a>(&'a self, args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let props = BigDripleafLikeProperties::from_state_id(args.state.id, args.block);
             if props.tilt == Tilt::None && can_entity_tilt(args.position, args.entity) {
@@ -78,6 +78,7 @@ impl BlockBehaviour for BigDripleafBlock {
             }
         })
     }
+    //TODO: onProjectileHit
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
             <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
@@ -206,7 +207,7 @@ async fn set_tilt(state: &BlockState, world: &Arc<World>, pos: &BlockPos, new_ti
             BlockFlags::NOTIFY_ALL,
         )
         .await;
-    //todo gamevents?
+    //todo GameEvents?
 }
 fn can_entity_tilt<T: EntityBase + ?Sized>(pos: &BlockPos, entity: &T) -> bool {
     entity.get_entity().on_ground.load(Ordering::Relaxed)
