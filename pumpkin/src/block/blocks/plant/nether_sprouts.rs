@@ -1,6 +1,6 @@
-use crate::block::blocks::plant::fungus::supports_fungus;
 use crate::block::{BlockBehaviour, BlockFuture, CanPlaceAtArgs};
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::BlockStateId;
 #[pumpkin_block("minecraft:nether_sprouts")]
@@ -34,7 +34,6 @@ impl PlantBlockBase for NetherSproutsBlock {
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         let block = block_accessor.get_block(pos).await;
-        // Nether Sprouts share the same soil requirements as Fungi
-        supports_fungus(block)
+        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_NETHER_SPROUTS)
     }
 }
