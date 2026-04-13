@@ -198,11 +198,9 @@ impl BlockBehaviour for PistonBlock {
 
             let extended_pos = pos.offset(dir.to_offset());
 
-            if let Some(block_entity) = world.get_block_entity(&extended_pos).await {
-                let piston = block_entity
-                    .as_any()
-                    .downcast_ref::<PistonBlockEntity>()
-                    .unwrap();
+            if let Some(block_entity) = world.get_block_entity(&extended_pos).await
+                && let Some(piston) = block_entity.as_any().downcast_ref::<PistonBlockEntity>()
+            {
                 piston.finish(world.clone()).await;
             }
 
@@ -243,17 +241,18 @@ impl BlockBehaviour for PistonBlock {
             if sticky {
                 let pull_pos = pos.offset_dir(dir.to_offset(), 2);
                 let (block, state) = world.get_block_and_state(&pull_pos).await;
-                let mut bl2 = false;
-                if block == &Block::MOVING_PISTON
+                let piston_piece = if block == &Block::MOVING_PISTON
                     && let Some(entity) = world.get_block_entity(&pull_pos).await
+                    && let Some(piston) = entity.as_any().downcast_ref::<PistonBlockEntity>()
+                    && piston.facing == dir
+                    && piston.extending
                 {
-                    let piston = entity.as_any().downcast_ref::<PistonBlockEntity>().unwrap();
-                    if piston.facing == dir && piston.extending {
-                        piston.finish(world.clone()).await;
-                        bl2 = true;
-                    }
-                }
-                if !bl2 {
+                    piston.finish(world.clone()).await;
+                    true
+                } else {
+                    false
+                };
+                if !piston_piece {
                     if r#type == 1
                         && !state.is_air()
                         && Self::is_movable(block, state, dir, false, dir)

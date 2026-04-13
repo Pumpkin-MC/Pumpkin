@@ -153,7 +153,7 @@ pumpkin-protocol = { path = "pumpkin-protocol" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
-rand = "0.10.0"
+rand = "0.10.1"
 rsa = "=0.10.0-rc.17"
 cipher = "0.5.1"
 rustc-hash = "2.1.2"

@@ -411,7 +411,7 @@ impl DragonFight {
                 (p.x - cx).abs() < 2.0 && (p.z - cz).abs() < 2.0
             });
             if let Some(e) = found {
-                ritual_uuids.push(e.get_entity().entity_uuid)
+                ritual_uuids.push(e.get_entity().entity_uuid);
             } else {
                 debug!("Respawn attempt failed – missing crystal near {:?}.", check);
                 return;
