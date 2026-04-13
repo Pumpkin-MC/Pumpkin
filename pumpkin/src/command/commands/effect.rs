@@ -68,7 +68,7 @@ impl CommandExecutor for GiveExecutor {
 
             let amplifier: u8 = match self.1 {
                 Amplifier::Base => 0,
-                Amplifier::Specified => BoundedNumArgumentConsumer::new()
+                Amplifier::Specified => BoundedNumArgumentConsumer::<i32>::new()
                     .name("amplifier")
                     .min(0)
                     .max(255)

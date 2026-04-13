@@ -391,6 +391,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         })
     }
 
+    fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
+        true
+    }
+
+    fn can_hit(&self) -> bool {
+        true
+    }
+
     fn damage_with_context<'a>(
         &'a self,
         caller: &'a dyn EntityBase,
@@ -431,6 +439,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         Some(&self.get_mob_entity().living_entity)
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     fn is_in_love(&self) -> bool {

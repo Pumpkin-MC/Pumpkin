@@ -15,7 +15,7 @@ use crate::{
     world::BlockRegistryExt,
 };
 use crossbeam::channel::Sender;
-use dashmap::DashMap;
+use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
@@ -215,7 +215,7 @@ impl Level {
         // TODO
         let total_cores = num_cpus::get().saturating_sub(2).max(1);
         let threads_per_dimension = (total_cores / 2).max(1);
-        let entity_threads = (threads_per_dimension / 2).max(1);
+        let entity_threads = 1;
 
         GenerationSchedule::create(
             2,
@@ -395,18 +395,12 @@ impl Level {
         let mut chunks_to_clean = Vec::new();
 
         for chunk in chunks {
-            let mut should_remove = false;
-
-            if let Some(mut count) = self.chunk_watchers.get_mut(chunk) {
-                *count = count.saturating_sub(1);
-                if *count == 0 {
-                    should_remove = true;
+            if let Entry::Occupied(mut entry) = self.chunk_watchers.entry(*chunk) {
+                *entry.get_mut() = entry.get().saturating_sub(1);
+                if *entry.get() == 0 {
+                    entry.remove();
+                    chunks_to_clean.push(*chunk);
                 }
-            }
-
-            if should_remove {
-                self.chunk_watchers.remove(chunk);
-                chunks_to_clean.push(*chunk);
             }
         }
 
@@ -461,7 +455,14 @@ impl Level {
             block_entities: Vec::new(),
         };
 
-        for chunk in self.loaded_chunks.iter() {
+        // Clone the Arcs quickly to release map shard locks!
+        let chunks_to_tick: Vec<SyncChunk> = self
+            .loaded_chunks
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        for chunk in chunks_to_tick {
             let chunk_x_base = chunk.x * 16;
             let chunk_z_base = chunk.z * 16;
             let section_count = chunk.section.count;

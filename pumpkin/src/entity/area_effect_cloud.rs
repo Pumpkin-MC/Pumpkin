@@ -418,4 +418,8 @@ impl EntityBase for AreaEffectCloudEntity {
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
     }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

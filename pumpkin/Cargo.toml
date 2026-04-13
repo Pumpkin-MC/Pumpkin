@@ -97,6 +97,8 @@ wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmparser = { workspace = true }
 
+ordered-float = "5.3.0"
+
 postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
 

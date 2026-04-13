@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{Block, entity::EntityType};
+use pumpkin_protocol::java::server::play::ActionType;
 use pumpkin_util::{
     GameMode, Hand,
     math::{position::BlockPos, vector3::Vector3},
@@ -96,6 +97,26 @@ pub(super) const fn from_wasm_hand(hand: pumpkin::plugin::common::Hand) -> Hand 
     match hand {
         pumpkin::plugin::common::Hand::Left => Hand::Left,
         pumpkin::plugin::common::Hand::Right => Hand::Right,
+    }
+}
+
+pub(super) const fn to_wasm_entity_interaction_action(
+    action: &ActionType,
+) -> pumpkin::plugin::event::EntityInteractionAction {
+    match action {
+        ActionType::Interact => pumpkin::plugin::event::EntityInteractionAction::Interact,
+        ActionType::Attack => pumpkin::plugin::event::EntityInteractionAction::Attack,
+        ActionType::InteractAt => pumpkin::plugin::event::EntityInteractionAction::InteractAt,
+    }
+}
+
+pub(super) const fn from_wasm_entity_interaction_action(
+    action: pumpkin::plugin::event::EntityInteractionAction,
+) -> ActionType {
+    match action {
+        pumpkin::plugin::event::EntityInteractionAction::Interact => ActionType::Interact,
+        pumpkin::plugin::event::EntityInteractionAction::Attack => ActionType::Attack,
+        pumpkin::plugin::event::EntityInteractionAction::InteractAt => ActionType::InteractAt,
     }
 }
 

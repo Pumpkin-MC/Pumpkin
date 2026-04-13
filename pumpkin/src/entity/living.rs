@@ -2237,6 +2237,10 @@ impl EntityBase for LivingEntity {
         Some(self)
     }
 
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }

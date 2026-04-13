@@ -331,7 +331,6 @@ mod tests {
     use crate::{ClientPacket, ReadingError};
     use aes::Aes128;
     use cfb8::Decryptor as Cfb8Decryptor;
-    use cfb8::cipher::AsyncStreamCipher;
     use flate2::read::ZlibDecoder;
     use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
     use pumpkin_macros::java_packet;
@@ -368,7 +367,8 @@ mod tests {
 
     /// Helper function to decrypt data using AES-128 CFB-8 mode
     fn decrypt_aes128(encrypted_data: &mut [u8], key: &[u8; 16], iv: &[u8; 16]) {
-        let decryptor = Cfb8Decryptor::<Aes128>::new_from_slices(key, iv).expect("Invalid key/iv");
+        let mut decryptor =
+            Cfb8Decryptor::<Aes128>::new_from_slices(key, iv).expect("Invalid key/iv");
         decryptor.decrypt(encrypted_data);
     }
 

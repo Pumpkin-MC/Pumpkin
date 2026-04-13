@@ -723,22 +723,25 @@ impl Server {
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub async fn tick_players_and_network(&self) {
-        // First, flush pending block updates and synced block events to clients
-        for world in self.worlds.load().iter() {
+        let worlds = self.worlds.load();
+
+        for world in worlds.iter() {
             world.flush_block_updates().await;
             world.flush_synced_block_events().await;
         }
 
-        let players_to_tick: Vec<_> = self.get_all_players();
-        for player in players_to_tick {
-            player.tick(self).await;
+        for world in worlds.iter() {
+            let players = world.players.load();
+            for player in players.iter() {
+                player.tick(self).await;
+            }
         }
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
-        let mut set = JoinSet::new();
-
         self.task_scheduler.tick(self).await;
+
+        let mut set = JoinSet::new();
 
         for world in self.worlds.load().iter() {
             let world = world.clone();

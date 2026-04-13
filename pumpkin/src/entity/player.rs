@@ -3562,6 +3562,10 @@ impl EntityBase for Player {
         Box::pin(async move { name.insertion(self.gameprofile.name.clone()) })
     }
 
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }

@@ -141,6 +141,10 @@ impl EntityBase for SplashPotionEntity {
         self
     }
 
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let world = self.get_entity().world.load();
