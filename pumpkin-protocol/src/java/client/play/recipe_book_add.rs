@@ -1,7 +1,8 @@
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::remap_item_id_for_version;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::packet::clientbound::PLAY_RECIPE_BOOK_ADD;
 use pumpkin_data::recipes::{
     CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING, RecipeCategoryTypes,
@@ -10,7 +11,10 @@ use pumpkin_data::recipes::{
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::MinecraftVersion;
 
-use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
+use crate::{
+    ClientPacket, VarInt, WritingError, codec::item_stack_seralizer::ItemStackSerializer,
+    ser::NetworkWriteExt,
+};
 
 // Recipe Display type IDs
 const RECIPE_DISPLAY_SHAPELESS: i32 = 0;
@@ -22,10 +26,15 @@ const SLOT_DISPLAY_EMPTY: i32 = 0;
 const SLOT_DISPLAY_ANY_FUEL: i32 = 1;
 // 1.21.2 - 1.21.11
 const SLOT_DISPLAY_ITEM_LEGACY: i32 = 2;
+const SLOT_DISPLAY_ITEM_STACK_LEGACY: i32 = 3;
 const SLOT_DISPLAY_COMPOSITE_LEGACY: i32 = 7;
 // 26.1+
 const SLOT_DISPLAY_ITEM_26_1: i32 = 4;
+const SLOT_DISPLAY_ITEM_STACK_26_1: i32 = 5;
 const SLOT_DISPLAY_COMPOSITE_26_1: i32 = 10;
+
+const ENTRY_FLAG_NOTIFICATION: u8 = 0x01;
+const ENTRY_FLAG_HIGHLIGHT: u8 = 0x02;
 
 // RecipeBookCategory IDs
 const CATEGORY_CRAFTING_BUILDING: i32 = 0;
@@ -74,6 +83,14 @@ fn slot_display_composite_type(version: MinecraftVersion) -> i32 {
     }
 }
 
+fn slot_display_item_stack_type(version: MinecraftVersion) -> i32 {
+    if version >= MinecraftVersion::V_26_1 {
+        SLOT_DISPLAY_ITEM_STACK_26_1
+    } else {
+        SLOT_DISPLAY_ITEM_STACK_LEGACY
+    }
+}
+
 fn write_item_slot_display(
     write: &mut impl Write,
     item: &Item,
@@ -82,6 +99,18 @@ fn write_item_slot_display(
     write.write_var_int(&VarInt(slot_display_item_type(version)))?;
     write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
     Ok(())
+}
+
+fn write_item_stack_slot_display(
+    write: &mut impl Write,
+    item: &Item,
+    count: u8,
+    version: MinecraftVersion,
+) -> Result<(), WritingError> {
+    write.write_var_int(&VarInt(slot_display_item_stack_type(version)))?;
+    let static_item = Item::from_id(item.id).expect("item id must exist");
+    ItemStackSerializer::from(ItemStack::new(count, static_item))
+        .write_with_version(write, &version)
 }
 
 fn write_empty_slot_display(write: &mut impl Write) -> Result<(), WritingError> {
@@ -210,11 +239,42 @@ fn write_result_slot_display(
 ) -> Result<(), WritingError> {
     let key = result.id.strip_prefix("minecraft:").unwrap_or(result.id);
     if let Some(item) = Item::from_registry_key(key) {
-        write_item_slot_display(write, item, version)?;
+        write_item_stack_slot_display(write, item, result.count, version)?;
     } else {
         write_empty_slot_display(write)?;
     }
     Ok(())
+}
+
+fn write_optional_var_int(write: &mut impl Write, value: Option<i32>) -> Result<(), WritingError> {
+    let encoded = value.map_or(0, |v| v.checked_add(1).expect("group id overflow"));
+    write.write_var_int(&VarInt(encoded))?;
+    Ok(())
+}
+
+fn resolve_group_id(
+    group_ids: &mut HashMap<&'static str, i32>,
+    next_group_id: &mut i32,
+    group: Option<&'static str>,
+) -> Option<i32> {
+    let key = group?;
+    Some(*group_ids.entry(key).or_insert_with(|| {
+        let id = *next_group_id;
+        *next_group_id += 1;
+        id
+    }))
+}
+
+const fn entry_flags(replace: bool, notification: bool, highlight: bool) -> u8 {
+    if replace {
+        return 0;
+    }
+
+    (if notification {
+        ENTRY_FLAG_NOTIFICATION
+    } else {
+        0
+    }) | (if highlight { ENTRY_FLAG_HIGHLIGHT } else { 0 })
 }
 
 const fn crafting_category(cat: &RecipeCategoryTypes) -> i32 {
@@ -233,6 +293,8 @@ fn write_entry(
     write: &mut impl Write,
     display_id: i32,
     version: MinecraftVersion,
+    group_id: Option<i32>,
+    flags: u8,
     crafting_table: &Item,
     furnace: &Item,
     blast_furnace: &Item,
@@ -278,8 +340,8 @@ fn write_entry(
                 write_result_slot_display(write, result, version)?;
                 // craftingStation
                 write_item_slot_display(write, crafting_table, version)?;
-                // group: absent
-                write.write_bool(false)?;
+                // group: OptionalVarInt
+                write_optional_var_int(write, group_id)?;
                 // category
                 write.write_var_int(&VarInt(crafting_category(category)))?;
                 // craftingRequirements: one HolderSet per non-empty grid slot
@@ -297,8 +359,7 @@ fn write_entry(
                     }
                     write_crafting_requirements(write, &slots, version)?;
                 };
-                // flags: 0 (no notification, no highlight)
-                write.write_u8(0)?;
+                write.write_u8(flags)?;
             }
             CraftingRecipeTypes::CraftingShapeless {
                 category,
@@ -319,8 +380,8 @@ fn write_entry(
                 write_result_slot_display(write, result, version)?;
                 // craftingStation
                 write_item_slot_display(write, crafting_table, version)?;
-                // group: absent
-                write.write_bool(false)?;
+                // group: OptionalVarInt
+                write_optional_var_int(write, group_id)?;
                 // category
                 write.write_var_int(&VarInt(crafting_category(category)))?;
                 // craftingRequirements: one HolderSet per ingredient
@@ -329,8 +390,7 @@ fn write_entry(
                         ingredients.iter().map(Some).collect();
                     write_crafting_requirements(write, &slots, version)?;
                 };
-                // flags
-                write.write_u8(0)?;
+                write.write_u8(flags)?;
             }
             CraftingRecipeTypes::CraftingTransmute {
                 category,
@@ -348,11 +408,11 @@ fn write_entry(
                 write_ingredient_slot_display(write, material, version)?;
                 write_result_slot_display(write, result, version)?;
                 write_item_slot_display(write, crafting_table, version)?;
-                write.write_bool(false)?;
+                write_optional_var_int(write, group_id)?;
                 write.write_var_int(&VarInt(crafting_category(category)))?;
                 // craftingRequirements: input + material
                 write_crafting_requirements(write, &[Some(input), Some(material)], version)?;
-                write.write_u8(0)?;
+                write.write_u8(flags)?;
             }
             // Skip special/decorated_pot recipes as they have no useful display
             CraftingRecipeTypes::CraftingDecoratedPot { .. }
@@ -386,14 +446,13 @@ fn write_entry(
         write.write_var_int(&VarInt(cooking.cookingtime))?;
         // experience
         write.write_f32_be(cooking.experience)?;
-        // group: absent
-        write.write_bool(false)?;
+        // group: OptionalVarInt
+        write_optional_var_int(write, group_id)?;
         // category
         write.write_var_int(&VarInt(book_category))?;
         // craftingRequirements: the single ingredient
         write_crafting_requirements(write, &[Some(&cooking.ingredient)], version)?;
-        // flags
-        write.write_u8(0)?;
+        write.write_u8(flags)?;
         return Ok(true);
     }
 
@@ -434,13 +493,31 @@ impl ClientPacket for CRecipeBookAdd {
         write.write_var_int(&VarInt(total as i32))?;
 
         let mut display_id: i32 = 0;
+        let mut group_ids: HashMap<&'static str, i32> = HashMap::new();
+        let mut next_group_id: i32 = 0;
+        let highlight = !self.replace;
 
         // Write crafting recipes
         for recipe in RECIPES_CRAFTING {
+            let (group, notification) = match recipe {
+                CraftingRecipeTypes::CraftingShaped {
+                    group,
+                    show_notification,
+                    ..
+                } => (*group, *show_notification),
+                CraftingRecipeTypes::CraftingShapeless { group, .. }
+                | CraftingRecipeTypes::CraftingTransmute { group, .. } => (*group, true),
+                CraftingRecipeTypes::CraftingDecoratedPot { .. }
+                | CraftingRecipeTypes::CraftingSpecial => (None, true),
+            };
+            let group_id = resolve_group_id(&mut group_ids, &mut next_group_id, group);
+            let flags = entry_flags(self.replace, notification, highlight);
             let written = write_entry(
                 &mut write,
                 display_id,
                 *version,
+                group_id,
+                flags,
                 crafting_table,
                 furnace,
                 blast_furnace,
@@ -456,23 +533,33 @@ impl ClientPacket for CRecipeBookAdd {
 
         // Write cooking recipes
         for recipe in RECIPES_COOKING {
-            let book_category = match recipe {
-                CookingRecipeType::Smelting(r) => match r.category {
-                    RecipeCategoryTypes::Food => CATEGORY_FURNACE_FOOD,
-                    RecipeCategoryTypes::Blocks => CATEGORY_FURNACE_BLOCKS,
-                    _ => CATEGORY_FURNACE_MISC,
-                },
-                CookingRecipeType::Blasting(r) => match r.category {
-                    RecipeCategoryTypes::Blocks => CATEGORY_BLAST_FURNACE_BLOCKS,
-                    _ => CATEGORY_BLAST_FURNACE_MISC,
-                },
-                CookingRecipeType::Smoking(_) => CATEGORY_SMOKER_FOOD,
-                CookingRecipeType::CampfireCooking(_) => CATEGORY_CAMPFIRE,
+            let (book_category, group) = match recipe {
+                CookingRecipeType::Smelting(r) => (
+                    match r.category {
+                        RecipeCategoryTypes::Food => CATEGORY_FURNACE_FOOD,
+                        RecipeCategoryTypes::Blocks => CATEGORY_FURNACE_BLOCKS,
+                        _ => CATEGORY_FURNACE_MISC,
+                    },
+                    r.group,
+                ),
+                CookingRecipeType::Blasting(r) => (
+                    match r.category {
+                        RecipeCategoryTypes::Blocks => CATEGORY_BLAST_FURNACE_BLOCKS,
+                        _ => CATEGORY_BLAST_FURNACE_MISC,
+                    },
+                    r.group,
+                ),
+                CookingRecipeType::Smoking(r) => (CATEGORY_SMOKER_FOOD, r.group),
+                CookingRecipeType::CampfireCooking(r) => (CATEGORY_CAMPFIRE, r.group),
             };
+            let group_id = resolve_group_id(&mut group_ids, &mut next_group_id, group);
+            let flags = entry_flags(self.replace, true, highlight);
             write_entry(
                 &mut write,
                 display_id,
                 *version,
+                group_id,
+                flags,
                 crafting_table,
                 furnace,
                 blast_furnace,
