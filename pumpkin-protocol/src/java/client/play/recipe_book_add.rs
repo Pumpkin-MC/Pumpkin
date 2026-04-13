@@ -20,8 +20,12 @@ const RECIPE_DISPLAY_FURNACE: i32 = 2;
 // Slot Display type IDs
 const SLOT_DISPLAY_EMPTY: i32 = 0;
 const SLOT_DISPLAY_ANY_FUEL: i32 = 1;
-const SLOT_DISPLAY_ITEM: i32 = 4;
-const SLOT_DISPLAY_COMPOSITE: i32 = 10;
+// 1.21.2 - 1.21.11
+const SLOT_DISPLAY_ITEM_LEGACY: i32 = 2;
+const SLOT_DISPLAY_COMPOSITE_LEGACY: i32 = 7;
+// 26.1+
+const SLOT_DISPLAY_ITEM_26_1: i32 = 4;
+const SLOT_DISPLAY_COMPOSITE_26_1: i32 = 10;
 
 // RecipeBookCategory IDs
 const CATEGORY_CRAFTING_BUILDING: i32 = 0;
@@ -54,12 +58,28 @@ fn item_id_versioned(item: &Item, version: MinecraftVersion) -> i32 {
     remap_item_id_for_version(item.id, version) as i32
 }
 
+fn slot_display_item_type(version: MinecraftVersion) -> i32 {
+    if version >= MinecraftVersion::V_26_1 {
+        SLOT_DISPLAY_ITEM_26_1
+    } else {
+        SLOT_DISPLAY_ITEM_LEGACY
+    }
+}
+
+fn slot_display_composite_type(version: MinecraftVersion) -> i32 {
+    if version >= MinecraftVersion::V_26_1 {
+        SLOT_DISPLAY_COMPOSITE_26_1
+    } else {
+        SLOT_DISPLAY_COMPOSITE_LEGACY
+    }
+}
+
 fn write_item_slot_display(
     write: &mut impl Write,
     item: &Item,
     version: MinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(SLOT_DISPLAY_ITEM))?;
+    write.write_var_int(&VarInt(slot_display_item_type(version)))?;
     write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
     Ok(())
 }
@@ -107,7 +127,7 @@ fn write_ingredient_slot_display(
             } else if items.len() == 1 {
                 write_item_slot_display(write, items[0], version)?;
             } else {
-                write.write_var_int(&VarInt(SLOT_DISPLAY_COMPOSITE))?;
+                write.write_var_int(&VarInt(slot_display_composite_type(version)))?;
                 write.write_var_int(&VarInt(items.len() as i32))?;
                 for item in &items {
                     write_item_slot_display(write, item, version)?;
