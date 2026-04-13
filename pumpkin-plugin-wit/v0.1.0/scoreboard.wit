@@ -1,0 +1,72 @@
+interface scoreboard {
+    use text.{text-component};
+    use common.{named-color};
+
+    enum render-type {
+        integer,
+        hearts
+    }
+
+    enum display-slot {
+        player-list,
+        sidebar,
+        below-name,
+        sidebar-team-black,
+        sidebar-team-dark-blue,
+        sidebar-team-dark-green,
+        sidebar-team-dark-aqua,
+        sidebar-team-dark-red,
+        sidebar-team-dark-purple,
+        sidebar-team-gold,
+        sidebar-team-gray,
+        sidebar-team-dark-gray,
+        sidebar-team-blue,
+        sidebar-team-green,
+        sidebar-team-aqua,
+        sidebar-team-red,
+        sidebar-team-light-purple,
+        sidebar-team-yellow,
+        sidebar-team-white,
+    }
+
+    enum nametag-visibility {
+        always,
+        never,
+        hide-for-other-teams,
+        hide-for-own-team
+    }
+
+    enum collision-rule {
+        always,
+        never,
+        push-other-teams,
+        push-own-team
+    }
+
+    record team-settings {
+        display-name: text-component,
+        friendly-fire: bool,
+        see-friendly-invisibles: bool,
+        nametag-visibility: nametag-visibility,
+        collision-rule: collision-rule,
+        color: named-color,
+        prefix: text-component,
+        suffix: text-component
+    }
+
+    resource scoreboard {
+        add-objective: func(name: string, display-name: text-component, render-type: render-type);
+        remove-objective: func(name: string);
+        set-display-slot: func(slot: display-slot, objective-name: string);
+
+        update-score: func(entity-name: string, objective-name: string, value: s32);
+        remove-score: func(entity-name: string, objective-name: string);
+
+        create-team: func(name: string, settings: team-settings);
+        remove-team: func(name: string);
+        update-team: func(name: string, settings: team-settings);
+
+        add-player-to-team: func(team-name: string, player-name: string);
+        remove-player-from-team: func(team-name: string, player-name: string);
+    }
+}

@@ -24,6 +24,7 @@ use crate::{
                 bogged::BoggedSkeletonEntity, parched::ParchedSkeletonEntity,
                 skeleton::SkeletonEntity, stray::StraySkeletonEntity, wither::WitherSkeletonEntity,
             },
+            slime::SlimeEntity,
             zombie::{drowned::DrownedEntity, husk::HuskEntity, zombie::ZombieEntity},
         },
         passive::{
@@ -71,7 +72,7 @@ pub async fn from_type(
         id if id == EntityType::WOLF.id => WolfEntity::new(entity).await,
 
         id if id == EntityType::WITHER.id => WitherEntity::new(entity).await,
-        id if id == EntityType::ENDER_DRAGON.id => EnderDragonEntity::new(entity),
+        id if id == EntityType::ENDER_DRAGON.id => EnderDragonEntity::new(entity).await,
 
         id if id == EntityType::AREA_EFFECT_CLOUD.id => {
             crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
@@ -80,6 +81,7 @@ pub async fn from_type(
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity).await,
+        id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
         // Fallback Entity
         _ => {
             if entity_type.attributes.is_empty() {

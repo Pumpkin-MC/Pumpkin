@@ -90,7 +90,7 @@ impl TreeFeature {
 
         let clipped_height = self.minimum_size.min_clipped_height;
         let top = self.get_top(height, chunk, pos); // TODO: roots   
-        if top < height && (clipped_height.is_none() || top < clipped_height.unwrap() as u32) {
+        if top < height && top < clipped_height.map_or(u32::MAX, |h| h as u32) {
             return vec![];
         }
         let trunk_state = self.trunk_provider.get(random, pos);

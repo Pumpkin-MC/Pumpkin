@@ -119,6 +119,10 @@ impl EntityBase for TNTEntity {
         self
     }
 
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn is_immune_to_explosion(&self) -> bool {
         true
     }

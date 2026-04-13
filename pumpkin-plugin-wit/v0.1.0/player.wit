@@ -1,93 +1,172 @@
+/// Represents a player connected to the Minecraft server.
 interface player {
     use common.{hand, item-stack, position, game-mode};
     use %world.{%world};
     use permission.{permission-level};
     use text.{text-component};
+    use gui.{gui};
 
+    /// Various abilities a player can have.
     record player-abilities {
+        /// Whether the player is invulnerable to damage.
         invulnerable:       bool,
+        /// Whether the player is currently flying.
         flying:             bool,
+        /// Whether the player is allowed to fly.
         allow-flying:       bool,
+        /// Whether the player is in creative mode.
         creative:           bool,
+        /// Whether the player can modify the world.
         allow-modify-world: bool,
+        /// The speed at which the player flies.
         fly-speed:          f32,
+        /// The speed at which the player walks.
         walk-speed:         f32,
     }
 
+    /// A handle to a player on the server.
     resource player {
-        get-id: func () -> result<string, string>;
-        get-name: func () -> result<string, string>;
+        /// Returns the player's unique UUID as a string.
+        get-id: func () -> string;
+        /// Returns the player's username.
+        get-name: func () -> string;
 
         // Basic state
-        get-position: func () -> result<position, string>;
-        get-rotation: func () -> result<tuple<f32, f32>, string>;
-        get-world: func () -> result<%world, string>;
-        get-gamemode: func () -> result<game-mode, string>;
-        set-gamemode: func (mode: game-mode) -> result<bool, string>;
-        get-locale: func () -> result<string, string>;
-        get-ping: func () -> result<u32, string>;
+
+        /// Returns the player's current position in the world.
+        get-position: func () -> position;
+        /// Returns the player's current yaw (horizontal rotation).
+        get-yaw: func () -> f32;
+        /// Returns the player's current pitch (vertical rotation).
+        get-pitch: func () -> f32;
+        /// Returns the world the player is currently in.
+        get-world: func () -> %world;
+        /// Returns the player's current game mode.
+        get-gamemode: func () -> game-mode;
+        /// Changes the player's game mode. Returns true if successful.
+        set-gamemode: func (mode: game-mode) -> bool;
+        /// Returns the player's locale (e.g., "en_us").
+        get-locale: func () -> string;
+        /// Returns the player's current ping in milliseconds.
+        get-ping: func () -> u32;
 
         // Permissions & metadata
-        get-permission-level: func () -> result<permission-level, string>;
-        set-permission-level: func (level: permission-level) -> result<_, string>;
-        has-permission: func (node: string) -> result<bool, string>;
-        get-display-name: func () -> result<text-component, string>;
+
+        /// Returns the player's permission level (0-4).
+        get-permission-level: func () -> permission-level;
+        /// Sets the player's permission level.
+        set-permission-level: func (level: permission-level);
+        /// Checks if the player has a specific permission node.
+        has-permission: func (node: string) -> bool;
+        /// Returns the player's display name, which may include formatting.
+        get-display-name: func () -> text-component;
 
         // Messaging & titles
-        send-system-message: func (text: text-component, overlay: bool) -> result<_, string>;
-        show-title: func (text: text-component) -> result<_, string>;
-        show-subtitle: func (text: text-component) -> result<_, string>;
-        show-actionbar: func (text: text-component) -> result<_, string>;
-        send-title-animation: func (fade-in: s32, stay: s32, fade-out: s32) -> result<_, string>;
+
+        /// Sends a system message to the player's chat.
+        send-system-message: func (text: text-component, overlay: bool);
+        /// Shows a large title on the player's screen.
+        show-title: func (text: text-component);
+        /// Shows a smaller subtitle on the player's screen.
+        show-subtitle: func (text: text-component);
+        /// Shows a message in the action bar area.
+        show-actionbar: func (text: text-component);
+        /// Sets the fade-in, stay, and fade-out times for titles.
+        send-title-animation: func (fade-in: s32, stay: s32, fade-out: s32);
 
         // Teleport & kick
-        teleport: func (position: position, yaw: f32, pitch: f32) -> result<_, string>;
-        teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>) -> result<_, string>;
-        kick: func (message: text-component) -> result<_, string>;
-        respawn: func () -> result<_, string>;
 
-        ban: func (reason: option<text-component>) -> result<_, string>;
-        ban-ip: func (reason: option<text-component>) -> result<_, string>;
+        /// Teleports the player to a position in a world.
+        teleport: func (position: position, yaw: option<f32>, pitch: option<f32>, %world: %world);
+        /// Teleports the player to another world at a specific position.
+        teleport-world: func (world-ref: %world, position: position, yaw: option<f32>, pitch: option<f32>);
+        /// Kicks the player from the server with the specified reason.
+        kick: func (message: text-component);
+        /// Forces the player to respawn.
+        respawn: func ();
+
+        /// Opens a GUI for the player.
+        open-gui: func (gui-ref: gui);
+
+        /// Bans the player with an optional reason.
+        ban: func (reason: option<text-component>);
+        /// Bans the player's IP address with an optional reason.
+        ban-ip: func (reason: option<text-component>);
 
         // Inventory
-        get-selected-slot: func () -> result<u8, string>;
-        get-item-in-hand: func (hand: hand) -> result<option<item-stack>, string>;
-        get-inventory-item: func (slot: u8) -> result<option<item-stack>, string>;
+
+        /// Returns the index of the currently selected hotbar slot (0-8).
+        get-selected-slot: func () -> u8;
+        /// Returns the item currently in the specified hand.
+        get-item-in-hand: func (hand: hand) -> option<item-stack>;
+        /// Returns the item in the specified inventory slot.
+        get-inventory-item: func (slot: u8) -> option<item-stack>;
 
         // Status
-        get-health: func () -> result<f32, string>;
-        set-health: func (health: f32) -> result<_, string>;
-        get-max-health: func () -> result<f32, string>;
-        set-max-health: func (max-health: f32) -> result<_, string>;
-        get-food-level: func () -> result<u8, string>;
-        set-food-level: func (food-level: u8) -> result<_, string>;
-        get-saturation: func () -> result<f32, string>;
-        set-saturation: func (saturation: f32) -> result<_, string>;
-        get-exhaustion: func () -> result<f32, string>;
-        set-exhaustion: func (exhaustion: f32) -> result<_, string>;
-        get-absorption: func () -> result<f32, string>;
-        set-absorption: func (absorption: f32) -> result<_, string>;
 
-        get-experience-level:    func() -> result<s32, string>;
-        get-experience-progress: func() -> result<f32, string>;
-        get-experience-points:   func() -> result<s32, string>;
-        set-experience-level:    func(level: s32) -> result<_, string>;
-        set-experience-progress: func(progress: f32) -> result<_, string>;
-        set-experience-points:   func(points: s32) -> result<_, string>;
-        add-experience-levels:   func(levels: s32) -> result<_, string>;
-        add-experience-points:   func(points: s32) -> result<_, string>;
+        /// Returns the player's current health.
+        get-health: func () -> f32;
+        /// Sets the player's current health.
+        set-health: func (health: f32);
+        /// Returns the player's maximum health.
+        get-max-health: func () -> f32;
+        /// Sets the player's maximum health.
+        set-max-health: func (max-health: f32);
+        /// Returns the player's food level (0-20).
+        get-food-level: func () -> u8;
+        /// Sets the player's food level.
+        set-food-level: func (food-level: u8);
+        /// Returns the player's food saturation level.
+        get-saturation: func () -> f32;
+        /// Sets the player's food saturation level.
+        set-saturation: func (saturation: f32);
+        /// Returns the player's food exhaustion level.
+        get-exhaustion: func () -> f32;
+        /// Sets the player's food exhaustion level.
+        set-exhaustion: func (exhaustion: f32);
+        /// Returns the player's current absorption amount.
+        get-absorption: func () -> f32;
+        /// Sets the player's current absorption amount.
+        set-absorption: func (absorption: f32);
 
-        is-sneaking:  func() -> result<bool, string>;
-        set-sneaking: func(sneaking: bool) -> result<_, string>;
-        is-sprinting: func() -> result<bool, string>;
-        set-sprinting: func(sprinting: bool) -> result<_, string>;
-        is-on-ground: func() -> result<bool, string>;
-        is-flying:    func() -> result<bool, string>;
-        set-flying:   func(flying: bool) -> result<_, string>;
+        /// Returns the player's total experience level.
+        get-experience-level:    func() -> s32;
+        /// Returns the player's progress toward the next level (0.0 to 1.0).
+        get-experience-progress: func() -> f32;
+        /// Returns the total experience points the player has.
+        get-experience-points:   func() -> s32;
+        /// Sets the player's total experience level.
+        set-experience-level:    func(level: s32);
+        /// Sets the player's progress toward the next level.
+        set-experience-progress: func(progress: f32);
+        /// Sets the player's total experience points.
+        set-experience-points:   func(points: s32);
+        /// Adds experience levels to the player.
+        add-experience-levels:   func(levels: s32);
+        /// Adds experience points to the player.
+        add-experience-points:   func(points: s32);
 
-        get-abilities: func() -> result<player-abilities, string>;
-        set-abilities: func(abilities: player-abilities) -> result<_, string>;
+        /// Returns whether the player is currently sneaking.
+        is-sneaking:  func() -> bool;
+        /// Sets whether the player is currently sneaking.
+        set-sneaking: func(sneaking: bool);
+        /// Returns whether the player is currently sprinting.
+        is-sprinting: func() -> bool;
+        /// Sets whether the player is currently sprinting.
+        set-sprinting: func(sprinting: bool);
+        /// Returns whether the player is currently on the ground.
+        is-on-ground: func() -> bool;
+        /// Returns whether the player is currently flying.
+        is-flying:    func() -> bool;
+        /// Sets whether the player should be flying.
+        set-flying:   func(flying: bool);
 
-        get-ip: func() -> result<string, string>;
+        /// Returns the player's current abilities.
+        get-abilities: func() -> player-abilities;
+        /// Updates the player's abilities.
+        set-abilities: func(abilities: player-abilities);
+
+        /// Returns the player's IP address.
+        get-ip: func() -> string;
     }
 }

@@ -561,7 +561,38 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
                 })
             }
         }
-
+        "minecraft:basalt_columns" => {
+            let height = value_to_int_provider(&config["height"]);
+            let reach = value_to_int_provider(&config["reach"]);
+            quote! {
+                ConfiguredFeature::BasaltColumns(crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {
+                    height: #height,
+                    reach: #reach,
+                })
+            }
+        }
+        "minecraft:basalt_pillar" => {
+            quote! { ConfiguredFeature::BasaltPillar(crate::generation::feature::features::basalt_pillar::BasaltPillarFeature {}) }
+        }
+        "minecraft:block_blob" => {
+            let state = value_to_block_state(&config["state"]);
+            quote! {
+                ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {
+                    state: #state,
+                })
+            }
+        }
+        "minecraft:freeze_top_layer" => {
+            quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) }
+        }
+        "minecraft:ice_spike" => {
+            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
+        }
+        "minecraft:iceberg" => {
+            let state = value_to_block_state_codec(&config["state"]);
+            quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature { main_block: #state }) }
+        }
+        
         // All TODO/empty features
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
@@ -578,9 +609,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:spike" => {
             quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
         }
-        "minecraft:freeze_top_layer" => {
-            quote! { ConfiguredFeature::FreezeTopLayer(crate::generation::feature::features::freeze_top_layer::FreezeTopLayerFeature {}) }
-        }
         "minecraft:vines" => {
             quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) }
         }
@@ -592,12 +620,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:blue_ice" => {
             quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) }
-        }
-        "minecraft:iceberg" => {
-            quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature {}) }
-        }
-        "minecraft:block_blob" => {
-            quote! { ConfiguredFeature::ForestRock(crate::generation::feature::features::forest_rock::ForestRockFeature {}) }
         }
         "minecraft:end_platform" => {
             quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
@@ -629,9 +651,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:twisting_vines" => {
             quote! { ConfiguredFeature::TwistingVines(crate::generation::feature::features::twisting_vines::TwistingVinesFeature {}) }
         }
-        "minecraft:basalt_columns" => {
-            quote! { ConfiguredFeature::BasaltColumns(crate::generation::feature::features::basalt_columns::BasaltColumnsFeature {}) }
-        }
         "minecraft:delta_feature" => {
             quote! { ConfiguredFeature::DeltaFeature(crate::generation::feature::features::delta_feature::DeltaFeatureFeature {}) }
         }
@@ -640,9 +659,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         }
         "minecraft:bonus_chest" => {
             quote! { ConfiguredFeature::BonusChest(crate::generation::feature::features::bonus_chest::BonusChestFeature {}) }
-        }
-        "minecraft:basalt_pillar" => {
-            quote! { ConfiguredFeature::BasaltPillar(crate::generation::feature::features::basalt_pillar::BasaltPillarFeature {}) }
         }
         "minecraft:dripstone_cluster" => {
             quote! { ConfiguredFeature::DripstoneCluster(crate::generation::feature::features::drip_stone::cluster::DripstoneClusterFeature {}) }

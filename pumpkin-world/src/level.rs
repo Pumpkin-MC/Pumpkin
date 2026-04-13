@@ -14,8 +14,7 @@ use crate::{
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
-use crossbeam::channel::Sender;
-use dashmap::DashMap;
+use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
@@ -96,12 +95,12 @@ pub struct Level {
     /// Number of ticks between autosave checks. If 0, autosave is disabled.
     pub autosave_ticks: u64,
 
-    gen_entity_request_tx: Sender<Vector2<i32>>,
     pending_entity_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncEntityChunk>>>>,
 
     pub level_channel: Arc<LevelChannel>,
     pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
     pub chunk_listener: Arc<ChunkListener>,
+    pub gen_pool: Option<Arc<rayon::ThreadPool>>,
 }
 
 pub struct TickData {
@@ -145,6 +144,7 @@ impl Level {
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
         dimension: Dimension,
+        gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) -> Arc<Self> {
         let region_folder = root_folder.join("region");
         let entities_folder = root_folder.join("entities");
@@ -178,7 +178,6 @@ impl Level {
             >::new(config.clone())),
         };
 
-        let (gen_entity_request_tx, gen_entity_request_rx) = crossbeam::channel::unbounded();
         let pending_entity_generations = Arc::new(DashMap::new());
         let level_channel = Arc::new(LevelChannel::new());
         let thread_tracker = Mutex::new(Vec::new());
@@ -205,73 +204,75 @@ impl Level {
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
             autosave_ticks: level_config.autosave_ticks,
-            gen_entity_request_tx,
             pending_entity_generations: pending_entity_generations.clone(),
             level_channel: level_channel.clone(),
             thread_tracker,
             chunk_listener: listener.clone(),
+            gen_pool: gen_pool.clone(),
         });
 
         // TODO
         let total_cores = num_cpus::get().saturating_sub(2).max(1);
         let threads_per_dimension = (total_cores / 2).max(1);
-        let entity_threads = (threads_per_dimension / 2).max(1);
 
         GenerationSchedule::create(
-            2,
+            4,
             threads_per_dimension,
             level_ref.clone(),
             level_channel,
             listener,
             level_ref.thread_tracker.lock().unwrap().as_mut(),
+            gen_pool,
         );
 
-        let mut tracker_lock = level_ref.thread_tracker.lock().unwrap();
+        level_ref
+    }
 
-        for thread_id in 0..entity_threads {
-            let level_clone = level_ref.clone();
-            let pending_clone = pending_entity_generations.clone();
-            let rx = gen_entity_request_rx.clone();
+    pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
+        let level = self.clone();
+        if let Some(pool) = &self.gen_pool {
+            pool.spawn(move || {
+                let arc_chunk = Arc::new(ChunkEntityData {
+                    x: pos.x,
+                    z: pos.y,
+                    data: tokio::sync::Mutex::new(FxHashMap::default()),
+                    dirty: AtomicBool::new(true),
+                });
 
-            let handle = thread::Builder::new()
-                .name(format!("Entity Chunk Generation Thread {thread_id}"))
+                level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
+
+                if let Some((_, waiters)) = level.pending_entity_generations.remove(&pos) {
+                    for tx in waiters {
+                        let _ = tx.send(arc_chunk.clone());
+                    }
+                }
+            });
+        } else {
+            // Fallback to spawning a new thread if no pool is available (should not happen in production)
+            let level_clone = level.clone();
+            thread::Builder::new()
+                .name(format!("Entity Gen {:?}", pos))
                 .spawn(move || {
-                    loop {
-                        if level_clone.cancel_token.is_cancelled() {
-                            break;
-                        }
+                    let arc_chunk = Arc::new(ChunkEntityData {
+                        x: pos.x,
+                        z: pos.y,
+                        data: tokio::sync::Mutex::new(FxHashMap::default()),
+                        dirty: AtomicBool::new(true),
+                    });
 
-                        match rx.recv_timeout(std::time::Duration::from_millis(500)) {
-                            Ok(pos) => {
-                                let arc_chunk = Arc::new(ChunkEntityData {
-                                    x: pos.x,
-                                    z: pos.y,
-                                    data: tokio::sync::Mutex::new(FxHashMap::default()),
-                                    dirty: AtomicBool::new(true),
-                                });
+                    level_clone
+                        .loaded_entity_chunks
+                        .insert(pos, arc_chunk.clone());
 
-                                level_clone
-                                    .loaded_entity_chunks
-                                    .insert(pos, arc_chunk.clone());
-
-                                if let Some((_, waiters)) = pending_clone.remove(&pos) {
-                                    for tx in waiters {
-                                        let _ = tx.send(arc_chunk.clone());
-                                    }
-                                }
-                            }
-                            Err(crossbeam::channel::RecvTimeoutError::Timeout) => continue,
-                            Err(crossbeam::channel::RecvTimeoutError::Disconnected) => break,
+                    if let Some((_, waiters)) = level_clone.pending_entity_generations.remove(&pos)
+                    {
+                        for tx in waiters {
+                            let _ = tx.send(arc_chunk.clone());
                         }
                     }
                 })
-                .expect("Failed to spawn Entity Generation Thread");
-
-            tracker_lock.push(handle);
+                .expect("Failed to spawn entity generation thread");
         }
-
-        drop(tracker_lock);
-        level_ref
     }
 
     /// Spawns a task associated with this world. All tasks spawned with this method are awaited
@@ -395,18 +396,12 @@ impl Level {
         let mut chunks_to_clean = Vec::new();
 
         for chunk in chunks {
-            let mut should_remove = false;
-
-            if let Some(mut count) = self.chunk_watchers.get_mut(chunk) {
-                *count = count.saturating_sub(1);
-                if *count == 0 {
-                    should_remove = true;
+            if let Entry::Occupied(mut entry) = self.chunk_watchers.entry(*chunk) {
+                *entry.get_mut() = entry.get().saturating_sub(1);
+                if *entry.get() == 0 {
+                    entry.remove();
+                    chunks_to_clean.push(*chunk);
                 }
-            }
-
-            if should_remove {
-                self.chunk_watchers.remove(chunk);
-                chunks_to_clean.push(*chunk);
             }
         }
 
@@ -461,7 +456,14 @@ impl Level {
             block_entities: Vec::new(),
         };
 
-        for chunk in self.loaded_chunks.iter() {
+        // Clone the Arcs quickly to release map shard locks!
+        let chunks_to_tick: Vec<SyncChunk> = self
+            .loaded_chunks
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        for chunk in chunks_to_tick {
             let chunk_x_base = chunk.x * 16;
             let chunk_z_base = chunk.z * 16;
             let section_count = chunk.section.count;
@@ -644,7 +646,7 @@ impl Level {
                                         }
                                         dashmap::mapref::entry::Entry::Vacant(entry) => {
                                             entry.insert(vec![tx]);
-                                            let _ = level_clone.gen_entity_request_tx.send(pos);
+                                            level_clone.spawn_entity_generation(pos);
                                         }
                                     }
                                     if let Ok(chunk) = rx.await {
@@ -682,7 +684,7 @@ impl Level {
                 }
                 dashmap::mapref::entry::Entry::Vacant(entry) => {
                     entry.insert(vec![tx]);
-                    let _ = self.gen_entity_request_tx.send(pos);
+                    self.spawn_entity_generation(pos);
                 }
             }
             rx.await.expect("Entity generation worker dropped")

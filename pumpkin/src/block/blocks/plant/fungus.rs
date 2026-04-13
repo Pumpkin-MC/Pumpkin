@@ -41,17 +41,13 @@ impl PlantBlockBase for FungusBlock {
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         let block = block_accessor.get_block(pos).await;
-        supports_fungus(block)
+
+        if block == &Block::WARPED_FUNGUS {
+            return block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WARPED_FUNGUS);
+        }
+        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CRIMSON_FUNGUS)
     }
     async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
         <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
-    }
-}
-#[must_use]
-pub fn supports_fungus(block: &Block) -> bool {
-    if block == &Block::WARPED_FUNGUS {
-        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WARPED_FUNGUS)
-    } else {
-        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CRIMSON_FUNGUS)
     }
 }

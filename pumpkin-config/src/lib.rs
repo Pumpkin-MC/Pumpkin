@@ -2,6 +2,7 @@ use fun::FunConfig;
 use logging::LoggingConfig;
 use pumpkin_util::world_seed::Seed;
 use pumpkin_util::{Difficulty, GameMode, PermissionLvl, random};
+use recipe::RecipeConfig;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::net::SocketAddr;
@@ -11,6 +12,7 @@ use tracing::{debug, warn};
 pub mod fun;
 pub mod logging;
 pub mod networking;
+pub mod recipe;
 
 pub mod resource_pack;
 
@@ -70,6 +72,8 @@ pub struct AdvancedConfiguration {
     pub player_data: PlayerDataConfig,
     /// Optional fun and experimental features.
     pub fun: FunConfig,
+    /// Recipe-related configuration.
+    pub recipe: RecipeConfig,
 }
 
 /// Basic configuration for core server settings.

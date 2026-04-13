@@ -13,7 +13,7 @@ query = []
 
 [dependencies]
 pumpkin-nbt.workspace = true
-pumpkin-data = { workspace = true, features = ["packet", "item_id_remap", "entity_id_remap"] }
+pumpkin-data = { workspace = true, features = ["packet", "item_id_remap", "entity_id_remap", "recipes"] }
 pumpkin-macros.workspace = true
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true
@@ -27,6 +27,7 @@ bytes.workspace = true
 # encryption
 aes.workspace = true
 cfb8.workspace = true
+hybrid-array = "0.4"
 
 # compression
 async-compression = { workspace = true, features = ["tokio", "zlib"] }

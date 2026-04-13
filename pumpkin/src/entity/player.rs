@@ -109,8 +109,6 @@ const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 pub const DATA_VERSION: i32 = 4786; // 26.1
 
 enum BatchState {
-    Initial,
-    Waiting,
     Count(u8),
 }
 
@@ -168,7 +166,7 @@ impl ChunkManager {
             chunk_sent: HashMap::new(),
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
-            batches_sent_since_ack: BatchState::Initial,
+            batches_sent_since_ack: BatchState::Count(0),
             last_chunk_batch_sent_at: Instant::now(),
             world,
         }
@@ -191,8 +189,6 @@ impl ChunkManager {
     const fn ack_window_open(&self) -> bool {
         match self.batches_sent_since_ack {
             BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
-            BatchState::Initial => true,
-            BatchState::Waiting => false,
         }
     }
 
@@ -203,7 +199,7 @@ impl ChunkManager {
     }
 
     pub fn pull_new_chunks(&mut self) {
-        // log::debug!("pull new chunks");
+        let mut new_nodes = Vec::new();
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
             let dst = (pos.x - self.center.x)
                 .abs()
@@ -212,12 +208,19 @@ impl ChunkManager {
                 continue;
             }
             if self.should_enqueue_chunk(pos, &chunk) {
-                // log::debug!("receive new chunk {pos:?}");
-                self.chunk_queue.push(HeapNode(dst, pos, chunk));
+                new_nodes.push(HeapNode(dst, pos, chunk));
             }
         }
-        // log::debug!("chunk_queue size {}", self.chunk_queue.len());
-        // log::debug!("chunk_sent size {}", self.chunk_sent.len());
+
+        if !new_nodes.is_empty() {
+            if self.chunk_queue.is_empty() {
+                self.chunk_queue = BinaryHeap::from(new_nodes);
+            } else {
+                for node in new_nodes {
+                    self.chunk_queue.push(node);
+                }
+            }
+        }
     }
 
     pub fn update_center_and_view_distance(
@@ -257,22 +260,27 @@ impl ChunkManager {
                 && !unloading_chunks.contains(pos)
         });
 
-        let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
-        for node in self.chunk_queue.drain() {
+        let mut tasks: Vec<_> = self.chunk_queue.drain().collect();
+        tasks.retain(|node| {
             let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-            if dst <= view_distance_i32 && !unloading_chunks.contains(&node.1) {
-                new_queue.push(HeapNode(dst, node.1, node.2));
-            }
+            dst <= view_distance_i32 && !unloading_chunks.contains(&node.1)
+        });
+        for node in &mut tasks {
+            node.0 = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
         }
-        self.chunk_queue = new_queue;
 
         for pos in loading_chunks {
             if !self.chunk_sent.contains_key(pos)
                 && let Some(chunk) = level.loaded_chunks.get(pos)
             {
-                self.push_chunk(*pos, chunk.value().clone());
+                let chunk = chunk.value().clone();
+                if self.should_enqueue_chunk(*pos, &chunk) {
+                    let dst = (pos.x - center.x).abs().max((pos.y - center.y).abs());
+                    tasks.push(HeapNode(dst, *pos, chunk));
+                }
             }
         }
+        self.chunk_queue = BinaryHeap::from(tasks);
     }
 
     pub fn clean_up(&mut self, level: &Arc<Level>) {
@@ -290,7 +298,7 @@ impl ChunkManager {
         self.chunk_sent.clear();
         self.chunk_queue.clear();
         self.entity_chunk_queue.clear();
-        self.batches_sent_since_ack = BatchState::Initial;
+        self.batches_sent_since_ack = BatchState::Count(0);
         self.last_chunk_batch_sent_at = Instant::now();
     }
 
@@ -307,7 +315,7 @@ impl ChunkManager {
         self.chunk_queue.clear();
         self.world = new_world;
         // Reset batch state so chunks can be sent immediately in the new dimension
-        self.batches_sent_since_ack = BatchState::Initial;
+        self.batches_sent_since_ack = BatchState::Count(0);
         self.last_chunk_batch_sent_at = Instant::now();
     }
 
@@ -347,8 +355,6 @@ impl ChunkManager {
             BatchState::Count(count) => {
                 *count = count.saturating_add(1);
             }
-            state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => (),
         }
         self.last_chunk_batch_sent_at = Instant::now();
 
@@ -371,8 +377,6 @@ impl ChunkManager {
             BatchState::Count(count) => {
                 *count = count.saturating_add(1);
             }
-            state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => (),
         }
         self.last_chunk_batch_sent_at = Instant::now();
 
@@ -457,6 +461,10 @@ pub struct Player {
     pub client_loaded: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
+    /// Item usage tracking for bows, crossbows, etc.
+    pub using_item: AtomicBool,
+    pub item_use_start_time: AtomicI32,
+    pub using_hand: AtomicCell<Option<Hand>>,
     /// The player's experience level.
     pub experience_level: AtomicI32,
     /// The player's experience progress (`0.0` to `1.0`)
@@ -559,6 +567,10 @@ impl Player {
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
+            // Item usage tracking
+            using_item: AtomicBool::new(false),
+            item_use_start_time: AtomicI32::new(0),
+            using_hand: AtomicCell::new(None),
             // Minecraft has no way to change the default permission level of new players.
             // Minecraft's default permission level is 0.
             permission_lvl: server
@@ -2894,6 +2906,40 @@ impl Player {
         }
     }
 
+    pub async fn open_handled_screen_direct(
+        &self,
+        screen_handler: Arc<Mutex<dyn ScreenHandler>>,
+        title: TextComponent,
+    ) {
+        if !self
+            .current_screen_handler
+            .lock()
+            .await
+            .lock()
+            .await
+            .as_any()
+            .is::<PlayerScreenHandler>()
+        {
+            self.close_handled_screen().await;
+        }
+
+        let screen_handler_temp = screen_handler.lock().await;
+        self.client
+            .enqueue_packet(&COpenScreen::new(
+                screen_handler_temp.sync_id().into(),
+                (screen_handler_temp
+                    .window_type()
+                    .expect("Can't open PlayerScreenHandler") as i32)
+                    .into(),
+                &title,
+            ))
+            .await;
+        drop(screen_handler_temp);
+        self.on_screen_handler_opened(screen_handler.clone()).await;
+        *self.current_screen_handler.lock().await = screen_handler;
+        self.open_container_pos.store(None);
+    }
+
     pub async fn on_slot_click(&self, packet: SClickSlot) {
         self.update_last_action_time();
         let screen_handler = self.current_screen_handler.lock().await;
@@ -2999,6 +3045,76 @@ impl Player {
             world
                 .broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet)
                 .await;
+        }
+    }
+
+    /// Start using an item (e.g. drawing a bow)
+    pub fn start_using_item(&self, hand: Hand) {
+        self.using_item.store(true, Ordering::Relaxed);
+        self.item_use_start_time
+            .store(self.tick_counter.load(Ordering::Relaxed), Ordering::Relaxed);
+        self.using_hand.store(Some(hand));
+    }
+
+    /// Stop using an item
+    pub fn stop_using_item(&self) {
+        self.using_item.store(false, Ordering::Relaxed);
+        self.using_hand.store(None);
+    }
+
+    /// Get the number of ticks the item has been in use
+    pub fn get_item_use_ticks(&self) -> i32 {
+        if !self.using_item.load(Ordering::Relaxed) {
+            return 0;
+        }
+        self.tick_counter.load(Ordering::Relaxed) - self.item_use_start_time.load(Ordering::Relaxed)
+    }
+
+    /// Find arrow in inventory (main hand, offhand, or inventory slots)
+    pub async fn find_arrow(&self) -> Option<usize> {
+        use pumpkin_data::item::Item;
+        let inventory = self.inventory();
+
+        // Check offhand first
+        let stack = inventory.get_stack(PlayerInventory::OFF_HAND_SLOT).await;
+        let item = stack.lock().await;
+        if item.item.id == Item::ARROW.id && item.item_count > 0 {
+            return Some(PlayerInventory::OFF_HAND_SLOT);
+        }
+        drop(item);
+
+        // Check hotbar and main inventory
+        for slot in 0..PlayerInventory::MAIN_SIZE {
+            let stack = inventory.get_stack(slot).await;
+            let item = stack.lock().await;
+            if item.item.id == Item::ARROW.id && item.item_count > 0 {
+                return Some(slot);
+            }
+        }
+
+        None
+    }
+
+    /// Consume one arrow from the specified slot
+    pub async fn consume_arrow(&self, slot: usize) -> bool {
+        let gamemode = self.gamemode.load();
+        if gamemode == GameMode::Creative {
+            return true; // Don't consume in creative
+        }
+
+        let inventory = self.inventory();
+        let stack_arc = inventory.get_stack(slot).await;
+        let mut stack = stack_arc.lock().await;
+        match stack.item_count {
+            2.. => {
+                stack.item_count -= 1;
+                true
+            }
+            1 => {
+                *stack = ItemStack::EMPTY.clone();
+                true
+            }
+            _ => false,
         }
     }
 
@@ -3448,6 +3564,10 @@ impl EntityBase for Player {
             Some(name_clone),
         ));
         Box::pin(async move { name.insertion(self.gameprofile.name.clone()) })
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {

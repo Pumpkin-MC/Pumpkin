@@ -98,4 +98,8 @@ impl EntityBase for WindChargeEntity {
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
     }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

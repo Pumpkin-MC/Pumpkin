@@ -32,6 +32,8 @@ impl ArgumentType for IntRangeArgumentType {
     }
 }
 
+impl_copy_get!(IntRangeArgumentType, IntBounds);
+
 /// Parses an inclusive range of `f64`s that can be represented in the following ways:
 /// - `value`: Only includes the number `value`.
 /// - `min..`: All numbers above or equal to `min`.
@@ -54,6 +56,8 @@ impl ArgumentType for FloatRangeArgumentType {
         examples!("8", "8.0", "5..", "..-3.8", "-4.2..5", "0.1..0.2")
     }
 }
+
+impl_copy_get!(FloatRangeArgumentType, DoubleBounds);
 
 #[cfg(test)]
 mod test {

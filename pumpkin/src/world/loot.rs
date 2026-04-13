@@ -1,4 +1,5 @@
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag;
 use pumpkin_data::{Block, BlockState, item::Item};
 use pumpkin_util::{
     loot_table::{
@@ -168,7 +169,33 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
             }
             Self::LootTable => todo!(),
             Self::Dynamic => todo!(),
-            Self::Tag => todo!(),
+            Self::Tag(tag) => {
+                let key = tag.name.strip_prefix("minecraft:").unwrap_or(tag.name);
+
+                let items = pumpkin_data::tag::get_tag_values(tag::RegistryKey::Item, key)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|registry_key| {
+                        let item_key = registry_key
+                            .strip_prefix("minecraft:")
+                            .unwrap_or(registry_key);
+                        Item::from_registry_key(item_key)
+                    })
+                    .collect::<Vec<_>>();
+
+                if items.is_empty() {
+                    return Vec::new();
+                }
+
+                if tag.expand {
+                    // Pick one random item from the tag
+                    let index = rand::random_range(0..items.len() as i32) as usize;
+                    vec![ItemStack::new(1, items[index])]
+                } else {
+                    // Yield one stack of every item in the tag
+                    items.iter().map(|&item| ItemStack::new(1, item)).collect()
+                }
+            }
             Self::Alternatives(alternative_entry) => {
                 for entry in alternative_entry.children {
                     if let Some(loot) = entry.get_loot(params) {
@@ -177,8 +204,35 @@ impl LootPoolEntryTypesExt for LootPoolEntryTypes {
                 }
                 Vec::new()
             }
-            Self::Sequence => todo!(),
-            Self::Group => todo!(),
+            Self::Sequence(sequence_entry) => {
+                let mut stacks = Vec::new();
+                for entry in sequence_entry.children {
+                    if entry
+                        .conditions
+                        .as_ref()
+                        .is_some_and(|c| !c.iter().all(|cond| cond.is_fulfilled(params)))
+                    {
+                        break;
+                    }
+
+                    match entry.get_loot(params) {
+                        Some(loot) => stacks.extend(loot),
+                        // get_loot returning None also signals failure — stop.
+                        None => break,
+                    }
+                }
+                stacks
+            }
+
+            Self::Group(group_entry) => {
+                let mut stacks = Vec::new();
+                for entry in group_entry.children {
+                    if let Some(loot) = entry.get_loot(params) {
+                        stacks.extend(loot);
+                    }
+                }
+                stacks
+            }
         }
     }
 }
@@ -197,6 +251,7 @@ impl LootConditionExt for LootCondition {
                 }
                 true
             }
+            Self::RandomChance { chance } => rand::rng().random::<f32>() < *chance,
             Self::KilledByPlayer => params.killed_by_player.unwrap_or(false),
             Self::BlockStateProperty {
                 block: _,

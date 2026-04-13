@@ -51,6 +51,18 @@ macro_rules! assert_parse_err_reset {
     };
 }
 
+/// Macro to implement a single `get()` function for an argument type whose `Item` is `Copy`.
+macro_rules! impl_copy_get {
+    ($ty:ty, $item:ty) => {
+        impl $ty {
+            #[doc = concat!("Returns a [`CommandContext`]'s parsed `", stringify!($item), "` argument.")]
+            pub fn get(context: &$crate::command::context::command_context::CommandContext, name: &str) -> Result<$item, CommandSyntaxError> {
+                Ok(*context.get_argument(name)?)
+            }
+        }
+    };
+}
+
 const EMPTY_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::ARGUMENT_RANGE_EMPTY);
 const SWAPPED_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
@@ -178,5 +190,6 @@ pub mod coordinates;
 pub mod core;
 pub mod entity;
 pub mod entity_selector;
+pub mod game_profile;
 pub mod range;
 pub mod time;

@@ -1,7 +1,12 @@
 use core::f32;
 
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity};
-use pumpkin_data::{damage::DamageType, meta_data_type::MetaDataType, tracked_data::TrackedData};
+use pumpkin_data::{
+    damage::DamageType,
+    meta_data_type::MetaDataType,
+    tag::{self, Taggable},
+    tracked_data::TrackedData,
+};
 use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -48,7 +53,8 @@ impl EntityBase for EndCrystalEntity {
         _cause: Option<&'a dyn EntityBase>,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
-            if damage_type != DamageType::EXPLOSION {
+            self.entity.remove().await;
+            if !damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
                 self.entity
                     .world
                     .load()
@@ -57,12 +63,15 @@ impl EntityBase for EndCrystalEntity {
             }
 
             // TODO
-            self.entity.remove().await;
             true
         })
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 }

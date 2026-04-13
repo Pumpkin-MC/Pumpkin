@@ -50,10 +50,11 @@ async fn register_player_event(
         player_change_world::PlayerChangeWorldEvent, player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
-        player_gamemode_change::PlayerGamemodeChangeEvent, player_join::PlayerJoinEvent,
-        player_leave::PlayerLeaveEvent, player_login::PlayerLoginEvent,
-        player_move::PlayerMoveEvent, player_permission_check::PlayerPermissionCheckEvent,
-        player_teleport::PlayerTeleportEvent,
+        player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
+        player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
+        player_login::PlayerLoginEvent, player_move::PlayerMoveEvent,
+        player_permission_check::PlayerPermissionCheckEvent, player_teleport::PlayerTeleportEvent,
     };
 
     match event_type {
@@ -121,7 +122,28 @@ async fn register_player_event(
             register_typed_event::<PlayerEggThrowEvent>(resource, handler, priority, blocking)
                 .await;
         }
+        EventType::PlayerInteractUnknownEntityEvent => {
+            register_typed_event::<PlayerInteractUnknownEntityEvent>(
+                resource, handler, priority, blocking,
+            )
+            .await;
+        }
         _ => unreachable!("non-player event should not be routed to register_player_event"),
+    }
+}
+
+impl PluginHostState {
+    fn get_context(&self, res: &Resource<Context>) -> wasmtime::Result<&ContextResource> {
+        self.resource_table
+            .get::<ContextResource>(&Resource::new_own(res.rep()))
+            .map_err(wasmtime::Error::from)
+    }
+
+    fn take_command(&mut self, res: &Resource<Command>) -> wasmtime::Result<CommandResource> {
+        self.resource_table
+            .delete::<CommandResource>(Resource::new_own(res.rep()))
+            // Convert ResourceTableError -> wasmtime::Error
+            .map_err(wasmtime::Error::from)
     }
 }
 
@@ -237,7 +259,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         event_type: EventType,
         event_priority: EventPriority,
         blocking: bool,
-    ) {
+    ) -> wasmtime::Result<()> {
+        // Updated return type
         let priority = match event_priority {
             EventPriority::Highest => crate::plugin::EventPriority::Highest,
             EventPriority::High => crate::plugin::EventPriority::High,
@@ -246,14 +269,15 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             EventPriority::Lowest => crate::plugin::EventPriority::Lowest,
         };
 
+        // Use ? to trap if the plugin was dropped or the context handle is dead
         let plugin = self
             .plugin
             .as_ref()
-            .expect("plugin should always be initialized here")
+            .ok_or_else(|| wasmtime::Error::msg("Plugin state uninitialized"))?
             .upgrade()
-            .expect("plugin has been dropped");
+            .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
 
-        let resource = context.downcast_ref(self);
+        let resource = self.get_context(&context)?;
         let handler = Arc::new(WasmPluginV0_1_0EventHandler { handler_id, plugin });
 
         match event_type {
@@ -275,6 +299,8 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
                 register_player_event(resource, &handler, priority, blocking, event_type).await;
             }
         }
+
+        Ok(())
     }
 
     async fn register_command(
@@ -282,44 +308,37 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         context: Resource<Context>,
         command: Resource<Command>,
         permission: String,
-    ) {
-        let command = self
-            .resource_table
-            .delete::<CommandResource>(Resource::new_own(command.rep()))
-            .expect("invalid command resource handle")
-            .provider;
+    ) -> wasmtime::Result<()> {
+        // Updated return type
+        // Use your helpers to safely take/get resources
+        let command_res = self.take_command(&command)?;
+        let context_res = self.get_context(&context)?;
 
-        let context_resource = self
-            .resource_table
-            .get_any_mut(context.rep())
-            .expect("invalid context resource handle")
-            .downcast_ref::<ContextResource>()
-            .expect("resource type mismatch");
-
-        context_resource
+        context_res
             .provider
-            .register_command(command, permission)
+            .register_command(command_res.provider, permission)
             .await;
+        Ok(())
     }
 
     async fn register_permission(
         &mut self,
         context: Resource<Context>,
         permission: Permission,
-    ) -> Result<(), String> {
-        let mut children: HashMap<String, bool> = HashMap::with_capacity(permission.children.len());
+    ) -> wasmtime::Result<Result<(), String>> {
+        let mut children = HashMap::with_capacity(permission.children.len());
         for child in permission.children {
             children.insert(child.node, child.value);
         }
 
-        let permission = pumpkin_util::permission::Permission {
+        let util_permission = pumpkin_util::permission::Permission {
             node: permission.node,
             description: permission.description,
             default: match permission.default {
                 PermissionDefault::Deny => pumpkin_util::permission::PermissionDefault::Deny,
                 PermissionDefault::Allow => pumpkin_util::permission::PermissionDefault::Allow,
-                PermissionDefault::Op(permission_level) => {
-                    pumpkin_util::permission::PermissionDefault::Op(match permission_level {
+                PermissionDefault::Op(lvl) => {
+                    pumpkin_util::permission::PermissionDefault::Op(match lvl {
                         PermissionLevel::Zero => pumpkin_util::permission::PermissionLvl::Zero,
                         PermissionLevel::One => pumpkin_util::permission::PermissionLvl::One,
                         PermissionLevel::Two => pumpkin_util::permission::PermissionLvl::Two,
@@ -331,26 +350,31 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             children,
         };
 
-        context
-            .downcast_mut(self)
+        let context_res = self
+            .resource_table
+            .get_mut::<ContextResource>(&Resource::new_own(context.rep()))?;
+        Ok(context_res
             .provider
-            .register_permission(permission)
-            .await
+            .register_permission(util_permission)
+            .await)
     }
 
-    async fn get_data_folder(&mut self, context: Resource<Context>) -> String {
-        context
-            .downcast_ref(self)
+    async fn get_data_folder(&mut self, context: Resource<Context>) -> wasmtime::Result<String> {
+        Ok(self
+            .get_context(&context)?
             .provider
             .get_data_folder()
             .to_string_lossy()
-            .into_owned()
+            .into_owned())
     }
 
-    async fn get_server(&mut self, context: Resource<Context>) -> Resource<Server> {
-        let server_provider = context.downcast_ref(self).provider.server.clone();
+    async fn get_server(
+        &mut self,
+        context: Resource<Context>,
+    ) -> wasmtime::Result<Resource<Server>> {
+        let server_provider = self.get_context(&context)?.provider.server.clone();
         self.add_server(server_provider)
-            .expect("failed to add server resource")
+            .map_err(|_| wasmtime::Error::msg("failed to add server resource"))
     }
 
     async fn drop(&mut self, rep: Resource<Context>) -> wasmtime::Result<()> {

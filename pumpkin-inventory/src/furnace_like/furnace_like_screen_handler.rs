@@ -1,3 +1,21 @@
+//! Furnace-like screen handler.
+//!
+//! This module implements the screen handler for furnace-like blocks:
+//! - Furnace
+//! - Smoker
+//! - Blast Furnace
+//!
+//! All three share the same 3-slot layout:
+//! - Slot 0: Input (item to smelt/cook)
+//! - Slot 1: Fuel (coal, charcoal, etc.)
+//! - Slot 2: Output (smelted result)
+//!
+//! The screen handler tracks 4 properties:
+//! - Property 0: Fire icon animation (fuel burn time remaining)
+//! - Property 1: Maximum fuel burn time
+//! - Property 2: Progress arrow (cooking/smelt time)
+//! - Property 3: Maximum progress (typically 200 ticks for furnace)
+
 use std::{any::Any, pin::Pin, sync::Arc};
 
 use pumpkin_data::{fuels::is_fuel, item_stack::ItemStack, screen::WindowType};
@@ -17,13 +35,31 @@ use tracing::debug;
 
 use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
 
+/// Screen handler for furnace-like containers.
+///
+/// Handles the UI for furnaces, smokers, and blast furnaces.
+/// These all share the same slot layout and quick-move behavior.
 pub struct FurnaceLikeScreenHandler {
+    /// The furnace's inventory (3 slots: 0 input, 1 fuel, 2 output).
     pub inventory: Arc<dyn Inventory>,
+    /// Container that tracks accumulated smelting experience.
+    ///
+    /// Experience is awarded to the player when they take items from the output slot.
     experience_container: Arc<dyn ExperienceContainer>,
+    /// Core screen handler behavior (slots, sync ID, properties, listeners).
     behaviour: ScreenHandlerBehaviour,
 }
 
 impl FurnaceLikeScreenHandler {
+    /// Creates a new furnace-like screen handler.
+    ///
+    /// # Arguments
+    /// - `sync_id` - The sync ID for client-server matching
+    /// - `player_inventory` - The player's inventory
+    /// - `inventory` - The furnace's inventory (3 slots)
+    /// - `property_delegate` - Delegate for accessing furnace properties
+    /// - `experience_container` - Container that tracks smelting experience
+    /// - `window_type` - The window type (Furnace, Smoker, or `BlastFurnace`)
     pub async fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -73,6 +109,11 @@ impl FurnaceLikeScreenHandler {
         handler
     }
 
+    /// Adds the 3 furnace inventory slots.
+    ///
+    /// - Slot 0: Input (top)
+    /// - Slot 1: Fuel (bottom)
+    /// - Slot 2: Output
     fn add_inventory_slots(&mut self) {
         self.add_slot(Arc::new(FurnaceLikeSlot::new(
             self.inventory.clone(),
@@ -91,13 +132,6 @@ impl FurnaceLikeScreenHandler {
 }
 
 impl ScreenHandler for FurnaceLikeScreenHandler {
-    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
-        Box::pin(async move {
-            self.default_on_closed(player).await;
-            // TODO: self.inventory.on_closed(player).await;
-        })
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -110,6 +144,18 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
         &mut self.behaviour
     }
 
+    fn on_closed<'a>(&'a mut self, player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+        Box::pin(async move {
+            self.default_on_closed(player).await;
+            // TODO: self.inventory.on_closed(player).await;
+        })
+    }
+
+    /// Quick move logic for furnace-like containers.
+    ///
+    /// - From furnace slots (0-2): Move to player inventory
+    /// - Fuel items: Move to fuel slot (1)
+    /// - Other items: Move to input slot (0)
     fn quick_move<'a>(
         &'a mut self,
         player: &'a dyn InventoryPlayer,
