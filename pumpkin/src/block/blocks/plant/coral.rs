@@ -63,7 +63,7 @@ impl BlockBehaviour for CoralPlantBlock {
     }
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            let replacing_block = args.block_accessor.get_block(&args.position).await;
+            let replacing_block = args.block_accessor.get_block(args.position).await;
             if replacing_block != &Block::WATER && replacing_block != args.block {
                 return false;
             }
