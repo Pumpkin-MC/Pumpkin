@@ -1,0 +1,69 @@
+[config]
+default_to_workspace = false
+
+[tasks.android]
+description = "Build debug APK (cargo make android)"
+dependencies = ["android-rust", "android-copy", "android-apk-debug"]
+
+[tasks.android-release]
+description = "Build release APK (cargo make android-release)"
+dependencies = ["android-rust-release", "android-copy-release", "android-apk-release"]
+
+[tasks.android-rust]
+description = "Build pumpkin binary + JNI bridge for both Android ABIs (debug)"
+dependencies = ["android-rust-arm64-debug", "android-rust-x86_64-debug"]
+
+[tasks.android-rust-release]
+description = "Build pumpkin binary + JNI bridge for both Android ABIs (release)"
+dependencies = ["android-rust-arm64-release", "android-rust-x86_64-release"]
+
+[tasks.android-rust-arm64-debug]
+command = "cargo"
+args = ["build", "--target", "aarch64-linux-android", "-p", "pumpkin", "-p", "pumpkin-android-jni"]
+
+[tasks.android-rust-x86_64-debug]
+command = "cargo"
+args = ["build", "--target", "x86_64-linux-android", "-p", "pumpkin", "-p", "pumpkin-android-jni"]
+
+[tasks.android-rust-arm64-release]
+command = "cargo"
+args = ["build", "--target", "aarch64-linux-android", "--release", "-p", "pumpkin", "-p", "pumpkin-android-jni"]
+
+[tasks.android-rust-x86_64-release]
+command = "cargo"
+args = ["build", "--target", "x86_64-linux-android", "--release", "-p", "pumpkin", "-p", "pumpkin-android-jni"]
+
+
+[tasks.android-copy]
+description = "Copy debug build artifacts into android/app/src/main/jniLibs"
+script_runner = "@shell"
+script = [
+  "mkdir -p android/app/src/main/jniLibs/arm64-v8a android/app/src/main/jniLibs/x86_64",
+  "cp target/aarch64-linux-android/debug/pumpkin           android/app/src/main/jniLibs/arm64-v8a/libpumpkin.so",
+  "cp target/x86_64-linux-android/debug/pumpkin            android/app/src/main/jniLibs/x86_64/libpumpkin.so",
+  "cp target/aarch64-linux-android/debug/librust_terminal.so  android/app/src/main/jniLibs/arm64-v8a/librust_terminal.so",
+  "cp target/x86_64-linux-android/debug/librust_terminal.so   android/app/src/main/jniLibs/x86_64/librust_terminal.so",
+]
+
+[tasks.android-copy-release]
+description = "Copy release build artifacts into android/app/src/main/jniLibs"
+script_runner = "@shell"
+script = [
+  "mkdir -p android/app/src/main/jniLibs/arm64-v8a android/app/src/main/jniLibs/x86_64",
+  "cp target/aarch64-linux-android/release/pumpkin          android/app/src/main/jniLibs/arm64-v8a/libpumpkin.so",
+  "cp target/x86_64-linux-android/release/pumpkin           android/app/src/main/jniLibs/x86_64/libpumpkin.so",
+  "cp target/aarch64-linux-android/release/librust_terminal.so android/app/src/main/jniLibs/arm64-v8a/librust_terminal.so",
+  "cp target/x86_64-linux-android/release/librust_terminal.so  android/app/src/main/jniLibs/x86_64/librust_terminal.so",
+]
+
+[tasks.android-apk-debug]
+description = "Assemble debug APK via Gradle"
+cwd = "android"
+script_runner = "@shell"
+script = ["./gradlew assembleDebug"]
+
+[tasks.android-apk-release]
+description = "Assemble release APK via Gradle"
+cwd = "android"
+script_runner = "@shell"
+script = ["./gradlew assembleRelease"]

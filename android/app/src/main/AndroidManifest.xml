@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-sdk tools:overrideLibrary="androidx.compose.material, androidx.compose.material.ripple, androidx.compose.material3, androidx.compose.foundation, androidx.compose.foundation.layout, androidx.compose.ui, androidx.compose.ui.util, androidx.compose.ui.tooling, androidx.compose.ui.tooling.preview, androidx.compose.ui.tooling.data, androidx.compose.runtime, androidx.compose.runtime.retain, androidx.compose.runtime.saveable, androidx.compose.runtime.annotation, androidx.compose.animation, androidx.compose.animation.core, androidx.compose.ui.text, androidx.compose.ui.graphics, androidx.compose.ui.unit, androidx.compose.ui.geometry, androidx.compose.ui.test.manifest, androidx.activity.compose, androidx.lifecycle.runtime.compose, androidx.lifecycle.viewmodel.compose, androidx.window, androidx.window.core, androidx.window.layout" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Pumpkinmc">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.Pumpkinmc">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

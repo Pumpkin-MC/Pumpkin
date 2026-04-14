@@ -97,6 +97,13 @@ target/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# === ANDROID ===
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/jniLibs/
+
 # === PROJECT SPECIFIC ===
 plugins/
 world/*

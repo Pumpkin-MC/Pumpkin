@@ -11,7 +11,8 @@ members = [
     "pumpkin/",
     "pumpkin-data",
     "pumpkin-plugin-api",
-    "pumpkin-codecs"
+    "pumpkin-codecs",
+    "pumpkin-android-jni",
 ]
 exclude = ["pumpkin-codegen"]
 
