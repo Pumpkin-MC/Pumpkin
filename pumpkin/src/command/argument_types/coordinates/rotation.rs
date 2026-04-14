@@ -50,17 +50,19 @@ impl RotationArgumentType {
         NOT_COMPLETE_ERROR_TYPE.create(reader)
     }
 
-    /// Returns the rotation of a parsed rotation argument.
+    /// Returns the [`Coordinates`] representing the rotation of a parsed rotation argument.
+    ///
+    /// Use [`Coordinates::rotation`] to resolve the coordinates to a rotation [`Vector2`].
     ///
     /// If the rotation is successfully provided in an `Ok`:
-    /// - The returned *x*-component of the vector is the **pitch**.
-    /// - The returned *y*-component of the vector is the **yaw**.
+    /// - The returned *x*-coordinate of the coordinates is the absolute/relative **pitch**.
+    /// - The returned *y*-coordinate of the coordinates is the absolute/relative **yaw**.
+    /// - The returned *z*-coordinate of the coordinates is always 0.
     pub fn get_rotation(
         context: &CommandContext,
         name: &str,
-    ) -> Result<Vector2<f32>, CommandSyntaxError> {
+    ) -> Result<Coordinates, CommandSyntaxError> {
         context
-            .get_argument::<Coordinates>(name)
-            .map(|c| c.rotation(context.source.as_ref()))
+            .get_argument::<Coordinates>(name).copied()
     }
 }
