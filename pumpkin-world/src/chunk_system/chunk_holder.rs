@@ -31,3 +31,16 @@ impl Default for ChunkHolder {
         }
     }
 }
+
+impl ChunkHolder {
+    #[must_use]
+    pub fn is_inactive(&self) -> bool {
+        self.target_stage == StagedChunkEnum::None
+            && self.dependency_stage == StagedChunkEnum::None
+            && self.current_stage == StagedChunkEnum::None
+            && self.chunk.is_none()
+            && self.occupied.is_null()
+            && !self.public
+            && self.tasks.iter().all(|task| task.is_null())
+    }
+}

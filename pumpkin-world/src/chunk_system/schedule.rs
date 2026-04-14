@@ -80,6 +80,28 @@ pub struct GenerationSchedule {
 }
 
 impl GenerationSchedule {
+    fn clear_occupied_by_edges(&mut self, holder: &mut ChunkHolder) {
+        let mut edge = holder.occupied_by;
+        while !edge.is_null() {
+            edge = self
+                .graph
+                .edges
+                .remove(edge)
+                .map_or(EdgeKey::null(), |cur| cur.next);
+        }
+        holder.occupied_by = EdgeKey::null();
+    }
+
+    fn store_holder(&mut self, pos: ChunkPos, mut holder: ChunkHolder) {
+        if holder.is_inactive() {
+            self.clear_occupied_by_edges(&mut holder);
+            self.unload_chunks.remove(&pos);
+            return;
+        }
+
+        self.chunk_map.insert(pos, holder);
+    }
+
     pub fn create(
         io_read_thread_count: usize,
         gen_thread_count: usize,
@@ -518,7 +540,7 @@ impl GenerationSchedule {
                     }
                 }
             }
-            self.chunk_map.insert(pos, holder);
+            self.store_holder(pos, holder);
         }
         self.last_level = new_level.1;
         self.queue_dirty = true;
@@ -530,12 +552,15 @@ impl GenerationSchedule {
         swap(&mut unload_chunks, &mut self.unload_chunks);
         let mut chunks = Vec::with_capacity(unload_chunks.len());
         for pos in unload_chunks {
-            let holder = self.chunk_map.get_mut(&pos).unwrap();
+            let Some(mut holder) = self.chunk_map.remove(&pos) else {
+                continue;
+            };
             debug_assert_eq!(holder.target_stage, StagedChunkEnum::None);
             if holder.occupied.is_null() {
                 let mut tmp = None;
                 swap(&mut holder.chunk, &mut tmp);
                 let Some(tmp) = tmp else {
+                    self.store_holder(pos, holder);
                     continue;
                 };
                 match tmp {
@@ -547,7 +572,6 @@ impl GenerationSchedule {
                         let sc = Arc::strong_count(&chunk);
                         if sc == 1 {
                             chunks.push((pos, Chunk::Level(chunk)));
-                            self.chunk_map.remove(&pos);
                         } else {
                             warn!(
                                 "unload_chunk: chunk {pos:?} still has {} strong refs; cannot unload. holder.public={}",
@@ -555,14 +579,16 @@ impl GenerationSchedule {
                             );
                             self.unload_chunks.insert(pos);
                             holder.chunk = Some(Chunk::Level(chunk));
+                            self.store_holder(pos, holder);
                         }
                     }
                     Chunk::Proto(chunk) => {
                         debug_assert!(!holder.public);
                         chunks.push((pos, Chunk::Proto(chunk)));
-                        self.chunk_map.remove(&pos);
                     }
                 }
+            } else {
+                self.store_holder(pos, holder);
             }
         }
         if chunks.is_empty() {
@@ -701,7 +727,7 @@ impl GenerationSchedule {
                     }
                 }
                 holder.chunk = Some(chunk);
-                self.chunk_map.insert(pos, holder);
+                self.store_holder(pos, holder);
 
                 // A new chunk arrived — unblock any waiting generation tasks
                 self.check_waiting_tasks();
@@ -788,7 +814,7 @@ impl GenerationSchedule {
                                 self.unload_chunks.insert(new_pos);
                             }
 
-                            self.chunk_map.insert(new_pos, holder);
+                            self.store_holder(new_pos, holder);
                         }
                         Chunk::Proto(chunk) => {
                             let mut holder = self.chunk_map.remove(&new_pos).unwrap();
@@ -829,7 +855,7 @@ impl GenerationSchedule {
 
                             holder.occupied = NodeKey::null();
                             holder.chunk = Some(Chunk::Proto(chunk));
-                            self.chunk_map.insert(new_pos, holder);
+                            self.store_holder(new_pos, holder);
                         }
                     }
                     dy += 1;
@@ -900,7 +926,7 @@ impl GenerationSchedule {
                         ));
                     }
 
-                    self.chunk_map.insert(pos, holder);
+                    self.store_holder(pos, holder);
 
                     warn!(
                         "Chunk {:?} reset to None and re-queued for regeneration (target: {:?})",
