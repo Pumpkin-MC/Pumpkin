@@ -38,6 +38,8 @@ impl ArgumentType for EntityAnchorArgumentType {
     }
 }
 
+impl_copy_get!(EntityAnchorArgumentType, EntityAnchor);
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum EntityAnchor {
     Feet,
