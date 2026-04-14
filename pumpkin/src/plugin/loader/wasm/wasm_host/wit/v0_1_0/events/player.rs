@@ -18,7 +18,8 @@ use crate::plugin::{
                 PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
                 PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
                 PlayerPermissionCheckEventData, PlayerTeleportEventData,
-                PlayerToggleSneakEventData, PlayerToggleSprintEventData,
+                PlayerToggleFlightEventData, PlayerToggleSneakEventData,
+                PlayerToggleSprintEventData,
             },
         },
     },
@@ -41,6 +42,7 @@ use crate::plugin::{
         player_move::PlayerMoveEvent,
         player_permission_check::PlayerPermissionCheckEvent,
         player_teleport::PlayerTeleportEvent,
+        player_toggle_flight_event::PlayerToggleFlightEvent,
         player_toggle_sneak_event::PlayerToggleSneakEvent,
         player_toggle_sprint_event::PlayerToggleSprintEvent,
     },
@@ -618,6 +620,31 @@ impl ToFromV0_1_0WasmEvent for PlayerToggleSneakEvent {
             Event::PlayerToggleSneakEvent(data) => Self {
                 player: consume_player(state, &data.player),
                 is_sneaking: data.is_sneaking,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerToggleFlightEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerToggleFlightEvent(PlayerToggleFlightEventData {
+            player,
+            is_flying: self.is_flying,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerToggleFlightEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                is_flying: data.is_flying,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

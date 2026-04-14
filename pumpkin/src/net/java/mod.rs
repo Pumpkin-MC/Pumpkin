@@ -766,8 +766,12 @@ impl JavaClient {
                 .await;
             }
             id if id == SPlayerAbilities::to_id(version) => {
-                self.handle_player_abilities(player, SPlayerAbilities::read(payload, &version)?)
-                    .await;
+                self.handle_player_abilities(
+                    player,
+                    SPlayerAbilities::read(payload, &version)?,
+                    server,
+                )
+                .await;
             }
             id if id == SPlayerAction::to_id(version) => {
                 self.handle_player_action(player, SPlayerAction::read(payload, &version)?, server)

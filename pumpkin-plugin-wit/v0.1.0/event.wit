@@ -161,6 +161,12 @@ interface event {
         cancelled: bool
     }
 
+    record player-toggle-flight-event-data {
+        player: player,
+        is-flying: bool,
+        cancelled: bool
+    }
+
     record player-toggle-sprint-event-data {
         player: player,
         is-sprinting: bool,
@@ -265,6 +271,7 @@ interface event {
         player-interact-unknown-entity-event,
         player-interact-event,
         player-toggle-sneak-event,
+        player-toggle-flight-event,
         player-toggle-sprint-event,
         block-redstone-event,
         block-break-event,
@@ -297,6 +304,7 @@ interface event {
         player-interact-unknown-entity-event(player-interact-unknown-entity-event-data),
         player-interact-event(player-interact-event-data),
         player-toggle-sneak-event(player-toggle-sneak-event-data),
+        player-toggle-flight-event(player-toggle-flight-event-data),
         player-toggle-sprint-event(player-toggle-sprint-event-data),
         block-redstone-event(block-redstone-event-data),
         block-break-event(block-break-event-data),

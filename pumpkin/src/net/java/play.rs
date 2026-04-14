@@ -30,7 +30,9 @@ use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEve
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
+use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
 use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
+
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
@@ -1970,17 +1972,29 @@ impl JavaClient {
 
     pub async fn handle_player_abilities(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         player_abilities: SPlayerAbilities,
+        server: &Server,
     ) {
         let mut abilities = player.abilities.lock().await;
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
-        if flying {
-            player.living_entity.fall_distance.store(0.0);
+        if abilities.flying != flying {
+            send_cancellable! {{
+                server;
+                PlayerToggleFlightEvent::new(player.clone(), flying);
+                'after: {
+                    if event.is_flying {
+                        player.living_entity.fall_distance.store(0.0);
+                    }
+                    abilities.flying = event.is_flying;
+                }
+                'cancelled: {
+                    player.send_abilities_update().await;
+                }
+            }}
         }
-        abilities.flying = flying;
     }
 
     pub async fn handle_play_ping_request(&self, request: SPlayPingRequest) {

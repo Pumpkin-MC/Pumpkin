@@ -521,7 +521,7 @@ impl BedrockClient {
         match packet.id {
             SPlayerAuthInput::PACKET_ID => {
                 if let Ok(input_packet) = SPlayerAuthInput::read(reader) {
-                    self.player_pos_update(player, input_packet).await;
+                    self.player_pos_update(player, input_packet, server).await;
                 }
             }
             SLoadingScreen::PACKET_ID => {

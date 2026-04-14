@@ -90,9 +90,8 @@ debug = true
 strip = false
 
 [workspace.dependencies]
-tokio = { version = "1.51", default-features = false }
+tokio = { version = "1.52", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
-
 
 thiserror = "2.0"
 
@@ -100,7 +99,7 @@ bytes = "1.11"
 
 # Concurrency/Parallelism and Synchronization
 futures = { version = "0.3", default-features = false, features = ["executor"] }
-rayon = "1.11"
+rayon = "1.12"
 crossbeam = "0.8"
 chrono = "0.4"
 
@@ -181,7 +180,7 @@ ureq = "3.3.0"
 
 wasmtime = "43.0"
 wasmtime-wasi = "43.0"
-wit-bindgen = "0.55"
+wit-bindgen = "0.56"
 wasmparser = "0.246"
 
 postcard = { version = "1.1", features = ["alloc"] }

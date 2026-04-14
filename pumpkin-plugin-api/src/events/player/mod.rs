@@ -16,6 +16,7 @@ pub mod player_login;
 pub mod player_move;
 pub mod player_permission_check;
 pub mod player_teleport;
+pub mod player_toggle_flight;
 pub mod player_toggle_sneak;
 pub mod player_toggle_sprint;
 
@@ -37,5 +38,6 @@ pub use player_login::*;
 pub use player_move::*;
 pub use player_permission_check::*;
 pub use player_teleport::*;
+pub use player_toggle_flight::*;
 pub use player_toggle_sneak::*;
 pub use player_toggle_sprint::*;
