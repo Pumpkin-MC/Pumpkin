@@ -58,7 +58,7 @@ fn world_from_resource(
         .clone()
 }
 
-fn to_wit_item_stack(
+pub(super) fn to_wit_item_stack(
     stack: &pumpkin_data::item_stack::ItemStack,
 ) -> Option<pumpkin::plugin::common::ItemStack> {
     if stack.item_count == 0 {

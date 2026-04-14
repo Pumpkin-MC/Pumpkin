@@ -3,8 +3,9 @@ use crate::block::{
     BlockBehaviour, BlockFuture, BlockMetadata, BrokenArgs, CanPlaceAtArgs,
     GetStateForNeighborUpdateArgs, PlacedArgs,
 };
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
@@ -105,7 +106,7 @@ impl PlantBlockBase for KelpBlock {
         if support_block == &Block::KELP || support_block == &Block::KELP_PLANT {
             return true;
         }
-        if support_block == &Block::MAGMA_BLOCK {
+        if support_block.has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_KELP) {
             return false;
         }
         if support_block_state.is_side_solid(pumpkin_data::BlockDirection::Up)

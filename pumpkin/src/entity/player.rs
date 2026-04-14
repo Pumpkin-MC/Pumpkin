@@ -109,8 +109,6 @@ const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 pub const DATA_VERSION: i32 = 4786; // 26.1
 
 enum BatchState {
-    Initial,
-    Waiting,
     Count(u8),
 }
 
@@ -168,7 +166,7 @@ impl ChunkManager {
             chunk_sent: HashMap::new(),
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
-            batches_sent_since_ack: BatchState::Initial,
+            batches_sent_since_ack: BatchState::Count(0),
             last_chunk_batch_sent_at: Instant::now(),
             world,
         }
@@ -191,8 +189,6 @@ impl ChunkManager {
     const fn ack_window_open(&self) -> bool {
         match self.batches_sent_since_ack {
             BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
-            BatchState::Initial => true,
-            BatchState::Waiting => false,
         }
     }
 
@@ -203,7 +199,7 @@ impl ChunkManager {
     }
 
     pub fn pull_new_chunks(&mut self) {
-        // log::debug!("pull new chunks");
+        let mut new_nodes = Vec::new();
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
             let dst = (pos.x - self.center.x)
                 .abs()
@@ -212,12 +208,19 @@ impl ChunkManager {
                 continue;
             }
             if self.should_enqueue_chunk(pos, &chunk) {
-                // log::debug!("receive new chunk {pos:?}");
-                self.chunk_queue.push(HeapNode(dst, pos, chunk));
+                new_nodes.push(HeapNode(dst, pos, chunk));
             }
         }
-        // log::debug!("chunk_queue size {}", self.chunk_queue.len());
-        // log::debug!("chunk_sent size {}", self.chunk_sent.len());
+
+        if !new_nodes.is_empty() {
+            if self.chunk_queue.is_empty() {
+                self.chunk_queue = BinaryHeap::from(new_nodes);
+            } else {
+                for node in new_nodes {
+                    self.chunk_queue.push(node);
+                }
+            }
+        }
     }
 
     pub fn update_center_and_view_distance(
@@ -257,22 +260,27 @@ impl ChunkManager {
                 && !unloading_chunks.contains(pos)
         });
 
-        let mut new_queue = BinaryHeap::with_capacity(self.chunk_queue.len());
-        for node in self.chunk_queue.drain() {
+        let mut tasks: Vec<_> = self.chunk_queue.drain().collect();
+        tasks.retain(|node| {
             let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-            if dst <= view_distance_i32 && !unloading_chunks.contains(&node.1) {
-                new_queue.push(HeapNode(dst, node.1, node.2));
-            }
+            dst <= view_distance_i32 && !unloading_chunks.contains(&node.1)
+        });
+        for node in &mut tasks {
+            node.0 = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
         }
-        self.chunk_queue = new_queue;
 
         for pos in loading_chunks {
             if !self.chunk_sent.contains_key(pos)
                 && let Some(chunk) = level.loaded_chunks.get(pos)
             {
-                self.push_chunk(*pos, chunk.value().clone());
+                let chunk = chunk.value().clone();
+                if self.should_enqueue_chunk(*pos, &chunk) {
+                    let dst = (pos.x - center.x).abs().max((pos.y - center.y).abs());
+                    tasks.push(HeapNode(dst, *pos, chunk));
+                }
             }
         }
+        self.chunk_queue = BinaryHeap::from(tasks);
     }
 
     pub fn clean_up(&mut self, level: &Arc<Level>) {
@@ -290,7 +298,7 @@ impl ChunkManager {
         self.chunk_sent.clear();
         self.chunk_queue.clear();
         self.entity_chunk_queue.clear();
-        self.batches_sent_since_ack = BatchState::Initial;
+        self.batches_sent_since_ack = BatchState::Count(0);
         self.last_chunk_batch_sent_at = Instant::now();
     }
 
@@ -307,7 +315,7 @@ impl ChunkManager {
         self.chunk_queue.clear();
         self.world = new_world;
         // Reset batch state so chunks can be sent immediately in the new dimension
-        self.batches_sent_since_ack = BatchState::Initial;
+        self.batches_sent_since_ack = BatchState::Count(0);
         self.last_chunk_batch_sent_at = Instant::now();
     }
 
@@ -347,8 +355,6 @@ impl ChunkManager {
             BatchState::Count(count) => {
                 *count = count.saturating_add(1);
             }
-            state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => (),
         }
         self.last_chunk_batch_sent_at = Instant::now();
 
@@ -371,8 +377,6 @@ impl ChunkManager {
             BatchState::Count(count) => {
                 *count = count.saturating_add(1);
             }
-            state @ BatchState::Initial => *state = BatchState::Waiting,
-            BatchState::Waiting => (),
         }
         self.last_chunk_batch_sent_at = Instant::now();
 

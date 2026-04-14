@@ -44,6 +44,7 @@ ruzstd.workspace = true
 
 itertools.workspace = true
 enum_dispatch.workspace = true
+rayon.workspace = true
 
 # thread_local.workspace = true
 # lru.workspace = true

@@ -50,6 +50,8 @@ use crate::block::blocks::plant::cactus::CactusBlock;
 use crate::block::blocks::plant::cactus_flower::CactusFlowerBlock;
 use crate::block::blocks::plant::coral::CoralPlantBlock;
 use crate::block::blocks::plant::coral_fan::CoralFanBlock;
+use crate::block::blocks::plant::chorus_flower::ChorusFlowerBlock;
+use crate::block::blocks::plant::chorus_plant::ChorusPlantBlock;
 use crate::block::blocks::plant::crop::beetroot::BeetrootBlock;
 use crate::block::blocks::plant::crop::carrot::CarrotBlock;
 use crate::block::blocks::plant::crop::nether_wart::NetherWartBlock;
@@ -177,6 +179,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(BedBlock);
     manager.register(SaplingBlock);
     manager.register(CactusBlock);
+    manager.register(ChorusFlowerBlock);
+    manager.register(ChorusPlantBlock);
     manager.register(CarpetBlock);
     manager.register(CarvedPumpkinBlock);
     manager.register(WitherSkeletonSkullBlock);
