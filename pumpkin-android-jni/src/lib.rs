@@ -1,8 +1,8 @@
-use libc;
+use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jint, jstring};
-use jni::JNIEnv;
-use nix::poll::{poll, PollFd, PollFlags};
+use libc;
+use nix::poll::{PollFd, PollFlags, poll};
 use nix::pty::openpty;
 use nix::unistd::{dup2, setsid};
 use std::fs::File;
@@ -36,9 +36,7 @@ pub extern "system" fn Java_com_pumpkinmc_MainActivity_openPty(
                 drop(slave_fd);
                 drop(master_fd);
 
-                let _ = Command::new(&cmd_str)
-                    .current_dir(cwd_str)
-                    .exec();
+                let _ = Command::new(&cmd_str).current_dir(cwd_str).exec();
                 std::process::exit(1);
             }
             Ok(nix::unistd::ForkResult::Parent { child: _ }) => {
