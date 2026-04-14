@@ -10,6 +10,7 @@ use super::CoralFeature;
 pub struct CoralTreeFeature;
 
 impl CoralTreeFeature {
+    #[allow(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
