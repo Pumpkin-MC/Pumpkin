@@ -592,6 +592,12 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             let state = value_to_block_state_codec(&config["state"]);
             quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature { main_block: #state }) }
         }
+        "minecraft:end_platform" => {
+            quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
+        }
+        "minecraft:end_island" => {
+            quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
+        }
         
         // All TODO/empty features
         "minecraft:fossil" => {
@@ -621,11 +627,8 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:blue_ice" => {
             quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) }
         }
-        "minecraft:end_platform" => {
-            quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
-        }
-        "minecraft:end_island" => {
-            quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
+        "minecraft:chorus_plant" => {
+            quote! { ConfiguredFeature::ChorusPlant(crate::generation::feature::features::chorus_plant::ChorusPlantFeature {}) }
         }
         "minecraft:end_gateway" => {
             quote! { ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {}) }
