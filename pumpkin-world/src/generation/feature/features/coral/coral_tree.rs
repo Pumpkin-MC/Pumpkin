@@ -1,4 +1,4 @@
-use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::proto_chunk::GenerationCache, world::BlockRegistryExt};
 use pumpkin_data::{BlockDirection, tag};
 use pumpkin_util::{
     math::position::BlockPos,
@@ -13,6 +13,7 @@ impl CoralTreeFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature
@@ -24,7 +25,7 @@ impl CoralTreeFeature {
         let mut pos = pos;
         let i = random.next_bounded_i32(3) + 1;
         for _ in 0..i {
-            if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
+            if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
                 return true;
             }
             pos = pos.up();
@@ -38,7 +39,7 @@ impl CoralTreeFeature {
             let times = random.next_bounded_i32(5) + 2;
             let mut m = 0;
             for n in 0..times {
-                if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
+                if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
                     break;
                 }
                 pos = pos.up();

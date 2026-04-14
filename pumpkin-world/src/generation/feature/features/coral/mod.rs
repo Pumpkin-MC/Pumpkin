@@ -1,4 +1,4 @@
-use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::proto_chunk::GenerationCache, world::BlockRegistryExt};
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, EnumVariants, SeaPickleLikeProperties},
@@ -18,6 +18,7 @@ pub struct CoralFeature;
 impl CoralFeature {
     pub fn generate_coral_piece<T: GenerationCache>(
         chunk: &mut T,
+        block_registry: &dyn BlockRegistryExt,
         random: &mut RandomGenerator,
         state: &BlockState,
         pos: BlockPos,
@@ -30,19 +31,29 @@ impl CoralFeature {
         {
             return false;
         }
-        chunk.set_block_state(&pos.0, state);
+        if block_registry.can_place_at(Block::from_state_id(state.id), state, chunk, &pos) {
+            chunk.set_block_state(&pos.0, state);
+        }
         if random.next_f32() < 0.25 {
-            chunk.set_block_state(
-                &pos.0,
-                Self::get_random_tag_entry(tag::Block::MINECRAFT_CORALS, random),
-            );
+            let block_to_place_state =
+                Self::get_random_tag_entry(tag::Block::MINECRAFT_CORALS, random);
+            if block_registry.can_place_at(
+                Block::from_state_id(block_to_place_state.id),
+                block_to_place_state,
+                chunk,
+                &pos,
+            ) {
+                chunk.set_block_state(&pos.0, block_to_place_state);
+            }
         } else if random.next_f32() < 0.05 {
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
             props.pickles = (random.next_bounded_i32(4) as u8) + 1;
-            chunk.set_block_state(
-                &pos.0,
-                BlockState::from_id(props.to_state_id(&Block::SEA_PICKLE)),
-            );
+            let state_id = props.to_state_id(&Block::SEA_PICKLE);
+            let block_state = BlockState::from_id(state_id);
+            if block_registry.can_place_at(Block::from_state_id(state_id), block_state, chunk, &pos)
+            {
+                chunk.set_block_state(&pos.0, block_state);
+            }
         }
         for dir in BlockDirection::horizontal() {
             let dir_pos = pos.offset(dir.to_offset());
@@ -69,10 +80,19 @@ impl CoralFeature {
                     }
                 })
                 .collect();
-            chunk.set_block_state(
-                &dir_pos.0,
-                BlockState::from_id(wall_coral.from_properties(&props).to_state_id(wall_coral)),
-            );
+            let block_state_id = wall_coral.from_properties(&props).to_state_id(wall_coral);
+            let block_state = BlockState::from_id(block_state_id);
+            if block_registry.can_place_at(
+                Block::from_state_id(block_state_id),
+                block_state,
+                chunk,
+                &dir_pos,
+            ) {
+                chunk.set_block_state(
+                    &dir_pos.0,
+                    BlockState::from_id(wall_coral.from_properties(&props).to_state_id(wall_coral)),
+                );
+            }
         }
 
         true
