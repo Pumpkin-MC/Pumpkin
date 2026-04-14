@@ -588,12 +588,24 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:ice_spike" => {
             quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
         }
+        "minecraft:spike" => {
+            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
+        }
         "minecraft:iceberg" => {
             let state = value_to_block_state_codec(&config["state"]);
             quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature { main_block: #state }) }
         }
         "minecraft:chorus_plant" => {
             quote! { ConfiguredFeature::ChorusPlant(crate::generation::feature::features::chorus_plant::ChorusPlantFeature {}) }
+        }
+        "minecraft:end_platform" => {
+            quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
+        }
+        "minecraft:end_island" => {
+            quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
+        }
+        "minecraft:kelp" => {
+            quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
         
         // All TODO/empty features
@@ -609,9 +621,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:huge_red_mushroom" => {
             quote! { ConfiguredFeature::HugeRedMushroom(crate::generation::feature::features::huge_red_mushroom::HugeRedMushroomFeature {}) }
         }
-        "minecraft:spike" => {
-            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
-        }
         "minecraft:vines" => {
             quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) }
         }
@@ -624,17 +633,8 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:blue_ice" => {
             quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) }
         }
-        "minecraft:end_platform" => {
-            quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
-        }
-        "minecraft:end_island" => {
-            quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
-        }
         "minecraft:end_gateway" => {
             quote! { ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {}) }
-        }
-        "minecraft:kelp" => {
-            quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
         "minecraft:coral_tree" => {
             quote! { ConfiguredFeature::CoralTree(crate::generation::feature::features::coral::coral_tree::CoralTreeFeature) }
