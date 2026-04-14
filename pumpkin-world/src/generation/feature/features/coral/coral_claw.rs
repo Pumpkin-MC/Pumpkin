@@ -1,4 +1,4 @@
-use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::proto_chunk::GenerationCache, world::BlockRegistryExt};
 use pumpkin_data::{BlockDirection, tag};
 use pumpkin_util::{
     math::position::BlockPos,
@@ -13,6 +13,7 @@ impl CoralClawFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature
@@ -21,7 +22,7 @@ impl CoralClawFeature {
     ) -> bool {
         // First lets get a random coral
         let block = CoralFeature::get_random_tag_entry(tag::Block::MINECRAFT_CORAL_BLOCKS, random);
-        if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
+        if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
             return false;
         }
         let i = random.next_bounded_i32(2) + 2;
@@ -48,7 +49,7 @@ impl CoralClawFeature {
             }
 
             for _ in 0..j {
-                if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
+                if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
                     break;
                 }
                 pos = pos.offset(direction3.to_offset());
@@ -59,7 +60,7 @@ impl CoralClawFeature {
 
             for _l in 0..k {
                 pos = pos.offset(direction.opposite().to_offset());
-                if !CoralFeature::generate_coral_piece(chunk, random, block, pos) {
+                if !CoralFeature::generate_coral_piece(chunk, block_registry, random, block, pos) {
                     continue 'block0;
                 }
                 if random.next_f32() < 0.25 {
