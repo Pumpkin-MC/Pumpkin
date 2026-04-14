@@ -1,5 +1,5 @@
 interface event {
-    use common.{block-position, game-mode, hand, position};
+    use common.{block-position, game-mode, hand, item-stack, position};
     use player.{player};
     use packet.{raw-packet-event};
     use text.{text-component};
@@ -140,6 +140,34 @@ interface event {
         interact-at,
     }
 
+    enum interact-action {
+        left-click-block,
+        left-click-air,
+        right-click-air,
+        right-click-block,
+    }
+
+    record player-interact-event-data {
+        player: player,
+        action: interact-action,
+        clicked-pos: option<block-position>,
+        item: item-stack,
+        block: string,
+        cancelled: bool
+    }
+
+    record player-toggle-sneak-event-data {
+        player: player,
+        is-sneaking: bool,
+        cancelled: bool
+    }
+
+    record player-toggle-sprint-event-data {
+        player: player,
+        is-sprinting: bool,
+        cancelled: bool
+    }
+
     record player-interact-unknown-entity-event-data {
         player: player,
         entity-id: s32,
@@ -241,6 +269,9 @@ interface event {
         player-fish-event,
         player-egg-throw-event,
         player-interact-unknown-entity-event,
+        player-interact-event,
+        player-toggle-sneak-event,
+        player-toggle-sprint-event,
         block-redstone-event,
         block-break-event,
         block-burn-event,
@@ -271,6 +302,9 @@ interface event {
         player-fish-event(player-fish-event-data),
         player-egg-throw-event(player-egg-throw-event-data),
         player-interact-unknown-entity-event(player-interact-unknown-entity-event-data),
+        player-interact-event(player-interact-event-data),
+        player-toggle-sneak-event(player-toggle-sneak-event-data),
+        player-toggle-sprint-event(player-toggle-sprint-event-data),
         block-redstone-event(block-redstone-event-data),
         block-break-event(block-break-event-data),
         block-burn-event(block-burn-event-data),

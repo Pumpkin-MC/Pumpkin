@@ -2765,6 +2765,7 @@ dependencies = [
  "hmac 0.13.0",
  "libloading",
  "num-bigint",
+ "num_cpus",
  "ordered-float",
  "pkcs8 0.11.0-rc.11",
  "postcard",
@@ -2776,7 +2777,8 @@ dependencies = [
  "pumpkin-protocol",
  "pumpkin-util",
  "pumpkin-world",
- "rand 0.10.0",
+ "rand 0.10.1",
+ "rayon",
  "rsa",
  "rustc-hash",
  "rustc_version_runtime",
@@ -2841,7 +2843,7 @@ dependencies = [
  "phf",
  "pumpkin-nbt",
  "pumpkin-util",
- "rand 0.10.0",
+ "rand 0.10.1",
  "serde",
 ]
 
@@ -2963,7 +2965,8 @@ dependencies = [
  "pumpkin-data",
  "pumpkin-nbt",
  "pumpkin-util",
- "rand 0.10.0",
+ "rand 0.10.1",
+ "rayon",
  "rustc-hash",
  "ruzstd",
  "serde",
@@ -3022,9 +3025,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc266eb313df6c5c09c1c7b1fbe2510961e5bcd3add930c1e31f7ed9da0feff8"
+checksum = "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
 dependencies = [
  "chacha20",
  "getrandom 0.4.2",
@@ -3729,7 +3732,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",

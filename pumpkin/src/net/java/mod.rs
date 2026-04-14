@@ -867,7 +867,7 @@ impl JavaClient {
                     .await;
             }
             id if id == SPlayerInput::to_id(version) => {
-                self.handle_player_input(player, SPlayerInput::read(payload, &version)?)
+                self.handle_player_input(player, SPlayerInput::read(payload, &version)?, server)
                     .await;
             }
             id if id == SMoveVehicle::to_id(version) => {
@@ -932,8 +932,12 @@ impl JavaClient {
                     .await;
             }
             id if id == SPlayerCommand::to_id(version) => {
-                self.handle_player_command(player, SPlayerCommand::read(payload, &version)?)
-                    .await;
+                self.handle_player_command(
+                    player,
+                    SPlayerCommand::read(payload, &version)?,
+                    server,
+                )
+                .await;
             }
             id if id == SPlayerLoaded::to_id(version) => {
                 Self::handle_player_loaded(player);
