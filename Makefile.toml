@@ -1,6 +1,20 @@
 [config]
 default_to_workspace = false
 
+[env]
+# Resolve NDK root: honour $ANDROID_NDK_HOME if set, otherwise pick the
+# latest NDK installed by Android Studio under ~/Android/Sdk/ndk/.
+ANDROID_NDK_BIN = { script = [
+  "ndk=${ANDROID_NDK_HOME:-$(ls -d \"$HOME/Android/Sdk/ndk/\"* 2>/dev/null | sort -V | tail -1)}",
+  "echo $ndk/toolchains/llvm/prebuilt/linux-x86_64/bin",
+] }
+CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = { script = ["echo $ANDROID_NDK_BIN/aarch64-linux-android34-clang"] }
+CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER  = { script = ["echo $ANDROID_NDK_BIN/x86_64-linux-android34-clang"] }
+CC_aarch64_linux_android = { script = ["echo $ANDROID_NDK_BIN/aarch64-linux-android34-clang"] }
+AR_aarch64_linux_android = { script = ["echo $ANDROID_NDK_BIN/llvm-ar"] }
+CC_x86_64_linux_android  = { script = ["echo $ANDROID_NDK_BIN/x86_64-linux-android34-clang"] }
+AR_x86_64_linux_android  = { script = ["echo $ANDROID_NDK_BIN/llvm-ar"] }
+
 [tasks.android]
 description = "Build debug APK (cargo make android)"
 dependencies = ["android-rust", "android-copy", "android-apk-debug"]

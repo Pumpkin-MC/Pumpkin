@@ -1,13 +1,2 @@
-[target.aarch64-linux-android]
-linker = "/home/ser/Android/Sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang"
-
 [target.x86_64-linux-android]
-linker = "/home/ser/Android/Sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android34-clang"
 rustflags = ["-C", "link-arg=-Wl,--hash-style=both"]
-
-# C compiler + archiver for crates with native C code (e.g. wasmtime, zstd)
-[env]
-CC_aarch64_linux_android  = "/home/ser/Android/Sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang"
-AR_aarch64_linux_android  = "/home/ser/Android/Sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
-CC_x86_64_linux_android   = "/home/ser/Android/Sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android34-clang"
-AR_x86_64_linux_android   = "/home/ser/Android/Sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
