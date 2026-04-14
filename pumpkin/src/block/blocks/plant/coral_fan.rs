@@ -256,6 +256,16 @@ fn get_corresponding_wall_fan_type(block: &Block) -> Option<Block> {
         Some(Block::FIRE_CORAL_WALL_FAN)
     } else if block == &Block::HORN_CORAL_FAN {
         Some(Block::HORN_CORAL_WALL_FAN)
+    } else if block == &Block::DEAD_TUBE_CORAL_FAN {
+        Some(Block::DEAD_TUBE_CORAL_WALL_FAN)
+    } else if block == &Block::DEAD_BRAIN_CORAL_FAN {
+        Some(Block::DEAD_BRAIN_CORAL_WALL_FAN)
+    } else if block == &Block::DEAD_BUBBLE_CORAL_FAN {
+        Some(Block::DEAD_BUBBLE_CORAL_WALL_FAN)
+    } else if block == &Block::DEAD_FIRE_CORAL_FAN {
+        Some(Block::DEAD_FIRE_CORAL_WALL_FAN)
+    } else if block == &Block::DEAD_HORN_CORAL_FAN {
+        Some(Block::DEAD_HORN_CORAL_WALL_FAN)
     } else {
         None
     }
