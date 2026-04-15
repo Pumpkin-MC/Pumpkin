@@ -1,0 +1,25 @@
+/// Tablist (player list) header and footer management.
+interface tablist {
+    use text.{text-component};
+
+    /// Resource for managing the tablist header and footer.
+    resource tablist {
+        /// Sets the header text displayed above the player list in the tab menu.
+        set-header: func(header: text-component);
+
+        /// Sets the footer text displayed below the player list in the tab menu.
+        set-footer: func(footer: text-component);
+
+        /// Sets both header and footer at once.
+        set-header-and-footer: func(header: text-component, footer: text-component);
+
+        /// Clears the header text (removes it from the tablist).
+        clear-header: func();
+
+        /// Clears the footer text (removes it from the tablist).
+        clear-footer: func();
+
+        /// Clears both header and footer.
+        clear-all: func();
+    }
+}

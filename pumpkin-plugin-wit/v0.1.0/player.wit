@@ -5,6 +5,7 @@ interface player {
     use permission.{permission-level};
     use text.{text-component};
     use gui.{gui};
+    use tablist.{tablist};
 
     /// Various abilities a player can have.
     record player-abilities {
@@ -168,5 +169,8 @@ interface player {
 
         /// Returns the player's IP address.
         get-ip: func() -> string;
+
+        /// Returns the player's tablist for managing header/footer.
+        get-tablist: func() -> tablist;
     }
 }

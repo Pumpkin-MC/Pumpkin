@@ -1,6 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use pumpkin_util::version::MinecraftVersion;
-pub const CURRENT_MC_VERSION: MinecraftVersion = pumpkin_util::version::MinecraftVersion::V_26_1;
+pub const CURRENT_MC_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
 pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_21;
 #[derive(Clone, Copy, Debug)]
 pub struct PacketId {
@@ -19,15 +19,15 @@ impl PacketId {
     #[doc = r" Returns -1 if the packet does not exist in that version."]
     pub fn to_id(&self, version: MinecraftVersion) -> i32 {
         match version {
-            pumpkin_util::version::MinecraftVersion::V_1_21 => self.v1_21,
-            pumpkin_util::version::MinecraftVersion::V_1_21_2 => self.v1_21_2,
-            pumpkin_util::version::MinecraftVersion::V_1_21_4 => self.v1_21_4,
-            pumpkin_util::version::MinecraftVersion::V_1_21_5 => self.v1_21_5,
-            pumpkin_util::version::MinecraftVersion::V_1_21_6 => self.v1_21_6,
-            pumpkin_util::version::MinecraftVersion::V_1_21_7 => self.v1_21_7,
-            pumpkin_util::version::MinecraftVersion::V_1_21_9 => self.v1_21_9,
-            pumpkin_util::version::MinecraftVersion::V_1_21_11 => self.v1_21_11,
-            pumpkin_util::version::MinecraftVersion::V_26_1 => self.v26_1,
+            MinecraftVersion::V_1_21 => self.v1_21,
+            MinecraftVersion::V_1_21_2 => self.v1_21_2,
+            MinecraftVersion::V_1_21_4 => self.v1_21_4,
+            MinecraftVersion::V_1_21_5 => self.v1_21_5,
+            MinecraftVersion::V_1_21_6 => self.v1_21_6,
+            MinecraftVersion::V_1_21_7 => self.v1_21_7,
+            MinecraftVersion::V_1_21_9 => self.v1_21_9,
+            MinecraftVersion::V_1_21_11 => self.v1_21_11,
+            MinecraftVersion::V_26_1 => self.v26_1,
             _ => self.v26_1,
         }
     }

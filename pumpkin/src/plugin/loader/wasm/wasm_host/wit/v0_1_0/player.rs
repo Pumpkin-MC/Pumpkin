@@ -684,6 +684,15 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.get_ip().await)
     }
 
+    async fn get_tablist(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::tablist::Tablist>> {
+        let player = player_from_resource(self, &player)?;
+        self.add_tablist(player)
+            .map_err(|_| wasmtime::Error::msg("failed to add tablist resource"))
+    }
+
     async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
         let _ = self
             .resource_table

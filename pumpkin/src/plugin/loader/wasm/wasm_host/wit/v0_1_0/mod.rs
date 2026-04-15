@@ -19,6 +19,7 @@ pub mod player;
 pub mod scheduler;
 pub mod scoreboard;
 pub mod server;
+pub mod tablist;
 pub mod text;
 pub mod world;
 
