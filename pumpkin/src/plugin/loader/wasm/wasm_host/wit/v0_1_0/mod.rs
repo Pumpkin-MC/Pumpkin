@@ -64,6 +64,7 @@ pub async fn init_plugin(
         version: metadata.version,
         authors: metadata.authors,
         description: metadata.description,
+        dependencies: metadata.dependencies,
     };
 
     Ok((
