@@ -290,6 +290,8 @@ interface common {
         pt-pt,
         /// Quenya.
         qya-aa,
+        /// Romanian (Romania).
+        ro-ro,
         /// Russian (Russia).
         ru-ru,
         /// Rusyn.
