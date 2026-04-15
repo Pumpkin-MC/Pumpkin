@@ -18,16 +18,17 @@ impl ArgumentType for RotationArgumentType {
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let i = reader.cursor();
         if reader.can_read_char() {
-            let y = Coordinates::parse_world_single(i, reader, false)?;
+            let y = WorldCoordinate::parse(reader, false)?;
             if reader.peek() == Some(' ') {
                 reader.skip();
-                let x = Coordinates::parse_world_single(i, reader, false)?;
+                let x = WorldCoordinate::parse(reader, false)?;
                 Ok(Coordinates::World(Vector3::new(
                     x,
                     y,
                     WorldCoordinate::Relative(0.0),
                 )))
             } else {
+                reader.set_cursor(i);
                 Err(Self::syntax_error(reader))
             }
         } else {
