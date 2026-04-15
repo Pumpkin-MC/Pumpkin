@@ -2,6 +2,7 @@
 interface player {
     use common.{hand, item-stack, position, game-mode};
     use %world.{%world};
+    use entity.{entity};
     use permission.{permission-level};
     use text.{text-component};
     use gui.{gui};
@@ -26,6 +27,8 @@ interface player {
 
     /// A handle to a player on the server.
     resource player {
+        /// Returns the player as an entity.
+        as-entity: func () -> entity;
         /// Returns the player's unique UUID as a string.
         get-id: func () -> string;
         /// Returns the player's username.

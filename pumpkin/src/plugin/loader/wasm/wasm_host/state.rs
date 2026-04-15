@@ -14,6 +14,7 @@ use crate::{
         args::ConsumedArgs,
         tree::{CommandTree, builder::NonLeafNodeBuilder},
     },
+    entity::EntityBase,
     entity::player::Player,
     plugin::{
         Context,
@@ -31,6 +32,7 @@ pub struct WasmResource<T> {
 pub type ServerResource = WasmResource<Arc<Server>>;
 pub type ContextResource = WasmResource<Arc<Context>>;
 pub type PlayerResource = WasmResource<Arc<Player>>;
+pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type WorldResource = WasmResource<Arc<World>>;
 pub type ScoreboardResource = WasmResource<Arc<World>>;
 pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
@@ -88,6 +90,14 @@ impl PluginHostState {
         provider: Arc<Player>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(PlayerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(EntityResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

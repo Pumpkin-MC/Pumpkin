@@ -43,9 +43,9 @@ pub mod command {
 }
 
 pub use wit::pumpkin::plugin::{
-    command as command_wit, common,
+    block_entity, command as command_wit, common,
     context::{Context, Server},
-    gui, permission, scoreboard, server, text, world,
+    entity, gui, permission, scoreboard, server, text, world,
 };
 
 pub mod logging;
