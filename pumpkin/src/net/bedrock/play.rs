@@ -24,7 +24,10 @@ use pumpkin_util::{math::position::BlockPos, text::TextComponent};
 use crate::{
     entity::{EntityBase, player::Player},
     net::{DisconnectReason, bedrock::BedrockClient},
-    plugin::player::{player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent},
+    plugin::player::{
+        player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent,
+        player_toggle_flight_event::PlayerToggleFlightEvent,
+    },
     server::{Server, seasonal_events},
     world::chunker::{self},
 };
@@ -76,7 +79,12 @@ impl BedrockClient {
         }
     }
 
-    pub async fn player_pos_update(&self, player: &Arc<Player>, packet: SPlayerAuthInput) {
+    pub async fn player_pos_update(
+        &self,
+        player: &Arc<Player>,
+        packet: SPlayerAuthInput,
+        server: &Server,
+    ) {
         if !player.has_client_loaded() {
             return;
         }
@@ -98,11 +106,35 @@ impl BedrockClient {
         }
 
         if input_data.get(InputData::StartFlying) {
-            player.abilities.lock().await.flying = true;
-            player.send_abilities_update().await;
+            let mut abilities = player.abilities.lock().await;
+            if !abilities.flying {
+                send_cancellable! {{
+                    server;
+                    PlayerToggleFlightEvent::new(player.clone(), true);
+                    'after: {
+                        abilities.flying = true;
+                        player.send_abilities_update().await;
+                    }
+                    'cancelled: {
+                        player.send_abilities_update().await;
+                    }
+                }}
+            }
         } else if input_data.get(InputData::StopFlying) {
-            player.abilities.lock().await.flying = false;
-            player.send_abilities_update().await;
+            let mut abilities = player.abilities.lock().await;
+            if abilities.flying {
+                send_cancellable! {{
+                    server;
+                    PlayerToggleFlightEvent::new(player.clone(), false);
+                    'after: {
+                        abilities.flying = false;
+                        player.send_abilities_update().await;
+                    }
+                    'cancelled: {
+                        player.send_abilities_update().await;
+                    }
+                }}
+            }
         }
 
         if input_data.get(InputData::StartSneaking) {
