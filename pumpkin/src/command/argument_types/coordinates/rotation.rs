@@ -57,11 +57,7 @@ impl RotationArgumentType {
     /// - The returned *x*-coordinate of the coordinates is the absolute/relative **pitch**.
     /// - The returned *y*-coordinate of the coordinates is the absolute/relative **yaw**.
     /// - The returned *z*-coordinate of the coordinates is always 0.
-    pub fn get(
-        context: &CommandContext,
-        name: &str,
-    ) -> Result<Coordinates, CommandSyntaxError> {
-        context
-            .get_argument::<Coordinates>(name).copied()
+    pub fn get(context: &CommandContext, name: &str) -> Result<Coordinates, CommandSyntaxError> {
+        context.get_argument::<Coordinates>(name).copied()
     }
 }
