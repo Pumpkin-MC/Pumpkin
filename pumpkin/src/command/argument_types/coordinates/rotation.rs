@@ -19,7 +19,7 @@ impl ArgumentType for RotationArgumentType {
         let i = reader.cursor();
         if reader.can_read_char() {
             let y = Coordinates::parse_world_single(i, reader, false)?;
-            if reader.peek() == Some('_') {
+            if reader.peek() == Some(' ') {
                 reader.skip();
                 let x = Coordinates::parse_world_single(i, reader, false)?;
                 Ok(Coordinates::World(Vector3::new(
