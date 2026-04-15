@@ -72,7 +72,7 @@ pub async fn from_type(
         id if id == EntityType::WOLF.id => WolfEntity::new(entity).await,
 
         id if id == EntityType::WITHER.id => WitherEntity::new(entity).await,
-        id if id == EntityType::ENDER_DRAGON.id => EnderDragonEntity::new(entity),
+        id if id == EntityType::ENDER_DRAGON.id => EnderDragonEntity::new(entity).await,
 
         id if id == EntityType::AREA_EFFECT_CLOUD.id => {
             crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)

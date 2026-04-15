@@ -11,6 +11,7 @@ pub fn into_level(
     mut base_directory: PathBuf,
     block_registry: Arc<dyn BlockRegistryExt>,
     seed: i64,
+    gen_pool: Option<Arc<rayon::ThreadPool>>,
 ) -> Arc<Level> {
     if dimension == Dimension::OVERWORLD {
     } else if dimension == Dimension::THE_NETHER {
@@ -24,5 +25,6 @@ pub fn into_level(
         block_registry,
         seed,
         dimension,
+        gen_pool,
     )
 }

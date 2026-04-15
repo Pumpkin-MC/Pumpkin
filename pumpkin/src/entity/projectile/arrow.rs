@@ -470,6 +470,10 @@ impl EntityBase for ArrowEntity {
             }
         })
     }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl ArrowEntity {

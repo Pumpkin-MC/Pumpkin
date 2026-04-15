@@ -439,6 +439,10 @@ impl EntityBase for ArmorStandEntity {
     fn get_gravity(&self) -> f64 {
         0.08
     }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 pub enum ArmorStandFlags {

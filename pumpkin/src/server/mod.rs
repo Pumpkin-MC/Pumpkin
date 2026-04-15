@@ -254,6 +254,15 @@ impl Server {
         };
         let server = Arc::new(server);
 
+        let total_cores = num_cpus::get().saturating_sub(2).max(1);
+        let gen_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(total_cores)
+                .thread_name(|i| format!("Gen-Pool-{i}"))
+                .build()
+                .expect("Failed to build generation thread pool"),
+        );
+
         let server_clone = server.clone();
         tokio::spawn(async move {
             server_clone
@@ -268,6 +277,7 @@ impl Server {
             let l_info = server.level_info.clone(); // Access from struct
             let weak = Arc::downgrade(&server);
             let config = Arc::new(server.advanced_config.world.clone());
+            let pool = gen_pool.clone();
 
             tokio::task::spawn_blocking(move || {
                 info!(
@@ -277,7 +287,7 @@ impl Server {
                         .to_pretty_console()
                 );
                 World::load(
-                    into_level(dim, &config, path, registry.clone(), seed),
+                    into_level(dim, &config, path, registry.clone(), seed, Some(pool)),
                     l_info,
                     dim,
                     registry,
@@ -723,22 +733,25 @@ impl Server {
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub async fn tick_players_and_network(&self) {
-        // First, flush pending block updates and synced block events to clients
-        for world in self.worlds.load().iter() {
+        let worlds = self.worlds.load();
+
+        for world in worlds.iter() {
             world.flush_block_updates().await;
             world.flush_synced_block_events().await;
         }
 
-        let players_to_tick: Vec<_> = self.get_all_players();
-        for player in players_to_tick {
-            player.tick(self).await;
+        for world in worlds.iter() {
+            let players = world.players.load();
+            for player in players.iter() {
+                player.tick(self).await;
+            }
         }
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
-        let mut set = JoinSet::new();
-
         self.task_scheduler.tick(self).await;
+
+        let mut set = JoinSet::new();
 
         for world in self.worlds.load().iter() {
             let world = world.clone();

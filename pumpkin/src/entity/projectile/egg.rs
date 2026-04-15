@@ -181,4 +181,8 @@ impl EntityBase for EggEntity {
             }
         })
     }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

@@ -108,7 +108,7 @@ pub type EntityBaseFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub type TeleportFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
-pub trait EntityBase: Send + Sync + NBTStorage {
+pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// Called every tick for this entity.
     ///
     /// The `caller` parameter is a reference to the entity that initiated the tick.
@@ -128,6 +128,13 @@ pub trait EntityBase: Send + Sync + NBTStorage {
                 self.get_entity().tick(caller, server).await;
             }
         })
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any
+    where
+        Self: Sized,
+    {
+        self
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -279,7 +286,10 @@ pub trait EntityBase: Send + Sync + NBTStorage {
     }
 
     fn get_entity(&self) -> &Entity;
+
     fn get_living_entity(&self) -> Option<&LivingEntity>;
+
+    fn cast_any(&self) -> &dyn std::any::Any;
 
     fn get_item_entity(self: Arc<Self>) -> Option<Arc<ItemEntity>> {
         None
@@ -294,6 +304,8 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         let entity = self.get_entity();
         entity
             .custom_name
+            .load()
+            .as_ref()
             .clone()
             .unwrap_or(TextComponent::translate(
                 format!("entity.minecraft.{}", entity.entity_type.resource_name),
@@ -305,13 +317,16 @@ pub trait EntityBase: Send + Sync + NBTStorage {
         Box::pin(async move {
             // TODO: team color
             let entity = self.get_entity();
-            let mut name = entity
-                .custom_name
-                .clone()
-                .unwrap_or(TextComponent::translate(
-                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                    [],
-                ));
+            let mut name =
+                entity
+                    .custom_name
+                    .load()
+                    .as_ref()
+                    .clone()
+                    .unwrap_or(TextComponent::translate(
+                        format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                        [],
+                    ));
             let name_clone = name.clone();
             name = name.hover_event(HoverEvent::show_entity(
                 entity.entity_uuid.to_string(),
@@ -464,9 +479,9 @@ pub struct Entity {
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
     /// Custom name for the entity
-    pub custom_name: Option<TextComponent>,
+    pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
-    pub custom_name_visible: bool,
+    pub custom_name_visible: AtomicBool,
     /// The data send in the Entity Spawn packet
     pub data: AtomicI32,
     /// Stores entity boolean flags (on fire, sneaking, invisible, glowing, etc.)
@@ -498,7 +513,27 @@ impl Entity {
         Self::from_uuid(Uuid::new_v4(), world, position, entity_type)
     }
 
+    pub fn reserve_ids(count: i32) -> i32 {
+        CURRENT_ID.fetch_add(count, Relaxed)
+    }
+
     pub fn from_uuid(
+        entity_uuid: uuid::Uuid,
+        world: Arc<World>,
+        position: Vector3<f64>,
+        entity_type: &'static EntityType,
+    ) -> Self {
+        Self::from_uuid_with_id(
+            CURRENT_ID.fetch_add(1, Relaxed),
+            entity_uuid,
+            world,
+            position,
+            entity_type,
+        )
+    }
+
+    pub fn from_uuid_with_id(
+        entity_id: i32,
         entity_uuid: uuid::Uuid,
         world: Arc<World>,
         position: Vector3<f64>,
@@ -515,7 +550,7 @@ impl Entity {
         };
 
         Self {
-            entity_id: CURRENT_ID.fetch_add(1, Relaxed),
+            entity_id,
             entity_uuid,
             entity_type,
             on_ground: AtomicBool::new(false),
@@ -570,8 +605,8 @@ impl Entity {
             age: AtomicI32::new(0),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
-            custom_name: None,
-            custom_name_visible: false,
+            custom_name: ArcSwap::new(Arc::new(None)),
+            custom_name_visible: AtomicBool::new(false),
             no_clip: AtomicBool::new(false),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
@@ -606,10 +641,21 @@ impl Entity {
 
     /// Sets a custom name for the entity, typically used with nametags
     pub async fn set_custom_name(&self, name: TextComponent) {
+        self.custom_name.store(Arc::new(Some(name.clone())));
         self.send_meta_data(&[Metadata::new(
             TrackedData::CUSTOM_NAME,
             MetaDataType::OPTIONAL_TEXT_COMPONENT,
             Some(name),
+        )])
+        .await;
+    }
+
+    pub async fn set_custom_name_visible(&self, visible: bool) {
+        self.custom_name_visible.store(visible, Ordering::Relaxed);
+        self.send_meta_data(&[Metadata::new(
+            TrackedData::CUSTOM_NAME_VISIBLE,
+            MetaDataType::BOOLEAN,
+            visible,
         )])
         .await;
     }
@@ -2793,6 +2839,10 @@ impl EntityBase for Entity {
 
     fn get_living_entity(&self) -> Option<&LivingEntity> {
         None
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
