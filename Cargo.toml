@@ -90,9 +90,8 @@ debug = true
 strip = false
 
 [workspace.dependencies]
-tokio = { version = "1.51", default-features = false }
+tokio = { version = "1.52", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
-
 
 thiserror = "2.0"
 
@@ -100,7 +99,7 @@ bytes = "1.11"
 
 # Concurrency/Parallelism and Synchronization
 futures = { version = "0.3", default-features = false, features = ["executor"] }
-rayon = "1.11"
+rayon = "1.12"
 crossbeam = "0.8"
 chrono = "0.4"
 
@@ -113,7 +112,7 @@ proc-macro-error2 = "2"
 aes = "0.9"
 async-compression = "0.4.41"
 base64 = "0.22.1"
-bitflags = "2.11.0"
+bitflags = "2.11.1"
 cesu8 = "1.1"
 cfb8 = "0.9"
 colored = "3.1"
@@ -132,7 +131,7 @@ hmac = "=0.13.0"
 indexmap = "2.14"
 itertools = "0.14.0"
 libloading = "0.9"
-lru = "0.16.3"
+lru = "0.17.0"
 lz4-java-wrc = "0.2.0"
 md5 = "0.8"
 num-bigint = "0.4"
@@ -153,7 +152,7 @@ pumpkin-protocol = { path = "pumpkin-protocol" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
-rand = "0.10.0"
+rand = "0.10.1"
 rsa = "=0.10.0-rc.17"
 cipher = "0.5.1"
 rustc-hash = "2.1.2"
@@ -178,10 +177,11 @@ arc-swap = "1.9"
 tokio-util = "0.7.18"
 toml = "1.1"
 ureq = "3.3.0"
+notify = "8.2.0"
 
 wasmtime = "43.0"
 wasmtime-wasi = "43.0"
-wit-bindgen = "0.55"
+wit-bindgen = "0.56"
 wasmparser = "0.246"
 
 postcard = { version = "1.1", features = ["alloc"] }

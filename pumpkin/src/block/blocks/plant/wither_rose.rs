@@ -1,5 +1,9 @@
 use crate::block::{GetStateForNeighborUpdateArgs, blocks::plant::PlantBlockBase};
-use pumpkin_data::{effect::StatusEffect, entity::EntityType};
+use pumpkin_data::{
+    effect::StatusEffect,
+    entity::EntityType,
+    tag::{self, Taggable},
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::Difficulty;
 use pumpkin_world::BlockStateId;
@@ -59,4 +63,13 @@ impl BlockBehaviour for WitherRoseBlock {
     }
 }
 
-impl PlantBlockBase for WitherRoseBlock {}
+impl PlantBlockBase for WitherRoseBlock {
+    async fn can_plant_on_top(
+        &self,
+        block_accessor: &dyn pumpkin_world::world::BlockAccessor,
+        pos: &pumpkin_util::math::position::BlockPos,
+    ) -> bool {
+        let support_block = block_accessor.get_block(pos).await;
+        support_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WITHER_ROSE)
+    }
+}
