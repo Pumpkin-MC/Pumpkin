@@ -193,3 +193,4 @@ pub mod entity_selector;
 pub mod game_profile;
 pub mod range;
 pub mod time;
+mod resource_key;

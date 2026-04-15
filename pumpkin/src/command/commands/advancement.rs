@@ -1,20 +1,17 @@
+use crate::command::args::{Arg, ConsumedArgs};
+use crate::command::argument_builder::{argument, command, literal, ArgumentBuilder};
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::CommandResult;
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandSender,
-    }
+use crate::command::{
+    CommandError, CommandExecutor, CommandSender,
 };
-use CommandError::InvalidConsumption;
 use pumpkin::entity::player::Player;
 use pumpkin_data::Advancement;
-use crate::command::argument_types::core::string::StringArgumentType;
+use pumpkin_protocol::java::client::play::ArgumentType;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::PermissionLvl;
-use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::args::Arg::Players;
-use crate::command::args::resource::advancement::AdvancementArgumentConsumer;
-use crate::command::argument_builder::{command,argument,literal, ArgumentBuilder};
-use crate::command::node::dispatcher::CommandDispatcher;
+use CommandError::InvalidConsumption;
 
 const NAME: &str = "advancement";
 const DESCRIPTION: &str = "manage advancement of the player";
@@ -62,7 +59,15 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
     dispatcher.register(
         command(NAME, DESCRIPTION)
             .requires(PERMISSION)
-            .then(literal("grant"))
-            .then(literal("revoke"))
+            .then(literal("grant")
+                .then(argument("targets",EntityArgumentType::Players)
+                    .then(literal("only")
+                        .then(argument("advancement",ArgumentType::ResourceKey {"advancement"})))
+                    .then(literal("from"))
+                    .then(literal("until"))
+                    .then(literal("through"))
+                    .then(literal("everything")))
+            .then(literal("revoke")
+                .then(argument("targets",EntityArgumentType::Players))
     );
 }
