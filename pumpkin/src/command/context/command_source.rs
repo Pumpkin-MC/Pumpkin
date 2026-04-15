@@ -327,7 +327,7 @@ impl CommandSource {
         entity: &Arc<dyn EntityBase>,
         anchor: EntityAnchor,
     ) -> Self {
-        self.with_looking_at_pos(anchor.position_at_entity(entity))
+        self.with_looking_at_pos(anchor.position_at_entity(entity.get_entity()))
     }
 
     /// Returns a new [`CommandSource`] with the rotation changed in such

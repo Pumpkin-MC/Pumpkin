@@ -3,11 +3,10 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
-use crate::entity::EntityBase;
+use crate::entity::Entity;
 use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use std::sync::Arc;
 
 pub const INVALID_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(translation::ARGUMENT_ANCHOR_INVALID);
@@ -66,20 +65,16 @@ impl EntityAnchor {
         }
     }
 
-    fn transform_position(self, position: Vector3<f64>, entity: &dyn EntityBase) -> Vector3<f64> {
+    fn transform_position(self, position: Vector3<f64>, entity: &Entity) -> Vector3<f64> {
         match self {
             Self::Feet => position,
-            Self::Eyes => position.add(&Vector3::new(
-                0.0,
-                entity.get_entity().get_eye_height(),
-                0.0,
-            )),
+            Self::Eyes => position.add(&Vector3::new(0.0, entity.get_eye_height(), 0.0)),
         }
     }
 
     /// Gets the position of an entity with respect to this anchor.
-    pub fn position_at_entity(self, entity: &Arc<dyn EntityBase>) -> Vector3<f64> {
-        self.transform_position(entity.get_entity().pos.load(), entity.as_ref())
+    pub fn position_at_entity(self, entity: &Entity) -> Vector3<f64> {
+        self.transform_position(entity.pos.load(), entity)
     }
 
     /// Gets the position of a source with respect to this anchor.
@@ -89,6 +84,6 @@ impl EntityAnchor {
         command_source
             .entity
             .as_ref()
-            .map_or_else(|| pos, |e| self.position_at_entity(e))
+            .map_or_else(|| pos, |e| self.position_at_entity(e.get_entity()))
     }
 }
