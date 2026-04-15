@@ -1,38 +1,106 @@
+/// GUI (Graphical User Interface) system for Pumpkin plugins.
+///
+/// This interface allows plugins to create and manage container GUIs
+/// that are displayed to players. Supports various container types
+/// like chests, furnaces, anvils, and more.
+///
+/// # GUI Types
+///
+/// - Generic containers (1-6 rows of 9 slots)
+/// - Crafting tables (3x3)
+/// - Furnaces, blast furnaces, smokers
+/// - Anvils, enchantment tables
+/// - Brewing stands, hoppers, beacons
+/// - And more...
+///
+/// # Usage
+///
+/// ```
+/// // Create a double chest GUI
+/// let gui = new gui(gui-type.generic-9x6, text-component.text("My Chest"));
+/// gui.set-item(0, item-stack { registry-key: "minecraft:diamond", count: 1 });
+/// player.open-gui(gui);
+/// ```
 interface gui {
     use text.{text-component};
     use common.{item-stack};
 
+    /// Available GUI (container) types.
+    ///
+    /// Each type determines the layout and slot count of the container.
     enum gui-type {
+        /// Single row of 9 slots.
         generic-9x1,
+        /// Two rows of 9 slots.
         generic-9x2,
+        /// Three rows (single chest) - 27 slots.
         generic-9x3,
+        /// Four rows of 9 slots.
         generic-9x4,
+        /// Five rows of 9 slots.
         generic-9x5,
+        /// Six rows (double chest) - 54 slots.
         generic-9x6,
+        /// 3x3 grid - 9 slots (dropper/dispenser style).
         generic-3x3,
+        /// Crafter block with 3x3 grid.
         crafter-3x3,
+        /// Anvil for repairing and renaming.
         anvil,
+        /// Beacon for selecting effects.
         beacon,
+        /// Blast furnace for smelting ores.
         blast-furnace,
+        /// Brewing stand for potions.
         brewing-stand,
+        /// Crafting table interface.
         crafting,
+        /// Enchantment table interface.
         enchantment,
+        /// Furnace for smelting.
         furnace,
+        /// Grindstone for repairing and disenchanting.
         grindstone,
+        /// Hopper - 5 slots.
         hopper,
+        /// Lectern for reading books.
         lectern,
+        /// Loom for banner patterns.
         loom,
+        /// Villager trading interface.
         merchant,
+        /// Shulker box storage.
         shulker-box,
+        /// Smithing table for netherite upgrades.
         smithing,
+        /// Smoker for cooking food.
         smoker,
+        /// Cartography table for maps.
         cartography-table,
+        /// Stonecutter for crafting variants.
         stonecutter,
     }
 
+    /// A GUI instance that can be opened for a player.
+    ///
+    /// GUIs are created with a specific type and title, then populated
+    /// with items before being shown to players.
     resource gui {
+        /// Creates a new GUI instance.
+        ///
+        /// * `%type`: The type of container to display.
+        /// * `title`: The title shown at the top of the GUI.
         constructor(%type: gui-type, title: text-component);
+
+        /// Sets an item in a specific slot.
+        ///
+        /// * `slot`: The slot index (0-based).
+        /// * `item`: The item stack to display, or null to clear.
         set-item: func(slot: u32, item: item-stack);
+
+        /// Gets the item currently in a slot.
+        ///
+        /// Returns `none` if the slot is empty.
         get-item: func(slot: u32) -> option<item-stack>;
     }
 }

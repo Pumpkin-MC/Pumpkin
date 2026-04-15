@@ -1,3 +1,28 @@
+/// World interface for Pumpkin plugins.
+///
+/// This interface provides access to Minecraft worlds (dimensions), allowing
+/// plugins to read and modify blocks, query world state, spawn particles,
+/// play sounds, and create explosions.
+///
+/// # World Operations
+///
+/// - Block state reading and modification
+/// - Time and weather control
+/// - Particle spawning
+/// - Sound playback
+/// - Explosion creation
+/// - Scoreboard access
+///
+/// # Coordinates
+///
+/// Minecraft uses two coordinate systems:
+/// - **Block positions**: Integer coordinates (x, y, z) for blocks
+/// - **Positions**: Floating point coordinates for entities/particles
+///
+/// # Thread Safety
+///
+/// World operations may happen asynchronously. The implementation handles
+/// synchronization between the plugin and the server thread.
 interface %world {
     use common.{position};
     use text.{text-component};
@@ -19,15 +44,25 @@ interface %world {
 
     /// Categories for sounds to control their volume independently.
     enum sound-category {
+        /// Master volume control.
         master,
+        /// Music volume.
         music,
+        /// Record/jukebox volume.
         records,
+        /// Weather sounds volume.
         weather,
+        /// Block sounds volume.
         blocks,
+        /// Hostile mob sounds volume.
         hostile,
+        /// Neutral mob sounds volume.
         neutral,
+        /// Player sounds volume.
         players,
+        /// Ambient environment sounds volume.
         ambient,
+        /// Voice/speech volume.
         voice,
     }
 

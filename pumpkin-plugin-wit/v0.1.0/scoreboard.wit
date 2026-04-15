@@ -1,72 +1,181 @@
+/// Scoreboard system for Pumpkin plugins.
+///
+/// This interface provides access to Minecraft's scoreboard system,
+/// allowing plugins to track scores, display objectives, and manage teams.
+///
+/// # Scoreboard Concepts
+///
+/// - **Objective**: A named value that can be tracked (like "kills", "deaths")
+/// - **Score**: A specific player's or entity's value for an objective
+/// - **Team**: A group of players with shared properties (color, collision rules)
+/// - **Display Slot**: Where an objective is shown (sidebar, below name, etc.)
+///
+/// # Display Slots
+///
+/// - `player-list`: Shows scores in the player list (tab menu)
+/// - `sidebar`: Shows scores on the right side of the screen
+/// - `below-name`: Shows scores below player nametags
+/// - `sidebar-team-*`: Sidebar for specific team colors
 interface scoreboard {
     use text.{text-component};
     use common.{named-color};
 
+    /// How scores should be displayed.
     enum render-type {
+        /// Shows the raw numeric value.
         integer,
+        /// Shows as hearts (for health objectives).
         hearts
     }
 
+    /// Locations where objectives can be displayed.
     enum display-slot {
+        /// Shows scores in the player list (tab menu).
         player-list,
+        /// Shows scores on the right side of the screen.
         sidebar,
+        /// Shows scores below player nametags.
         below-name,
+        /// Sidebar with black team color.
         sidebar-team-black,
+        /// Sidebar with dark blue team color.
         sidebar-team-dark-blue,
+        /// Sidebar with dark green team color.
         sidebar-team-dark-green,
+        /// Sidebar with dark aqua team color.
         sidebar-team-dark-aqua,
+        /// Sidebar with dark red team color.
         sidebar-team-dark-red,
+        /// Sidebar with dark purple team color.
         sidebar-team-dark-purple,
+        /// Sidebar with gold team color.
         sidebar-team-gold,
+        /// Sidebar with gray team color.
         sidebar-team-gray,
+        /// Sidebar with dark gray team color.
         sidebar-team-dark-gray,
+        /// Sidebar with blue team color.
         sidebar-team-blue,
+        /// Sidebar with green team color.
         sidebar-team-green,
+        /// Sidebar with aqua team color.
         sidebar-team-aqua,
+        /// Sidebar with red team color.
         sidebar-team-red,
+        /// Sidebar with light purple team color.
         sidebar-team-light-purple,
+        /// Sidebar with yellow team color.
         sidebar-team-yellow,
+        /// Sidebar with white team color.
         sidebar-team-white,
     }
 
+    /// Visibility settings for team nametags.
     enum nametag-visibility {
+        /// Nametags are always visible.
         always,
+        /// Nametags are never visible.
         never,
+        /// Hide nametags for other teams.
         hide-for-other-teams,
+        /// Hide nametags for own team members.
         hide-for-own-team
     }
 
+    /// Collision rules for team members.
     enum collision-rule {
+        /// Always collide with other entities.
         always,
+        /// Never collide with other entities.
         never,
+        /// Only push other teams.
         push-other-teams,
+        /// Only push own team members.
         push-own-team
     }
 
+    /// Settings for a team.
     record team-settings {
+        /// The display name shown for the team.
         display-name: text-component,
+        /// Whether team members can damage each other.
         friendly-fire: bool,
+        /// Whether team members can see invisible teammates.
         see-friendly-invisibles: bool,
+        /// When nametags are visible for team members.
         nametag-visibility: nametag-visibility,
+        /// How collision is handled for team members.
         collision-rule: collision-rule,
+        /// The color used for team prefixes/suffixes.
         color: named-color,
+        /// Text shown before each member's name.
         prefix: text-component,
+        /// Text shown after each member's name.
         suffix: text-component
     }
 
+    /// A scoreboard for a world.
+    ///
+    /// Scoreboards track objectives, scores, and teams for a specific world.
     resource scoreboard {
+        /// Creates a new objective.
+        ///
+        /// * `name`: The unique identifier for this objective.
+        /// * `display-name`: The name shown to players.
+        /// * `render-type`: How to display the scores.
         add-objective: func(name: string, display-name: text-component, render-type: render-type);
+
+        /// Removes an objective.
+        ///
+        /// * `name`: The objective to remove.
         remove-objective: func(name: string);
+
+        /// Sets which objective to display in a slot.
+        ///
+        /// * `slot`: Where to display the objective.
+        /// * `objective-name`: The objective to display, or empty string to clear.
         set-display-slot: func(slot: display-slot, objective-name: string);
 
+        /// Updates a score for an entity.
+        ///
+        /// * `entity-name`: The entity whose score to update.
+        /// * `objective-name`: The objective to update.
+        /// * `value`: The new score value.
         update-score: func(entity-name: string, objective-name: string, value: s32);
+
+        /// Removes a score for an entity.
+        ///
+        /// * `entity-name`: The entity whose score to remove.
+        /// * `objective-name`: The objective to remove from.
         remove-score: func(entity-name: string, objective-name: string);
 
+        /// Creates a new team.
+        ///
+        /// * `name`: The unique team identifier.
+        /// * `settings`: Initial team settings.
         create-team: func(name: string, settings: team-settings);
+
+        /// Removes a team.
+        ///
+        /// * `name`: The team to remove.
         remove-team: func(name: string);
+
+        /// Updates a team's settings.
+        ///
+        /// * `name`: The team to update.
+        /// * `settings`: New team settings.
         update-team: func(name: string, settings: team-settings);
 
+        /// Adds a player to a team.
+        ///
+        /// * `team-name`: The team to add to.
+        /// * `player-name`: The player to add.
         add-player-to-team: func(team-name: string, player-name: string);
+
+        /// Removes a player from a team.
+        ///
+        /// * `team-name`: The team to remove from.
+        /// * `player-name`: The player to remove.
         remove-player-from-team: func(team-name: string, player-name: string);
     }
 }

@@ -1,46 +1,84 @@
+/// Permission system for Pumpkin plugins.
+///
+/// This interface defines permission levels and permission nodes
+/// that control access to commands and server operations.
+///
+/// # Permission Levels
+///
+/// Permission levels determine the player's access to commands and server operations.
+/// Each numeric level corresponds to a specific role:
+/// - `zero`: Player can use basic commands.
+/// - `one`: Player can bypass spawn protection.
+/// - `two`: Player can use more commands and command blocks.
+/// - `three`: Player can use multiplayer management commands.
+/// - `four`: Player can use all commands including server management.
+///
+/// # Permission Nodes
+///
+/// Permission nodes are dot-separated strings that identify specific permissions:
+/// - Format: `plugin.category.action`
+/// - Example: `minecraft.command.gamemode`, `myplugin.commands.fly`
+///
+/// # Default Permissions
+///
+/// Permissions can have default values that apply when not explicitly set:
+/// - `deny`: Not granted by default
+/// - `allow`: Granted to all players by default
+/// - `op`: Granted to operators at a specific level or higher
 interface permission {
-    /// Represents the player's permission level
+    /// Represents the player's permission level.
     ///
     /// Permission levels determine the player's access to commands and server operations.
     /// Each numeric level corresponds to a specific role:
-    /// - `Zero`: `normal`: Player can use basic commands.
-    /// - `One`: `moderator`: Player can bypass spawn protection.
-    /// - `Two`: `gamemaster`: Player or executor can use more commands and player can use command blocks.
-    /// - `Three`:  `admin`: Player or executor can use commands related to multiplayer management.
-    /// - `Four`: `owner`: Player or executor can use all of the commands, including commands related to server management.
+    /// - `Zero`: Player can use basic commands.
+    /// - `One`: Player can bypass spawn protection.
+    /// - `Two`: Player or executor can use more commands and player can use command blocks.
+    /// - `Three`: Player or executor can use commands related to multiplayer management.
+    /// - `Four`: Player or executor can use all of the commands, including commands related to server management.
     enum permission-level {
+        /// Normal player - basic commands only.
         zero,
+        /// Can bypass spawn protection.
         one,
+        /// Can use command blocks and more commands.
         two,
+        /// Can use multiplayer management commands.
         three,
+        /// Full server management access.
         four,
     }
 
-    /// Describes the default behavior for permissions
+    /// Describes the default behavior for permissions.
     variant permission-default {
-        /// Permission is not granted by default
+        /// Permission is not granted by default.
         deny,
-        /// Permission is granted by default
+        /// Permission is granted to all players by default.
         allow,
-        /// Permission is granted by default to operators
+        /// Permission is granted to operators at the specified level or higher.
         op(permission-level),
     }
 
-    /// A child permission entry
+    /// A child permission entry.
+    ///
+    /// Child permissions allow setting multiple related permissions
+    /// at once. When a parent permission is granted, its children
+    /// are also granted based on their values.
     record permission-child {
+        /// The permission node.
         node: string,
+        /// Whether this child is granted when the parent is.
         value: bool,
     }
 
-    /// Defines a permission node in the system
+    /// Defines a permission node in the system.
     record permission {
-        /// The full node name (e.g., "minecraft:command.gamemode")
+        /// The full node name (e.g., "minecraft:command.gamemode").
         node: string,
-        /// Description of what this permission does
+        /// Description of what this permission does.
         description: string,
-        /// The default value of this permission
+        /// The default value of this permission.
         default: permission-default,
-        /// Children nodes that are affected by this permission
+        /// Children nodes that are affected by this permission.
         children: list<permission-child>,
     }
 }

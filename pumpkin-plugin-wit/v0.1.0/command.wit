@@ -1,3 +1,20 @@
+/// Command system for Pumpkin plugins.
+///
+/// This interface allows plugins to register custom commands with the server.
+/// Commands support arguments, permissions, and multiple execution handlers.
+///
+/// # Command Structure
+///
+/// Commands are built as trees of nodes:
+/// - **Literal nodes**: Fixed text (like "give", "set")
+/// - **Argument nodes**: Dynamic values (like player names, numbers)
+///
+/// # Example Command
+///
+/// ```
+/// /kit starter
+/// /kit <player> <kit_name>
+/// ```
 interface command {
     use player.{player};
     use %world.{%world};
@@ -6,184 +23,362 @@ interface command {
     use server.{server, difficulty};
     use text.{text-component};
 
+    /// Minecraft game modes for command arguments.
     enum gamemode {
+        /// Survival mode - limited resources, health, hunger.
         survival,
+        /// Creative mode - unlimited resources, flying.
         creative,
+        /// Adventure mode - can only interact with specific blocks/items.
         adventure,
+        /// Spectator mode - invisible, flying, can clip through blocks.
         spectator,
     }
 
+    /// Colors available for boss bar displays.
     enum bossbar-color {
+        /// Pink boss bar color.
         pink,
+        /// Blue boss bar color.
         blue,
+        /// Red boss bar color.
         red,
+        /// Green boss bar color.
         green,
+        /// Yellow boss bar color.
         yellow,
+        /// Purple boss bar color.
         purple,
+        /// White boss bar color.
         white,
     }
 
+    /// Styles for boss bar segmentation.
     enum bossbar-style {
+        /// Solid bar with no divisions.
         no-division,
+        /// Bar divided into 6 segments.
         notches6,
+        /// Bar divided into 10 segments.
         notches10,
+        /// Bar divided into 12 segments.
         notches12,
+        /// Bar divided into 20 segments.
         notches20,
     }
 
+    /// Categories for controlling sound volume.
     enum sound-category {
+        /// Master volume control.
         master,
+        /// Music volume.
         music,
+        /// Record/jukebox volume.
         records,
+        /// Weather sounds volume.
         weather,
+        /// Block sounds volume.
         blocks,
+        /// Hostile mob sounds volume.
         hostile,
+        /// Neutral mob sounds volume.
         neutral,
+        /// Player sounds volume.
         players,
+        /// Ambient environment sounds volume.
         ambient,
+        /// Voice/speech volume.
         voice,
+        /// UI interaction sounds volume.
         ui,
     }
 
+    /// Anchor points for entity positioning.
     enum entity-anchor {
+        /// Position at the entity's feet.
         feet,
+        /// Position at the entity's eyes.
         eyes,
     }
 
+    /// Numeric types for command arguments.
     variant number {
+        /// 64-bit floating point.
         float64(f64),
+        /// 32-bit floating point.
         float32(f32),
+        /// 32-bit signed integer.
         int32(s32),
+        /// 64-bit signed integer.
         int64(s64),
     }
 
+    /// Error when a number is outside allowed bounds.
     variant not-in-bounds {
+        /// Value is below the minimum allowed.
         lower-bound(tuple<number, number>),
+        /// Value is above the maximum allowed.
         upper-bound(tuple<number, number>),
     }
 
+    /// Parsed command argument values.
+    ///
+    /// Each variant represents a different argument type that can be
+    /// extracted from a consumed command.
     variant arg {
+        /// List of entities matching the selector.
         entities(list<entity>),
+        /// Single entity matching the selector.
         entity(entity),
+        /// List of players matching the selector.
         players(list<player>),
+        /// Block position (integer coordinates).
         block-pos(block-position),
+        /// 3D position (floating point coordinates).
         pos3d(position),
+        /// 2D position (x, z coordinates).
         pos2d(tuple<f64, f64>),
+        /// Rotation (yaw, yaw-relative, pitch, pitch-relative).
         rotation(tuple<f32, bool, f32, bool>),
+        /// Game mode value.
         game-mode(gamemode),
+        /// Difficulty level.
         difficulty(difficulty),
+        /// Item registry key.
         item(string),
+        /// Item predicate for matching items.
         item-predicate(string),
+        /// Resource location (namespace:path).
         resource-location(string),
+        /// Block registry key.
         block(string),
+        /// Block predicate for matching blocks.
         block-predicate(string),
+        /// Boss bar color.
         bossbar-color(bossbar-color),
+        /// Boss bar style.
         bossbar-style(bossbar-style),
+        /// Particle type.
         particle(string),
+        /// Message text.
         msg(string),
+        /// Formatted text component.
         text-component(text-component),
+        /// Time in ticks.
         time(s32),
+        /// Numeric value with bounds checking.
         num(result<number, not-in-bounds>),
+        /// Boolean value.
         %bool(bool),
+        /// Simple string argument.
         simple(string),
+        /// Sound category.
         sound-category(sound-category),
+        /// Damage type registry key.
         damage-type(string),
+        /// Effect/potion registry key.
         effect(string),
+        /// Enchantment registry key.
         enchantment(string),
+        /// Entity anchor point.
         entity-anchor(entity-anchor),
     }
 
+    /// Container for parsed command arguments.
+    ///
+    /// Retrieve values by their argument name using `get-value`.
     resource consumed-args {
+        /// Gets the parsed value for a named argument.
         get-value: func(key: string) -> arg;
     }
 
+    /// Types of command senders.
     variant command-sender-type {
+        /// RCON (Remote Console) connection.
         rcon,
+        /// Server console.
         console,
+        /// Player in-game.
         player(player),
+        /// Command block execution.
         command-block(tuple<command-block-entity, %world>),
+        /// Dummy/no-op sender.
         dummy,
     }
 
+    /// Permission levels for command execution.
+    ///
+    /// Higher levels can execute more sensitive commands.
     enum permission-level {
+        /// No special permissions.
         zero,
+        /// Moderator level.
         one,
+        /// Gamemaster level.
         two,
+        /// Admin level.
         three,
+        /// Owner level - all permissions.
         four,
     }
 
+    /// A source of command execution.
+    ///
+    /// Could be a player, console, command block, or other sources.
     resource command-sender {
+        /// Returns the type of this sender.
         get-command-sender-type: func() -> command-sender-type;
+
+        /// Sends a message to the sender.
         send-message: func(text: text-component);
+
+        /// Sets the success count for command blocks.
         set-success-count: func(count: s32);
+
+        /// Returns true if the sender is a player.
         is-player: func() -> bool;
+
+        /// Returns true if the sender is the console.
         is-console: func() -> bool;
+
+        /// Returns the sender as a player, if applicable.
         as-player: func() -> option<player>;
+
+        /// Returns the sender's permission level.
         permission-level: func() -> permission-level;
+
+        /// Checks if the sender has at least the given permission level.
         has-permission-level: func(level: permission-level) -> bool;
+
+        /// Checks if the sender has a specific permission node.
         has-permission: func(server: borrow<server>, node: string) -> bool;
+
+        /// Returns the sender's position, if applicable.
         position: func() -> option<position>;
+
+        /// Returns the sender's world, if applicable.
         %world: func() -> option<%world>;
+
+        /// Returns the sender's locale.
         get-locale: func() -> locale;
+
+        /// Returns whether the sender should receive command feedback.
         should-receive-feedback: func() -> bool;
+
+        /// Returns whether console output should be broadcast to operators.
         should-broadcast-console-to-ops: func() -> bool;
+
+        /// Returns whether the sender tracks command output.
         should-track-output: func() -> bool;
     }
 
+    /// String parsing modes for string arguments.
     enum string-type {
+        /// Single word, no spaces allowed.
         single-word,
+        /// Quotable string allowing spaces.
         quotable,
+        /// Greedy string consuming the rest of input.
         greedy,
     }
 
+    /// Types of arguments that can be used in commands.
     variant argument-type {
+        /// Boolean value.
         %bool,
+        /// Float with optional min/max bounds.
         float(tuple<option<f32>, option<f32>>),
+        /// Double with optional min/max bounds.
         double(tuple<option<f64>, option<f64>>),
+        /// Integer with optional min/max bounds.
         integer(tuple<option<s32>, option<s32>>),
+        /// Long with optional min/max bounds.
         long(tuple<option<s64>, option<s64>>),
+        /// String with specific parsing mode.
         %string(string-type),
+        /// Entity selector (multiple).
         entities,
+        /// Entity selector (single).
         entity,
+        /// Player selector (multiple).
         %players,
+        /// Game profile (player by name).
         game-profile,
+        /// Block position.
         block-pos,
+        /// 3D position.
         position3d,
+        /// 2D position.
         position2d,
+        /// Block state.
         block-state,
+        /// Block predicate.
         block-predicate,
+        /// Item stack.
         item,
+        /// Item predicate.
         item-predicate,
+        /// Data component.
         component,
+        /// Rotation (yaw and pitch).
         rotation,
+        /// Resource location.
         %resource-location,
+        /// Entity anchor.
         entity-anchor,
+        /// Game mode.
         gamemode,
+        /// Difficulty level.
         difficulty,
+        /// Time with optional minimum ticks.
         time(s32),
+        /// Resource location with registry namespace.
         %resource(string),
     }
 
+    /// Errors that can occur during command execution.
     variant command-error {
+        /// Argument was consumed incorrectly.
         invalid-consumption(option<string>),
+        /// Command requirements not met.
         invalid-requirement,
+        /// Sender lacks permission to execute.
         permission-denied,
+        /// Command execution failed.
         command-failed(text-component),
     }
 
+    /// A node in the command tree.
+    ///
+    /// Command trees are built by chaining nodes with `then`.
     resource command-node {
+        /// Creates a literal node (fixed text).
         literal: static func(name: string) -> command-node;
+
+        /// Creates an argument node with a type.
         argument: static func(name: string, arg-type: argument-type) -> command-node;
+
+        /// Adds a child node to this node.
         then: func(node: command-node);
+
+        /// Sets the handler ID for execution.
         execute-with-handler-id: func(handler-id: u32);
+
+        /// Sets the handler ID for requirement checking.
         require-with-handler-id: func(handler-id: u32);
     }
 
+    /// A complete command definition.
     resource command {
-        /// First name is primary, rest are aliases
+        /// Creates a new command.
+        ///
+        /// The first name is the primary command, additional names are aliases.
         constructor(names: list<string>, description: string);
+
+        /// Adds a child node to the command root.
         then: func(node: command-node);
+
+        /// Sets the handler ID that will be called when this command executes.
         execute-with-handler-id: func(handler-id: u32);
     }
 }

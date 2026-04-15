@@ -1,4 +1,32 @@
 /// The core context provided to a plugin during initialization and event handling.
+///
+/// This interface provides the context resource that plugins use to register
+/// event handlers, commands, and permissions, as well as access server state
+/// during the plugin lifecycle.
+///
+/// # Context Usage
+///
+/// The context is provided to plugins during `on-load` and is used for:
+/// - Registering event listeners
+/// - Adding custom commands
+/// - Creating permission nodes
+/// - Accessing the server's data folder
+/// - Getting the global server instance
+///
+/// # Example
+///
+/// ```
+/// on-load(context) {
+///     // Register an event handler
+///     context.register-event(1, event-type.player-join-event, event-priority.normal, false);
+///
+///     // Register a command
+///     context.register-command(my-command, "myplugin.command.use");
+///
+///     // Get data folder
+///     let folder = context.get-data-folder();
+/// }
+/// ```
 interface context {
     use server.{server};
     use event.{event-type, event-priority};
@@ -22,12 +50,21 @@ interface context {
         register-command: func(command: command, permission: string);
 
         /// Registers a permission node with the server.
+        ///
+        /// * `permission`: The permission to register.
+        ///
+        /// Returns an error if the permission could not be registered.
         register-permission: func(permission: permission) -> result<_, string>;
 
         /// Returns the path to the plugin's private data folder.
+        ///
+        /// Plugins can use this folder to store configuration files,
+        /// player data, caches, and other persistent data.
         get-data-folder: func() -> string;
 
         /// Returns the global server instance.
+        ///
+        /// Use this to access server-wide operations and player lookup.
         get-server: func() -> server;
     }
 }

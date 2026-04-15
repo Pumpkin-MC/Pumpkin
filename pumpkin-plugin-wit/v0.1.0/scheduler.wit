@@ -1,4 +1,29 @@
-/// Provides functionality to schedule tasks to be executed later on the server.
+/// Task scheduler interface for Pumpkin plugins.
+///
+/// This interface provides functionality to schedule tasks to be executed
+/// later on the server, either once after a delay or repeatedly on a timer.
+///
+/// # Tick Timing
+///
+/// Minecraft runs at 20 ticks per second (TPS):
+/// - 20 ticks = 1 second
+/// - 1200 ticks = 1 minute
+/// - 72000 ticks = 1 hour
+///
+/// # Task Types
+///
+/// - **Delayed tasks**: Execute once after a specified delay.
+/// - **Repeating tasks**: Execute repeatedly with a fixed period.
+///
+/// # Usage
+///
+/// ```
+/// // Execute a task in 5 seconds
+/// schedule-delayed-task(my-handler-id, 100);
+///
+/// // Execute a task every second, starting in 1 second
+/// schedule-repeating-task(my-handler-id, 20, 20);
+/// ```
 interface scheduler {
     /// Schedules a task to be executed once after the specified number of ticks.
     ///

@@ -12,50 +12,79 @@ interface common {
 
     /// Represents the hands of a player.
     enum hand {
+        /// The left hand.
         left,
+        /// The right hand (main hand by default).
         right,
     }
 
     /// Represents the game modes available in Minecraft.
     enum game-mode {
+        /// Survival mode - limited resources, health, hunger.
         survival,
+        /// Creative mode - unlimited resources, flying.
         creative,
+        /// Adventure mode - can only interact with specific blocks/items.
         adventure,
+        /// Spectator mode - invisible, flying, can clip through blocks.
         spectator,
     }
 
     /// The 16 base Minecraft colors.
     enum named-color {
+        /// Black color.
         black,
+        /// Dark blue color.
         dark-blue,
+        /// Dark green color.
         dark-green,
+        /// Dark aqua/cyan color.
         dark-aqua,
+        /// Dark red color.
         dark-red,
+        /// Dark purple color.
         dark-purple,
+        /// Gold/orange color.
         gold,
+        /// Gray color.
         gray,
+        /// Dark gray color.
         dark-gray,
+        /// Blue color.
         blue,
+        /// Green color.
         green,
+        /// Aqua/cyan color.
         aqua,
+        /// Red color.
         red,
+        /// Light purple/pink color.
         light-purple,
+        /// Yellow color.
         yellow,
+        /// White color.
         white,
     }
 
     /// An RGB color represented by its red, green, and blue components.
     record rgb-color {
+        /// Red component (0-255).
         r: u8,
+        /// Green component (0-255).
         g: u8,
+        /// Blue component (0-255).
         b: u8,
     }
 
     /// An ARGB color with alpha (transparency) channel.
     record argb-color {
+        /// Alpha/transparency component (0-255).
         a: u8,
+        /// Red component (0-255).
         r: u8,
+        /// Green component (0-255).
         g: u8,
+        /// Blue component (0-255).
         b: u8,
     }
 
@@ -69,133 +98,259 @@ interface common {
 
     /// All Minecraft-supported locales.
     enum locale {
+        /// Afrikaans (South Africa).
         af-za,
+        /// Arabic (Saudi Arabia).
         ar-sa,
+        /// Asturian (Spain).
         ast-es,
+        /// Azerbaijani (Azerbaijan).
         az-az,
+        /// Bashkir (Russia).
         ba-ru,
+        /// Bavarian.
         bar,
+        /// Belarusian (Belarus).
         be-by,
+        /// Bulgarian (Bulgaria).
         bg-bg,
+        /// Breton (France).
         br-fr,
+        /// Bemba.
         brb,
+        /// Bosnian (Bosnia and Herzegovina).
         bs-ba,
+        /// Catalan (Spain).
         ca-es,
+        /// Czech (Czech Republic).
         cs-cz,
+        /// Welsh (United Kingdom).
         cy-gb,
+        /// Danish (Denmark).
         da-dk,
+        /// German (Austria).
         de-at,
+        /// German (Switzerland).
         de-ch,
+        /// German (Germany).
         de-de,
+        /// Greek (Greece).
         el-gr,
+        /// English (Australia).
         en-au,
+        /// English (Canada).
         en-ca,
+        /// English (United Kingdom).
         en-gb,
+        /// English (New Zealand).
         en-nz,
+        /// English (Pirate Speak).
         en-pt,
+        /// English (Upside Down).
         en-ud,
+        /// English (US).
         en-us,
+        /// English (Northeastern US).
         enp,
+        /// English (Shakespearean).
         enws,
+        /// Esperanto.
         eo-uy,
+        /// Spanish (Argentina).
         es-ar,
+        /// Spanish (Chile).
         es-cl,
+        /// Spanish (Ecuador).
         es-ec,
+        /// Spanish (Spain).
         es-es,
+        /// Spanish (Mexico).
         es-mx,
+        /// Spanish (Uruguay).
         es-uy,
+        /// Spanish (Venezuela).
         es-ve,
+        /// Andalusian Spanish.
         esan,
+        /// Estonian (Estonia).
         et-ee,
+        /// Basque (Spain).
         eu-es,
+        /// Persian (Iran).
         fa-ir,
+        /// Finnish (Finland).
         fi-fi,
+        /// Filipino (Philippines).
         fil-ph,
+        /// Faroese (Faroe Islands).
         fo-fo,
+        /// French (Canada).
         fr-ca,
+        /// French (France).
         fr-fr,
+        /// East Frisian (Germany).
         fra-de,
+        /// Friulian (Italy).
         fur-it,
+        /// Frisian (Netherlands).
         fy-nl,
+        /// Irish (Ireland).
         ga-ie,
+        /// Scottish Gaelic (United Kingdom).
         gd-gb,
+        /// Galician (Spain).
         gl-es,
+        /// Hawaiian (United States).
         haw-us,
+        /// Hebrew (Israel).
         he-il,
+        /// Hindi (India).
         hi-in,
+        /// Croatian (Croatia).
         hr-hr,
+        /// Hungarian (Hungary).
         hu-hu,
+        /// Armenian (Armenia).
         hy-am,
+        /// Indonesian (Indonesia).
         id-id,
+        /// Igbo (Nigeria).
         ig-ng,
+        /// Ido.
         io-en,
+        /// Icelandic (Iceland).
         is-is,
+        /// Interslavic.
         isv,
+        /// Italian (Italy).
         it-it,
+        /// Japanese (Japan).
         ja-jp,
+        /// Lojban.
         jbo-en,
+        /// Georgian (Georgia).
         ka-ge,
+        /// Kazakh (Kazakhstan).
         kk-kz,
+        /// Kannada (India).
         kn-in,
+        /// Korean (South Korea).
         ko-kr,
+        /// Colognian.
         ksh,
+        /// Cornish (United Kingdom).
         kw-gb,
+        /// Latin.
         la-la,
+        /// Luxembourgish (Luxembourg).
         lb-lu,
+        /// Limburgish.
         li-li,
+        /// Lombard.
         lmo,
+        /// Lao (Laos).
         lo-la,
+        /// LOLCAT.
         lol-us,
+        /// Lithuanian (Lithuania).
         lt-lt,
+        /// Latvian (Latvia).
         lv-lv,
+        /// Literary Chinese.
         lzh,
+        /// Macedonian (North Macedonia).
         mk-mk,
+        /// Mongolian (Mongolia).
         mn-mn,
+        /// Malay (Malaysia).
         ms-my,
+        /// Maltese (Malta).
         mt-mt,
+        /// Nahuatl.
         nah,
+        /// Low German (Germany).
         nds-de,
+        /// Dutch (Belgium).
         nl-be,
+        /// Dutch (Netherlands).
         nl-nl,
+        /// Norwegian Nynorsk (Norway).
         nn-no,
+        /// Norwegian (Norway).
         no-no,
+        /// Occitan (France).
         oc-fr,
+        /// Elfdalian.
         ovd,
+        /// Polish (Poland).
         pl-pl,
+        /// Portuguese (Brazil).
         pt-br,
+        /// Portuguese (Portugal).
         pt-pt,
+        /// Quenya.
         qya-aa,
-        ro-ro,
-        rpr,
+        /// Russian (Russia).
         ru-ru,
+        /// Rusyn.
+        rpr,
+        /// Rusyn (Ukraine).
         ry-ua,
+        /// Yakut (Russia).
         sah-sah,
+        /// Northern Sami (Norway).
         se-no,
+        /// Slovak (Slovakia).
         sk-sk,
+        /// Slovenian (Slovenia).
         sl-si,
+        /// Somali (Somalia).
         so-so,
+        /// Albanian (Albania).
         sq-al,
+        /// Serbian (Latin).
         sr-cs,
+        /// Serbian (Serbia).
         sr-sp,
+        /// Swedish (Sweden).
         sv-se,
+        /// Upper Saxon.
         sxu,
+        /// Silesian.
         szl,
+        /// Tamil (India).
         ta-in,
+        /// Thai (Thailand).
         th-th,
+        /// Tagalog (Philippines).
         tl-ph,
+        /// Klingon.
         tlh-aa,
+        /// Toki Pona.
         tok,
+        /// Turkish (Turkey).
         tr-tr,
+        /// Tatar (Russia).
         tt-ru,
+        /// Ukrainian (Ukraine).
         uk-ua,
+        /// Valencian (Spain).
         val-es,
+        /// Venetian (Italy).
         vec-it,
+        /// Vietnamese (Vietnam).
         vi-vn,
+        /// Yiddish (Germany).
         yi-de,
+        /// Yoruba (Nigeria).
         yo-ng,
+        /// Simplified Chinese (China).
         zh-cn,
+        /// Traditional Chinese (Hong Kong).
         zh-hk,
+        /// Traditional Chinese (Taiwan).
         zh-tw,
+        /// Malay (Jawi).
         zlm-arab,
     }
 }

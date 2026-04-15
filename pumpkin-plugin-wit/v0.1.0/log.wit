@@ -1,14 +1,40 @@
+/// Logging interface for Pumpkin plugins.
+///
+/// This interface provides logging capabilities to plugins for debugging
+/// and monitoring purposes. Supports multiple log levels to control
+/// the verbosity of output.
+///
+/// # Log Levels
+///
+/// - `trace`: Very detailed information, typically of interest only when diagnosing problems.
+/// - `debug`: Detailed information useful during development.
+/// - `info`: Confirmation that things are working as expected.
+/// - `warn`: Indication that something unexpected happened, or may indicate a problem.
+/// - `error`: An error occurred, preventing the current operation from completing.
 interface logging {
+    /// Log levels for controlling message verbosity.
     enum level {
+        /// Very detailed diagnostic information.
         trace,
+        /// Information useful for debugging.
         debug,
+        /// General informational messages.
         info,
+        /// Warning messages for unexpected conditions.
         warn,
+        /// Error messages for failures.
         error,
     }
 
-    /// log any general purpose message
+    /// Logs a message at the specified level.
+    ///
+    /// * `level`: The severity level of this message.
+    /// * `message`: The text to log.
     log: func(level: level, message: string);
-    /// This function is meant to be used by the tracing crate.
+
+    /// Logs a tracing event.
+    ///
+    /// This function is meant to be used by the tracing crate
+    /// for structured logging. The event is a serialized tracing event.
     log-tracing: func(event: list<u8>);
 }

@@ -1,15 +1,52 @@
-/// Plugin metadata describing the plugin and its compatibility.
+/// Plugin metadata interface for Pumpkin plugins.
+///
+/// This interface defines the metadata that plugins must provide to the
+/// server, such as name, version, authors, and description. This information
+/// is used by the server to identify plugins and check compatibility.
+///
+/// # Metadata Usage
+///
+/// The metadata is returned by the `get-metadata` function, which the host
+/// calls when loading the plugin. This information is displayed in server
+/// logs, plugin lists, and compatibility checks.
+///
+/// # Example
+///
+/// ```
+/// get-metadata() -> plugin-metadata {
+///     name: "my-awesome-plugin",
+///     version: "1.0.0",
+///     authors: ["Your Name"],
+///     description: "Adds awesome features to the server"
+/// }
+/// ```
 interface metadata {
+    /// Metadata describing a plugin.
+    ///
+    /// This record contains basic information about the plugin that
+    /// the server uses for identification and display purposes.
     record plugin-metadata {
         /// Name of the plugin.
+        ///
+        /// This should be a unique, descriptive name for your plugin.
         name: string,
-        /// Plugin version (semver).
+        /// Plugin version following semantic versioning.
+        ///
+        /// Format: MAJOR.MINOR.PATCH (e.g., "1.0.0", "2.5.1")
         version: string,
-        /// Plugin authors.
+        /// List of plugin authors.
+        ///
+        /// Can contain individual names, organization names, or both.
         authors: list<string>,
-        /// Short description of the plugin.
+        /// Short description of what the plugin does.
+        ///
+        /// Keep this concise but informative. Displayed in plugin lists.
         description: string,
     }
 
+    /// Returns the metadata for this plugin.
+    ///
+    /// Called by the host during plugin loading to get information
+    /// about the plugin.
     get-metadata: func() -> plugin-metadata;
 }

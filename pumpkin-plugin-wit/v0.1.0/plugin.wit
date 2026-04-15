@@ -1,6 +1,43 @@
 /// The main entry point for a Pumpkin plugin.
+///
 /// This world defines the exports that the plugin must provide to the host
 /// and the imports that the host provides to the plugin.
+///
+/// # Plugin Lifecycle
+///
+/// 1. **init-plugin**: Called once when the plugin is loaded (internal use only).
+/// 2. **on-load**: Called after initialization for setup (register commands, events).
+/// 3. **handle-event**: Called when registered events occur.
+/// 4. **handle-command**: Called when registered commands are executed.
+/// 5. **handle-task**: Called when scheduled tasks fire.
+/// 6. **on-unload**: Called when the plugin is being disabled (cleanup).
+///
+/// # Imports and Exports
+///
+/// **Imports** (provided by the host):
+/// - Logging, GUI, scoreboard, server info, text components, commands
+/// - Context, permissions, scheduler, world access
+///
+/// **Exports** (provided by the plugin):
+/// - Lifecycle hooks (on-load, on-unload)
+/// - Event handlers
+/// - Command handlers
+/// - Task handlers
+/// - Metadata
+///
+/// # Example
+///
+/// ```
+/// export on-load(context) {
+///     // Setup your plugin here
+///     return ok(_);
+/// }
+///
+/// export on-unload(context) {
+///     // Cleanup here
+///     return ok(_);
+/// }
+/// ```
 package pumpkin:plugin;
 
 world plugin {
@@ -33,15 +70,20 @@ world plugin {
     // --- Plugin-provided exports ---
 
     /// Called by the host once to initialize the plugin.
+    ///
     /// Internal use only; plugins should use the `register_plugin!` macro.
     export init-plugin: func();
 
     /// Called when the plugin is being loaded.
+    ///
     /// Use this to register commands, events, and perform initial setup.
+    /// Returns an error message string if initialization fails.
     export on-load: func(context: context) -> result<_, string>;
 
     /// Called when the plugin is being unloaded.
+    ///
     /// Use this to save data and clean up resources.
+    /// Returns an error message string if cleanup fails.
     export on-unload: func(context: context) -> result<_, string>;
 
     /// Provides plugin metadata (name, version, etc.) to the host.
@@ -51,11 +93,27 @@ world plugin {
     export common;
 
     /// Dispatches an event to the plugin for handling.
+    ///
+    /// * `event-id`: The ID of the registered handler.
+    /// * `server`: The global server instance.
+    /// * `event`: The event data.
+    ///
+    /// Returns the event (possibly modified) back to the host.
     export handle-event: func(event-id: u32, server: server-instance, event: event) -> event;
 
     /// Dispatches a command execution to the plugin.
+    ///
+    /// * `command-id`: The ID of the registered command handler.
+    /// * `sender`: The source of the command (player, console, etc.).
+    /// * `server`: The global server instance.
+    /// * `args`: The parsed command arguments.
+    ///
+    /// Returns the command result or an error.
     export handle-command: func(command-id: u32, sender: command-sender, server: server-instance, args: consumed-args) -> result<s32, command-error>;
 
     /// Dispatches a scheduled task execution to the plugin.
+    ///
+    /// * `handler-id`: The ID of the registered task handler.
+    /// * `server`: The global server instance.
     export handle-task: func(handler-id: u32, server: server-instance);
 }

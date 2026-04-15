@@ -1,14 +1,30 @@
+/// Internationalization (i18n) interface for Pumpkin plugins.
+///
+/// This interface provides translation capabilities to plugins,
+/// allowing them to support multiple languages. Plugins can retrieve
+/// translated strings from the host or load their own translations.
+///
+/// # Translation Keys
+///
+/// Translation keys should be namespaced to avoid conflicts:
+/// - Format: `namespace:key`
+/// - Example: `myplugin:welcome_message`
+///
+/// # Locales
+///
+/// The interface uses Minecraft's locale codes (e.g., `en_us`, `de_de`).
+/// See the `common.locale` enum for all supported locales.
 interface i18n {
     use common.{locale};
 
     /// Retrieves a translated string from the host.
     ///
     /// # Arguments
-    /// * `key`: The namespaced translation key (e.g. `pumpkin:my_key`).
+    /// * `key`: The namespaced translation key (e.g., `pumpkin:my_key`).
     /// * `locale`: The target locale.
     ///
     /// # Returns
-    /// The localized string, falling back to English or the key itself.
+    /// The localized string, falling back to English or the key itself if not found.
     translate: func(key: string, locale: locale) -> string;
 
     /// Loads custom translations from a JSON string.
@@ -17,5 +33,13 @@ interface i18n {
     /// * `namespace`: The namespace to associate these keys with.
     /// * `json`: A JSON string containing a flat map of translations.
     /// * `locale`: The target locale for these translations.
+    ///
+    /// # Example JSON
+    /// ```json
+    /// {
+    ///     "welcome_message": "Welcome to the server!",
+    ///     "goodbye_message": "Goodbye!"
+    /// }
+    /// ```
     load-translations: func(namespace: string, json: string, locale: locale);
 }

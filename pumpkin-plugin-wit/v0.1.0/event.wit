@@ -1,9 +1,30 @@
+/// Event system for Pumpkin plugins.
+///
+/// This interface defines all events that plugins can listen to and handle.
+/// Events cover player actions, block changes, server lifecycle, and more.
+///
+/// # Event Handling
+///
+/// Events are registered via the context during plugin initialization:
+/// - Use `event-type` to specify which event to listen for
+/// - Use `event-priority` to control handler execution order
+/// - Set `blocking` to true if the server should wait for your handler
+///
+/// # Cancellation
+///
+/// Many events have a `cancelled` field. Setting this to true prevents
+/// the default action from occurring (e.g., preventing a block break).
 interface event {
     use common.{block-position, game-mode, hand, item-stack, position};
     use player.{player};
     use text.{text-component};
     use %world.{%world};
 
+    /// Priority levels for event handlers.
+    ///
+    /// Handlers are called from highest to lowest priority.
+    /// Use `highest` for handlers that should run first and may cancel events.
+    /// Use `lowest` for handlers that should run last and observe final outcomes.
     enum event-priority {
         highest,
         high,
@@ -12,24 +33,41 @@ interface event {
         lowest,
     }
 
+    /// Data for player join events.
+    ///
+    /// Fired when a player successfully connects to the server.
+    /// Modify `join-message` to change the broadcast message.
     record player-join-event-data {
         player: player,
         join-message: text-component,
         cancelled: bool
     }
 
+    /// Data for player leave events.
+    ///
+    /// Fired when a player disconnects from the server.
+    /// Modify `leave-message` to change the broadcast message.
     record player-leave-event-data {
         player: player,
         leave-message: text-component,
         cancelled: bool
     }
 
+    /// Data for player login events.
+    ///
+    /// Fired during player authentication, before joining the world.
+    /// Set `cancelled` to true and provide a `kick-message` to deny entry.
     record player-login-event-data {
         player: player,
         kick-message: text-component,
         cancelled: bool
     }
 
+    /// Data for player chat events.
+    ///
+    /// Fired when a player sends a chat message.
+    /// Modify `message` to change the content.
+    /// Modify `recipients` to control who sees the message.
     record player-chat-event-data {
         player: player,
         message: string,
@@ -37,18 +75,30 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for player command events.
+    ///
+    /// Fired when a player attempts to execute a command.
+    /// Set `cancelled` to true to prevent command execution.
     record player-command-send-event-data {
         player: player,
         command: string,
         cancelled: bool
     }
 
+    /// Data for permission check events.
+    ///
+    /// Fired when checking if a player has a specific permission.
+    /// Modify `permission-result` to override the default behavior.
     record player-permission-check-event-data {
         player: player,
         permission: string,
         permission-result: bool
     }
 
+    /// Data for player movement events.
+    ///
+    /// Fired when a player attempts to move.
+    /// Set `cancelled` to true to teleport the player back to `from-position`.
     record player-move-event-data {
         player: player,
         from-position: position,
@@ -56,6 +106,9 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for player teleport events.
+    ///
+    /// Fired when a player is about to be teleported.
     record player-teleport-event-data {
         player: player,
         from-position: position,
@@ -63,6 +116,9 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for player world change events.
+    ///
+    /// Fired when a player moves between dimensions (worlds).
     record player-change-world-event-data {
         player: player,
         previous-world: %world,
@@ -73,11 +129,17 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for player experience change events.
+    ///
+    /// Fired when a player's experience points change.
     record player-exp-change-event-data {
         player: player,
         amount: s32
     }
 
+    /// Data for player held item change events.
+    ///
+    /// Fired when a player changes their selected hotbar slot.
     record player-item-held-event-data {
         player: player,
         previous-slot: u8,
@@ -85,11 +147,17 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for player main hand change events.
+    ///
+    /// Fired when a player switches their dominant hand setting.
     record player-changed-main-hand-event-data {
         player: player,
         main-hand: hand
     }
 
+    /// Data for player game mode change events.
+    ///
+    /// Fired when a player's game mode is about to change.
     record player-gamemode-change-event-data {
         player: player,
         previous-gamemode: game-mode,
@@ -97,12 +165,16 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for custom payload events.
+    ///
+    /// Fired when a plugin channel message is received from the client.
     record player-custom-payload-event-data {
         player: player,
         channel: string,
         data: list<u8>
     }
 
+    /// States of the fishing rod.
     enum player-fish-state {
         fishing,
         caught-fish,
@@ -113,6 +185,9 @@ interface event {
         bite,
     }
 
+    /// Data for player fishing events.
+    ///
+    /// Fired during various fishing rod states.
     record player-fish-event-data {
         player: player,
         caught-uuid: option<string>,
@@ -124,6 +199,9 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for player egg throw events.
+    ///
+    /// Fired when a player throws a spawn egg.
     record player-egg-throw-event-data {
         player: player,
         egg-uuid: string,
@@ -133,12 +211,14 @@ interface event {
         cancelled: bool
     }
 
+    /// Types of entity interactions.
     enum entity-interaction-action {
         interact,
         attack,
         interact-at,
     }
 
+    /// Types of block/air interactions.
     enum interact-action {
         left-click-block,
         left-click-air,
@@ -146,6 +226,9 @@ interface event {
         right-click-block,
     }
 
+    /// Data for player interact events.
+    ///
+    /// Fired when a player clicks a block or the air.
     record player-interact-event-data {
         player: player,
         action: interact-action,
@@ -155,24 +238,36 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for player sneak toggle events.
+    ///
+    /// Fired when a player starts or stops sneaking.
     record player-toggle-sneak-event-data {
         player: player,
         is-sneaking: bool,
         cancelled: bool
     }
 
+    /// Data for player flight toggle events.
+    ///
+    /// Fired when a player starts or stops flying.
     record player-toggle-flight-event-data {
         player: player,
         is-flying: bool,
         cancelled: bool
     }
 
+    /// Data for player sprint toggle events.
+    ///
+    /// Fired when a player starts or stops sprinting.
     record player-toggle-sprint-event-data {
         player: player,
         is-sprinting: bool,
         cancelled: bool
     }
 
+    /// Data for unknown entity interaction events.
+    ///
+    /// Fired when a player interacts with an entity that isn't fully tracked.
     record player-interact-unknown-entity-event-data {
         player: player,
         entity-id: s32,
@@ -180,6 +275,9 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for block redstone events.
+    ///
+    /// Fired when a block's redstone power level changes.
     record block-redstone-event-data {
         target-world: %world,
         state-id: u16,
@@ -189,6 +287,10 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for block break events.
+    ///
+    /// Fired when a block is about to be broken.
+    /// `player` is `none` for non-player causes (explosions, etc.).
     record block-break-event-data {
         player: option<player>,
         block: string,
@@ -198,12 +300,18 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for block burn events.
+    ///
+    /// Fired when a block is about to be destroyed by fire.
     record block-burn-event-data {
         igniting-block: string,
         block: string,
         cancelled: bool
     }
 
+    /// Data for block can-build events.
+    ///
+    /// Fired when checking if a player can build at a location.
     record block-can-build-event-data {
         block-to-build: string,
         buildable: bool,
@@ -212,6 +320,9 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for block grow events.
+    ///
+    /// Fired when a plant grows (crops, saplings, etc.).
     record block-grow-event-data {
         target-world: %world,
         old-block: string,
@@ -222,6 +333,9 @@ interface event {
         cancelled: bool
     }
 
+    /// Data for block place events.
+    ///
+    /// Fired when a player places a block.
     record block-place-event-data {
         player: player,
         block-placed: string,
@@ -230,11 +344,18 @@ interface event {
         can-build: bool,
         cancelled: bool
     }
+
+    /// Data for server command events.
+    ///
+    /// Fired when a command is executed from the console.
     record server-command-event-data {
         command: string,
         cancelled: bool
     }
 
+    /// Data for spawn change events.
+    ///
+    /// Fired when a world's spawn point changes.
     record spawn-change-event-data {
         target-world: %world,
         previous-position: block-position,
@@ -245,12 +366,16 @@ interface event {
         new-pitch: f32
     }
 
+    /// Data for server broadcast events.
+    ///
+    /// Fired when a system message is broadcast to all players.
     record server-broadcast-event-data {
         message: text-component,
         sender: text-component,
         cancelled: bool
     }
 
+    /// All event types that can be registered.
     enum event-type {
         player-join-event,
         player-leave-event,
@@ -284,6 +409,9 @@ interface event {
         server-broadcast-event,
     }
 
+    /// The event variant type passed to handlers.
+    ///
+    /// Each variant contains the specific event data for that event type.
     variant event {
         player-join-event(player-join-event-data),
         player-leave-event(player-leave-event-data),

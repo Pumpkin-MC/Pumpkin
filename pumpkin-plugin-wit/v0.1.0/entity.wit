@@ -1,36 +1,70 @@
+/// Entity system for Pumpkin plugins.
+///
+/// This interface provides access to block entities and other entity types
+/// that can be manipulated by plugins.
+///
+/// # Block Entities
+///
+/// Block entities are blocks with additional data beyond their state:
+/// - Chests (inventory contents)
+/// - Furnaces (burn time, cook time, inventory)
+/// - Command blocks (stored command, output)
+/// - Signs (text lines)
+/// - And more...
 interface entity {
     use common.{block-position};
 
+    /// A block entity with associated data storage.
+    ///
+    /// Block entities store additional data for blocks like chests,
+    /// furnaces, signs, command blocks, etc.
     resource block-entity {
+        /// Returns the resource location identifier for this block entity type.
         resource-location: func() -> string;
+
+        /// Returns the block position of this entity.
         get-position: func() -> block-position;
+
+        /// Returns the unique ID of this block entity.
         get-id: func() -> u32;
-        // write-nbt: func(nbt: nbt-compound);
-        // from-nbt: func(nbt: nbt-compound, position: block-position) -> entity;
-        // tick: func(world: simple-world);
-        // write-internal: func(nbt: nbt-compound);
-        // chunk-data-nbt: func() -> option<nbt-compound;
-        // get-inventory: func() -> option<inventory>;
-        // set-block-state: func(block-state: block-state-id);
-        // on-block-replaced: func(world: simple-world, position: block-position);
+
+        /// Returns true if the block entity has unsaved changes.
         is-dirty: func() -> bool;
+
+        /// Marks the block entity as clean (saved).
         clear-dirty: func();
-        // to-property-delegate: func() -> option<property-delegate>;
-        // to-experience-container: func() -> option<experience-container>;
     }
 
+    /// A command block entity with command execution capabilities.
     resource command-block-entity {
+        /// Gets the underlying block entity.
         get-block-entity: func () -> block-entity;
+
+        /// Returns the last command output.
         last-output: func() -> string;
+
+        /// Returns whether output tracking is enabled.
         track-output: func() -> bool;
+
+        /// Returns how many times the command succeeded.
         success-count: func() -> u32;
+
+        /// Returns the stored command.
         command: func() -> string;
+
+        /// Returns whether the command block executes automatically.
         auto: func() -> bool;
+
+        /// Returns whether the condition was met (for conditional command blocks).
         condition-met: func() -> bool;
+
+        /// Returns whether the command block is powered.
         powered: func() -> bool;
     }
 
+    /// Types of entities in the system.
     variant entity {
+        /// A command block entity.
         command-block-entity(command-block-entity),
     }
 }

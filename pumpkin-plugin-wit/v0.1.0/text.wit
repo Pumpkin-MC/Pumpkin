@@ -1,41 +1,124 @@
+/// Text component system for Pumpkin plugins.
+///
+/// This interface provides rich text formatting capabilities for chat messages,
+/// titles, scoreboards, and other displayed text. Supports colors, styles,
+/// click events, hover events, and translations.
+///
+/// # Text Component Features
+///
+/// - Plain text with formatting (colors, bold, italic, etc.)
+/// - Translatable text with arguments
+/// - Click events (open URL, run command, suggest command, copy to clipboard)
+/// - Hover events (show text, item, entity)
+/// - Nested child components for complex layouts
+///
+/// # Example Usage
+///
+/// ```
+/// // Simple colored text
+/// let text = text-component.text("Hello World");
+/// text.color-named(named-color.green);
+/// text.bold(true);
+///
+/// // Text with click event
+/// let clickable = text-component.text("Click me!");
+/// clickable.click-run-command("/help");
+///
+/// // Translation with arguments
+/// let translated = text-component.translate("chat.type.text", [text-component.text("Player")]);
+/// ```
 interface text {
     use common.{named-color, rgb-color, argb-color};
 
+    /// A rich text component that can be displayed to players.
+    ///
+    /// Text components support styling, interactivity, and nesting.
     resource text-component {
+        /// Creates a plain text component.
         text: static func(plain: string) -> text-component;
+
+        /// Creates a translated text component.
+        ///
+        /// Takes a translation key and a list of arguments to fill placeholders.
         translate: static func(key: string, %with: list<text-component>) -> text-component;
 
+        /// Adds a child component to this component.
+        ///
+        /// Children are displayed inline after the parent text.
         add-child: func(child: text-component);
+
+        /// Appends plain text to this component.
+        ///
+        /// This is a convenience method equivalent to creating a text component and adding it as a child.
         add-text: func(text: string);
+
+        /// Returns the plain text content of this component.
         get-text: func() -> string;
+
+        /// Encodes this component to a byte array.
+        ///
+        /// Returns the serialized representation suitable for network transmission.
         encode: func() -> list<u8>;
 
-        // Style
+        // ===== Style Methods =====
 
+        /// Sets the text color using a named color.
         color-named: func(color: named-color);
+
+        /// Sets the text color using RGB values.
         color-rgb: func(color: rgb-color);
+
+        /// Sets whether the text should be bold.
         bold: func(value: bool);
+
+        /// Sets whether the text should be italic.
         italic: func(value: bool);
+
+        /// Sets whether the text should be underlined.
         underlined: func(value: bool);
+
+        /// Sets whether the text should have strikethrough.
         strikethrough: func(value: bool);
+
+        /// Sets whether the text should be obfuscated (random characters).
         obfuscated: func(value: bool);
-        /// Text inserted into chat when shift-clicked
+
+        /// Sets the text that gets inserted when shift-clicked.
         insertion: func(text: string);
+
+        /// Sets the font to use for rendering.
+        ///
+        /// Use a resource location like "minecraft:default" or "minecraft:alt".
         font: func(font: string);
+
+        /// Sets the shadow color using ARGB values.
         shadow-color: func(color: argb-color);
 
-        // Click events
+        // ===== Click Event Methods =====
 
+        /// Opens a URL when the text is clicked.
         click-open-url: func(url: string);
+
+        /// Runs a command when the text is clicked.
         click-run-command: func(command: string);
+
+        /// Suggests a command in chat when the text is clicked.
         click-suggest-command: func(command: string);
+
+        /// Copies text to clipboard when clicked.
         click-copy-to-clipboard: func(text: string);
 
-        // Hover events
+        // ===== Hover Event Methods =====
 
+        /// Shows text when hovering over this component.
         hover-show-text: func(text: text-component);
-        /// Item data as SNBT string
+
+        /// Shows item information when hovering.
+        ///
+        /// The item parameter should be the item data as an SNBT string.
         hover-show-item: func(item: string);
+
+        /// Shows entity information when hovering.
         hover-show-entity: func(entity-type: string, id: string, name: option<text-component>);
     }
 }
