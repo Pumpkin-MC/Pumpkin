@@ -162,9 +162,9 @@ impl<R: Read> NetworkReadExt for R {
         // 1 Java `char` takes a maximum of 3 bytes in UTF-8:
         let maximum_utf8_bytes = bound.saturating_mul(3);
         if bytes_len > maximum_utf8_bytes {
-            return Err(ReadingError::TooLarge(
-                format!("string has too many bytes ({bytes_len} > {maximum_utf8_bytes})"),
-            ));
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many bytes ({bytes_len} > {maximum_utf8_bytes})"
+            )));
         }
 
         let data = self.read_boxed_slice(bytes_len)?;
@@ -173,9 +173,9 @@ impl<R: Read> NetworkReadExt for R {
 
         // Next, if we're able to find the (bound + 1)th UTF-16 character, the string is too big.
         if string.encode_utf16().nth(bound).is_some() {
-            return Err(ReadingError::TooLarge(
-                format!("string has too many UTF-16 characters (more than the maximum limit {bound})"),
-            ));
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many UTF-16 characters (more than the maximum limit {bound})"
+            )));
         }
 
         Ok(string)
