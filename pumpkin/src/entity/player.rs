@@ -2100,6 +2100,10 @@ impl Player {
     }
 
     pub async fn send_health(&self) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
         self.client
             .enqueue_packet(&CSetHealth::new(
                 self.living_entity.health.load(),
@@ -2110,6 +2114,10 @@ impl Player {
     }
 
     pub async fn tick_health(&self) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
         let health = self.living_entity.health.load() as i32;
         let food = self.hunger_manager.level.load();
         let saturation = self.hunger_manager.saturation.load();
@@ -2550,6 +2558,10 @@ impl Player {
     }
 
     pub async fn tick_experience(&self) {
+        if !self.has_client_loaded() {
+            return;
+        }
+
         let level = self.experience_level.load(Ordering::Relaxed);
         if self.last_sent_xp.load(Ordering::Relaxed) != level {
             let progress = self.experience_progress.load();
@@ -2560,8 +2572,8 @@ impl Player {
             self.client
                 .send_packet_now(&CSetExperience::new(
                     progress.clamp(0.0, 1.0),
-                    points.into(),
                     level.into(),
+                    points.into(),
                 ))
                 .await;
         }
@@ -2576,13 +2588,15 @@ impl Player {
         self.last_sent_xp.store(-1, Ordering::Relaxed);
         self.tick_experience().await;
 
-        self.client
-            .enqueue_packet(&CSetExperience::new(
-                progress.clamp(0.0, 1.0),
-                points.into(),
-                level.into(),
-            ))
-            .await;
+        if self.has_client_loaded() {
+            self.client
+                .enqueue_packet(&CSetExperience::new(
+                    progress.clamp(0.0, 1.0),
+                    level.into(),
+                    points.into(),
+                ))
+                .await;
+        }
     }
 
     /// Sets the player's experience level directly.
