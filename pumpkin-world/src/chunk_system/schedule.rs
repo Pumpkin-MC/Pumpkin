@@ -1298,3 +1298,89 @@ impl GenerationSchedule {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chunk_system::dag::{Edge, Node};
+    use std::sync::{Arc, Condvar, Mutex};
+
+    fn test_schedule() -> GenerationSchedule {
+        let (send_chunk, recv_chunk) = crossfire::compat::mpmc::unbounded_blocking();
+        let (io_read, _recv_read) = crossfire::compat::mpmc::bounded_tx_blocking_rx_async(1);
+        let (io_write, _recv_write) = crossfire::compat::spsc::bounded_tx_blocking_rx_async(1);
+        let (generate, _recv_gen) = crossfire::compat::mpmc::bounded_blocking(1);
+
+        GenerationSchedule {
+            queue: BinaryHeap::new(),
+            graph: DAG::default(),
+            last_level: ChunkLevel::default(),
+            last_high_priority: Vec::new(),
+            send_level: Arc::new(LevelChannel::new()),
+            public_chunk_map: Arc::default(),
+            chunk_map: HashMap::new(),
+            unload_chunks: HashSetType::default(),
+            waiting_for_chunks: HashSetType::default(),
+            io_lock: Arc::new((Mutex::new(HashMapType::default()), Condvar::new())),
+            running_task_count: 0,
+            max_in_flight: 1,
+            queue_dirty: false,
+            recv_chunk,
+            io_read,
+            io_write,
+            generate,
+            send_chunk,
+            gen_pool: None,
+            listener: Arc::new(ChunkListener::new()),
+            lighting_config: LightingEngineConfig::Default,
+        }
+    }
+
+    #[test]
+    fn store_holder_prunes_inactive_dependency_only_holder_and_clears_edges() {
+        let mut schedule = test_schedule();
+        let pos = ChunkPos::new(4, 7);
+
+        let dependency_a = schedule
+            .graph
+            .nodes
+            .insert(Node::new(ChunkPos::new(10, 10), StagedChunkEnum::Surface));
+        let dependency_b = schedule
+            .graph
+            .nodes
+            .insert(Node::new(ChunkPos::new(11, 11), StagedChunkEnum::Features));
+
+        let tail = schedule
+            .graph
+            .edges
+            .insert(Edge::new(dependency_b, EdgeKey::null()));
+        let head = schedule.graph.edges.insert(Edge::new(dependency_a, tail));
+
+        let holder = ChunkHolder {
+            occupied_by: head,
+            ..Default::default()
+        };
+
+        schedule.unload_chunks.insert(pos);
+        schedule.store_holder(pos, holder);
+
+        assert!(
+            !schedule.chunk_map.contains_key(&pos),
+            "inactive dependency-only holders should be pruned instead of retained"
+        );
+        assert!(
+            !schedule.unload_chunks.contains(&pos),
+            "pruned holders should also be removed from unload bookkeeping"
+        );
+        assert!(
+            !schedule.graph.edges.contains_key(head),
+            "the occupied_by edge head should be released when the holder is pruned"
+        );
+        assert!(
+            !schedule.graph.edges.contains_key(tail),
+            "the full occupied_by edge chain should be released when the holder is pruned"
+        );
+        assert!(schedule.graph.nodes.contains_key(dependency_a));
+        assert!(schedule.graph.nodes.contains_key(dependency_b));
+    }
+}
