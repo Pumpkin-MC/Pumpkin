@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr, time::Duration};
 
 use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
@@ -7,6 +7,7 @@ use rsa::RsaPublicKey;
 use rsa::pkcs8::DecodePublicKey;
 use serde::Deserialize;
 use thiserror::Error;
+use ureq::Agent;
 use ureq::http::{StatusCode, Uri};
 use uuid::Uuid;
 
@@ -50,6 +51,21 @@ const MOJANG_SERVICES_URL: &str = "https://api.minecraftservices.com/";
 const MOJANG_PROFILE_BY_NAME_URL: &str =
     "https://api.mojang.com/users/profiles/minecraft/{username}";
 
+fn build_auth_agent(auth_config: &AuthenticationConfig) -> Agent {
+    Agent::config_builder()
+        .timeout_connect(Some(Duration::from_millis(u64::from(
+            auth_config.connect_timeout,
+        ))))
+        .timeout_recv_response(Some(Duration::from_millis(u64::from(
+            auth_config.read_timeout,
+        ))))
+        .timeout_recv_body(Some(Duration::from_millis(u64::from(
+            auth_config.read_timeout,
+        ))))
+        .build()
+        .into()
+}
+
 /// Sends a GET request to Mojang's authentication servers to verify a client's Minecraft account.
 ///
 /// **Purpose:**
@@ -90,7 +106,10 @@ pub fn authenticate(
             .replace("{server_hash}", server_hash)
     };
 
-    let mut response = ureq::get(address)
+    let agent = build_auth_agent(auth_config);
+
+    let mut response = agent
+        .get(address)
         .call()
         .map_err(|_| AuthError::FailedResponse)?;
     match response.status() {
@@ -152,7 +171,10 @@ pub fn fetch_mojang_public_keys(
 
     let url = format!("{services_url}/publickeys");
 
-    let mut response = ureq::get(url)
+    let agent = build_auth_agent(auth_config);
+
+    let mut response = agent
+        .get(url)
         .call()
         .map_err(|_| AuthError::FailedResponse)?;
 
@@ -189,11 +211,14 @@ struct MojangProfileByNameResponse {
 
 pub fn lookup_profile_by_name(
     name: &str,
-    _auth_config: &AuthenticationConfig,
+    auth_config: &AuthenticationConfig,
 ) -> Result<Option<(Uuid, String)>, AuthError> {
     let url = MOJANG_PROFILE_BY_NAME_URL.replace("{username}", name);
 
-    let mut response = ureq::get(url)
+    let agent = build_auth_agent(auth_config);
+
+    let mut response = agent
+        .get(url)
         .call()
         .map_err(|_| AuthError::FailedResponse)?;
 
