@@ -30,6 +30,10 @@ use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEve
 use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
 use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
 use crate::plugin::player::player_move::PlayerMoveEvent;
+use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
+use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
+
+use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
@@ -775,7 +779,12 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_player_command(&self, player: &Arc<Player>, command: SPlayerCommand) {
+    pub async fn handle_player_command(
+        &self,
+        player: &Arc<Player>,
+        command: SPlayerCommand,
+        server: &Server,
+    ) {
         if command.entity_id != player.entity_id().into() {
             return;
         }
@@ -788,12 +797,24 @@ impl JavaClient {
         match command.action {
             Action::StartSprinting => {
                 if !entity.sprinting.load(Ordering::Relaxed) {
-                    entity.set_sprinting(true).await;
+                    send_cancellable! {{
+                        server;
+                        PlayerToggleSprintEvent::new(player.clone(), true);
+                        'after: {
+                            player.living_entity.entity.set_sprinting(event.is_sprinting).await;
+                        }
+                    }}
                 }
             }
             Action::StopSprinting => {
                 if entity.sprinting.load(Ordering::Relaxed) {
-                    entity.set_sprinting(false).await;
+                    send_cancellable! {{
+                        server;
+                        PlayerToggleSprintEvent::new(player.clone(), false);
+                        'after: {
+                            player.living_entity.entity.set_sprinting(event.is_sprinting).await;
+                        }
+                    }}
                 }
             }
             Action::LeaveBed => player.wake_up().await,
@@ -814,19 +835,38 @@ impl JavaClient {
                     SPlayerInput {
                         input: SPlayerInput::SNEAK,
                     },
+                    server,
                 )
                 .await;
             }
         }
     }
 
-    pub async fn handle_player_input(&self, player: &Arc<Player>, input: SPlayerInput) {
+    pub async fn handle_player_input(
+        &self,
+        player: &Arc<Player>,
+        input: SPlayerInput,
+        server: &Server,
+    ) {
         let sneak = input.input & SPlayerInput::SNEAK != 0;
         if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
-            player.get_entity().set_sneaking(sneak).await;
-        }
-
-        if sneak {
+            send_cancellable! {{
+                server;
+                PlayerToggleSneakEvent::new(player.clone(), sneak);
+                'after: {
+                    player.get_entity().set_sneaking(event.is_sneaking).await;
+                    if event.is_sneaking {
+                        let vehicle = player.get_entity().vehicle.lock().await.clone();
+                        if let Some(vehicle) = vehicle {
+                            vehicle
+                                .get_entity()
+                                .remove_passenger(player.entity_id())
+                                .await;
+                        }
+                    }
+                }
+            }}
+        } else if sneak {
             let vehicle = player.get_entity().vehicle.lock().await.clone();
             if let Some(vehicle) = vehicle {
                 vehicle
@@ -1932,17 +1972,29 @@ impl JavaClient {
 
     pub async fn handle_player_abilities(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         player_abilities: SPlayerAbilities,
+        server: &Server,
     ) {
         let mut abilities = player.abilities.lock().await;
 
         // Set the flying ability
         let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
-        if flying {
-            player.living_entity.fall_distance.store(0.0);
+        if abilities.flying != flying {
+            send_cancellable! {{
+                server;
+                PlayerToggleFlightEvent::new(player.clone(), flying);
+                'after: {
+                    if event.is_flying {
+                        player.living_entity.fall_distance.store(0.0);
+                    }
+                    abilities.flying = event.is_flying;
+                }
+                'cancelled: {
+                    player.send_abilities_update().await;
+                }
+            }}
         }
-        abilities.flying = flying;
     }
 
     pub async fn handle_play_ping_request(&self, request: SPlayPingRequest) {

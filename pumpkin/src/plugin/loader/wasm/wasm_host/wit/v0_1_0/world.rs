@@ -1,6 +1,7 @@
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockFlags, SimpleWorld};
+use std::sync::Arc;
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::pumpkin::plugin::world::{
@@ -341,6 +342,26 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
 
     async fn get_min_y(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
         Ok(self.get_world_res(&world)?.provider.min_y)
+    }
+
+    async fn get_entities(
+        &mut self,
+        world: Resource<World>,
+    ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::entity::Entity>>> {
+        let world_provider = self.get_world_res(&world)?.provider.clone();
+        let mut entities = Vec::new();
+
+        // Add players as entities
+        for player in world_provider.players.load().iter() {
+            entities.push(self.add_entity(player.clone() as Arc<dyn crate::entity::EntityBase>)?);
+        }
+
+        // Add other entities
+        for entity in world_provider.entities.load().iter() {
+            entities.push(self.add_entity(entity.clone())?);
+        }
+
+        Ok(entities)
     }
 
     async fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {

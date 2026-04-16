@@ -37,6 +37,7 @@ async fn register_typed_event<E: crate::plugin::Payload + ToFromV0_1_0WasmEvent 
     register_host_event!(resource, handler, priority, blocking, E);
 }
 
+#[expect(clippy::too_many_lines)]
 async fn register_player_event(
     resource: &ContextResource,
     handler: &Arc<WasmPluginV0_1_0EventHandler>,
@@ -51,10 +52,14 @@ async fn register_player_event(
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_event::PlayerInteractEvent,
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent, player_leave::PlayerLeaveEvent,
         player_login::PlayerLoginEvent, player_move::PlayerMoveEvent,
         player_permission_check::PlayerPermissionCheckEvent, player_teleport::PlayerTeleportEvent,
+        player_toggle_flight_event::PlayerToggleFlightEvent,
+        player_toggle_sneak_event::PlayerToggleSneakEvent,
+        player_toggle_sprint_event::PlayerToggleSprintEvent,
     };
 
     match event_type {
@@ -127,6 +132,22 @@ async fn register_player_event(
                 resource, handler, priority, blocking,
             )
             .await;
+        }
+        EventType::PlayerInteractEvent => {
+            register_typed_event::<PlayerInteractEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerToggleSneakEvent => {
+            register_typed_event::<PlayerToggleSneakEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerToggleFlightEvent => {
+            register_typed_event::<PlayerToggleFlightEvent>(resource, handler, priority, blocking)
+                .await;
+        }
+        EventType::PlayerToggleSprintEvent => {
+            register_typed_event::<PlayerToggleSprintEvent>(resource, handler, priority, blocking)
+                .await;
         }
         _ => unreachable!("non-player event should not be routed to register_player_event"),
     }

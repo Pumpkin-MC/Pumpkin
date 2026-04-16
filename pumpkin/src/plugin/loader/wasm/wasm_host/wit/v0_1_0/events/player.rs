@@ -5,17 +5,21 @@ use crate::plugin::{
             events::{
                 ToFromV0_1_0WasmEvent, consume_player, consume_text_component, consume_world,
                 from_wasm_entity_interaction_action, from_wasm_entity_type, from_wasm_game_mode,
-                from_wasm_hand, from_wasm_position, to_wasm_entity_interaction_action,
-                to_wasm_entity_type, to_wasm_game_mode, to_wasm_hand, to_wasm_position,
+                from_wasm_hand, from_wasm_position, to_wasm_block_position,
+                to_wasm_entity_interaction_action, to_wasm_entity_type, to_wasm_game_mode,
+                to_wasm_hand, to_wasm_position,
             },
             pumpkin::plugin::event::{
-                Event, PlayerChangeWorldEventData, PlayerChangedMainHandEventData,
-                PlayerChatEventData, PlayerCommandSendEventData, PlayerCustomPayloadEventData,
-                PlayerEggThrowEventData, PlayerExpChangeEventData, PlayerFishEventData,
-                PlayerFishState as WasmPlayerFishState, PlayerGamemodeChangeEventData,
+                Event, InteractAction as WasmInteractAction, PlayerChangeWorldEventData,
+                PlayerChangedMainHandEventData, PlayerChatEventData, PlayerCommandSendEventData,
+                PlayerCustomPayloadEventData, PlayerEggThrowEventData, PlayerExpChangeEventData,
+                PlayerFishEventData, PlayerFishState as WasmPlayerFishState,
+                PlayerGamemodeChangeEventData, PlayerInteractEventData,
                 PlayerInteractUnknownEntityEventData, PlayerItemHeldEventData, PlayerJoinEventData,
                 PlayerLeaveEventData, PlayerLoginEventData, PlayerMoveEventData,
                 PlayerPermissionCheckEventData, PlayerTeleportEventData,
+                PlayerToggleFlightEventData, PlayerToggleSneakEventData,
+                PlayerToggleSprintEventData,
             },
         },
     },
@@ -30,6 +34,7 @@ use crate::plugin::{
         player_command_send::PlayerCommandSendEvent,
         player_custom_payload::PlayerCustomPayloadEvent,
         player_gamemode_change::PlayerGamemodeChangeEvent,
+        player_interact_event::{InteractAction, PlayerInteractEvent},
         player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent,
         player_join::PlayerJoinEvent,
         player_leave::PlayerLeaveEvent,
@@ -37,6 +42,9 @@ use crate::plugin::{
         player_move::PlayerMoveEvent,
         player_permission_check::PlayerPermissionCheckEvent,
         player_teleport::PlayerTeleportEvent,
+        player_toggle_flight_event::PlayerToggleFlightEvent,
+        player_toggle_sneak_event::PlayerToggleSneakEvent,
+        player_toggle_sprint_event::PlayerToggleSprintEvent,
     },
 };
 use bytes::Bytes;
@@ -546,6 +554,122 @@ impl ToFromV0_1_0WasmEvent for PlayerInteractUnknownEntityEvent {
                 player: consume_player(state, &data.player),
                 entity_id: data.entity_id,
                 action: from_wasm_entity_interaction_action(data.action),
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+const fn to_wasm_interact_action(action: &InteractAction) -> WasmInteractAction {
+    match action {
+        InteractAction::LeftClickBlock => WasmInteractAction::LeftClickBlock,
+        InteractAction::LeftClickAir => WasmInteractAction::LeftClickAir,
+        InteractAction::RightClickAir => WasmInteractAction::RightClickAir,
+        InteractAction::RightClickBlock => WasmInteractAction::RightClickBlock,
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerInteractEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        let stack = self.item.blocking_lock();
+        let item = crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::player::to_wit_item_stack(&stack).unwrap_or(crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::pumpkin::plugin::common::ItemStack {
+            registry_key: "minecraft:air".to_string(),
+            count: 0,
+        });
+
+        Event::PlayerInteractEvent(PlayerInteractEventData {
+            player,
+            action: to_wasm_interact_action(&self.action),
+            clicked_pos: self.clicked_pos.map(to_wasm_block_position),
+            item,
+            block: self.block.name.to_string(),
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerInteractEvent(_data) => {
+                panic!("from_v0_1_0_wasm_event for PlayerInteractEvent is not supported")
+            }
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerToggleSneakEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerToggleSneakEvent(PlayerToggleSneakEventData {
+            player,
+            is_sneaking: self.is_sneaking,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerToggleSneakEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                is_sneaking: data.is_sneaking,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerToggleFlightEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerToggleFlightEvent(PlayerToggleFlightEventData {
+            player,
+            is_flying: self.is_flying,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerToggleFlightEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                is_flying: data.is_flying,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromV0_1_0WasmEvent for PlayerToggleSprintEvent {
+    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::PlayerToggleSprintEvent(PlayerToggleSprintEventData {
+            player,
+            is_sprinting: self.is_sprinting,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerToggleSprintEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                is_sprinting: data.is_sprinting,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

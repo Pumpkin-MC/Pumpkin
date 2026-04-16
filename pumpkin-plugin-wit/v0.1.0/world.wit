@@ -1,5 +1,5 @@
 interface %world {
-    use common.{position};
+    use common.{position, entity-pose};
     use text.{text-component};
     use scoreboard.{scoreboard};
 
@@ -101,6 +101,44 @@ interface %world {
         z: s32,
     }
 
+    resource entity {
+        get-id: func() -> u32;
+        get-uuid: func() -> string;
+        get-type: func() -> string;
+
+        get-position: func() -> position;
+        get-world: func() -> %world;
+
+        get-yaw: func() -> f32;
+        get-pitch: func() -> f32;
+        get-head-yaw: func() -> f32;
+
+        is-on-ground: func() -> bool;
+        is-sneaking: func() -> bool;
+        is-sprinting: func() -> bool;
+        is-invisible: func() -> bool;
+        is-glowing: func() -> bool;
+
+        teleport: func(pos: position, world-ref: %world);
+        set-velocity: func(velocity: position);
+        get-velocity: func() -> position;
+
+        get-pose: func() -> entity-pose;
+        get-name: func() -> text-component;
+        set-custom-name: func(name: text-component);
+        get-custom-name: func() -> option<text-component>;
+        set-custom-name-visible: func(visible: bool);
+        is-custom-name-visible: func() -> bool;
+
+        is-invulnerable: func() -> bool;
+        set-invulnerable: func(invulnerable: bool);
+
+        get-fire-ticks: func() -> s32;
+        set-fire-ticks: func(ticks: s32);
+
+        remove: func();
+    }
+
     /// Represents a Minecraft world (dimension).
     resource %world {
         /// Returns the unique identifier of this world.
@@ -165,5 +203,8 @@ interface %world {
 
         /// Returns the minimum Y coordinate (bottom of the world).
         get-min-y: func() -> s32;
+
+        /// Returns a list of all entities in this world.
+        get-entities: func() -> list<entity>;
     }
 }

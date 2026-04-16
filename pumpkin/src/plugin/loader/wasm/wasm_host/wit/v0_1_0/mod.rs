@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use wasmtime::component::{Component, HasData, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
+pub mod block_entity;
 pub mod commands;
 pub mod common;
 pub mod context;
@@ -64,6 +65,7 @@ pub async fn init_plugin(
         version: metadata.version,
         authors: metadata.authors,
         description: metadata.description,
+        dependencies: metadata.dependencies,
     };
 
     Ok((
