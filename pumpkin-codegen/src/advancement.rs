@@ -4,9 +4,12 @@ use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::TextContent::Translate;
+use pumpkin_util::text::TextContent::{Text, Translate};
 use quote::{ToTokens, format_ident, quote};
 use serde::{Deserialize, Deserializer, Serialize};
+use pumpkin_util::text::color::{Color, NamedColor};
+use pumpkin_util::text::hover::HoverEvent;
+use pumpkin_util::text::style::Style;
 
 #[derive(Deserialize, Default)]
 pub struct Advancement {
@@ -113,6 +116,16 @@ impl ToTokens for FrameType {
     }
 }
 
+impl FrameType {
+    fn get_color(&self) -> NamedColor {
+        match self {
+            FrameType::Task => NamedColor::Green,
+            FrameType::Challenge => NamedColor::DarkPurple,
+            FrameType::Goal => NamedColor::Green,
+        }
+    }
+}
+
 
 #[derive(Deserialize,Default)]
 pub struct AdvancementRewards {
@@ -141,6 +154,28 @@ impl ToTokens for AdvancementRewards {
     }
 }
 
+fn decorate_name(display : &AdvancementDisplay) -> TextComponent{
+    let title = &display.title;
+    let color = display.frame_type.get_color();
+    let mut over = title.clone();
+    *over.0.style = Style::default().color(Color::Named(color));
+    over = over.add_text("\n").add_child(display.description);
+    let mut text = title.clone();
+    text.0.style.hover_event = Some(HoverEvent::show_text(over));
+    text.wrap_in_square_brackets().color(Color::Named(color))
+}
+
+fn format_component_name(display: &AdvancementDisplay) -> TokenStream{
+    let decorate_name = decorate_name(display);
+    if let Text { text } =  decorate_name.0.content {
+        TextComponent::text(text).color(Color::Named(display.frame_type.get_color())).
+    }
+
+    quote! {
+
+    }
+}
+
 pub(crate) fn build() -> TokenStream {
     let advancements: BTreeMap<String, Advancement> =
         serde_json::from_str(&fs::read_to_string("../assets/advancements.json").unwrap())
@@ -157,10 +192,14 @@ pub(crate) fn build() -> TokenStream {
         let parent = token_option(&advancement.parent);
         let send_telemetry = advancement.sends_telemetry;
         let display = match &advancement.display {
-            Some(x) => quote! { Some(&#x) },
+            Some(display) => quote! { Some(&#display) },
             None => quote! { None },
         };
         let reward = advancement.rewards;
+        let name_component = match &advancement.display {
+            Some(display) => format_component_name(display),
+            None => quote! { None },
+        };
         variants.extend([quote! {
             pub const #format_name: Self = Self {
                 id: #raw_name,
@@ -168,6 +207,7 @@ pub(crate) fn build() -> TokenStream {
                 send_telemetry : #send_telemetry,
                 display : #display,
                 reward : &#reward,
+                name : LazyLock::new(|| #name_component),
             };
         }]);
         name_to_type.extend(quote! { #raw_name => Some(&Self::#format_name), });
@@ -179,6 +219,7 @@ pub(crate) fn build() -> TokenStream {
         use crate::item_stack::ItemStack;
         use crate::item::Item;
         use crate::advancement_data::*;
+        use std::sync::LazyLock;
 
         pub struct Advancement {
             pub id : &'static str,
@@ -186,6 +227,7 @@ pub(crate) fn build() -> TokenStream {
             pub send_telemetry : bool,
             pub display : Option<&'static AdvancementDisplay>,
             pub reward : &'static AdvancementReward,
+            pub name: LazyLock<Option<TextComponent>>,
         }
 
         impl Advancement {

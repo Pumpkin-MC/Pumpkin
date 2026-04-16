@@ -1,14 +1,16 @@
 /* This file is generated. Do not edit manually. */
+use std::sync::LazyLock;
 use crate::advancement_data::*;
 use crate::item::Item;
 use crate::item_stack::ItemStack;
-use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::{TextComponent, TextContent};
 pub struct Advancement {
     pub id: &'static str,
     pub parent: Option<&'static str>,
     pub send_telemetry: bool,
     pub display: Option<&'static AdvancementDisplay>,
     pub reward: &'static AdvancementReward,
+    pub name: LazyLock<Option<TextComponent>>,
 }
 impl Advancement {
     pub const ADVENTURE_ADVENTURING_TIME: Self = Self {
@@ -29,6 +31,8 @@ impl Advancement {
             experience: 500u32,
             recipes: &[],
         },
+        name : LazyLock::new(|| Some(TextComponent::text("test")))
+
     };
     pub const ADVENTURE_ARBALISTIC: Self = Self {
         id: "adventure/arbalistic",
