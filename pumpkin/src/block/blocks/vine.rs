@@ -222,7 +222,7 @@ const fn supports_vine(support_block: &Block) -> bool {
     false
 }
 //returns (accurate direction, boolean)
-// true if this direction is for hanging leaf
+// true if this direction is for hanging vine
 // false if it is not
 async fn get_accurate_direction(
     block_accessor: &dyn BlockAccessor,
