@@ -42,6 +42,8 @@ interface metadata {
         ///
         /// Keep this concise but informative. Displayed in plugin lists.
         description: string,
+        /// Plugin dependencies.
+        dependencies: list<string>,
     }
 
     /// Returns the metadata for this plugin.

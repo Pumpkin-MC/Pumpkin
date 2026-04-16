@@ -16,9 +16,10 @@
 /// /kit <player> <kit_name>
 /// ```
 interface command {
-    use player.{player};
     use %world.{%world};
-    use entity.{command-block-entity, entity};
+    use entity.{entity};
+    use player.{player};
+    use block-entity.{command-block-entity};
     use common.{position, block-position, locale};
     use server.{server, difficulty};
     use text.{text-component};

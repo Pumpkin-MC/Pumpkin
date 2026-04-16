@@ -66,6 +66,10 @@ world plugin {
     import i18n;
     /// Provides task scheduling for delayed or repeating logic.
     import scheduler;
+    /// Provides world information and block manipulation.
+    import %world;
+    /// Provides entity types and manipulation.
+    import entity;
 
     // --- Plugin-provided exports ---
 

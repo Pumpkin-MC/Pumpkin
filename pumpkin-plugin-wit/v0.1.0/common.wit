@@ -96,6 +96,28 @@ interface common {
         count: u8,
     }
 
+    /// Represents the various poses an entity can be in.
+    enum entity-pose {
+        standing,
+        fall-flying,
+        sleeping,
+        swimming,
+        spin-attack,
+        crouching,
+        long-jumping,
+        dying,
+        croaking,
+        using-tongue,
+        sitting,
+        roaring,
+        sniffing,
+        emerging,
+        digging,
+        sliding,
+        shooting,
+        inhaling,
+    }
+
     /// All Minecraft-supported locales.
     enum locale {
         /// Afrikaans (South Africa).

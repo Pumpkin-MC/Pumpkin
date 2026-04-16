@@ -304,6 +304,8 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         let entity = self.get_entity();
         entity
             .custom_name
+            .load()
+            .as_ref()
             .clone()
             .unwrap_or(TextComponent::translate(
                 format!("entity.minecraft.{}", entity.entity_type.resource_name),
@@ -315,13 +317,16 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async move {
             // TODO: team color
             let entity = self.get_entity();
-            let mut name = entity
-                .custom_name
-                .clone()
-                .unwrap_or(TextComponent::translate(
-                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                    [],
-                ));
+            let mut name =
+                entity
+                    .custom_name
+                    .load()
+                    .as_ref()
+                    .clone()
+                    .unwrap_or(TextComponent::translate(
+                        format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                        [],
+                    ));
             let name_clone = name.clone();
             name = name.hover_event(HoverEvent::show_entity(
                 entity.entity_uuid.to_string(),
@@ -474,9 +479,9 @@ pub struct Entity {
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
     /// Custom name for the entity
-    pub custom_name: Option<TextComponent>,
+    pub custom_name: ArcSwap<Option<TextComponent>>,
     /// Indicates whether the entity's custom name is visible
-    pub custom_name_visible: bool,
+    pub custom_name_visible: AtomicBool,
     /// The data send in the Entity Spawn packet
     pub data: AtomicI32,
     /// Stores entity boolean flags (on fire, sneaking, invisible, glowing, etc.)
@@ -600,8 +605,8 @@ impl Entity {
             age: AtomicI32::new(0),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
-            custom_name: None,
-            custom_name_visible: false,
+            custom_name: ArcSwap::new(Arc::new(None)),
+            custom_name_visible: AtomicBool::new(false),
             no_clip: AtomicBool::new(false),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
@@ -636,10 +641,21 @@ impl Entity {
 
     /// Sets a custom name for the entity, typically used with nametags
     pub async fn set_custom_name(&self, name: TextComponent) {
+        self.custom_name.store(Arc::new(Some(name.clone())));
         self.send_meta_data(&[Metadata::new(
             TrackedData::CUSTOM_NAME,
             MetaDataType::OPTIONAL_TEXT_COMPONENT,
             Some(name),
+        )])
+        .await;
+    }
+
+    pub async fn set_custom_name_visible(&self, visible: bool) {
+        self.custom_name_visible.store(visible, Ordering::Relaxed);
+        self.send_meta_data(&[Metadata::new(
+            TrackedData::CUSTOM_NAME_VISIBLE,
+            MetaDataType::BOOLEAN,
+            visible,
         )])
         .await;
     }
