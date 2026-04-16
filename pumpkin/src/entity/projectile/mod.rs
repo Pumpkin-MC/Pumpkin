@@ -11,6 +11,7 @@ use std::{
 };
 pub mod arrow;
 pub mod egg;
+pub mod ender_pearl;
 pub mod eye_of_ender;
 pub mod firework_rocket;
 pub mod lingering_potion;
@@ -27,6 +28,7 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::WIND_CHARGE
         || *entity_type == EntityType::SPLASH_POTION
         || *entity_type == EntityType::LINGERING_POTION
+        || *entity_type == EntityType::ENDER_PEARL
 }
 
 pub struct ThrownItemEntity {
