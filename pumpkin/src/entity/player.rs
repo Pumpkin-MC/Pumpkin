@@ -31,7 +31,9 @@ use uuid::Uuid;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
+use pumpkin_data::data_component_impl::{
+    AttackRangeImpl, AttributeModifiersImpl, MinimumAttackChargeImpl, Operation,
+};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
@@ -2058,6 +2060,98 @@ impl Player {
         } else {
             4.5
         }
+    }
+
+    pub fn entity_interaction_range(&self) -> f64 {
+        let mut range = self
+            .living_entity
+            .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE);
+        if self.gamemode.load() == GameMode::Creative {
+            range += 2.0;
+        }
+        range
+    }
+
+    pub fn is_within_entity_range(
+        &self,
+        target_bounds: &BoundingBox,
+        additional_range: f64,
+    ) -> bool {
+        let d = self.entity_interaction_range() + additional_range;
+        target_bounds.squared_magnitude(self.eye_position()) < d * d
+    }
+
+    async fn active_item_stack(&self) -> Arc<Mutex<ItemStack>> {
+        if self.using_item.load(Ordering::Relaxed)
+            && let Some(hand) = self.using_hand.load()
+        {
+            return self.inventory.get_stack_in_hand(hand).await;
+        }
+        self.inventory.held_item()
+    }
+
+    pub async fn cannot_attack_with_item(&self, tolerance: f64) -> bool {
+        let active_item = self.active_item_stack().await;
+        let required_strength = active_item
+            .lock()
+            .await
+            .get_data_component::<MinimumAttackChargeImpl>()
+            .map_or(0.0, |value| f64::from(value.value));
+        if required_strength <= 0.0 {
+            return false;
+        }
+
+        let current_item_attack_strength_delay = 20.0
+            / self
+                .living_entity
+                .get_attribute_value(&Attributes::ATTACK_SPEED);
+        let optimistic_strength = (f64::from(self.last_attacked_ticks.load(Ordering::Acquire))
+            + tolerance)
+            / current_item_attack_strength_delay;
+
+        optimistic_strength < required_strength
+    }
+
+    pub async fn is_within_attack_range(
+        &self,
+        target_bounds: &BoundingBox,
+        additional_range: f64,
+    ) -> bool {
+        let active_item = self.active_item_stack().await;
+        let attack_range = active_item
+            .lock()
+            .await
+            .get_data_component::<AttackRangeImpl>()
+            .cloned()
+            .unwrap_or_else(|| {
+                let range = self.entity_interaction_range() as f32;
+                AttackRangeImpl {
+                    min_range: 0.0,
+                    max_range: range,
+                    min_creative_range: 0.0,
+                    max_creative_range: range,
+                    hitbox_margin: 0.0,
+                    mob_factor: 1.0,
+                }
+            });
+
+        let (min_range, max_range) = if self.gamemode.load() == GameMode::Creative {
+            (
+                f64::from(attack_range.min_creative_range),
+                f64::from(attack_range.max_creative_range),
+            )
+        } else {
+            (
+                f64::from(attack_range.min_range),
+                f64::from(attack_range.max_range),
+            )
+        };
+
+        let distance = target_bounds.squared_magnitude(self.eye_position()).sqrt();
+        let min_reach = min_range - f64::from(attack_range.hitbox_margin) - additional_range;
+        let max_reach = max_range + f64::from(attack_range.hitbox_margin) + additional_range;
+
+        distance >= min_reach && distance <= max_reach
     }
 
     pub fn can_interact_with_block_at(&self, position: &BlockPos, additional_range: f64) -> bool {

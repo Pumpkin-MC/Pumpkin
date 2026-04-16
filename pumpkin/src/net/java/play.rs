@@ -39,11 +39,14 @@ use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
-use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
+use pumpkin_data::data_component_impl::{
+    ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl, PiercingWeaponImpl,
+};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, translation};
 use pumpkin_inventory::InventoryError;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -78,6 +81,173 @@ use tokio::sync::Mutex;
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
 const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
+const ENTITY_ATTACK_VALIDATION_LENIENCY: f64 = 3.0;
+
+enum AttackValidationResult {
+    Allow {
+        target: Arc<dyn EntityBase>,
+        player_target: Option<Arc<Player>>,
+    },
+    Unknown,
+    Ignore,
+    Disconnect,
+}
+
+#[derive(Clone, Copy)]
+struct AttackValidationInput {
+    entity_id: i32,
+    self_entity_id: i32,
+    target_exists: bool,
+    target_removed: bool,
+    target_is_invalid: bool,
+    within_world_border: bool,
+    within_reach: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AttackValidationInput, AttackValidationVerdict, attack_validation_verdict};
+
+    #[test]
+    fn attack_validation_allows_valid_entity_in_range() {
+        let verdict = attack_validation_verdict(AttackValidationInput {
+            entity_id: 42,
+            self_entity_id: 1,
+            target_exists: true,
+            target_removed: false,
+            target_is_invalid: false,
+            within_world_border: true,
+            within_reach: true,
+        });
+        assert_eq!(verdict, AttackValidationVerdict::Allow);
+    }
+
+    #[test]
+    fn attack_validation_disconnects_for_missing_target() {
+        let verdict = attack_validation_verdict(AttackValidationInput {
+            entity_id: 42,
+            self_entity_id: 1,
+            target_exists: false,
+            target_removed: false,
+            target_is_invalid: false,
+            within_world_border: false,
+            within_reach: false,
+        });
+        assert_eq!(verdict, AttackValidationVerdict::Unknown);
+    }
+
+    #[test]
+    fn attack_validation_disconnects_for_removed_target() {
+        let verdict = attack_validation_verdict(AttackValidationInput {
+            entity_id: 42,
+            self_entity_id: 1,
+            target_exists: true,
+            target_removed: true,
+            target_is_invalid: false,
+            within_world_border: true,
+            within_reach: true,
+        });
+        assert_eq!(verdict, AttackValidationVerdict::Unknown);
+    }
+
+    #[test]
+    fn attack_validation_disconnects_for_item_target() {
+        let verdict = attack_validation_verdict(AttackValidationInput {
+            entity_id: 42,
+            self_entity_id: 1,
+            target_exists: true,
+            target_removed: false,
+            target_is_invalid: true,
+            within_world_border: true,
+            within_reach: true,
+        });
+        assert_eq!(verdict, AttackValidationVerdict::Disconnect);
+    }
+
+    #[test]
+    fn attack_validation_disconnects_for_experience_orb_target() {
+        let verdict = attack_validation_verdict(AttackValidationInput {
+            entity_id: 42,
+            self_entity_id: 1,
+            target_exists: true,
+            target_removed: false,
+            target_is_invalid: true,
+            within_world_border: true,
+            within_reach: true,
+        });
+        assert_eq!(verdict, AttackValidationVerdict::Disconnect);
+    }
+
+    #[test]
+    fn attack_validation_disconnects_for_self_target() {
+        let verdict = attack_validation_verdict(AttackValidationInput {
+            entity_id: 1,
+            self_entity_id: 1,
+            target_exists: true,
+            target_removed: false,
+            target_is_invalid: false,
+            within_world_border: true,
+            within_reach: true,
+        });
+        assert_eq!(verdict, AttackValidationVerdict::Disconnect);
+    }
+
+    #[test]
+    fn attack_validation_ignores_target_outside_world_border() {
+        let verdict = attack_validation_verdict(AttackValidationInput {
+            entity_id: 42,
+            self_entity_id: 1,
+            target_exists: true,
+            target_removed: false,
+            target_is_invalid: false,
+            within_world_border: false,
+            within_reach: true,
+        });
+        assert_eq!(verdict, AttackValidationVerdict::Ignore);
+    }
+
+    #[test]
+    fn attack_validation_ignores_target_outside_reach() {
+        let verdict = attack_validation_verdict(AttackValidationInput {
+            entity_id: 42,
+            self_entity_id: 1,
+            target_exists: true,
+            target_removed: false,
+            target_is_invalid: false,
+            within_world_border: true,
+            within_reach: false,
+        });
+        assert_eq!(verdict, AttackValidationVerdict::Ignore);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AttackValidationVerdict {
+    Allow,
+    Unknown,
+    Ignore,
+    Disconnect,
+}
+
+const fn attack_validation_verdict(input: AttackValidationInput) -> AttackValidationVerdict {
+    if input.entity_id == input.self_entity_id {
+        return AttackValidationVerdict::Disconnect;
+    }
+
+    if !input.target_exists || input.target_removed {
+        return AttackValidationVerdict::Unknown;
+    }
+
+    if input.target_is_invalid {
+        return AttackValidationVerdict::Disconnect;
+    }
+
+    if !input.within_world_border || !input.within_reach {
+        return AttackValidationVerdict::Ignore;
+    }
+
+    AttackValidationVerdict::Allow
+}
 
 #[derive(Debug, Error)]
 pub enum BlockPlacingError {
@@ -1577,48 +1747,100 @@ impl JavaClient {
         }
     }
 
-    pub async fn handle_attack(&self, player: &Arc<Player>, attack: SAttack, server: &Arc<Server>) {
-        if !player.has_client_loaded() {
-            return;
-        }
-        player.update_last_action_time();
-        let entity_id = attack.entity_id;
-        let player_entity = &player.living_entity.entity;
-        let world = player_entity.world.load_full();
-
-        let config = &server.advanced_config.pvp;
-        if !config.enabled {
-            return;
-        }
-
-        if entity_id.0 == player.entity_id() {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                [],
-            ))
-            .await;
-            return;
-        }
-
-        let player_target = world.get_player_by_id(entity_id.0);
+    async fn validate_attack_target(
+        &self,
+        player: &Arc<Player>,
+        entity_id: i32,
+    ) -> AttackValidationResult {
+        let world = player.world();
+        let is_piercing_weapon = {
+            let held_item = player.inventory.held_item();
+            held_item
+                .lock()
+                .await
+                .get_data_component::<PiercingWeaponImpl>()
+                .is_some()
+        };
+        let player_target = world.get_player_by_id(entity_id);
         let target: Option<Arc<dyn EntityBase>> = player_target
             .as_ref()
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
-            .or_else(|| world.get_entity_by_id(entity_id.0));
-        let Some(target) = target else {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                [],
-            ))
-            .await;
-            return;
-        };
+            .or_else(|| world.get_entity_by_id(entity_id));
+
+        let target_exists = target.is_some();
+        let (target_removed, target_is_invalid, within_world_border, within_reach) =
+            if let Some(target) = &target {
+                let target_entity = target.get_entity();
+                let target_removed = target_entity.is_removed();
+                let target_type = target_entity.entity_type;
+                let target_is_invalid = if is_piercing_weapon {
+                    false
+                } else {
+                    target_type == &EntityType::ITEM
+                        || target_type == &EntityType::EXPERIENCE_ORB
+                        || (target_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_ARROWS)
+                            && !target_type.has_tag(
+                                &pumpkin_data::tag::EntityType::MINECRAFT_REDIRECTABLE_PROJECTILE,
+                            ))
+                };
+
+                let block_pos = target_entity.block_pos.load().0;
+                let within_world_border = {
+                    let border = world.worldborder.lock().await;
+                    border.contains_block(block_pos.x, block_pos.z)
+                };
+
+                let target_bounds = target_entity.bounding_box.load();
+                let within_reach = player
+                    .is_within_attack_range(&target_bounds, ENTITY_ATTACK_VALIDATION_LENIENCY)
+                    .await;
+                (
+                    target_removed,
+                    target_is_invalid,
+                    within_world_border,
+                    within_reach,
+                )
+            } else {
+                (false, false, false, false)
+            };
+
+        match attack_validation_verdict(AttackValidationInput {
+            entity_id,
+            self_entity_id: player.entity_id(),
+            target_exists,
+            target_removed,
+            target_is_invalid,
+            within_world_border,
+            within_reach,
+        }) {
+            AttackValidationVerdict::Allow => target.map_or_else(
+                || AttackValidationResult::Disconnect,
+                |target| AttackValidationResult::Allow {
+                    target,
+                    player_target,
+                },
+            ),
+            AttackValidationVerdict::Unknown => AttackValidationResult::Unknown,
+            AttackValidationVerdict::Ignore => AttackValidationResult::Ignore,
+            AttackValidationVerdict::Disconnect => AttackValidationResult::Disconnect,
+        }
+    }
+
+    async fn finish_validated_attack(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        target: Arc<dyn EntityBase>,
+        player_target: Option<Arc<Player>>,
+    ) {
+        let config = &server.advanced_config.pvp;
         if let Some(player_victim) = &player_target {
             if player_victim.living_entity.health.load() <= 0.0 {
                 return;
             }
             if config.protect_creative && player_victim.gamemode.load() == GameMode::Creative {
-                world
+                player
+                    .world()
                     .play_sound(
                         Sound::EntityPlayerAttackNodamage,
                         SoundCategory::Players,
@@ -1628,9 +1850,52 @@ impl JavaClient {
                 return;
             }
         }
+
+        if player.cannot_attack_with_item(5.0).await {
+            return;
+        }
+
         player.attack(target).await;
     }
 
+    pub async fn handle_attack(&self, player: &Arc<Player>, attack: SAttack, server: &Arc<Server>) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+        let entity_id = attack.entity_id.0;
+
+        let config = &server.advanced_config.pvp;
+        if !config.enabled {
+            return;
+        }
+
+        match self.validate_attack_target(player, entity_id).await {
+            AttackValidationResult::Allow {
+                target,
+                player_target,
+            } => {
+                self.finish_validated_attack(player, server, target, player_target)
+                    .await;
+            }
+            AttackValidationResult::Unknown => {
+                send_cancellable! {{
+                    server;
+                    PlayerInteractUnknownEntityEvent::new(player, entity_id, ActionType::Attack);
+                }}
+            }
+            AttackValidationResult::Ignore => {}
+            AttackValidationResult::Disconnect => {
+                self.kick(TextComponent::translate(
+                    translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                    [],
+                ))
+                .await;
+            }
+        }
+    }
+
+    #[expect(clippy::too_many_lines)]
     pub async fn handle_interact(
         &self,
         player: &Arc<Player>,
@@ -1653,94 +1918,107 @@ impl JavaClient {
             return;
         };
 
-        // Resolve the target entity for the event
-        let world = player_entity.world.load_full();
-        let player_target = world.get_player_by_id(entity_id.0);
-        let target: Option<Arc<dyn EntityBase>> = player_target
-            .as_ref()
-            .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
-            .or_else(|| world.get_entity_by_id(entity_id.0));
+        if action == ActionType::Attack {
+            let config = &server.advanced_config.pvp;
+            if !config.enabled {
+                return;
+            }
 
-        if let Some(target) = target {
+            match self.validate_attack_target(player, entity_id.0).await {
+                AttackValidationResult::Allow {
+                    target,
+                    player_target,
+                } => {
+                    let attack_target = Arc::clone(&target);
+                    send_cancellable! {{
+                        server;
+                        PlayerInteractEntityEvent::new(
+                            player,
+                            target,
+                            action,
+                            interact.target_position,
+                            sneaking,
+                        );
+
+                        'after: {
+                            self.finish_validated_attack(
+                                player,
+                                server,
+                                attack_target,
+                                player_target,
+                            )
+                            .await;
+                        }
+                    }}
+                }
+                AttackValidationResult::Unknown => {
+                    send_cancellable! {{
+                        server;
+                        PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
+                    }}
+                }
+                AttackValidationResult::Ignore => {}
+                AttackValidationResult::Disconnect => {
+                    self.kick(TextComponent::translate(
+                        translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                        [],
+                    ))
+                    .await;
+                }
+            }
+            return;
+        }
+
+        let world = player_entity.world.load_full();
+        if let Some(target) = world.get_entity_by_id(entity_id.0) {
+            let target_entity = target.get_entity();
+            if target_entity.is_removed() {
+                send_cancellable! {{
+                    server;
+                    PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
+                }}
+                return;
+            }
+
+            let block_pos = target_entity.block_pos.load().0;
+            let within_world_border = {
+                let border = world.worldborder.lock().await;
+                border.contains_block(block_pos.x, block_pos.z)
+            };
+            if !within_world_border {
+                return;
+            }
+
+            let target_bounds = target_entity.bounding_box.load();
+            if !player.is_within_entity_range(&target_bounds, ENTITY_ATTACK_VALIDATION_LENIENCY) {
+                return;
+            }
+
             send_cancellable! {{
                 server;
                 PlayerInteractEntityEvent::new(
                     player,
-                    Arc::clone(&target),
-                    action.clone(),
+                    target,
+                    action,
                     interact.target_position,
                     sneaking,
                 );
 
                 'after: {
-                    match event.action {
-                        ActionType::Attack => {
-                            let config = &server.advanced_config.pvp;
-                            if !config.enabled {
-                                return;
-                            }
-
-                            if entity_id.0 == player.entity_id() {
-                                self.kick(TextComponent::translate(
-                                    translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                                    [],
-                                ))
-                                .await;
-                                return;
-                            }
-
-                            if let Some(player_victim) = &player_target {
-                                if player_victim.living_entity.health.load() <= 0.0 {
-                                    return;
-                                }
-                                if config.protect_creative
-                                    && player_victim.gamemode.load() == GameMode::Creative
-                                {
-                                    world
-                                        .play_sound(
-                                            Sound::EntityPlayerAttackNodamage,
-                                            SoundCategory::Players,
-                                            &player_victim.position(),
-                                        )
-                                        .await;
-                                    return;
-                                }
-                            }
-                            player.attack(event.target).await;
-                        }
-                        ActionType::Interact | ActionType::InteractAt => {
-                            let held = player.inventory.held_item();
-                            let mut stack = held.lock().await;
-                            if !event.target.interact(player, &mut stack).await {
-                                server
-                                    .item_registry
-                                    .use_on_entity(&mut stack, player, event.target)
-                                    .await;
-                            }
-                        }
+                    let held = player.inventory.held_item();
+                    let mut stack = held.lock().await;
+                    if !event.target.interact(player, &mut stack).await {
+                        server
+                            .item_registry
+                            .use_on_entity(&mut stack, player, event.target)
+                            .await;
                     }
                 }
             }}
         } else {
-            // Entity not found
             send_cancellable! {{
                 server;
                 PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
-
-                'after: {
-                    if event.action == ActionType::Attack {
-                        error!(
-                            "Player id {} interacted with entity id {}, which was not found.",
-                            player.entity_id(),
-                            event.entity_id
-                        );
-                        self.kick(TextComponent::translate(
-                            translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                            [],
-                        ))
-                        .await;
-                    }
-                }
             }}
         }
     }

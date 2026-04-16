@@ -3,9 +3,10 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
-    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
-    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
+    AttackRange, AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage,
+    DamageResistant, DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food,
+    ItemModel, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, MinimumAttackCharge,
+    PiercingWeapon, PotionContents, Tool, Unbreakable, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -53,10 +54,13 @@ pub trait DataComponentImpl: Send + Sync {
 pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataComponentImpl>> {
     match id {
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
+        MinimumAttackCharge => Some(MinimumAttackChargeImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
         DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
+        AttackRange => Some(AttackRangeImpl::read_data(data)?.to_dyn()),
+        PiercingWeapon => Some(PiercingWeaponImpl::read_data(data)?.to_dyn()),
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
@@ -653,6 +657,117 @@ impl Hash for ConsumableImpl {
 pub struct UseRemainderImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseCooldownImpl;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MinimumAttackChargeImpl {
+    pub value: f32,
+}
+
+impl MinimumAttackChargeImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_float().map(|value| Self { value })
+    }
+}
+
+impl DataComponentImpl for MinimumAttackChargeImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Float(self.value)
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_f32_hash(self.value) as i32
+    }
+
+    default_impl!(MinimumAttackCharge);
+}
+
+impl Hash for MinimumAttackChargeImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        unsafe { (*(&raw const self.value).cast::<u32>()).hash(state) };
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AttackRangeImpl {
+    pub min_range: f32,
+    pub max_range: f32,
+    pub min_creative_range: f32,
+    pub max_creative_range: f32,
+    pub hitbox_margin: f32,
+    pub mob_factor: f32,
+}
+
+impl AttackRangeImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        Some(Self {
+            min_range: compound.get_float("min_reach").unwrap_or(0.0),
+            max_range: compound.get_float("max_reach").unwrap_or(3.0),
+            min_creative_range: compound.get_float("min_creative_reach").unwrap_or(0.0),
+            max_creative_range: compound.get_float("max_creative_reach").unwrap_or(5.0),
+            hitbox_margin: compound.get_float("hitbox_margin").unwrap_or(0.3),
+            mob_factor: compound.get_float("mob_factor").unwrap_or(1.0),
+        })
+    }
+}
+
+impl DataComponentImpl for AttackRangeImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_float("min_reach", self.min_range);
+        compound.put_float("max_reach", self.max_range);
+        compound.put_float("min_creative_reach", self.min_creative_range);
+        compound.put_float("max_creative_reach", self.max_creative_range);
+        compound.put_float("hitbox_margin", self.hitbox_margin);
+        compound.put_float("mob_factor", self.mob_factor);
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&get_f32_hash(self.min_range).to_le_bytes());
+        digest.update(&get_f32_hash(self.max_range).to_le_bytes());
+        digest.update(&get_f32_hash(self.min_creative_range).to_le_bytes());
+        digest.update(&get_f32_hash(self.max_creative_range).to_le_bytes());
+        digest.update(&get_f32_hash(self.hitbox_margin).to_le_bytes());
+        digest.update(&get_f32_hash(self.mob_factor).to_le_bytes());
+        digest.finalize() as i32
+    }
+
+    default_impl!(AttackRange);
+}
+
+impl Hash for AttackRangeImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        unsafe { (*(&raw const self.min_range).cast::<u32>()).hash(state) };
+        unsafe { (*(&raw const self.max_range).cast::<u32>()).hash(state) };
+        unsafe { (*(&raw const self.min_creative_range).cast::<u32>()).hash(state) };
+        unsafe { (*(&raw const self.max_creative_range).cast::<u32>()).hash(state) };
+        unsafe { (*(&raw const self.hitbox_margin).cast::<u32>()).hash(state) };
+        unsafe { (*(&raw const self.mob_factor).cast::<u32>()).hash(state) };
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct PiercingWeaponImpl;
+
+impl PiercingWeaponImpl {
+    fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
+
+impl DataComponentImpl for PiercingWeaponImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(NbtCompound::new())
+    }
+
+    fn get_hash(&self) -> i32 {
+        0
+    }
+
+    default_impl!(PiercingWeapon);
+}
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum DamageResistantType {
     /// Damage always dealt to ender dragons
