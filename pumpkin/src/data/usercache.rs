@@ -2,20 +2,20 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::{env, fs};
 
-use chrono::{DateTime, FixedOffset, Local, Months, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
+use time::format_description::well_known::Rfc3339;
+use time::{Duration, OffsetDateTime};
 use tracing::warn;
 use uuid::Uuid;
 
 const USER_CACHE_PATH: &str = "usercache.json";
 const USER_CACHE_MRU_LIMIT: usize = 1000;
-const USER_CACHE_DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S %z";
 
 #[derive(Clone, Debug)]
 pub struct UserCacheEntry {
     pub uuid: Uuid,
     pub name: String,
-    expiration_date: DateTime<FixedOffset>,
+    expiration_date: OffsetDateTime,
     last_access: u64,
 }
 
@@ -192,8 +192,8 @@ impl UserCache {
             let Ok(uuid) = Uuid::parse_str(uuid_raw) else {
                 continue;
             };
-            let Ok(expiration_date) = DateTime::parse_from_str(expires_on, USER_CACHE_DATE_FORMAT)
-            else {
+
+            let Ok(expiration_date) = OffsetDateTime::parse(expires_on, &Rfc3339) else {
                 continue;
             };
 
@@ -209,16 +209,14 @@ impl UserCache {
     }
 }
 
-fn format_cache_date(date: DateTime<FixedOffset>) -> String {
-    date.format(USER_CACHE_DATE_FORMAT).to_string()
+fn format_cache_date(date: OffsetDateTime) -> String {
+    date.format(&Rfc3339).unwrap_or_default()
 }
 
-fn is_expired(expiration_date: DateTime<FixedOffset>) -> bool {
-    Utc::now() >= expiration_date.with_timezone(&Utc)
+fn is_expired(expiration_date: OffsetDateTime) -> bool {
+    OffsetDateTime::now_utc() >= expiration_date
 }
 
-fn one_month_from_now() -> DateTime<FixedOffset> {
-    let now = Local::now().fixed_offset();
-    now.checked_add_months(Months::new(1))
-        .unwrap_or(now + TimeDelta::days(30))
+fn one_month_from_now() -> OffsetDateTime {
+    OffsetDateTime::now_utc() + Duration::days(30)
 }
