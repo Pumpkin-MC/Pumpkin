@@ -251,21 +251,26 @@ async fn count_bamboo_above(world: Arc<World>, pos: &BlockPos) -> usize {
 async fn bone_meal(world: Arc<World>, position: &BlockPos) {
     let mut bamboo_above = count_bamboo_above(Arc::clone(&world), position).await;
     let bamboo_below = count_bamboo_below(Arc::clone(&world), position).await;
-    let mut new_height = bamboo_above + bamboo_below + 1;
-    let l = rand::rng().random_range(0..=2) + 1; // what is this?
-    for _ in 0..l {
+
+    let growth_amount = rand::rng().random_range(1..=3);
+
+    for _ in 0..growth_amount {
+        let current_total_height = bamboo_above + bamboo_below + 1;
+
         let next_pos = position.up_height(bamboo_above as i32);
         let next_state = world.get_block_state(&next_pos).await;
-        if !next_state.is_air() || new_height >= 16 {
+
+        if !next_state.is_air() || current_total_height >= 16 {
             return;
         }
-        let next_props = BambooLikeProperties::from_state_id(next_state.id, &Block::BAMBOO);
 
+        let next_props = BambooLikeProperties::from_state_id(next_state.id, &Block::BAMBOO);
         if next_props.stage == Integer0To1::L1 {
             return;
         }
+
         update_leaves_and_grow(Arc::clone(&world), position).await;
-        new_height += 1;
+
         bamboo_above += 1;
     }
 }
