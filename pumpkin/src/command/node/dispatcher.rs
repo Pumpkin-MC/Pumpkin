@@ -493,7 +493,7 @@ impl CommandDispatcher {
         let mut provided_suggestions = Vec::new();
 
         for child in children {
-            let mut builder = SuggestionsBuilder::new(truncated_input, start);
+            let builder = SuggestionsBuilder::new(truncated_input, start);
 
             let future: Option<Pin<Box<dyn Future<Output = Suggestions> + Send>>> =
                 match self.tree.classify_id(child) {
@@ -530,11 +530,7 @@ impl CommandDispatcher {
                             provided_suggestions.push(provider.suggest(&context, builder).await);
                             None
                         } else {
-                            Some(
-                                node.meta
-                                    .argument_type
-                                    .list_suggestions(&context, &mut builder),
-                            )
+                            Some(node.meta.argument_type.list_suggestions(&context, builder))
                         }
                     }
                 };
