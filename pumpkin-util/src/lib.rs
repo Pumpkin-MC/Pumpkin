@@ -26,6 +26,7 @@ pub mod version;
 pub mod world_seed;
 pub mod y_offset;
 
+pub mod identifier;
 pub mod jwt;
 
 /// Represents the different types of height maps used for terrain generation and collision checks.
