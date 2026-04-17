@@ -5,7 +5,8 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
     DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
-    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
+    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, StoredEnchantments, Tool,
+    Unbreakable, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -63,6 +64,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
+        StoredEnchantments => Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -698,7 +700,7 @@ pub enum DamageResistantType {
     NoKnockback,
     PanicCauses,
     PanicEnvironmentalCauses,
-    /// Reducese damage dealt to witches by 85%
+    /// Reduces damage dealt to witches by 85%
     WitchResistantTo,
     WitherImmuneTo,
     /// Generic fallback
@@ -1383,7 +1385,44 @@ impl DataComponentImpl for BlocksAttacksImpl {
     default_impl!(BlocksAttacks);
 }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct StoredEnchantmentsImpl;
+pub struct StoredEnchantmentsImpl {
+    pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
+}
+
+impl StoredEnchantmentsImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let data = &data.extract_compound()?.child_tags;
+        let mut enc = Vec::with_capacity(data.len());
+        for (name, level) in data {
+            enc.push((Enchantment::from_name(name.as_str())?, level.extract_int()?));
+        }
+        Some(Self {
+            enchantment: Cow::from(enc),
+        })
+    }
+}
+impl DataComponentImpl for StoredEnchantmentsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut data = NbtCompound::new();
+        for (enc, level) in self.enchantment.iter() {
+            data.put_int(enc.name, *level);
+        }
+        NbtTag::Compound(data)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        for (enc, level) in self.enchantment.iter() {
+            digest.update(&get_str_hash(enc.name).to_le_bytes());
+            digest.update(&get_i32_hash(*level).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(StoredEnchantments);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DyedColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

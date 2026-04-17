@@ -8,6 +8,8 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
+
+#[derive(Debug)]
 pub struct Enchantment {
     pub id: u8,
     pub name: &'static str,
