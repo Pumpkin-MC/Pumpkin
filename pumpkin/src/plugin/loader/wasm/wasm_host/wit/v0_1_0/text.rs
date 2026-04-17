@@ -83,14 +83,22 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
-    async fn text_colored(&mut self, plain: String, color: NamedColor) -> wasmtime::Result<Resource<TextComponent>> {
+    async fn text_colored(
+        &mut self,
+        plain: String,
+        color: NamedColor,
+    ) -> wasmtime::Result<Resource<TextComponent>> {
         let mut tc = InternalTextComponent::text(plain);
         tc = tc.color(Color::Named(map_named_color(color)));
         self.add_text_component(tc)
             .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
-    async fn text_rgb(&mut self, plain: String, color: RgbColor) -> wasmtime::Result<Resource<TextComponent>> {
+    async fn text_rgb(
+        &mut self,
+        plain: String,
+        color: RgbColor,
+    ) -> wasmtime::Result<Resource<TextComponent>> {
         let mut tc = InternalTextComponent::text(plain);
         tc = tc.color(Color::Rgb(color::RGBColor::new(color.r, color.g, color.b)));
         self.add_text_component(tc)
