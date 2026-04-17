@@ -101,6 +101,10 @@ impl ItemEntity {
         }
     }
 
+    pub async fn new_for_restore(entity: Entity) -> Self {
+        Self::new_with_velocity(entity, ItemStack::EMPTY.clone(), Vector3::default(), 0).await
+    }
+
     async fn can_merge(&self) -> bool {
         if self.never_pickup.load(Ordering::Relaxed) || self.entity.removed.load(Ordering::Relaxed)
         {
@@ -626,12 +630,12 @@ mod tests {
         assert_eq!(nbt.get_short("PickupDelay"), Some(7));
         assert_eq!(nbt.get_float("Health"), Some(3.5));
 
-        let reloaded = ItemEntity::new_with_velocity(
-            Entity::from_uuid(uuid, world, Vector3::new(0.0, 0.0, 0.0), &EntityType::ITEM),
-            ItemStack::EMPTY.clone(),
+        let reloaded = ItemEntity::new_for_restore(Entity::from_uuid(
+            uuid,
+            world,
             Vector3::new(0.0, 0.0, 0.0),
-            0,
-        )
+            &EntityType::ITEM,
+        ))
         .await;
         reloaded.read_nbt_non_mut(&nbt).await;
 

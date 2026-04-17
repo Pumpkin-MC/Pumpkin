@@ -81,15 +81,7 @@ pub async fn from_type(
         id if id == EntityType::AREA_EFFECT_CLOUD.id => {
             crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
         }
-        id if id == EntityType::ITEM.id => Arc::new(
-            ItemEntity::new_with_velocity(
-                entity,
-                pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
-                Vector3::new(0.0, 0.0, 0.0),
-                0,
-            )
-            .await,
-        ),
+        id if id == EntityType::ITEM.id => Arc::new(ItemEntity::new_for_restore(entity).await),
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
