@@ -449,6 +449,13 @@ impl BedrockClient {
                 vec
             });
 
+            if fragment_index >= entry.len() {
+                return Err(Error::other(format!(
+                    "Fragment index {fragment_index} out of bounds for size {}",
+                    entry.len()
+                )));
+            }
+
             entry[fragment_index] = Some(frame);
 
             // Check if all fragments are received
@@ -456,21 +463,21 @@ impl BedrockClient {
                 return Ok(());
             }
 
-            let mut frames = compounds.remove(&compound_id).unwrap();
+            let mut frames_opt = compounds
+                .remove(&compound_id)
+                .ok_or_else(|| Error::other("Compound ID vanished"))?;
 
-            // Safety: We already checked that all frames are Some at this point
-            let len = frames
-                .iter()
-                .map(|frame| unsafe { frame.as_ref().unwrap_unchecked().payload.len() })
-                .sum();
+            let total_len: usize = frames_opt.iter().flatten().map(|f| f.payload.len()).sum();
 
-            let mut merged = Vec::with_capacity(len);
+            let mut merged = Vec::with_capacity(total_len);
 
-            for frame in &frames {
-                merged.extend_from_slice(unsafe { &frame.as_ref().unwrap_unchecked().payload });
+            for f in frames_opt.iter().flatten() {
+                merged.extend_from_slice(&f.payload);
             }
 
-            frame = unsafe { frames[0].take().unwrap_unchecked() };
+            frame = frames_opt[0]
+                .take()
+                .ok_or_else(|| Error::other("Failed to retrieve primary frame"))?;
 
             frame.payload = merged;
             frame.split_size = 0;
@@ -504,7 +511,8 @@ impl BedrockClient {
                     .await;
             }
             _ => {
-                self.handle_play_packet(self.player.lock().await.as_ref().unwrap(), server, packet)
+                return self
+                    .handle_play_packet(self.player.lock().await.as_ref().unwrap(), server, packet)
                     .await;
             }
         }
@@ -516,46 +524,43 @@ impl BedrockClient {
         player: &Arc<Player>,
         server: &Arc<Server>,
         packet: RawPacket,
-    ) {
+    ) -> Result<(), Error> {
         let reader = &mut &packet.payload[..];
         match packet.id {
             SPlayerAuthInput::PACKET_ID => {
-                if let Ok(input_packet) = SPlayerAuthInput::read(reader) {
-                    self.player_pos_update(player, input_packet, server).await;
-                }
+                self.player_pos_update(player, SPlayerAuthInput::read(reader)?, server)
+                    .await;
             }
             SLoadingScreen::PACKET_ID => {
-                if SLoadingScreen::read(reader).unwrap().is_loading_done() {
+                if SLoadingScreen::read(reader)?.is_loading_done() {
                     player.set_client_loaded(true);
                 }
             }
             SRequestChunkRadius::PACKET_ID => {
-                self.handle_request_chunk_radius(
-                    player,
-                    SRequestChunkRadius::read(reader).unwrap(),
-                )
-                .await;
+                self.handle_request_chunk_radius(player, SRequestChunkRadius::read(reader)?)
+                    .await;
             }
             SInteraction::PACKET_ID => {
-                self.handle_interaction(player, SInteraction::read(reader).unwrap())
+                self.handle_interaction(player, SInteraction::read(reader)?)
                     .await;
             }
             SContainerClose::PACKET_ID => {
-                self.handle_container_close(player, SContainerClose::read(reader).unwrap())
+                self.handle_container_close(player, SContainerClose::read(reader)?)
                     .await;
             }
             SText::PACKET_ID => {
-                self.handle_chat_message(server, player, SText::read(reader).unwrap())
+                self.handle_chat_message(server, player, SText::read(reader)?)
                     .await;
             }
             SCommandRequest::PACKET_ID => {
-                self.handle_chat_command(player, server, SCommandRequest::read(reader).unwrap())
+                self.handle_chat_command(player, server, SCommandRequest::read(reader)?)
                     .await;
             }
             _ => {
                 warn!("Bedrock: Received Unknown Game packet: {}", packet.id);
             }
         }
+        Ok(())
     }
 
     async fn handle_raknet_packet(

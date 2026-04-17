@@ -7,6 +7,9 @@ use uuid::Uuid;
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
 use crate::entity::mob::blaze::BlazeEntity;
 use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
+use crate::entity::projectile::egg::EggEntity;
+use crate::entity::projectile::ender_pearl::EnderPearlEntity;
+use crate::entity::projectile::snowball::SnowballEntity;
 use crate::{
     entity::{
         Entity, EntityBase,
@@ -80,6 +83,9 @@ pub async fn from_type(
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
+        id if id == EntityType::ENDER_PEARL.id => Arc::new(EnderPearlEntity::new(entity).await),
+        id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity).await),
+        id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity).await),
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity).await,
         id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
         // Fallback Entity

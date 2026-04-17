@@ -131,6 +131,15 @@ impl DowncastResourceExt<PlayerResource> for Resource<Player> {
 
 impl pumpkin::plugin::player::Host for PluginHostState {}
 impl pumpkin::plugin::player::HostPlayer for PluginHostState {
+    async fn as_entity(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
+        let player = player_from_resource(self, &player)?;
+        self.add_entity(player as Arc<dyn EntityBase>)
+            .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))
+    }
+
     async fn get_id(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.gameprofile.id.to_string())

@@ -21,7 +21,7 @@ pumpkin-util.workspace = true
 uuid.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["net"] }
 bytes.workspace = true
 
 # encryption

@@ -27,120 +27,100 @@ impl DarkOakTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        let pos = start_pos.down();
-        placer.set_dirt(block_registry, chunk, random, &pos, below_trunk_provider);
+        let below = start_pos.down();
+        placer.set_dirt(block_registry, chunk, random, &below, below_trunk_provider);
         placer.set_dirt(
             block_registry,
             chunk,
             random,
-            &pos.offset(BlockDirection::East.to_offset()),
+            &below.east(),
             below_trunk_provider,
         );
         placer.set_dirt(
             block_registry,
             chunk,
             random,
-            &pos.offset(BlockDirection::South.to_offset()),
+            &below.south(),
             below_trunk_provider,
         );
         placer.set_dirt(
             block_registry,
             chunk,
             random,
-            &pos.offset(BlockDirection::South.to_offset())
-                .offset(BlockDirection::East.to_offset()),
+            &below.south().east(),
             below_trunk_provider,
         );
-        let start_y = start_pos.0.y;
-        let y_height = start_y + height as i32 - 1;
-        let max_height = height - random.next_bounded_i32(4) as u32;
+
+        let horizontal_directions = BlockDirection::horizontal();
+        let lean_direction = horizontal_directions[random.next_bounded_i32(4) as usize];
+        let lean_height = height as i32 - random.next_bounded_i32(4);
+        let mut lean_steps = 2 - random.next_bounded_i32(3);
+
+        let mut tx = start_pos.0.x;
+        let mut tz = start_pos.0.z;
+        let ey = start_pos.0.y + height as i32 - 1;
+
         let mut trunk_poses = Vec::new();
-        let mut nodes = Vec::new();
-        let mut rand = random.next_bounded_i32(3);
-
-        let mut x = pos.0.x;
-        let mut z = pos.0.z;
-
-        // TODO: make this random
-        let random_direction = BlockDirection::North;
-
-        for y in 0..height {
-            if y >= max_height && rand > 0 {
-                x += random_direction.to_offset().x;
-                z += random_direction.to_offset().z;
-                rand -= 1;
+        for dy in 0..height as i32 {
+            if dy >= lean_height && lean_steps > 0 {
+                let offset = lean_direction.to_offset();
+                tx += offset.x;
+                tz += offset.z;
+                lean_steps -= 1;
             }
 
-            let current_y = start_y + y as i32;
-            let pos = BlockPos::new(x, current_y, z);
-            // TODO: support multiple chunks
+            let yy = start_pos.0.y + dy;
+            let pos = BlockPos::new(tx, yy, tz);
+
+            // Check if air or leaves at the main 2x2 position
             let state = GenerationCache::get_block_state(chunk, &pos.0);
-            if !TreeFeature::is_air_or_leaves(state.to_state(), state.to_block_id()) {
-                continue;
-            }
-            if placer.try_place(chunk, &pos, trunk_block) {
-                trunk_poses.push(pos);
-            }
-            if placer.try_place(
-                chunk,
-                &pos.offset(BlockDirection::East.to_offset()),
-                trunk_block,
-            ) {
-                trunk_poses.push(pos.offset(BlockDirection::East.to_offset()));
-            }
-            if placer.try_place(
-                chunk,
-                &pos.offset(BlockDirection::South.to_offset()),
-                trunk_block,
-            ) {
-                trunk_poses.push(pos.offset(BlockDirection::South.to_offset()));
-            }
-            if placer.try_place(
-                chunk,
-                &pos.offset(BlockDirection::East.to_offset())
-                    .offset(BlockDirection::South.to_offset()),
-                trunk_block,
-            ) {
-                trunk_poses.push(
-                    pos.offset(BlockDirection::East.to_offset())
-                        .offset(BlockDirection::South.to_offset()),
-                );
+            if TreeFeature::is_air_or_leaves(state.to_state(), state.to_block_id()) {
+                if placer.try_place(chunk, &pos, trunk_block) {
+                    trunk_poses.push(pos);
+                }
+                if placer.try_place(chunk, &pos.east(), trunk_block) {
+                    trunk_poses.push(pos.east());
+                }
+                if placer.try_place(chunk, &pos.south(), trunk_block) {
+                    trunk_poses.push(pos.south());
+                }
+                if placer.try_place(chunk, &pos.east().south(), trunk_block) {
+                    trunk_poses.push(pos.east().south());
+                }
             }
         }
+
+        let mut nodes = Vec::new();
         nodes.push(TreeNode {
-            center: BlockPos::new(x, y_height, z),
+            center: BlockPos::new(tx, ey, tz),
             foliage_radius: 0,
             giant_trunk: true,
         });
-        for xd in -1..2 {
-            for zd in -1..2 {
-                if (0..=1).contains(&xd) && (0..=1).contains(&zd) || random.next_bounded_i32(3) > 0
+
+        for ox in -1..=2 {
+            for oz in -1..=2 {
+                if (!(0..=1).contains(&ox) || !(0..=1).contains(&oz))
+                    && random.next_bounded_i32(3) <= 0
                 {
-                    continue;
-                }
-                let h = random.next_bounded_i32(3) + 2;
-                for height in 0..h {
-                    if placer.try_place(
-                        chunk,
-                        &BlockPos::new(
-                            start_pos.0.x + xd,
-                            y_height - height - 1,
-                            start_pos.0.z + zd,
-                        ),
-                        trunk_block,
-                    ) {
-                        trunk_poses.push(BlockPos::new(
-                            start_pos.0.x + xd,
-                            y_height - height - 1,
-                            start_pos.0.z + zd,
-                        ));
+                    let length = random.next_bounded_i32(3) + 2;
+
+                    for branch_y in 0..length {
+                        let pos = BlockPos::new(
+                            start_pos.0.x + ox,
+                            ey - branch_y - 1,
+                            start_pos.0.z + oz,
+                        );
+                        if placer.try_place(chunk, &pos, trunk_block) {
+                            trunk_poses.push(pos);
+                        }
                     }
+
+                    nodes.push(TreeNode {
+                        center: BlockPos::new(start_pos.0.x + ox, ey, start_pos.0.z + oz),
+                        foliage_radius: 0,
+                        giant_trunk: false,
+                    });
                 }
-                nodes.push(TreeNode {
-                    center: BlockPos::new(start_pos.0.x + xd, y_height, start_pos.0.z + zd),
-                    foliage_radius: 0,
-                    giant_trunk: false,
-                });
             }
         }
 

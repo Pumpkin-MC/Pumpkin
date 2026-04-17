@@ -67,8 +67,7 @@ impl Goal for PlaceBlockGoal {
             }
 
             let below_pos = BlockPos::new(bx, by - 1, bz);
-            let below_block = world.get_block(&below_pos).await;
-            let below_state = world.get_block_state(&below_pos).await;
+            let (below_block, below_state) = world.get_block_and_state(&below_pos).await;
             if !below_state.is_solid()
                 || !below_state.is_full_cube()
                 || below_block == &Block::BEDROCK
