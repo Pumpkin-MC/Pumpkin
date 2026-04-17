@@ -19,6 +19,7 @@
 //!             version: "0.1.0".into(),
 //!             authors: vec!["you".into()],
 //!             description: "An example plugin.".into(),
+//!             dependencies: vec![],
 //!         }
 //!     }
 //! }
@@ -42,9 +43,9 @@ pub mod command {
 }
 
 pub use wit::pumpkin::plugin::{
-    command as command_wit, common,
+    block_entity, command as command_wit, common,
     context::{Context, Server},
-    gui, permission, scoreboard, server, text, world,
+    entity, gui, permission, scoreboard, server, text, world,
 };
 
 pub mod logging;
@@ -78,6 +79,8 @@ pub struct PluginMetadata {
     pub authors: Vec<String>,
     /// A short description of what the plugin does.
     pub description: String,
+    /// The list of plugin dependencies.
+    pub dependencies: Vec<String>,
 }
 
 impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
@@ -89,6 +92,7 @@ impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
             version: metadata.version,
             authors: metadata.authors,
             description: metadata.description,
+            dependencies: metadata.dependencies,
         }
     }
 }

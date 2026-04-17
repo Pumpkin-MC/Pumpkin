@@ -9,6 +9,8 @@ interface metadata {
         authors: list<string>,
         /// Short description of the plugin.
         description: string,
+        /// Plugin dependencies.
+        dependencies: list<string>,
     }
 
     get-metadata: func() -> plugin-metadata;

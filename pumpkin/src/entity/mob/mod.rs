@@ -561,8 +561,7 @@ pub trait SunSensitive: Mob + Send + Sync {
                 .level
                 .light_engine
                 .get_sky_light_level(&world.level, &pos.to_block_pos())
-                .await
-                .unwrap_or(0) as f32
+                .await as f32
                 / 15.0;
 
             if brightness < 0.5 {

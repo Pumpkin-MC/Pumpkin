@@ -397,7 +397,7 @@ async fn count_neighbor_oxidation_levels(
                     center.0.z + dz,
                 ));
 
-                let (neighbor_block, _) = world.get_block_and_state_id(&neighbor_pos).await;
+                let neighbor_block = world.get_block(&neighbor_pos).await;
 
                 if let Some(neighbor_level) = get_oxidation_level(neighbor_block) {
                     match neighbor_level.cmp(&current_level) {

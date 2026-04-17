@@ -48,12 +48,12 @@ impl BlockBehaviour for PistonHeadBlock {
                     .to_block_direction()
                     .to_offset(),
             );
-            let (piston_block, _) = args.world.get_block_and_state_id(&piston_pos).await;
+            let piston_block = args.world.get_block(&piston_pos).await;
             if &Block::PISTON == piston_block || &Block::STICKY_PISTON == piston_block {
                 let up_pos = args
                     .position
                     .offset(head_props.facing.to_block_direction().to_offset());
-                let (upper_block, _) = args.world.get_block_and_state_id(&up_pos).await;
+                let upper_block = args.world.get_block(&up_pos).await;
                 if upper_block != &Block::REDSTONE_BLOCK {
                     //Then somebody probably broke the redstone block, try to check if piston should still be extended.
                     try_move(args.world, piston_block, &piston_pos).await;
