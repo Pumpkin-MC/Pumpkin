@@ -965,6 +965,30 @@ fn value_to_tree_feature(config: &Value) -> TokenStream {
     }
 }
 
+fn value_to_block_list(v: &Value) -> TokenStream {
+    if let Some(s) = v.as_str() {
+        if let Some(tag) = s.strip_prefix('#') {
+            let name = format!(
+                "MINECRAFT_{}",
+                tag.strip_prefix("minecraft:").unwrap_or(tag).to_uppercase()
+            );
+            let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+            return quote! { &pumpkin_data::tag::Block::#ident.1 };
+        }
+    }
+    let mut blocks = Vec::new();
+    if let Some(arr) = v.as_array() {
+        for b in arr {
+            if let Some(s) = b.as_str() {
+                let name = s.strip_prefix("minecraft:").unwrap_or(s).to_uppercase();
+                let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+                blocks.push(quote! { pumpkin_data::Block::#ident.id });
+            }
+        }
+    }
+    quote! { &[#(#blocks),*] }
+}
+
 /// Converts a trunk-placer JSON object into a `TrunkPlacer` token stream.
 ///
 /// # Arguments
@@ -994,10 +1018,35 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
             }
         }
         "minecraft:upwards_branching_trunk_placer" => {
-            quote! { TrunkType::UpwardsBranching(UpwardsBranchingTrunkPlacer {}) }
+            let extra_branch_steps = value_to_int_provider(&v["extra_branch_steps"]);
+            let place_branch_per_log_probability =
+                v["place_branch_per_log_probability"].as_f64().unwrap_or(0.0) as f32;
+            let extra_branch_length = value_to_int_provider(&v["extra_branch_length"]);
+            let can_grow_through = value_to_block_list(&v["can_grow_through"]);
+            quote! {
+                TrunkType::UpwardsBranching(UpwardsBranchingTrunkPlacer {
+                    extra_branch_steps: #extra_branch_steps,
+                    place_branch_per_log_probability: #place_branch_per_log_probability,
+                    extra_branch_length: #extra_branch_length,
+                    can_grow_through: #can_grow_through,
+                })
+            }
         }
         "minecraft:cherry_trunk_placer" => {
-            quote! { TrunkType::Cherry(CherryTrunkPlacer {}) }
+            let branch_count = value_to_int_provider(&v["branch_count"]);
+            let branch_horizontal_length = value_to_int_provider(&v["branch_horizontal_length"]);
+            let branch_start_offset_v = &v["branch_start_offset_from_top"];
+            let min = branch_start_offset_v["min_inclusive"].as_i64().unwrap_or(0) as i32;
+            let max = branch_start_offset_v["max_inclusive"].as_i64().unwrap_or(0) as i32;
+            let branch_end_offset_from_top = value_to_int_provider(&v["branch_end_offset_from_top"]);
+            quote! {
+                TrunkType::Cherry(CherryTrunkPlacer {
+                    branch_count: #branch_count,
+                    branch_horizontal_length: #branch_horizontal_length,
+                    branch_start_offset_from_top: UniformIntProvider { min_inclusive: #min, max_inclusive: #max },
+                    branch_end_offset_from_top: #branch_end_offset_from_top,
+                })
+            }
         }
         _ => quote! { TrunkType::Straight(StraightTrunkPlacer) },
     };
