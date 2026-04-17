@@ -136,6 +136,7 @@ pub struct LevelDat {
 mod test {
 
     use std::{
+        collections::HashMap,
         fs,
         io::{Cursor, Read},
         sync::LazyLock,
@@ -241,6 +242,7 @@ mod test {
                 snapshot: false,
                 series: "main".to_string(),
             },
+            random_sequences: HashMap::new(),
         },
     });
 

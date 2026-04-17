@@ -80,6 +80,8 @@ pub struct LevelData {
     pub world_version: WorldVersion,
     #[serde(rename = "version", default = "default_level_version")]
     pub level_version: i32,
+    #[serde(default)]
+    pub random_sequences: HashMap<String, RandomSequence>,
 }
 
 const DEFAULT_BORDER_DAMAGE_PER_BLOCK: f64 = 0.2;
@@ -325,6 +327,7 @@ impl LevelData {
             spawn_pitch: 0.0,
             world_version: WorldVersion::default(),
             level_version: MAXIMUM_SUPPORTED_LEVEL_VERSION,
+            random_sequences: HashMap::new(),
         }
     }
 
@@ -355,4 +358,10 @@ impl From<std::io::Error> for WorldInfoError {
             value => Self::IoError(value),
         }
     }
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Default)]
+pub struct RandomSequence {
+    pub seed: i64,
+    pub include_world_seed: bool,
+    pub include_sequence_id: bool,
 }
