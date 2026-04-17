@@ -1384,7 +1384,7 @@ pub struct BlocksAttacksImpl;
 impl DataComponentImpl for BlocksAttacksImpl {
     default_impl!(BlocksAttacks);
 }
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct StoredEnchantmentsImpl {
     pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
 }

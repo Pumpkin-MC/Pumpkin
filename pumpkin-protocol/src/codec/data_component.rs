@@ -773,10 +773,16 @@ impl DataComponentCodec<Self> for StoredEnchantmentsImpl {
     }
 
     fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        const MAX_ENCHANTMENTS: usize = 256;
+
         let len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No StoredEnchantmentsImpl len VarInt!"))?
             .0 as usize;
+
+        if len > MAX_ENCHANTMENTS {
+            return Err(de::Error::custom("Too many enchantments"));
+        }
 
         let mut stored_enchantments = Vec::with_capacity(len);
         for _ in 0..len {
