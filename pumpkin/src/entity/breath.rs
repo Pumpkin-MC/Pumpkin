@@ -50,6 +50,10 @@ impl BreathManager {
             return;
         }
 
+        if player.living_entity.dead.load(Ordering::Relaxed) {
+            return;
+        }
+
         if player
             .living_entity
             .has_effect(&StatusEffect::WATER_BREATHING)
