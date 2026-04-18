@@ -3229,11 +3229,11 @@ impl NBTStorage for Player {
 
             self.abilities.lock().await.write_nbt(nbt).await;
 
-            // Store total XP instead of individual components
             let total_exp =
                 experience::points_to_level(self.experience_level.load(Ordering::Relaxed))
                     + self.experience_points.load(Ordering::Relaxed);
             nbt.put_int(total_exp);
+
             nbt.put_byte(self.gamemode.load() as i8);
             if let Some(previous_gamemode) = self.previous_gamemode.load() {
                 nbt.put_bool(true);
@@ -3243,11 +3243,8 @@ impl NBTStorage for Player {
             }
 
             nbt.put_bool(self.has_played_before.load(Ordering::Relaxed));
-
-            // Store food level, saturation, exhaustion, and tick timer
             self.hunger_manager.write_nbt(nbt).await;
 
-            // Optional: Spawn point
             if let Some(respawn) = self.respawn_point.load().as_ref() {
                 nbt.put_bool(true);
                 nbt.put_int(respawn.position.0.x);
@@ -3266,12 +3263,17 @@ impl NBTStorage for Player {
             let _version = nbt.get_int().unwrap_or(0);
             let _dimension_name = nbt.get_string().unwrap_or_default();
 
-            // TODO: dimension is currently not applied here but in server/mod.rs
-
             self.living_entity.read_nbt(nbt).await;
             self.inventory.read_nbt_non_mut(nbt).await;
             self.ender_chest_inventory.read_nbt_non_mut(nbt).await;
             self.abilities.lock().await.read_nbt(nbt).await;
+
+            let total_exp = nbt.get_int().unwrap_or(0);
+            let (level, points) = experience::total_to_level_and_points(total_exp);
+            let progress = experience::progress_in_level(level, points);
+            self.experience_level.store(level, Ordering::Relaxed);
+            self.experience_progress.store(progress);
+            self.experience_points.store(points, Ordering::Relaxed);
 
             self.gamemode.store(
                 GameMode::try_from(nbt.get_byte().unwrap_or(0)).unwrap_or(GameMode::Survival),
@@ -3285,18 +3287,8 @@ impl NBTStorage for Player {
             self.has_played_before
                 .store(nbt.get_bool().unwrap_or(false), Ordering::Relaxed);
 
-            // Load food level, saturation, exhaustion, and tick timer
             self.hunger_manager.read_nbt(nbt).await;
 
-            // Load from total XP
-            let total_exp = nbt.get_int().unwrap_or(0);
-            let (level, points) = experience::total_to_level_and_points(total_exp);
-            let progress = experience::progress_in_level(level, points);
-            self.experience_level.store(level, Ordering::Relaxed);
-            self.experience_progress.store(progress);
-            self.experience_points.store(points, Ordering::Relaxed);
-
-            // Load any saved spawnpoint data
             if nbt.get_bool().unwrap_or(false) {
                 let x = nbt.get_int().unwrap_or(0);
                 let y = nbt.get_int().unwrap_or(0);
