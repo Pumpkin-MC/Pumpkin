@@ -128,7 +128,8 @@ use pumpkin_world::{
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
-use pumpkin_world::{world::BlockFlags, world_info::LevelData};
+use pumpkin_storage::level_info::LevelData;
+use pumpkin_world::world::BlockFlags;
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
 use scoreboard::Scoreboard;

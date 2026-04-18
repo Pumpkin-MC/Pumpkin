@@ -10,5 +10,11 @@ async-trait.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
 
+pumpkin-data.workspace = true
+pumpkin-nbt.workspace = true
+pumpkin-util.workspace = true
+
+serde.workspace = true
+
 [lints]
 workspace = true

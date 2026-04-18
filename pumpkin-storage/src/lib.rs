@@ -7,6 +7,8 @@
 //!
 //! Domain traits are added in subsequent commits.
 
+pub mod level_info;
+
 mod memory;
 mod vanilla;
 

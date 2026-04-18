@@ -33,10 +33,11 @@ use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::lock::LevelLocker;
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
+use pumpkin_storage::level_info::LevelData;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
-use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
+use pumpkin_world::world_info::{WorldInfoError, WorldInfoReader, WorldInfoWriter};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;

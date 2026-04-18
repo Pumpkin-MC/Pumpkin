@@ -9,12 +9,12 @@ use tracing::error;
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 
-use crate::world_info::{
-    MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+use pumpkin_storage::level_info::{
+    LevelData, MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
     MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION,
 };
 
-use super::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
+use super::{WorldInfoError, WorldInfoReader, WorldInfoWriter};
 
 pub const LEVEL_DAT_FILE_NAME: &str = "level.dat";
 pub const LEVEL_DAT_BACKUP_FILE_NAME: &str = "level.dat_old";
@@ -147,10 +147,9 @@ mod test {
     use pumpkin_util::{Difficulty, world_seed::Seed};
     use temp_dir::TempDir;
 
-    use crate::{
-        global_path,
-        world_info::{DataPacks, LevelData, WorldGenSettings, WorldInfoError, WorldVersion},
-    };
+    use pumpkin_storage::level_info::{DataPacks, LevelData, WorldGenSettings, WorldVersion};
+
+    use crate::{global_path, world_info::WorldInfoError};
 
     use super::{AnvilLevelInfo, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader, WorldInfoWriter};
 
