@@ -74,6 +74,7 @@ impl BreathManager {
                 .fetch_sub(AIR_DEPLETION_RATE, Ordering::Relaxed);
             let new_air = (prev - AIR_DEPLETION_RATE).max(0);
             if new_air != prev {
+                self.air_supply.store(new_air, Ordering::Relaxed);
                 self.send_air_supply(player).await;
             }
 
