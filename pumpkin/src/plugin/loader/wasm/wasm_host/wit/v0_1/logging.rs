@@ -1,5 +1,5 @@
 use crate::plugin::loader::wasm::wasm_host::{
-    logging::log_tracing, state::PluginHostState, wit::v0_1_0::pumpkin,
+    logging::log_tracing, state::PluginHostState, wit::v0_1::pumpkin,
 };
 
 impl pumpkin::plugin::logging::Host for PluginHostState {

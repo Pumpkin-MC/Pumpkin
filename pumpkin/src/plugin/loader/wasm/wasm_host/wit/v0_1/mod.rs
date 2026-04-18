@@ -3,7 +3,7 @@ use crate::plugin::{
     loader::wasm::wasm_host::{PluginInstance, WasmPlugin, state::PluginHostState},
 };
 use tokio::sync::Mutex;
-use wasmtime::component::{Component, HasData, Linker, bindgen};
+use wasmtime::component::{HasSelf, InstancePre, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
 pub mod block_entity;
@@ -24,34 +24,29 @@ pub mod text;
 pub mod world;
 
 bindgen!({
-    path: "../pumpkin-plugin-wit/v0.1.0",
+    path: "../pumpkin-plugin-wit/v0.1",
     world: "plugin",
     imports: { default: async | trappable },
     exports: { default: async | trappable},
 });
 
-struct PluginHostComponent;
-
-impl HasData for PluginHostComponent {
-    type Data<'a> = &'a mut PluginHostState;
+pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
+    Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;
+    Ok(())
 }
 
-pub fn setup_linker(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {
-    let mut linker = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-    Plugin::add_to_linker::<_, PluginHostComponent>(&mut linker, |state: &mut PluginHostState| {
-        state
-    })?;
-    Ok(linker)
+pub fn prepare_plugin(
+    instance_pre: &InstancePre<PluginHostState>,
+) -> wasmtime::Result<PluginPre<PluginHostState>> {
+    PluginPre::new(instance_pre.clone())
 }
 
 pub async fn init_plugin(
     engine: &Engine,
-    linker: &Linker<PluginHostState>,
-    component: Component,
+    plugin_pre: PluginPre<PluginHostState>,
 ) -> wasmtime::Result<(WasmPlugin, PluginMetadata)> {
     let mut store = Store::new(engine, PluginHostState::new());
-    let plugin = Plugin::instantiate_async(&mut store, &component, linker).await?;
+    let plugin = plugin_pre.instantiate_async(&mut store).await?;
 
     plugin.call_init_plugin(&mut store).await?;
 
@@ -70,7 +65,7 @@ pub async fn init_plugin(
 
     Ok((
         WasmPlugin {
-            plugin_instance: PluginInstance::V0_1_0(plugin),
+            plugin_instance: PluginInstance::V0_1(plugin),
             store: Mutex::new(store),
         },
         metadata,

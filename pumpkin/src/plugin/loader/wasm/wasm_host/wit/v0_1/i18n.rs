@@ -1,6 +1,6 @@
 use crate::plugin::loader::wasm::wasm_host::{
     state::PluginHostState,
-    wit::v0_1_0::pumpkin::plugin::{common::Locale as WitLocale, i18n::Host},
+    wit::v0_1::pumpkin::plugin::{common::Locale as WitLocale, i18n::Host},
 };
 use pumpkin_util::translation::{Locale as UtilLocale, add_translation_file, get_translation};
 use std::str::FromStr;

@@ -1,10 +1,9 @@
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
-        wit::v0_1_0::{
+        wit::v0_1::{
             events::{
-                ToFromV0_1_0WasmEvent, consume_world, from_wasm_block_position,
-                to_wasm_block_position,
+                ToFromWasmEvent, consume_world, from_wasm_block_position, to_wasm_block_position,
             },
             pumpkin::plugin::event::{Event, SpawnChangeEventData},
         },
@@ -12,8 +11,8 @@ use crate::plugin::{
     world::spawn_change::SpawnChangeEvent,
 };
 
-impl ToFromV0_1_0WasmEvent for SpawnChangeEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromWasmEvent for SpawnChangeEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let world = state
             .add_world(self.world.clone())
             .expect("failed to add world resource");
@@ -29,7 +28,7 @@ impl ToFromV0_1_0WasmEvent for SpawnChangeEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::SpawnChangeEvent(data) => Self {
                 world: consume_world(state, &data.target_world),

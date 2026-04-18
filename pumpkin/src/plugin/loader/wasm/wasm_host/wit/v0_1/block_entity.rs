@@ -2,7 +2,7 @@ use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
     state::PluginHostState,
-    wit::v0_1_0::pumpkin::{
+    wit::v0_1::pumpkin::{
         self,
         plugin::{
             block_entity::{BlockEntity, CommandBlockEntity},

@@ -1,23 +1,23 @@
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
-        wit::v0_1_0::{
-            events::{ToFromV0_1_0WasmEvent, consume_text_component},
+        wit::v0_1::{
+            events::{ToFromWasmEvent, consume_text_component},
             pumpkin::plugin::event::{Event, ServerBroadcastEventData, ServerCommandEventData},
         },
     },
     server::{server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent},
 };
 
-impl ToFromV0_1_0WasmEvent for ServerCommandEvent {
-    fn to_v0_1_0_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+impl ToFromWasmEvent for ServerCommandEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
         Event::ServerCommandEvent(ServerCommandEventData {
             command: self.command.clone(),
             cancelled: self.cancelled,
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
         match event {
             Event::ServerCommandEvent(data) => Self {
                 command: data.command,
@@ -28,8 +28,8 @@ impl ToFromV0_1_0WasmEvent for ServerCommandEvent {
     }
 }
 
-impl ToFromV0_1_0WasmEvent for ServerBroadcastEvent {
-    fn to_v0_1_0_wasm_event(&self, state: &mut PluginHostState) -> Event {
+impl ToFromWasmEvent for ServerBroadcastEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let message = state
             .add_text_component(self.message.clone())
             .expect("failed to add text-component resource");
@@ -44,7 +44,7 @@ impl ToFromV0_1_0WasmEvent for ServerBroadcastEvent {
         })
     }
 
-    fn from_v0_1_0_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
         match event {
             Event::ServerBroadcastEvent(data) => Self {
                 message: consume_text_component(state, &data.message),

@@ -4,13 +4,13 @@ use pumpkin_world::world::{BlockFlags, SimpleWorld};
 use std::sync::Arc;
 use wasmtime::component::Resource;
 
-use crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::pumpkin::plugin::world::{
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
     BlockFlags as WitBlockFlags, BlockPos as WitBlockPos, BlockState as WitBlockState,
     PistonBehavior as WitPistonBehavior,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, TextComponentResource, WorldResource},
-    wit::v0_1_0::pumpkin::{self, plugin::world::World},
+    wit::v0_1::pumpkin::{self, plugin::world::World},
 };
 use crate::world::explosion::Explosion;
 
