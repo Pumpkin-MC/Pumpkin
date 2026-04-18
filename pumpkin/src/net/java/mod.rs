@@ -372,14 +372,15 @@ impl JavaClient {
         version: MinecraftVersion,
         mut write: impl Write,
     ) -> Result<(), WritingError> {
-        if P::to_id(version) == -1 {
+        let version_number = P::to_id(version);
+        if version_number == -1 {
             error!(
                 "Packet ID for version {} is invalid ({} at latest)",
                 version,
-                P::to_id(CURRENT_MC_VERSION)
+                P::to_id(CURRENT_MC_VERSION),
             );
         }
-        write.write_var_int(&VarInt(P::to_id(version)))?;
+        write.write_var_int(&VarInt(version_number))?;
         packet.write_packet_data(write, &version)
     }
 
@@ -388,6 +389,7 @@ impl JavaClient {
         version: MinecraftVersion,
     ) -> Result<Bytes, WritingError> {
         let mut packet_buf = Vec::new();
+
         Self::write_packet_for_version(packet, version, &mut packet_buf)?;
         Ok(packet_buf.into())
     }
@@ -649,8 +651,12 @@ impl JavaClient {
                 return Ok(Some(self.handle_config_acknowledged(server).await));
             }
             id if id == SKnownPacks::to_id(version) => {
-                self.handle_known_packs(SKnownPacks::read(payload, &version)?)
-                    .await;
+                if let Some(i) = self
+                    .handle_known_packs(SKnownPacks::read(payload, &version)?, server)
+                    .await
+                {
+                    return Ok(Some(i));
+                }
             }
             id if id == SConfigCookieResponse::to_id(version) => {
                 self.handle_config_cookie_response(&SConfigCookieResponse::read(

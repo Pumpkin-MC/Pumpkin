@@ -1,5 +1,4 @@
 use std::{
-    io::Cursor,
     path::PathBuf,
     pin::Pin,
     sync::{
@@ -11,7 +10,7 @@ use std::{
 use bytes::Bytes;
 use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
-use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
+use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
 use tracing::debug;
@@ -34,8 +33,6 @@ use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
     palette::{BiomePalette, BlockPalette},
 };
-use crate::block::BlockStateCodec;
-
 pub mod anvil;
 pub mod linear;
 
@@ -107,7 +104,7 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
+        let chunk_data = pumpkin_nbt::from_pnbt::<ChunkNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
@@ -264,9 +261,8 @@ impl ChunkData {
             light_correct: is_light_correct,
         };
 
-        let mut result = Vec::new();
-        pumpkin_nbt::to_bytes(&nbt, &mut result)
-            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        let result =
+            pumpkin_nbt::to_pnbt(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
         Ok(result.into())
     }
 }
@@ -314,7 +310,7 @@ impl ChunkEntityData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_entity_data = pumpkin_nbt::from_bytes::<EntityNbt>(Cursor::new(chunk_data))
+        let chunk_entity_data = pumpkin_nbt::from_pnbt::<EntityNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_entity_data.position[0] != position.x
@@ -362,9 +358,8 @@ impl ChunkEntityData {
             entities: self.data.lock().await.values().cloned().collect(),
         };
 
-        let mut result = Vec::new();
-        pumpkin_nbt::to_bytes(&nbt, &mut result)
-            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        let result =
+            pumpkin_nbt::to_pnbt(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
         Ok(result.into())
     }
 }
@@ -390,15 +385,7 @@ pub struct ChunkSectionBiomes {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<PaletteBiomeEntry>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-// NOTE: Change not documented in the wiki; biome palettes are directly just the name now
-#[serde(rename_all = "PascalCase", transparent)]
-pub struct PaletteBiomeEntry {
-    /// Biome name
-    pub name: String,
+    pub(crate) palette: Box<[u8]>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -408,7 +395,7 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<BlockStateCodec>,
+    pub(crate) palette: Box<[u16]>,
 }
 
 #[derive(Debug, Clone)]

@@ -75,6 +75,7 @@ pub(crate) fn build() -> TokenStream {
 
     // Watch specific tag versions
     let assets = [
+        (MinecraftVersion::V_1_20_5, "1_21_2_tags.json"),
         // TODO: upload 1_21_tags.json
         (MinecraftVersion::V_1_21, "1_21_2_tags.json"),
         (MinecraftVersion::V_1_21_2, "1_21_2_tags.json"),
