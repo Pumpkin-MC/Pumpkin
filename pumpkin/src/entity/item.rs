@@ -582,6 +582,7 @@ mod tests {
             block_registry.clone(),
             0,
             Dimension::OVERWORLD,
+            None,
         );
         let level_info = Arc::new(ArcSwap::new(Arc::new(LevelData::default(Seed(0)))));
 
