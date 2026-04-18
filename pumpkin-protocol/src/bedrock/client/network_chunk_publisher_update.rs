@@ -2,8 +2,8 @@ use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
 use pumpkin_util::{
-    math::{position::BlockPos, vector2::Vector2},
     BedrockVersion,
+    math::{position::BlockPos, vector2::Vector2},
 };
 
 use crate::{

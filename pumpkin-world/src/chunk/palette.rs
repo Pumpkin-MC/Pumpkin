@@ -412,11 +412,17 @@ impl BlockPalette {
     }
 
     #[must_use]
-    pub fn convert_be_network(&self, version: pumpkin_util::BedrockVersion) -> BeNetworkSerialization<u16> {
+    pub fn convert_be_network(
+        &self,
+        version: pumpkin_util::BedrockVersion,
+    ) -> BeNetworkSerialization<u16> {
         match self {
             Self::Homogeneous(registry_id) => BeNetworkSerialization {
                 bits_per_entry: 0,
-                palette: NetworkPalette::Single(BlockState::to_be_network_id(*registry_id, version)),
+                palette: NetworkPalette::Single(BlockState::to_be_network_id(
+                    *registry_id,
+                    version,
+                )),
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {

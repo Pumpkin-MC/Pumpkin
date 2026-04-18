@@ -272,8 +272,7 @@ impl Jwk {
         sec1.extend_from_slice(&x_bytes);
         sec1.extend_from_slice(&y_bytes);
 
-        PublicKey::from_sec1_bytes(&sec1)
-            .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
+        PublicKey::from_sec1_bytes(&sec1).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
     }
 
     pub fn to_rsa_public_key(&self) -> Result<rsa::RsaPublicKey, AuthError> {
@@ -284,9 +283,10 @@ impl Jwk {
             )));
         }
 
-        let n = self.n.as_ref().ok_or_else(|| {
-            AuthError::PublicKeyBuild("JWK missing n modulus for RSA key".into())
-        })?;
+        let n = self
+            .n
+            .as_ref()
+            .ok_or_else(|| AuthError::PublicKeyBuild("JWK missing n modulus for RSA key".into()))?;
         let e = self.e.as_ref().ok_or_else(|| {
             AuthError::PublicKeyBuild("JWK missing e exponent for RSA key".into())
         })?;
@@ -409,7 +409,11 @@ pub fn verify_oidc_token(
     Ok(extract_oidc_player_claims(&v))
 }
 
-fn verify_es384_signature(jwk: &Jwk, signing_input: &str, signature_b64: &str) -> Result<(), AuthError> {
+fn verify_es384_signature(
+    jwk: &Jwk,
+    signing_input: &str,
+    signature_b64: &str,
+) -> Result<(), AuthError> {
     let public_key = jwk.to_ec_public_key()?;
     let verifying_key = VerifyingKey::from(public_key);
 
@@ -421,7 +425,11 @@ fn verify_es384_signature(jwk: &Jwk, signing_input: &str, signature_b64: &str) -
         .map_err(|_| AuthError::InvalidSignature)
 }
 
-fn verify_rs256_signature(jwk: &Jwk, signing_input: &str, signature_b64: &str) -> Result<(), AuthError> {
+fn verify_rs256_signature(
+    jwk: &Jwk,
+    signing_input: &str,
+    signature_b64: &str,
+) -> Result<(), AuthError> {
     use rsa::pkcs1v15::VerifyingKey as RsaVerifyingKey;
     use rsa::signature::Verifier;
     use sha2::Sha256;
@@ -449,14 +457,13 @@ fn verify_oidc_claims(payload: &Value, expected_issuer: &str) -> Result<(), Auth
         )));
     }
 
-    let aud = payload.get("aud").ok_or_else(|| {
-        AuthError::PublicKeyBuild("OIDC payload missing aud".into())
-    })?;
+    let aud = payload
+        .get("aud")
+        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing aud".into()))?;
     let aud_match = aud.as_str().map_or_else(
         || {
-            aud.as_array().is_some_and(|arr| {
-                arr.iter().any(|v| v.as_str() == Some(OIDC_AUDIENCE))
-            })
+            aud.as_array()
+                .is_some_and(|arr| arr.iter().any(|v| v.as_str() == Some(OIDC_AUDIENCE)))
         },
         |s| s == OIDC_AUDIENCE,
     );

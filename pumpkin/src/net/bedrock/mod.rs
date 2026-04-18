@@ -120,7 +120,9 @@ impl BedrockClient {
             output_split_number: AtomicU16::new(0),
             output_sequenced_index: AtomicU32::new(0),
             output_ordered_index: AtomicU32::new(0),
-            protocol_version: AtomicU32::new(pumpkin_util::BedrockVersion::V1_26_0.protocol_version()),
+            protocol_version: AtomicU32::new(
+                pumpkin_util::BedrockVersion::V1_26_0.protocol_version(),
+            ),
             compounds: Arc::new(Mutex::new(HashMap::new())),
             close_token: CancellationToken::new(),
             //input_sequence_number: AtomicU32::new(0),
@@ -169,7 +171,8 @@ impl BedrockClient {
 
     /// Gets the negotiated protocol version for this Bedrock client.
     pub fn protocol_version(&self) -> u32 {
-        self.protocol_version.load(std::sync::atomic::Ordering::Relaxed)
+        self.protocol_version
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn bedrock_version(&self) -> BedrockVersion {

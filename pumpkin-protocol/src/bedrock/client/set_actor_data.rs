@@ -1,7 +1,10 @@
 use std::{collections::HashMap, io::Write};
 
 use crate::{
-    codec::{bedrock_block_pos::NetworkPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
+    codec::{
+        bedrock_block_pos::NetworkPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
+        var_ulong::VarULong,
+    },
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;

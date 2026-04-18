@@ -1,7 +1,7 @@
 use std::io::{Error, Write};
 
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::BedrockVersion;
+use pumpkin_util::math::position::BlockPos;
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},

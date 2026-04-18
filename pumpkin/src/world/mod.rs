@@ -110,10 +110,10 @@ use pumpkin_protocol::{
         CExplosion, CRespawn, CSetBlockDestroyStage, CWorldEvent,
     },
 };
+use pumpkin_util::BedrockVersion;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::version::MinecraftVersion;
-use pumpkin_util::BedrockVersion;
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
@@ -1502,11 +1502,7 @@ impl World {
             hardcore: base_config.hardcore,
             difficulty: VarInt(level_info.difficulty as i32),
             spawn_position: NetworkPos::for_protocol(
-                BlockPos::new(
-                    level_info.spawn_x,
-                    level_info.spawn_y,
-                    level_info.spawn_z,
-                ),
+                BlockPos::new(level_info.spawn_x, level_info.spawn_y, level_info.spawn_z),
                 version,
             ),
             has_achievements_disabled: false,

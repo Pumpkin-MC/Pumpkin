@@ -36,7 +36,6 @@ pub mod serial;
 pub const MAX_PACKET_SIZE: u64 = 2_097_152;
 pub const MAX_PACKET_DATA_SIZE: usize = 8_388_608;
 
-
 pub type FixedBitSet = Box<[u8]>;
 
 /// Represents a compression threshold.
