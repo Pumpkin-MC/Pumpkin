@@ -1,14 +1,19 @@
 [package]
-name = "pumpkin-codecs"
+name = "pumpkin-codecs-macros"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[lib]
+proc-macro = true
+
 [dependencies]
-serde_json.workspace = true
-tracing.workspace = true
-pumpkin-codecs-macros.workspace = true
+
+proc-macro-error2.workspace = true
+
+quote.workspace = true
+syn.workspace = true
 
 [lints]
 workspace = true

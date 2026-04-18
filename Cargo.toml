@@ -11,7 +11,8 @@ members = [
     "pumpkin/",
     "pumpkin-data",
     "pumpkin-plugin-api",
-    "pumpkin-codecs"
+    "pumpkin-codecs",
+    "pumpkin-codecs-macros"
 ]
 exclude = ["pumpkin-codegen"]
 
@@ -49,7 +50,7 @@ print_stderr = "deny"
 todo = "deny"
 unreachable = "deny"
 unimplemented = "deny"
-# indexing_slicing = "deny" 
+# indexing_slicing = "deny"
 
 # Expected/Allowed
 cargo_common_metadata = "allow"
@@ -149,6 +150,7 @@ p384 = { version = "0.13.1", default-features = false, features = ["std", "arith
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
 pumpkin-codecs = { path = "pumpkin-codecs", default-features = false }
+pumpkin-codecs-macros = { path = "pumpkin-codecs-macros", default-features = false }
 pumpkin-config = { path = "pumpkin-config", default-features = false }
 pumpkin-data = { path = "pumpkin-data", default-features = false }
 pumpkin-inventory = { path = "pumpkin-inventory", default-features = false }
