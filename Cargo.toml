@@ -11,7 +11,8 @@ members = [
     "pumpkin/",
     "pumpkin-data",
     "pumpkin-plugin-api",
-    "pumpkin-codecs"
+    "pumpkin-codecs",
+    "pumpkin-storage",
 ]
 exclude = ["pumpkin-codegen"]
 
@@ -94,6 +95,7 @@ tokio = { version = "1.52", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
 
 thiserror = "2.0"
+async-trait = "0.1"
 
 bytes = "1.11"
 
@@ -148,6 +150,7 @@ pumpkin-inventory = { path = "pumpkin-inventory" }
 pumpkin-macros = { path = "pumpkin-macros" }
 pumpkin-nbt = { path = "pumpkin-nbt" }
 pumpkin-protocol = { path = "pumpkin-protocol" }
+pumpkin-storage = { path = "pumpkin-storage" }
 pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
