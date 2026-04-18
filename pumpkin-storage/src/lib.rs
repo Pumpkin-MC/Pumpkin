@@ -2,7 +2,13 @@
 //!
 //! Each persistent-data domain (level info, player data, chunks, POI, server
 //! configs) has its own trait defined in this crate. Implementations are
-//! provided by the [`VanillaStorage`] struct (filesystem, vanilla-compatible
-//! layout) and by [`MemoryStorage`] (ephemeral, format-agnostic).
+//! provided by [`VanillaStorage`] (filesystem, vanilla-compatible layout) and
+//! by [`MemoryStorage`] (ephemeral, format-agnostic).
 //!
-//! Domain traits and backends are added in subsequent commits.
+//! Domain traits are added in subsequent commits.
+
+mod memory;
+mod vanilla;
+
+pub use memory::MemoryStorage;
+pub use vanilla::VanillaStorage;
