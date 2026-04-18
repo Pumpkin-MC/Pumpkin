@@ -1,23 +1,17 @@
 use crate::codec::optional_field::OptionalFieldDecode;
-use crate::codec::{FieldDecode, FieldEncode};
+use crate::codec::FieldDecode;
 use crate::struct_builder::StructBuilder;
-use crate::{DataResult, Decode, DynamicOps, Encode, Lifecycle};
+use crate::{DataResult, Decode, DynamicOps, Lifecycle};
+use pumpkin_codecs_macros::Encode;
 
-#[derive(Debug)]
+#[derive(Debug, Encode)]
 struct Test {
+    #[field(name = "a")]
     a: i32,
+    #[field(name = "b")]
     b: Vec<String>,
+    #[field(name = "c")]
     c: Option<bool>,
-}
-
-impl Encode for Test {
-    fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
-        let mut builder = ops.map_builder();
-        builder = self.a.encode_field("a", ops, builder);
-        builder = self.b.encode_field("b", ops, builder);
-        builder = self.c.encode_field("c", ops, builder);
-        builder.build(prefix)
-    }
 }
 
 impl Decode for Test {
