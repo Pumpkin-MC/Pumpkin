@@ -5,12 +5,17 @@
 //! provided by [`VanillaStorage`] (filesystem, vanilla-compatible layout) and
 //! by [`MemoryStorage`] (ephemeral, format-agnostic).
 //!
-//! Domain traits are added in subsequent commits.
+//! Additional domain traits are added in subsequent commits.
 
+pub mod error;
 pub mod level_info;
 
 mod memory;
 mod vanilla;
 
+pub use error::StorageError;
 pub use memory::MemoryStorage;
 pub use vanilla::VanillaStorage;
+
+#[cfg(test)]
+mod conformance_tests;

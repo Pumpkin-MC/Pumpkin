@@ -14,7 +14,12 @@ pumpkin-data.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-util.workspace = true
 
+flate2.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["fs", "io-util", "sync", "macros", "rt"] }
+temp-dir.workspace = true
 
 [lints]
 workspace = true

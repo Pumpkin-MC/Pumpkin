@@ -7,9 +7,26 @@
 
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use pumpkin_data::{game_rules::GameRuleRegistry, packet::CURRENT_MC_VERSION};
 use pumpkin_util::{Difficulty, serde_enum_as_integer, world_seed::Seed};
 use serde::{Deserialize, Serialize};
+
+use crate::error::StorageError;
+
+/// Persistent storage for world-level metadata (`level.dat` on vanilla).
+#[async_trait]
+pub trait LevelInfoStorage: Send + Sync {
+    /// Reads the current level info.
+    ///
+    /// Returns [`StorageError::NotFound`] (or an I/O error whose
+    /// [`StorageError::is_not_found`] returns `true`) when no level info has
+    /// been stored yet.
+    async fn load(&self) -> Result<LevelData, StorageError>;
+
+    /// Persists `data` as the current level info, overwriting any prior value.
+    async fn save(&self, data: &LevelData) -> Result<(), StorageError>;
+}
 
 // Constraint: disk biome palette serialization changed in 1.21.5
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.9
