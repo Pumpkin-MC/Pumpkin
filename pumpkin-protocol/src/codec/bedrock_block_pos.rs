@@ -1,7 +1,7 @@
 use std::io::{Error, Write};
 
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::BEDROCK_VERSION_1_26_10;
+use pumpkin_util::BedrockVersion;
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -16,44 +16,25 @@ use crate::{
 /// while 944+ uses signed VarInt.
 pub struct NetworkPos {
     pub pos: BlockPos,
-    pub signed_y: bool,
+    pub version: BedrockVersion,
 }
 
 impl NetworkPos {
     /// Creates a NetworkPos with default encoding for the given protocol version.
-    pub const fn for_protocol(pos: BlockPos, protocol: u32) -> Self {
-        Self {
-            pos,
-            signed_y: protocol >= BEDROCK_VERSION_1_26_10,
-        }
-    }
-
-    /// Creates a NetworkPos with legacy unsigned Y encoding (protocol < 944).
-    pub const fn new_legacy(pos: BlockPos) -> Self {
-        Self {
-            pos,
-            signed_y: false,
-        }
-    }
-
-    /// Creates a NetworkPos with modern signed Y encoding (protocol >= 944).
-    pub const fn new_modern(pos: BlockPos) -> Self {
-        Self {
-            pos,
-            signed_y: true,
-        }
+    pub const fn for_protocol(pos: BlockPos, version: BedrockVersion) -> Self {
+        Self { pos, version }
     }
 }
 
 impl PacketWrite for NetworkPos {
     /// Encodes block position with protocol-aware Y-axis handling.
     ///
-    /// X and Z are always signed VarInt. Y encoding depends on signed_y:
-    /// - false (protocol < 944): Y is unsigned VarUInt
-    /// - true (protocol >= 944): Y is signed VarInt
+    /// X and Z are always signed VarInt. Y encoding depends on version:
+    /// - protocol < 944: Y is unsigned VarUInt
+    /// - protocol >= 944: Y is signed VarInt
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarInt(self.pos.0.x).write(writer)?;
-        if self.signed_y {
+        if self.version >= BedrockVersion::V1_26_10 {
             VarInt(self.pos.0.y).write(writer)?;
         } else {
             VarUInt(self.pos.0.y as u32).write(writer)?;

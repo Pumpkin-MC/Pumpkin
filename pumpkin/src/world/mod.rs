@@ -113,6 +113,7 @@ use pumpkin_protocol::{
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
 use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::BedrockVersion;
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
@@ -1468,7 +1469,7 @@ impl World {
         base_config: &BasicConfiguration,
         player: Arc<Player>,
         server: &Server,
-        protocol_version: u32,
+        version: BedrockVersion,
     ) {
         let level_info = server.level_info.load();
         let weather = self.weather.lock().await;
@@ -1506,7 +1507,7 @@ impl World {
                     level_info.spawn_y,
                     level_info.spawn_z,
                 ),
-                protocol_version,
+                version,
             ),
             has_achievements_disabled: false,
             editor_world_type: VarInt(0),

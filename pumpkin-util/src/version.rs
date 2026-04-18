@@ -202,6 +202,38 @@ impl MinecraftVersion {
     }
 }
 
+/// Represents a specific version of the Minecraft Bedrock Edition protocol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BedrockVersion {
+    /// 1.26.0
+    V1_26_0,
+    /// 1.26.10
+    V1_26_10,
+    /// Fallback for unrecognized protocol versions.
+    Unknown,
+}
+
+impl BedrockVersion {
+    #[must_use]
+    pub const fn protocol_version(&self) -> u32 {
+        match self {
+            Self::V1_26_0 => 924,
+            Self::V1_26_10 => 944,
+            Self::Unknown => 0,
+        }
+    }
+}
+
+impl From<u32> for BedrockVersion {
+    fn from(version: u32) -> Self {
+        match version {
+            924 => Self::V1_26_0,
+            944 => Self::V1_26_10,
+            _ => Self::Unknown,
+        }
+    }
+}
+
 impl std::fmt::Display for MinecraftVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

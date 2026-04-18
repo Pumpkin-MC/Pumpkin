@@ -3,15 +3,10 @@ use std::ops::{Index, IndexMut};
 
 pub use serde_json;
 
-/// Bedrock protocol version for Minecraft 1.26.0
-pub const BEDROCK_VERSION_1_26_0: u32 = 924;
-
-/// Bedrock protocol version for Minecraft 1.26.10
-pub const BEDROCK_VERSION_1_26_10: u32 = 944;
-
 pub use difficulty::Difficulty;
 pub use gamemode::GameMode;
 pub use permission::PermissionLvl;
+pub use version::{BedrockVersion, MinecraftVersion};
 
 use crate::{math::vector3::Axis, random::RandomImpl};
 

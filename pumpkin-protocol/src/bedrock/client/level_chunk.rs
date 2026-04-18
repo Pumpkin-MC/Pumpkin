@@ -14,7 +14,7 @@ pub struct CLevelChunk<'a> {
     // https://mojang.github.io/bedrock-protocol-docs/html/LevelChunkPacket.html
     pub dimension: i32,
     pub cache_enabled: bool,
-    pub protocol: u32,
+    pub version: pumpkin_util::BedrockVersion,
 
     // https://gist.github.com/Tomcc/a96af509e275b1af483b25c543cfbf37
     // https://github.com/Mojang/bedrock-protocol-docs/blob/main/additional_docs/SubChunk%20Request%20System%20v1.18.10.md
@@ -44,7 +44,7 @@ impl PacketWrite for CLevelChunk<'_> {
             let num_storages = 1;
             data_write.write_all(&[VERSION, num_storages, y as u8])?;
 
-            let network_repr = block_palette.convert_be_network(self.protocol);
+            let network_repr = block_palette.convert_be_network(self.version);
 
             (network_repr.bits_per_entry << 1 | 1).write(data_write)?;
 

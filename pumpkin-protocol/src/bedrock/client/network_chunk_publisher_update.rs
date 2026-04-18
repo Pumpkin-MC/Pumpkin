@@ -1,7 +1,10 @@
 use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
-use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
+use pumpkin_util::{
+    math::{position::BlockPos, vector2::Vector2},
+    BedrockVersion,
+};
 
 use crate::{
     codec::{bedrock_block_pos::NetworkPos, var_int::VarInt, var_uint::VarUInt},
@@ -20,9 +23,9 @@ pub struct CNetworkChunkPublisherUpdate {
 
 impl CNetworkChunkPublisherUpdate {
     #[must_use]
-    pub const fn new(pos_for_view: BlockPos, protocol_version: u32, new_radius: u32) -> Self {
+    pub const fn new(pos_for_view: BlockPos, version: BedrockVersion, new_radius: u32) -> Self {
         Self {
-            pos_for_view: NetworkPos::for_protocol(pos_for_view, protocol_version),
+            pos_for_view: NetworkPos::for_protocol(pos_for_view, version),
             new_radius: VarUInt(new_radius),
             server_build_chunk_list: Vec::new(),
         }

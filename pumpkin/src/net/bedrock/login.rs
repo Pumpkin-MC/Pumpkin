@@ -130,7 +130,7 @@ impl BedrockClient {
         server: &Server,
     ) -> Result<(), LoginError> {
         let protocol_version = self.protocol_version.load(std::sync::atomic::Ordering::Relaxed);
-        let player_data = if protocol_version == 924 {
+        let player_data = if protocol_version == pumpkin_util::BedrockVersion::V1_26_0.protocol_version() {
             let outer_payload: FullLoginPayload = serde_json::from_slice(&packet.jwt)?;
             verify_certificate_chain_path(&outer_payload.certificate)?
         } else {
@@ -162,7 +162,7 @@ impl BedrockClient {
             .await
         {
             world
-                .spawn_bedrock_player(&server.basic_config, player.clone(), server, self.protocol_version())
+                .spawn_bedrock_player(&server.basic_config, player.clone(), server, self.bedrock_version())
                 .await;
             *self.player.lock().await = Some(player);
         }

@@ -1168,12 +1168,11 @@ pub fn build() -> TokenStream {
                 (block, state)
             }
 
-            pub fn to_be_network_id(id: u16, protocol: u32) -> u16 {
+            pub fn to_be_network_id(id: u16, version: pumpkin_util::BedrockVersion) -> u16 {
                 // Y-axis encoding changed in protocol BEDROCK_VERSION_1_26_10: select array based on protocol version
-                if protocol >= pumpkin_util::BEDROCK_VERSION_1_26_10 {
-                    Self::STATE_ID_TO_BEDROCK_944[id as usize]
-                } else {
-                    Self::STATE_ID_TO_BEDROCK[id as usize]
+                match version {
+                    pumpkin_util::BedrockVersion::V1_26_10 => Self::STATE_ID_TO_BEDROCK_944[id as usize],
+                    _ => Self::STATE_ID_TO_BEDROCK[id as usize]
                 }
             }
         }

@@ -549,7 +549,7 @@ impl ItemStack {
         let patch_len = nbt.get_u32().ok()? as usize;
         for _ in 0..patch_len {
             let component_id_raw = nbt.get_u8().ok()?;
-            let id = DataComponent::try_from_u8(component_id_raw)?;
+            let id = DataComponent::try_from_id(component_id_raw)?;
             let is_present = nbt.get_bool().ok()?;
 
             if is_present {

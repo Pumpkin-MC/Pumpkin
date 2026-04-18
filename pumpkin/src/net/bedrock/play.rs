@@ -149,7 +149,7 @@ impl BedrockClient {
             self.send_game_packet(&CContainerOpen {
                 container_id: 0,
                 container_type: 0xff,
-                position: NetworkPos::for_protocol(BlockPos::ZERO, self.protocol_version()),
+                position: NetworkPos::for_protocol(BlockPos::ZERO, self.bedrock_version()),
                 target_entity_id: VarLong(-1),
             })
             .await;
