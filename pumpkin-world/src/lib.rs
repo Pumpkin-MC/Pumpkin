@@ -18,7 +18,6 @@ pub mod lock;
 pub mod poi;
 pub mod tick;
 pub mod world;
-pub mod world_info;
 
 pub type BlockId = u16;
 pub type BlockStateId = u16;

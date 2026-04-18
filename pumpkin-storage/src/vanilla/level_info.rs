@@ -16,7 +16,7 @@ use crate::vanilla::VanillaStorage;
 pub const LEVEL_DAT_FILE_NAME: &str = "level.dat";
 pub const LEVEL_DAT_BACKUP_FILE_NAME: &str = "level.dat_old";
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct LevelDat {
     #[serde(rename = "Data")]
     data: LevelData,
@@ -132,18 +132,146 @@ impl LevelInfoStorage for VanillaStorage {
                 .await
                 .map_err(|e| StorageError::io_at(parent, e))?;
         }
-        let mut file = fs::File::create(&path)
+        fs::write(&path, &compressed)
             .await
             .map_err(|e| StorageError::io_at(&path, e))?;
-        tokio::io::AsyncWriteExt::write_all(&mut file, &compressed)
-            .await
-            .map_err(|e| StorageError::io_at(&path, e))?;
-        tokio::io::AsyncWriteExt::flush(&mut file)
-            .await
-            .map_err(|e| StorageError::io_at(&path, e))?;
-        let _ = file;
-        // Ensure the write buffer reaches disk before returning.
-        drop(compressed);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::{Cursor, Read};
+    use std::sync::LazyLock;
+
+    use flate2::read::GzDecoder;
+    use pumpkin_data::game_rules::GameRuleRegistry;
+    use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
+    use pumpkin_util::{Difficulty, world_seed::Seed};
+    use temp_dir::TempDir;
+
+    use crate::error::StorageError;
+    use crate::level_info::{
+        DataPacks, LevelData, LevelInfoStorage, WorldGenSettings, WorldVersion,
+    };
+    use crate::vanilla::VanillaStorage;
+
+    use super::{LEVEL_DAT_FILE_NAME, LevelDat};
+
+    static LEVEL_DAT: LazyLock<LevelDat> = LazyLock::new(|| LevelDat {
+        data: LevelData {
+            allow_commands: true,
+            border_center_x: 0.0,
+            border_center_z: 0.0,
+            border_damage_per_block: 0.2,
+            border_size: 59_999_968.0,
+            border_safe_zone: 5.0,
+            border_size_lerp_target: 59_999_968.0,
+            border_size_lerp_time: 0,
+            border_warning_blocks: 5.0,
+            border_warning_time: 15.0,
+            clear_weather_time: 0,
+            data_packs: DataPacks {
+                disabled: vec![
+                    "minecart_improvements".to_string(),
+                    "redstone_experiments".to_string(),
+                    "trade_rebalance".to_string(),
+                ],
+                enabled: vec!["vanilla".to_string()],
+            },
+            data_version: 4189,
+            day_time: 1727,
+            difficulty: Difficulty::Normal,
+            difficulty_locked: false,
+            game_rules: GameRuleRegistry {
+                block_explosion_drop_decay: true,
+                command_block_output: true,
+                drowning_damage: true,
+                ender_pearls_vanish_on_death: true,
+                fall_damage: true,
+                fire_damage: true,
+                forgive_dead_players: true,
+                freeze_damage: true,
+                global_sound_events: true,
+                keep_inventory: false,
+                lava_source_conversion: false,
+                log_admin_commands: true,
+                max_entity_cramming: 24,
+                mob_explosion_drop_decay: true,
+                mob_griefing: true,
+                players_nether_portal_creative_delay: 0,
+                players_nether_portal_default_delay: 80,
+                players_sleeping_percentage: 100,
+                projectiles_can_break_blocks: true,
+                random_tick_speed: 3,
+                reduced_debug_info: false,
+                send_command_feedback: true,
+                show_death_messages: true,
+                spectators_generate_chunks: true,
+                tnt_explosion_drop_decay: false,
+                universal_anger: false,
+                water_source_conversion: true,
+                ..Default::default()
+            },
+            world_gen_settings: WorldGenSettings::new(Seed(1)),
+            last_played: 1733847709327,
+            level_name: "New World".to_string(),
+            spawn_x: 160,
+            spawn_y: 70,
+            spawn_z: 160,
+            spawn_yaw: 0.0,
+            spawn_pitch: 0.0,
+            level_version: 19133,
+            world_version: WorldVersion {
+                name: "1.21.4".to_string(),
+                id: 4189,
+                snapshot: false,
+                series: "main".to_string(),
+            },
+        },
+    });
+
+    #[test]
+    fn deserialize_level_dat() {
+        let raw_compressed_nbt = std::fs::read("assets/level_1_21_4.dat").unwrap();
+        assert!(!raw_compressed_nbt.is_empty());
+
+        let mut decoder = GzDecoder::new(&raw_compressed_nbt[..]);
+        let mut buf = Vec::new();
+        decoder.read_to_end(&mut buf).unwrap();
+        let level_dat: LevelDat =
+            from_bytes(Cursor::new(buf)).expect("Failed to decode from file");
+
+        assert_eq!(level_dat, *LEVEL_DAT);
+    }
+
+    #[test]
+    fn serialize_level_dat() {
+        let mut serialized = Vec::new();
+        to_bytes(&*LEVEL_DAT, &mut serialized).expect("Failed to encode to bytes");
+
+        assert!(!serialized.is_empty());
+
+        let round_tripped: LevelDat =
+            from_bytes(Cursor::new(serialized)).expect("Failed to decode from bytes");
+
+        assert_eq!(round_tripped, *LEVEL_DAT);
+    }
+
+    #[tokio::test]
+    async fn failed_deserialize_old_level_dat() {
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::copy(
+            "assets/level_1_20.dat",
+            temp_dir.path().join(LEVEL_DAT_FILE_NAME),
+        )
+        .unwrap();
+
+        let store = VanillaStorage::new(temp_dir.path());
+        let err = store.load().await.unwrap_err();
+        assert!(
+            matches!(err, StorageError::UnsupportedVersion(_)),
+            "unexpected error: {err}"
+        );
     }
 }
