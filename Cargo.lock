@@ -2955,7 +2955,6 @@ dependencies = [
  "criterion",
  "flate2",
  "pumpkin-codecs",
- "rustc-hash",
  "serde",
  "tempfile",
  "thiserror 2.0.18",
