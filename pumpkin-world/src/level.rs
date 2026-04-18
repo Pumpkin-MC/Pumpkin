@@ -1,3 +1,4 @@
+use crate::chunk::format::linear::LinearV2File;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::generation::generator::VanillaGenerator;
 use crate::lighting::DynamicLightEngine;
@@ -6,7 +7,7 @@ use crate::{
     block::{RawBlockState, entities::BlockEntity},
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
-        format::{anvil::AnvilChunkFile, linear::LinearFile},
+        format::anvil::AnvilChunkFile,
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
         palette::has_random_ticking_fluid,
     },
@@ -163,16 +164,16 @@ impl Level {
 
         let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
             ChunkConfig::Linear(config) => Arc::new(
-                ChunkFileManager::<LinearFile<ChunkData>>::new(config.clone()),
+                ChunkFileManager::<LinearV2File<ChunkData>>::new(config.clone()),
             ),
             ChunkConfig::Anvil(config) => Arc::new(
                 ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
             ),
         };
         let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
-            ChunkConfig::Linear(config) => Arc::new(
-                ChunkFileManager::<LinearFile<ChunkEntityData>>::new(config.clone()),
-            ),
+            ChunkConfig::Linear(config) => Arc::new(ChunkFileManager::<
+                LinearV2File<ChunkEntityData>,
+            >::new(config.clone())),
             ChunkConfig::Anvil(config) => Arc::new(ChunkFileManager::<
                 AnvilChunkFile<ChunkEntityData>,
             >::new(config.clone())),
