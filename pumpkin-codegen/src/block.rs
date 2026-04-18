@@ -1026,17 +1026,17 @@ pub fn build() -> TokenStream {
     let max_state_id = raw_id_from_state_id_ordered.len();
     let raw_id_from_state_id = quote! { #(#raw_id_from_state_id_ordered),* };
 
-    let max_index = block_state_to_bedrock
+    let max_index_924 = block_state_to_bedrock
         .iter()
         .map(|(idx, _)| *idx)
         .max()
         .unwrap_or(0);
-    let mut state_to_bedrock_tokens = vec![quote! { 1 }; (max_index + 1) as usize];
+    let mut state_to_bedrock_924_tokens = vec![quote! { 1 }; (max_index_924 + 1) as usize];
     for (state_id, id_lit) in block_state_to_bedrock {
         let lit = LitInt::new(&id_lit.to_string(), Span::call_site());
-        state_to_bedrock_tokens[state_id as usize] = quote! { #lit };
+        state_to_bedrock_924_tokens[state_id as usize] = quote! { #lit };
     }
-    let block_state_to_bedrock_t = quote! { #(#state_to_bedrock_tokens),* };
+    let block_state_to_bedrock_924_t = quote! { #(#state_to_bedrock_924_tokens),* };
 
     let max_index_944 = block_state_to_bedrock_944
         .iter()
@@ -1142,8 +1142,8 @@ pub fn build() -> TokenStream {
         }
 
         impl BlockState {
-            const STATE_ID_TO_BEDROCK: &[u16] = &[
-                #block_state_to_bedrock_t
+            const STATE_ID_TO_BEDROCK_924: &[u16] = &[
+                #block_state_to_bedrock_924_t
             ];
 
             const STATE_ID_TO_BEDROCK_944: &[u16] = &[
@@ -1172,7 +1172,7 @@ pub fn build() -> TokenStream {
                 // Y-axis encoding changed in protocol BEDROCK_VERSION_1_26_10: select array based on protocol version
                 match version {
                     pumpkin_util::BedrockVersion::V1_26_10 => Self::STATE_ID_TO_BEDROCK_944[id as usize],
-                    _ => Self::STATE_ID_TO_BEDROCK[id as usize]
+                    _ => Self::STATE_ID_TO_BEDROCK_924[id as usize]
                 }
             }
         }
