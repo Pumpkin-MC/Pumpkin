@@ -2853,8 +2853,18 @@ dependencies = [
 name = "pumpkin-codecs"
 version = "0.1.0-dev+26.1"
 dependencies = [
+ "pumpkin-codecs-macros",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "pumpkin-codecs-macros"
+version = "0.1.0-dev+26.1"
+dependencies = [
+ "proc-macro-error2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
