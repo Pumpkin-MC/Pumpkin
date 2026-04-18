@@ -247,8 +247,7 @@ impl Jwk {
             && crv != "P-384"
         {
             return Err(AuthError::PublicKeyBuild(format!(
-                "Unsupported JWK crv: {}",
-                crv
+                "Unsupported JWK crv: {crv}"
             )));
         }
 
@@ -314,7 +313,7 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()
         .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {}", e)))
+        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
         .and_then(|s| {
             serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
         })?;
@@ -334,7 +333,7 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()
         .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {}", e)))
+        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
         .and_then(|s| {
             serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
         })?;
@@ -355,7 +354,7 @@ pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
         .body_mut()
         .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {}", e)))
+        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
         .and_then(|s| {
             serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
         })?;
@@ -407,7 +406,7 @@ pub fn verify_oidc_token(
 
     verify_oidc_claims(&v, expected_issuer)?;
 
-    extract_oidc_player_claims(&v)
+    Ok(extract_oidc_player_claims(&v))
 }
 
 fn verify_es384_signature(jwk: &Jwk, signing_input: &str, signature_b64: &str) -> Result<(), AuthError> {
@@ -453,13 +452,14 @@ fn verify_oidc_claims(payload: &Value, expected_issuer: &str) -> Result<(), Auth
     let aud = payload.get("aud").ok_or_else(|| {
         AuthError::PublicKeyBuild("OIDC payload missing aud".into())
     })?;
-    let aud_match = if let Some(s) = aud.as_str() {
-        s == OIDC_AUDIENCE
-    } else if let Some(arr) = aud.as_array() {
-        arr.iter().any(|v| v.as_str() == Some(OIDC_AUDIENCE))
-    } else {
-        false
-    };
+    let aud_match = aud.as_str().map_or_else(
+        || {
+            aud.as_array().is_some_and(|arr| {
+                arr.iter().any(|v| v.as_str() == Some(OIDC_AUDIENCE))
+            })
+        },
+        |s| s == OIDC_AUDIENCE,
+    );
     if !aud_match {
         return Err(AuthError::PublicKeyBuild(format!(
             "OIDC audience mismatch: expected {OIDC_AUDIENCE}, got {aud:?}"
@@ -468,7 +468,7 @@ fn verify_oidc_claims(payload: &Value, expected_issuer: &str) -> Result<(), Auth
 
     let exp = payload
         .get("exp")
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing exp".into()))?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -481,7 +481,7 @@ fn verify_oidc_claims(payload: &Value, expected_issuer: &str) -> Result<(), Auth
     Ok(())
 }
 
-fn extract_oidc_player_claims(payload: &Value) -> Result<PlayerClaims, AuthError> {
+fn extract_oidc_player_claims(payload: &Value) -> PlayerClaims {
     let display_name = payload
         .get("xname")
         .and_then(|v| v.as_str())
@@ -499,12 +499,12 @@ fn extract_oidc_player_claims(payload: &Value) -> Result<PlayerClaims, AuthError
 
     let uuid = xuid_to_uuid(&xuid);
 
-    Ok(PlayerClaims {
+    PlayerClaims {
         display_name,
         uuid,
         xuid,
         playfab_id,
-    })
+    }
 }
 
 fn xuid_to_uuid(xuid: &str) -> String {

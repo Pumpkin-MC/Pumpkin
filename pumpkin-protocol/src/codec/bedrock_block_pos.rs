@@ -12,15 +12,16 @@ use crate::{
 ///
 /// Bedrock Edition encodes coordinates differently than Java Edition, using
 /// `VarInt`'s to save bandwidth. The Y-axis encoding changed in protocol version
-/// BEDROCK_VERSION_1_26_10 (944): earlier versions use unsigned VarUInt for Y,
-/// while 944+ uses signed VarInt.
+/// `BEDROCK_VERSION_1_26_10` (944): earlier versions use unsigned `VarUInt` for Y,
+/// while 944+ uses signed `VarInt`.
 pub struct NetworkPos {
     pub pos: BlockPos,
     pub version: BedrockVersion,
 }
 
 impl NetworkPos {
-    /// Creates a NetworkPos with default encoding for the given protocol version.
+    /// Creates a `NetworkPos` with default encoding for the given protocol version.
+    #[must_use]
     pub const fn for_protocol(pos: BlockPos, version: BedrockVersion) -> Self {
         Self { pos, version }
     }
@@ -29,9 +30,9 @@ impl NetworkPos {
 impl PacketWrite for NetworkPos {
     /// Encodes block position with protocol-aware Y-axis handling.
     ///
-    /// X and Z are always signed VarInt. Y encoding depends on version:
-    /// - protocol < 944: Y is unsigned VarUInt
-    /// - protocol >= 944: Y is signed VarInt
+    /// X and Z are always signed `VarInt`. Y encoding depends on version:
+    /// - protocol < 944: Y is unsigned `VarUInt`
+    /// - protocol >= 944: Y is signed `VarInt`
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         VarInt(self.pos.0.x).write(writer)?;
         if self.version >= BedrockVersion::V1_26_10 {

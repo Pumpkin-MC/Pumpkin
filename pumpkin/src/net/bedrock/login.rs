@@ -60,7 +60,7 @@ struct CertificateChainPayload {
 }
 
 /// Verifies OIDC tokens for Bedrock 1.26.10+ clients.
-async fn verify_oidc_token_path(
+fn verify_oidc_token_path(
     server: &Server,
     token: &str,
 ) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
@@ -71,8 +71,7 @@ async fn verify_oidc_token_path(
             AuthError::PublicKeyBuild("OIDC keys not initialized".into()),
         ))?;
 
-    pumpkin_util::jwt::verify_oidc_token(token, issuer, jwks)
-        .map_err(|e| LoginError::ChainValidationFailed(e))
+    pumpkin_util::jwt::verify_oidc_token(token, issuer, jwks).map_err(LoginError::ChainValidationFailed)
 }
 
 /// Verifies certificate chains for legacy Bedrock clients (pre-1.26.10).
@@ -80,23 +79,29 @@ fn verify_certificate_chain_path(certificate: &str) -> Result<pumpkin_util::jwt:
     let inner_payload: CertificateChainPayload = serde_json::from_str(certificate)?;
     let chain_vec: Vec<&str> = inner_payload.chain.iter().map(String::as_str).collect();
     verify_chain(&chain_vec, MOJANG_BEDROCK_PUBLIC_KEY_BASE64)
-        .map_err(|e| LoginError::ChainValidationFailed(e))
+        .map_err(LoginError::ChainValidationFailed)
 }
 
 /// Routes authentication to the appropriate verification path based on available credentials.
-async fn extract_player_data_from_auth(
+fn extract_player_data_from_auth(
     auth: &AuthPayload,
     server: &Server,
 ) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
-    if let Some(token) = auth.token.as_ref().filter(|t| !t.is_empty()) {
-        verify_oidc_token_path(server, token).await
-    } else if let Some(certificate) = auth.certificate.as_ref().filter(|c| !c.is_empty()) {
-        verify_certificate_chain_path(certificate)
-    } else {
-        Err(LoginError::ChainValidationFailed(
-            AuthError::InvalidTokenFormat,
-        ))
-    }
+    auth.token
+        .as_ref()
+        .filter(|t| !t.is_empty())
+        .map_or_else(
+            || {
+                auth.certificate
+                    .as_ref()
+                    .filter(|c| !c.is_empty())
+                    .map_or_else(
+                        || Err(LoginError::ChainValidationFailed(AuthError::InvalidTokenFormat)),
+                        |certificate| verify_certificate_chain_path(certificate),
+                    )
+            },
+            |token| verify_oidc_token_path(server, token),
+        )
 }
 
 impl BedrockClient {
@@ -135,7 +140,7 @@ impl BedrockClient {
             verify_certificate_chain_path(&outer_payload.certificate)?
         } else {
             let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
-            extract_player_data_from_auth(&auth_payload, server).await?
+            extract_player_data_from_auth(&auth_payload, server)?
         };
 
         let profile = GameProfile {

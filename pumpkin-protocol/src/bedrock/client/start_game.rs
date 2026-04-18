@@ -63,9 +63,9 @@ pub struct CStartGame {
 
 #[derive(PacketWrite)]
 pub struct ServerJoinInformation {
-    gathering_info: Option<GatheringJoinInfo>,
-    store_entry_point_info: Option<StoreEntryPointInfo>,
-    presence_info: Option<PresenceInfo>,
+    gathering: Option<GatheringJoinInfo>,
+    store_entry_point: Option<StoreEntryPointInfo>,
+    presence: Option<PresenceInfo>,
 }
 
 #[derive(PacketWrite)]
