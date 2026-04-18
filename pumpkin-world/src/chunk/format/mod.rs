@@ -15,7 +15,6 @@ use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
 use tracing::debug;
-use uuid::Uuid;
 
 use crate::{
     block::entities::block_entity_from_nbt,
@@ -330,27 +329,16 @@ impl ChunkEntityData {
             )));
         }
         let mut map = FxHashMap::default();
-        for entity_nbt in chunk_entity_data.entities {
-            let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
-                if uuid.len() != 4 {
-                    debug!(
-                        "Entity in chunk {},{} has invalid UUID array length {}: {:?}",
-                        position.x,
-                        position.y,
-                        uuid.len(),
-                        entity_nbt
-                    );
-                    continue;
-                }
-                Uuid::from_u128(
-                    (uuid[0] as u128) << 96
-                        | (uuid[1] as u128) << 64
-                        | (uuid[2] as u128) << 32
-                        | (uuid[3] as u128),
-                )
-            } else {
+        for mut entity_nbt in chunk_entity_data.entities {
+            let uuid = {
+                let _id = entity_nbt.get_string().ok();
+                entity_nbt.get_uuid().ok()
+            };
+            entity_nbt.read_pos = 0;
+
+            let Some(uuid) = uuid else {
                 debug!(
-                    "Entity in chunk {},{} is missing UUID: {:?}",
+                    "Entity in chunk {},{} is missing UUID or ID: {:?}",
                     position.x, position.y, entity_nbt
                 );
                 continue;
@@ -528,10 +516,12 @@ struct ChunkNbt {
     light_correct: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+use pumpkin_nbt::pnbt::PNbtCompound;
+
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct EntityNbt {
     data_version: i32,
     position: [i32; 2],
-    entities: Vec<NbtCompound>,
+    entities: Vec<PNbtCompound>,
 }

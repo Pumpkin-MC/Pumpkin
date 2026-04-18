@@ -2952,12 +2952,15 @@ version = "0.1.0-dev+26.1"
 dependencies = [
  "bytes",
  "cesu8",
+ "criterion",
  "flate2",
  "pumpkin-codecs",
+ "rustc-hash",
  "serde",
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

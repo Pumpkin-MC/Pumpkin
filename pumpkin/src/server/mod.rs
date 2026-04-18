@@ -376,41 +376,47 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
-        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
-            if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = Dimension::from_name(dimension_key) {
-                    let world = self.get_world_from_dimension(dimension);
-                    (world, Some(data))
+        let (world, nbt) =
+            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id) {
+                let _version = data.get_int().unwrap_or(0);
+                if let Ok(dimension_key) = data.get_string() {
+                    if let Some(dimension) = Dimension::from_name(&dimension_key) {
+                        let world = self.get_world_from_dimension(dimension);
+                        // Reset read position so player.read_nbt can read everything from start
+                        data.read_pos = 0;
+                        (world, Some(data))
+                    } else {
+                        warn!("Invalid dimension key in player data: {dimension_key}");
+                        let default_world = self
+                            .worlds
+                            .load()
+                            .first()
+                            .expect("Default world should exist")
+                            .clone();
+                        data.read_pos = 0;
+                        (default_world, Some(data))
+                    }
                 } else {
-                    warn!("Invalid dimension key in player data: {dimension_key}");
+                    // Player data exists but doesn't have a dimension entry.
                     let default_world = self
                         .worlds
                         .load()
                         .first()
                         .expect("Default world should exist")
                         .clone();
+                    data.read_pos = 0;
                     (default_world, Some(data))
                 }
             } else {
-                // Player data exists but doesn't have a "Dimension" key.
+                // No player data found or an error occurred, default to the Overworld.
                 let default_world = self
                     .worlds
                     .load()
                     .first()
                     .expect("Default world should exist")
                     .clone();
-                (default_world, Some(data))
-            }
-        } else {
-            // No player data found or an error occurred, default to the Overworld.
-            let default_world = self
-                .worlds
-                .load()
-                .first()
-                .expect("Default world should exist")
-                .clone();
-            (default_world, None)
-        };
+                (default_world, None)
+            };
 
         let mut player = Player::new(
             client,
