@@ -62,6 +62,7 @@ pub async fn update_position(player: &Arc<Player>) {
             bedrock_client
                 .send_game_packet(&CNetworkChunkPublisherUpdate::new(
                     player.get_entity().block_pos.load(),
+                    bedrock_client.protocol_version(),
                     u32::from(view_distance.get()) * 16,
                 ))
                 .await;

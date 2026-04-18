@@ -13,20 +13,19 @@ use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
-/// Represents the claims extracted from the player's JWT token.
+/// Represents the claims extracted from a Minecraft Bedrock player's JWT token.
 ///
-/// This struct contains the player's display name, UUID, and XUID.
+/// Supports both legacy chains (1.26.0 extraData format) and 1.26.10+ OIDC tokens.
 #[derive(Debug, Deserialize)]
 pub struct PlayerClaims {
-    /// The player's display name (in-game name).
-    #[serde(rename = "displayName")]
+    #[serde(rename = "displayName", default)]
     pub display_name: String,
-    /// The player's unique identifier (UUID).
-    #[serde(rename = "identity")]
+    #[serde(rename = "identity", default)]
     pub uuid: String,
-    /// The player's Xbox User ID (XUID).
-    #[serde(rename = "XUID")]
+    #[serde(rename = "XUID", default)]
     pub xuid: String,
+    #[serde(rename = "PlayFabID", default)]
+    pub playfab_id: Option<String>,
 }
 
 /// Represents the possible errors that can occur during JWT verification.
@@ -206,7 +205,312 @@ pub fn verify_chain(raw_chain: &[&str], mojang_key_b64: &str) -> Result<PlayerCl
         .ok_or(AuthError::InvalidTokenFormat)?;
     let payload_bytes = decode_b64_url_nopad(last_payload_b64)?;
     let v: Value = serde_json::from_slice(&payload_bytes)?;
-    let extra_data: PlayerClaims = serde_json::from_value(v["extraData"].clone())?;
+
+    let extra_data: PlayerClaims = if v.get("extraData").is_some_and(|e| !e.is_null()) {
+        serde_json::from_value(v["extraData"].clone())?
+    } else {
+        serde_json::from_value(v)?
+    };
 
     Ok(extra_data)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Jwks {
+    pub keys: Vec<Jwk>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Jwk {
+    pub kty: String,
+    #[serde(default)]
+    pub alg: Option<String>,
+    #[serde(default)]
+    pub crv: Option<String>,
+    pub x: Option<String>,
+    pub y: Option<String>,
+    pub n: Option<String>,
+    pub e: Option<String>,
+    pub kid: String,
+}
+
+impl Jwk {
+    pub fn to_ec_public_key(&self) -> Result<PublicKey, AuthError> {
+        if self.kty != "EC" {
+            return Err(AuthError::PublicKeyBuild(format!(
+                "Unsupported JWK kty for EC: {}",
+                self.kty
+            )));
+        }
+
+        if let Some(ref crv) = self.crv
+            && crv != "P-384"
+        {
+            return Err(AuthError::PublicKeyBuild(format!(
+                "Unsupported JWK crv: {}",
+                crv
+            )));
+        }
+
+        let x = self.x.as_ref().ok_or_else(|| {
+            AuthError::PublicKeyBuild("JWK missing x coordinate for EC key".into())
+        })?;
+        let y = self.y.as_ref().ok_or_else(|| {
+            AuthError::PublicKeyBuild("JWK missing y coordinate for EC key".into())
+        })?;
+
+        let x_bytes = decode_b64_url_nopad(x)?;
+        let y_bytes = decode_b64_url_nopad(y)?;
+
+        if x_bytes.len() != 48 || y_bytes.len() != 48 {
+            return Err(AuthError::PublicKeyBuild(
+                "Invalid P-384 coordinate lengths".into(),
+            ));
+        }
+
+        let mut sec1 = Vec::with_capacity(97);
+        sec1.push(0x04u8);
+        sec1.extend_from_slice(&x_bytes);
+        sec1.extend_from_slice(&y_bytes);
+
+        PublicKey::from_sec1_bytes(&sec1)
+            .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
+    }
+
+    pub fn to_rsa_public_key(&self) -> Result<rsa::RsaPublicKey, AuthError> {
+        if self.kty != "RSA" {
+            return Err(AuthError::PublicKeyBuild(format!(
+                "Unsupported JWK kty for RSA: {}",
+                self.kty
+            )));
+        }
+
+        let n = self.n.as_ref().ok_or_else(|| {
+            AuthError::PublicKeyBuild("JWK missing n modulus for RSA key".into())
+        })?;
+        let e = self.e.as_ref().ok_or_else(|| {
+            AuthError::PublicKeyBuild("JWK missing e exponent for RSA key".into())
+        })?;
+
+        let n_bytes = decode_b64_url_nopad(n)?;
+        let e_bytes = decode_b64_url_nopad(e)?;
+
+        let n_boxed = crypto_bigint::BoxedUint::from_be_slice_vartime(&n_bytes);
+        let e_boxed = crypto_bigint::BoxedUint::from_be_slice_vartime(&e_bytes);
+
+        rsa::RsaPublicKey::new(n_boxed, e_boxed)
+            .map_err(|err| AuthError::PublicKeyBuild(err.to_string()))
+    }
+}
+
+pub const OIDC_ISSUER: &str = "https://identity.minecraft-services.net";
+pub const OIDC_AUDIENCE: &str = "api://auth-minecraft-services/multiplayer";
+pub const OIDC_DISCOVERY_URL: &str =
+    "https://client.discovery.minecraft-services.net/api/v1.0/discovery/MinecraftPE/builds/1.0.0.0";
+
+pub fn fetch_oidc_jwks() -> Result<(String, Jwks), AuthError> {
+    let discovery: Value = ureq::get(OIDC_DISCOVERY_URL)
+        .call()
+        .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {}", e)))
+        .and_then(|s| {
+            serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
+        })?;
+
+    let service_uri = discovery
+        .get("result")
+        .and_then(|v| v.get("serviceEnvironments"))
+        .and_then(|v| v.get("auth"))
+        .and_then(|v| v.get("prod"))
+        .and_then(|v| v.get("serviceUri"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::PublicKeyBuild("Discovery missing serviceUri".into()))?;
+
+    let openid_config_url = format!("{service_uri}/.well-known/openid-configuration");
+    let openid_config: Value = ureq::get(&openid_config_url)
+        .call()
+        .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {}", e)))
+        .and_then(|s| {
+            serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
+        })?;
+
+    let jwks_uri = openid_config
+        .get("jwks_uri")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::PublicKeyBuild("OpenID config missing jwks_uri".into()))?;
+
+    let issuer = openid_config
+        .get("issuer")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::PublicKeyBuild("OpenID config missing issuer".into()))?
+        .to_string();
+
+    let jwks: Jwks = ureq::get(jwks_uri)
+        .call()
+        .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {}", e)))
+        .and_then(|s| {
+            serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
+        })?;
+
+    Ok((issuer, jwks))
+}
+
+pub fn verify_oidc_token(
+    token: &str,
+    expected_issuer: &str,
+    jwks: &Jwks,
+) -> Result<PlayerClaims, AuthError> {
+    let mut parts = token.split('.');
+    let header_b64 = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
+    let payload_b64 = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
+    let signature_b64 = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
+
+    let signing_input = format!("{header_b64}.{payload_b64}");
+
+    let header_bytes = decode_b64_url_nopad(header_b64)?;
+    let header: Value = serde_json::from_slice(&header_bytes)?;
+    let kid = header
+        .get("kid")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC header missing kid".into()))?;
+    let alg = header
+        .get("alg")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC header missing alg".into()))?;
+
+    let jwk = jwks
+        .keys
+        .iter()
+        .find(|k| k.kid == kid)
+        .ok_or_else(|| AuthError::PublicKeyBuild(format!("Key not found in JWKS: {kid}")))?;
+
+    if alg == "ES384" {
+        verify_es384_signature(jwk, &signing_input, signature_b64)?;
+    } else if alg == "RS256" {
+        verify_rs256_signature(jwk, &signing_input, signature_b64)?;
+    } else {
+        return Err(AuthError::PublicKeyBuild(format!(
+            "Unsupported OIDC algorithm: {alg}"
+        )));
+    }
+
+    let payload_bytes = decode_b64_url_nopad(payload_b64)?;
+    let v: Value = serde_json::from_slice(&payload_bytes)?;
+
+    verify_oidc_claims(&v, expected_issuer)?;
+
+    extract_oidc_player_claims(&v)
+}
+
+fn verify_es384_signature(jwk: &Jwk, signing_input: &str, signature_b64: &str) -> Result<(), AuthError> {
+    let public_key = jwk.to_ec_public_key()?;
+    let verifying_key = VerifyingKey::from(public_key);
+
+    let sig_bytes = decode_b64_url_nopad(signature_b64)?;
+    let signature = Signature::from_slice(&sig_bytes).map_err(|_| AuthError::InvalidSignature)?;
+
+    verifying_key
+        .verify(signing_input.as_bytes(), &signature)
+        .map_err(|_| AuthError::InvalidSignature)
+}
+
+fn verify_rs256_signature(jwk: &Jwk, signing_input: &str, signature_b64: &str) -> Result<(), AuthError> {
+    use rsa::pkcs1v15::VerifyingKey as RsaVerifyingKey;
+    use rsa::signature::Verifier;
+    use sha2::Sha256;
+
+    let public_key = jwk.to_rsa_public_key()?;
+    let sig_bytes = decode_b64_url_nopad(signature_b64)?;
+
+    let verifying_key: RsaVerifyingKey<Sha256> = RsaVerifyingKey::new(public_key);
+    let signature = rsa::pkcs1v15::Signature::try_from(sig_bytes.as_slice())
+        .map_err(|_| AuthError::InvalidSignature)?;
+
+    verifying_key
+        .verify(signing_input.as_bytes(), &signature)
+        .map_err(|_| AuthError::InvalidSignature)
+}
+
+fn verify_oidc_claims(payload: &Value, expected_issuer: &str) -> Result<(), AuthError> {
+    let iss = payload
+        .get("iss")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing iss".into()))?;
+    if iss != expected_issuer {
+        return Err(AuthError::PublicKeyBuild(format!(
+            "OIDC issuer mismatch: expected {expected_issuer}, got {iss}"
+        )));
+    }
+
+    let aud = payload.get("aud").ok_or_else(|| {
+        AuthError::PublicKeyBuild("OIDC payload missing aud".into())
+    })?;
+    let aud_match = if let Some(s) = aud.as_str() {
+        s == OIDC_AUDIENCE
+    } else if let Some(arr) = aud.as_array() {
+        arr.iter().any(|v| v.as_str() == Some(OIDC_AUDIENCE))
+    } else {
+        false
+    };
+    if !aud_match {
+        return Err(AuthError::PublicKeyBuild(format!(
+            "OIDC audience mismatch: expected {OIDC_AUDIENCE}, got {aud:?}"
+        )));
+    }
+
+    let exp = payload
+        .get("exp")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| AuthError::PublicKeyBuild("OIDC payload missing exp".into()))?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    if now > exp {
+        return Err(AuthError::PublicKeyBuild("OIDC token expired".into()));
+    }
+
+    Ok(())
+}
+
+fn extract_oidc_player_claims(payload: &Value) -> Result<PlayerClaims, AuthError> {
+    let display_name = payload
+        .get("xname")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let xuid = payload
+        .get("xid")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let playfab_id = payload
+        .get("PlayFabID")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
+    let uuid = xuid_to_uuid(&xuid);
+
+    Ok(PlayerClaims {
+        display_name,
+        uuid,
+        xuid,
+        playfab_id,
+    })
+}
+
+fn xuid_to_uuid(xuid: &str) -> String {
+    let input = format!("pocket-auth-1-xuid:{xuid}");
+    let mut bytes = *md5::compute(input.as_bytes());
+    bytes[6] = (bytes[6] & 0x0f) | 0x30;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    uuid::Uuid::from_bytes(bytes).to_string()
 }

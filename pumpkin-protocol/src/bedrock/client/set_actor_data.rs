@@ -1,10 +1,11 @@
 use std::{collections::HashMap, io::Write};
 
 use crate::{
-    codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
+    codec::{bedrock_block_pos::NetworkPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
+use pumpkin_util::math::vector3::Vector3;
 use std::io::Error;
 
 #[derive(PacketWrite)]
@@ -83,9 +84,9 @@ pub enum MetadataValue {
     Float(f32),
     String(String),
     CompoundTag,
-    BlockPos,
+    BlockPos(NetworkPos),
     Long(i64),
-    Vec3,
+    Vec3(Vector3<f32>),
 }
 
 impl MetadataValue {
@@ -98,9 +99,9 @@ impl MetadataValue {
             Self::Float(_) => 3,
             Self::String(_) => 4,
             Self::CompoundTag => 5,
-            Self::BlockPos => 6,
+            Self::BlockPos(_) => 6,
             Self::Long(_) => 7,
-            Self::Vec3 => 8,
+            Self::Vec3(_) => 8,
         }
     }
 
@@ -108,16 +109,17 @@ impl MetadataValue {
         match self {
             Self::Byte(v) => v.write(writer),
             Self::Short(v) => v.write(writer),
-            // Type 2: Signed VarInt
             Self::Int(v) => VarInt(*v).write(writer),
-            // Type 3: LE Float (4 bytes)
             Self::Float(v) => writer.write_all(&v.to_le_bytes()),
-            // Type 4: VarInt length + UTF8 String
             Self::String(v) => v.write(writer),
             Self::CompoundTag => todo!(),
-            Self::BlockPos => todo!(),
+            Self::BlockPos(v) => v.write(writer),
             Self::Long(v) => VarLong(*v).write(writer),
-            Self::Vec3 => todo!(),
+            Self::Vec3(v) => {
+                writer.write_all(&v.x.to_le_bytes())?;
+                writer.write_all(&v.y.to_le_bytes())?;
+                writer.write_all(&v.z.to_le_bytes())
+            }
         }
     }
 }

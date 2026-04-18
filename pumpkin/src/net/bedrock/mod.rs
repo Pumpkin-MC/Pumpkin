@@ -88,6 +88,8 @@ pub struct BedrockClient {
     output_ordered_index: AtomicU32,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
+    /// The client's negotiated Bedrock protocol version (e.g., 924 for 1.26.0 or 944 for 1.26.10).
+    pub protocol_version: AtomicU32,
     /// Store Fragments until the packet is complete
     compounds: Arc<Mutex<HashMap<u16, Vec<Option<Frame>>>>>,
     //input_sequence_number: AtomicU32,
@@ -117,6 +119,7 @@ impl BedrockClient {
             output_split_number: AtomicU16::new(0),
             output_sequenced_index: AtomicU32::new(0),
             output_ordered_index: AtomicU32::new(0),
+            protocol_version: AtomicU32::new(pumpkin_util::BEDROCK_VERSION_1_26_0),
             compounds: Arc::new(Mutex::new(HashMap::new())),
             close_token: CancellationToken::new(),
             //input_sequence_number: AtomicU32::new(0),
@@ -161,6 +164,11 @@ impl BedrockClient {
                 }
             }
         });
+    }
+
+    /// Gets the negotiated protocol version for this Bedrock client.
+    pub fn protocol_version(&self) -> u32 {
+        self.protocol_version.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub async fn process_packet(self: &Arc<Self>, server: &Arc<Server>, packet: Cursor<Vec<u8>>) {

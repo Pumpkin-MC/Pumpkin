@@ -120,6 +120,7 @@ crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
 crossfire = { version = "3.1.7", features = ["compat"] }
+crypto-bigint = "0.7.3"
 dashmap = "6.1"
 ecdsa = "0.16.9"
 either = "1.15.0"

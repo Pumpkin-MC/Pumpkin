@@ -1468,6 +1468,7 @@ impl World {
         base_config: &BasicConfiguration,
         player: Arc<Player>,
         server: &Server,
+        protocol_version: u32,
     ) {
         let level_info = server.level_info.load();
         let weather = self.weather.lock().await;
@@ -1499,11 +1500,14 @@ impl World {
             world_gamemode: server.defaultgamemode.lock().await.gamemode,
             hardcore: base_config.hardcore,
             difficulty: VarInt(level_info.difficulty as i32),
-            spawn_position: NetworkPos(BlockPos::new(
-                level_info.spawn_x,
-                level_info.spawn_y,
-                level_info.spawn_z,
-            )),
+            spawn_position: NetworkPos::for_protocol(
+                BlockPos::new(
+                    level_info.spawn_x,
+                    level_info.spawn_y,
+                    level_info.spawn_z,
+                ),
+                protocol_version,
+            ),
             has_achievements_disabled: false,
             editor_world_type: VarInt(0),
             is_created_in_editor: false,

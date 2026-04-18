@@ -749,11 +749,73 @@ pub struct BlockAssets {
     pub block_entity_types: Vec<String>,
 }
 
+/// Matches a Java block state's properties against Bedrock variants to find the best matching ID.
+///
+/// # Arguments
+/// – `be_variants` – the list of Bedrock block variants with their properties for this block name
+/// – `java_props` – the Java properties to match against the Bedrock variants
+/// – `property_enums` – map of property names to their enum information
+/// – `property_mapping` – list of property mappings in reverse order
+/// – `state_index` – the state index used to decode Java properties from the property mapping
+fn match_bedrock_id(
+    be_variants: &[(u32, BTreeMap<String, String>)],
+    property_enums: &BTreeMap<String, PropertyStruct>,
+    property_mapping: &[PropertyVariantMapping],
+    state_index: u16,
+) -> u32 {
+    let mut temp_index = state_index;
+    let mut java_props_for_this_state = BTreeMap::new();
+
+    for mapping in property_mapping.iter().rev() {
+        match &mapping.property_type {
+            PropertyType::Bool => {
+                let val = temp_index % 2;
+                temp_index /= 2;
+                java_props_for_this_state.insert(
+                    mapping.original_name.clone(),
+                    if val == 0 { "true" } else { "false" }.to_string(),
+                );
+            }
+            PropertyType::Enum { name } => {
+                let enum_info = property_enums.get(name).unwrap();
+                let count = enum_info.values.len() as u16;
+                let val_idx = temp_index % count;
+                temp_index /= count;
+
+                let raw_val = &enum_info.values[val_idx as usize];
+                let val_str = if raw_val.starts_with('L') {
+                    raw_val.strip_prefix('L').unwrap().to_string()
+                } else {
+                    raw_val.clone()
+                };
+                java_props_for_this_state
+                    .insert(mapping.original_name.clone(), val_str);
+            }
+        }
+    }
+
+    be_variants
+        .iter()
+        .find(|(_, be_props)| {
+            java_props_for_this_state
+                .iter()
+                .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
+        })
+        .map_or_else(
+            || be_variants.first().map_or(1, |(id, _)| *id),
+            |(id, _)| *id,
+        )
+}
+
 /// Reads all block assets and generates the complete block registry `TokenStream`.
 pub fn build() -> TokenStream {
-    let be_blocks_data = fs::read("../assets/bedrock_block_states.nbt").unwrap();
-    let mut be_blocks_cursor = Cursor::new(be_blocks_data);
-    let be_blocks = get_be_data_from_nbt(&mut be_blocks_cursor);
+    let be_blocks_data_924 = fs::read("../assets/bedrock_block_states_924.nbt").unwrap();
+    let mut be_blocks_cursor_924 = Cursor::new(be_blocks_data_924);
+    let be_blocks_924 = get_be_data_from_nbt(&mut be_blocks_cursor_924);
+
+    let be_blocks_data_944 = fs::read("../assets/bedrock_block_states_944.nbt").unwrap();
+    let mut be_blocks_cursor_944 = Cursor::new(be_blocks_data_944);
+    let be_blocks_944 = get_be_data_from_nbt(&mut be_blocks_cursor_944);
 
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../assets/blocks.json").unwrap())
@@ -776,6 +838,7 @@ pub fn build() -> TokenStream {
     let mut block_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
     let mut block_state_to_bedrock = Vec::new();
+    let mut block_state_to_bedrock_944 = Vec::new();
 
     let mut raw_id_from_state_id_array = Vec::new();
     let mut type_from_raw_id_array = Vec::new();
@@ -855,7 +918,8 @@ pub fn build() -> TokenStream {
             name => name,
         };
 
-        let be_state_list = be_blocks.get(be_name);
+        let be_state_list_924 = be_blocks_924.get(be_name);
+        let be_state_list_944 = be_blocks_944.get(be_name);
 
         for (i, state) in block.states.iter().enumerate() {
             if state.has_random_ticks() {
@@ -872,53 +936,28 @@ pub fn build() -> TokenStream {
             }
 
             let mut matched_be_id = 1;
+            let mut matched_be_id_944 = 1;
 
-            if let Some(be_variants) = be_state_list {
-                let mut temp_index = i as u16;
-                let mut java_props_for_this_state = BTreeMap::new();
+            if let Some(be_variants) = be_state_list_924 {
+                matched_be_id = match_bedrock_id(
+                    be_variants,
+                    &property_enums,
+                    &property_mapping,
+                    i as u16,
+                );
+            }
 
-                for mapping in property_mapping.iter().rev() {
-                    match &mapping.property_type {
-                        PropertyType::Bool => {
-                            let val = temp_index % 2;
-                            temp_index /= 2;
-                            java_props_for_this_state.insert(
-                                mapping.original_name.clone(),
-                                if val == 0 { "true" } else { "false" }.to_string(),
-                            );
-                        }
-                        PropertyType::Enum { name } => {
-                            let enum_info = property_enums.get(name).unwrap();
-                            let count = enum_info.values.len() as u16;
-                            let val_idx = temp_index % count;
-                            temp_index /= count;
-
-                            let raw_val = &enum_info.values[val_idx as usize];
-                            let val_str = if raw_val.starts_with('L') {
-                                raw_val.strip_prefix('L').unwrap().to_string()
-                            } else {
-                                raw_val.clone()
-                            };
-                            java_props_for_this_state
-                                .insert(mapping.original_name.clone(), val_str);
-                        }
-                    }
-                }
-
-                matched_be_id = be_variants
-                    .iter()
-                    .find(|(_, be_props)| {
-                        java_props_for_this_state
-                            .iter()
-                            .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
-                    })
-                    .map_or_else(
-                        || be_variants.first().map_or(1, |(id, _)| *id),
-                        |(id, _)| *id,
-                    );
+            if let Some(be_variants) = be_state_list_944 {
+                matched_be_id_944 = match_bedrock_id(
+                    be_variants,
+                    &property_enums,
+                    &property_mapping,
+                    i as u16,
+                );
             }
 
             block_state_to_bedrock.push((state.id, matched_be_id));
+            block_state_to_bedrock_944.push((state.id, matched_be_id_944));
             raw_id_from_state_id_array.push((state.id, id_lit.clone()));
             state_from_state_id_array.push((const_ident.clone(), i, state.id));
         }
@@ -998,6 +1037,18 @@ pub fn build() -> TokenStream {
         state_to_bedrock_tokens[state_id as usize] = quote! { #lit };
     }
     let block_state_to_bedrock_t = quote! { #(#state_to_bedrock_tokens),* };
+
+    let max_index_944 = block_state_to_bedrock_944
+        .iter()
+        .map(|(idx, _)| *idx)
+        .max()
+        .unwrap_or(0);
+    let mut state_to_bedrock_944_tokens = vec![quote! { 1 }; (max_index_944 + 1) as usize];
+    for (state_id, id_lit) in block_state_to_bedrock_944 {
+        let lit = LitInt::new(&id_lit.to_string(), Span::call_site());
+        state_to_bedrock_944_tokens[state_id as usize] = quote! { #lit };
+    }
+    let block_state_to_bedrock_944_t = quote! { #(#state_to_bedrock_944_tokens),* };
 
     let type_from_raw_id_vec = fill_array(type_from_raw_id_array);
     let max_type_id = type_from_raw_id_vec.len();
@@ -1095,6 +1146,10 @@ pub fn build() -> TokenStream {
                 #block_state_to_bedrock_t
             ];
 
+            const STATE_ID_TO_BEDROCK_944: &[u16] = &[
+                #block_state_to_bedrock_944_t
+            ];
+
             #[doc = r" Get a block state from a state id."]
             #[doc = r" If you need access to the block use `BlockState::from_id_with_block` instead."]
             #[inline]
@@ -1113,8 +1168,13 @@ pub fn build() -> TokenStream {
                 (block, state)
             }
 
-            pub fn to_be_network_id(id: u16) -> u16 {
-                Self::STATE_ID_TO_BEDROCK[id as usize]
+            pub fn to_be_network_id(id: u16, protocol: u32) -> u16 {
+                // Y-axis encoding changed in protocol BEDROCK_VERSION_1_26_10: select array based on protocol version
+                if protocol >= pumpkin_util::BEDROCK_VERSION_1_26_10 {
+                    Self::STATE_ID_TO_BEDROCK_944[id as usize]
+                } else {
+                    Self::STATE_ID_TO_BEDROCK[id as usize]
+                }
             }
         }
 

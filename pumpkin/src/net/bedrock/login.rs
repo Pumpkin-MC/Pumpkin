@@ -43,13 +43,66 @@ struct FullLoginPayload {
     certificate: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct AuthPayload {
+    /// Present in legacy certificate-chain auth (protocol versions before 1.26.10).
+    #[serde(default)]
+    certificate: Option<String>,
+    /// Present in 1.26.10+ OIDC token auth.
+    #[serde(default)]
+    token: Option<String>,
+}
+
 #[derive(Deserialize, Debug)]
 struct CertificateChainPayload {
     chain: Vec<String>,
 }
 
+/// Verifies OIDC tokens for Bedrock 1.26.10+ clients.
+async fn verify_oidc_token_path(
+    server: &Server,
+    token: &str,
+) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
+    let (issuer, jwks) = server
+        .bedrock_oidc_keys
+        .get()
+        .ok_or(LoginError::ChainValidationFailed(
+            AuthError::PublicKeyBuild("OIDC keys not initialized".into()),
+        ))?;
+
+    pumpkin_util::jwt::verify_oidc_token(token, issuer, jwks)
+        .map_err(|e| LoginError::ChainValidationFailed(e))
+}
+
+/// Verifies certificate chains for legacy Bedrock clients (pre-1.26.10).
+fn verify_certificate_chain_path(certificate: &str) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
+    let inner_payload: CertificateChainPayload = serde_json::from_str(certificate)?;
+    let chain_vec: Vec<&str> = inner_payload.chain.iter().map(String::as_str).collect();
+    verify_chain(&chain_vec, MOJANG_BEDROCK_PUBLIC_KEY_BASE64)
+        .map_err(|e| LoginError::ChainValidationFailed(e))
+}
+
+/// Routes authentication to the appropriate verification path based on available credentials.
+async fn extract_player_data_from_auth(
+    auth: &AuthPayload,
+    server: &Server,
+) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
+    if let Some(token) = auth.token.as_ref().filter(|t| !t.is_empty()) {
+        verify_oidc_token_path(server, token).await
+    } else if let Some(certificate) = auth.certificate.as_ref().filter(|c| !c.is_empty()) {
+        verify_certificate_chain_path(certificate)
+    } else {
+        Err(LoginError::ChainValidationFailed(
+            AuthError::InvalidTokenFormat,
+        ))
+    }
+}
+
 impl BedrockClient {
-    pub async fn handle_request_network_settings(&self, _packet: SRequestNetworkSettings) {
+    pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
+        self.protocol_version
+            .store(packet.protocol_version as u32, std::sync::atomic::Ordering::Relaxed);
         self.send_game_packet(&CNetworkSettings::new(0, 0, false, 0, 0.0))
             .await;
         self.set_compression(CompressionInfo::default()).await;
@@ -76,12 +129,14 @@ impl BedrockClient {
         packet: SLogin,
         server: &Server,
     ) -> Result<(), LoginError> {
-        let outer_payload: FullLoginPayload = serde_json::from_slice(&packet.jwt)?;
-        let inner_payload: CertificateChainPayload =
-            serde_json::from_str(&outer_payload.certificate)?;
-
-        let chain_vec: Vec<&str> = inner_payload.chain.iter().map(String::as_str).collect();
-        let player_data = verify_chain(&chain_vec, MOJANG_BEDROCK_PUBLIC_KEY_BASE64)?;
+        let protocol_version = self.protocol_version.load(std::sync::atomic::Ordering::Relaxed);
+        let player_data = if protocol_version == 924 {
+            let outer_payload: FullLoginPayload = serde_json::from_slice(&packet.jwt)?;
+            verify_certificate_chain_path(&outer_payload.certificate)?
+        } else {
+            let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
+            extract_player_data_from_auth(&auth_payload, server).await?
+        };
 
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
@@ -89,13 +144,6 @@ impl BedrockClient {
             properties: Vec::new(),
             profile_actions: None,
         };
-
-        //let raw_token = unsafe { String::from_utf8_unchecked(packet.raw_token) };
-        //let raw_token: Vec<&str> = raw_token.split('.').collect();
-        // We dont care about the validation, we just want to get the data
-        //let _raw_token = unsafe {
-        //    String::from_utf8_unchecked(general_purpose::URL_SAFE_NO_PAD.decode(raw_token[1]).unwrap())
-        //};
 
         let mut frame_set = FrameSet::default();
 
@@ -114,7 +162,7 @@ impl BedrockClient {
             .await
         {
             world
-                .spawn_bedrock_player(&server.basic_config, player.clone(), server)
+                .spawn_bedrock_player(&server.basic_config, player.clone(), server, self.protocol_version())
                 .await;
             *self.player.lock().await = Some(player);
         }

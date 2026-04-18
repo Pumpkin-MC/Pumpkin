@@ -64,16 +64,32 @@ pub struct CStartGame {
 #[derive(PacketWrite)]
 pub struct ServerJoinInformation {
     gathering_info: Option<GatheringJoinInfo>,
+    store_entry_point_info: Option<StoreEntryPointInfo>,
+    presence_info: Option<PresenceInfo>,
 }
 
 #[derive(PacketWrite)]
 pub struct GatheringJoinInfo {
-    experience_id: String,
+    experience_id: Uuid,
     experience_name: String,
-    experience_world_id: String,
+    experience_world_id: Uuid,
     experience_world_name: String,
     creator_id: String,
+    unknown_uuid_1: Uuid,
+    unknown_uuid_2: Uuid,
+    server_id: String,
+}
+
+#[derive(PacketWrite)]
+pub struct StoreEntryPointInfo {
     store_id: String,
+    store_name: String,
+}
+
+#[derive(PacketWrite)]
+pub struct PresenceInfo {
+    experience_name: String,
+    world_name: String,
 }
 
 #[derive(PacketWrite)]

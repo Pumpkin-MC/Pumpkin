@@ -1551,6 +1551,7 @@ impl Player {
                     for chunk in chunk_of_chunks {
                         bedrock_client
                             .send_game_packet(&CLevelChunk {
+                                protocol: bedrock_client.protocol_version(),
                                 dimension: 0,
                                 cache_enabled: false,
                                 chunk: &chunk,

@@ -3002,6 +3002,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "colored",
+ "crypto-bigint 0.7.3",
  "ecdsa",
  "enum_dispatch",
  "md5",
@@ -3011,11 +3012,14 @@ dependencies = [
  "proc-macro2",
  "pumpkin-nbt",
  "quote",
+ "rsa",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "syn",
  "thiserror 2.0.18",
  "tokio",
+ "ureq",
  "uuid",
 ]
 

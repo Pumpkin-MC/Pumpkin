@@ -412,11 +412,11 @@ impl BlockPalette {
     }
 
     #[must_use]
-    pub fn convert_be_network(&self) -> BeNetworkSerialization<u16> {
+    pub fn convert_be_network(&self, protocol: u32) -> BeNetworkSerialization<u16> {
         match self {
             Self::Homogeneous(registry_id) => BeNetworkSerialization {
                 bits_per_entry: 0,
-                palette: NetworkPalette::Single(BlockState::to_be_network_id(*registry_id)),
+                palette: NetworkPalette::Single(BlockState::to_be_network_id(*registry_id, protocol)),
                 packed_data: Box::new([]),
             },
             Self::Heterogeneous(data) => {
@@ -468,7 +468,7 @@ impl BlockPalette {
                     palette: NetworkPalette::Indirect(
                         data.palette
                             .iter()
-                            .map(|&id| BlockState::to_be_network_id(id))
+                            .map(|&id| BlockState::to_be_network_id(id, protocol))
                             .collect(),
                     ),
                     packed_data: packed_data.into_boxed_slice(),
