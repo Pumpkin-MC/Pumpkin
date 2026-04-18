@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 mod level_info;
+mod player_data;
 
 #[allow(unused_imports)]
 pub use level_info::{LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME};

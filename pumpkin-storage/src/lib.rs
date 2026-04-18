@@ -9,12 +9,15 @@
 
 pub mod error;
 pub mod level_info;
+pub mod player_data;
 
 mod memory;
+mod null;
 mod vanilla;
 
 pub use error::StorageError;
 pub use memory::MemoryStorage;
+pub use null::NullStorage;
 pub use vanilla::VanillaStorage;
 
 #[cfg(test)]

@@ -1,8 +1,13 @@
+use std::collections::HashMap;
+
+use pumpkin_nbt::compound::NbtCompound;
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 use crate::level_info::LevelData;
 
 mod level_info;
+mod player_data;
 
 /// Format-agnostic, in-memory storage.
 ///
@@ -12,6 +17,7 @@ mod level_info;
 #[derive(Debug, Default)]
 pub struct MemoryStorage {
     pub(crate) level_info: RwLock<Option<LevelData>>,
+    pub(crate) player_data: RwLock<HashMap<Uuid, NbtCompound>>,
 }
 
 impl MemoryStorage {

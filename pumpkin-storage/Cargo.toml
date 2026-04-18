@@ -16,6 +16,7 @@ pumpkin-util.workspace = true
 
 flate2.workspace = true
 serde.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["fs", "io-util", "sync", "macros", "rt"] }

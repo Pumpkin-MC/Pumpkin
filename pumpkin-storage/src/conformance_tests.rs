@@ -1,13 +1,16 @@
-//! Behavioural tests shared by every [`LevelInfoStorage`] (and future domain)
-//! implementation. Each backend calls into these helpers from its own
-//! `#[test]` function so fixtures (temp dirs, fresh maps) stay local.
+//! Behavioural tests shared by every storage-trait implementation. Each
+//! backend calls into these helpers from its own `#[test]` function so
+//! fixtures (temp dirs, fresh maps) stay local.
 
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::world_seed::Seed;
 use temp_dir::TempDir;
+use uuid::Uuid;
 
 use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
-use crate::{MemoryStorage, VanillaStorage};
+use crate::player_data::PlayerDataStorage;
+use crate::{MemoryStorage, NullStorage, VanillaStorage};
 
 async fn level_info_round_trip(store: &dyn LevelInfoStorage) {
     let err = store.load().await.expect_err("empty store must report not found");
@@ -47,9 +50,85 @@ async fn level_info_round_trip_vanilla() {
 async fn vanilla_level_info_not_found_reports_not_found() {
     let dir = TempDir::new().unwrap();
     let store = VanillaStorage::new(dir.path());
-    let err = store.load().await.unwrap_err();
+    let err = LevelInfoStorage::load(&store).await.unwrap_err();
     assert!(err.is_not_found(), "{err}");
     assert!(matches!(err, StorageError::NotFound { .. }));
+}
+
+#[tokio::test]
+async fn level_info_null_always_empty() {
+    let store = NullStorage::new();
+    let err = LevelInfoStorage::load(&store).await.unwrap_err();
+    assert!(err.is_not_found());
+    // Save is a no-op that succeeds.
+    LevelInfoStorage::save(&store, &LevelData::default(Seed(0)))
+        .await
+        .unwrap();
+    // Still empty.
+    assert!(LevelInfoStorage::load(&store).await.is_err());
+}
+
+async fn player_data_round_trip(store: &dyn PlayerDataStorage) {
+    let uuid = Uuid::from_u128(0x1234_5678_90AB_CDEF_1122_3344_5566_7788);
+
+    let err = store.load(uuid).await.expect_err("no data yet");
+    assert!(err.is_not_found(), "{err}");
+    assert!(store.list().await.unwrap().is_empty());
+
+    let mut nbt = NbtCompound::new();
+    nbt.put_string("name", "Alice".to_string());
+    nbt.put_int("level", 7);
+    store.save(uuid, &nbt).await.unwrap();
+
+    let loaded = store.load(uuid).await.unwrap();
+    assert_eq!(loaded.get_string("name").unwrap(), "Alice");
+    assert_eq!(loaded.get_int("level").unwrap(), 7);
+
+    let ids = store.list().await.unwrap();
+    assert_eq!(ids, vec![uuid]);
+
+    // Overwrite.
+    let mut nbt = NbtCompound::new();
+    nbt.put_int("level", 10);
+    store.save(uuid, &nbt).await.unwrap();
+    assert_eq!(
+        store.load(uuid).await.unwrap().get_int("level").unwrap(),
+        10
+    );
+
+    // Second uuid.
+    let other = Uuid::from_u128(0xAA);
+    store.save(other, &NbtCompound::new()).await.unwrap();
+    let mut ids = store.list().await.unwrap();
+    ids.sort();
+    let mut expected = vec![uuid, other];
+    expected.sort();
+    assert_eq!(ids, expected);
+}
+
+#[tokio::test]
+async fn player_data_round_trip_memory() {
+    let store = MemoryStorage::new();
+    player_data_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn player_data_round_trip_vanilla() {
+    let dir = TempDir::new().unwrap();
+    let store = VanillaStorage::new(dir.path());
+    player_data_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn player_data_null_always_empty() {
+    let store = NullStorage::new();
+    let uuid = Uuid::from_u128(1);
+    assert!(PlayerDataStorage::load(&store, uuid).await.unwrap_err().is_not_found());
+    PlayerDataStorage::save(&store, uuid, &NbtCompound::new())
+        .await
+        .unwrap();
+    assert!(PlayerDataStorage::load(&store, uuid).await.unwrap_err().is_not_found());
+    assert!(PlayerDataStorage::list(&store).await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -58,11 +137,13 @@ async fn vanilla_level_info_writes_backup_on_load() {
 
     let dir = TempDir::new().unwrap();
     let store = VanillaStorage::new(dir.path());
-    store.save(&LevelData::default(Seed(1))).await.unwrap();
+    LevelInfoStorage::save(&store, &LevelData::default(Seed(1)))
+        .await
+        .unwrap();
 
     assert!(dir.path().join(LEVEL_DAT_FILE_NAME).exists());
     assert!(!dir.path().join(LEVEL_DAT_BACKUP_FILE_NAME).exists());
 
-    store.load().await.unwrap();
+    LevelInfoStorage::load(&store).await.unwrap();
     assert!(dir.path().join(LEVEL_DAT_BACKUP_FILE_NAME).exists());
 }
