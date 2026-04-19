@@ -728,7 +728,7 @@ impl LivingEntity {
             .await;
     }
 
-    async fn tick_movement(&self, server: &Server, caller: Arc<dyn EntityBase>) {
+    async fn tick_movement<'a>(&'a self, server: &'a Server, caller: &'a Arc<dyn EntityBase>) {
         if self.jumping_cooldown.load(Relaxed) != 0 {
             self.jumping_cooldown.fetch_sub(1, Relaxed);
         }
@@ -799,24 +799,24 @@ impl LivingEntity {
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
         {
-            self.travel_in_fluid(caller.clone(), touching_water).await;
+            self.travel_in_fluid(caller, touching_water).await;
         } else {
             // TODO: Gliding
 
-            self.travel_in_air(caller.clone()).await;
+            self.travel_in_air(caller).await;
         }
 
         // TODO: Apply Soul Speed boot durability when tick_block_underneath is implemented.
         //self.entity.tick_block_underneath(&caller);
 
-        let suffocating = self.entity.tick_block_collisions(&caller, server).await;
+        let suffocating = self.entity.tick_block_collisions(caller, server).await;
 
         if suffocating {
-            self.damage(&*caller, 1.0, DamageType::IN_WALL).await;
+            self.damage(&**caller, 1.0, DamageType::IN_WALL).await;
         }
     }
 
-    async fn travel_in_air(&self, caller: Arc<dyn EntityBase>) {
+    async fn travel_in_air<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
         // applyMovementInput
 
         let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
@@ -853,7 +853,7 @@ impl LivingEntity {
 
         self.apply_climbing_speed();
 
-        self.make_move(caller.clone()).await;
+        self.make_move(caller).await;
 
         let mut velo = self.entity.velocity.load();
 
@@ -874,7 +874,7 @@ impl LivingEntity {
         if let Some(lev) = levitation {
             velo.y += 0.05f64.mul_add(f64::from(lev.amplifier + 1), -velo.y) * 0.2;
         } else {
-            velo.y -= self.get_effective_gravity(&caller).await;
+            velo.y -= self.get_effective_gravity(caller).await;
 
             // TODO: If world is not loaded: replace effective gravity with:
 
@@ -898,11 +898,11 @@ impl LivingEntity {
         self.entity.velocity.store(velo);
     }
 
-    async fn travel_in_fluid(&self, caller: Arc<dyn EntityBase>, water: bool) {
+    async fn travel_in_fluid<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, water: bool) {
         let movement_input = self.movement_input.load();
 
         let falling = self.entity.velocity.load().y <= 0.0;
-        let gravity = self.get_effective_gravity(&caller).await;
+        let gravity = self.get_effective_gravity(caller).await;
         let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
 
         if water {
@@ -995,7 +995,7 @@ impl LivingEntity {
         }
     }
 
-    async fn make_move(&self, caller: Arc<dyn EntityBase>) {
+    async fn make_move<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
         self.entity
             .move_entity(caller, self.entity.velocity.load())
             .await;
@@ -2028,11 +2028,11 @@ impl EntityBase for LivingEntity {
     #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.tick(caller.clone(), server).await;
+            self.entity.tick(caller, server).await;
 
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).
@@ -2041,7 +2041,7 @@ impl EntityBase for LivingEntity {
             let in_death_animation =
                 self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
             if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
-                self.tick_movement(server, caller.clone()).await;
+                self.tick_movement(server, caller).await;
                 // Vanilla-like order: freeze logic runs after movement/collisions.
                 self.entity.tick_frozen(caller.as_ref()).await;
             }

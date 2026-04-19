@@ -1597,7 +1597,8 @@ impl Player {
 
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
-        self.living_entity.tick(self.clone(), server).await;
+        let caller: Arc<dyn EntityBase> = self.clone();
+        self.living_entity.tick(&caller, server).await;
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
         self.update_player_pose().await;
         self.breath_manager.tick(self).await;

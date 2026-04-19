@@ -117,7 +117,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// The `server` parameter provides access to the game server instance.
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -1508,7 +1508,7 @@ impl Entity {
     // Move by a delta, adjust for collisions, and send
 
     // Does not send movement. That must be done separately
-    async fn move_entity(&self, caller: Arc<dyn EntityBase>, mut motion: Vector3<f64>) {
+    async fn move_entity<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, mut motion: Vector3<f64>) {
         if caller.get_player().is_some() {
             return;
         }
@@ -2753,7 +2753,7 @@ impl NBTStorage for Entity {
 impl EntityBase for Entity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -2763,9 +2763,9 @@ impl EntityBase for Entity {
                 .store(was_in_powder_snow, Ordering::Relaxed);
             self.is_in_powder_snow.store(false, Ordering::Relaxed);
             self.update_last_pos();
-            self.tick_portal(&caller).await;
-            self.update_fluid_state(&caller).await;
-            self.check_out_of_world(&*caller).await;
+            self.tick_portal(caller).await;
+            self.update_fluid_state(caller).await;
+            self.check_out_of_world(&**caller).await;
             let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
             // Check for fire immunity (or if the specific entity is)
@@ -2779,7 +2779,7 @@ impl EntityBase for Entity {
                     }
                 } else {
                     if fire_ticks % 20 == 0 {
-                        caller.damage(&*caller, 1.0, DamageType::ON_FIRE).await;
+                        (**caller).damage(&**caller, 1.0, DamageType::ON_FIRE).await;
                     }
 
                     self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);

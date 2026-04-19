@@ -576,22 +576,10 @@ impl ToFromWasmEvent for PlayerInteractEvent {
             .add_player(self.player.clone())
             .expect("failed to add player resource");
 
-        let stack = self.item.blocking_lock();
-        let item = crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::to_wit_item_stack(
-            &stack,
-        )
-        .unwrap_or(
-            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::common::ItemStack {
-                registry_key: "minecraft:air".to_string(),
-                count: 0,
-            },
-        );
-
         Event::PlayerInteractEvent(PlayerInteractEventData {
             player,
             action: to_wasm_interact_action(&self.action),
             clicked_pos: self.clicked_pos.map(to_wasm_block_position),
-            item,
             block: self.block.name.to_string(),
             cancelled: self.cancelled,
         })

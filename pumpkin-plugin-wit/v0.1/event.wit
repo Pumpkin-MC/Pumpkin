@@ -150,7 +150,6 @@ interface event {
         player: player,
         action: interact-action,
         clicked-pos: option<block-position>,
-        item: item-stack,
         block: string,
         cancelled: bool
     }

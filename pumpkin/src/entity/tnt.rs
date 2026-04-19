@@ -36,7 +36,7 @@ impl NBTStorage for TNTEntity {}
 impl EntityBase for TNTEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -46,8 +46,8 @@ impl EntityBase for TNTEntity {
             let mut velo = original_velo;
             velo.y -= self.get_gravity();
 
-            entity.move_entity(caller.clone(), velo).await;
-            entity.tick_block_collisions(&caller, server).await;
+            entity.move_entity(caller, velo).await;
+            entity.tick_block_collisions(caller, server).await;
             entity.velocity.store(velo.multiply(0.98, 0.98, 0.98));
 
             if entity.on_ground.load(Ordering::Relaxed) {
@@ -73,7 +73,7 @@ impl EntityBase for TNTEntity {
             } else {
                 // Safe decrement
                 self.fuse.store(fuse - 1, Relaxed);
-                entity.update_fluid_state(&caller).await;
+                entity.update_fluid_state(caller).await;
             }
         })
     }

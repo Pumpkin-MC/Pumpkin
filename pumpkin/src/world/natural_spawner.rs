@@ -434,30 +434,28 @@ pub async fn spawn_category_for_position(
             prepared_data.push((base_entity.entity_uuid, nbt, packet, entity.clone()));
         }
 
-        {
-            let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
-            let mut data = chunk_handle.data.lock().await;
+        let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
+        let mut data = chunk_handle.data.lock().await;
 
-            for (uuid, nbt, _, _) in &prepared_data {
-                data.insert(*uuid, nbt.clone());
-            }
-            drop(data);
-            chunk_handle.mark_dirty(true);
+        for (uuid, nbt, _, _) in &prepared_data {
+            data.insert(*uuid, nbt.clone());
+        }
+        drop(data);
+        chunk_handle.mark_dirty(true);
 
-            world.entities.rcu(|current_entities| {
-                let mut new_entities = (**current_entities).clone();
+        world.entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
 
-                for (uuid, _, _, entity_ref) in &prepared_data {
-                    if !new_entities
-                        .iter()
-                        .any(|e| e.get_entity().entity_uuid == *uuid)
-                    {
-                        new_entities.push(entity_ref.clone());
-                    }
+            for (uuid, _, _, entity_ref) in &prepared_data {
+                if !new_entities
+                    .iter()
+                    .any(|e| e.get_entity().entity_uuid == *uuid)
+                {
+                    new_entities.push(entity_ref.clone());
                 }
-                new_entities
-            });
-        };
+            }
+            new_entities
+        });
 
         for (_, _, packet, _) in prepared_data {
             world.broadcast_packet_all(&packet).await;

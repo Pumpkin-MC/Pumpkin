@@ -75,7 +75,7 @@ impl NBTStorage for WindChargeEntity {}
 impl EntityBase for WindChargeEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {

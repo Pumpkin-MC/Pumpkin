@@ -50,12 +50,12 @@ impl NBTStorage for FallingEntity {}
 impl EntityBase for FallingEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let entity = &self.entity;
-            entity.tick(caller.clone(), server).await;
+            entity.tick(caller, server).await;
 
             let original_velo = entity.velocity.load();
             let mut velo = original_velo;
@@ -63,8 +63,8 @@ impl EntityBase for FallingEntity {
 
             entity.velocity.store(velo);
 
-            entity.move_entity(caller.clone(), velo).await;
-            entity.tick_block_collisions(&caller, server).await;
+            entity.move_entity(caller, velo).await;
+            entity.tick_block_collisions(caller, server).await;
             if entity.on_ground.load(Ordering::Relaxed) {
                 entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
                 entity

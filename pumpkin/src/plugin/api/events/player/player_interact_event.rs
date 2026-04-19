@@ -2,10 +2,8 @@ use std::sync::Arc;
 
 use crate::entity::player::Player;
 use pumpkin_data::Block;
-use pumpkin_data::item_stack::ItemStack;
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::position::BlockPos;
-use tokio::sync::Mutex;
 
 use super::PlayerEvent;
 
@@ -25,9 +23,6 @@ pub struct PlayerInteractEvent {
 
     /// The position of the block that was clicked, if any.
     pub clicked_pos: Option<BlockPos>,
-
-    /// The item in the player's hand at the time of interaction.
-    pub item: Arc<Mutex<ItemStack>>,
 
     /// The block that was interacted with.
     pub block: &'static Block,
@@ -50,14 +45,12 @@ impl PlayerInteractEvent {
     pub fn new(
         player: &Arc<Player>,
         action: InteractAction,
-        item: &Arc<Mutex<ItemStack>>,
         block: &'static Block,
         clicked_pos: Option<BlockPos>,
     ) -> Self {
         Self {
             player: Arc::clone(player),
             action,
-            item: Arc::clone(item),
             block,
             clicked_pos,
             cancelled: false,
