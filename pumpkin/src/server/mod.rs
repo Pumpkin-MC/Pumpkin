@@ -34,7 +34,8 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::lock::LevelLocker;
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use pumpkin_storage::level_info::{LevelData, LevelInfoStorage};
-use pumpkin_storage::{StorageError, VanillaStorage};
+use pumpkin_storage::player_data::PlayerDataStorage;
+use pumpkin_storage::{NullStorage, StorageError, VanillaStorage};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
@@ -181,10 +182,15 @@ impl Server {
         let defaultgamemode = Mutex::new(DefaultGamemode {
             gamemode: basic_config.default_gamemode,
         });
+        let player_data_backend: Arc<dyn PlayerDataStorage> =
+            if advanced_config.player_data.save_player_data {
+                vanilla_storage.clone()
+            } else {
+                Arc::new(NullStorage::new())
+            };
         let player_data_storage = ServerPlayerData::new(
-            world_path.join("playerdata"),
+            player_data_backend,
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
-            advanced_config.player_data.save_player_data,
         );
         let white_list = AtomicBool::new(basic_config.white_list);
 
@@ -368,7 +374,9 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
-        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
+        let (world, nbt) = if let Ok(Some(data)) =
+            self.player_data_storage.load_data(profile.id).await
+        {
             if let Some(dimension_key) = data.get_string("Dimension") {
                 if let Some(dimension) = Dimension::from_name(dimension_key) {
                     let world = self.get_world_from_dimension(dimension);

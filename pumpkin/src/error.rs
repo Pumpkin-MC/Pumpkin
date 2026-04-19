@@ -1,6 +1,6 @@
 use pumpkin_inventory::InventoryError;
 use pumpkin_protocol::ser::ReadingError;
-use pumpkin_world::data::player_data::PlayerDataError;
+use pumpkin_storage::StorageError;
 use std::fmt::Display;
 use tracing::Level;
 
@@ -69,7 +69,7 @@ impl PumpkinError for ReadingError {
     }
 }
 
-impl PumpkinError for PlayerDataError {
+impl PumpkinError for StorageError {
     fn is_kick(&self) -> bool {
         false
     }
@@ -79,9 +79,6 @@ impl PumpkinError for PlayerDataError {
     }
 
     fn client_kick_reason(&self) -> Option<String> {
-        match self {
-            Self::Io(err) => Some(format!("Failed to load player data: {err}")),
-            Self::Nbt(err) => Some(format!("Failed to parse player data: {err}")),
-        }
+        Some(format!("Storage error: {self}"))
     }
 }

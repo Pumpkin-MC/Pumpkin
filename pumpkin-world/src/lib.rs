@@ -8,7 +8,6 @@ pub mod block;
 pub mod chunk;
 pub mod chunk_system;
 pub mod cylindrical_chunk_iterator;
-pub mod data;
 pub mod dimension;
 pub mod generation;
 pub mod inventory;
