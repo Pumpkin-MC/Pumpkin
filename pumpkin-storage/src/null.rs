@@ -9,8 +9,11 @@
 
 use async_trait::async_trait;
 use pumpkin_nbt::compound::NbtCompound;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::banlist::BannedPlayerEntry;
+use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::player_data::PlayerDataStorage;
@@ -52,6 +55,36 @@ impl PlayerDataStorage for NullStorage {
     }
 
     async fn list(&self) -> Result<Vec<Uuid>, StorageError> {
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl BannedPlayerStorage for NullStorage {
+    async fn ban(
+        &self,
+        _uuid: Uuid,
+        _name: &str,
+        _source: String,
+        _expires: Option<OffsetDateTime>,
+        _reason: String,
+    ) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn unban(&self, _uuid: Uuid) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn is_banned(&self, _uuid: Uuid) -> Result<bool, StorageError> {
+        Ok(false)
+    }
+
+    async fn get(&self, _uuid: Uuid) -> Result<Option<BannedPlayerEntry>, StorageError> {
+        Ok(None)
+    }
+
+    async fn list(&self) -> Result<Vec<BannedPlayerEntry>, StorageError> {
         Ok(Vec::new())
     }
 }

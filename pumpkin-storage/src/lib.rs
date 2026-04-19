@@ -8,6 +8,7 @@
 //! Additional domain traits are added in subsequent commits.
 
 pub mod banlist;
+pub mod banned_player;
 pub mod error;
 pub mod level_info;
 pub mod player_data;

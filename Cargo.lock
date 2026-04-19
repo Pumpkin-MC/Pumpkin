@@ -3000,6 +3000,7 @@ dependencies = [
  "pumpkin-nbt",
  "pumpkin-util",
  "serde",
+ "serde_json",
  "temp-dir",
  "thiserror 2.0.18",
  "time",

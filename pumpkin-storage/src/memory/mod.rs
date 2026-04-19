@@ -4,8 +4,10 @@ use pumpkin_nbt::compound::NbtCompound;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+use crate::banlist::BannedPlayerEntry;
 use crate::level_info::LevelData;
 
+mod banned_player;
 mod level_info;
 mod player_data;
 
@@ -18,6 +20,7 @@ mod player_data;
 pub struct MemoryStorage {
     pub(crate) level_info: RwLock<Option<LevelData>>,
     pub(crate) player_data: RwLock<HashMap<Uuid, NbtCompound>>,
+    pub(crate) banned_players: RwLock<Vec<BannedPlayerEntry>>,
 }
 
 impl MemoryStorage {

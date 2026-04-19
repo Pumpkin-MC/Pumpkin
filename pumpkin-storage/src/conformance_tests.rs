@@ -5,8 +5,10 @@
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::world_seed::Seed;
 use temp_dir::TempDir;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::player_data::PlayerDataStorage;
@@ -129,6 +131,116 @@ async fn player_data_null_always_empty() {
         .unwrap();
     assert!(PlayerDataStorage::load(&store, uuid).await.unwrap_err().is_not_found());
     assert!(PlayerDataStorage::list(&store).await.unwrap().is_empty());
+}
+
+async fn banned_player_round_trip(store: &dyn BannedPlayerStorage) {
+    let uuid = Uuid::from_u128(0xAB);
+    let other = Uuid::from_u128(0xCD);
+
+    assert!(store.list().await.unwrap().is_empty());
+    assert!(!store.is_banned(uuid).await.unwrap());
+
+    store
+        .ban(
+            uuid,
+            "Alice",
+            "Admin".to_string(),
+            None,
+            "spam".to_string(),
+        )
+        .await
+        .unwrap();
+
+    assert!(store.is_banned(uuid).await.unwrap());
+    let entry = store.get(uuid).await.unwrap().unwrap();
+    assert_eq!(entry.name, "Alice");
+    assert_eq!(entry.reason, "spam");
+    assert_eq!(entry.source, "Admin");
+
+    // Re-banning replaces the existing entry.
+    store
+        .ban(
+            uuid,
+            "Alice",
+            "Mod".to_string(),
+            None,
+            "grief".to_string(),
+        )
+        .await
+        .unwrap();
+    let entry = store.get(uuid).await.unwrap().unwrap();
+    assert_eq!(entry.source, "Mod");
+    assert_eq!(entry.reason, "grief");
+    assert_eq!(store.list().await.unwrap().len(), 1);
+
+    // Expired bans are filtered out.
+    let past = OffsetDateTime::now_utc() - time::Duration::hours(1);
+    store
+        .ban(
+            other,
+            "Bob",
+            "Admin".to_string(),
+            Some(past),
+            "old".to_string(),
+        )
+        .await
+        .unwrap();
+    assert!(!store.is_banned(other).await.unwrap());
+    assert_eq!(store.list().await.unwrap().len(), 1);
+
+    store.unban(uuid).await.unwrap();
+    assert!(!store.is_banned(uuid).await.unwrap());
+}
+
+#[tokio::test]
+async fn banned_player_round_trip_memory() {
+    let store = MemoryStorage::new();
+    banned_player_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn banned_player_round_trip_vanilla() {
+    let dir = TempDir::new().unwrap();
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+    banned_player_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn banned_player_null_always_empty() {
+    let store = NullStorage::new();
+    let uuid = Uuid::from_u128(1);
+    BannedPlayerStorage::ban(
+        &store,
+        uuid,
+        "Alice",
+        "s".to_string(),
+        None,
+        "r".to_string(),
+    )
+    .await
+    .unwrap();
+    assert!(!BannedPlayerStorage::is_banned(&store, uuid).await.unwrap());
+    assert!(BannedPlayerStorage::list(&store).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn banned_player_vanilla_persists_across_instances() {
+    let dir = TempDir::new().unwrap();
+    {
+        let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+        store
+            .ban(
+                Uuid::from_u128(1),
+                "Alice",
+                "Admin".to_string(),
+                None,
+                "reason".to_string(),
+            )
+            .await
+            .unwrap();
+    }
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+    assert_eq!(BannedPlayerStorage::list(&store).await.unwrap().len(), 1);
 }
 
 #[tokio::test]
