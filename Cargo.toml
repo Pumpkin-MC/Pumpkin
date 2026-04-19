@@ -180,8 +180,8 @@ notify = "8.2.0"
 
 wasmtime = "43.0"
 wasmtime-wasi = "43.0"
-wit-bindgen = "0.56"
-wasmparser = "0.246"
+wit-bindgen = "0.57"
+wasmparser = "0.247"
 
 postcard = { version = "1.1", features = ["alloc"] }
 tracing-serde-structured = "0.4"

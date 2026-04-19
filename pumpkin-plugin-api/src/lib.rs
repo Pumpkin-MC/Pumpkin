@@ -56,6 +56,7 @@ mod wit {
         skip: ["init-plugin"],
         path: "../pumpkin-plugin-wit/v0.1",
         world: "plugin",
+        enable_method_chaining: true
     });
 
     use super::Component;

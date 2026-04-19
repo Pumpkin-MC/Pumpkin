@@ -1,17 +1,14 @@
 use std::{collections::HashMap, hash::Hash, iter::repeat_n};
 
 use pumpkin_data::{
-    Block, BlockState,
+    BlockState,
     block_properties::{has_random_ticks, is_air, is_liquid},
-    chunk::Biome,
     fluid::Fluid,
 };
 use pumpkin_util::encompassing_bits;
 use tracing::warn;
 
-use crate::block::BlockStateCodec;
-
-use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates, PaletteBiomeEntry};
+use super::format::{ChunkSectionBiomes, ChunkSectionBlockStates};
 
 /// 3d array indexed by y,z,x
 type AbstractCube<T, const DIM: usize> = [[[T; DIM]; DIM]; DIM];
@@ -152,7 +149,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
 
     #[must_use]
     pub fn from_palette_and_packed_data(
-        palette: Vec<V>,
+        palette: &[V],
         packed_data: &[i64],
         minimum_bits_per_entry: u8,
     ) -> Self {
@@ -220,7 +217,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
 
         Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
             cube,
-            palette,
+            palette: palette.to_vec(),
             counts,
         }))
     }
@@ -328,14 +325,10 @@ impl BiomePalette {
 
     #[must_use]
     pub fn from_disk_nbt(nbt: ChunkSectionBiomes) -> Self {
-        let palette = nbt
-            .palette
-            .into_iter()
-            .map(|entry| Biome::from_name(&entry.name).unwrap_or(&Biome::PLAINS).id)
-            .collect::<Vec<_>>();
+        let palette = nbt.palette;
 
         Self::from_palette_and_packed_data(
-            palette,
+            &palette,
             nbt.data.as_ref().unwrap_or(&Box::default()),
             BIOME_DISK_MIN_BITS,
         )
@@ -352,12 +345,7 @@ impl BiomePalette {
             } else {
                 Some(packed_data)
             },
-            palette: palette
-                .into_iter()
-                .map(|registry_id| PaletteBiomeEntry {
-                    name: Biome::from_id(registry_id).unwrap().registry_id.into(),
-                })
-                .collect(),
+            palette,
         }
     }
 }
@@ -561,14 +549,10 @@ impl BlockPalette {
 
     #[must_use]
     pub fn from_disk_nbt(nbt: ChunkSectionBlockStates) -> Self {
-        let palette = nbt
-            .palette
-            .into_iter()
-            .map(|entry| entry.get_state_id())
-            .collect::<Vec<_>>();
+        let palette = nbt.palette;
 
         Self::from_palette_and_packed_data(
-            palette,
+            &palette,
             nbt.data.as_ref().unwrap_or(&Box::default()),
             BLOCK_DISK_MIN_BITS,
         )
@@ -583,24 +567,7 @@ impl BlockPalette {
             } else {
                 Some(packed_data)
             },
-            palette: palette
-                .into_iter()
-                .map(Self::block_state_id_to_palette_entry)
-                .collect(),
-        }
-    }
-
-    fn block_state_id_to_palette_entry(registry_id: u16) -> BlockStateCodec {
-        let block = Block::from_state_id(registry_id);
-
-        BlockStateCodec {
-            name: block,
-            properties: block.properties(registry_id).map(|p| {
-                p.to_props()
-                    .into_iter()
-                    .map(|(k, v)| (k.to_owned(), v.to_owned()))
-                    .collect()
-            }),
+            palette,
         }
     }
 }

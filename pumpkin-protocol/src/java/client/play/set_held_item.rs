@@ -20,8 +20,10 @@ impl MultiVersionJavaPacket for CSetSelectedSlot {
     fn to_id(version: MinecraftVersion) -> i32 {
         if version >= MinecraftVersion::V_1_21_2 {
             PLAY_SET_HELD_SLOT.to_id(version)
-        } else {
+        } else if version == MinecraftVersion::V_1_21 {
             PLAY_SET_CARRIED_ITEM.to_id(version)
+        } else {
+            PLAY_SET_HELD_SLOT.to_id(version)
         }
     }
 }
