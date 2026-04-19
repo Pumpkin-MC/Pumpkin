@@ -8,6 +8,9 @@ use temp_dir::TempDir;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use std::net::{IpAddr, Ipv4Addr};
+
+use crate::banned_ip::BannedIpStorage;
 use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
@@ -228,19 +231,59 @@ async fn banned_player_vanilla_persists_across_instances() {
     let dir = TempDir::new().unwrap();
     {
         let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
-        store
-            .ban(
-                Uuid::from_u128(1),
-                "Alice",
-                "Admin".to_string(),
-                None,
-                "reason".to_string(),
-            )
-            .await
-            .unwrap();
+        BannedPlayerStorage::ban(
+            &store,
+            Uuid::from_u128(1),
+            "Alice",
+            "Admin".to_string(),
+            None,
+            "reason".to_string(),
+        )
+        .await
+        .unwrap();
     }
     let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
     assert_eq!(BannedPlayerStorage::list(&store).await.unwrap().len(), 1);
+}
+
+async fn banned_ip_round_trip(store: &dyn BannedIpStorage) {
+    let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
+    assert!(store.list().await.unwrap().is_empty());
+    assert!(!store.is_banned(ip).await.unwrap());
+
+    store
+        .ban(ip, "Admin".to_string(), None, "abuse".to_string())
+        .await
+        .unwrap();
+    assert!(store.is_banned(ip).await.unwrap());
+    let entry = store.get(ip).await.unwrap().unwrap();
+    assert_eq!(entry.reason, "abuse");
+
+    store.unban(ip).await.unwrap();
+    assert!(!store.is_banned(ip).await.unwrap());
+}
+
+#[tokio::test]
+async fn banned_ip_round_trip_memory() {
+    banned_ip_round_trip(&MemoryStorage::new()).await;
+}
+
+#[tokio::test]
+async fn banned_ip_round_trip_vanilla() {
+    let dir = TempDir::new().unwrap();
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+    banned_ip_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn banned_ip_null_always_empty() {
+    let store = NullStorage::new();
+    let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+    BannedIpStorage::ban(&store, ip, "s".to_string(), None, "r".to_string())
+        .await
+        .unwrap();
+    assert!(!BannedIpStorage::is_banned(&store, ip).await.unwrap());
+    assert!(BannedIpStorage::list(&store).await.unwrap().is_empty());
 }
 
 #[tokio::test]
