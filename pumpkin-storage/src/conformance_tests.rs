@@ -10,9 +10,12 @@ use uuid::Uuid;
 
 use std::net::{IpAddr, Ipv4Addr};
 
+use pumpkin_util::permission::PermissionLvl;
+
 use crate::banned_ip::BannedIpStorage;
 use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
+use crate::op::OpStorage;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::player_data::PlayerDataStorage;
 use crate::{MemoryStorage, NullStorage, VanillaStorage};
@@ -284,6 +287,52 @@ async fn banned_ip_null_always_empty() {
         .unwrap();
     assert!(!BannedIpStorage::is_banned(&store, ip).await.unwrap());
     assert!(BannedIpStorage::list(&store).await.unwrap().is_empty());
+}
+
+async fn op_round_trip(store: &dyn OpStorage) {
+    let uuid = Uuid::from_u128(0xEE);
+    assert!(store.list().await.unwrap().is_empty());
+    assert!(!store.is_op(uuid).await.unwrap());
+
+    store
+        .op(uuid, "Alice", PermissionLvl::Four, false)
+        .await
+        .unwrap();
+    assert!(store.is_op(uuid).await.unwrap());
+    let op = store.get(uuid).await.unwrap().unwrap();
+    assert_eq!(op.name, "Alice");
+    assert_eq!(op.level, PermissionLvl::Four);
+
+    store.deop(uuid).await.unwrap();
+    assert!(!store.is_op(uuid).await.unwrap());
+}
+
+#[tokio::test]
+async fn op_round_trip_memory() {
+    op_round_trip(&MemoryStorage::new()).await;
+}
+
+#[tokio::test]
+async fn op_round_trip_vanilla() {
+    let dir = TempDir::new().unwrap();
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+    op_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn op_null_always_empty() {
+    let store = NullStorage::new();
+    OpStorage::op(
+        &store,
+        Uuid::from_u128(1),
+        "Alice",
+        PermissionLvl::Four,
+        false,
+    )
+    .await
+    .unwrap();
+    assert!(!OpStorage::is_op(&store, Uuid::from_u128(1)).await.unwrap());
+    assert!(OpStorage::list(&store).await.unwrap().is_empty());
 }
 
 #[tokio::test]

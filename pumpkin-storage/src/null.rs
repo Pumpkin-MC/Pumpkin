@@ -14,11 +14,15 @@ use uuid::Uuid;
 
 use std::net::IpAddr;
 
+use pumpkin_config::op::Op;
+use pumpkin_util::permission::PermissionLvl;
+
 use crate::banlist::{BannedIpEntry, BannedPlayerEntry};
 use crate::banned_ip::BannedIpStorage;
 use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
+use crate::op::OpStorage;
 use crate::player_data::PlayerDataStorage;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -58,6 +62,35 @@ impl PlayerDataStorage for NullStorage {
     }
 
     async fn list(&self) -> Result<Vec<Uuid>, StorageError> {
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl OpStorage for NullStorage {
+    async fn op(
+        &self,
+        _uuid: Uuid,
+        _name: &str,
+        _level: PermissionLvl,
+        _bypasses_player_limit: bool,
+    ) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn deop(&self, _uuid: Uuid) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn is_op(&self, _uuid: Uuid) -> Result<bool, StorageError> {
+        Ok(false)
+    }
+
+    async fn get(&self, _uuid: Uuid) -> Result<Option<Op>, StorageError> {
+        Ok(None)
+    }
+
+    async fn list(&self) -> Result<Vec<Op>, StorageError> {
         Ok(Vec::new())
     }
 }

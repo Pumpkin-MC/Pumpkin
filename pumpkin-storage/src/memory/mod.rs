@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use pumpkin_config::op::Op;
 use pumpkin_nbt::compound::NbtCompound;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -10,6 +11,7 @@ use crate::level_info::LevelData;
 mod banned_ip;
 mod banned_player;
 mod level_info;
+mod op;
 mod player_data;
 
 /// Format-agnostic, in-memory storage.
@@ -23,6 +25,7 @@ pub struct MemoryStorage {
     pub(crate) player_data: RwLock<HashMap<Uuid, NbtCompound>>,
     pub(crate) banned_players: RwLock<Vec<BannedPlayerEntry>>,
     pub(crate) banned_ips: RwLock<Vec<BannedIpEntry>>,
+    pub(crate) ops: RwLock<Vec<Op>>,
 }
 
 impl MemoryStorage {

@@ -2,11 +2,14 @@ use std::path::{Path, PathBuf};
 
 use tokio::sync::RwLock;
 
+use pumpkin_config::op::Op;
+
 use crate::banlist::{BannedIpEntry, BannedPlayerEntry};
 
 mod banned_ip;
 mod banned_player;
 mod level_info;
+mod op;
 mod player_data;
 
 #[allow(unused_imports)]
@@ -29,6 +32,7 @@ pub struct VanillaStorage {
     server_data_dir: PathBuf,
     pub(crate) banned_players: RwLock<Option<Vec<BannedPlayerEntry>>>,
     pub(crate) banned_ips: RwLock<Option<Vec<BannedIpEntry>>>,
+    pub(crate) ops: RwLock<Option<Vec<Op>>>,
 }
 
 impl VanillaStorage {
@@ -38,6 +42,7 @@ impl VanillaStorage {
             server_data_dir: server_data_dir.into(),
             banned_players: RwLock::new(None),
             banned_ips: RwLock::new(None),
+            ops: RwLock::new(None),
         }
     }
 

@@ -12,6 +12,7 @@ pub mod banned_ip;
 pub mod banned_player;
 pub mod error;
 pub mod level_info;
+pub mod op;
 pub mod player_data;
 pub mod user_cache;
 

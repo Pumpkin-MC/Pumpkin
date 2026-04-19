@@ -5,7 +5,7 @@ use uuid::Uuid;
 /// Represents an operator (admin) on the server.
 ///
 /// Includes their UUID, name, permission level, and whether they bypass the player limit.
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct Op {
     /// The UUID of the operator.
     pub uuid: Uuid,
