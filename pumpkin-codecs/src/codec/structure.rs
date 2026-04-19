@@ -7,14 +7,11 @@ struct Test {
     a: i32,
     b: Vec<String>,
     #[field(default = 4)]
-    c: u8
+    c: u8,
 }
 
 #[derive(Debug, Encode, Decode)]
-struct T(
-    #[field(name = "fg")] i32,
-    #[field(name = "hi")] String
-);
+struct T;
 
 #[cfg(test)]
 mod test {
