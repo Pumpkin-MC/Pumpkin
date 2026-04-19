@@ -25,6 +25,7 @@ use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::op::OpStorage;
 use crate::player_data::PlayerDataStorage;
+use crate::user_cache::{UserCacheEntry, UserCacheStorage};
 use crate::whitelist::WhitelistStorage;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -65,6 +66,21 @@ impl PlayerDataStorage for NullStorage {
 
     async fn list(&self) -> Result<Vec<Uuid>, StorageError> {
         Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl UserCacheStorage for NullStorage {
+    async fn upsert(&self, _uuid: Uuid, _name: &str) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn get_by_uuid(&self, _uuid: Uuid) -> Result<Option<UserCacheEntry>, StorageError> {
+        Ok(None)
+    }
+
+    async fn get_by_name(&self, _name: &str) -> Result<Option<UserCacheEntry>, StorageError> {
+        Ok(None)
     }
 }
 

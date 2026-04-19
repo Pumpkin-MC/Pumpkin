@@ -12,7 +12,10 @@ mod banned_player;
 mod level_info;
 mod op;
 mod player_data;
+mod user_cache;
 mod whitelist;
+
+use user_cache::UserCacheInner;
 
 #[allow(unused_imports)]
 pub use level_info::{LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME};
@@ -36,6 +39,7 @@ pub struct VanillaStorage {
     pub(crate) banned_ips: RwLock<Option<Vec<BannedIpEntry>>>,
     pub(crate) ops: RwLock<Option<Vec<Op>>>,
     pub(crate) whitelist: RwLock<Option<Vec<WhitelistEntry>>>,
+    pub(crate) user_cache_inner: tokio::sync::Mutex<UserCacheInner>,
 }
 
 impl VanillaStorage {
@@ -47,6 +51,7 @@ impl VanillaStorage {
             banned_ips: RwLock::new(None),
             ops: RwLock::new(None),
             whitelist: RwLock::new(None),
+            user_cache_inner: tokio::sync::Mutex::new(UserCacheInner::default()),
         }
     }
 
