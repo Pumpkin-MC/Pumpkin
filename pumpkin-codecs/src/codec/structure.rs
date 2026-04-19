@@ -56,7 +56,7 @@ impl Decode for E {
     }
 }
 
-#[derive(Debug, Decode)]
+#[derive(Debug, Encode, Decode)]
 #[tag_key("type")]
 enum Foo {
     #[tag("a")]
@@ -69,7 +69,11 @@ enum Foo {
         c: bool
     },
     #[tag("c")]
-    C
+    C,
+    #[tag("d")]
+    D(
+        #[field(name = "e")] Vec<i8>
+    ),
 }
 
 #[derive(Debug, Encode, Decode)]
