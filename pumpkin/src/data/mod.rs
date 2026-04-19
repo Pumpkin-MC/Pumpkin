@@ -8,7 +8,6 @@ const DATA_FOLDER: &str = "data/";
 
 pub mod op;
 
-pub mod banlist_serializer;
 pub mod banned_ip;
 pub mod banned_player;
 pub mod player_server;

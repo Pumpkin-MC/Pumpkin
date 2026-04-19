@@ -1,34 +1,39 @@
+//! Entry types for `banned-players.json` and `banned-ips.json`.
+//!
+//! The on-disk format uses a peculiar timestamp layout (not RFC3339) and an
+//! `"expires": "forever"` sentinel for permanent bans — both handled by the
+//! `format` submodule below.
+
 use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::net::GameProfile;
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BannedPlayerEntry {
     pub uuid: Uuid,
     pub name: String,
     #[serde(with = "format::date")]
-    pub created: time::OffsetDateTime,
+    pub created: OffsetDateTime,
     pub source: String,
     #[serde(with = "format::option_date")]
-    pub expires: Option<time::OffsetDateTime>,
+    pub expires: Option<OffsetDateTime>,
     pub reason: String,
 }
 
 impl BannedPlayerEntry {
     #[must_use]
     pub fn new(
-        profile: &GameProfile,
+        uuid: Uuid,
+        name: String,
         source: String,
-        expires: Option<time::OffsetDateTime>,
+        expires: Option<OffsetDateTime>,
         reason: String,
     ) -> Self {
         Self {
-            uuid: profile.id,
-            name: profile.name.clone(),
+            uuid,
+            name,
             created: OffsetDateTime::now_utc(),
             source,
             expires,
@@ -37,14 +42,14 @@ impl BannedPlayerEntry {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BannedIpEntry {
     pub ip: IpAddr,
     #[serde(with = "format::date")]
-    pub created: time::OffsetDateTime,
+    pub created: OffsetDateTime,
     pub source: String,
     #[serde(with = "format::option_date")]
-    pub expires: Option<time::OffsetDateTime>,
+    pub expires: Option<OffsetDateTime>,
     pub reason: String,
 }
 
@@ -53,7 +58,7 @@ impl BannedIpEntry {
     pub fn new(
         ip: IpAddr,
         source: String,
-        expires: Option<time::OffsetDateTime>,
+        expires: Option<OffsetDateTime>,
         reason: String,
     ) -> Self {
         Self {
@@ -67,7 +72,6 @@ impl BannedIpEntry {
 }
 
 mod format {
-
     const DATE_FORMAT: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
         "[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory]:[offset_minute]"
     );
@@ -98,7 +102,7 @@ mod format {
         use serde::{self, Deserialize, Deserializer, Serializer};
         use time::OffsetDateTime;
 
-        use crate::data::banlist_serializer::format::DATE_FORMAT;
+        use super::DATE_FORMAT;
 
         #[expect(clippy::ref_option)]
         pub fn serialize<S: Serializer>(

@@ -2195,14 +2195,15 @@ impl Player {
             return;
         }
 
-        banned_players.banned_players.push(
-            crate::data::banlist_serializer::BannedPlayerEntry::new(
-                &self.gameprofile,
+        banned_players
+            .banned_players
+            .push(pumpkin_storage::banlist::BannedPlayerEntry::new(
+                self.gameprofile.id,
+                self.gameprofile.name.clone(),
                 "Plugin".to_string(),
                 None,
                 string_reason,
-            ),
-        );
+            ));
 
         banned_players.save();
         drop(banned_players);
@@ -2228,7 +2229,7 @@ impl Player {
 
         banned_ips
             .banned_ips
-            .push(crate::data::banlist_serializer::BannedIpEntry::new(
+            .push(pumpkin_storage::banlist::BannedIpEntry::new(
                 target_ip,
                 "Plugin".to_string(),
                 None,

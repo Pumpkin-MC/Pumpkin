@@ -9,11 +9,12 @@ use crate::{
         },
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry},
+    data::SaveJSONConfiguration,
     net::{DisconnectReason, GameProfile},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
+use pumpkin_storage::banlist::BannedPlayerEntry;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban"];
@@ -112,7 +113,8 @@ async fn ban_profile(
     }
 
     banned_players.banned_players.push(BannedPlayerEntry::new(
-        profile,
+        profile.id,
+        profile.name.clone(),
         sender.to_string(),
         None,
         reason.clone(),

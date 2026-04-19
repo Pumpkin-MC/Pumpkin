@@ -5,7 +5,9 @@ use time::OffsetDateTime;
 
 use crate::net::GameProfile;
 
-use super::{LoadJSONConfiguration, SaveJSONConfiguration, banlist_serializer::BannedPlayerEntry};
+use pumpkin_storage::banlist::BannedPlayerEntry;
+
+use super::{LoadJSONConfiguration, SaveJSONConfiguration};
 
 #[derive(Deserialize, Serialize, Default)]
 #[serde(transparent)]

@@ -3,7 +3,9 @@ use std::{net::IpAddr, path::Path};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-use super::{LoadJSONConfiguration, SaveJSONConfiguration, banlist_serializer::BannedIpEntry};
+use pumpkin_storage::banlist::BannedIpEntry;
+
+use super::{LoadJSONConfiguration, SaveJSONConfiguration};
 
 #[derive(Deserialize, Serialize, Default)]
 #[serde(transparent)]

@@ -6,12 +6,13 @@ use crate::{
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::{SaveJSONConfiguration, banlist_serializer::BannedIpEntry},
+    data::SaveJSONConfiguration,
     net::DisconnectReason,
     server::Server,
 };
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
+use pumpkin_storage::banlist::BannedIpEntry;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban-ip"];

@@ -16,6 +16,7 @@ pumpkin-util.workspace = true
 
 flate2.workspace = true
 serde.workspace = true
+time = { workspace = true, features = ["formatting", "parsing", "macros", "serde"] }
 uuid.workspace = true
 
 [dev-dependencies]
