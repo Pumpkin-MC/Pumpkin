@@ -2,8 +2,8 @@ use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
     state::{EntityResource, PluginHostState},
-    wit::v0_1_0::events::to_wasm_position,
-    wit::v0_1_0::pumpkin::plugin::{
+    wit::v0_1::events::to_wasm_position,
+    wit::v0_1::pumpkin::plugin::{
         common::{EntityPose, Position},
         entity::Host,
         text::TextComponent,

@@ -5,7 +5,7 @@ use wasmtime::component::Resource;
 use crate::plugin::api::gui::{PluginGui, PluginInventory};
 use crate::plugin::loader::wasm::wasm_host::{
     state::{GuiResource, PluginHostState},
-    wit::v0_1_0::pumpkin::plugin::{
+    wit::v0_1::pumpkin::plugin::{
         common::ItemStack as WitItemStack,
         gui::{self, Gui, GuiType},
     },
@@ -26,7 +26,9 @@ impl gui::HostGui for PluginHostState {
     async fn new(
         &mut self,
         gui_type: GuiType,
-        title: Resource<crate::plugin::loader::wasm::wasm_host::wit::v0_1_0::pumpkin::plugin::text::TextComponent>,
+        title: Resource<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent,
+        >,
     ) -> wasmtime::Result<Resource<Gui>> {
         let title = self.get_text_provider(&title)?;
         let window_type = match gui_type {

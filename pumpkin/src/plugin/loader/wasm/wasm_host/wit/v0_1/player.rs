@@ -12,7 +12,7 @@ use crate::{
         state::{
             GuiResource, PlayerResource, PluginHostState, TextComponentResource, WorldResource,
         },
-        wit::v0_1_0::{
+        wit::v0_1::{
             events::{
                 from_wasm_game_mode, from_wasm_position, to_wasm_game_mode, to_wasm_position,
             },

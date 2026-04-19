@@ -1,7 +1,7 @@
 /// The main entry point for a Pumpkin plugin.
 /// This world defines the exports that the plugin must provide to the host
 /// and the imports that the host provides to the plugin.
-package pumpkin:plugin;
+package pumpkin:plugin@0.1.0;
 
 world plugin {
     use context.{context};
@@ -50,9 +50,6 @@ world plugin {
 
     /// Provides plugin metadata (name, version, etc.) to the host.
     export metadata;
-
-    /// Common types used across the API.
-    export common;
 
     /// Dispatches an event to the plugin for handling.
     export handle-event: func(event-id: u32, server: server-instance, event: event) -> event;

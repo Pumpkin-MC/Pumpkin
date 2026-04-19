@@ -34,7 +34,7 @@ use crate::{
             CommandNodeResource, CommandResource, CommandSenderResource, ConsumedArgsResource,
             PluginHostState, ServerResource, TextComponentResource,
         },
-        wit::v0_1_0::{
+        wit::v0_1::{
             commands::executor::WasmCommandExecutor,
             pumpkin::{
                 self,

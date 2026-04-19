@@ -4,8 +4,8 @@ use wasmtime::component::Resource;
 use crate::plugin::loader::wasm::wasm_host::{
     DowncastResourceExt,
     state::{CommandResource, ContextResource, PluginHostState},
-    wit::v0_1_0::{
-        events::{ToFromV0_1_0WasmEvent, WasmPluginV0_1_0EventHandler},
+    wit::v0_1::{
+        events::{ToFromWasmEvent, WasmPluginEventHandler},
         pumpkin::{
             self,
             plugin::{
@@ -28,9 +28,9 @@ macro_rules! register_host_event {
     };
 }
 
-async fn register_typed_event<E: crate::plugin::Payload + ToFromV0_1_0WasmEvent + 'static>(
+async fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + 'static>(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginEventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
 ) {
@@ -40,7 +40,7 @@ async fn register_typed_event<E: crate::plugin::Payload + ToFromV0_1_0WasmEvent 
 #[expect(clippy::too_many_lines)]
 async fn register_player_event(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginEventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
     event_type: EventType,
@@ -170,7 +170,7 @@ impl PluginHostState {
 
 async fn register_world_event(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginEventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
     event_type: EventType,
@@ -187,7 +187,7 @@ async fn register_world_event(
 
 async fn register_block_event(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginEventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
     event_type: EventType,
@@ -222,7 +222,7 @@ async fn register_block_event(
 }
 async fn register_server_event(
     resource: &ContextResource,
-    handler: &Arc<WasmPluginV0_1_0EventHandler>,
+    handler: &Arc<WasmPluginEventHandler>,
     priority: crate::plugin::EventPriority,
     blocking: bool,
     event_type: EventType,
@@ -299,7 +299,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .ok_or_else(|| wasmtime::Error::msg("Plugin has been dropped"))?;
 
         let resource = self.get_context(&context)?;
-        let handler = Arc::new(WasmPluginV0_1_0EventHandler { handler_id, plugin });
+        let handler = Arc::new(WasmPluginEventHandler { handler_id, plugin });
 
         match event_type {
             event_type @ (EventType::ServerCommandEvent | EventType::ServerBroadcastEvent) => {

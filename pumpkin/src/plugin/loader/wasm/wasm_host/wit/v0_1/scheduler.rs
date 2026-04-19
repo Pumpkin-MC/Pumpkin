@@ -1,5 +1,5 @@
 use crate::plugin::loader::wasm::wasm_host::{
-    state::PluginHostState, wit::v0_1_0::pumpkin::plugin::scheduler,
+    state::PluginHostState, wit::v0_1::pumpkin::plugin::scheduler,
 };
 use std::sync::atomic::Ordering;
 
