@@ -12,10 +12,14 @@ use std::net::{IpAddr, Ipv4Addr};
 
 use pumpkin_util::permission::PermissionLvl;
 
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
+
 use crate::banned_ip::BannedIpStorage;
 use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
 use crate::op::OpStorage;
+use crate::poi::{POI_TYPE_NETHER_PORTAL, PoiStorage};
 use crate::whitelist::WhitelistStorage;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::player_data::PlayerDataStorage;
@@ -373,6 +377,93 @@ async fn whitelist_null_always_empty() {
             .unwrap()
     );
     assert!(WhitelistStorage::list(&store).await.unwrap().is_empty());
+}
+
+async fn poi_round_trip(store: &dyn PoiStorage) {
+    let pos_a = BlockPos(Vector3::new(100, 64, 100));
+    let pos_b = BlockPos(Vector3::new(110, 64, 100));
+    let pos_far = BlockPos(Vector3::new(1000, 64, 1000));
+
+    store.add(pos_a, POI_TYPE_NETHER_PORTAL).await.unwrap();
+    store.add(pos_b, POI_TYPE_NETHER_PORTAL).await.unwrap();
+    store.add(pos_far, POI_TYPE_NETHER_PORTAL).await.unwrap();
+
+    let near = store
+        .get_in_square(
+            BlockPos(Vector3::new(105, 64, 100)),
+            16,
+            Some(POI_TYPE_NETHER_PORTAL),
+        )
+        .await
+        .unwrap();
+    assert_eq!(near.len(), 2);
+
+    assert!(store.remove(pos_a).await.unwrap());
+    let near = store
+        .get_in_square(
+            BlockPos(Vector3::new(105, 64, 100)),
+            16,
+            Some(POI_TYPE_NETHER_PORTAL),
+        )
+        .await
+        .unwrap();
+    assert_eq!(near.len(), 1);
+}
+
+#[tokio::test]
+async fn poi_round_trip_memory() {
+    poi_round_trip(&MemoryStorage::new()).await;
+}
+
+#[tokio::test]
+async fn poi_round_trip_vanilla() {
+    let dir = TempDir::new().unwrap();
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+    poi_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn poi_vanilla_persists_across_instances() {
+    let dir = TempDir::new().unwrap();
+    {
+        let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+        PoiStorage::add(
+            &store,
+            BlockPos(Vector3::new(5, 64, 5)),
+            POI_TYPE_NETHER_PORTAL,
+        )
+        .await
+        .unwrap();
+        store.save_all().await.unwrap();
+    }
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+    let results = store
+        .get_in_square(
+            BlockPos(Vector3::new(0, 64, 0)),
+            32,
+            Some(POI_TYPE_NETHER_PORTAL),
+        )
+        .await
+        .unwrap();
+    assert_eq!(results.len(), 1);
+}
+
+#[tokio::test]
+async fn poi_null_always_empty() {
+    let store = NullStorage::new();
+    PoiStorage::add(
+        &store,
+        BlockPos(Vector3::new(0, 0, 0)),
+        POI_TYPE_NETHER_PORTAL,
+    )
+    .await
+    .unwrap();
+    assert!(
+        PoiStorage::get_in_square(&store, BlockPos(Vector3::new(0, 0, 0)), 100, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]

@@ -16,6 +16,7 @@ use std::net::IpAddr;
 
 use pumpkin_config::op::Op;
 use pumpkin_config::whitelist::WhitelistEntry;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::permission::PermissionLvl;
 
 use crate::banlist::{BannedIpEntry, BannedPlayerEntry};
@@ -25,6 +26,7 @@ use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::op::OpStorage;
 use crate::player_data::PlayerDataStorage;
+use crate::poi::PoiStorage;
 use crate::user_cache::{UserCacheEntry, UserCacheStorage};
 use crate::whitelist::WhitelistStorage;
 
@@ -66,6 +68,30 @@ impl PlayerDataStorage for NullStorage {
 
     async fn list(&self) -> Result<Vec<Uuid>, StorageError> {
         Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl PoiStorage for NullStorage {
+    async fn add(&self, _pos: BlockPos, _poi_type: &str) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn remove(&self, _pos: BlockPos) -> Result<bool, StorageError> {
+        Ok(false)
+    }
+
+    async fn get_in_square(
+        &self,
+        _center: BlockPos,
+        _radius: i32,
+        _poi_type: Option<&str>,
+    ) -> Result<Vec<BlockPos>, StorageError> {
+        Ok(Vec::new())
+    }
+
+    async fn save_all(&self) -> Result<(), StorageError> {
+        Ok(())
     }
 }
 

@@ -12,9 +12,11 @@ mod banned_player;
 mod level_info;
 mod op;
 mod player_data;
+mod poi;
 mod user_cache;
 mod whitelist;
 
+use poi::PoiInner;
 use user_cache::UserCacheInner;
 
 #[allow(unused_imports)]
@@ -40,6 +42,7 @@ pub struct VanillaStorage {
     pub(crate) ops: RwLock<Option<Vec<Op>>>,
     pub(crate) whitelist: RwLock<Option<Vec<WhitelistEntry>>>,
     pub(crate) user_cache_inner: tokio::sync::Mutex<UserCacheInner>,
+    pub(crate) poi_inner: tokio::sync::Mutex<PoiInner>,
 }
 
 impl VanillaStorage {
@@ -52,6 +55,7 @@ impl VanillaStorage {
             ops: RwLock::new(None),
             whitelist: RwLock::new(None),
             user_cache_inner: tokio::sync::Mutex::new(UserCacheInner::default()),
+            poi_inner: tokio::sync::Mutex::new(PoiInner::default()),
         }
     }
 

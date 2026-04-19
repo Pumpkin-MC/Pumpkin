@@ -19,6 +19,7 @@ flate2.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 time = { workspace = true, features = ["formatting", "parsing", "macros", "serde"] }
+tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]

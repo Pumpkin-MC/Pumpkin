@@ -14,6 +14,7 @@ pub mod error;
 pub mod level_info;
 pub mod op;
 pub mod player_data;
+pub mod poi;
 pub mod user_cache;
 pub mod whitelist;
 
