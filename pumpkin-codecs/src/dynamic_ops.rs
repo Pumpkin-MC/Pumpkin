@@ -248,11 +248,6 @@ pub trait DynamicOps {
     /// This returns the new value if successful, otherwise, this returns itself.
     fn remove(&self, input: Self::Value, key: &str) -> Self::Value;
 
-    /// Whether maps should be compressed under this `DynamicOps`.
-    fn compress_maps(&self) -> bool {
-        false
-    }
-
     /// Tries to get a value from a value represented by this `DynamicOps` using a key.
     /// Only works for values that can be [`MapLike`]-viewed.
     fn get_element<'a>(&'a self, input: &'a Self::Value, key: &str) -> DataResult<&'a Self::Value> {
