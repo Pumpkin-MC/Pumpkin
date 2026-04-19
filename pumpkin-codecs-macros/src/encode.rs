@@ -19,11 +19,7 @@ pub fn derive_encode(codecs_crate: &Ident, input: &DeriveInput) -> Result<TokenS
     }
 }
 
-fn derive_struct_encode(
-    name: &Ident,
-    codecs_crate: &Ident,
-    data: &DataStruct,
-) -> TokenStream {
+fn derive_struct_encode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -> TokenStream {
     // Add a special case for unit structs.
     if matches!(&data.fields, Fields::Unit) {
         return quote! {
