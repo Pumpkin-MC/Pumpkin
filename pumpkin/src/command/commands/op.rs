@@ -1,18 +1,14 @@
 use crate::command::CommandResult;
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandSender,
-        args::{
-            Arg, ConsumedArgs,
-            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
-        },
-        tree::CommandTree,
-        tree::builder::argument,
+use crate::command::{
+    CommandError, CommandExecutor, CommandSender,
+    args::{
+        Arg, ConsumedArgs,
+        gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
     },
-    data::SaveJSONConfiguration,
+    tree::CommandTree,
+    tree::builder::argument,
 };
 use CommandError::InvalidConsumption;
-use pumpkin_config::op::Op;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["op"];
@@ -29,8 +25,6 @@ impl CommandExecutor for Executor {
         args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let mut config = server.data.operator_config.write().await;
-
             let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGETS) else {
                 return Err(InvalidConsumption(Some(ARG_TARGETS.into())));
             };
@@ -42,18 +36,26 @@ impl CommandExecutor for Executor {
                 .min(sender.permission_lvl());
 
             for profile in targets {
-                let maybe_existing_entry = config.ops.iter_mut().find(|o| o.uuid == profile.id);
+                let existing = server
+                    .op_storage
+                    .get(profile.id)
+                    .await
+                    .ok()
+                    .flatten();
 
-                if let Some(op) = maybe_existing_entry {
-                    if op.level == new_level {
-                        continue;
-                    }
+                if let Some(op) = &existing
+                    && op.level == new_level
+                {
+                    continue;
+                }
 
-                    op.level = new_level;
-                    op.name.clone_from(&profile.name);
-                } else {
-                    let op_entry = Op::new(profile.id, profile.name.clone(), new_level, false);
-                    config.ops.push(op_entry);
+                if let Err(e) = server
+                    .op_storage
+                    .op(profile.id, &profile.name, new_level, false)
+                    .await
+                {
+                    tracing::error!("Failed to op {}: {e}", profile.name);
+                    continue;
                 }
 
                 if let Some(player) = server.get_player_by_uuid(profile.id) {
@@ -71,10 +73,6 @@ impl CommandExecutor for Executor {
                     .await;
 
                 successes += 1;
-            }
-
-            if successes > 0 {
-                config.save();
             }
 
             if successes == 0 {

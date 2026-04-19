@@ -36,6 +36,7 @@ use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use pumpkin_storage::banned_ip::BannedIpStorage;
 use pumpkin_storage::banned_player::BannedPlayerStorage;
 use pumpkin_storage::level_info::{LevelData, LevelInfoStorage};
+use pumpkin_storage::op::OpStorage;
 use pumpkin_storage::player_data::PlayerDataStorage;
 use pumpkin_storage::{NullStorage, StorageError, VanillaStorage};
 use rand::seq::{IndexedRandom, SliceRandom};
@@ -126,6 +127,7 @@ pub struct Server {
     level_info_storage: Arc<dyn LevelInfoStorage>,
     pub banned_player_storage: Arc<dyn BannedPlayerStorage>,
     pub banned_ip_storage: Arc<dyn BannedIpStorage>,
+    pub op_storage: Arc<dyn OpStorage>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
     _locker: Arc<Option<AnvilLevelLocker>>,
@@ -197,6 +199,7 @@ impl Server {
             };
         let banned_player_storage: Arc<dyn BannedPlayerStorage> = vanilla_storage.clone();
         let banned_ip_storage: Arc<dyn BannedIpStorage> = vanilla_storage.clone();
+        let op_storage: Arc<dyn OpStorage> = vanilla_storage.clone();
         let player_data_storage = ServerPlayerData::new(
             player_data_backend,
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
@@ -258,6 +261,7 @@ impl Server {
             level_info_storage,
             banned_player_storage,
             banned_ip_storage,
+            op_storage,
             level_info,
             _locker: Arc::new(locker),
         };

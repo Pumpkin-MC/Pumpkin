@@ -573,11 +573,11 @@ impl Player {
             // Minecraft has no way to change the default permission level of new players.
             // Minecraft's default permission level is 0.
             permission_lvl: server
-                .data
-                .operator_config
-                .read()
+                .op_storage
+                .get(player_uuid)
                 .await
-                .get_entry(&player_uuid)
+                .ok()
+                .flatten()
                 .map_or(
                     AtomicCell::new(server.advanced_config.commands.default_op_level),
                     |op| AtomicCell::new(op.level),

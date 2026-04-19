@@ -122,17 +122,16 @@ impl ArgumentConsumer for GameProfilesArgumentConsumer {
                     }
                 }
                 GameProfileSuggestionMode::NonOpOnlinePlayers => {
-                    let ops = server.data.operator_config.read().await;
+                    let ops = server.op_storage.list().await.unwrap_or_default();
                     for player in server.get_all_players() {
-                        if ops.ops.iter().all(|op| op.uuid != player.gameprofile.id) {
+                        if ops.iter().all(|op| op.uuid != player.gameprofile.id) {
                             push_name_if_missing(&mut names, player.gameprofile.name.clone());
                         }
                     }
                 }
                 GameProfileSuggestionMode::OpNames => {
-                    let ops = server.data.operator_config.read().await;
-                    for op in &ops.ops {
-                        push_name_if_missing(&mut names, op.name.clone());
+                    for op in server.op_storage.list().await.unwrap_or_default() {
+                        push_name_if_missing(&mut names, op.name);
                     }
                 }
                 GameProfileSuggestionMode::BannedNames => {
@@ -274,11 +273,10 @@ async fn resolve_profiles_from_token(
 }
 
 async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<GameProfile> {
+    if let Ok(ops) = server.op_storage.list().await
+        && let Some(op) = ops.iter().find(|op| op.name.eq_ignore_ascii_case(name))
     {
-        let ops = server.data.operator_config.read().await;
-        if let Some(op) = ops.ops.iter().find(|op| op.name.eq_ignore_ascii_case(name)) {
-            return Some(profile_from_uuid_name(op.uuid, op.name.clone()));
-        }
+        return Some(profile_from_uuid_name(op.uuid, op.name.clone()));
     }
 
     if let Ok(banned_players) = server.banned_player_storage.list().await
@@ -304,11 +302,8 @@ async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<Ga
 }
 
 async fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<GameProfile> {
-    {
-        let ops = server.data.operator_config.read().await;
-        if let Some(op) = ops.ops.iter().find(|op| op.uuid == uuid) {
-            return Some(profile_from_uuid_name(op.uuid, op.name.clone()));
-        }
+    if let Ok(Some(op)) = server.op_storage.get(uuid).await {
+        return Some(profile_from_uuid_name(op.uuid, op.name));
     }
 
     if let Ok(Some(entry)) = server.banned_player_storage.get(uuid).await {

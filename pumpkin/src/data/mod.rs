@@ -6,14 +6,11 @@ use tracing::{debug, error, warn};
 
 const DATA_FOLDER: &str = "data/";
 
-pub mod op;
-
 pub mod player_server;
 pub mod usercache;
 pub mod whitelist;
 
 pub struct VanillaData {
-    pub operator_config: RwLock<op::OperatorConfig>,
     pub user_cache: RwLock<usercache::UserCache>,
     pub whitelist_config: RwLock<whitelist::WhitelistConfig>,
 }
@@ -22,7 +19,6 @@ impl VanillaData {
     #[must_use]
     pub fn load() -> Self {
         Self {
-            operator_config: RwLock::new(op::OperatorConfig::load()),
             user_cache: RwLock::new(usercache::UserCache::load()),
             whitelist_config: RwLock::new(whitelist::WhitelistConfig::load()),
         }

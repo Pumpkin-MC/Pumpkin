@@ -192,10 +192,10 @@ pub async fn can_not_join(
     }
 
     if server.white_list.load(Ordering::Relaxed) {
-        let ops = server.data.operator_config.read().await;
+        let is_op = server.op_storage.is_op(profile.id).await.unwrap_or(false);
         let whitelist = server.data.whitelist_config.read().await;
 
-        if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
+        if !is_op && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate(
                 translation::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
                 &[],
