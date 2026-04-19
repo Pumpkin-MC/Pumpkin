@@ -63,6 +63,14 @@ impl<'a> ParsedField<'a> {
         }
     }
 
+    /// Returns the index of this field, if any.
+    pub const fn index(&self) -> Option<usize> {
+        match self {
+            ParsedField::Named(_) => None,
+            ParsedField::Unnamed(_, i) => Some(*i),
+        }
+    }
+
     /// Returns the `TokenStream` for accessing this field of a value.
     /// It can be an `Ident` or `Index`.
     pub fn access(self) -> proc_macro2::TokenStream {
