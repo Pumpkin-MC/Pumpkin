@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use pumpkin_config::op::Op;
+use pumpkin_config::whitelist::WhitelistEntry;
 use pumpkin_nbt::compound::NbtCompound;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -13,6 +14,7 @@ mod banned_player;
 mod level_info;
 mod op;
 mod player_data;
+mod whitelist;
 
 /// Format-agnostic, in-memory storage.
 ///
@@ -26,6 +28,7 @@ pub struct MemoryStorage {
     pub(crate) banned_players: RwLock<Vec<BannedPlayerEntry>>,
     pub(crate) banned_ips: RwLock<Vec<BannedIpEntry>>,
     pub(crate) ops: RwLock<Vec<Op>>,
+    pub(crate) whitelist: RwLock<Vec<WhitelistEntry>>,
 }
 
 impl MemoryStorage {

@@ -16,6 +16,7 @@ use crate::banned_ip::BannedIpStorage;
 use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
 use crate::op::OpStorage;
+use crate::whitelist::WhitelistStorage;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::player_data::PlayerDataStorage;
 use crate::{MemoryStorage, NullStorage, VanillaStorage};
@@ -333,6 +334,45 @@ async fn op_null_always_empty() {
     .unwrap();
     assert!(!OpStorage::is_op(&store, Uuid::from_u128(1)).await.unwrap());
     assert!(OpStorage::list(&store).await.unwrap().is_empty());
+}
+
+async fn whitelist_round_trip(store: &dyn WhitelistStorage) {
+    let uuid = Uuid::from_u128(0x99);
+    assert!(store.list().await.unwrap().is_empty());
+    assert!(!store.is_whitelisted(uuid).await.unwrap());
+
+    store.add(uuid, "Alice").await.unwrap();
+    assert!(store.is_whitelisted(uuid).await.unwrap());
+    assert_eq!(store.list().await.unwrap().len(), 1);
+
+    store.remove(uuid).await.unwrap();
+    assert!(!store.is_whitelisted(uuid).await.unwrap());
+}
+
+#[tokio::test]
+async fn whitelist_round_trip_memory() {
+    whitelist_round_trip(&MemoryStorage::new()).await;
+}
+
+#[tokio::test]
+async fn whitelist_round_trip_vanilla() {
+    let dir = TempDir::new().unwrap();
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+    whitelist_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn whitelist_null_always_empty() {
+    let store = NullStorage::new();
+    WhitelistStorage::add(&store, Uuid::from_u128(1), "Alice")
+        .await
+        .unwrap();
+    assert!(
+        !WhitelistStorage::is_whitelisted(&store, Uuid::from_u128(1))
+            .await
+            .unwrap()
+    );
+    assert!(WhitelistStorage::list(&store).await.unwrap().is_empty());
 }
 
 #[tokio::test]

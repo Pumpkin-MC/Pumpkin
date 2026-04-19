@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use tokio::sync::RwLock;
 
 use pumpkin_config::op::Op;
+use pumpkin_config::whitelist::WhitelistEntry;
 
 use crate::banlist::{BannedIpEntry, BannedPlayerEntry};
 
@@ -11,6 +12,7 @@ mod banned_player;
 mod level_info;
 mod op;
 mod player_data;
+mod whitelist;
 
 #[allow(unused_imports)]
 pub use level_info::{LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME};
@@ -33,6 +35,7 @@ pub struct VanillaStorage {
     pub(crate) banned_players: RwLock<Option<Vec<BannedPlayerEntry>>>,
     pub(crate) banned_ips: RwLock<Option<Vec<BannedIpEntry>>>,
     pub(crate) ops: RwLock<Option<Vec<Op>>>,
+    pub(crate) whitelist: RwLock<Option<Vec<WhitelistEntry>>>,
 }
 
 impl VanillaStorage {
@@ -43,6 +46,7 @@ impl VanillaStorage {
             banned_players: RwLock::new(None),
             banned_ips: RwLock::new(None),
             ops: RwLock::new(None),
+            whitelist: RwLock::new(None),
         }
     }
 

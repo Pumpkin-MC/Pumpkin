@@ -15,6 +15,7 @@ use uuid::Uuid;
 use std::net::IpAddr;
 
 use pumpkin_config::op::Op;
+use pumpkin_config::whitelist::WhitelistEntry;
 use pumpkin_util::permission::PermissionLvl;
 
 use crate::banlist::{BannedIpEntry, BannedPlayerEntry};
@@ -24,6 +25,7 @@ use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::op::OpStorage;
 use crate::player_data::PlayerDataStorage;
+use crate::whitelist::WhitelistStorage;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NullStorage;
@@ -62,6 +64,25 @@ impl PlayerDataStorage for NullStorage {
     }
 
     async fn list(&self) -> Result<Vec<Uuid>, StorageError> {
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl WhitelistStorage for NullStorage {
+    async fn add(&self, _uuid: Uuid, _name: &str) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn remove(&self, _uuid: Uuid) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn is_whitelisted(&self, _uuid: Uuid) -> Result<bool, StorageError> {
+        Ok(false)
+    }
+
+    async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError> {
         Ok(Vec::new())
     }
 }
