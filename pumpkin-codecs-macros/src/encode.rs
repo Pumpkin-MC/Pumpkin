@@ -4,90 +4,135 @@ use proc_macro::TokenStream;
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::{Ident, Span};
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Error, Fields, LitStr};
+use syn::{Attribute, Data, DataEnum, DataStruct, DeriveInput, Error, Fields, LitStr};
 
 pub fn derive_encode(codecs_crate: &Ident, input: &DeriveInput) -> Result<TokenStream, Error> {
     let name = input.ident.clone();
 
     match &input.data {
-        Data::Struct(data) => {
-            // Add a special case for unit structs.
-            if matches!(&data.fields, Fields::Unit) {
-                return Ok(
-                    quote! {
+        Data::Struct(data) => Ok(derive_struct_encode(&name, codecs_crate, data)),
+        Data::Enum(data) => derive_enum_encode(&name, codecs_crate, data, &input.attrs),
+        Data::Union(_) => Err(Error::new_spanned(
+            input,
+            "Only structs and enums are supported",
+        )),
+    }
+}
+
+fn derive_struct_encode(
+    name: &Ident,
+    codecs_crate: &Ident,
+    data: &DataStruct,
+) -> TokenStream {
+    // Add a special case for unit structs.
+    if matches!(&data.fields, Fields::Unit) {
+        return quote! {
+                impl #codecs_crate::codec::Encode for #name {
+                    fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
+                        let mut builder = ops.map_builder();
+                        builder.build(prefix)
+                    }
+                }
+            }.into();
+    }
+    let variant_encode = derive_single_variant_encode(codecs_crate, &data.fields);
+    quote! {
+            impl #codecs_crate::codec::Encode for #name {
+                fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
+                    #variant_encode
+                }
+            }
+        }.into()
+}
+
+fn derive_enum_encode(
+    name: &Ident,
+    codecs_crate: &Ident,
+    data: &DataEnum,
+    attrs: &[Attribute],
+) -> Result<TokenStream, Error> {
+    // Add a special case for all variants being unit variants.
+    if data
+        .variants
+        .iter()
+        .all(|v| matches!(v.fields, Fields::Unit))
+    {
+        let mut match_arms = Vec::new();
+        for variant in &data.variants {
+            let ident = &variant.ident;
+            let ty = parse_enum_dispatch_variant_attributes(&variant.ident, &variant.attrs)?;
+            let ty_lit = LitStr::new(&ty, Span::call_site());
+            match_arms.push(quote! {
+                Self::#ident => #ty_lit
+            });
+        }
+        return Ok(
+            quote! {
                         impl #codecs_crate::codec::Encode for #name {
                             fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                                let mut builder = ops.map_builder();
-                                builder.build(prefix)
+                                let string = match self { #( #match_arms ),* }.to_string();
+                                #codecs_crate::codec::Encode::encode(&string, ops, prefix)
                             }
                         }
                     }.into()
-                );
-            }
-            let variant_encode = derive_single_variant_encode(codecs_crate, &data.fields);
-            Ok(
-                quote! {
-                    impl #codecs_crate::codec::Encode for #name {
-                        fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                            #variant_encode
-                        }
-                    }
-                }.into()
-            )
-        }
-        Data::Enum(data) => {
-            let dispatch_data = parse_enum_dispatch_attributes(&name, &input.attrs)?;
-            let tag_key_lit = LitStr::new(&dispatch_data.tag_key, Span::call_site());
-
-            let mut match_arms = Vec::new();
-            for variant in &data.variants {
-                let ty = parse_enum_dispatch_variant_attributes(&variant.ident, &variant.attrs)?;
-                let ty_lit = LitStr::new(&ty, Span::call_site());
-
-                let fields: Vec<_> = variant.fields
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| f.ident.as_ref().map_or_else(|| format_ident!("a{i}"), Clone::clone))
-                    .collect();
-                let ident = &variant.ident;
-                let mat = match variant.fields {
-                    Fields::Named(_) => Some(quote! { { #( #fields ),* } }),
-                    Fields::Unnamed(_) => Some(quote! { ( #( #fields ),* ) }),
-                    Fields::Unit => None
-                };
-                let variant_encode = derive_single_variant_builder_encode(codecs_crate, &variant.fields, |f| {
-                    if matches!(&variant.fields, Fields::Unnamed(_)) {
-                        let ident = format_ident!("a{}", f.index().unwrap());
-                        quote! { #ident }
-                    } else {
-                        let ident = f.named_ident().unwrap();
-                        quote! { #ident }
-                    }
-                });
-                match_arms.push(quote! {
-                    Self::#ident #mat => {
-                        builder = builder.add_string_key_value(#tag_key_lit, ops.create_string(#ty_lit));
-                        #variant_encode
-                    }
-                });
-            };
-
-            Ok(
-                quote! {
-                    impl #codecs_crate::codec::Encode for #name {
-                        fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                            let mut builder = ops.map_builder();
-                            match self {
-                                #( #match_arms ),*
-                            }
-                            builder.build(prefix)
-                        }
-                    }
-                }.into()
-            )
-        }
-        Data::Union(_) => Err(Error::new_spanned(input, "Only structs and enums are supported"))
+        );
     }
+
+    let dispatch_data = parse_enum_dispatch_attributes(name, attrs)?;
+    let tag_key_lit = LitStr::new(&dispatch_data.tag_key, Span::call_site());
+
+    let mut match_arms = Vec::new();
+    for variant in &data.variants {
+        let ty = parse_enum_dispatch_variant_attributes(&variant.ident, &variant.attrs)?;
+        let ty_lit = LitStr::new(&ty, Span::call_site());
+
+        let fields: Vec<_> = variant
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                f.ident
+                    .as_ref()
+                    .map_or_else(|| format_ident!("a{i}"), Clone::clone)
+            })
+            .collect();
+        let ident = &variant.ident;
+        let mat = match variant.fields {
+            Fields::Named(_) => Some(quote! { { #( #fields ),* } }),
+            Fields::Unnamed(_) => Some(quote! { ( #( #fields ),* ) }),
+            Fields::Unit => None,
+        };
+        let variant_encode =
+            derive_single_variant_builder_encode(codecs_crate, &variant.fields, |f| {
+                if matches!(&variant.fields, Fields::Unnamed(_)) {
+                    let ident = format_ident!("a{}", f.index().unwrap());
+                    quote! { #ident }
+                } else {
+                    let ident = f.named_ident().unwrap();
+                    quote! { #ident }
+                }
+            });
+        match_arms.push(quote! {
+            Self::#ident #mat => {
+                builder = builder.add_string_key_value(#tag_key_lit, ops.create_string(#ty_lit));
+                #variant_encode
+            }
+        });
+    }
+
+    Ok(
+        quote! {
+            impl #codecs_crate::codec::Encode for #name {
+                fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
+                    let mut builder = ops.map_builder();
+                    match self {
+                        #( #match_arms ),*
+                    }
+                    builder.build(prefix)
+                }
+            }
+        }.into()
+    )
 }
 
 /// Creates a single variant's encoding in tokens.
@@ -104,7 +149,11 @@ fn derive_single_variant_encode(codecs_crate: &Ident, fields: &Fields) -> proc_m
 }
 
 /// Creates a single variant's encoding in tokens.
-fn derive_single_variant_builder_encode(codecs_crate: &Ident, fields: &Fields, access_fn: impl Fn(&ParsedField) -> proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+fn derive_single_variant_builder_encode(
+    codecs_crate: &Ident,
+    fields: &Fields,
+    access_fn: impl Fn(&ParsedField) -> proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     let mut builder_encodes = Vec::new();
     for (index, field) in fields.iter().enumerate() {
         let field = ParsedField::from_field(field, index);
@@ -122,7 +171,11 @@ struct EncodeFieldData {
     builder_encode: Option<proc_macro2::TokenStream>,
 }
 
-fn encode_field_tokens(codecs_crate: &Ident, field: ParsedField, access_fn: impl Fn(&ParsedField) -> proc_macro2::TokenStream) -> Result<EncodeFieldData, Error> {
+fn encode_field_tokens(
+    codecs_crate: &Ident,
+    field: ParsedField,
+    access_fn: impl Fn(&ParsedField) -> proc_macro2::TokenStream,
+) -> Result<EncodeFieldData, Error> {
     match field.generate_field_data()? {
         FieldData::Present {
             name,

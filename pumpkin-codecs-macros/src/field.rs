@@ -1,8 +1,8 @@
+use crate::duplicate_attribute_error;
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::Ident;
 use quote::{ToTokens, quote};
 use syn::{Attribute, Error, Field, Index, LitStr, Path, Token, Type};
-use crate::duplicate_attribute_error;
 
 /// Data from parsing a single field.
 pub enum FieldData {
@@ -33,13 +33,13 @@ pub enum ParsedFieldAttribute {
     Default,
     Lenient,
     Name,
-    Skip
+    Skip,
 }
 
 macro_rules! add_attribute_branch {
     ($path:ident, $ident:literal, $var:ident) => {
         if $path.is_ident($ident) {
-            return Some(Self::$var)
+            return Some(Self::$var);
         }
     };
 }
@@ -188,7 +188,7 @@ impl<'a> ParsedField<'a> {
                         name,
                         lenient,
                         default,
-                        implicit_default
+                        implicit_default,
                     })
                 },
             )

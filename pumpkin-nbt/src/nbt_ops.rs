@@ -662,8 +662,6 @@ macro_rules! add_inner_specific_array_collector_impl {
 add_inner_specific_array_collector_impl!(InnerIntListCollector, Int, IntArray, i32);
 add_inner_specific_array_collector_impl!(InnerLongListCollector, Long, LongArray, i64);
 
-/*
-
 #[cfg(test)]
 mod test {
     use crate::nbt_ops::ListCollector;
@@ -730,5 +728,3 @@ mod test {
         );
     }
 }
-
-*/

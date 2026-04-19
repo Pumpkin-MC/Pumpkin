@@ -8,7 +8,6 @@ license.workspace = true
 [dependencies]
 serde_json.workspace = true
 tracing.workspace = true
-pumpkin-codecs-macros.workspace = true
 
 [lints]
 workspace = true

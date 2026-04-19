@@ -26,7 +26,7 @@ mod field;
 use proc_macro::TokenStream;
 use proc_macro_error2::__export::proc_macro2::Ident;
 use quote::format_ident;
-use syn::{parse_macro_input, Attribute, DeriveInput, Error, LitStr, Type};
+use syn::{Attribute, DeriveInput, Error, LitStr, Type, parse_macro_input};
 
 /// Derives the `Encode` trait for a struct.
 ///
@@ -49,7 +49,7 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
 }
 
 struct EnumDispatchData {
-    tag_key: String
+    tag_key: String,
 }
 
 fn duplicate_attribute_error(ident: &Ident) -> Error {
@@ -59,7 +59,10 @@ fn duplicate_attribute_error(ident: &Ident) -> Error {
     )
 }
 
-fn parse_enum_dispatch_attributes(ident: &Ident, attributes: &[Attribute]) -> Result<EnumDispatchData, Error> {
+fn parse_enum_dispatch_attributes(
+    ident: &Ident,
+    attributes: &[Attribute],
+) -> Result<EnumDispatchData, Error> {
     let mut tag_key = None;
     for attr in attributes {
         if attr.path().is_ident("tag_key") {
@@ -71,14 +74,13 @@ fn parse_enum_dispatch_attributes(ident: &Ident, attributes: &[Attribute]) -> Re
         }
     }
     let tag_key = tag_key.unwrap_or("type".to_string());
-    Ok(
-        EnumDispatchData {
-            tag_key
-        }
-    )
+    Ok(EnumDispatchData { tag_key })
 }
 
-fn parse_enum_dispatch_variant_attributes(ident: &Ident, attributes: &[Attribute]) -> Result<String, Error> {
+fn parse_enum_dispatch_variant_attributes(
+    ident: &Ident,
+    attributes: &[Attribute],
+) -> Result<String, Error> {
     let mut ty = None;
     for attr in attributes {
         if attr.path().is_ident("tag") {
@@ -89,7 +91,15 @@ fn parse_enum_dispatch_variant_attributes(ident: &Ident, attributes: &[Attribute
             ty = Some(attr.value());
         }
     }
-    ty.map_or_else(|| Err(Error::new_spanned(ident, "The `tag` attribute was not found")), Ok)
+    ty.map_or_else(
+        || {
+            Err(Error::new_spanned(
+                ident,
+                "The `tag` attribute was not found",
+            ))
+        },
+        Ok,
+    )
 }
 
 /// Expects an `Option` type, and if it is an `Option`, returns the type of the `Option` in a `Some`.
