@@ -1,7 +1,8 @@
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::Ident;
 use quote::{ToTokens, quote};
-use syn::{Attribute, Error, Field, Index, LitStr, Token, Type};
+use syn::{Attribute, Error, Field, Index, LitStr, Path, Token, Type};
+use crate::duplicate_attribute_error;
 
 /// Data from parsing a single field.
 pub enum FieldData {
@@ -25,6 +26,32 @@ pub enum FieldData {
 pub enum ParsedField<'a> {
     Named(&'a Field),
     Unnamed(&'a Field, usize),
+}
+
+/// A valid field attribute for the Encode and Decode trait derives.
+pub enum ParsedFieldAttribute {
+    Default,
+    Lenient,
+    Name,
+    Skip
+}
+
+macro_rules! add_attribute_branch {
+    ($path:ident, $ident:literal, $var:ident) => {
+        if $path.is_ident($ident) {
+            return Some(Self::$var)
+        }
+    };
+}
+
+impl ParsedFieldAttribute {
+    fn from_path(path: &Path) -> Option<Self> {
+        add_attribute_branch!(path, "default", Default);
+        add_attribute_branch!(path, "lenient", Lenient);
+        add_attribute_branch!(path, "name", Name);
+        add_attribute_branch!(path, "skip", Skip);
+        None
+    }
 }
 
 impl<'a> ParsedField<'a> {
@@ -71,13 +98,6 @@ impl<'a> ParsedField<'a> {
 
     /// Parses this field to get its [`FieldData`].
     pub fn generate_field_data(self) -> Result<FieldData, Error> {
-        fn duplicate_error(ident: &Ident) -> Error {
-            Error::new_spanned(
-                ident,
-                format!("The `{ident}` attribute was already defined"),
-            )
-        }
-
         let mut field_name = None;
         let mut default = None;
         let mut implicit_default = false;
@@ -88,44 +108,45 @@ impl<'a> ParsedField<'a> {
             if attr.path().is_ident("field") {
                 attr.parse_nested_meta(|meta| {
                     let ident = meta.path.get_ident().expect("Ident should exist");
-                    // #[field(skip)]
-                    if meta.path.is_ident("skip") {
-                        if skipped {
-                            return Err(duplicate_error(ident));
+                    if let Some(attribute) = ParsedFieldAttribute::from_path(&meta.path) {
+                        match attribute {
+                            // default or default = ..
+                            ParsedFieldAttribute::Default => {
+                                if default.is_some() {
+                                    return Err(duplicate_attribute_error(ident));
+                                }
+                                if meta.input.peek(Token![=]) {
+                                    let _: Token![=] = meta.input.parse()?;
+                                    default = Some(meta.input.parse()?);
+                                } else {
+                                    default = None;
+                                    implicit_default = true;
+                                }
+                            }
+                            // lenient
+                            ParsedFieldAttribute::Lenient => {
+                                if lenient {
+                                    return Err(duplicate_attribute_error(ident));
+                                }
+                                lenient = true;
+                            }
+                            // name = "x"
+                            ParsedFieldAttribute::Name => {
+                                if field_name.is_some() {
+                                    return Err(duplicate_attribute_error(ident));
+                                }
+                                let value = meta.value()?;
+                                let lit = value.parse::<LitStr>()?;
+                                field_name = Some(lit.value());
+                            }
+                            // skip
+                            ParsedFieldAttribute::Skip => {
+                                if skipped {
+                                    return Err(duplicate_attribute_error(ident));
+                                }
+                                skipped = true;
+                            }
                         }
-                        skipped = true;
-                        Ok(())
-                    }
-                    // #[field(default = ...)]
-                    else if meta.path.is_ident("default") {
-                        if default.is_some() {
-                            return Err(duplicate_error(ident));
-                        }
-                        if meta.input.peek(Token![=]) {
-                            let _: Token![=] = meta.input.parse()?;
-                            default = Some(meta.input.parse()?);
-                        } else {
-                            default = None;
-                            implicit_default = true;
-                        }
-                        Ok(())
-                    }
-                    // #[field(lenient)]
-                    else if meta.path.is_ident("lenient") {
-                        if lenient {
-                            return Err(duplicate_error(ident));
-                        }
-                        lenient = true;
-                        Ok(())
-                    }
-                    // #[field(name = "x")]
-                    else if meta.path.is_ident("name") {
-                        if field_name.is_some() {
-                            return Err(duplicate_error(ident));
-                        }
-                        let value = meta.value()?;
-                        let lit = value.parse::<LitStr>()?;
-                        field_name = Some(lit.value());
                         Ok(())
                     } else {
                         Err(Error::new_spanned(ident, "Invalid attribute"))
@@ -159,7 +180,7 @@ impl<'a> ParsedField<'a> {
                         name,
                         lenient,
                         default,
-                        implicit_default,
+                        implicit_default
                     })
                 },
             )
