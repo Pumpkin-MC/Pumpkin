@@ -10,6 +10,12 @@ struct Test {
     c: u8
 }
 
+#[derive(Debug, Encode, Decode)]
+struct T(
+    #[field(name = "fg")] i32,
+    #[field(name = "hi")] String
+);
+
 #[cfg(test)]
 mod test {
     use crate::codec::structure::Test;

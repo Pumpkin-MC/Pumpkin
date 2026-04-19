@@ -17,7 +17,7 @@ use proc_macro::TokenStream;
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::Span;
 use quote::{ToTokens, format_ident, quote};
-use syn::{DeriveInput, Error, Field, Ident, LitStr, parse_macro_input, Token, LitBool, Data};
+use syn::{DeriveInput, Error, Field, Ident, LitStr, parse_macro_input, Token, LitBool, Data, Type, Attribute, Index, Fields};
 
 enum FieldData {
     /// Serialization occurs with the given field name.
@@ -36,10 +36,56 @@ enum FieldData {
     },
 }
 
+
+
+#[derive(Debug, Copy, Clone)]
+enum ParsedField<'a> {
+    Named(&'a Field),
+    Unnamed(&'a Field, usize)
+}
+
+impl<'a> ParsedField<'a> {
+    fn named_ident(self) -> Option<&'a Ident> {
+        match self {
+            ParsedField::Named(f) => Some(f.ident.as_ref().unwrap()),
+            ParsedField::Unnamed(_, i) => None
+        }
+    }
+
+    fn access(self) -> proc_macro2::TokenStream {
+        match self {
+            ParsedField::Named(f) => f.ident.as_ref().unwrap().clone().into_token_stream(),
+            ParsedField::Unnamed(_, i) => Index::from(i).into_token_stream(),
+        }
+    }
+
+    fn ty(self) -> &'a Type {
+        match self {
+            ParsedField::Named(f) => &f.ty,
+            ParsedField::Unnamed(f, _) => &f.ty,
+        }
+    }
+
+    fn attrs(self) -> &'a [Attribute] {
+        match self {
+            ParsedField::Named(f) => &f.attrs,
+            ParsedField::Unnamed(f, _) => &f.attrs,
+        }
+    }
+
+    fn from_field(value: &'a Field, index: usize) -> Self {
+        if value.ident.is_some() {
+            ParsedField::Named(value)
+        } else {
+            ParsedField::Unnamed(value, index)
+        }
+    }
+}
+
 /// Parses a single field to get its [`FieldData`].
-fn generate_field_data(field: &Field) -> Result<FieldData, Error> {
+fn generate_field_data(field: ParsedField) -> Result<FieldData, Error> {
     fn duplicate_error(ident: &Ident) -> Error {
-        Error::new_spanned(ident, format!("A `{ident}` path was already defined"))
+        Error::new_spanned(ident, format!("The `{ident}` attribute was already defined"))
     }
 
     let mut field_name = None;
@@ -48,7 +94,7 @@ fn generate_field_data(field: &Field) -> Result<FieldData, Error> {
     let mut skipped = false;
     let mut lenient = false;
 
-    for attr in &field.attrs {
+    for attr in field.attrs() {
         if attr.path().is_ident("field") {
             attr.parse_nested_meta(|meta| {
                 let ident = meta.path.get_ident().expect("Ident should exist");
@@ -104,17 +150,17 @@ fn generate_field_data(field: &Field) -> Result<FieldData, Error> {
     if skipped {
         if field_name.is_some() || lenient {
             return Err(Error::new_spanned(
-                &field.ident,
+                field.access(),
                 "Cannot specify `name` or `lenient` for a skipped field",
             ));
         }
         // Default to using the Default trait if no specific default value is given.
         Ok(FieldData::Skipped { default: default.unwrap_or_else(|| quote! { Default::default() }) })
     } else {
-        let name = field_name.or_else(|| field.ident.as_ref().map(ToString::to_string));
+        let name = field_name.or_else(|| field.named_ident().map(ToString::to_string));
         name.map_or_else(
             || Err(Error::new_spanned(
-                &field.ident,
+                field.access(),
                 "No field name could be inferred",
             )),
             |name| Ok(FieldData::Present {
@@ -135,13 +181,16 @@ pub fn derive_encode(input: TokenStream) -> TokenStream {
     match &input.data {
         Data::Struct(data) => {
             let mut builder_encodes = Vec::new();
+            let mut index = 0;
             for field in &data.fields {
+                let field = ParsedField::from_field(field, index);
                 match encode_field_tokens(field) {
                     Ok(EncodeFieldData { builder_encode }) => {
                         builder_encodes.push(builder_encode);
                     }
                     Err(e) => return e.to_compile_error().into(),
                 }
+                index += 1;
             }
             quote! {
                 impl crate::codec::Encode for #name {
@@ -163,23 +212,23 @@ struct EncodeFieldData {
     builder_encode: Option<proc_macro2::TokenStream>,
 }
 
-fn encode_field_tokens(field: &Field) -> Result<EncodeFieldData, Error> {
+fn encode_field_tokens(field: ParsedField) -> Result<EncodeFieldData, Error> {
     match generate_field_data(field)? {
         FieldData::Present { name, default, implicit_default, .. } => {
-            let ident = field.ident.as_ref().unwrap();
+            let access = field.access();
             let encoded_name_lit = LitStr::new(&name, Span::call_site());
-            let builder_encode = if option_type(&field.ty).is_some() {
+            let builder_encode = if option_type(field.ty()).is_some() {
                 quote! {
-                    builder = crate::codec::optional_field::OptionalFieldEncode::encode_optional_field(&self.#ident, #encoded_name_lit, ops, builder);
+                    builder = crate::codec::optional_field::OptionalFieldEncode::encode_optional_field(&self.#access, #encoded_name_lit, ops, builder);
                 }
             } else if default.is_some() || implicit_default {
                 let default_tokens = default.unwrap_or_else(|| quote! {Default::default()});
                 quote! {
-                    builder = crate::codec::FieldEncode::encode_defaulted_field(&self.#ident, #encoded_name_lit, ops, builder, #default_tokens);
+                    builder = crate::codec::FieldEncode::encode_defaulted_field(&self.#access, #encoded_name_lit, ops, builder, #default_tokens);
                 }
             } else {
                 quote! {
-                    builder = crate::codec::FieldEncode::encode_field(&self.#ident, #encoded_name_lit, ops, builder);
+                    builder = crate::codec::FieldEncode::encode_field(&self.#access, #encoded_name_lit, ops, builder);
                 }
             };
             Ok(EncodeFieldData {
@@ -200,11 +249,15 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
     match &input.data {
         Data::Struct(data) => {
             let mut builder_decodes = Vec::new();
-            let mut i = 0;
+            // The counted encoded values.
+            let mut counter = 0;
+            // The total number of fields in the struct.
+            let mut index = 0;
             let mut field_inputs = Vec::new();
             let mut field_outputs = Vec::new();
             for field in &data.fields {
-                match decode_field_tokens(field, &mut i) {
+                let field = ParsedField::from_field(field, index);
+                match decode_field_tokens(field, &mut counter) {
                     Ok(DecodeFieldData {
                         builder_decode,
                         field_input,
@@ -218,22 +271,31 @@ pub fn derive_decode(input: TokenStream) -> TokenStream {
                     }
                     Err(e) => return e.to_compile_error().into(),
                 }
+                index += 1;
             }
-            if i < 1 {
+            if counter < 1 {
                 // TODO
                 return Error::new_spanned(&input, "At least 1 field must be decoded")
                     .to_compile_error()
                     .into()
-            } else if i > 16 {
+            } else if counter > 16 {
                 return Error::new_spanned(&input, "No more than 16 fields may be decoded")
                     .to_compile_error()
                     .into()
             }
-            let constructor_tokens = quote! {
-                |#( #field_inputs ),*| Self {#( #field_outputs ),*}
+            let constructor_tokens = match &data.fields {
+                Fields::Named(_) => quote! {
+                    |#( #field_inputs ),*| Self {#( #field_outputs ),*}
+                },
+                Fields::Unnamed(_) => quote! {
+                    |#( #field_inputs ),*| Self (#( #field_outputs ),*)
+                },
+                Fields::Unit => quote! {
+                    || Self
+                }
             };
-            let apply_fn = if i == 1 { format_ident!("map") } else { format_ident!("apply_{}", i) };
-            let other_apply_params = (1..i).map(|i| format_ident!("a{i}"));
+            let apply_fn = if counter == 1 { format_ident!("map") } else { format_ident!("apply_{}", counter) };
+            let other_apply_params = (1..counter).map(|i| format_ident!("a{i}"));
             quote! {
                 impl crate::codec::Decode for #name {
                     fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
@@ -281,15 +343,20 @@ fn option_type(ty: &syn::Type) -> Option<&syn::Type> {
     }
 }
 
-fn decode_field_tokens(field: &Field, counter: &mut usize) -> Result<DecodeFieldData, Error> {
-    let ident = field.ident.as_ref().unwrap();
+fn decode_field_tokens(field: ParsedField, counter: &mut usize) -> Result<DecodeFieldData, Error> {
+    let ident = field.named_ident();
     match generate_field_data(field)? {
         FieldData::Present { name, lenient, default, implicit_default } => {
             let encoded_name_lit = LitStr::new(&name, Span::call_site());
             let decoded_ident = format_ident!("a{counter}");
+            let constructor_ident = if let Some(ident) = ident {
+                ident
+            } else {
+                &decoded_ident
+            };
             *counter += 1;
             let builder_decode = {
-                if let Some(ty) = option_type(&field.ty) {
+                if let Some(ty) = option_type(field.ty()) {
                     // For an Option, it can be lenient.
                     let lenient_token = LitBool::new(lenient, Span::call_site());
                     quote! {
@@ -298,13 +365,13 @@ fn decode_field_tokens(field: &Field, counter: &mut usize) -> Result<DecodeField
                 } else if default.is_some() || implicit_default {
                         let lenient_token = LitBool::new(lenient, Span::call_site());
                         let default_tokens = default.unwrap_or_else(|| quote! {Default::default()});
-                        let ty = &field.ty;
+                        let ty = field.ty();
                         quote! {
                             let #decoded_ident: DataResult<#ty> = crate::codec::FieldDecode::decode_defaulted_field::<O>(#encoded_name_lit, &map, ops, #default_tokens, #lenient_token);
                         }
                 } else {
                     if lenient {
-                        return Err(Error::new_spanned(&field.ty, "Invalid use of `lenient`"));
+                        return Err(Error::new_spanned(field.ty(), "Invalid use of `lenient`"));
                     }
                     quote! {
                         let #decoded_ident = crate::codec::FieldDecode::decode_field::<O>(#encoded_name_lit, &map, ops);
@@ -313,12 +380,16 @@ fn decode_field_tokens(field: &Field, counter: &mut usize) -> Result<DecodeField
             };
             Ok(DecodeFieldData {
                 builder_decode: Some(builder_decode),
-                field_input: Some(ident.into_token_stream()),
-                field_output: ident.into_token_stream(),
+                field_input: Some(constructor_ident.clone().into_token_stream()),
+                field_output: constructor_ident.into_token_stream(),
             })
         }
         FieldData::Skipped { default } => {
-            let default_tokens = quote! { #ident: #default };
+            let default_tokens = if let Some(ident) = ident {
+                quote! { #ident: #default }
+            } else {
+                quote! { #default }
+            };
             Ok(DecodeFieldData {
                 builder_decode: None,
                 field_input: None,
