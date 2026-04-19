@@ -213,8 +213,7 @@ async fn resolve_profiles_from_token(
             return Ok(vec![player.gameprofile.clone()]);
         }
 
-        let cached_entry = server.data.user_cache.write().await.get_by_uuid(uuid);
-        if let Some(entry) = cached_entry {
+        if let Ok(Some(entry)) = server.user_cache_storage.get_by_uuid(uuid).await {
             return Ok(vec![profile_from_uuid_name(entry.uuid, entry.name)]);
         }
 
@@ -229,13 +228,7 @@ async fn resolve_profiles_from_token(
         return Ok(vec![player.gameprofile.clone()]);
     }
 
-    let cached_entry = server
-        .data
-        .user_cache
-        .write()
-        .await
-        .get_by_name(raw_arg.value);
-    if let Some(entry) = cached_entry {
+    if let Ok(Some(entry)) = server.user_cache_storage.get_by_name(raw_arg.value).await {
         return Ok(vec![profile_from_uuid_name(entry.uuid, entry.name)]);
     }
 
@@ -249,12 +242,10 @@ async fn resolve_profiles_from_token(
             &server.advanced_config.networking.authentication,
         ) {
             Ok(Some((uuid, resolved_name))) => {
-                server
-                    .data
-                    .user_cache
-                    .write()
-                    .await
-                    .upsert(uuid, resolved_name.clone());
+                let _ = server
+                    .user_cache_storage
+                    .upsert(uuid, &resolved_name)
+                    .await;
                 return Ok(vec![profile_from_uuid_name(uuid, resolved_name)]);
             }
             Ok(None) | Err(_) => return Err(syntax_player_unknown(raw_arg)),
@@ -263,12 +254,10 @@ async fn resolve_profiles_from_token(
 
     if let Ok(uuid) = offline_uuid(raw_arg.value) {
         let profile = profile_from_uuid_name(uuid, raw_arg.value.to_string());
-        server
-            .data
-            .user_cache
-            .write()
-            .await
-            .upsert(profile.id, profile.name.clone());
+        let _ = server
+            .user_cache_storage
+            .upsert(profile.id, &profile.name)
+            .await;
         return Ok(vec![profile]);
     }
 

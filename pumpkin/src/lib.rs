@@ -2,7 +2,6 @@
 #![allow(unused_labels)]
 
 use crate::crash::CrashReport;
-use crate::data::VanillaData;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::{JavaClient, PacketHandlerResult};
@@ -214,9 +213,8 @@ impl PumpkinServer {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
-        vanilla_data: VanillaData,
     ) -> Self {
-        let server = Server::new(basic_config, advanced_config, vanilla_data).await;
+        let server = Server::new(basic_config, advanced_config).await;
 
         let rcon = server.advanced_config.networking.rcon.clone();
 

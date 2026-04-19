@@ -22,7 +22,6 @@ use tokio::signal::unix::{SignalKind, signal};
 use pumpkin::{
     CRASH_REPORT, SERVER_EXIT_CODE, SERVER_IS_STOPPING,
     crash::{CrashReport, FullBacktrace},
-    data::VanillaData,
     stop_or_exit_server,
 };
 use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
@@ -80,8 +79,6 @@ async fn main() {
     let basic_config = BasicConfiguration::load(&config_dir);
     let advanced_config = AdvancedConfiguration::load(&config_dir);
 
-    let vanilla_data = VanillaData::load();
-
     pumpkin::init_logger(&advanced_config);
 
     info!(
@@ -120,7 +117,7 @@ async fn main() {
             .expect("Unable to setup signal handlers");
     });
 
-    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
+    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config).await;
     pumpkin_server.init_plugins().await;
 
     info!(

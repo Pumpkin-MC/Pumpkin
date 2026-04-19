@@ -1,7 +1,6 @@
 use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
-use crate::data::VanillaData;
 use crate::data::player_server::ServerPlayerData;
 use crate::entity::{EntityBase, NBTStorage};
 use crate::item::registry::ItemRegistry;
@@ -38,6 +37,7 @@ use pumpkin_storage::banned_player::BannedPlayerStorage;
 use pumpkin_storage::level_info::{LevelData, LevelInfoStorage};
 use pumpkin_storage::op::OpStorage;
 use pumpkin_storage::player_data::PlayerDataStorage;
+use pumpkin_storage::user_cache::UserCacheStorage;
 use pumpkin_storage::whitelist::WhitelistStorage;
 use pumpkin_storage::{NullStorage, StorageError, VanillaStorage};
 use rand::seq::{IndexedRandom, SliceRandom};
@@ -67,8 +67,6 @@ use crate::server::scheduler::TaskScheduler;
 pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
-
-    pub data: VanillaData,
 
     /// Plugin manager
     pub plugin_manager: Arc<PluginManager>,
@@ -130,6 +128,7 @@ pub struct Server {
     pub banned_ip_storage: Arc<dyn BannedIpStorage>,
     pub op_storage: Arc<dyn OpStorage>,
     pub whitelist_storage: Arc<dyn WhitelistStorage>,
+    pub user_cache_storage: Arc<dyn UserCacheStorage>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
     _locker: Arc<Option<AnvilLevelLocker>>,
@@ -141,7 +140,6 @@ impl Server {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
-        vanilla_data: VanillaData,
     ) -> Arc<Self> {
         let permission_registry = Arc::new(RwLock::new(PermissionRegistry::new()));
         // First register the default commands. After that, plugins can put in their own.
@@ -203,6 +201,7 @@ impl Server {
         let banned_ip_storage: Arc<dyn BannedIpStorage> = vanilla_storage.clone();
         let op_storage: Arc<dyn OpStorage> = vanilla_storage.clone();
         let whitelist_storage: Arc<dyn WhitelistStorage> = vanilla_storage.clone();
+        let user_cache_storage: Arc<dyn UserCacheStorage> = vanilla_storage.clone();
         let player_data_storage = ServerPlayerData::new(
             player_data_backend,
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
@@ -229,7 +228,6 @@ impl Server {
         let server = Self {
             basic_config,
             advanced_config,
-            data: vanilla_data,
             plugin_manager: Arc::new(PluginManager::new()),
             permission_manager: Arc::new(RwLock::new(PermissionManager::new(
                 permission_registry.clone(),
@@ -266,6 +264,7 @@ impl Server {
             banned_ip_storage,
             op_storage,
             whitelist_storage,
+            user_cache_storage,
             level_info,
             _locker: Arc::new(locker),
         };
@@ -455,8 +454,13 @@ impl Server {
                 if world
                     .add_player(&player)
                     .is_ok() {
-                    let mut user_cache = self.data.user_cache.write().await;
-                    user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());
+                    if let Err(e) = self
+                        .user_cache_storage
+                        .upsert(player.gameprofile.id, &player.gameprofile.name)
+                        .await
+                    {
+                        tracing::warn!("Failed to upsert user cache: {e}");
+                    }
 
                     // TODO: Config if we want increase online
                     if let Some(config) = config {
