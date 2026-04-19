@@ -16,7 +16,7 @@
 //! For enum dispatch, you can also use the following:
 //! - `tag_key("x")` on the `enum`: Tells the key for storing the enum's type. This is used to differentiate the variant
 //!   during decoding. If omitted, this defaults to `"type"`.
-//! - `tag("x")` on the `enum`: Tells the value for storing the enum's type. This is used to differentiate the variant
+//! - `tag("x")` on the `enum` variant: Tells the value for storing the enum's type. This is used to differentiate the variant
 //!   during decoding.
 
 mod decode;
