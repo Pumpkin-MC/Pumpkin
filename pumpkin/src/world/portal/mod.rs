@@ -10,7 +10,6 @@ pub mod nether;
 pub mod poi;
 
 pub use nether::{NetherPortal, PortalSearchResult};
-pub use poi::PortalPoiStorage;
 
 #[derive(Clone)]
 pub struct SourcePortalInfo {

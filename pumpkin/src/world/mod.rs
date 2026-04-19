@@ -129,6 +129,8 @@ use pumpkin_world::{
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
 use pumpkin_storage::level_info::LevelData;
+use pumpkin_storage::poi::PoiStorage;
+use pumpkin_storage::VanillaStorage;
 use pumpkin_world::world::BlockFlags;
 use rand::seq::SliceRandom;
 use rand::{RngExt, rng};
@@ -207,7 +209,7 @@ pub struct World {
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
     /// POI storage for fast portal lookups
-    pub portal_poi: Mutex<portal::PortalPoiStorage>,
+    pub poi_storage: Arc<dyn PoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
 }
@@ -232,8 +234,11 @@ impl World {
         // TODO
         let generation_settings = GenerationSettings::from_dimension(&dimension);
 
-        // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
-        let portal_poi = portal::PortalPoiStorage::new(&level.level_folder.root_folder);
+        // Per-world VanillaStorage so POI reads/writes go under this world's folder.
+        // server_data_dir isn't used by POI so we pass the same root here.
+        let world_root = &level.level_folder.root_folder;
+        let poi_storage: Arc<dyn PoiStorage> =
+            Arc::new(VanillaStorage::new(world_root, world_root));
 
         Self {
             uuid: Uuid::new_v4(),
@@ -251,7 +256,7 @@ impl World {
             min_y: i32::from(generation_settings.shape.min_y),
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
-            portal_poi: Mutex::new(portal_poi),
+            poi_storage,
             dragon_fight: (dimension == Dimension::THE_END)
                 .then(|| Mutex::new(dragon_fight::DragonFight::new())),
             server,
@@ -282,8 +287,7 @@ impl World {
         }
 
         // Save portal POI to disk
-        let save_result = self.portal_poi.lock().await.save_all();
-        if let Err(e) = save_result {
+        if let Err(e) = self.poi_storage.save_all().await {
             error!("Failed to save portal POI: {e}");
         }
 

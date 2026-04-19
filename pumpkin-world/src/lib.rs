@@ -14,7 +14,6 @@ pub mod inventory;
 pub mod level;
 pub mod lighting;
 pub mod lock;
-pub mod poi;
 pub mod tick;
 pub mod world;
 

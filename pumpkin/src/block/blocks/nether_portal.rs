@@ -89,8 +89,7 @@ impl BlockBehaviour for NetherPortalBlock {
     fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             // Remove from POI storage when portal block is replaced
-            let mut poi_storage = args.world.portal_poi.lock().await;
-            poi_storage.remove(args.position);
+            let _ = args.world.poi_storage.remove(*args.position).await;
         })
     }
 }
