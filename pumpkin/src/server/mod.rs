@@ -143,7 +143,10 @@ impl Server {
 
         let block_registry = super::block::registry::default_registry();
 
-        let vanilla_storage = Arc::new(VanillaStorage::new(&world_path));
+        let server_data_dir = std::env::current_dir()
+            .unwrap_or_else(|_| ".".into())
+            .join("data");
+        let vanilla_storage = Arc::new(VanillaStorage::new(&world_path, &server_data_dir));
         let level_info_storage: Arc<dyn LevelInfoStorage> = vanilla_storage.clone();
         let level_info = level_info_storage.load().await;
         if let Err(error) = &level_info {

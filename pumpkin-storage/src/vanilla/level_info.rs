@@ -72,7 +72,7 @@ fn check_level_version(raw_nbt: &[u8]) -> Result<(), StorageError> {
 #[async_trait]
 impl LevelInfoStorage for VanillaStorage {
     async fn load(&self) -> Result<LevelData, StorageError> {
-        let path = self.base_dir().join(LEVEL_DAT_FILE_NAME);
+        let path = self.world_dir().join(LEVEL_DAT_FILE_NAME);
         let compressed = fs::read(&path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 StorageError::NotFound {
@@ -94,7 +94,7 @@ impl LevelInfoStorage for VanillaStorage {
         let dat: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(buf))
             .map_err(|e| StorageError::Deserialize(e.to_string()))?;
 
-        let backup = self.base_dir().join(LEVEL_DAT_BACKUP_FILE_NAME);
+        let backup = self.world_dir().join(LEVEL_DAT_BACKUP_FILE_NAME);
         if let Err(e) = fs::copy(&path, &backup).await {
             // Backup is best-effort; surface as a hard error only if the source
             // disappeared between read and copy (unlikely).
@@ -124,7 +124,7 @@ impl LevelInfoStorage for VanillaStorage {
             encoder.finish().map_err(StorageError::io)?;
         }
 
-        let path = self.base_dir().join(LEVEL_DAT_FILE_NAME);
+        let path = self.world_dir().join(LEVEL_DAT_FILE_NAME);
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()
         {
@@ -267,7 +267,7 @@ mod tests {
         )
         .unwrap();
 
-        let store = VanillaStorage::new(temp_dir.path());
+        let store = VanillaStorage::new(temp_dir.path(), temp_dir.path().join("data"));
         let err = store.load().await.unwrap_err();
         assert!(
             matches!(err, StorageError::UnsupportedVersion(_)),

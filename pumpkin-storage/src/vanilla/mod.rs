@@ -8,22 +8,34 @@ pub use level_info::{LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME};
 
 /// Filesystem-backed storage laid out the way vanilla Minecraft expects.
 ///
-/// `base_dir` is the world root (the directory containing `level.dat`,
-/// `playerdata/`, `region/`, etc.). Domain traits implemented on this struct
-/// translate their operations into file I/O under that root.
+/// Vanilla keeps two distinct roots:
+/// - `world_dir`: the world folder (`level.dat`, `playerdata/`, `region/`,
+///   `poi/`, ...). Moves with the world and is per-world.
+/// - `server_data_dir`: the server-wide `data/` folder (`ops.json`,
+///   `whitelist.json`, `banned-players.json`, `banned-ips.json`,
+///   `usercache.json`). Shared across worlds on the same server.
+///
+/// Domain traits implemented on `VanillaStorage` translate their operations
+/// into file I/O under the appropriate root.
 #[derive(Debug, Clone)]
 pub struct VanillaStorage {
-    base_dir: PathBuf,
+    world_dir: PathBuf,
+    server_data_dir: PathBuf,
 }
 
 impl VanillaStorage {
-    pub fn new(base_dir: impl Into<PathBuf>) -> Self {
+    pub fn new(world_dir: impl Into<PathBuf>, server_data_dir: impl Into<PathBuf>) -> Self {
         Self {
-            base_dir: base_dir.into(),
+            world_dir: world_dir.into(),
+            server_data_dir: server_data_dir.into(),
         }
     }
 
-    pub fn base_dir(&self) -> &Path {
-        &self.base_dir
+    pub fn world_dir(&self) -> &Path {
+        &self.world_dir
+    }
+
+    pub fn server_data_dir(&self) -> &Path {
+        &self.server_data_dir
     }
 }

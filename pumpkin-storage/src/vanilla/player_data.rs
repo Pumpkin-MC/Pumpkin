@@ -14,7 +14,7 @@ const PLAYERDATA_DIR: &str = "playerdata";
 
 impl VanillaStorage {
     fn player_data_dir(&self) -> PathBuf {
-        self.base_dir().join(PLAYERDATA_DIR)
+        self.world_dir().join(PLAYERDATA_DIR)
     }
 
     fn player_data_path(&self, uuid: Uuid) -> PathBuf {

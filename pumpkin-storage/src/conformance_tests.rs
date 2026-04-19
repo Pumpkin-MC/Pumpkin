@@ -42,14 +42,14 @@ async fn level_info_round_trip_memory() {
 #[tokio::test]
 async fn level_info_round_trip_vanilla() {
     let dir = TempDir::new().unwrap();
-    let store = VanillaStorage::new(dir.path());
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
     level_info_round_trip(&store).await;
 }
 
 #[tokio::test]
 async fn vanilla_level_info_not_found_reports_not_found() {
     let dir = TempDir::new().unwrap();
-    let store = VanillaStorage::new(dir.path());
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
     let err = LevelInfoStorage::load(&store).await.unwrap_err();
     assert!(err.is_not_found(), "{err}");
     assert!(matches!(err, StorageError::NotFound { .. }));
@@ -115,7 +115,7 @@ async fn player_data_round_trip_memory() {
 #[tokio::test]
 async fn player_data_round_trip_vanilla() {
     let dir = TempDir::new().unwrap();
-    let store = VanillaStorage::new(dir.path());
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
     player_data_round_trip(&store).await;
 }
 
@@ -136,7 +136,7 @@ async fn vanilla_level_info_writes_backup_on_load() {
     use crate::vanilla::{LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME};
 
     let dir = TempDir::new().unwrap();
-    let store = VanillaStorage::new(dir.path());
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
     LevelInfoStorage::save(&store, &LevelData::default(Seed(1)))
         .await
         .unwrap();
