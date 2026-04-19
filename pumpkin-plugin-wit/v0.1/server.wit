@@ -1,5 +1,7 @@
 interface server {
     use player.{player};
+    use common.{game-mode};
+    use %world.{%world};
 
     /// Represents the difficulty setting of a Minecraft server.
     enum difficulty {
@@ -37,5 +39,44 @@ interface server {
 
         /// Searches for a player by their UUID string.
         get-player-by-uuid: func(id: string) -> option<player>;
+
+        /// Returns a list of all worlds on this server.
+        get-all-worlds: func() -> list<%world>;
+
+        /// Gets a world by its dimension name (e.g., "minecraft:overworld").
+        get-world-by-name: func(name: string) -> option<%world>;
+
+        /// Broadcasts a system chat message to all players.
+        broadcast: func(message: string);
+
+        /// Returns the maximum number of players allowed on the server.
+        get-max-players: func() -> u32;
+
+        /// Returns whether the server is in hardcore mode.
+        is-hardcore: func() -> bool;
+
+        /// Returns whether the server is in online mode (authenticates with Mojang).
+        is-online-mode: func() -> bool;
+
+        /// Returns the server's Message of the Day (MOTD).
+        get-motd: func() -> string;
+
+        /// Returns whether the server has a whitelist enabled.
+        has-whitelist: func() -> bool;
+
+        /// Returns whether the server allows the Nether dimension.
+        get-allow-nether: func() -> bool;
+
+        /// Returns whether the server allows the End dimension.
+        get-allow-end: func() -> bool;
+
+        /// Returns the server's maximum view distance.
+        get-view-distance: func() -> u8;
+
+        /// Returns the server's maximum simulation distance.
+        get-simulation-distance: func() -> u8;
+
+        /// Returns the server's default gamemode.
+        get-default-gamemode: func() -> game-mode;
     }
 }

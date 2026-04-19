@@ -117,6 +117,66 @@ impl gui::HostGui for PluginHostState {
         }
     }
 
+    async fn get_type(&mut self, res: Resource<Gui>) -> wasmtime::Result<GuiType> {
+        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        Ok(match gui.window_type {
+            pumpkin_data::screen::WindowType::Generic9x1 => GuiType::Generic9x1,
+            pumpkin_data::screen::WindowType::Generic9x2 => GuiType::Generic9x2,
+            pumpkin_data::screen::WindowType::Generic9x3 => GuiType::Generic9x3,
+            pumpkin_data::screen::WindowType::Generic9x4 => GuiType::Generic9x4,
+            pumpkin_data::screen::WindowType::Generic9x5 => GuiType::Generic9x5,
+            pumpkin_data::screen::WindowType::Generic9x6 => GuiType::Generic9x6,
+            pumpkin_data::screen::WindowType::Generic3x3 => GuiType::Generic3x3,
+            pumpkin_data::screen::WindowType::Crafter3x3 => GuiType::Crafter3x3,
+            pumpkin_data::screen::WindowType::Anvil => GuiType::Anvil,
+            pumpkin_data::screen::WindowType::Beacon => GuiType::Beacon,
+            pumpkin_data::screen::WindowType::BlastFurnace => GuiType::BlastFurnace,
+            pumpkin_data::screen::WindowType::BrewingStand => GuiType::BrewingStand,
+            pumpkin_data::screen::WindowType::Crafting => GuiType::Crafting,
+            pumpkin_data::screen::WindowType::Enchantment => GuiType::Enchantment,
+            pumpkin_data::screen::WindowType::Furnace => GuiType::Furnace,
+            pumpkin_data::screen::WindowType::Grindstone => GuiType::Grindstone,
+            pumpkin_data::screen::WindowType::Hopper => GuiType::Hopper,
+            pumpkin_data::screen::WindowType::Lectern => GuiType::Lectern,
+            pumpkin_data::screen::WindowType::Loom => GuiType::Loom,
+            pumpkin_data::screen::WindowType::Merchant => GuiType::Merchant,
+            pumpkin_data::screen::WindowType::ShulkerBox => GuiType::ShulkerBox,
+            pumpkin_data::screen::WindowType::Smithing => GuiType::Smithing,
+            pumpkin_data::screen::WindowType::Smoker => GuiType::Smoker,
+            pumpkin_data::screen::WindowType::CartographyTable => GuiType::CartographyTable,
+            pumpkin_data::screen::WindowType::Stonecutter => GuiType::Stonecutter,
+        })
+    }
+
+    async fn get_title(
+        &mut self,
+        res: Resource<Gui>,
+    ) -> wasmtime::Result<
+        Resource<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent,
+        >,
+    > {
+        let title = {
+            let gui = self.get_gui_res(&res)?.provider.lock().await;
+            gui.title.clone()
+        };
+        self.add_text_component(title)
+            .map_err(|_| wasmtime::Error::msg("Failed to add text component resource"))
+    }
+
+    async fn get_size(&mut self, res: Resource<Gui>) -> wasmtime::Result<u32> {
+        use pumpkin_world::inventory::Inventory;
+        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        Ok(gui.inventory.size() as u32)
+    }
+
+    async fn clear_items(&mut self, res: Resource<Gui>) -> wasmtime::Result<()> {
+        use pumpkin_world::inventory::Clearable;
+        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        gui.inventory.clear().await;
+        Ok(())
+    }
+
     async fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {
         self.resource_table
             .delete::<GuiResource>(Resource::new_own(rep.rep()))

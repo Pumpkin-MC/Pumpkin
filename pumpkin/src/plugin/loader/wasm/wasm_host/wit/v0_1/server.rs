@@ -113,6 +113,160 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .transpose()
     }
 
+    async fn get_all_worlds(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::world::World>>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server
+            .worlds
+            .load()
+            .iter()
+            .map(|world| {
+                self.add_world(world.clone())
+                    .expect("failed to add world resource")
+            })
+            .collect())
+    }
+
+    async fn get_world_by_name(
+        &mut self,
+        _rep: Resource<Server>,
+        name: String,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::World>>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server
+            .worlds
+            .load()
+            .iter()
+            .find(|world| world.dimension.minecraft_name == name)
+            .map(|world| {
+                self.add_world(world.clone())
+                    .expect("failed to add world resource")
+            }))
+    }
+
+    async fn broadcast(&mut self, _rep: Resource<Server>, message: String) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        server
+            .broadcast_message(
+                &pumpkin_util::text::TextComponent::text(message),
+                &pumpkin_util::text::TextComponent::text("Server"),
+                0,
+                None,
+            )
+            .await;
+
+        Ok(())
+    }
+
+    async fn get_max_players(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u32> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.basic_config.max_players)
+    }
+
+    async fn is_hardcore(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.basic_config.hardcore)
+    }
+
+    async fn is_online_mode(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.advanced_config.networking.authentication.enabled)
+    }
+
+    async fn get_motd(&mut self, _rep: Resource<Server>) -> wasmtime::Result<String> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.basic_config.motd.clone())
+    }
+
+    async fn has_whitelist(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.basic_config.white_list)
+    }
+
+    async fn get_allow_nether(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.basic_config.allow_nether)
+    }
+
+    async fn get_allow_end(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.basic_config.allow_end)
+    }
+
+    async fn get_view_distance(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u8> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.basic_config.view_distance.get())
+    }
+
+    async fn get_simulation_distance(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u8> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(server.basic_config.simulation_distance.get())
+    }
+
+    async fn get_default_gamemode(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<pumpkin::plugin::common::GameMode> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        Ok(super::events::to_wasm_game_mode(
+            server.basic_config.default_gamemode,
+        ))
+    }
+
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
         self.resource_table
             .delete::<ServerResource>(Resource::new_own(rep.rep()))

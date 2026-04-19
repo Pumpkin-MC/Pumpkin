@@ -35,7 +35,6 @@ impl PlayerInteractEvent {
     ///
     /// - `player`: A reference-counted pointer to the player who triggered the event.
     /// - `action`: The type of interaction performed.
-    /// - `item`: A reference-counted, mutex-protected item stack used during the interaction.
     /// - `block`: The block that was interacted with.
     /// - `clicked_pos`: The optional position of the block that was clicked.
     ///

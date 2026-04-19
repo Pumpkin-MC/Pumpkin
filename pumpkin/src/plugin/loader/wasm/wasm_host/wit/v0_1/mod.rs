@@ -7,6 +7,7 @@ use wasmtime::component::{HasSelf, InstancePre, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
 pub mod block_entity;
+pub mod boss_bar;
 pub mod commands;
 pub mod common;
 pub mod context;

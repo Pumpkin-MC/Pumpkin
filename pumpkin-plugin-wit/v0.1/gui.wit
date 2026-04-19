@@ -34,5 +34,17 @@ interface gui {
         constructor(%type: gui-type, title: text-component);
         set-item: func(slot: u32, item: item-stack);
         get-item: func(slot: u32) -> option<item-stack>;
+        
+        /// Returns the type of this GUI.
+        get-type: func() -> gui-type;
+        
+        /// Returns the title of this GUI.
+        get-title: func() -> text-component;
+        
+        /// Returns the number of slots in this GUI.
+        get-size: func() -> u32;
+        
+        /// Clears all items from the GUI.
+        clear-items: func();
     }
 }
