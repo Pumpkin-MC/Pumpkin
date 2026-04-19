@@ -8,11 +8,9 @@ const DATA_FOLDER: &str = "data/";
 
 pub mod player_server;
 pub mod usercache;
-pub mod whitelist;
 
 pub struct VanillaData {
     pub user_cache: RwLock<usercache::UserCache>,
-    pub whitelist_config: RwLock<whitelist::WhitelistConfig>,
 }
 
 impl VanillaData {
@@ -20,7 +18,6 @@ impl VanillaData {
     pub fn load() -> Self {
         Self {
             user_cache: RwLock::new(usercache::UserCache::load()),
-            whitelist_config: RwLock::new(whitelist::WhitelistConfig::load()),
         }
     }
 }

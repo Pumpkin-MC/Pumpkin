@@ -33,4 +33,8 @@ impl WhitelistStorage for MemoryStorage {
             .map(|e| WhitelistEntry::new(e.uuid, e.name.clone()))
             .collect())
     }
+
+    async fn reload(&self) -> Result<(), StorageError> {
+        Ok(())
+    }
 }

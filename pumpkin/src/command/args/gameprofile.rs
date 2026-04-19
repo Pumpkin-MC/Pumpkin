@@ -142,17 +142,20 @@ impl ArgumentConsumer for GameProfilesArgumentConsumer {
                     }
                 }
                 GameProfileSuggestionMode::NonWhitelistedOnlinePlayers => {
-                    let whitelist = server.data.whitelist_config.read().await;
                     for player in server.get_all_players() {
-                        if !whitelist.is_whitelisted(&player.gameprofile) {
+                        if !server
+                            .whitelist_storage
+                            .is_whitelisted(player.gameprofile.id)
+                            .await
+                            .unwrap_or(false)
+                        {
                             push_name_if_missing(&mut names, player.gameprofile.name.clone());
                         }
                     }
                 }
                 GameProfileSuggestionMode::WhitelistedNames => {
-                    let whitelist = server.data.whitelist_config.read().await;
-                    for entry in &whitelist.whitelist {
-                        push_name_if_missing(&mut names, entry.name.clone());
+                    for entry in server.whitelist_storage.list().await.unwrap_or_default() {
+                        push_name_if_missing(&mut names, entry.name);
                     }
                 }
             }
@@ -287,15 +290,12 @@ async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<Ga
         return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
     }
 
-    {
-        let whitelist = server.data.whitelist_config.read().await;
-        if let Some(entry) = whitelist
-            .whitelist
+    if let Ok(whitelist) = server.whitelist_storage.list().await
+        && let Some(entry) = whitelist
             .iter()
             .find(|entry| entry.name.eq_ignore_ascii_case(name))
-        {
-            return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
-        }
+    {
+        return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
     }
 
     None
@@ -310,11 +310,10 @@ async fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<Ga
         return Some(profile_from_uuid_name(entry.uuid, entry.name));
     }
 
+    if let Ok(whitelist) = server.whitelist_storage.list().await
+        && let Some(entry) = whitelist.iter().find(|entry| entry.uuid == uuid)
     {
-        let whitelist = server.data.whitelist_config.read().await;
-        if let Some(entry) = whitelist.whitelist.iter().find(|entry| entry.uuid == uuid) {
-            return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
-        }
+        return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
     }
 
     None

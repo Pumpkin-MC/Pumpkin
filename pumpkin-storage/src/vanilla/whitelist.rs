@@ -91,6 +91,11 @@ impl WhitelistStorage for VanillaStorage {
         let guard = self.whitelist_load_locked().await?;
         Ok(clone_entries(guard.as_ref().expect("loaded")))
     }
+
+    async fn reload(&self) -> Result<(), StorageError> {
+        *self.whitelist.write().await = None;
+        Ok(())
+    }
 }
 
 fn clone_entries(entries: &[WhitelistEntry]) -> Vec<WhitelistEntry> {

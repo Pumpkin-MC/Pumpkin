@@ -85,6 +85,10 @@ impl WhitelistStorage for NullStorage {
     async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError> {
         Ok(Vec::new())
     }
+
+    async fn reload(&self) -> Result<(), StorageError> {
+        Ok(())
+    }
 }
 
 #[async_trait]

@@ -1,6 +1,5 @@
 use std::sync::atomic::Ordering;
 
-use pumpkin_config::whitelist::WhitelistEntry;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
@@ -18,7 +17,6 @@ use crate::{
             builder::{argument, literal},
         },
     },
-    data::{LoadJSONConfiguration, SaveJSONConfiguration, whitelist::WhitelistConfig},
     net::DisconnectReason,
     server::Server,
 };
@@ -28,22 +26,24 @@ const DESCRIPTION: &str = "Manage server whitelists.";
 const ARG_TARGETS: &str = "targets";
 
 async fn kick_non_whitelisted_players(server: &Server) {
-    let whitelist = server.data.whitelist_config.read().await;
-    if server.basic_config.enforce_whitelist && server.white_list.load(Ordering::Relaxed) {
-        for player in server.get_all_players() {
-            if whitelist.is_whitelisted(&player.gameprofile) {
-                continue;
-            }
-            player
-                .kick(
-                    DisconnectReason::Kicked,
-                    TextComponent::translate(
-                        translation::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
-                        &[],
-                    ),
-                )
-                .await;
+    if !(server.basic_config.enforce_whitelist && server.white_list.load(Ordering::Relaxed)) {
+        return;
+    }
+    for player in server.get_all_players() {
+        if server
+            .whitelist_storage
+            .is_whitelisted(player.gameprofile.id)
+            .await
+            .unwrap_or(false)
+        {
+            continue;
         }
+        player
+            .kick(
+                DisconnectReason::Kicked,
+                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED, &[]),
+            )
+            .await;
     }
 }
 
@@ -116,7 +116,7 @@ impl CommandExecutor for ListExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            let whitelist = &server.data.whitelist_config.read().await.whitelist;
+            let whitelist = server.whitelist_storage.list().await.unwrap_or_default();
             if whitelist.is_empty() {
                 sender
                     .send_message(TextComponent::translate(
@@ -160,7 +160,11 @@ impl CommandExecutor for ReloadExecutor {
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
         Box::pin(async move {
-            *server.data.whitelist_config.write().await = WhitelistConfig::load();
+            if let Err(e) = server.whitelist_storage.reload().await {
+                return Err(CommandError::CommandFailed(TextComponent::text(
+                    format!("Failed to reload whitelist: {e}"),
+                )));
+            }
             kick_non_whitelisted_players(server).await;
             sender
                 .send_message(TextComponent::translate(
@@ -187,22 +191,24 @@ impl CommandExecutor for AddExecutor {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
-            let mut whitelist = server.data.whitelist_config.write().await;
             let mut successes: i32 = 0;
             for profile in targets {
-                if let Some(existing_entry) = whitelist
-                    .whitelist
-                    .iter_mut()
-                    .find(|entry| entry.uuid == profile.id)
+                if server
+                    .whitelist_storage
+                    .is_whitelisted(profile.id)
+                    .await
+                    .unwrap_or(false)
                 {
-                    if existing_entry.name != profile.name {
-                        existing_entry.name.clone_from(&profile.name);
-                    }
                     continue;
                 }
-                whitelist
-                    .whitelist
-                    .push(WhitelistEntry::new(profile.id, profile.name.clone()));
+                if let Err(e) = server
+                    .whitelist_storage
+                    .add(profile.id, &profile.name)
+                    .await
+                {
+                    tracing::error!("Failed to whitelist {}: {e}", profile.name);
+                    continue;
+                }
                 sender
                     .send_message(TextComponent::translate(
                         translation::COMMANDS_WHITELIST_ADD_SUCCESS,
@@ -211,8 +217,6 @@ impl CommandExecutor for AddExecutor {
                     .await;
                 successes += 1;
             }
-
-            whitelist.save();
 
             if successes == 0 {
                 Err(CommandError::CommandFailed(TextComponent::translate(
@@ -240,28 +244,28 @@ impl CommandExecutor for RemoveExecutor {
                 return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
             };
 
-            let mut whitelist = server.data.whitelist_config.write().await;
             let mut successes: i32 = 0;
             for player in targets {
-                let i = whitelist
-                    .whitelist
-                    .iter()
-                    .position(|entry| entry.uuid == player.id);
-
-                if let Some(i) = i {
-                    whitelist.whitelist.remove(i);
-                    sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_WHITELIST_REMOVE_SUCCESS,
-                            [TextComponent::text(player.name.clone())],
-                        ))
-                        .await;
-                    successes += 1;
+                if !server
+                    .whitelist_storage
+                    .is_whitelisted(player.id)
+                    .await
+                    .unwrap_or(false)
+                {
+                    continue;
                 }
+                if let Err(e) = server.whitelist_storage.remove(player.id).await {
+                    tracing::error!("Failed to remove {} from whitelist: {e}", player.name);
+                    continue;
+                }
+                sender
+                    .send_message(TextComponent::translate(
+                        translation::COMMANDS_WHITELIST_REMOVE_SUCCESS,
+                        [TextComponent::text(player.name.clone())],
+                    ))
+                    .await;
+                successes += 1;
             }
-
-            whitelist.save();
-            drop(whitelist);
 
             kick_non_whitelisted_players(server).await;
 

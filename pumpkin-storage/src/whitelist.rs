@@ -14,4 +14,8 @@ pub trait WhitelistStorage: Send + Sync {
     async fn is_whitelisted(&self, uuid: Uuid) -> Result<bool, StorageError>;
 
     async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError>;
+
+    /// Drops any in-memory cache so the next read re-reads the underlying
+    /// source. Used by the `/whitelist reload` command.
+    async fn reload(&self) -> Result<(), StorageError>;
 }
