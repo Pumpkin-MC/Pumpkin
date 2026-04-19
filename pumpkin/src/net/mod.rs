@@ -203,13 +203,7 @@ pub async fn can_not_join(
         }
     }
 
-    if let Some(entry) = server
-        .data
-        .banned_ip_list
-        .write()
-        .await
-        .get_entry(&address.ip())
-    {
+    if let Ok(Some(entry)) = server.banned_ip_storage.get(address.ip()).await {
         let text = TextComponent::translate(
             translation::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
             [TextComponent::text(entry.reason.clone())],

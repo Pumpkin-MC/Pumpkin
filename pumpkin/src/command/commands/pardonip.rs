@@ -1,12 +1,9 @@
 use std::{net::IpAddr, str::FromStr};
 
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
-        tree::{CommandTree, builder::argument},
-    },
-    data::SaveJSONConfiguration,
+use crate::command::{
+    CommandError, CommandExecutor, CommandResult, CommandSender,
+    args::{Arg, ConsumedArgs, simple::SimpleArgConsumer},
+    tree::{CommandTree, builder::argument},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -37,28 +34,31 @@ impl CommandExecutor for Executor {
                 )));
             };
 
-            let mut lock = server.data.banned_ip_list.write().await;
-
-            let result = if let Some(idx) = lock.banned_ips.iter().position(|entry| entry.ip == ip)
+            if !server
+                .banned_ip_storage
+                .is_banned(ip)
+                .await
+                .unwrap_or(false)
             {
-                lock.banned_ips.remove(idx);
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.pardonip.success",
-                        [TextComponent::text(ip.to_string())],
-                    ))
-                    .await;
-                Ok(1)
-            } else {
-                Err(CommandError::CommandFailed(TextComponent::translate(
+                return Err(CommandError::CommandFailed(TextComponent::translate(
                     "commands.pardonip.failed",
                     [],
-                )))
-            };
-
-            lock.save();
-
-            result
+                )));
+            }
+            if let Err(e) = server.banned_ip_storage.unban(ip).await {
+                tracing::error!("Failed to pardon {ip}: {e}");
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.pardonip.failed",
+                    [],
+                )));
+            }
+            sender
+                .send_message(TextComponent::translate(
+                    "commands.pardonip.success",
+                    [TextComponent::text(ip.to_string())],
+                ))
+                .await;
+            Ok(1)
         })
     }
 }

@@ -8,13 +8,11 @@ const DATA_FOLDER: &str = "data/";
 
 pub mod op;
 
-pub mod banned_ip;
 pub mod player_server;
 pub mod usercache;
 pub mod whitelist;
 
 pub struct VanillaData {
-    pub banned_ip_list: RwLock<banned_ip::BannedIpList>,
     pub operator_config: RwLock<op::OperatorConfig>,
     pub user_cache: RwLock<usercache::UserCache>,
     pub whitelist_config: RwLock<whitelist::WhitelistConfig>,
@@ -24,7 +22,6 @@ impl VanillaData {
     #[must_use]
     pub fn load() -> Self {
         Self {
-            banned_ip_list: RwLock::new(banned_ip::BannedIpList::load()),
             operator_config: RwLock::new(op::OperatorConfig::load()),
             user_cache: RwLock::new(usercache::UserCache::load()),
             whitelist_config: RwLock::new(whitelist::WhitelistConfig::load()),

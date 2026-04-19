@@ -28,17 +28,13 @@ impl CommandExecutor for ListExecutor {
 
             match *list_type {
                 "ips" => {
-                    let lock = &server.data.banned_ip_list.read().await;
-                    let entries = lock
-                        .banned_ips
-                        .iter()
-                        .map(|entry| {
-                            (
-                                entry.ip.to_string(),
-                                entry.source.clone(),
-                                entry.reason.clone(),
-                            )
-                        })
+                    let entries = server
+                        .banned_ip_storage
+                        .list()
+                        .await
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|entry| (entry.ip.to_string(), entry.source, entry.reason))
                         .collect();
 
                     handle_banlist(entries, sender).await
@@ -84,12 +80,8 @@ impl CommandExecutor for ListAllExecutor {
                 entries.push((entry.name, entry.source, entry.reason));
             }
 
-            for entry in &server.data.banned_ip_list.read().await.banned_ips {
-                entries.push((
-                    entry.ip.to_string(),
-                    entry.source.clone(),
-                    entry.reason.clone(),
-                ));
+            for entry in server.banned_ip_storage.list().await.unwrap_or_default() {
+                entries.push((entry.ip.to_string(), entry.source, entry.reason));
             }
 
             handle_banlist(entries, sender).await

@@ -6,13 +6,11 @@ use crate::{
         args::{Arg, ConsumedArgs, message::MsgArgConsumer, simple::SimpleArgConsumer},
         tree::{CommandTree, builder::argument},
     },
-    data::SaveJSONConfiguration,
     net::DisconnectReason,
     server::Server,
 };
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
-use pumpkin_storage::banlist::BannedIpEntry;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban-ip"];
@@ -90,24 +88,29 @@ async fn ban_ip(
         )));
     };
 
-    let mut banned_ips = server.data.banned_ip_list.write().await;
-
-    if banned_ips.get_entry(&target_ip).is_some() {
+    if server
+        .banned_ip_storage
+        .is_banned(target_ip)
+        .await
+        .unwrap_or(false)
+    {
         return Err(CommandError::CommandFailed(TextComponent::translate(
             translation::COMMANDS_BANIP_FAILED,
             [],
         )));
     }
 
-    banned_ips.banned_ips.push(BannedIpEntry::new(
-        target_ip,
-        sender.to_string(),
-        None,
-        reason.clone(),
-    ));
-
-    banned_ips.save();
-    drop(banned_ips);
+    if let Err(e) = server
+        .banned_ip_storage
+        .ban(target_ip, sender.to_string(), None, reason.clone())
+        .await
+    {
+        tracing::error!("Failed to ban {target_ip}: {e}");
+        return Err(CommandError::CommandFailed(TextComponent::translate(
+            translation::COMMANDS_BANIP_FAILED,
+            [],
+        )));
+    }
 
     // Send messages
     let affected = server.get_players_by_ip(target_ip).await;

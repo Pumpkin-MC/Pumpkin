@@ -83,7 +83,6 @@ use crate::block::blocks::bed::BedBlock;
 use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::{CommandSender, client_suggestions};
-use crate::data::SaveJSONConfiguration;
 use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
@@ -2216,28 +2215,29 @@ impl Player {
     }
 
     pub async fn ban_ip(&self, server: &Server, reason: Option<TextComponent>) {
-        let mut banned_ips = server.data.banned_ip_list.write().await;
         let string_reason = reason.clone().map_or_else(
             || "Banned by an operator.".to_string(),
             pumpkin_util::text::TextComponent::get_text,
         );
         let target_ip = self.client.address().await.ip();
 
-        if banned_ips.get_entry(&target_ip).is_some() {
+        if server
+            .banned_ip_storage
+            .is_banned(target_ip)
+            .await
+            .unwrap_or(false)
+        {
             return;
         }
 
-        banned_ips
-            .banned_ips
-            .push(pumpkin_storage::banlist::BannedIpEntry::new(
-                target_ip,
-                "Plugin".to_string(),
-                None,
-                string_reason,
-            ));
-
-        banned_ips.save();
-        drop(banned_ips);
+        if let Err(e) = server
+            .banned_ip_storage
+            .ban(target_ip, "Plugin".to_string(), None, string_reason)
+            .await
+        {
+            tracing::error!("Failed to ban ip {target_ip}: {e}");
+            return;
+        }
 
         let kick_reason = reason.unwrap_or_else(|| {
             TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, [])
