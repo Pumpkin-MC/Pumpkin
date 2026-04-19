@@ -2181,32 +2181,32 @@ impl Player {
     }
 
     pub async fn ban(&self, server: &Server, reason: Option<TextComponent>) {
-        let mut banned_players = server.data.banned_player_list.write().await;
+        let is_banned = server
+            .banned_player_storage
+            .is_banned(self.gameprofile.id)
+            .await
+            .unwrap_or(false);
+        if is_banned {
+            return;
+        }
         let string_reason = reason.clone().map_or_else(
             || "Banned by an operator.".to_string(),
             pumpkin_util::text::TextComponent::get_text,
         );
-
-        if banned_players
-            .banned_players
-            .iter()
-            .any(|entry| entry.uuid == self.gameprofile.id)
-        {
-            return;
-        }
-
-        banned_players
-            .banned_players
-            .push(pumpkin_storage::banlist::BannedPlayerEntry::new(
+        if let Err(e) = server
+            .banned_player_storage
+            .ban(
                 self.gameprofile.id,
-                self.gameprofile.name.clone(),
+                &self.gameprofile.name,
                 "Plugin".to_string(),
                 None,
                 string_reason,
-            ));
-
-        banned_players.save();
-        drop(banned_players);
+            )
+            .await
+        {
+            tracing::error!("Failed to ban {}: {e}", self.gameprofile.name);
+            return;
+        }
 
         let kick_reason = reason.unwrap_or_else(|| {
             TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, [])

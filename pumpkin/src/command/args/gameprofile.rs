@@ -136,9 +136,10 @@ impl ArgumentConsumer for GameProfilesArgumentConsumer {
                     }
                 }
                 GameProfileSuggestionMode::BannedNames => {
-                    let banned = server.data.banned_player_list.read().await;
-                    for entry in &banned.banned_players {
-                        push_name_if_missing(&mut names, entry.name.clone());
+                    if let Ok(banned) = server.banned_player_storage.list().await {
+                        for entry in banned {
+                            push_name_if_missing(&mut names, entry.name);
+                        }
                     }
                 }
                 GameProfileSuggestionMode::NonWhitelistedOnlinePlayers => {
@@ -280,15 +281,12 @@ async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<Ga
         }
     }
 
-    {
-        let banned_players = server.data.banned_player_list.read().await;
-        if let Some(entry) = banned_players
-            .banned_players
+    if let Ok(banned_players) = server.banned_player_storage.list().await
+        && let Some(entry) = banned_players
             .iter()
             .find(|entry| entry.name.eq_ignore_ascii_case(name))
-        {
-            return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
-        }
+    {
+        return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
     }
 
     {
@@ -313,15 +311,8 @@ async fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<Ga
         }
     }
 
-    {
-        let banned_players = server.data.banned_player_list.read().await;
-        if let Some(entry) = banned_players
-            .banned_players
-            .iter()
-            .find(|entry| entry.uuid == uuid)
-        {
-            return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
-        }
+    if let Ok(Some(entry)) = server.banned_player_storage.get(uuid).await {
+        return Some(profile_from_uuid_name(entry.uuid, entry.name));
     }
 
     {

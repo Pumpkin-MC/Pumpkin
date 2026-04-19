@@ -33,6 +33,7 @@ use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::lock::LevelLocker;
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
+use pumpkin_storage::banned_player::BannedPlayerStorage;
 use pumpkin_storage::level_info::{LevelData, LevelInfoStorage};
 use pumpkin_storage::player_data::PlayerDataStorage;
 use pumpkin_storage::{NullStorage, StorageError, VanillaStorage};
@@ -122,6 +123,7 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     level_info_storage: Arc<dyn LevelInfoStorage>,
+    pub banned_player_storage: Arc<dyn BannedPlayerStorage>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
     _locker: Arc<Option<AnvilLevelLocker>>,
@@ -191,6 +193,7 @@ impl Server {
             } else {
                 Arc::new(NullStorage::new())
             };
+        let banned_player_storage: Arc<dyn BannedPlayerStorage> = vanilla_storage.clone();
         let player_data_storage = ServerPlayerData::new(
             player_data_backend,
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
@@ -250,6 +253,7 @@ impl Server {
             player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             level_info_storage,
+            banned_player_storage,
             level_info,
             _locker: Arc::new(locker),
         };

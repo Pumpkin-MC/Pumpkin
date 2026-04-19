@@ -9,12 +9,10 @@ use crate::{
         },
         tree::{CommandTree, builder::argument},
     },
-    data::SaveJSONConfiguration,
     net::{DisconnectReason, GameProfile},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_data::translation;
-use pumpkin_storage::banlist::BannedPlayerEntry;
 use pumpkin_util::text::TextComponent;
 
 const NAMES: [&str; 1] = ["ban"];
@@ -96,32 +94,39 @@ async fn ban_profile(
     profile: &GameProfile,
     reason: Option<String>,
 ) -> bool {
-    let mut banned_players = server.data.banned_player_list.write().await;
-
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
 
-    if let Some(entry) = banned_players
-        .banned_players
-        .iter_mut()
-        .find(|entry| entry.uuid == profile.id)
-    {
+    if let Ok(Some(entry)) = server.banned_player_storage.get(profile.id).await {
         if entry.name != profile.name {
-            entry.name.clone_from(&profile.name);
-            banned_players.save();
+            // Name changed; rewrite the ban entry preserving source/expires/reason.
+            let _ = server
+                .banned_player_storage
+                .ban(
+                    profile.id,
+                    &profile.name,
+                    entry.source,
+                    entry.expires,
+                    entry.reason,
+                )
+                .await;
         }
         return false;
     }
 
-    banned_players.banned_players.push(BannedPlayerEntry::new(
-        profile.id,
-        profile.name.clone(),
-        sender.to_string(),
-        None,
-        reason.clone(),
-    ));
-
-    banned_players.save();
-    drop(banned_players);
+    if let Err(e) = server
+        .banned_player_storage
+        .ban(
+            profile.id,
+            &profile.name,
+            sender.to_string(),
+            None,
+            reason.clone(),
+        )
+        .await
+    {
+        tracing::error!("Failed to ban {}: {e}", profile.name);
+        return false;
+    }
 
     // Send messages
     sender

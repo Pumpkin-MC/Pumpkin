@@ -44,17 +44,13 @@ impl CommandExecutor for ListExecutor {
                     handle_banlist(entries, sender).await
                 }
                 "players" => {
-                    let lock = &server.data.banned_player_list.read().await;
-                    let entries = lock
-                        .banned_players
-                        .iter()
-                        .map(|entry| {
-                            (
-                                entry.name.clone(),
-                                entry.source.clone(),
-                                entry.reason.clone(),
-                            )
-                        })
+                    let entries = server
+                        .banned_player_storage
+                        .list()
+                        .await
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|entry| (entry.name, entry.source, entry.reason))
                         .collect();
 
                     handle_banlist(entries, sender).await
@@ -79,12 +75,13 @@ impl CommandExecutor for ListAllExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             let mut entries = Vec::new();
-            for entry in &server.data.banned_player_list.read().await.banned_players {
-                entries.push((
-                    entry.name.clone(),
-                    entry.source.clone(),
-                    entry.reason.clone(),
-                ));
+            for entry in server
+                .banned_player_storage
+                .list()
+                .await
+                .unwrap_or_default()
+            {
+                entries.push((entry.name, entry.source, entry.reason));
             }
 
             for entry in &server.data.banned_ip_list.read().await.banned_ips {

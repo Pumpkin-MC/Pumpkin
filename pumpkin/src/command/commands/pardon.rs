@@ -1,13 +1,10 @@
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{
-            Arg, ConsumedArgs,
-            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
-        },
-        tree::{CommandTree, builder::argument},
+use crate::command::{
+    CommandError, CommandExecutor, CommandResult, CommandSender,
+    args::{
+        Arg, ConsumedArgs,
+        gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
     },
-    data::SaveJSONConfiguration,
+    tree::{CommandTree, builder::argument},
 };
 use CommandError::InvalidConsumption;
 use pumpkin_util::text::TextComponent;
@@ -31,17 +28,18 @@ impl CommandExecutor for Executor {
                 return Err(InvalidConsumption(Some(ARG_TARGET.into())));
             };
 
-            let mut lock = server.data.banned_player_list.write().await;
             let mut successes = 0;
-
             for target in targets {
-                let idx = lock
-                    .banned_players
-                    .iter()
-                    .position(|entry| entry.uuid == target.id);
-
-                if let Some(idx) = idx {
-                    lock.banned_players.remove(idx);
+                if server
+                    .banned_player_storage
+                    .is_banned(target.id)
+                    .await
+                    .unwrap_or(false)
+                {
+                    if let Err(e) = server.banned_player_storage.unban(target.id).await {
+                        tracing::error!("Failed to unban {}: {e}", target.name);
+                        continue;
+                    }
                     sender
                         .send_message(TextComponent::translate(
                             "commands.pardon.success",
@@ -53,7 +51,6 @@ impl CommandExecutor for Executor {
             }
 
             if successes > 0 {
-                lock.save();
                 Ok(successes)
             } else {
                 Err(CommandError::CommandFailed(TextComponent::translate(

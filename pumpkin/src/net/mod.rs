@@ -175,8 +175,7 @@ pub async fn can_not_join(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 
-    let mut banned_players = server.data.banned_player_list.write().await;
-    if let Some(entry) = banned_players.get_entry(profile) {
+    if let Ok(Some(entry)) = server.banned_player_storage.get(profile.id).await {
         let text = TextComponent::translate(
             translation::MULTIPLAYER_DISCONNECT_BANNED_REASON,
             [TextComponent::text(entry.reason.clone())],
@@ -191,7 +190,6 @@ pub async fn can_not_join(
             None => text,
         });
     }
-    drop(banned_players);
 
     if server.white_list.load(Ordering::Relaxed) {
         let ops = server.data.operator_config.read().await;
