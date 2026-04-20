@@ -30,7 +30,6 @@ use pumpkin_data::{
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
 };
-use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
     PositionFlag,
@@ -118,7 +117,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// The `server` parameter provides access to the game server instance.
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -1509,7 +1508,7 @@ impl Entity {
     // Move by a delta, adjust for collisions, and send
 
     // Does not send movement. That must be done separately
-    async fn move_entity(&self, caller: Arc<dyn EntityBase>, mut motion: Vector3<f64>) {
+    async fn move_entity<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, mut motion: Vector3<f64>) {
         if caller.get_player().is_some() {
             return;
         }
@@ -2686,85 +2685,66 @@ impl Entity {
 }
 
 impl NBTStorage for Entity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             let position = self.pos.load();
-            nbt.put_string(
-                "id",
-                format!("minecraft:{}", self.entity_type.resource_name),
-            );
-            let uuid = self.entity_uuid.as_u128();
-            nbt.put(
-                "UUID",
-                NbtTag::IntArray(vec![
-                    (uuid >> 96) as i32,
-                    ((uuid >> 64) & 0xFFFF_FFFF) as i32,
-                    ((uuid >> 32) & 0xFFFF_FFFF) as i32,
-                    (uuid & 0xFFFF_FFFF) as i32,
-                ]),
-            );
-            nbt.put(
-                "Pos",
-                NbtTag::List(vec![
-                    position.x.into(),
-                    position.y.into(),
-                    position.z.into(),
-                ]),
-            );
+            nbt.put_string(&format!("minecraft:{}", self.entity_type.resource_name));
+            nbt.put_uuid(&self.entity_uuid);
+
+            // Pos
+            nbt.put_f64(position.x);
+            nbt.put_f64(position.y);
+            nbt.put_f64(position.z);
+
+            // Motion
             let velocity = self.velocity.load();
-            nbt.put(
-                "Motion",
-                NbtTag::List(vec![
-                    velocity.x.into(),
-                    velocity.y.into(),
-                    velocity.z.into(),
-                ]),
-            );
-            nbt.put(
-                "Rotation",
-                NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
-            );
-            nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
-            nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
-            nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
-            nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
-            if self.has_visual_fire.load(Relaxed) {
-                nbt.put_bool("HasVisualFire", true);
-            }
+            nbt.put_f64(velocity.x);
+            nbt.put_f64(velocity.y);
+            nbt.put_f64(velocity.z);
+
+            // Rotation
+            nbt.put_f32(self.yaw.load());
+            nbt.put_f32(self.pitch.load());
+
+            nbt.put_short(self.fire_ticks.load(Relaxed) as i16);
+            nbt.put_bool(self.on_ground.load(Relaxed));
+            nbt.put_bool(self.invulnerable.load(Relaxed));
+            nbt.put_int(self.portal_cooldown.load(Relaxed) as i32);
+            nbt.put_bool(self.has_visual_fire.load(Relaxed));
 
             // todo more...
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            let position = nbt.get_list("Pos").unwrap();
-            let x = position[0].extract_double().unwrap_or(0.0);
-            let y = position[1].extract_double().unwrap_or(0.0);
-            let z = position[2].extract_double().unwrap_or(0.0);
+            let _id = nbt.get_string().unwrap();
+            let _uuid = nbt.get_uuid().unwrap();
+
+            let x = nbt.get_f64().unwrap_or(0.0);
+            let y = nbt.get_f64().unwrap_or(0.0);
+            let z = nbt.get_f64().unwrap_or(0.0);
             let pos = Vector3::new(x, y, z);
             self.set_pos(pos);
             self.first_loaded_chunk_position.store(Some(pos.to_i32()));
-            let velocity = nbt.get_list("Motion").unwrap();
-            let x = velocity[0].extract_double().unwrap_or(0.0);
-            let y = velocity[1].extract_double().unwrap_or(0.0);
-            let z = velocity[2].extract_double().unwrap_or(0.0);
-            self.velocity.store(Vector3::new(x, y, z));
-            let rotation = nbt.get_list("Rotation").unwrap();
-            let yaw = rotation[0].extract_float().unwrap_or(0.0);
-            let pitch = rotation[1].extract_float().unwrap_or(0.0);
+            let vx = nbt.get_f64().unwrap_or(0.0);
+            let vy = nbt.get_f64().unwrap_or(0.0);
+            let vz = nbt.get_f64().unwrap_or(0.0);
+            self.velocity.store(Vector3::new(vx, vy, vz));
+            let yaw = nbt.get_f32().unwrap_or(0.0);
+            let pitch = nbt.get_f32().unwrap_or(0.0);
             self.set_rotation(yaw, pitch);
             self.head_yaw.store(yaw);
             self.fire_ticks
-                .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
+                .store(i32::from(nbt.get_short().unwrap_or(0)), Relaxed);
             self.on_ground
-                .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
+                .store(nbt.get_bool().unwrap_or(false), Relaxed);
             self.invulnerable
-                .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
+                .store(nbt.get_bool().unwrap_or(false), Relaxed);
             self.portal_cooldown
-                .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
+                .store(nbt.get_int().unwrap_or(0) as u32, Relaxed);
             self.has_visual_fire
-                .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
+                .store(nbt.get_bool().unwrap_or(false), Relaxed);
             // todo more...
         })
     }
@@ -2773,7 +2753,7 @@ impl NBTStorage for Entity {
 impl EntityBase for Entity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -2783,9 +2763,9 @@ impl EntityBase for Entity {
                 .store(was_in_powder_snow, Ordering::Relaxed);
             self.is_in_powder_snow.store(false, Ordering::Relaxed);
             self.update_last_pos();
-            self.tick_portal(&caller).await;
-            self.update_fluid_state(&caller).await;
-            self.check_out_of_world(&*caller).await;
+            self.tick_portal(caller).await;
+            self.update_fluid_state(caller).await;
+            self.check_out_of_world(&**caller).await;
             let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
             // Check for fire immunity (or if the specific entity is)
@@ -2799,7 +2779,7 @@ impl EntityBase for Entity {
                     }
                 } else {
                     if fire_ticks % 20 == 0 {
-                        caller.damage(&*caller, 1.0, DamageType::ON_FIRE).await;
+                        (**caller).damage(&**caller, 1.0, DamageType::ON_FIRE).await;
                     }
 
                     self.fire_ticks.store(fire_ticks - 1, Ordering::Relaxed);
@@ -2850,20 +2830,22 @@ impl EntityBase for Entity {
     }
 }
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 pub type NbtFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait NBTStorage: Send + Sync {
-    fn write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, _nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {})
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt<'a>(&'a mut self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.read_nbt_non_mut(nbt).await;
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, _nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {})
     }
 }
@@ -2871,7 +2853,7 @@ pub trait NBTStorage: Send + Sync {
 pub type NBTInitFuture<'a, T> = Pin<Box<dyn Future<Output = Option<T>> + Send + 'a>>;
 
 pub trait NBTStorageInit: Send + Sync + Sized {
-    fn create_from_nbt<'a>(_nbt: &'a mut NbtCompound) -> NBTInitFuture<'a, Self>
+    fn create_from_nbt<'a>(_nbt: &'a mut PNbtCompound) -> NBTInitFuture<'a, Self>
     where
         Self: 'a,
     {

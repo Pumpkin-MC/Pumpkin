@@ -1,0 +1,82 @@
+interface server {
+    use player.{player};
+    use common.{game-mode};
+    use %world.{%world};
+
+    /// Represents the difficulty setting of a Minecraft server.
+    enum difficulty {
+        /// Hostile mobs do not spawn. Players regain health automatically.
+        peaceful,
+        /// Hostile mobs deal less damage.
+        easy,
+        /// Standard Minecraft difficulty.
+        normal,
+        /// Hostile mobs deal more damage.
+        hard,
+    }
+
+    /// Represents the global server instance.
+    resource server {
+        /// Returns the current difficulty level of the server.
+        get-difficulty: func() -> difficulty;
+
+        /// Returns the total number of players currently connected to the server.
+        get-player-count: func() -> u32;
+
+        /// Returns the rolling average Milliseconds Per Tick (MSPT).
+        /// A value below 50.0 is required for a stable 20 TPS.
+        get-mspt: func() -> f64;
+
+        /// Returns the effective Ticks Per Second (TPS).
+        /// Ideal value is 20.0.
+        get-tps: func() -> f64;
+
+        /// Returns a list of all online players across all worlds.
+        get-all-players: func() -> list<player>;
+
+        /// Searches for a player by their exact name.
+        get-player-by-name: func(name: string) -> option<player>;
+
+        /// Searches for a player by their UUID string.
+        get-player-by-uuid: func(id: string) -> option<player>;
+
+        /// Returns a list of all worlds on this server.
+        get-all-worlds: func() -> list<%world>;
+
+        /// Gets a world by its dimension name (e.g., "minecraft:overworld").
+        get-world-by-name: func(name: string) -> option<%world>;
+
+        /// Broadcasts a system chat message to all players.
+        broadcast: func(message: string);
+
+        /// Returns the maximum number of players allowed on the server.
+        get-max-players: func() -> u32;
+
+        /// Returns whether the server is in hardcore mode.
+        is-hardcore: func() -> bool;
+
+        /// Returns whether the server is in online mode (authenticates with Mojang).
+        is-online-mode: func() -> bool;
+
+        /// Returns the server's Message of the Day (MOTD).
+        get-motd: func() -> string;
+
+        /// Returns whether the server has a whitelist enabled.
+        has-whitelist: func() -> bool;
+
+        /// Returns whether the server allows the Nether dimension.
+        get-allow-nether: func() -> bool;
+
+        /// Returns whether the server allows the End dimension.
+        get-allow-end: func() -> bool;
+
+        /// Returns the server's maximum view distance.
+        get-view-distance: func() -> u8;
+
+        /// Returns the server's maximum simulation distance.
+        get-simulation-distance: func() -> u8;
+
+        /// Returns the server's default gamemode.
+        get-default-gamemode: func() -> game-mode;
+    }
+}

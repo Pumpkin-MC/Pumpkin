@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::Sound;
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
@@ -65,23 +64,25 @@ impl BatEntity {
     }
 }
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 impl NBTStorage for BatEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity.living_entity.entity.write_nbt(nbt).await;
             let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
-            nbt.put_byte("BatFlags", flags as i8);
+            nbt.put_byte(flags as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity
                 .living_entity
                 .entity
                 .read_nbt_non_mut(nbt)
                 .await;
-            let flags = nbt.get_byte("BatFlags").unwrap_or(0) as u8;
+            let flags = nbt.get_byte().unwrap_or(0) as u8;
             let roosting = (flags & ROOSTING_FLAG) != 0;
             self.set_roosting(roosting).await;
         })

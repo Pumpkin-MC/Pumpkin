@@ -285,15 +285,15 @@ impl ItemEntity {
         Some(tick_move)
     }
 
-    async fn move_and_apply_friction(
-        &self,
-        caller: &Arc<dyn EntityBase>,
-        server: &Server,
+    async fn move_and_apply_friction<'a>(
+        &'a self,
+        caller: &'a Arc<dyn EntityBase>,
+        server: &'a Server,
         move_velo: Vector3<f64>,
     ) {
         let entity = &self.entity;
 
-        entity.move_entity(caller.clone(), move_velo).await;
+        entity.move_entity(caller, move_velo).await;
         entity.tick_block_collisions(caller, server).await;
 
         let mut friction = 0.98;
@@ -346,9 +346,9 @@ impl ItemEntity {
         true
     }
 
-    async fn sync_motion_if_dirty(
-        &self,
-        caller: &Arc<dyn EntityBase>,
+    async fn sync_motion_if_dirty<'a>(
+        &'a self,
+        caller: &'a Arc<dyn EntityBase>,
         original_velo: Vector3<f64>,
     ) {
         let entity = &self.entity;
@@ -416,7 +416,7 @@ impl NBTStorage for ItemEntity {
 impl EntityBase for ItemEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -437,12 +437,12 @@ impl EntityBase for ItemEntity {
             };
 
             if tick_move {
-                self.move_and_apply_friction(&caller, server, move_velo)
+                self.move_and_apply_friction(caller, server, move_velo)
                     .await;
             }
 
             if self.process_age_and_merge().await {
-                self.sync_motion_if_dirty(&caller, original_velo).await;
+                self.sync_motion_if_dirty(caller, original_velo).await;
             }
         })
     }

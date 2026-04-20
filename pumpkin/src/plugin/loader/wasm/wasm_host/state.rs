@@ -36,6 +36,9 @@ pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type WorldResource = WasmResource<Arc<World>>;
 pub type ScoreboardResource = WasmResource<Arc<World>>;
 pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
+pub type BossBarResource = WasmResource<
+    Arc<Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>>,
+>;
 pub type TextComponentResource = WasmResource<TextComponent>;
 pub type CommandResource = WasmResource<CommandTree>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
@@ -122,6 +125,16 @@ impl PluginHostState {
         provider: Arc<Mutex<PluginGui>>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(GuiResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_boss_bar<T>(
+        &mut self,
+        provider: Arc<
+            Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>,
+        >,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(BossBarResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

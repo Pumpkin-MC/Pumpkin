@@ -154,13 +154,31 @@ impl<R: Read> NetworkReadExt for R {
     }
 
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {
-        let size = self.get_var_uint()?.0 as usize;
-        if size > bound {
-            return Err(ReadingError::TooLarge("string".to_string()));
+        let bytes_len = self.get_var_uint()?.0 as usize;
+
+        // We treat `bound` as the maximum number of Java `char`s allowed.
+
+        // First, check if there are too many bytes to even fit in the UTF-16 bound.
+        // 1 Java `char` takes a maximum of 3 bytes in UTF-8:
+        let maximum_utf8_bytes = bound.saturating_mul(3);
+        if bytes_len > maximum_utf8_bytes {
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many bytes ({bytes_len} > {maximum_utf8_bytes})"
+            )));
         }
 
-        let data = self.read_boxed_slice(size)?;
-        String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))
+        let data = self.read_boxed_slice(bytes_len)?;
+        let string =
+            String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))?;
+
+        // Next, if we're able to find the (bound + 1)th UTF-16 character, the string is too big.
+        if string.encode_utf16().nth(bound).is_some() {
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many UTF-16 characters (more than the maximum limit {bound})"
+            )));
+        }
+
+        Ok(string)
     }
 
     fn get_string(&mut self) -> Result<String, ReadingError> {
