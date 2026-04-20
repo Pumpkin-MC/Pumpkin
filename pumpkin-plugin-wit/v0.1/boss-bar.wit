@@ -1,0 +1,66 @@
+interface boss-bar {
+    use text.{text-component};
+    use player.{player};
+
+    /// Represents the color of a boss bar.
+    enum boss-bar-color {
+        pink,
+        blue,
+        red,
+        green,
+        yellow,
+        purple,
+        white,
+    }
+
+    /// Represents the division (notches) of a boss bar.
+    enum boss-bar-division {
+        no-division,
+        notches-6,
+        notches-10,
+        notches-12,
+        notches-20,
+    }
+
+    /// Represents a boss bar that can be shown to players.
+    resource boss-bar {
+        /// Creates a new boss bar.
+        constructor(title: text-component, color: boss-bar-color, division: boss-bar-division);
+        
+        /// Returns the title of this boss bar.
+        get-title: func() -> text-component;
+        
+        /// Sets the title of this boss bar.
+        set-title: func(title: text-component);
+        
+        /// Returns the health (0.0 to 1.0) of this boss bar.
+        get-health: func() -> f32;
+        
+        /// Sets the health (0.0 to 1.0) of this boss bar.
+        set-health: func(health: f32);
+        
+        /// Returns the color of this boss bar.
+        get-color: func() -> boss-bar-color;
+        
+        /// Sets the color of this boss bar.
+        set-color: func(color: boss-bar-color);
+        
+        /// Returns the division of this boss bar.
+        get-division: func() -> boss-bar-division;
+        
+        /// Sets the division of this boss bar.
+        set-division: func(division: boss-bar-division);
+        
+        /// Adds a player to this boss bar, making it visible to them.
+        add-player: func(player: player);
+        
+        /// Removes a player from this boss bar, hiding it from them.
+        remove-player: func(player: player);
+        
+        /// Returns a list of all players currently seeing this boss bar.
+        get-players: func() -> list<player>;
+        
+        /// Removes this boss bar from all players and cleans it up.
+        remove-all: func();
+    }
+}

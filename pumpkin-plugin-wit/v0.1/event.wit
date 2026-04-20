@@ -1,0 +1,318 @@
+interface event {
+    use common.{block-position, game-mode, hand, item-stack, position};
+    use player.{player};
+    use text.{text-component};
+    use %world.{%world};
+
+    enum event-priority {
+        highest,
+        high,
+        normal,
+        low,
+        lowest,
+    }
+
+    record player-join-event-data {
+        player: player,
+        join-message: text-component,
+        cancelled: bool
+    }
+
+    record player-leave-event-data {
+        player: player,
+        leave-message: text-component,
+        cancelled: bool
+    }
+
+    record player-login-event-data {
+        player: player,
+        kick-message: text-component,
+        cancelled: bool
+    }
+
+    record player-chat-event-data {
+        player: player,
+        message: string,
+        recipients: list<player>,
+        cancelled: bool
+    }
+
+    record player-command-send-event-data {
+        player: player,
+        command: string,
+        cancelled: bool
+    }
+
+    record player-permission-check-event-data {
+        player: player,
+        permission: string,
+        permission-result: bool
+    }
+
+    record player-move-event-data {
+        player: player,
+        from-position: position,
+        to-position: position,
+        cancelled: bool
+    }
+
+    record player-teleport-event-data {
+        player: player,
+        from-position: position,
+        to-position: position,
+        cancelled: bool
+    }
+
+    record player-change-world-event-data {
+        player: player,
+        previous-world: %world,
+        new-world: %world,
+        position: position,
+        yaw: f32,
+        pitch: f32,
+        cancelled: bool
+    }
+
+    record player-exp-change-event-data {
+        player: player,
+        amount: s32
+    }
+
+    record player-item-held-event-data {
+        player: player,
+        previous-slot: u8,
+        new-slot: u8,
+        cancelled: bool
+    }
+
+    record player-changed-main-hand-event-data {
+        player: player,
+        main-hand: hand
+    }
+
+    record player-gamemode-change-event-data {
+        player: player,
+        previous-gamemode: game-mode,
+        new-gamemode: game-mode,
+        cancelled: bool
+    }
+
+    record player-custom-payload-event-data {
+        player: player,
+        channel: string,
+        data: list<u8>
+    }
+
+    enum player-fish-state {
+        fishing,
+        caught-fish,
+        caught-entity,
+        in-ground,
+        failed-attempt,
+        reel-in,
+        bite,
+    }
+
+    record player-fish-event-data {
+        player: player,
+        caught-uuid: option<string>,
+        caught-type: string,
+        hook-uuid: string,
+        state: player-fish-state,
+        hand: hand,
+        exp-to-drop: s32,
+        cancelled: bool
+    }
+
+    record player-egg-throw-event-data {
+        player: player,
+        egg-uuid: string,
+        hatching: bool,
+        num-hatches: u8,
+        hatching-type: string,
+        cancelled: bool
+    }
+
+    enum entity-interaction-action {
+        interact,
+        attack,
+        interact-at,
+    }
+
+    enum interact-action {
+        left-click-block,
+        left-click-air,
+        right-click-air,
+        right-click-block,
+    }
+
+    record player-interact-event-data {
+        player: player,
+        action: interact-action,
+        clicked-pos: option<block-position>,
+        block: string,
+        cancelled: bool
+    }
+
+    record player-toggle-sneak-event-data {
+        player: player,
+        is-sneaking: bool,
+        cancelled: bool
+    }
+
+    record player-toggle-flight-event-data {
+        player: player,
+        is-flying: bool,
+        cancelled: bool
+    }
+
+    record player-toggle-sprint-event-data {
+        player: player,
+        is-sprinting: bool,
+        cancelled: bool
+    }
+
+    record player-interact-unknown-entity-event-data {
+        player: player,
+        entity-id: s32,
+        action: entity-interaction-action,
+        cancelled: bool
+    }
+
+    record block-redstone-event-data {
+        target-world: %world,
+        state-id: u16,
+        block-position: block-position,
+        old-current: s32,
+        new-current: s32,
+        cancelled: bool
+    }
+
+    record block-break-event-data {
+        player: option<player>,
+        block: string,
+        block-position: block-position,
+        exp: u32,
+        should-drop: bool,
+        cancelled: bool
+    }
+
+    record block-burn-event-data {
+        igniting-block: string,
+        block: string,
+        cancelled: bool
+    }
+
+    record block-can-build-event-data {
+        block-to-build: string,
+        buildable: bool,
+        player: player,
+        block: string,
+        cancelled: bool
+    }
+
+    record block-grow-event-data {
+        target-world: %world,
+        old-block: string,
+        old-state-id: u16,
+        new-block: string,
+        new-state-id: u16,
+        block-position: block-position,
+        cancelled: bool
+    }
+
+    record block-place-event-data {
+        player: player,
+        block-placed: string,
+        block-placed-against: string,
+        block-position: block-position,
+        can-build: bool,
+        cancelled: bool
+    }
+    record server-command-event-data {
+        command: string,
+        cancelled: bool
+    }
+
+    record spawn-change-event-data {
+        target-world: %world,
+        previous-position: block-position,
+        previous-yaw: f32,
+        previous-pitch: f32,
+        new-position: block-position,
+        new-yaw: f32,
+        new-pitch: f32
+    }
+
+    record server-broadcast-event-data {
+        message: text-component,
+        sender: text-component,
+        cancelled: bool
+    }
+
+    enum event-type {
+        player-join-event,
+        player-leave-event,
+        player-login-event,
+        player-chat-event,
+        player-command-send-event,
+        player-permission-check-event,
+        player-move-event,
+        player-teleport-event,
+        player-change-world-event,
+        player-exp-change-event,
+        player-item-held-event,
+        player-changed-main-hand-event,
+        player-gamemode-change-event,
+        player-custom-payload-event,
+        player-fish-event,
+        player-egg-throw-event,
+        player-interact-unknown-entity-event,
+        player-interact-event,
+        player-toggle-sneak-event,
+        player-toggle-flight-event,
+        player-toggle-sprint-event,
+        block-redstone-event,
+        block-break-event,
+        block-burn-event,
+        block-can-build-event,
+        block-grow-event,
+        block-place-event,
+        server-command-event,
+        spawn-change-event,
+        server-broadcast-event,
+    }
+
+    variant event {
+        player-join-event(player-join-event-data),
+        player-leave-event(player-leave-event-data),
+        player-login-event(player-login-event-data),
+        player-chat-event(player-chat-event-data),
+        player-command-send-event(player-command-send-event-data),
+        player-permission-check-event(player-permission-check-event-data),
+        player-move-event(player-move-event-data),
+        player-teleport-event(player-teleport-event-data),
+        player-change-world-event(player-change-world-event-data),
+        player-exp-change-event(player-exp-change-event-data),
+        player-item-held-event(player-item-held-event-data),
+        player-changed-main-hand-event(player-changed-main-hand-event-data),
+        player-gamemode-change-event(player-gamemode-change-event-data),
+        player-custom-payload-event(player-custom-payload-event-data),
+        player-fish-event(player-fish-event-data),
+        player-egg-throw-event(player-egg-throw-event-data),
+        player-interact-unknown-entity-event(player-interact-unknown-entity-event-data),
+        player-interact-event(player-interact-event-data),
+        player-toggle-sneak-event(player-toggle-sneak-event-data),
+        player-toggle-flight-event(player-toggle-flight-event-data),
+        player-toggle-sprint-event(player-toggle-sprint-event-data),
+        block-redstone-event(block-redstone-event-data),
+        block-break-event(block-break-event-data),
+        block-burn-event(block-burn-event-data),
+        block-can-build-event(block-can-build-event-data),
+        block-grow-event(block-grow-event-data),
+        block-place-event(block-place-event-data),
+        server-command-event(server-command-event-data),
+        spawn-change-event(spawn-change-event-data),
+        server-broadcast-event(server-broadcast-event-data),
+    }
+}
