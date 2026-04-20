@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 serde_json.workspace = true
 tracing.workspace = true
+either.workspace = true
 
 [lints]
 workspace = true
