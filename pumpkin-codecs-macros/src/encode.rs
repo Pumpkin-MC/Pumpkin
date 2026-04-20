@@ -25,8 +25,8 @@ fn derive_struct_encode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -
         return quote! {
                 impl #codecs_crate::codec::Encode for #name {
                     fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                        let mut builder = ops.map_builder();
-                        builder.build(prefix)
+                        let mut builder = #codecs_crate::DynamicOps::map_builder(ops);
+                        #codecs_crate::struct_builder::StructBuilder::build(builder, prefix)
                     }
                 }
             }.into();
@@ -110,7 +110,7 @@ fn derive_enum_encode(
             });
         match_arms.push(quote! {
             Self::#ident #mat => {
-                builder = builder.add_string_key_value(#tag_key_lit, ops.create_string(#ty_lit));
+                builder = #codecs_crate::struct_builder::StructBuilder::add_string_key_value(builder, #tag_key_lit, ops.create_string(#ty_lit));
                 #variant_encode
             }
         });
@@ -120,11 +120,11 @@ fn derive_enum_encode(
         quote! {
             impl #codecs_crate::codec::Encode for #name {
                 fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                    let mut builder = ops.map_builder();
+                    let mut builder = #codecs_crate::DynamicOps::map_builder(ops);
                     match self {
                         #( #match_arms ),*
                     }
-                    builder.build(prefix)
+                    #codecs_crate::struct_builder::StructBuilder::build(builder, prefix)
                 }
             }
         }.into()
@@ -138,9 +138,9 @@ fn derive_single_variant_encode(codecs_crate: &Ident, fields: &Fields) -> proc_m
         quote! { &self. #access }
     });
     quote! {
-        let mut builder = ops.map_builder();
+        let mut builder = #codecs_crate::DynamicOps::map_builder(ops);
         #builder_encodes
-        builder.build(prefix)
+        #codecs_crate::struct_builder::StructBuilder::build(builder, prefix)
     }
 }
 
