@@ -1,7 +1,7 @@
+use libc::EIO;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jint, jstring};
-use libc;
 use nix::poll::{PollFd, PollFlags, poll};
 use nix::pty::openpty;
 use nix::unistd::{dup2, setsid};
@@ -19,7 +19,7 @@ pub extern "system" fn Java_com_pumpkinmc_MainActivity_openPty(
     cwd: JString,
 ) -> jint {
     let cmd_str: String = env.get_string(&command).unwrap().into();
-    let cwd_str: String = env.get_string(&cwd).unwrap().into();
+    let working_dir: String = env.get_string(&cwd).unwrap().into();
 
     let pty = openpty(None, None).expect("openpty failed");
     let master_fd = pty.master;
@@ -36,7 +36,7 @@ pub extern "system" fn Java_com_pumpkinmc_MainActivity_openPty(
                 drop(slave_fd);
                 drop(master_fd);
 
-                let _ = Command::new(&cmd_str).current_dir(cwd_str).exec();
+                let _ = Command::new(&cmd_str).current_dir(working_dir).exec();
                 std::process::exit(1);
             }
             Ok(nix::unistd::ForkResult::Parent { child: _ }) => {
@@ -82,12 +82,10 @@ pub extern "system" fn Java_com_pumpkinmc_MainActivity_readPty(
             Some(env.new_string(s).unwrap().into_raw())
         }
         Ok(_) => {
-            // EOF — slave side closed (server exited)
             let _ = file.into_raw_fd();
             return env.new_string("\n[Server stopped]\n").unwrap().into_raw();
         }
-        Err(e) if e.raw_os_error() == Some(libc::EIO) => {
-            // EIO — PTY master loses slave when child exits
+        Err(e) if e.raw_os_error() == Some(EIO) => {
             let _ = file.into_raw_fd();
             return env.new_string("\n[Server stopped]\n").unwrap().into_raw();
         }

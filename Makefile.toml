@@ -70,14 +70,26 @@ script = [
   "cp target/x86_64-linux-android/release/librust_terminal.so  android/app/src/main/jniLibs/x86_64/librust_terminal.so",
 ]
 
+[tasks.android-gradle-wrapper]
+description = "Download gradle-wrapper.jar if missing"
+script_runner = "@shell"
+script = [
+  "JAR=android/gradle/wrapper/gradle-wrapper.jar",
+  "[ -f \"$JAR\" ] && exit 0",
+  "echo 'Downloading gradle-wrapper.jar...'",
+  "curl -fsSL 'https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar' -o \"$JAR\"",
+]
+
 [tasks.android-apk-debug]
 description = "Assemble debug APK via Gradle"
+dependencies = ["android-gradle-wrapper"]
 cwd = "android"
 script_runner = "@shell"
 script = ["./gradlew assembleDebug"]
 
 [tasks.android-apk-release]
 description = "Assemble release APK via Gradle"
+dependencies = ["android-gradle-wrapper"]
 cwd = "android"
 script_runner = "@shell"
 script = ["./gradlew assembleRelease"]
