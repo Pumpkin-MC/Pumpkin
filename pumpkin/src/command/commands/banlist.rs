@@ -7,7 +7,7 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const DESCRIPTION: &str = "shows the banlist";
+const DESCRIPTION: &str = "Prints the banlist of players, IPs, or both at once.";
 
 const PERMISSION: &str = "minecraft:command.banlist";
 
