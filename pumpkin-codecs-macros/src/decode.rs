@@ -37,11 +37,12 @@ fn derive_struct_decode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -
     quote! {
         impl #codecs_crate::codec::Decode for #name {
             fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> #codecs_crate::DataResult<(Self, O::Value)> {
-                ops.get_map(&input)
+                let single_result = ops.get_map(&input)
                     .with_lifecycle(#codecs_crate::Lifecycle::Stable)
                     .flat_map(|map| {
                         #variant_decode
-                    })
+                    });
+                single_result.map(|s| (s, input))
             }
         }
     }.into()
@@ -95,7 +96,7 @@ fn derive_enum_decode(
         let ident = &variant.ident;
         let qualified_variant_ident = quote! { Self::#ident };
         let variant_decode = if variant.fields.is_empty() {
-            quote! { #codecs_crate::DataResult::new_success((#qualified_variant_ident, input.clone())) }
+            quote! { #codecs_crate::DataResult::new_success(#qualified_variant_ident) }
         } else {
             derive_single_variant_decode(
                 codecs_crate,
@@ -114,7 +115,7 @@ fn derive_enum_decode(
         quote! {
             impl #codecs_crate::codec::Decode for #name {
                 fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
-                    ops.get_map(&input)
+                    let single_result = ops.get_map(&input)
                         .with_lifecycle(#codecs_crate::Lifecycle::Stable)
                         .flat_map(|map| {
                             let ty: #codecs_crate::DataResult<String> = #codecs_crate::codec::FieldDecode::decode_field::<O>(#tag_key_lit, &map, ops);
@@ -124,7 +125,8 @@ fn derive_enum_decode(
                                     _ => #codecs_crate::DataResult::new_error(format!("Invalid differentiator key {ty}"))
                                 }
                             })
-                        })
+                        });
+                    single_result.map(|s| (s, input))
                 }
             }
         }.into()
@@ -188,7 +190,6 @@ fn derive_single_variant_decode(
     quote! {
         #(#builder_decodes)*
         a0.#apply_fn(#constructor_tokens, #( #other_apply_params ),*)
-            .map(|r| (r, input.clone()))
     }
 }
 
