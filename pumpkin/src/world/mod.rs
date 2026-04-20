@@ -386,13 +386,6 @@ impl World {
         .await;
     }
 
-    pub fn get_difficulty(&self, difficulty: Difficulty) {
-        let current_info = self.level_info.load();
-        let mut new_info = (**current_info).clone();
-        new_info.difficulty = difficulty;
-        self.level_info.store(Arc::new(new_info));
-    }
-
     pub fn set_difficulty(&self, difficulty: Difficulty) {
         let current_info = self.level_info.load();
         let mut new_info = (**current_info).clone();
@@ -821,7 +814,11 @@ impl World {
             Vector3<i32>,
             Vec<(BlockPos, BlockStateId)>,
         > = HashMap::new();
-        for (position, block_state_id) in self.unsent_block_changes.lock().await.drain() {
+        let changes = {
+            let mut guard = self.unsent_block_changes.lock().await;
+            std::mem::take(&mut *guard)
+        };
+        for (position, block_state_id) in changes {
             let chunk_section = chunk_section_from_pos(&position);
             block_state_updates_by_chunk_section
                 .entry(chunk_section)
