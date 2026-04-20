@@ -1,7 +1,7 @@
-use libc::EIO;
 use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jint, jstring};
+use libc::EIO;
 use nix::poll::{PollFd, PollFlags, poll};
 use nix::pty::openpty;
 use nix::unistd::{dup2, setsid};
