@@ -17,12 +17,12 @@ struct BanListEntry {
     reason: String,
 }
 
-struct ListCommandExecutor {
+struct BanListCommandExecutor {
     players: bool,
     ips: bool,
 }
 
-impl CommandExecutor for ListCommandExecutor {
+impl CommandExecutor for BanListCommandExecutor {
     fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
         Box::pin(async move {
             let mut entries = Vec::new();
@@ -104,15 +104,15 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
     dispatcher.register(
         command("banlist", DESCRIPTION)
             .requires(PERMISSION)
-            .then(literal("ips").executes(ListCommandExecutor {
+            .then(literal("ips").executes(BanListCommandExecutor {
                 players: false,
                 ips: true,
             }))
-            .then(literal("players").executes(ListCommandExecutor {
+            .then(literal("players").executes(BanListCommandExecutor {
                 players: true,
                 ips: false,
             }))
-            .executes(ListCommandExecutor {
+            .executes(BanListCommandExecutor {
                 players: true,
                 ips: true,
             }),
