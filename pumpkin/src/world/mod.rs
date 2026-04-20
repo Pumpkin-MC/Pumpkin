@@ -1837,7 +1837,9 @@ impl World {
         self.broadcast_packet_all(&CPlayerInfoUpdate::new(
             (PlayerInfoFlags::ADD_PLAYER
                 | PlayerInfoFlags::UPDATE_GAME_MODE
-                | PlayerInfoFlags::UPDATE_LISTED)
+                | PlayerInfoFlags::UPDATE_LISTED
+                | PlayerInfoFlags::UPDATE_LATENCY
+                | PlayerInfoFlags::UPDATE_LIST_PRIORITY)
                 .bits(),
             &[pumpkin_protocol::java::client::play::Player {
                 uuid: gameprofile.id,
@@ -1848,6 +1850,8 @@ impl World {
                     },
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
                     PlayerAction::UpdateListed(true),
+                    PlayerAction::UpdateLatency(VarInt(0)),
+                    PlayerAction::UpdateListOrder(VarInt(0)),
                 ],
             }],
         ))
@@ -1867,7 +1871,13 @@ impl World {
                         name: &player.gameprofile.name,
                         properties: &player.gameprofile.properties,
                     },
-                    PlayerAction::UpdateListed(true),
+                    PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
+                    PlayerAction::UpdateLatency(VarInt(
+                        player.tab_list_latency.load(Ordering::Relaxed),
+                    )),
+                    PlayerAction::UpdateListOrder(VarInt(
+                        player.tab_list_order.load(Ordering::Relaxed),
+                    )),
                 ];
 
                 if base_config.allow_chat_reports {
@@ -1883,7 +1893,10 @@ impl World {
                 current_player_data.push((&player.gameprofile.id, player_actions));
             }
 
-            let mut action_flags = PlayerInfoFlags::ADD_PLAYER | PlayerInfoFlags::UPDATE_LISTED;
+            let mut action_flags = PlayerInfoFlags::ADD_PLAYER
+                | PlayerInfoFlags::UPDATE_LISTED
+                | PlayerInfoFlags::UPDATE_LATENCY
+                | PlayerInfoFlags::UPDATE_LIST_PRIORITY;
             if base_config.allow_chat_reports {
                 action_flags |= PlayerInfoFlags::INITIALIZE_CHAT;
             }

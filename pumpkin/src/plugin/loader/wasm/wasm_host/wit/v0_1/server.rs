@@ -1,6 +1,8 @@
+use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 use wasmtime::component::Resource;
 
+use super::player::text_component_from_resource;
 use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, ServerResource},
     wit::v0_1::pumpkin::{
@@ -162,13 +164,31 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
 
         server
             .broadcast_message(
-                &pumpkin_util::text::TextComponent::text(message),
-                &pumpkin_util::text::TextComponent::text("Server"),
+                &TextComponent::text(message),
+                &TextComponent::text("Server"),
                 0,
                 None,
             )
             .await;
 
+        Ok(())
+    }
+
+    async fn broadcast_tab_list_header_footer(
+        &mut self,
+        _rep: Resource<Server>,
+        header: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        footer: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let header = text_component_from_resource(self, &header);
+        let footer = text_component_from_resource(self, &footer);
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+        server
+            .broadcast_tab_list_header_footer(&header, &footer)
+            .await;
         Ok(())
     }
 

@@ -63,12 +63,25 @@ interface player {
         has-permission: func (node: string) -> bool;
         /// Returns the player's display name, which may include formatting.
         get-display-name: func () -> text-component;
+        /// Sets the player's display name.
+        set-display-name: func (display-name: text-component);
 
         // Messaging & titles
 
         /// Sends a system message to the player's chat.
         send-system-message: func (text: text-component, overlay: bool);
+        /// Sets the header and footer of the player's Tab list.
+        set-tab-list-header-footer: func (header: text-component, footer: text-component);
+
+        /// Sets the sorting order of the player in the Tab list.
+        set-tab-list-order: func (order: s32);
+        /// Sets the latency (ping) shown for the player in the Tab list.
+        set-tab-list-latency: func (latency: s32);
+        /// Sets whether the player is visible in the Tab list.
+        set-tab-list-listed: func (listed: bool);
+
         /// Shows a large title on the player's screen.
+
         show-title: func (text: text-component);
         /// Shows a smaller subtitle on the player's screen.
         show-subtitle: func (text: text-component);

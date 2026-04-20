@@ -1,4 +1,5 @@
 use core::str;
+use serde::Serialize;
 use std::io::{Read, Write};
 
 use crate::{
@@ -283,9 +284,7 @@ pub trait NetworkWriteExt {
         list: &[G],
         writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
-        self.write_var_int(&list.len().try_into().map_err(|_| {
-            WritingError::Message(format!("{} isn't representable as a VarInt", list.len()))
-        })?)?;
+        self.write_var_int(&(list.len() as i32).into())?;
 
         for data in list {
             writer(self, data)?;
@@ -293,6 +292,10 @@ pub trait NetworkWriteExt {
 
         Ok(())
     }
+
+    fn write_serialize<G: Serialize>(&mut self, data: &G) -> Result<(), WritingError>
+    where
+        Self: Sized;
 
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError>;
 }
@@ -398,11 +401,17 @@ impl<W: Write> NetworkWriteExt for W {
         writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
         self.write_var_int(&(list.len() as i32).into())?;
+
         for data in list {
             writer(self, data)?;
         }
 
         Ok(())
+    }
+
+    fn write_serialize<G: Serialize>(&mut self, data: &G) -> Result<(), WritingError> {
+        let mut serializer = serializer::Serializer::new(self);
+        data.serialize(&mut serializer)
     }
 
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
