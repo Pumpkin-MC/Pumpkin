@@ -103,7 +103,7 @@ impl NBTStorage for ThrownItemEntity {}
 
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
-    pub async fn process_tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
+    pub async fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
 

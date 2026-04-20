@@ -7,7 +7,7 @@ use pumpkin_data::data_component_impl::{
     ConsumableImpl, ConsumeAnimation, ConsumeEffect, DamageImpl, DataComponentImpl,
     EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape,
     FireworksImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl,
-    SoundEvent, StatusEffectInstance, UnbreakableImpl, get,
+    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -762,6 +762,51 @@ impl DataComponentCodec<Self> for FireworksImpl {
     }
 }
 
+impl DataComponentCodec<Self> for StoredEnchantmentsImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.enchantment.len() as i32))?;
+        for (enc, level) in self.enchantment.iter() {
+            seq.serialize_field::<VarInt>("", &VarInt::from(enc.id))?;
+            seq.serialize_field::<VarInt>("", &VarInt::from(*level))?;
+        }
+        Ok(())
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        const MAX_ENCHANTMENTS: usize = 256;
+
+        let len = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No StoredEnchantmentsImpl len VarInt!"))?
+            .0 as usize;
+
+        if len > MAX_ENCHANTMENTS {
+            return Err(de::Error::custom("Too many enchantments"));
+        }
+
+        let mut stored_enchantments = Vec::with_capacity(len);
+        for _ in 0..len {
+            let id = seq
+                .next_element::<VarInt>()?
+                .ok_or(de::Error::custom("No StoredEnchantmentsImpl id VarInt!"))?
+                .0 as u8;
+            let level = seq
+                .next_element::<VarInt>()?
+                .ok_or(de::Error::custom("No StoredEnchantmentsImpl level VarInt!"))?
+                .0;
+            stored_enchantments.push((
+                Enchantment::from_id(id).ok_or(de::Error::custom(
+                    "StoredEnchantmentsImpl Enchantment VarInt Incorrect!",
+                ))?,
+                level,
+            ));
+        }
+        Ok(Self {
+            enchantment: Cow::from(stored_enchantments),
+        })
+    }
+}
+
 pub fn deserialize<'a, A: SeqAccess<'a>>(
     id: DataComponent,
     seq: &mut A,
@@ -777,7 +822,8 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
-        _ => Err(serde::de::Error::custom("TODO")),
+        DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
+        _ => Err(serde::de::Error::custom(format!("{id:?} (TODO)"))),
     }
 }
 pub fn serialize<T: SerializeStruct>(
@@ -796,6 +842,7 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
         DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
+        DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
         _ => todo!("{} not yet implemented", id.to_name()),
     }
 }

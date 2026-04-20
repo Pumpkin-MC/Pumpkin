@@ -23,10 +23,15 @@ fn reverse_mapping(mapping: &[u16], mapped_size: usize) -> Vec<u16> {
 /// Generates the `TokenStream` for per-version item ID remap tables and the
 /// `remap_item_id_for_version`/`remap_item_id_from_version` functions.
 pub fn build() -> TokenStream {
+    let node_1_20_5 = MappingNode {
+        version: MinecraftVersion::V_1_20_5,
+        value: "../assets/viaversion/data/mappings-1.20.5to1.21.nbt",
+        child: None,
+    };
     let node_1_21 = MappingNode {
         version: MinecraftVersion::V_1_21,
         value: "../assets/viaversion/data/mappings-1.21to1.21.2.nbt",
-        child: None,
+        child: Some(&node_1_20_5),
     };
     let node_1_21_2 = MappingNode {
         version: MinecraftVersion::V_1_21_2,

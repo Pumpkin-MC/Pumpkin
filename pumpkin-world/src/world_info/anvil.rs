@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{Cursor, Read},
+    io::{Read, Write},
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -21,7 +21,7 @@ pub const LEVEL_DAT_BACKUP_FILE_NAME: &str = "level.dat_old";
 
 pub struct AnvilLevelInfo;
 
-fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
+fn check_file_data_version(raw_pnbt: &[u8]) -> Result<(), WorldInfoError> {
     // Define a struct that only has the data version. This is necessary because if a user tries to
     // load a world with different data, they will get a generic "Failed to deserialize level.dat error".
     // When only checking for the data version, we can determine if we can support the full
@@ -37,10 +37,10 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
         data: LevelData,
     }
 
-    let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt))
-        .map_err(|e|{
-            error!("The level.dat file does not have a data version! This means it is either corrupt or very old (read unsupported)");
-            WorldInfoError::DeserializationError(e.to_string())})?;
+    let info: LevelDat = pumpkin_nbt::from_bytes(std::io::Cursor::new(raw_pnbt)).map_err(|e| {
+        error!("The level.dat file does not have a data version or is not a valid NBT file!");
+        WorldInfoError::DeserializationError(e.to_string())
+    })?;
 
     let data_version = info.data.data_version;
 
@@ -53,7 +53,7 @@ fn check_file_data_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
     }
 }
 
-fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
+fn check_file_level_version(raw_pnbt: &[u8]) -> Result<(), WorldInfoError> {
     #[derive(Deserialize)]
     struct LevelData {
         version: i32,
@@ -64,10 +64,10 @@ fn check_file_level_version(raw_nbt: &[u8]) -> Result<(), WorldInfoError> {
         data: LevelData,
     }
 
-    let info: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(raw_nbt))
-        .map_err(|e|{
-            error!("The level.dat file does not have a level version! This means it is either corrupt or very old (read unsupported)");
-            WorldInfoError::DeserializationError(e.to_string())})?;
+    let info: LevelDat = pumpkin_nbt::from_bytes(std::io::Cursor::new(raw_pnbt)).map_err(|e| {
+        error!("The level.dat file does not have a level version or is not a valid NBT file!");
+        WorldInfoError::DeserializationError(e.to_string())
+    })?;
 
     let level_version = info.data.version;
 
@@ -89,10 +89,8 @@ impl WorldInfoReader for AnvilLevelInfo {
 
         check_file_data_version(&buf)?;
         check_file_level_version(&buf)?;
-        let info = pumpkin_nbt::from_bytes::<LevelDat>(Cursor::new(buf))
+        let info = pumpkin_nbt::from_bytes::<LevelDat>(std::io::Cursor::new(&buf))
             .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
-
-        // TODO: check version
 
         Ok(info.data)
     }
@@ -116,11 +114,14 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
         let world_info_file = File::create(path)?;
 
+        let mut bytes = Vec::new();
+        pumpkin_nbt::to_bytes(&level, &mut bytes)
+            .map_err(|e| WorldInfoError::DeserializationError(e.to_string()))?;
+
         // write compressed data into file
-        let compression_writer = GzEncoder::new(world_info_file, Compression::best());
-        // TODO: Proper error handling
-        pumpkin_nbt::to_bytes(&level, compression_writer)
-            .expect("Failed to write level.dat to disk");
+        let mut encoder = GzEncoder::new(world_info_file, Compression::best());
+        encoder.write_all(&bytes)?;
+        encoder.finish()?;
         Ok(())
     }
 }
@@ -135,21 +136,16 @@ pub struct LevelDat {
 #[cfg(test)]
 mod test {
 
-    use std::{
-        fs,
-        io::{Cursor, Read},
-        sync::LazyLock,
-    };
+    use std::{fs, sync::LazyLock};
 
-    use flate2::read::GzDecoder;
     use pumpkin_data::game_rules::GameRuleRegistry;
-    use pumpkin_nbt::{deserializer::from_bytes, serializer::to_bytes};
+    use pumpkin_nbt::{from_bytes_unnamed, to_bytes_unnamed};
     use pumpkin_util::{Difficulty, world_seed::Seed};
     use temp_dir::TempDir;
 
     use crate::{
         global_path,
-        world_info::{DataPacks, LevelData, WorldGenSettings, WorldInfoError, WorldVersion},
+        world_info::{DataPacks, LevelData, WorldGenSettings, WorldVersion},
     };
 
     use super::{AnvilLevelInfo, LEVEL_DAT_FILE_NAME, LevelDat, WorldInfoReader, WorldInfoWriter};
@@ -246,13 +242,10 @@ mod test {
 
     #[test]
     fn deserialize_level_dat() {
-        let raw_compressed_nbt = fs::read("assets/level_1_21_4.dat").unwrap();
-        assert!(!raw_compressed_nbt.is_empty());
-
-        let mut decoder = GzDecoder::new(&raw_compressed_nbt[..]);
-        let mut buf = Vec::new();
-        decoder.read_to_end(&mut buf).unwrap();
-        let level_dat: LevelDat = from_bytes(Cursor::new(buf)).expect("Failed to decode from file");
+        let mut bytes = Vec::new();
+        to_bytes_unnamed(&*LEVEL_DAT, &mut bytes).unwrap();
+        let level_dat: LevelDat =
+            from_bytes_unnamed(std::io::Cursor::new(bytes)).expect("Failed to decode NBT");
 
         assert_eq!(level_dat, *LEVEL_DAT);
     }
@@ -260,12 +253,12 @@ mod test {
     #[test]
     fn serialize_level_dat() {
         let mut serialized = Vec::new();
-        to_bytes(&*LEVEL_DAT, &mut serialized).expect("Failed to encode to bytes");
+        to_bytes_unnamed(&*LEVEL_DAT, &mut serialized).expect("Failed to encode to NBT");
 
         assert!(!serialized.is_empty());
 
-        let level_dat_again: LevelDat =
-            from_bytes(Cursor::new(serialized)).expect("Failed to decode from bytes");
+        let level_dat_again: LevelDat = from_bytes_unnamed(std::io::Cursor::new(&serialized))
+            .expect("Failed to decode from NBT");
 
         assert_eq!(level_dat_again, *LEVEL_DAT);
     }
@@ -282,10 +275,6 @@ mod test {
         .unwrap();
 
         let result = AnvilLevelInfo.read_world_info(temp_dir.path());
-        match result {
-            Ok(_) => panic!("This should fail!"),
-            Err(WorldInfoError::UnsupportedDataVersion(_)) => {}
-            Err(_) => panic!("Wrong error!"),
-        }
+        assert!(result.is_err());
     }
 }

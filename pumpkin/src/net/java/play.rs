@@ -1197,9 +1197,6 @@ impl JavaClient {
             return;
         };
 
-        let inventory = player.inventory();
-        let item = inventory.held_item();
-
         let (yaw, pitch) = player.rotation();
         let hit_result = player
             .world()
@@ -1219,18 +1216,11 @@ impl JavaClient {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickBlock,
-                &item,
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
             )
         } else {
-            PlayerInteractEvent::new(
-                player,
-                InteractAction::LeftClickAir,
-                &item,
-                &Block::AIR,
-                None,
-            )
+            PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None)
         };
 
         let server = player.world().server.upgrade().unwrap();
@@ -1319,7 +1309,8 @@ impl JavaClient {
         chat_message: &SChatMessage,
     ) -> Result<(), ChatError> {
         // Check for oversized messages
-        if chat_message.message.len() > 256 {
+        // If we're able to find the 257th UTF-16 character, the message is too big.
+        if chat_message.message.encode_utf16().nth(256).is_some() {
             return Err(ChatError::OversizedMessage);
         }
         // Check for illegal characters
@@ -2263,18 +2254,11 @@ impl JavaClient {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
-                &item_in_hand,
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
             )
         } else {
-            PlayerInteractEvent::new(
-                player,
-                InteractAction::RightClickAir,
-                &item_in_hand,
-                &Block::AIR,
-                None,
-            )
+            PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None)
         };
         self.prepare_hand_item_for_use(player, hand, &item_in_hand)
             .await;

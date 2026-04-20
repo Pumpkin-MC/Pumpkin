@@ -1,3 +1,4 @@
+use crate::chunk::format::linear::LinearV2File;
 use crate::chunk_system::{ChunkListener, ChunkLoading, GenerationSchedule, LevelChannel};
 use crate::generation::generator::VanillaGenerator;
 use crate::lighting::DynamicLightEngine;
@@ -6,7 +7,7 @@ use crate::{
     block::{RawBlockState, entities::BlockEntity},
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
-        format::{anvil::AnvilChunkFile, linear::LinearFile},
+        format::anvil::AnvilChunkFile,
         io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
         palette::has_random_ticking_fluid,
     },
@@ -163,16 +164,16 @@ impl Level {
 
         let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
             ChunkConfig::Linear(config) => Arc::new(
-                ChunkFileManager::<LinearFile<ChunkData>>::new(config.clone()),
+                ChunkFileManager::<LinearV2File<ChunkData>>::new(config.clone()),
             ),
             ChunkConfig::Anvil(config) => Arc::new(
                 ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
             ),
         };
         let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
-            ChunkConfig::Linear(config) => Arc::new(
-                ChunkFileManager::<LinearFile<ChunkEntityData>>::new(config.clone()),
-            ),
+            ChunkConfig::Linear(config) => Arc::new(ChunkFileManager::<
+                LinearV2File<ChunkEntityData>,
+            >::new(config.clone())),
             ChunkConfig::Anvil(config) => Arc::new(ChunkFileManager::<
                 AnvilChunkFile<ChunkEntityData>,
             >::new(config.clone())),
@@ -337,18 +338,6 @@ impl Level {
         self.entity_saver.block_and_await_ongoing_tasks().await;
 
         // save all chunks currently in memory
-        // let chunks_to_write = self
-        //     .loaded_chunks
-        //     .iter()
-        //     .map(|chunk| (*chunk.key(), chunk.value().clone()))
-        //     .collect::<Vec<_>>();
-        // self.loaded_chunks.clear();
-
-        // TODO: I think the chunk_saver should be at the server level
-        // self.chunk_saver.clear_watched_chunks().await;
-        // self.write_chunks(chunks_to_write).await;
-
-        // save all chunks currently in memory
         let chunks_to_write = self
             .loaded_entity_chunks
             .iter()
@@ -382,9 +371,6 @@ impl Level {
                 .or_insert(1);
         }
 
-        // self.chunk_saver
-        //     .watch_chunks(&self.level_folder, chunks)
-        //     .await;
         self.entity_saver
             .watch_chunks(&self.level_folder, chunks)
             .await;
@@ -538,23 +524,25 @@ impl Level {
             self.chunk_watchers.shrink_to_fit();
         }
 
-        // if the difference is too big, we can shrink the loaded chunks
-        // (1024 chunks is the equivalent to a 32x32 chunks area)
-        // if self.loaded_chunks.capacity() - self.loaded_chunks.len() >= 4096 {
-        //     self.loaded_chunks.shrink_to_fit();
-        // }
-
         if self.loaded_entity_chunks.capacity() - self.loaded_entity_chunks.len() >= 4096 {
             self.loaded_entity_chunks.shrink_to_fit();
         }
     }
 
-    pub async fn get_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
+    pub async fn get_or_fetch_chunk<R, F: Fn(&SyncChunk) -> R>(
+        self: &Arc<Self>,
+        pos: Vector2<i32>,
+        f: F,
+    ) -> R {
         // Check if already in memory
-        if let Some(chunk) = self.loaded_chunks.get(&pos) {
-            return chunk.clone();
+        if let Some(res) = self.read_chunk_sync(&pos, &f) {
+            return res;
         }
+        let chunk = self.fetch_chunk(pos).await;
+        f(&chunk)
+    }
 
+    async fn fetch_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
         let recv = self.chunk_listener.add_single_chunk_listener(pos);
 
         {
@@ -563,12 +551,9 @@ impl Level {
             lock.send_change();
         };
 
-        let chunk = if let Some(chunk) = self.loaded_chunks.get(&pos) {
-            chunk.clone()
-        } else {
-            recv.await
-                .expect("Chunk listener dropped without sending chunk")
-        };
+        let chunk = recv
+            .await
+            .expect("Chunk listener dropped without sending chunk");
 
         {
             let mut lock = self.chunk_loading.lock().unwrap();
@@ -693,31 +678,30 @@ impl Level {
 
     pub async fn get_block_state(self: &Arc<Self>, position: &BlockPos) -> RawBlockState {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let chunk = self.get_chunk(chunk_coordinate).await;
-
-        let Some(id) = chunk.section.get_block_absolute_y(
-            relative.x as usize,
-            relative.y,
-            relative.z as usize,
-        ) else {
-            return RawBlockState(Block::VOID_AIR.default_state.id);
-        };
-
-        RawBlockState(id)
+        let id = self
+            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+                chunk.section.get_block_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                )
+            })
+            .await;
+        RawBlockState(id.unwrap_or(Block::VOID_AIR.default_state.id))
     }
+
     pub async fn get_rough_biome(self: &Arc<Self>, position: &BlockPos) -> &'static Biome {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let chunk = self.get_chunk(chunk_coordinate).await;
-
-        let Some(id) = chunk.section.get_rough_biome_absolute_y(
-            relative.x as usize,
-            relative.y,
-            relative.z as usize,
-        ) else {
-            return &Biome::THE_VOID;
-        };
-
-        Biome::from_id(id).unwrap()
+        let id = self
+            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+                chunk.section.get_rough_biome_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                )
+            })
+            .await;
+        Biome::from_id(id.unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
     }
 
     pub async fn set_block_state(
@@ -726,17 +710,19 @@ impl Level {
         block_state_id: BlockStateId,
     ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let chunk = self.get_chunk(chunk_coordinate).await;
-        let replaced_block_state_id = chunk.section.set_block_absolute_y(
-            relative.x as usize,
-            relative.y,
-            relative.z as usize,
-            block_state_id,
-        );
-        if replaced_block_state_id != block_state_id {
-            chunk.mark_dirty(true);
-        }
-        replaced_block_state_id
+        self.get_or_fetch_chunk(chunk_coordinate, |chunk| {
+            let replaced_block_state_id = chunk.section.set_block_absolute_y(
+                relative.x as usize,
+                relative.y,
+                relative.z as usize,
+                block_state_id,
+            );
+            if replaced_block_state_id != block_state_id {
+                chunk.mark_dirty(true);
+            }
+            replaced_block_state_id
+        })
+        .await
     }
 
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
@@ -779,6 +765,40 @@ impl Level {
             .map(|x| x.value().clone())
     }
 
+    pub fn is_chunk_loaded(&self, coordinates: &Vector2<i32>) -> bool {
+        self.loaded_chunks.contains_key(coordinates)
+    }
+
+    pub fn read_chunk_sync<R, F: Fn(&SyncChunk) -> R>(
+        &self,
+        coordinates: &Vector2<i32>,
+        f: F,
+    ) -> Option<R> {
+        self.loaded_chunks.get(coordinates).map(|x| f(x.value()))
+    }
+
+    pub fn read_entity_chunk_sync<R, F: Fn(&SyncEntityChunk) -> R>(
+        &self,
+        coordinates: &Vector2<i32>,
+        f: F,
+    ) -> Option<R> {
+        self.loaded_entity_chunks
+            .get(coordinates)
+            .map(|x| f(x.value()))
+    }
+
+    pub async fn get_or_fetch_entity_chunk<R, F: Fn(&SyncEntityChunk) -> R>(
+        self: &Arc<Self>,
+        pos: Vector2<i32>,
+        f: F,
+    ) -> R {
+        if let Some(res) = self.read_entity_chunk_sync(&pos, &f) {
+            return res;
+        }
+        let chunk = self.get_entity_chunk(pos).await;
+        f(&chunk)
+    }
+
     pub fn try_get_entity_chunk(
         &self,
         coordinates: Vector2<i32>,
@@ -793,17 +813,18 @@ impl Level {
         delay: u8,
         priority: TickPriority,
     ) {
-        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
-        chunk.block_ticks.schedule_tick(
-            &ScheduledTick {
-                delay,
-                position: block_pos,
-                priority,
-                value: unsafe { &*std::ptr::from_ref::<Block>(block) },
-            },
-            tick_order,
-        );
+        let scheduled_tick = ScheduledTick {
+            delay,
+            position: block_pos,
+            priority,
+            value: unsafe { &*std::ptr::from_ref::<Block>(block) },
+        };
+
+        self.get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+            chunk.block_ticks.schedule_tick(&scheduled_tick, tick_order);
+        })
+        .await;
     }
 
     pub async fn schedule_fluid_tick(
@@ -813,17 +834,18 @@ impl Level {
         delay: u8,
         priority: TickPriority,
     ) {
-        let chunk = self.get_chunk(block_pos.chunk_position()).await;
         let tick_order = self.schedule_tick_counts.fetch_add(1, Ordering::Relaxed);
-        chunk.fluid_ticks.schedule_tick(
-            &ScheduledTick {
-                delay,
-                position: block_pos,
-                priority,
-                value: unsafe { &*std::ptr::from_ref::<Fluid>(fluid) },
-            },
-            tick_order,
-        );
+        let scheduled_tick = ScheduledTick {
+            delay,
+            position: block_pos,
+            priority,
+            value: unsafe { &*std::ptr::from_ref::<Fluid>(fluid) },
+        };
+
+        self.get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+            chunk.fluid_ticks.schedule_tick(&scheduled_tick, tick_order);
+        })
+        .await;
     }
 
     pub async fn is_block_tick_scheduled(
@@ -831,8 +853,10 @@ impl Level {
         block_pos: &BlockPos,
         block: &Block,
     ) -> bool {
-        let chunk = self.get_chunk(block_pos.chunk_position()).await;
-        chunk.block_ticks.is_scheduled(*block_pos, block)
+        self.get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+            chunk.block_ticks.is_scheduled(*block_pos, block)
+        })
+        .await
     }
 
     pub async fn is_fluid_tick_scheduled(
@@ -840,7 +864,9 @@ impl Level {
         block_pos: &BlockPos,
         fluid: &Fluid,
     ) -> bool {
-        let chunk = self.get_chunk(block_pos.chunk_position()).await;
-        chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
+        self.get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+            chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
+        })
+        .await
     }
 }

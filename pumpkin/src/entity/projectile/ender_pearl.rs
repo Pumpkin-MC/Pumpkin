@@ -43,7 +43,7 @@ impl NBTStorage for EnderPearlEntity {}
 impl EntityBase for EnderPearlEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move { self.thrown.process_tick(caller, server).await })
