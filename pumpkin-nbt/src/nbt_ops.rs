@@ -1,10 +1,10 @@
 use crate::compound::NbtCompound;
 use crate::tag::NbtTag;
+use pumpkin_codecs::DataResult;
+use pumpkin_codecs::DynamicOps;
+use pumpkin_codecs::Lifecycle;
+use pumpkin_codecs::MapLike;
 use pumpkin_codecs::Number;
-use pumpkin_codecs::data_result::DataResult;
-use pumpkin_codecs::dynamic_ops::DynamicOps;
-use pumpkin_codecs::lifecycle::Lifecycle;
-use pumpkin_codecs::map_like::MapLike;
 use pumpkin_codecs::struct_builder::{ResultStructBuilder, StringStructBuilder, StructBuilder};
 use pumpkin_codecs::{impl_get_list, impl_string_struct_builder, impl_struct_builder};
 use std::iter::Map;

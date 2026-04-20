@@ -10,6 +10,8 @@ pub mod codec;
 mod number;
 
 pub use crate::data_result::DataResult;
+pub use crate::data_result::FlatTryFrom;
+pub use crate::data_result::FlatTryInto;
 pub use crate::dynamic_ops::DynamicOps;
 pub use crate::lifecycle::Lifecycle;
 pub use crate::list_builder::ListBuilder;
@@ -19,6 +21,6 @@ pub use number::Number;
 pub use crate::codec::Decode;
 pub use crate::codec::Encode;
 
-pub use crate::codec::ByteBuffer;
-pub use crate::codec::IntStream;
-pub use crate::codec::LongStream;
+pub use crate::codec::primitive::ByteBuffer;
+pub use crate::codec::primitive::IntStream;
+pub use crate::codec::primitive::LongStream;
