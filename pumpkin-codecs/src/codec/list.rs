@@ -176,12 +176,13 @@ mod test {
 
     #[test]
     fn decoding() {
+        type NumberGrid = Vec<Vec<f64>>;
+
         assert_decode!(Vec<i16>, json!([1, 2, 3]), JsonOps, is_success);
         assert_decode!(Vec<i16>, json!([1, 2, 6, 24, 120]), JsonOps, is_success);
         assert_decode!(Vec<i16>, json!(["string", "b"]), JsonOps, is_error);
         assert_decode!(Vec<i16>, json!(false), JsonOps, is_error);
 
-        type NumberGrid = Vec<Vec<f64>>;
         assert_decode!(NumberGrid, json!([[0, 0.5, 1.0]]), JsonOps, is_success);
         assert_decode!(
             NumberGrid,

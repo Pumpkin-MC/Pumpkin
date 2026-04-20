@@ -203,7 +203,7 @@ mod test {
             if string.len() == 1 {
                 DataResult::new_success(Letter(string))
             } else {
-                DataResult::new_error(format!("Not a letter: {}", string))
+                DataResult::new_error(format!("Not a letter: {string}"))
             }
         }
 
