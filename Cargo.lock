@@ -2854,7 +2854,6 @@ name = "pumpkin-codecs"
 version = "0.1.0-dev+26.1"
 dependencies = [
  "either",
- "pumpkin-codecs-macros",
  "serde_json",
  "tracing",
 ]
