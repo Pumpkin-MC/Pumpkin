@@ -82,7 +82,7 @@ impl<T: Encode> FieldEncode for T {
 /// This is used mostly for encoding structures, and this trait is usually adapted to work with [`Encode`].
 pub trait MapEncode {
     /// Encodes this value to a map by adding one or more fields.
-    fn map_encode<O: DynamicOps, B: StructBuilder<Value=O::Value>>(
+    fn map_encode<O: DynamicOps, B: StructBuilder<Value = O::Value>>(
         &self,
         ops: &'static O,
         prefix: B,
@@ -110,7 +110,7 @@ pub trait FieldDecode: Sized {
     fn decode_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
     ) -> DataResult<Self>;
 
     /// Decodes a value of this type from a map by decoding one of its defaulted fields, whose:
@@ -123,7 +123,7 @@ pub trait FieldDecode: Sized {
     fn decode_defaulted_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
         default: Self,
         lenient: bool,
     ) -> DataResult<Self>;
@@ -133,7 +133,7 @@ impl<T: Decode> FieldDecode for T {
     fn decode_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
     ) -> DataResult<Self> {
         input.get_str(name).map_or_else(
             || DataResult::new_error(format!("No key {name} in map")),
@@ -144,7 +144,7 @@ impl<T: Decode> FieldDecode for T {
     fn decode_defaulted_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
         default: Self,
         lenient: bool,
     ) -> DataResult<Self> {
@@ -159,7 +159,7 @@ impl<T: Decode> FieldDecode for T {
 pub trait MapDecode: Sized {
     /// Decodes a value of this type from a map by decoding one or more fields.
     fn map_decode<O: DynamicOps>(
-        input: &impl MapLike<Value=O::Value>,
-        ops: &'static impl DynamicOps<Value=O::Value>,
+        input: impl MapLike<Value = O::Value>,
+        ops: &'static O,
     ) -> DataResult<Self>;
 }
