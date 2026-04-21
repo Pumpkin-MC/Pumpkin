@@ -9,18 +9,7 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 /// A [`DynamicOps`] to serialize to/deserialize from JSON data.
-pub struct JsonOps {
-    compressed: bool,
-}
-
-/// A normal instance of [`JsonOps`], which serializes/deserializes normal JSON data.
-pub static INSTANCE: JsonOps = JsonOps { compressed: false };
-
-/// A normal instance of [`JsonOps`], which serializes/deserializes compressed JSON data.
-///
-/// *Compressed* JSON data is a little more lenient with placing values at places that expect something else.
-/// This allows JSON to be compressed to a single string.
-pub static COMPRESSED: JsonOps = JsonOps { compressed: true };
+pub struct JsonOps;
 
 impl JsonOps {
     /// A function to get a JSON value as a string, similar to Google's GSON's `getAsString()` method for `JsonElement`.
@@ -53,14 +42,8 @@ impl JsonOps {
     /// Whether a JSON value is considered to be a valid key.
     ///
     /// If this returns `true`, it is safe to say that calling [`get_as_string`] with `input` will always return a [`Some`].
-    const fn is_valid_key(&self, input: &Value) -> bool {
-        // Normal mode: has to be a string.
-        // Compressed mode: can be any JSON primitive.
-        if self.compressed {
-            matches!(input, Value::String(_) | Value::Number(_) | Value::Bool(_))
-        } else {
-            matches!(input, Value::String(_))
-        }
+    const fn is_valid_key(input: &Value) -> bool {
+        matches!(input, Value::String(_))
     }
 }
 
@@ -112,35 +95,19 @@ impl DynamicOps for JsonOps {
     }
 
     fn get_number(&self, input: &Self::Value) -> DataResult<Number> {
-        match input {
-            Value::Number(_) => {
-                return input.try_into().map_or_else(
-                    |_| DataResult::new_error(format!("Not a number: {input}")),
-                    DataResult::new_success,
-                );
-            }
-            Value::String(string) if self.compressed => {
-                if let Ok(i) = string.parse::<i32>() {
-                    return DataResult::new_success(Number::Int(i));
-                }
-                if let Ok(l) = string.parse::<i64>() {
-                    return DataResult::new_success(Number::Long(l));
-                }
-                if let Ok(d) = string.parse::<f64>() {
-                    return DataResult::new_success(Number::Double(d));
-                }
-                return DataResult::new_error(format!("Number could not be parsed: {string}"));
-            }
-            _ => {}
+        if let Value::Number(_) = input {
+            input.try_into().map_or_else(
+                |_| DataResult::new_error(format!("Not a number: {input}")),
+                DataResult::new_success,
+            )
+        } else {
+            DataResult::new_error(format!("Not a number: {input}"))
         }
-        DataResult::new_error(format!("Not a number: {input}"))
     }
 
     fn get_string(&self, input: &Self::Value) -> DataResult<String> {
-        if matches!(input, Value::String(_))
-            || (matches!(input, Value::Number(_)) && self.compressed)
-        {
-            // Unwrapping is fine as only strings and numbers are possible here.
+        if let Value::String(_) = input {
+            // Unwrapping is fine as only strings are possible here.
             DataResult::new_success(Self::get_as_string(input).unwrap())
         } else {
             DataResult::new_error(format!("Not a string: {input}"))
@@ -224,7 +191,7 @@ impl DynamicOps for JsonOps {
             return DataResult::new_partial_error(format!("Not a map: {map}"), map);
         }
 
-        if !self.is_valid_key(&key) {
+        if !Self::is_valid_key(&key) {
             return DataResult::new_partial_error(format!("Key is not a string: {key}"), map);
         }
 
@@ -258,7 +225,7 @@ impl DynamicOps for JsonOps {
             let mut missed = vec![];
 
             for entry in other_map_like.iter() {
-                if self.is_valid_key(&entry.0) {
+                if Self::is_valid_key(&entry.0) {
                     output_map.insert(Self::get_as_string(&entry.0).unwrap(), entry.1.clone());
                 } else {
                     missed.push(entry.0);
@@ -289,10 +256,6 @@ impl DynamicOps for JsonOps {
         } else {
             input
         }
-    }
-
-    fn compress_maps(&self) -> bool {
-        self.compressed
     }
 
     fn convert_to<U>(&self, out_ops: &impl DynamicOps<Value = U>, input: Self::Value) -> U {
@@ -407,7 +370,7 @@ impl StructBuilder for JsonStructBuilder {
     type Value = Value;
 
     impl_struct_builder!(builder);
-    impl_string_struct_builder!(builder, INSTANCE);
+    impl_string_struct_builder!(builder, JsonOps);
 }
 
 impl StringStructBuilder for JsonStructBuilder {
