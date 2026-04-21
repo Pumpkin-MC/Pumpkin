@@ -6,7 +6,7 @@ use crate::data_component::DataComponent::{
     AttackRange, AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage,
     DamageResistant, DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food,
     ItemModel, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, MinimumAttackCharge,
-    PiercingWeapon, PotionContents, Tool, Unbreakable, Weapon,
+    PiercingWeapon, PotionContents, StoredEnchantments, Tool, Unbreakable, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
