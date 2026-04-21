@@ -12,8 +12,7 @@ use pumpkin_util::{
 use std::f64::consts::PI;
 use std::sync::OnceLock;
 
-use crate::biome::BiomeSupplier;
-use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
+use crate::ProtoChunk;
 /// A thread-safe global cache for structures that require world-wide placement calculations
 /// rather than localized chunk-based math (e.g., Strongholds using Concentric Rings).
 ///
@@ -45,8 +44,7 @@ impl GlobalStructureCache {
         &self,
         seed: i64,
         placement: &ConcentricRingsStructurePlacement,
-        biome_supplier: &dyn BiomeSupplier,
-        multi_noise_sampler: &mut MultiNoiseSampler,
+        biome_supplier: &ProtoChunk,
         allowed_biomes: &[u16],
     ) -> &[(i32, i32)] {
         self.stronghold_chunks.get_or_init(|| {
@@ -100,12 +98,7 @@ impl GlobalStructureCache {
                         let test_x = center_block_x + dx;
                         let test_z = center_block_z + dz;
 
-                        let biome_x = crate::generation::biome_coords::from_block(test_x);
-                        let biome_y = crate::generation::biome_coords::from_block(0);
-                        let biome_z = crate::generation::biome_coords::from_block(test_z);
-
-                        let biome =
-                            biome_supplier.biome(biome_x, biome_y, biome_z, multi_noise_sampler);
+                        let biome = biome_supplier.get_biome(test_x, 0, test_z);
 
                         if allowed_biomes.contains(&(biome.id as u16)) {
                             found_count += 1;
@@ -147,15 +140,14 @@ impl Default for GlobalStructureCache {
 }
 
 #[must_use]
-#[expect(clippy::too_many_arguments)]
+// #[expect(clippy::too_many_arguments)]
 pub fn should_generate_structure(
     placement: &StructurePlacement,
     calculator: &StructurePlacementCalculator,
     chunk_x: i32,
     chunk_z: i32,
     global_cache: &GlobalStructureCache,
-    biome_supplier: &dyn BiomeSupplier,
-    multi_noise_sampler: &mut MultiNoiseSampler,
+    biome_supplier: &ProtoChunk,
     allowed_biomes: &[u16],
 ) -> bool {
     is_start_chunk(
@@ -166,7 +158,6 @@ pub fn should_generate_structure(
         placement.salt,
         global_cache,
         biome_supplier,
-        multi_noise_sampler,
         allowed_biomes,
     ) && apply_frequency_reduction(
         placement.frequency_reduction_method,
@@ -238,8 +229,7 @@ fn is_start_chunk(
     chunk_z: i32,
     salt: u32,
     global_cache: &GlobalStructureCache,
-    biome_supplier: &dyn BiomeSupplier,
-    multi_noise_sampler: &mut MultiNoiseSampler,
+    biome_supplier: &ProtoChunk,
     allowed_biomes: &[u16],
 ) -> bool {
     match placement_type {
@@ -251,7 +241,6 @@ fn is_start_chunk(
                 calculator.seed,
                 placement,
                 biome_supplier,
-                multi_noise_sampler,
                 allowed_biomes,
             );
             strongholds.contains(&(chunk_x, chunk_z))
