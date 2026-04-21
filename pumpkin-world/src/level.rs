@@ -597,9 +597,9 @@ impl Level {
 
         match rx.recv().await {
             Some(LoadedData::Loaded(chunk)) => Ok((chunk, false)),
-            Some(LoadedData::Error { error, .. }) => Err(ChunkReadingError::IoError(
-                std::io::Error::other(error.to_string()).kind(),
-            )),
+            Some(LoadedData::Error { .. }) => {
+                Err(ChunkReadingError::IoError(std::io::ErrorKind::Other))
+            }
             _ => Err(ChunkReadingError::ChunkNotExist),
         }
     }
@@ -633,16 +633,13 @@ impl Level {
                     level.entity_saver.fetch_chunks(&to_fetch, tx).await;
 
                     while let Some(data) = rx.recv().await {
-                        let (chunk_opt, missing_pos) = match data {
-                            LoadedData::Loaded(chunk) => (Some(chunk), None),
-                            LoadedData::Missing(pos) => (None, Some(pos)),
-                            LoadedData::Error { pos, .. } => (None, Some(pos)),
-                        };
-                        if let Some(chunk) = chunk_opt {
-                            let pos = Vector2::new(chunk.x, chunk.z);
-                            level.loaded_entity_chunks.insert(pos, chunk.clone());
-                            let _ = sender.send((chunk, false));
-                        } else if let Some(pos) = missing_pos {
+                        match data {
+                            LoadedData::Loaded(chunk) => {
+                                let pos = Vector2::new(chunk.x, chunk.z);
+                                level.loaded_entity_chunks.insert(pos, chunk.clone());
+                                let _ = sender.send((chunk, false));
+                            }
+                            LoadedData::Missing(pos) | LoadedData::Error { pos, .. } => {
                                 let sender_clone = sender.clone();
                                 let level_clone = level.clone();
 
@@ -661,6 +658,7 @@ impl Level {
                                         let _ = sender_clone.send((chunk, true));
                                     }
                                 });
+                            }
                         }
                     }
                 }

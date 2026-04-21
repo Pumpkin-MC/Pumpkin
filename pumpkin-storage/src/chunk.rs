@@ -14,26 +14,13 @@ use crate::error::StorageError;
 /// Outcome of a single-chunk read.
 #[derive(Debug)]
 pub enum LoadedData<T> {
-    /// Chunk was loaded successfully.
     Loaded(T),
-    /// Chunk does not exist on disk yet. Callers generate or default it.
+    /// No entry exists yet. Callers generate or default the chunk.
     Missing(Vector2<i32>),
-    /// An error occurred while loading. The chunk position is carried so
-    /// callers can diagnose which chunk failed.
     Error {
         pos: Vector2<i32>,
         error: StorageError,
     },
-}
-
-impl<T> LoadedData<T> {
-    pub fn map_loaded<U>(self, f: impl FnOnce(T) -> U) -> LoadedData<U> {
-        match self {
-            Self::Loaded(x) => LoadedData::Loaded(f(x)),
-            Self::Missing(p) => LoadedData::Missing(p),
-            Self::Error { pos, error } => LoadedData::Error { pos, error },
-        }
-    }
 }
 
 /// Storage for per-chunk data (blocks, entities) keyed by chunk coordinates.
@@ -57,15 +44,12 @@ pub trait ChunkStorage<T: Send + Sync + 'static>: Send + Sync {
         chunks: Vec<(Vector2<i32>, T)>,
     ) -> Result<(), StorageError>;
 
-    /// Signals that these chunks are now resident in memory — backends that
-    /// cache serializers keep those regions alive while any chunk inside is
-    /// watched.
+    /// Marks chunks as resident in memory — region-file backends use this to
+    /// keep serializer caches alive while any chunk in a region is watched.
     async fn watch_chunks(&self, chunks: &[Vector2<i32>]);
 
-    /// Signals that these chunks have been unloaded from memory.
     async fn unwatch_chunks(&self, chunks: &[Vector2<i32>]);
 
-    /// Drops all watch state.
     async fn clear_watched_chunks(&self);
 
     /// Waits until any in-flight saves/fetches have completed.

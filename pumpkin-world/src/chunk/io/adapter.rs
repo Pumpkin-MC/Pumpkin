@@ -14,7 +14,25 @@ use pumpkin_util::math::vector2::Vector2;
 use tokio::sync::mpsc;
 
 use crate::chunk::io::{FileIO, LoadedData as OldLoadedData};
+use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
+
+fn read_to_storage(err: ChunkReadingError) -> StorageError {
+    match err {
+        ChunkReadingError::ChunkNotExist => StorageError::NotFound {
+            message: "chunk not found".to_string(),
+        },
+        ChunkReadingError::IoError(kind) => StorageError::io(std::io::Error::from(kind)),
+        other => StorageError::Deserialize(other.to_string()),
+    }
+}
+
+fn write_to_storage(err: ChunkWritingError) -> StorageError {
+    match err {
+        ChunkWritingError::IoError(kind) => StorageError::io(std::io::Error::from(kind)),
+        other => StorageError::Serialize(other.to_string()),
+    }
+}
 
 /// Wraps an `Arc<dyn FileIO<Data = T>>` plus a `LevelFolder` and exposes it
 /// as an `Arc<dyn ChunkStorage<T>>`.
@@ -36,27 +54,25 @@ impl<T: Send + Sync + 'static> ChunkStorage<T> for FolderBoundFileIO<T> {
         chunk_coords: &[Vector2<i32>],
         out: mpsc::Sender<LoadedData<T>>,
     ) {
-        let capacity = chunk_coords.len().max(1);
-        let (old_tx, mut old_rx) =
-            mpsc::channel::<OldLoadedData<T, crate::chunk::ChunkReadingError>>(capacity);
+        let (old_tx, mut old_rx) = mpsc::channel(chunk_coords.len().max(1));
 
         let fetch = self.inner.fetch_chunks(&self.folder, chunk_coords, old_tx);
         let forward = async {
             while let Some(msg) = old_rx.recv().await {
-                let new_msg = match msg {
+                let translated = match msg {
                     OldLoadedData::Loaded(v) => LoadedData::Loaded(v),
                     OldLoadedData::Missing(p) => LoadedData::Missing(p),
                     OldLoadedData::Error((pos, err)) => LoadedData::Error {
                         pos,
-                        error: StorageError::io(std::io::Error::other(err.to_string())),
+                        error: read_to_storage(err),
                     },
                 };
-                if out.send(new_msg).await.is_err() {
+                if out.send(translated).await.is_err() {
                     break;
                 }
             }
         };
-        let _ = tokio::join!(fetch, forward);
+        tokio::join!(fetch, forward);
     }
 
     async fn save_chunks(
@@ -66,7 +82,7 @@ impl<T: Send + Sync + 'static> ChunkStorage<T> for FolderBoundFileIO<T> {
         self.inner
             .save_chunks(&self.folder, chunks)
             .await
-            .map_err(|e| StorageError::Serialize(e.to_string()))
+            .map_err(write_to_storage)
     }
 
     async fn watch_chunks(&self, chunks: &[Vector2<i32>]) {
