@@ -8,7 +8,10 @@ use syn::{
     Attribute, Data, DataEnum, DataStruct, DeriveInput, Error, Fields, Ident, LitBool, LitStr,
 };
 
-pub fn derive_decode(codecs_crate: &Ident, input: &DeriveInput) -> Result<TokenStream, Error> {
+pub fn derive_decode(
+    codecs_crate: &proc_macro2::TokenStream,
+    input: &DeriveInput,
+) -> Result<TokenStream, Error> {
     let name = input.ident.clone();
 
     match &input.data {
@@ -22,7 +25,10 @@ pub fn derive_decode(codecs_crate: &Ident, input: &DeriveInput) -> Result<TokenS
 }
 
 /// Used to implement `Decode` for a type implementing `MapDecode`.
-fn decode_delegate_impl(name: &Ident, codecs_crate: &Ident) -> proc_macro2::TokenStream {
+fn decode_delegate_impl(
+    name: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     quote! {
         impl #codecs_crate::codec::Decode for #name {
             fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> #codecs_crate::DataResult<(Self, O::Value)> {
@@ -37,7 +43,11 @@ fn decode_delegate_impl(name: &Ident, codecs_crate: &Ident) -> proc_macro2::Toke
     }
 }
 
-fn derive_struct_decode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -> TokenStream {
+fn derive_struct_decode(
+    name: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
+    data: &DataStruct,
+) -> TokenStream {
     // Add a special case for unit structs.
     if matches!(&data.fields, Fields::Unit) {
         let decode_impl = decode_delegate_impl(name, codecs_crate);
@@ -76,7 +86,7 @@ fn derive_struct_decode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -
 
 fn derive_enum_decode(
     name: &Ident,
-    codecs_crate: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
     data: &DataEnum,
     attrs: &[Attribute],
 ) -> Result<TokenStream, Error> {
@@ -162,7 +172,7 @@ fn derive_enum_decode(
 
 /// Creates a single variant's decoding in tokens.
 fn derive_single_variant_decode(
-    codecs_crate: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
     variant_ident: &Ident,
     fields: &Fields,
     variant_tokens: &proc_macro2::TokenStream,
@@ -230,7 +240,7 @@ struct DecodeFieldData {
 }
 
 fn decode_field_tokens(
-    codecs_crate: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
     field: ParsedField,
     counter: &mut usize,
 ) -> Result<DecodeFieldData, Error> {

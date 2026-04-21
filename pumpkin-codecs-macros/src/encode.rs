@@ -6,7 +6,10 @@ use proc_macro_error2::__export::proc_macro2::{Ident, Span};
 use quote::{format_ident, quote};
 use syn::{Attribute, Data, DataEnum, DataStruct, DeriveInput, Error, Fields, LitStr};
 
-pub fn derive_encode(codecs_crate: &Ident, input: &DeriveInput) -> Result<TokenStream, Error> {
+pub fn derive_encode(
+    codecs_crate: &proc_macro2::TokenStream,
+    input: &DeriveInput,
+) -> Result<TokenStream, Error> {
     let name = input.ident.clone();
 
     match &input.data {
@@ -20,7 +23,10 @@ pub fn derive_encode(codecs_crate: &Ident, input: &DeriveInput) -> Result<TokenS
 }
 
 /// Used to implement `Encode` for a type implementing `MapEncode`.
-fn encode_delegate_impl(name: &Ident, codecs_crate: &Ident) -> proc_macro2::TokenStream {
+fn encode_delegate_impl(
+    name: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
     quote! {
         impl #codecs_crate::codec::Encode for #name {
             fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
@@ -32,7 +38,11 @@ fn encode_delegate_impl(name: &Ident, codecs_crate: &Ident) -> proc_macro2::Toke
     }
 }
 
-fn derive_struct_encode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -> TokenStream {
+fn derive_struct_encode(
+    name: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
+    data: &DataStruct,
+) -> TokenStream {
     // Add a special case for unit structs.
     if matches!(&data.fields, Fields::Unit) {
         let encode_impl = encode_delegate_impl(name, codecs_crate);
@@ -62,7 +72,7 @@ fn derive_struct_encode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -
 
 fn derive_enum_encode(
     name: &Ident,
-    codecs_crate: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
     data: &DataEnum,
     attrs: &[Attribute],
 ) -> Result<TokenStream, Error> {
@@ -155,7 +165,10 @@ fn derive_enum_encode(
 }
 
 /// Creates a single variant's encoding in tokens.
-fn derive_single_variant_encode(codecs_crate: &Ident, fields: &Fields) -> proc_macro2::TokenStream {
+fn derive_single_variant_encode(
+    codecs_crate: &proc_macro2::TokenStream,
+    fields: &Fields,
+) -> proc_macro2::TokenStream {
     derive_single_variant_builder_encode(codecs_crate, fields, |f| {
         let access = f.access();
         quote! { &self. #access }
@@ -164,7 +177,7 @@ fn derive_single_variant_encode(codecs_crate: &Ident, fields: &Fields) -> proc_m
 
 /// Creates a single variant's encoding in tokens.
 fn derive_single_variant_builder_encode(
-    codecs_crate: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
     fields: &Fields,
     access_fn: impl Fn(&ParsedField) -> proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
@@ -186,7 +199,7 @@ struct EncodeFieldData {
 }
 
 fn encode_field_tokens(
-    codecs_crate: &Ident,
+    codecs_crate: &proc_macro2::TokenStream,
     field: ParsedField,
     access_fn: impl Fn(&ParsedField) -> proc_macro2::TokenStream,
 ) -> Result<EncodeFieldData, Error> {
