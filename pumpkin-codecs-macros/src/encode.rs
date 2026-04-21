@@ -19,25 +19,44 @@ pub fn derive_encode(codecs_crate: &Ident, input: &DeriveInput) -> Result<TokenS
     }
 }
 
+/// Used to implement `Encode` for a type implementing `MapEncode`.
+fn encode_delegate_impl(name: &Ident, codecs_crate: &Ident) -> proc_macro2::TokenStream {
+    quote! {
+        impl #codecs_crate::codec::Encode for #name {
+            fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
+                let mut builder = #codecs_crate::DynamicOps::map_builder(ops);
+                builder = #codecs_crate::codec::MapEncode::map_encode(self, ops, builder);
+                #codecs_crate::struct_builder::StructBuilder::build(builder, prefix)
+            }
+        }
+    }
+}
+
 fn derive_struct_encode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -> TokenStream {
     // Add a special case for unit structs.
     if matches!(&data.fields, Fields::Unit) {
+        let encode_impl = encode_delegate_impl(name, codecs_crate);
         return quote! {
-                impl #codecs_crate::codec::Encode for #name {
-                    fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                        let mut builder = #codecs_crate::DynamicOps::map_builder(ops);
-                        #codecs_crate::struct_builder::StructBuilder::build(builder, prefix)
-                    }
-                }
-            }.into();
-    }
-    let variant_encode = derive_single_variant_encode(codecs_crate, &data.fields);
-    quote! {
-            impl #codecs_crate::codec::Encode for #name {
-                fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                    #variant_encode
+            impl #codecs_crate::codec::MapEncode for #name {
+                fn map_encode<O: #codecs_crate::DynamicOps, B: #codecs_crate::struct_builder::StructBuilder<Value=O::Value>>(&self, ops: &'static O, prefix: B) -> B {
+                    prefix
                 }
             }
+
+            #encode_impl
+        }.into();
+    }
+    let variant_encode = derive_single_variant_encode(codecs_crate, &data.fields);
+    let encode_impl = encode_delegate_impl(name, codecs_crate);
+    quote! {
+            impl #codecs_crate::codec::MapEncode for #name {
+                fn map_encode<O: #codecs_crate::DynamicOps, B: #codecs_crate::struct_builder::StructBuilder<Value=O::Value>>(&self, ops: &'static O, mut builder: B) -> B {
+                    #variant_encode
+                    builder
+                }
+            }
+
+            #encode_impl
         }.into()
 }
 
@@ -53,6 +72,7 @@ fn derive_enum_encode(
         .iter()
         .all(|v| matches!(v.fields, Fields::Unit))
     {
+        // We encode all variants as strings.
         let mut match_arms = Vec::new();
         for variant in &data.variants {
             let ident = &variant.ident;
@@ -64,13 +84,13 @@ fn derive_enum_encode(
         }
         return Ok(
             quote! {
-                        impl #codecs_crate::codec::Encode for #name {
-                            fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                                let string = match self { #( #match_arms ),* }.to_string();
-                                #codecs_crate::codec::Encode::encode(&string, ops, prefix)
-                            }
-                        }
-                    }.into()
+                impl #codecs_crate::codec::Encode for #name {
+                    fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
+                        let string = match self { #( #match_arms ),* }.to_string();
+                        #codecs_crate::codec::Encode::encode(&string, ops, prefix)
+                    }
+                }
+            }.into()
         );
     }
 
@@ -116,32 +136,30 @@ fn derive_enum_encode(
         });
     }
 
+    let encode_impl = encode_delegate_impl(name, codecs_crate);
+
     Ok(
         quote! {
-            impl #codecs_crate::codec::Encode for #name {
-                fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
-                    let mut builder = #codecs_crate::DynamicOps::map_builder(ops);
+            impl #codecs_crate::codec::MapEncode for #name {
+                fn map_encode<O: #codecs_crate::DynamicOps, B: #codecs_crate::struct_builder::StructBuilder<Value=O::Value>>(&self, ops: &'static O, mut builder: B) -> B {
                     match self {
                         #( #match_arms ),*
                     }
-                    #codecs_crate::struct_builder::StructBuilder::build(builder, prefix)
+                    builder
                 }
             }
+
+            #encode_impl
         }.into()
     )
 }
 
 /// Creates a single variant's encoding in tokens.
 fn derive_single_variant_encode(codecs_crate: &Ident, fields: &Fields) -> proc_macro2::TokenStream {
-    let builder_encodes = derive_single_variant_builder_encode(codecs_crate, fields, |f| {
+    derive_single_variant_builder_encode(codecs_crate, fields, |f| {
         let access = f.access();
         quote! { &self. #access }
-    });
-    quote! {
-        let mut builder = #codecs_crate::DynamicOps::map_builder(ops);
-        #builder_encodes
-        #codecs_crate::struct_builder::StructBuilder::build(builder, prefix)
-    }
+    })
 }
 
 /// Creates a single variant's encoding in tokens.
