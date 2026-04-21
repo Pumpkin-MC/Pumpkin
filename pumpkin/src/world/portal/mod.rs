@@ -7,7 +7,6 @@ use super::World;
 
 pub mod end;
 pub mod nether;
-pub mod poi;
 
 pub use nether::{NetherPortal, PortalSearchResult};
 

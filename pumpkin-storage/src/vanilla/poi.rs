@@ -11,6 +11,7 @@ use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use pumpkin_util::math::position::BlockPos;
 use serde::{Deserialize, Serialize};
+use tokio::fs;
 use tracing::warn;
 
 use crate::error::StorageError;
@@ -65,55 +66,24 @@ impl PoiRegion {
         self.entries.values()
     }
 
-    fn load(path: &Path) -> std::io::Result<Self> {
-        if !path.exists() {
-            return Ok(Self::default());
-        }
-
-        let file_data = std::fs::read(path)?;
+    async fn load(path: &Path) -> std::io::Result<Self> {
+        let file_data = match fs::read(path).await {
+            Ok(data) => data,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(e) => return Err(e),
+        };
         if file_data.len() < HEADER_SIZE {
             return Ok(Self::default());
         }
 
         let mut region = Self::default();
-
         for index in 0..CHUNK_COUNT {
-            let offset = index * 4;
-            let location = u32::from_be_bytes([
-                file_data[offset],
-                file_data[offset + 1],
-                file_data[offset + 2],
-                file_data[offset + 3],
-            ]);
-            let sector_offset = (location >> 8) as usize;
-            let sector_count = (location & 0xFF) as usize;
-            if sector_offset == 0 || sector_count == 0 {
+            let Some(compressed) = chunk_payload(&file_data, index) else {
                 continue;
-            }
-            let byte_offset = sector_offset * SECTOR_SIZE;
-            let byte_end = byte_offset + sector_count * SECTOR_SIZE;
-            if byte_end > file_data.len() {
-                continue;
-            }
-            let chunk_bytes = &file_data[byte_offset..byte_end];
-            if chunk_bytes.len() < 5 {
-                continue;
-            }
-            let length = u32::from_be_bytes([
-                chunk_bytes[0],
-                chunk_bytes[1],
-                chunk_bytes[2],
-                chunk_bytes[3],
-            ]) as usize;
-            let compression = chunk_bytes[4];
-            if compression != COMPRESSION_ZLIB || length < 1 || length > chunk_bytes.len() - 4 {
-                continue;
-            }
-            let compressed = &chunk_bytes[5..5 + length - 1];
-
+            };
             match decompress_chunk(compressed) {
                 Ok(chunk_data) => {
-                    for (_k, section) in chunk_data.sections {
+                    for (_, section) in chunk_data.sections {
                         for entry in section.records {
                             let key = (entry.x, entry.y, entry.z);
                             region.entries.insert(key, entry);
@@ -123,23 +93,34 @@ impl PoiRegion {
                 Err(e) => warn!("Failed to parse POI chunk at index {index}: {e}"),
             }
         }
-
         region.dirty = false;
         Ok(region)
     }
 
-    fn save(&mut self, path: &Path) -> std::io::Result<()> {
+    async fn save(&mut self, path: &Path) -> std::io::Result<()> {
         if !self.dirty {
             return Ok(());
         }
         if self.entries.is_empty() {
-            if path.exists() {
-                std::fs::remove_file(path)?;
+            match fs::remove_file(path).await {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
             }
             self.dirty = false;
             return Ok(());
         }
 
+        let bytes = self.encode_region()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        fs::write(path, &bytes).await?;
+        self.dirty = false;
+        Ok(())
+    }
+
+    fn encode_region(&self) -> std::io::Result<Vec<u8>> {
         let mut chunks_with_data: HashSet<(i32, i32)> = HashSet::new();
         for entry in self.entries.values() {
             chunks_with_data.insert((entry.x >> 4, entry.z >> 4));
@@ -149,8 +130,7 @@ impl PoiRegion {
         for (chunk_x, chunk_z) in &chunks_with_data {
             if let Some(chunk_data) = self.build_chunk_data(*chunk_x, *chunk_z) {
                 let compressed = compress_chunk(&chunk_data)?;
-                let index = chunk_index(*chunk_x, *chunk_z);
-                chunk_data_map.insert(index, compressed);
+                chunk_data_map.insert(chunk_index(*chunk_x, *chunk_z), compressed);
             }
         }
 
@@ -179,22 +159,18 @@ impl PoiRegion {
             }
         }
 
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut file = std::fs::File::create(path)?;
+        let mut bytes =
+            Vec::with_capacity(HEADER_SIZE + sector_data.iter().map(Vec::len).sum::<usize>());
         for loc in &location_table {
-            file.write_all(&loc.to_be_bytes())?;
+            bytes.extend_from_slice(&loc.to_be_bytes());
         }
         for ts in &timestamp_table {
-            file.write_all(&ts.to_be_bytes())?;
+            bytes.extend_from_slice(&ts.to_be_bytes());
         }
         for data in &sector_data {
-            file.write_all(data)?;
+            bytes.extend_from_slice(data);
         }
-
-        self.dirty = false;
-        Ok(())
+        Ok(bytes)
     }
 
     fn build_chunk_data(&self, chunk_x: i32, chunk_z: i32) -> Option<PoiChunkData> {
@@ -221,6 +197,40 @@ impl PoiRegion {
             })
         }
     }
+}
+
+fn chunk_payload(file_data: &[u8], index: usize) -> Option<&[u8]> {
+    let offset = index * 4;
+    let location = u32::from_be_bytes([
+        file_data[offset],
+        file_data[offset + 1],
+        file_data[offset + 2],
+        file_data[offset + 3],
+    ]);
+    let sector_offset = (location >> 8) as usize;
+    let sector_count = (location & 0xFF) as usize;
+    if sector_offset == 0 || sector_count == 0 {
+        return None;
+    }
+    let byte_offset = sector_offset * SECTOR_SIZE;
+    let byte_end = byte_offset + sector_count * SECTOR_SIZE;
+    if byte_end > file_data.len() {
+        return None;
+    }
+    let chunk_bytes = &file_data[byte_offset..byte_end];
+    if chunk_bytes.len() < 5 || chunk_bytes[4] != COMPRESSION_ZLIB {
+        return None;
+    }
+    let length = u32::from_be_bytes([
+        chunk_bytes[0],
+        chunk_bytes[1],
+        chunk_bytes[2],
+        chunk_bytes[3],
+    ]) as usize;
+    if length < 1 || length > chunk_bytes.len() - 4 {
+        return None;
+    }
+    Some(&chunk_bytes[5..5 + length - 1])
 }
 
 const fn chunk_index(chunk_x: i32, chunk_z: i32) -> usize {
@@ -268,15 +278,18 @@ impl VanillaStorage {
 }
 
 impl PoiInner {
-    fn get_or_load_region(&mut self, rx: i32, rz: i32, path: &Path) -> &mut PoiRegion {
-        self.regions.entry((rx, rz)).or_insert_with(|| {
-            PoiRegion::load(path).unwrap_or_else(|e| {
-                if path.exists() {
-                    warn!("Failed to load POI region {}: {}", path.display(), e);
-                }
-                PoiRegion::default()
-            })
-        })
+    async fn get_or_load_region(&mut self, rx: i32, rz: i32, path: &Path) -> &mut PoiRegion {
+        use std::collections::hash_map::Entry;
+        match self.regions.entry((rx, rz)) {
+            Entry::Occupied(e) => e.into_mut(),
+            Entry::Vacant(e) => {
+                let region = PoiRegion::load(path).await.unwrap_or_else(|err| {
+                    warn!("Failed to load POI region {}: {}", path.display(), err);
+                    PoiRegion::default()
+                });
+                e.insert(region)
+            }
+        }
     }
 }
 
@@ -286,7 +299,7 @@ impl PoiStorage for VanillaStorage {
         let (rx, rz) = region_coords(pos);
         let path = self.poi_region_path(rx, rz);
         let mut guard = self.poi_inner.lock().await;
-        let region = guard.get_or_load_region(rx, rz, &path);
+        let region = guard.get_or_load_region(rx, rz, &path).await;
         region.add(PoiEntry {
             x: pos.0.x,
             y: pos.0.y,
@@ -301,7 +314,7 @@ impl PoiStorage for VanillaStorage {
         let (rx, rz) = region_coords(pos);
         let path = self.poi_region_path(rx, rz);
         let mut guard = self.poi_inner.lock().await;
-        let region = guard.get_or_load_region(rx, rz, &path);
+        let region = guard.get_or_load_region(rx, rz, &path).await;
         Ok(region.remove(pos))
     }
 
@@ -325,7 +338,7 @@ impl PoiStorage for VanillaStorage {
         for rx in min_rx..=max_rx {
             for rz in min_rz..=max_rz {
                 let path = self.poi_region_path(rx, rz);
-                let region = guard.get_or_load_region(rx, rz, &path);
+                let region = guard.get_or_load_region(rx, rz, &path).await;
                 for entry in region.entries() {
                     if let Some(filter) = poi_type
                         && entry.poi_type != filter
@@ -345,13 +358,18 @@ impl PoiStorage for VanillaStorage {
 
     async fn save_all(&self) -> Result<(), StorageError> {
         let folder = self.poi_folder();
-        std::fs::create_dir_all(&folder).map_err(|e| StorageError::io_at(&folder, e))?;
+        fs::create_dir_all(&folder)
+            .await
+            .map_err(|e| StorageError::io_at(&folder, e))?;
 
         let mut guard = self.poi_inner.lock().await;
         for ((rx, rz), region) in guard.regions.iter_mut() {
             if region.dirty {
                 let path = folder.join(format!("r.{rx}.{rz}.mca"));
-                region.save(&path).map_err(|e| StorageError::io_at(&path, e))?;
+                region
+                    .save(&path)
+                    .await
+                    .map_err(|e| StorageError::io_at(&path, e))?;
             }
         }
         Ok(())

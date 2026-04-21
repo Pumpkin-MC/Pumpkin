@@ -16,6 +16,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::GameMode;
 use pumpkin_world::BlockStateId;
+use tracing::warn;
 
 #[pumpkin_block("minecraft:nether_portal")]
 pub struct NetherPortalBlock;
@@ -88,8 +89,9 @@ impl BlockBehaviour for NetherPortalBlock {
 
     fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            // Remove from POI storage when portal block is replaced
-            let _ = args.world.poi_storage.remove(*args.position).await;
+            if let Err(e) = args.world.poi_storage.remove(*args.position).await {
+                warn!("Failed to remove portal POI at {}: {e}", args.position);
+            }
         })
     }
 }

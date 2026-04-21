@@ -1,4 +1,4 @@
-//! Points of Interest storage (vanilla's `poi/*.mca`).
+//! Points of Interest storage.
 
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
@@ -20,17 +20,6 @@ pub struct PoiEntry {
 }
 
 impl PoiEntry {
-    #[must_use]
-    pub fn new_portal(pos: BlockPos) -> Self {
-        Self {
-            x: pos.0.x,
-            y: pos.0.y,
-            z: pos.0.z,
-            poi_type: POI_TYPE_NETHER_PORTAL.to_string(),
-            free_tickets: 0,
-        }
-    }
-
     #[must_use]
     pub const fn pos(&self) -> BlockPos {
         BlockPos(Vector3::new(self.x, self.y, self.z))

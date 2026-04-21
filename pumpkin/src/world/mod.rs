@@ -208,7 +208,6 @@ pub struct World {
     synced_block_event_queue: Mutex<Vec<BlockEvent>>,
     /// A map of unsent block changes, keyed by block position.
     unsent_block_changes: Mutex<HashMap<BlockPos, u16>>,
-    /// POI storage for fast portal lookups
     pub poi_storage: Arc<dyn PoiStorage>,
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<Mutex<dragon_fight::DragonFight>>,
@@ -234,8 +233,6 @@ impl World {
         // TODO
         let generation_settings = GenerationSettings::from_dimension(&dimension);
 
-        // Per-world VanillaStorage so POI reads/writes go under this world's folder.
-        // server_data_dir isn't used by POI so we pass the same root here.
         let world_root = &level.level_folder.root_folder;
         let poi_storage: Arc<dyn PoiStorage> =
             Arc::new(VanillaStorage::new(world_root, world_root));
@@ -286,7 +283,6 @@ impl World {
             self.save_entity(entity).await;
         }
 
-        // Save portal POI to disk
         if let Err(e) = self.poi_storage.save_all().await {
             error!("Failed to save portal POI: {e}");
         }

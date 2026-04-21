@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::poi;
+use pumpkin_storage::poi;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
     block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
@@ -9,6 +9,7 @@ use pumpkin_data::{
 };
 use pumpkin_util::math::{boundingbox::EntityDimensions, position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
+use tracing::warn;
 
 use crate::world::World;
 
@@ -281,10 +282,13 @@ impl NetherPortal {
                     BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
                 )
                 .await;
-            let _ = world
+            if let Err(e) = world
                 .poi_storage
                 .add(pos, poi::POI_TYPE_NETHER_PORTAL)
-                .await;
+                .await
+            {
+                warn!("Failed to add portal POI at {pos}: {e}");
+            }
         }
     }
 
@@ -489,11 +493,17 @@ impl NetherPortal {
             max_y
         };
 
-        let portal_positions = world
+        let portal_positions = match world
             .poi_storage
             .get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL))
             .await
-            .unwrap_or_default();
+        {
+            Ok(positions) => positions,
+            Err(e) => {
+                warn!("Failed to query portal POI near {target_pos}: {e}");
+                Vec::new()
+            }
+        };
 
         let mut best: Option<(PortalSearchResult, f64, i32)> = None;
 
@@ -789,10 +799,13 @@ impl NetherPortal {
                         BlockFlags::NOTIFY_LISTENERS | BlockFlags::FORCE_STATE,
                     )
                     .await;
-                let _ = world
+                if let Err(e) = world
                     .poi_storage
                     .add(pos, poi::POI_TYPE_NETHER_PORTAL)
-                    .await;
+                    .await
+                {
+                    warn!("Failed to add portal POI at {pos}: {e}");
+                }
             }
         }
     }
