@@ -204,7 +204,7 @@ pub(crate) fn build() -> TokenStream {
         impl Advancement {
             #variants
 
-            fn name(&self) -> Option<TextComponent> {
+            pub fn option_name(&self) -> Option<TextComponent> {
                 match self.display {
                     Some(display) => {
                         let mut over = display.get_title();
@@ -217,6 +217,10 @@ pub(crate) fn build() -> TokenStream {
                     }
                     None => None
                 }
+            }
+
+            pub fn name(&self) -> TextComponent {
+                self.option_name().unwrap_or(TextComponent::text(self.id))
             }
 
             pub fn from_name(name: &str) -> Option<&'static Self> {

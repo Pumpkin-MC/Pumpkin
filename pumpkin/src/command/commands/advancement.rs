@@ -4,12 +4,14 @@ use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::resource_key::{ResourceKeyArgument, ADVANCEMENT_REGISTRY};
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
-use crate::command::node::CommandExecutorResult;
-use pumpkin_data::Advancement;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use pumpkin_data::{translation, Advancement};
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::text::TextComponent;
 use crate::command::context::command_source::CommandSource;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::CommandErrorType;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 
@@ -18,15 +20,28 @@ const DESCRIPTION: &str = "manage advancement of the player";
 const PERMISSION: &str = "minecraft:command.help";
 
 
-const ARG_TARGET: &str = "player";
+const ARG_TARGETS: &str = "targets";
+const ARG_ADVANCEMENT: &str = "advancement";
 
+const ERROR_CRITERION_NOT_FOUND : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND);
+const ERROR_GRANT_ONE_TO_ONE : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_ONE_FAILURE);
+const ERROR_REVOKE_ONE_TO_ONE : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_ONE_FAILURE);
+const ERROR_GRANT_ONE_TO_MANY : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_MANY_FAILURE);
+const ERROR_REVOKE_ONE_TO_MANY : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_MANY_FAILURE);
+const ERROR_GRANT_MANY_TO_ONE : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_ONE_FAILURE);
+const ERROR_REVOKE_MANY_TO_ONE : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_ONE_FAILURE);
+const ERROR_GRANT_MANY_TO_MANY : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_MANY_FAILURE);
+const ERROR_REVOKE_MANY_TO_MANY : CommandErrorType<2> = CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_MANY_FAILURE);
+
+
+#[derive(Clone, Copy)]
 enum Action {
     Grant,
     Revoke
 }
 
 impl Action {
-    fn perform(&self, player: &Arc<Player>, advancements: &[&Advancement],grant_everything: bool) -> u32 {
+    fn perform(&self, player: &Arc<Player>, advancements: &Vec<&Advancement>,grant_everything: bool) -> i32 {
         let mut count = 0;
 
         if !grant_everything {
@@ -77,7 +92,7 @@ impl Action {
     }
 
 }
-
+#[derive(Clone, Copy)]
 enum Mode {
     Only,
     Through,
@@ -121,43 +136,71 @@ fn get_advancement<'a>(_context : &CommandContext, advancement :&'a Advancement,
     result
 }
 
-fn perform_everything(context: Arc<CommandSource>, players: Vec<Arc<Player>>, action: Action, advancements : &[&Advancement])->CommandExecutorResult{
-    perform(context,players,action,advancements,true)
+async fn perform_everything(context: Arc<CommandSource>, players: Vec<Arc<Player>>, action: Action, advancements : Vec<&Advancement>)->Result<i32,CommandSyntaxError>{
+    perform(context,players,action,advancements,true).await
 }
 
-fn perform(context: Arc<CommandSource>, targets: Vec<Arc<Player>>, action: Action, advancements : &[&Advancement], grant_everything:bool) -> CommandExecutorResult {
-    Box::pin(async move {
-        let mut i = 0;
-        for player in &targets {
-            i += action.perform(player, advancements, grant_everything);
-        }
-        if (i == 0) {
-            if (advancements.size() == 1) {
-                if (targets.len() == 1) {
-                    ERROR_NO_ACTION_PERFORMED.create(Component.translatable(action.getKey() + ".one.to.one.failure", new Object[]{Advancement.name((AdvancementHolder)advancements.iterator().next()), ((ServerPlayer)targets.iterator().next()).getDisplayName()}));
-                } else {
-                    ERROR_NO_ACTION_PERFORMED.create(Component.translatable(action.getKey() + ".one.to.many.failure", new Object[]{Advancement.name((AdvancementHolder)advancements.iterator().next()), targets.size()}));
-                }
-            } else if (targets.size() == 1) {
-                ERROR_NO_ACTION_PERFORMED.create(Component.translatable(action.getKey() + ".many.to.one.failure", new Object[]{advancements.size(), ((ServerPlayer)targets.iterator().next()).getDisplayName()}));
+async fn perform(context: Arc<CommandSource>, targets: Vec<Arc<Player>>, action: Action, advancements : Vec<&Advancement>, grant_everything:bool) -> Result<i32,CommandSyntaxError> {
+    let mut i = 0;
+    for player in &targets {
+        i += action.perform(player, &advancements, grant_everything);
+    }
+    if i == 0 {
+        return if let [first_advancement] = advancements[..] {
+            if let [first_player] = targets.as_slice() {
+                Err(match action {
+                    Action::Grant => &ERROR_GRANT_ONE_TO_ONE,
+                    Action::Revoke => &ERROR_REVOKE_ONE_TO_ONE
+                }.create_without_context_args_slice(&[first_advancement.name(), first_player.get_display_name().await]))
             } else {
-                ERROR_NO_ACTION_PERFORMED.create(Component.translatable(action.getKey() + ".many.to.many.failure", new Object[]{advancements.size(), targets.size()}));
+                Err(match action {
+                    Action::Grant => &ERROR_GRANT_ONE_TO_MANY,
+                    Action::Revoke => &ERROR_REVOKE_ONE_TO_MANY
+                }.create_without_context_args_slice(&[first_advancement.name(), TextComponent::text(targets.len().to_string())]))
             }
+        } else if let [first_player] = targets.as_slice() {
+            Err(match action {
+                Action::Grant => &ERROR_GRANT_MANY_TO_ONE,
+                Action::Revoke => &ERROR_REVOKE_MANY_TO_ONE
+            }.create_without_context_args_slice(&[TextComponent::text(advancements.len().to_string()), first_player.get_display_name().await]))
         } else {
-            if let [first_advancement] = advancements {
-                if let [first_player] = targets.as_slice(){
-                    context.send_feedback(TextComponent::translate(action.get_key() + ".one.to.one.success", [first_advancement.name(), first_player.get_display_name()]), true);
-                } else {
-                    context.send_feedback(TextComponent::translate(action.get_key() +  ".one.to.many.success", new Object[]{Advancement.name((AdvancementHolder)advancements.iterator().next()), targets.size()}), true);
-                }
-            } else if let [first] = targets.as_slice() {
-                context.send_feedback(TextComponent::translate(action.get_key() + ".many.to.many.success", [advancements.size(), first.get_display_name()]), true).await;
-            } else {
-                context.send_feedback(TextComponent::translate(action.get_key() + ".many.to.many.success", [advancements.size(), targets.len()]), true).await;
-            }
+            Err(match action {
+                Action::Grant => &ERROR_GRANT_MANY_TO_MANY,
+                Action::Revoke => &ERROR_REVOKE_MANY_TO_MANY
+            }.create_without_context_args_slice(&[TextComponent::text(advancements.len().to_string()), TextComponent::text(targets.len().to_string())]))
         }
-        Ok(i)
-    })
+    } else {
+        if let [first_advancement] = advancements[..] {
+            if let [first_player] = targets.as_slice(){
+                context.send_feedback(TextComponent::translate(format!("commands.advancement.{}.one.to.one.success",action.get_key()), [first_advancement.name(), first_player.get_display_name().await]), true).await;
+            } else {
+                context.send_feedback(TextComponent::translate(format!("commands.advancement.{}.one.to.many.success",action.get_key()), [first_advancement.name(), TextComponent::text(targets.len().to_string())]), true).await;
+            }
+        } else if let [first] = targets.as_slice() {
+            context.send_feedback(TextComponent::translate(format!("commands.advancement.{}.many.to.many.success",action.get_key()), [TextComponent::text(advancements.len().to_string()), first.get_display_name().await]), true).await;
+        } else {
+            context.send_feedback(TextComponent::translate(format!("commands.advancement.{}.many.to.many.success",action.get_key()), [TextComponent::text(advancements.len().to_string()), TextComponent::text(targets.len().to_string())]), true).await;
+        }
+    }
+    Ok(i)
+}
+
+struct AdvancementExecutor {
+    action: Action,
+}
+
+impl CommandExecutor for AdvancementExecutor {
+    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+        let action = self.action;
+        Box::pin(async move {
+            perform_everything(
+                context.source.clone(),
+                EntityArgumentType::get_players(context, ARG_TARGETS).await?,
+                action,
+                get_advancement(context, ResourceKeyArgument::get_advancement(context, ARG_ADVANCEMENT)?, Mode::Only),
+            ).await
+        })
+    }
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
@@ -169,24 +212,22 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
         ))
         .expect("Permission should have registered successfully");
 
+
+    let build_action = |name: &'static str, action: Action| {
+        literal(name).then(
+            argument(ARG_TARGETS, EntityArgumentType::Players).then(
+                literal("only").then(
+                    argument(ARG_ADVANCEMENT, ResourceKeyArgument(ADVANCEMENT_REGISTRY.clone()))
+                        .executes(AdvancementExecutor { action }),
+                ),
+            ),
+        )
+    };
+
     dispatcher.register(
         command(NAME, DESCRIPTION)
             .requires(PERMISSION)
-            .then(literal("grant")
-                .then(argument("targets",EntityArgumentType::Players)
-                    .then(literal("only")
-                        .then(argument("advancement",ResourceKeyArgument(ADVANCEMENT_REGISTRY))
-                            .executes(|context| perform_everything(
-                                context.source,
-                                EntityArgumentType::get_players(context,"targets"),
-                                Action::Grant,
-                                get_advancement(context,ResourceKeyArgument::get_advancement(context,"advancement"),Mode::Only)
-                            ))))))
-                    .then(literal("from"))
-                    .then(literal("until"))
-                    .then(literal("through"))
-                    .then(literal("everything")))
-            .then(literal("revoke")
-                .then(argument("targets",EntityArgumentType::Players))
+            .then(build_action("grant", Action::Grant))
+            .then(build_action("revoke", Action::Revoke))
     );
 }
