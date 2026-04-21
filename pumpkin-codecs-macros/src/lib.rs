@@ -30,6 +30,9 @@ use syn::{Attribute, DeriveInput, Error, LitStr, Type, parse_macro_input};
 
 /// Derives the `Encode` trait for a struct.
 ///
+/// This trait also derives `MapEncode`, though this trait may only be useful for certain cases,
+/// which is then used to derive `Encode`.
+///
 /// Check the module's documentation for every attribute you can use.
 #[proc_macro_derive(Encode, attributes(field, tag_key, tag))]
 pub fn derive_encode(input: TokenStream) -> TokenStream {
@@ -39,6 +42,9 @@ pub fn derive_encode(input: TokenStream) -> TokenStream {
 }
 
 /// Derives the `Decode` trait for a struct.
+///
+/// This trait also derives `MapDecode`, though this trait may only be useful for certain cases,
+/// which is then used to derive `Decode`.
 ///
 /// Check the module's documentation for every attribute you can use.
 #[proc_macro_derive(Decode, attributes(field, tag_key, tag))]
