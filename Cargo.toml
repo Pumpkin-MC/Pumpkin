@@ -142,6 +142,7 @@ num-traits = "0.2"
 p384 = "0.13.1"
 phf = "0.13.1"
 proc-macro2 = "1.0"
+proc-macro-crate = "3.5.0"
 pumpkin-codecs = { path = "pumpkin-codecs" }
 pumpkin-codecs-macros = { path = "pumpkin-codecs-macros" }
 pumpkin-config = { path = "pumpkin-config" }

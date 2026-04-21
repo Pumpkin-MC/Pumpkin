@@ -105,6 +105,7 @@ postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
 
 bitflags = { workspace = true }
+proc-macro-crate = "3.5.0"
 
 [dev-dependencies]
 tempfile.workspace = true

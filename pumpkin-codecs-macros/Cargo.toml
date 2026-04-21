@@ -11,6 +11,7 @@ proc-macro = true
 [dependencies]
 
 proc-macro-error2.workspace = true
+proc-macro-crate.workspace = true
 
 quote.workspace = true
 syn.workspace = true
