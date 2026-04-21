@@ -170,10 +170,10 @@ impl Filler for HollowFiller {
 struct KeepFiller;
 impl Filler for KeepFiller {
     async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
-        let old_state = context.world.get_block_state(&block_position).await;
+        let (old_block, old_state) = context.world.get_block_and_state(&block_position).await;
         if old_state.is_air() {
             if let Some(filter) = &context.option_filter
-                && not_in_filter(filter, context.world.get_block(&block_position).await)
+                && not_in_filter(filter, old_block)
             {
                 return FillerResult::DidNotPlaceBlock;
             }

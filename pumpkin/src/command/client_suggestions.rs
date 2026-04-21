@@ -174,7 +174,7 @@ pub async fn send_c_commands_packet(
         root_node.children = first.into_boxed_slice();
     }
 
-    let packet = CCommands::new(proto_nodes.into(), root_node_index.try_into().unwrap());
+    let packet = CCommands::new(proto_nodes.into(), VarInt(root_node_index as i32));
     player.client.enqueue_packet(&packet).await;
 }
 
@@ -207,15 +207,19 @@ struct ProtoNodeBuilder<'a> {
 
 impl<'a> ProtoNodeBuilder<'a> {
     fn build(self, buffer: &mut Vec<ProtoNode<'a>>) -> usize {
-        let mut children = Vec::with_capacity(self.child_nodes.len());
-        for node in self.child_nodes {
-            let i = node.build(buffer);
-            children.push(i.try_into().unwrap());
-        }
+        let children: Box<[VarInt]> = self
+            .child_nodes
+            .into_iter()
+            .map(|node| {
+                node.build(buffer)
+                    .try_into()
+                    .expect("Buffer index exceeded i32 bounds")
+            })
+            .collect();
 
         let i = buffer.len();
         buffer.push(ProtoNode {
-            children: children.into(),
+            children,
             node_type: self.node_type,
         });
         i

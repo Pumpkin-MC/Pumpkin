@@ -55,11 +55,11 @@ impl<'a> ResourceKeyArgument<'a> {
     pub fn get_advancement(context: &CommandContext,name:&str) -> Result<&'static Advancement, CommandSyntaxError> {
         let identifier : &ResourceKey = Self::get_registry_key(context,name,ADVANCEMENT_REGISTRY,ERROR_INVALID_ADVANCEMENT)?;
         Advancement::from_name(identifier.identifier.as_str())
-            .ok_or_else(|| ERROR_INVALID_ADVANCEMENT.create_without_context(TextComponent::text(identifier.identifier)))
+            .ok_or_else(|| ERROR_INVALID_ADVANCEMENT.create_without_context(TextComponent::text(identifier.identifier.clone().as_str())))
     }
 
     pub fn get_registry_key(context: &CommandContext, name: &str, registry: &str, error: CommandErrorType<1>) -> Result<&'a ResourceKey<'a>, CommandSyntaxError> {
         let argument = context.get_argument::<ResourceKey>(name)?;
-        argument.cast(registry).ok_or_else(|| error.create_without_context(TextComponent::text(argument.identifier)))
+        argument.cast(registry).ok_or_else(|| error.create_without_context(TextComponent::text(argument.identifier.as_str())))
     }
 }

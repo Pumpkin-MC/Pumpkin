@@ -18,7 +18,7 @@ pub enum ChunkConfig {
 
 impl Default for ChunkConfig {
     fn default() -> Self {
-        Self::Anvil(AnvilChunkConfig::default())
+        Self::Linear(LinearChunkConfig::default())
     }
 }
 

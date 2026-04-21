@@ -1,19 +1,27 @@
 /* This file is generated. Do not edit manually. */
 pub struct DoublePerlinNoiseParameters {
+    pub id: usize,
     pub first_octave: i32,
     pub amplitudes: &'static [f64],
-    id: &'static str,
+    name: &'static str,
 }
 impl DoublePerlinNoiseParameters {
-    pub const fn new(first_octave: i32, amplitudes: &'static [f64], id: &'static str) -> Self {
+    pub const COUNT: usize = 62usize;
+    pub const fn new(
+        id: usize,
+        first_octave: i32,
+        amplitudes: &'static [f64],
+        name: &'static str,
+    ) -> Self {
         Self {
+            id,
             first_octave,
             amplitudes,
-            id,
+            name,
         }
     }
-    pub const fn id(&self) -> &'static str {
-        self.id
+    pub const fn name(&self) -> &'static str {
+        self.name
     }
     pub fn id_to_parameters(id: &str) -> Option<&DoublePerlinNoiseParameters> {
         Some(match id {
@@ -83,62 +91,91 @@ impl DoublePerlinNoiseParameters {
         })
     }
     pub const AQUIFER_BARRIER: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-3i32, &[1f64], "minecraft:aquifer_barrier");
+        DoublePerlinNoiseParameters::new(0usize, -3i32, &[1f64], "minecraft:aquifer_barrier");
     pub const AQUIFER_FLUID_LEVEL_FLOODEDNESS: DoublePerlinNoiseParameters =
         DoublePerlinNoiseParameters::new(
+            1usize,
             -7i32,
             &[1f64],
             "minecraft:aquifer_fluid_level_floodedness",
         );
     pub const AQUIFER_FLUID_LEVEL_SPREAD: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-5i32, &[1f64], "minecraft:aquifer_fluid_level_spread");
+        DoublePerlinNoiseParameters::new(
+            2usize,
+            -5i32,
+            &[1f64],
+            "minecraft:aquifer_fluid_level_spread",
+        );
     pub const AQUIFER_LAVA: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-1i32, &[1f64], "minecraft:aquifer_lava");
+        DoublePerlinNoiseParameters::new(3usize, -1i32, &[1f64], "minecraft:aquifer_lava");
     pub const BADLANDS_PILLAR: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        4usize,
         -2i32,
         &[1f64, 1f64, 1f64, 1f64],
         "minecraft:badlands_pillar",
     );
     pub const BADLANDS_PILLAR_ROOF: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:badlands_pillar_roof");
-    pub const BADLANDS_SURFACE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-6i32, &[1f64, 1f64, 1f64], "minecraft:badlands_surface");
-    pub const CALCITE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-9i32, &[1f64, 1f64, 1f64, 1f64], "minecraft:calcite");
+        DoublePerlinNoiseParameters::new(5usize, -8i32, &[1f64], "minecraft:badlands_pillar_roof");
+    pub const BADLANDS_SURFACE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        6usize,
+        -6i32,
+        &[1f64, 1f64, 1f64],
+        "minecraft:badlands_surface",
+    );
+    pub const CALCITE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        7usize,
+        -9i32,
+        &[1f64, 1f64, 1f64, 1f64],
+        "minecraft:calcite",
+    );
     pub const CAVE_CHEESE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        8usize,
         -8i32,
         &[0.5f64, 1f64, 2f64, 1f64, 2f64, 1f64, 0f64, 2f64, 0f64],
         "minecraft:cave_cheese",
     );
-    pub const CAVE_ENTRANCE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[0.4f64, 0.5f64, 1f64], "minecraft:cave_entrance");
+    pub const CAVE_ENTRANCE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        9usize,
+        -7i32,
+        &[0.4f64, 0.5f64, 1f64],
+        "minecraft:cave_entrance",
+    );
     pub const CAVE_LAYER: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:cave_layer");
+        DoublePerlinNoiseParameters::new(10usize, -8i32, &[1f64], "minecraft:cave_layer");
     pub const CLAY_BANDS_OFFSET: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:clay_bands_offset");
+        DoublePerlinNoiseParameters::new(11usize, -8i32, &[1f64], "minecraft:clay_bands_offset");
     pub const CONTINENTALNESS: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        12usize,
         -9i32,
         &[1f64, 1f64, 2f64, 2f64, 2f64, 1f64, 1f64, 1f64, 1f64],
         "minecraft:continentalness",
     );
     pub const CONTINENTALNESS_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        13usize,
         -11i32,
         &[1f64, 1f64, 2f64, 2f64, 2f64, 1f64, 1f64, 1f64, 1f64],
         "minecraft:continentalness_large",
     );
     pub const EROSION: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        14usize,
         -9i32,
         &[1f64, 1f64, 0f64, 1f64, 1f64],
         "minecraft:erosion",
     );
     pub const EROSION_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        15usize,
         -11i32,
         &[1f64, 1f64, 0f64, 1f64, 1f64],
         "minecraft:erosion_large",
     );
-    pub const GRAVEL: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64, 1f64, 1f64, 1f64], "minecraft:gravel");
+    pub const GRAVEL: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        16usize,
+        -8i32,
+        &[1f64, 1f64, 1f64, 1f64],
+        "minecraft:gravel",
+    );
     pub const GRAVEL_LAYER: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        17usize,
         -8i32,
         &[
             1f64,
@@ -153,18 +190,28 @@ impl DoublePerlinNoiseParameters {
         ],
         "minecraft:gravel_layer",
     );
-    pub const ICE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-4i32, &[1f64, 1f64, 1f64, 1f64], "minecraft:ice");
+    pub const ICE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        18usize,
+        -4i32,
+        &[1f64, 1f64, 1f64, 1f64],
+        "minecraft:ice",
+    );
     pub const ICEBERG_PILLAR: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        19usize,
         -6i32,
         &[1f64, 1f64, 1f64, 1f64],
         "minecraft:iceberg_pillar",
     );
     pub const ICEBERG_PILLAR_ROOF: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-3i32, &[1f64], "minecraft:iceberg_pillar_roof");
-    pub const ICEBERG_SURFACE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-6i32, &[1f64, 1f64, 1f64], "minecraft:iceberg_surface");
+        DoublePerlinNoiseParameters::new(20usize, -3i32, &[1f64], "minecraft:iceberg_pillar_roof");
+    pub const ICEBERG_SURFACE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        21usize,
+        -6i32,
+        &[1f64, 1f64, 1f64],
+        "minecraft:iceberg_surface",
+    );
     pub const JAGGED: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        22usize,
         -16i32,
         &[
             1f64, 1f64, 1f64, 1f64, 1f64, 1f64, 1f64, 1f64, 1f64, 1f64, 1f64, 1f64, 1f64, 1f64,
@@ -172,61 +219,90 @@ impl DoublePerlinNoiseParameters {
         ],
         "minecraft:jagged",
     );
-    pub const NETHER_TEMPERATURE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64, 1f64], "minecraft:nether/temperature");
-    pub const NETHER_VEGETATION: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64, 1f64], "minecraft:nether/vegetation");
-    pub const NETHER_STATE_SELECTOR: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-4i32, &[1f64], "minecraft:nether_state_selector");
+    pub const NETHER_TEMPERATURE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        23usize,
+        -7i32,
+        &[1f64, 1f64],
+        "minecraft:nether/temperature",
+    );
+    pub const NETHER_VEGETATION: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        24usize,
+        -7i32,
+        &[1f64, 1f64],
+        "minecraft:nether/vegetation",
+    );
+    pub const NETHER_STATE_SELECTOR: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        25usize,
+        -4i32,
+        &[1f64],
+        "minecraft:nether_state_selector",
+    );
     pub const NETHER_WART: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        26usize,
         -3i32,
         &[1f64, 0f64, 0f64, 0.9f64],
         "minecraft:nether_wart",
     );
     pub const NETHERRACK: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        27usize,
         -3i32,
         &[1f64, 0f64, 0f64, 0.35f64],
         "minecraft:netherrack",
     );
     pub const NOODLE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:noodle");
+        DoublePerlinNoiseParameters::new(28usize, -8i32, &[1f64], "minecraft:noodle");
     pub const NOODLE_RIDGE_A: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64], "minecraft:noodle_ridge_a");
+        DoublePerlinNoiseParameters::new(29usize, -7i32, &[1f64], "minecraft:noodle_ridge_a");
     pub const NOODLE_RIDGE_B: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64], "minecraft:noodle_ridge_b");
+        DoublePerlinNoiseParameters::new(30usize, -7i32, &[1f64], "minecraft:noodle_ridge_b");
     pub const NOODLE_THICKNESS: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:noodle_thickness");
-    pub const OFFSET: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-3i32, &[1f64, 1f64, 1f64, 0f64], "minecraft:offset");
+        DoublePerlinNoiseParameters::new(31usize, -8i32, &[1f64], "minecraft:noodle_thickness");
+    pub const OFFSET: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        32usize,
+        -3i32,
+        &[1f64, 1f64, 1f64, 0f64],
+        "minecraft:offset",
+    );
     pub const ORE_GAP: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-5i32, &[1f64], "minecraft:ore_gap");
+        DoublePerlinNoiseParameters::new(33usize, -5i32, &[1f64], "minecraft:ore_gap");
     pub const ORE_VEIN_A: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64], "minecraft:ore_vein_a");
+        DoublePerlinNoiseParameters::new(34usize, -7i32, &[1f64], "minecraft:ore_vein_a");
     pub const ORE_VEIN_B: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64], "minecraft:ore_vein_b");
+        DoublePerlinNoiseParameters::new(35usize, -7i32, &[1f64], "minecraft:ore_vein_b");
     pub const ORE_VEININESS: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:ore_veininess");
-    pub const PACKED_ICE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64, 1f64, 1f64, 1f64], "minecraft:packed_ice");
+        DoublePerlinNoiseParameters::new(36usize, -8i32, &[1f64], "minecraft:ore_veininess");
+    pub const PACKED_ICE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        37usize,
+        -7i32,
+        &[1f64, 1f64, 1f64, 1f64],
+        "minecraft:packed_ice",
+    );
     pub const PATCH: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        38usize,
         -5i32,
         &[1f64, 0f64, 0f64, 0f64, 0f64, 0.013333333333333334f64],
         "minecraft:patch",
     );
     pub const PILLAR: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64, 1f64], "minecraft:pillar");
+        DoublePerlinNoiseParameters::new(39usize, -7i32, &[1f64, 1f64], "minecraft:pillar");
     pub const PILLAR_RARENESS: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:pillar_rareness");
+        DoublePerlinNoiseParameters::new(40usize, -8i32, &[1f64], "minecraft:pillar_rareness");
     pub const PILLAR_THICKNESS: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:pillar_thickness");
-    pub const POWDER_SNOW: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-6i32, &[1f64, 1f64, 1f64, 1f64], "minecraft:powder_snow");
+        DoublePerlinNoiseParameters::new(41usize, -8i32, &[1f64], "minecraft:pillar_thickness");
+    pub const POWDER_SNOW: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        42usize,
+        -6i32,
+        &[1f64, 1f64, 1f64, 1f64],
+        "minecraft:powder_snow",
+    );
     pub const RIDGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        43usize,
         -7i32,
         &[1f64, 2f64, 1f64, 0f64, 0f64, 0f64],
         "minecraft:ridge",
     );
     pub const SOUL_SAND_LAYER: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        44usize,
         -8i32,
         &[
             1f64,
@@ -242,50 +318,80 @@ impl DoublePerlinNoiseParameters {
         "minecraft:soul_sand_layer",
     );
     pub const SPAGHETTI_2D: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64], "minecraft:spaghetti_2d");
+        DoublePerlinNoiseParameters::new(45usize, -7i32, &[1f64], "minecraft:spaghetti_2d");
     pub const SPAGHETTI_2D_ELEVATION: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:spaghetti_2d_elevation");
+        DoublePerlinNoiseParameters::new(
+            46usize,
+            -8i32,
+            &[1f64],
+            "minecraft:spaghetti_2d_elevation",
+        );
     pub const SPAGHETTI_2D_MODULATOR: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-11i32, &[1f64], "minecraft:spaghetti_2d_modulator");
+        DoublePerlinNoiseParameters::new(
+            47usize,
+            -11i32,
+            &[1f64],
+            "minecraft:spaghetti_2d_modulator",
+        );
     pub const SPAGHETTI_2D_THICKNESS: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-11i32, &[1f64], "minecraft:spaghetti_2d_thickness");
+        DoublePerlinNoiseParameters::new(
+            48usize,
+            -11i32,
+            &[1f64],
+            "minecraft:spaghetti_2d_thickness",
+        );
     pub const SPAGHETTI_3D_1: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64], "minecraft:spaghetti_3d_1");
+        DoublePerlinNoiseParameters::new(49usize, -7i32, &[1f64], "minecraft:spaghetti_3d_1");
     pub const SPAGHETTI_3D_2: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-7i32, &[1f64], "minecraft:spaghetti_3d_2");
+        DoublePerlinNoiseParameters::new(50usize, -7i32, &[1f64], "minecraft:spaghetti_3d_2");
     pub const SPAGHETTI_3D_RARITY: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-11i32, &[1f64], "minecraft:spaghetti_3d_rarity");
+        DoublePerlinNoiseParameters::new(51usize, -11i32, &[1f64], "minecraft:spaghetti_3d_rarity");
     pub const SPAGHETTI_3D_THICKNESS: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:spaghetti_3d_thickness");
+        DoublePerlinNoiseParameters::new(
+            52usize,
+            -8i32,
+            &[1f64],
+            "minecraft:spaghetti_3d_thickness",
+        );
     pub const SPAGHETTI_ROUGHNESS: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-5i32, &[1f64], "minecraft:spaghetti_roughness");
+        DoublePerlinNoiseParameters::new(53usize, -5i32, &[1f64], "minecraft:spaghetti_roughness");
     pub const SPAGHETTI_ROUGHNESS_MODULATOR: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-8i32, &[1f64], "minecraft:spaghetti_roughness_modulator");
+        DoublePerlinNoiseParameters::new(
+            54usize,
+            -8i32,
+            &[1f64],
+            "minecraft:spaghetti_roughness_modulator",
+        );
     pub const SURFACE: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-6i32, &[1f64, 1f64, 1f64], "minecraft:surface");
+        DoublePerlinNoiseParameters::new(55usize, -6i32, &[1f64, 1f64, 1f64], "minecraft:surface");
     pub const SURFACE_SECONDARY: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        56usize,
         -6i32,
         &[1f64, 1f64, 0f64, 1f64],
         "minecraft:surface_secondary",
     );
     pub const SURFACE_SWAMP: DoublePerlinNoiseParameters =
-        DoublePerlinNoiseParameters::new(-2i32, &[1f64], "minecraft:surface_swamp");
+        DoublePerlinNoiseParameters::new(57usize, -2i32, &[1f64], "minecraft:surface_swamp");
     pub const TEMPERATURE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        58usize,
         -10i32,
         &[1.5f64, 0f64, 1f64, 0f64, 0f64, 0f64],
         "minecraft:temperature",
     );
     pub const TEMPERATURE_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        59usize,
         -12i32,
         &[1.5f64, 0f64, 1f64, 0f64, 0f64, 0f64],
         "minecraft:temperature_large",
     );
     pub const VEGETATION: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        60usize,
         -8i32,
         &[1f64, 1f64, 0f64, 0f64, 0f64, 0f64],
         "minecraft:vegetation",
     );
     pub const VEGETATION_LARGE: DoublePerlinNoiseParameters = DoublePerlinNoiseParameters::new(
+        61usize,
         -10i32,
         &[1f64, 1f64, 0f64, 0f64, 0f64, 0f64],
         "minecraft:vegetation_large",

@@ -39,10 +39,11 @@ impl<'a> CLoginSuccess<'a> {
 
 impl MultiVersionJavaPacket for CLoginSuccess<'_> {
     fn to_id(version: MinecraftVersion) -> i32 {
-        if version >= MinecraftVersion::V_1_21_2 {
-            LOGIN_LOGIN_FINISHED.to_id(version)
-        } else {
+        // TODO: this is hacky :c
+        if version == MinecraftVersion::V_1_21 {
             LOGIN_GAME_PROFILE.to_id(version)
+        } else {
+            LOGIN_LOGIN_FINISHED.to_id(version)
         }
     }
 }

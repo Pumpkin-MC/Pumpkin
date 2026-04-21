@@ -41,161 +41,85 @@ enum ExpType {
 
 struct Executor {
     mode: Mode,
-    exp_type: Option<ExpType>,
+    exp_type: ExpType,
 }
 
 impl Executor {
-    async fn handle_query(
-        &self,
-        sender: &CommandSender,
-        target: &Player,
-        exp_type: ExpType,
-    ) -> i32 {
-        match exp_type {
-            ExpType::Levels => {
-                let level = target.experience_level.load(Ordering::Relaxed);
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.experience.query.levels",
-                        [
-                            target.get_display_name().await,
-                            TextComponent::text(level.to_string()),
-                        ],
-                    ))
-                    .await;
-                level
-            }
-            ExpType::Points => {
-                let points = target.experience_points.load(Ordering::Relaxed);
-                sender
-                    .send_message(TextComponent::translate(
-                        "commands.experience.query.points",
-                        [
-                            target.get_display_name().await,
-                            TextComponent::text(points.to_string()),
-                        ],
-                    ))
-                    .await;
-                points
-            }
-        }
+    async fn handle_query(&self, sender: &CommandSender, target: &Player) -> i32 {
+        let (val, translation_key) = match self.exp_type {
+            ExpType::Levels => (
+                target.experience_level.load(Ordering::Relaxed),
+                "commands.experience.query.levels",
+            ),
+            ExpType::Points => (
+                target.experience_points.load(Ordering::Relaxed),
+                "commands.experience.query.points",
+            ),
+        };
+
+        sender
+            .send_message(TextComponent::translate(
+                translation_key,
+                [
+                    target.get_display_name().await,
+                    TextComponent::text(val.to_string()),
+                ],
+            ))
+            .await;
+
+        val
     }
 
     fn get_success_message(
-        mode: Mode,
-        exp_type: ExpType,
+        &self,
         amount: i32,
-        targets_len: usize,
-        target_name: Option<TextComponent>,
+        targets: &[Arc<Player>],
+        first_target_name: TextComponent,
     ) -> TextComponent {
-        match (mode, exp_type) {
-            (Mode::Add, ExpType::Points) => {
-                if targets_len > 1 {
-                    TextComponent::translate(
-                        "commands.experience.add.points.success.multiple",
-                        [
-                            TextComponent::text(amount.to_string()),
-                            TextComponent::text(targets_len.to_string()),
-                        ],
-                    )
-                } else {
-                    TextComponent::translate(
-                        "commands.experience.add.points.success.single",
-                        [
-                            TextComponent::text(amount.to_string()),
-                            target_name.unwrap(),
-                        ],
-                    )
-                }
-            }
-            (Mode::Add, ExpType::Levels) => {
-                if targets_len > 1 {
-                    TextComponent::translate(
-                        "commands.experience.add.levels.success.multiple",
-                        [
-                            TextComponent::text(amount.to_string()),
-                            TextComponent::text(targets_len.to_string()),
-                        ],
-                    )
-                } else {
-                    TextComponent::translate(
-                        "commands.experience.add.levels.success.single",
-                        [
-                            TextComponent::text(amount.to_string()),
-                            target_name.unwrap(),
-                        ],
-                    )
-                }
-            }
-            (Mode::Set, ExpType::Points) => {
-                if targets_len > 1 {
-                    TextComponent::translate(
-                        "commands.experience.set.points.success.multiple",
-                        [
-                            TextComponent::text(amount.to_string()),
-                            TextComponent::text(targets_len.to_string()),
-                        ],
-                    )
-                } else {
-                    TextComponent::translate(
-                        "commands.experience.set.points.success.single",
-                        [
-                            TextComponent::text(amount.to_string()),
-                            target_name.unwrap(),
-                        ],
-                    )
-                }
-            }
-            (Mode::Set, ExpType::Levels) => {
-                if targets_len > 1 {
-                    TextComponent::translate(
-                        "commands.experience.set.levels.success.multiple",
-                        [
-                            TextComponent::text(amount.to_string()),
-                            TextComponent::text(targets_len.to_string()),
-                        ],
-                    )
-                } else {
-                    TextComponent::translate(
-                        "commands.experience.set.levels.success.single",
-                        [
-                            TextComponent::text(amount.to_string()),
-                            target_name.unwrap(),
-                        ],
-                    )
-                }
-            }
-            (Mode::Query, _) => unreachable!("Query mode doesn't use success messages"),
+        let type_str = match self.exp_type {
+            ExpType::Points => "points",
+            ExpType::Levels => "levels",
+        };
+        let mode_str = match self.mode {
+            Mode::Add => "add",
+            Mode::Set => "set",
+            Mode::Query => "query",
+        };
+
+        if targets.len() > 1 {
+            TextComponent::translate(
+                format!("commands.experience.{mode_str}.{type_str}.success.multiple"),
+                [
+                    TextComponent::text(amount.to_string()),
+                    TextComponent::text(targets.len().to_string()),
+                ],
+            )
+        } else {
+            TextComponent::translate(
+                format!("commands.experience.{mode_str}.{type_str}.success.single"),
+                [TextComponent::text(amount.to_string()), first_target_name],
+            )
         }
     }
 
     /// Returns `true` if successful. Otherwise, there was a problem setting the points of a player.
-    async fn handle_modify(
-        &self,
-        target: &Arc<Player>,
-        amount: i32,
-        exp_type: ExpType,
-        mode: Mode,
-    ) -> bool {
-        match exp_type {
+    async fn handle_modify(&self, target: &Arc<Player>, amount: i32) -> bool {
+        match self.exp_type {
             ExpType::Levels => {
-                if mode == Mode::Add {
+                if self.mode == Mode::Add {
                     target.add_experience_levels(amount).await;
                 } else {
                     target.set_experience_level(amount, true).await;
                 }
             }
             ExpType::Points => {
-                if mode == Mode::Add {
+                if self.mode == Mode::Add {
                     target.add_experience_points(amount).await;
                 } else {
-                    let current_level = target.experience_level.load(Ordering::Relaxed);
-                    let current_max_points = experience::points_in_level(current_level);
-
-                    if amount > current_max_points {
+                    let current_lvl = target.experience_level.load(Ordering::Relaxed);
+                    if amount > experience::points_in_level(current_lvl) {
                         return false;
                     }
-
                     target.set_experience_points(amount).await;
                 }
             }
@@ -214,72 +138,46 @@ impl CommandExecutor for Executor {
         Box::pin(async move {
             let targets = PlayersArgumentConsumer::find_arg(args, ARG_TARGETS)?;
 
-            match self.mode {
-                Mode::Query => {
-                    if targets.len() != 1 {
-                        // TODO: Add proper error message for multiple players in query mode during parsing itself and not here
-                        return Err(CommandError::CommandFailed(TextComponent::translate(
-                            "argument.player.toomany",
-                            [],
-                        )));
-                    }
-                    Ok(self
-                        .handle_query(sender, &targets[0], self.exp_type.unwrap())
-                        .await)
+            if self.mode == Mode::Query {
+                let target = targets.first().ok_or_else(|| {
+                    CommandError::CommandFailed(TextComponent::translate(
+                        "argument.player.unknown",
+                        [],
+                    ))
+                })?;
+
+                if targets.len() > 1 {
+                    return Err(CommandError::CommandFailed(TextComponent::translate(
+                        "argument.player.toomany",
+                        [],
+                    )));
                 }
-                Mode::Add | Mode::Set => {
-                    let Ok(amount) = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)?
-                    else {
-                        return Err(CommandError::CommandFailed(TextComponent::translate(
-                            "commands.experience.set.points.invalid",
-                            [],
-                        )));
-                    };
+                return Ok(self.handle_query(sender, target).await);
+            }
 
-                    if self.mode == Mode::Set && amount < 0 {
-                        return Err(CommandError::CommandFailed(TextComponent::translate(
-                            "commands.experience.set.points.invalid",
-                            [],
-                        )));
-                    }
+            // Handle Add/Set
+            let amount = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_AMOUNT)??;
 
-                    let mut successes: i32 = 0;
-                    for target in targets {
-                        let succeeded = self
-                            .handle_modify(target, amount, self.exp_type.unwrap(), self.mode)
-                            .await;
-
-                        if succeeded {
-                            successes += 1;
-                        }
-                    }
-
-                    if successes == 0 {
-                        Err(CommandError::CommandFailed(TextComponent::translate(
-                            "commands.experience.set.points.invalid",
-                            [],
-                        )))
-                    } else {
-                        // This should not panic as we already check the number of successes to not be equal to `0`.
-                        let target = targets
-                            .first()
-                            .expect("expected at least one player in targets")
-                            .get_display_name()
-                            .await;
-
-                        let msg = Self::get_success_message(
-                            self.mode,
-                            self.exp_type.unwrap(),
-                            amount,
-                            targets.len(),
-                            Some(target),
-                        );
-                        sender.send_message(msg).await;
-
-                        Ok(successes)
-                    }
+            let mut successes = 0;
+            for target in targets {
+                if self.handle_modify(target, amount).await {
+                    successes += 1;
                 }
             }
+
+            if successes == 0 {
+                return Err(CommandError::CommandFailed(TextComponent::translate(
+                    "commands.experience.set.points.invalid",
+                    [],
+                )));
+            }
+
+            // Safe to access first() because successes > 0
+            let first_name = targets[0].get_display_name().await;
+            let msg = self.get_success_message(amount, targets, first_name);
+            sender.send_message(msg).await;
+
+            Ok(successes)
         })
     }
 }
@@ -292,15 +190,15 @@ pub fn init_command_tree() -> CommandTree {
                     argument(ARG_AMOUNT, xp_amount())
                         .then(literal("levels").execute(Executor {
                             mode: Mode::Add,
-                            exp_type: Some(ExpType::Levels),
+                            exp_type: ExpType::Levels,
                         }))
                         .then(literal("points").execute(Executor {
                             mode: Mode::Add,
-                            exp_type: Some(ExpType::Points),
+                            exp_type: ExpType::Points,
                         }))
                         .execute(Executor {
                             mode: Mode::Add,
-                            exp_type: Some(ExpType::Points),
+                            exp_type: ExpType::Points,
                         }),
                 ),
             ),
@@ -311,15 +209,15 @@ pub fn init_command_tree() -> CommandTree {
                     argument(ARG_AMOUNT, xp_amount())
                         .then(literal("levels").execute(Executor {
                             mode: Mode::Set,
-                            exp_type: Some(ExpType::Levels),
+                            exp_type: ExpType::Levels,
                         }))
                         .then(literal("points").execute(Executor {
                             mode: Mode::Set,
-                            exp_type: Some(ExpType::Points),
+                            exp_type: ExpType::Points,
                         }))
                         .execute(Executor {
                             mode: Mode::Set,
-                            exp_type: Some(ExpType::Points),
+                            exp_type: ExpType::Points,
                         }),
                 ),
             ),
@@ -329,11 +227,11 @@ pub fn init_command_tree() -> CommandTree {
                 argument(ARG_TARGETS, PlayersArgumentConsumer)
                     .then(literal("levels").execute(Executor {
                         mode: Mode::Query,
-                        exp_type: Some(ExpType::Levels),
+                        exp_type: ExpType::Levels,
                     }))
                     .then(literal("points").execute(Executor {
                         mode: Mode::Query,
-                        exp_type: Some(ExpType::Points),
+                        exp_type: ExpType::Points,
                     })),
             ),
         )

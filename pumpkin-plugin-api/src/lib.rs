@@ -45,7 +45,7 @@ pub mod command {
 pub use wit::pumpkin::plugin::{
     block_entity, command as command_wit, common,
     context::{Context, Server},
-    entity, gui, permission, scoreboard, server, text, world,
+    entity, gui, permission, player, scoreboard, server, text, world,
 };
 
 pub mod logging;
@@ -54,18 +54,14 @@ pub mod logging;
 mod wit {
     wit_bindgen::generate!({
         skip: ["init-plugin"],
-        path: "../pumpkin-plugin-wit/v0.1.0",
+        path: "../pumpkin-plugin-wit/v0.1",
         world: "plugin",
+        enable_method_chaining: true
     });
 
     use super::Component;
     export!(Component);
 }
-
-#[cfg(target_arch = "wasm32")]
-#[unsafe(link_section = "pumpkin:api-version")]
-#[used]
-static API_VERSION: [u8; 5] = *b"0.1.0";
 
 struct Component;
 

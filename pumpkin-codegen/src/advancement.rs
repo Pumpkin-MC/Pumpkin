@@ -5,20 +5,20 @@ use proc_macro2::TokenStream;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::TextContent::{Text, Translate};
-use quote::{ToTokens, format_ident, quote};
-use serde::{Deserialize, Deserializer, Serialize};
 use pumpkin_util::text::color::{Color, NamedColor};
 use pumpkin_util::text::hover::HoverEvent;
 use pumpkin_util::text::style::Style;
+use quote::{ToTokens, format_ident, quote};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Deserialize, Default)]
-pub struct Advancement {
+pub struct AdvancementStruct {
     pub parent: Option<ResourceLocation>,
     #[serde(default)]
     pub display: Option<AdvancementDisplay>,
     //pub criteria : Vec<Criterion>,
     #[serde(default)]
-    pub rewards : AdvancementRewards,
+    pub rewards: AdvancementRewards,
     #[serde(default, rename = "sends_telemetry_event")]
     pub sends_telemetry: bool,
 }
@@ -43,7 +43,7 @@ pub struct AdvancementDisplay {
     #[serde(rename = "icon", deserialize_with = "deserialize_icon_id")]
     pub item_icon: ResourceLocation,
     #[serde(default, rename = "frame")]
-    pub frame_type: FrameType,
+    pub frame_type: FrameTypeStruct,
     #[serde(default, rename = "background")]
     pub background_texture: Option<ResourceLocation>,
     #[serde(default)]
@@ -73,7 +73,13 @@ where
 
 impl ToTokens for AdvancementDisplay {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let item_icon = format_ident!("{}", self.item_icon.strip_prefix("minecraft:").unwrap().to_uppercase());
+        let item_icon = format_ident!(
+            "{}",
+            self.item_icon
+                .strip_prefix("minecraft:")
+                .unwrap()
+                .to_uppercase()
+        );
         let frame_type = &self.frame_type;
         let announce_to_chat = &self.announce_to_chat;
         let show_toast = &self.show_toast;
@@ -98,36 +104,25 @@ impl ToTokens for AdvancementDisplay {
 
 #[derive(Clone, Copy, Deserialize, Serialize, Default)]
 #[serde(rename_all = "lowercase")]
-pub enum FrameType {
+pub enum FrameTypeStruct {
     #[default]
     Task = 0,
     Challenge = 1,
     Goal = 2,
 }
 
-impl ToTokens for FrameType {
+impl ToTokens for FrameTypeStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let t = match self {
-            FrameType::Task => quote! { FrameType::Task },
-            FrameType::Challenge => quote! { FrameType::Challenge },
-            FrameType::Goal => quote! { FrameType::Goal },
+            FrameTypeStruct::Task => quote! { FrameType::Task },
+            FrameTypeStruct::Challenge => quote! { FrameType::Challenge },
+            FrameTypeStruct::Goal => quote! { FrameType::Goal },
         };
         tokens.extend(t);
     }
 }
 
-impl FrameType {
-    fn get_color(&self) -> NamedColor {
-        match self {
-            FrameType::Task => NamedColor::Green,
-            FrameType::Challenge => NamedColor::DarkPurple,
-            FrameType::Goal => NamedColor::Green,
-        }
-    }
-}
-
-
-#[derive(Deserialize,Default)]
+#[derive(Deserialize, Default)]
 pub struct AdvancementRewards {
     #[serde(default)]
     experience: u32,
@@ -154,30 +149,8 @@ impl ToTokens for AdvancementRewards {
     }
 }
 
-fn decorate_name(display : &AdvancementDisplay) -> TextComponent{
-    let title = &display.title;
-    let color = display.frame_type.get_color();
-    let mut over = title.clone();
-    *over.0.style = Style::default().color(Color::Named(color));
-    over = over.add_text("\n").add_child(display.description);
-    let mut text = title.clone();
-    text.0.style.hover_event = Some(HoverEvent::show_text(over));
-    text.wrap_in_square_brackets().color(Color::Named(color))
-}
-
-fn format_component_name(display: &AdvancementDisplay) -> TokenStream{
-    let decorate_name = decorate_name(display);
-    if let Text { text } =  decorate_name.0.content {
-        TextComponent::text(text).color(Color::Named(display.frame_type.get_color())).
-    }
-
-    quote! {
-
-    }
-}
-
 pub(crate) fn build() -> TokenStream {
-    let advancements: BTreeMap<String, Advancement> =
+    let advancements: BTreeMap<String, AdvancementStruct> =
         serde_json::from_str(&fs::read_to_string("../assets/advancements.json").unwrap())
             .expect("Failed to parse advancements.json");
 
@@ -196,18 +169,13 @@ pub(crate) fn build() -> TokenStream {
             None => quote! { None },
         };
         let reward = advancement.rewards;
-        let name_component = match &advancement.display {
-            Some(display) => format_component_name(display),
-            None => quote! { None },
-        };
         variants.extend([quote! {
-            pub const #format_name: Self = Self {
+            pub const #format_name: &Self = &Self {
                 id: #raw_name,
                 parent : #parent,
                 send_telemetry : #send_telemetry,
                 display : #display,
                 reward : &#reward,
-                name : LazyLock::new(|| #name_component),
             };
         }]);
         name_to_type.extend(quote! { #raw_name => Some(&Self::#format_name), });
@@ -220,6 +188,10 @@ pub(crate) fn build() -> TokenStream {
         use crate::item::Item;
         use crate::advancement_data::*;
         use std::sync::LazyLock;
+        use pumpkin_util::text::{color::NamedColor,
+            style::Style,
+            hover::HoverEvent,
+            color::Color};
 
         pub struct Advancement {
             pub id : &'static str,
@@ -227,11 +199,25 @@ pub(crate) fn build() -> TokenStream {
             pub send_telemetry : bool,
             pub display : Option<&'static AdvancementDisplay>,
             pub reward : &'static AdvancementReward,
-            pub name: LazyLock<Option<TextComponent>>,
         }
 
         impl Advancement {
             #variants
+
+            fn name(&self) -> Option<TextComponent> {
+                match self.display {
+                    Some(display) => {
+                        let mut over = display.get_title();
+                        let color = Color::Named(display.frame_type.get_color());
+                        *over.0.style = Style::default().color(color);
+                        over = over.add_text("\n").add_child(display.get_description());
+                        let mut text = display.get_title();
+                        text.0.style.hover_event = Some(HoverEvent::show_text(over));
+                        Some(text.wrap_in_square_brackets().color(color))
+                    }
+                    None => None
+                }
+            }
 
             pub fn from_name(name: &str) -> Option<&'static Self> {
                     match name {
@@ -239,6 +225,7 @@ pub(crate) fn build() -> TokenStream {
                         _ => None
                     }
                 }
+
 
             pub fn from_minecraft_name(name: &str) -> Option<&'static Self> {
                 match name {

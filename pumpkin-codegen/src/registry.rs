@@ -13,6 +13,7 @@ const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
 /// static registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
     let assets = [
+        (MinecraftVersion::V_1_20_5, "1_21_synced_registries.json"),
         (MinecraftVersion::V_1_21, "1_21_synced_registries.json"),
         (MinecraftVersion::V_1_21_2, "1_21_2_synced_registries.json"),
         (MinecraftVersion::V_1_21_4, "1_21_4_synced_registries.json"),

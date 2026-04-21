@@ -5,7 +5,6 @@ use crate::entity::{
     Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
 };
 use pumpkin_data::damage::DamageType;
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 
 pub struct PaintingEntity {
@@ -18,17 +17,19 @@ impl PaintingEntity {
     }
 }
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 impl NBTStorage for PaintingEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            nbt.put_byte("facing", self.entity.data.load(Ordering::Relaxed) as i8);
+            nbt.put_byte(self.entity.data.load(Ordering::Relaxed) as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            // TODO
-            self.entity.data.store(3, Ordering::Relaxed);
+            let facing = nbt.get_byte().unwrap_or(3);
+            self.entity.data.store(facing as i32, Ordering::Relaxed);
         })
     }
 }

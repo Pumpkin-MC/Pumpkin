@@ -9,7 +9,7 @@ use pumpkin_protocol::{
         SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart,
     },
 };
-use pumpkin_util::text::TextComponent;
+use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
 use tracing::debug;
 use uuid::Uuid;
 
@@ -300,7 +300,9 @@ impl JavaClient {
         self.connection_state.store(ConnectionState::Config);
         self.send_packet_now(&server.get_branding()).await;
 
-        if server.advanced_config.server_links.enabled {
+        if server.advanced_config.server_links.enabled
+            && self.version.load() >= MinecraftVersion::V_1_21
+        {
             let mut links: Vec<Link> = Vec::new();
 
             let bug_report = &server.advanced_config.server_links.bug_report;

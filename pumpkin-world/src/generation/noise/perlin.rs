@@ -80,7 +80,7 @@ mod double_perlin_noise_sampler_test {
         assert_eq!(rand.next_i32(), -1302745855);
 
         let mut rand_gen = RandomGenerator::Legacy(rand);
-        let params = DoublePerlinNoiseParameters::new(0, &[4f64], "");
+        let params = DoublePerlinNoiseParameters::new(0, 0, &[4f64], "");
         let sampler = DoublePerlinNoiseSampler::from_params(&mut rand_gen, &params, true);
 
         let values = [
@@ -178,7 +178,7 @@ mod double_perlin_noise_sampler_test {
 
         let mut rand_gen = RandomGenerator::Xoroshiro(rand);
 
-        let params = DoublePerlinNoiseParameters::new(1, &[2f64, 4f64], "");
+        let params = DoublePerlinNoiseParameters::new(0, 1, &[2f64, 4f64], "");
 
         let sampler = DoublePerlinNoiseSampler::from_params(&mut rand_gen, &params, false);
 

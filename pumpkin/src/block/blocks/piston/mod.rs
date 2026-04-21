@@ -67,7 +67,8 @@ impl<'a> PistonHandler<'a> {
         if !self.try_move(self.pos_to, self.motion_direction).await {
             return false;
         }
-        for block_pos in self.moved_blocks.clone() {
+        for i in 0..self.moved_blocks.len() {
+            let block_pos = self.moved_blocks[i];
             let block = self.world.get_block(&block_pos).await;
             if Self::is_block_sticky(block)
                 && !self.try_move_adjacent_block(block, &block_pos).await

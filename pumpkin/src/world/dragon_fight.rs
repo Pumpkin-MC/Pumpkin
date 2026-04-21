@@ -603,7 +603,7 @@ impl DragonFight {
             health: 1.0,
             color: BossbarColor::Pink,
             division: BossbarDivisions::NoDivision,
-            flags: BossbarFlags::DragonBar,
+            flags: BossbarFlags::DRAGON_BAR,
         }
     }
 

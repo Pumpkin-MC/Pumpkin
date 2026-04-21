@@ -107,7 +107,7 @@ impl BreathManager {
             let state_here = world.get_block_state(&bp).await;
             if !state_here.is_solid() {
                 let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-                let (fluid_above_x, _) = world.get_fluid_and_fluid_state(&above).await;
+                let fluid_above_x = world.get_fluid(&above).await;
                 if fluid_above_x.has_tag(&tag::Fluid::MINECRAFT_WATER) {
                     in_water_fluid = true;
                 }
@@ -119,7 +119,7 @@ impl BreathManager {
         }
 
         let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-        let (fluid_above, _) = world.get_fluid_and_fluid_state(&above).await;
+        let fluid_above = world.get_fluid(&above).await;
 
         let surface_y = if fluid_above.has_tag(&tag::Fluid::MINECRAFT_WATER) {
             f64::from(bp.0.y as f32 + 1.0)
