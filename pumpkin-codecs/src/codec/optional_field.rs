@@ -47,7 +47,7 @@ pub trait OptionalFieldDecode: Sized {
     fn decode_optional_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
         lenient: bool,
     ) -> DataResult<Self>;
 }
@@ -59,7 +59,7 @@ where
     fn decode_optional_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
         lenient: bool,
     ) -> DataResult<Self> {
         input.get_str(name).map_or_else(

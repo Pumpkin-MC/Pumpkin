@@ -21,31 +21,57 @@ pub fn derive_decode(codecs_crate: &Ident, input: &DeriveInput) -> Result<TokenS
     }
 }
 
-fn derive_struct_decode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -> TokenStream {
-    // Add a special case for unit structs.
-    if matches!(&data.fields, Fields::Unit) {
-        return quote! {
-            impl #codecs_crate::codec::Decode for #name {
-                fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
-                    DataResult::new_success((Self, input))
-                }
-            }
-        }.into();
-    }
-    let variant_decode =
-        derive_single_variant_decode(codecs_crate, name, &data.fields, &quote! { Self });
+/// Used to implement `Decode` for a type implementing `MapDecode`.
+fn decode_delegate_impl(name: &Ident, codecs_crate: &Ident) -> proc_macro2::TokenStream {
     quote! {
         impl #codecs_crate::codec::Decode for #name {
             fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> #codecs_crate::DataResult<(Self, O::Value)> {
-                let single_result = ops.get_map(&input)
-                    .with_lifecycle(#codecs_crate::Lifecycle::Stable)
+                let map = #codecs_crate::DynamicOps::get_map(ops, &input);
+                let single_result = #codecs_crate::DataResult::with_lifecycle(map, #codecs_crate::Lifecycle::Stable)
                     .flat_map(|map| {
-                        #variant_decode
-                    });
-                single_result.map(|s| (s, input))
+                        #codecs_crate::codec::MapDecode::map_decode(map, ops)
+                });
+                crate::DataResult::map(single_result, |s| (s, input))
             }
         }
-    }.into()
+    }
+}
+
+fn derive_struct_decode(name: &Ident, codecs_crate: &Ident, data: &DataStruct) -> TokenStream {
+    // Add a special case for unit structs.
+    if matches!(&data.fields, Fields::Unit) {
+        let decode_impl = decode_delegate_impl(name, codecs_crate);
+        return quote! {
+            impl MapDecode for T {
+                fn map_decode<O: DynamicOps>(
+                    input: impl MapLike<Value = O::Value>,
+                    ops: &'static O,
+                ) -> DataResult<Self> {
+                    DataResult::new_success(Self)
+                }
+            }
+
+            #decode_impl
+        }
+        .into();
+    }
+    let variant_decode =
+        derive_single_variant_decode(codecs_crate, name, &data.fields, &quote! { Self });
+
+    let decode_impl = decode_delegate_impl(name, codecs_crate);
+    quote! {
+        impl #codecs_crate::codec::MapDecode for #name {
+            fn map_decode<O: #codecs_crate::DynamicOps>(
+                    map: impl #codecs_crate::MapLike<Value = O::Value>,
+                    ops: &'static O,
+                ) -> DataResult<Self> {
+                #variant_decode
+            }
+        }
+
+        #decode_impl
+    }
+    .into()
 }
 
 fn derive_enum_decode(
@@ -71,18 +97,18 @@ fn derive_enum_decode(
         }
         return Ok(
             quote! {
-                        impl #codecs_crate::codec::Decode for Test {
-                            fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> #codecs_crate::DataResult<(Self, O::Value)> {
-                                let string: DataResult<(String, O::Value)> = #codecs_crate::codec::Decode::decode(input, ops);
-                                string.flat_map(|(s, p)| {
-                                    match s.as_str() {
-                                        #( #match_arms ),* ,
-                                        _ => DataResult::new_error(format!("Invalid type '{s}'"))
-                                    }
-                                })
+                impl #codecs_crate::codec::Decode for Test {
+                    fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> #codecs_crate::DataResult<(Self, O::Value)> {
+                        let string: DataResult<(String, O::Value)> = #codecs_crate::codec::Decode::decode(input, ops);
+                        string.flat_map(|(s, p)| {
+                            match s.as_str() {
+                                #( #match_arms ),* ,
+                                _ => DataResult::new_error(format!("Invalid type '{s}'"))
                             }
-                        }
-                    }.into()
+                        })
+                    }
+                }
+            }.into()
         );
     }
 
@@ -111,24 +137,25 @@ fn derive_enum_decode(
             }
         });
     }
+    let decode_impl = decode_delegate_impl(name, codecs_crate);
     Ok(
         quote! {
-            impl #codecs_crate::codec::Decode for #name {
-                fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
-                    let single_result = ops.get_map(&input)
-                        .with_lifecycle(#codecs_crate::Lifecycle::Stable)
-                        .flat_map(|map| {
-                            let ty: #codecs_crate::DataResult<String> = #codecs_crate::codec::FieldDecode::decode_field::<O>(#tag_key_lit, &map, ops);
-                            ty.flat_map(|ty| {
-                                match ty.as_str() {
-                                    #( #match_arms ),*
-                                    _ => #codecs_crate::DataResult::new_error(format!("Invalid differentiator key {ty}"))
-                                }
-                            })
-                        });
-                    single_result.map(|s| (s, input))
+            impl #codecs_crate::codec::MapDecode for T {
+                fn map_decode<O: #codecs_crate::DynamicOps>(
+                    map: impl #codecs_crate::MapLike<Value = O::Value>,
+                    ops: &'static O,
+                ) -> DataResult<Self> {
+                    let ty: #codecs_crate::DataResult<String> = #codecs_crate::codec::FieldDecode::decode_field::<O>(#tag_key_lit, &map, ops);
+                    ty.flat_map(|ty| {
+                        match ty.as_str() {
+                            #( #match_arms ),*
+                            _ => #codecs_crate::DataResult::new_error(format!("Invalid differentiator key {ty}"))
+                        }
+                    })
                 }
             }
+
+            #decode_impl
         }.into()
     )
 }
