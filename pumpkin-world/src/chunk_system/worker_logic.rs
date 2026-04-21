@@ -3,8 +3,8 @@ use super::generation_cache::Cache;
 use super::{ChunkPos, IOLock};
 use crate::ProtoChunk;
 use crate::chunk::format::LightContainer;
-use crate::chunk::io::LoadedData;
-use crate::chunk::io::LoadedData::Loaded;
+use pumpkin_storage::chunk::LoadedData;
+use pumpkin_storage::chunk::LoadedData::Loaded;
 use crate::level::Level;
 use crossfire::compat::AsyncRx;
 use itertools::Itertools;
@@ -80,7 +80,7 @@ pub async fn io_read_work(
 
         level
             .chunk_saver
-            .fetch_chunks(&level.level_folder, &batch, t_send.clone())
+            .fetch_chunks(&batch, t_send.clone())
             .await;
 
         for _ in 0..batch.len() {
@@ -150,7 +150,7 @@ pub async fn io_read_work(
                         }
                     }
                 }
-                LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                LoadedData::Missing(pos) | LoadedData::Error { pos, .. } => {
                     if send
                         .send((
                             pos,
@@ -194,11 +194,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             }
         }
         let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
-        if let Err(e) = level
-            .chunk_saver
-            .save_chunks(&level.level_folder, vec)
-            .await
-        {
+        if let Err(e) = level.chunk_saver.save_chunks(vec).await {
             error!("Failed to save chunks: {:?}", e);
         }
 

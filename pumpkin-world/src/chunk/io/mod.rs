@@ -6,6 +6,7 @@ use pumpkin_util::math::vector2::Vector2;
 use super::{ChunkReadingError, ChunkWritingError};
 use crate::level::LevelFolder;
 
+pub mod adapter;
 pub mod file_manager;
 
 /// The result of loading a chunk data.

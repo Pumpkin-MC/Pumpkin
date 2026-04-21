@@ -7,13 +7,16 @@ use crate::{
     chunk::{
         ChunkData, ChunkEntityData, ChunkReadingError,
         format::{anvil::AnvilChunkFile, linear::LinearFile},
-        io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
+        io::{
+            Dirtiable, FileIO, adapter::FolderBoundFileIO, file_manager::ChunkFileManager,
+        },
         palette::has_random_ticking_fluid,
     },
     generation::get_world_gen,
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
+use pumpkin_storage::chunk::{ChunkStorage, LoadedData};
 use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
@@ -75,8 +78,8 @@ pub struct Level {
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
 
-    pub chunk_saver: Arc<dyn FileIO<Data = SyncChunk>>,
-    entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>>,
+    pub chunk_saver: Arc<dyn ChunkStorage<SyncChunk>>,
+    entity_saver: Arc<dyn ChunkStorage<SyncEntityChunk>>,
 
     pub world_gen: Arc<VanillaGenerator>,
 
@@ -161,7 +164,7 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
+        let raw_chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
             ChunkConfig::Linear(config) => Arc::new(
                 ChunkFileManager::<LinearFile<ChunkData>>::new(config.clone()),
             ),
@@ -169,7 +172,7 @@ impl Level {
                 ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
             ),
         };
-        let entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
+        let raw_entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
             ChunkConfig::Linear(config) => Arc::new(
                 ChunkFileManager::<LinearFile<ChunkEntityData>>::new(config.clone()),
             ),
@@ -177,6 +180,12 @@ impl Level {
                 AnvilChunkFile<ChunkEntityData>,
             >::new(config.clone())),
         };
+        let chunk_saver: Arc<dyn ChunkStorage<SyncChunk>> = Arc::new(
+            FolderBoundFileIO::new(raw_chunk_saver, level_folder.clone()),
+        );
+        let entity_saver: Arc<dyn ChunkStorage<SyncEntityChunk>> = Arc::new(
+            FolderBoundFileIO::new(raw_entity_saver, level_folder.clone()),
+        );
 
         let pending_entity_generations = Arc::new(DashMap::new());
         let level_channel = Arc::new(LevelChannel::new());
@@ -386,7 +395,7 @@ impl Level {
         //     .watch_chunks(&self.level_folder, chunks)
         //     .await;
         self.entity_saver
-            .watch_chunks(&self.level_folder, chunks)
+            .watch_chunks(chunks)
             .await;
     }
 
@@ -406,7 +415,7 @@ impl Level {
         }
 
         self.entity_saver
-            .unwatch_chunks(&self.level_folder, chunks)
+            .unwatch_chunks(chunks)
             .await;
         chunks_to_clean
     }
@@ -584,13 +593,13 @@ impl Level {
         pos: Vector2<i32>,
     ) -> Result<(SyncEntityChunk, bool), ChunkReadingError> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-        self.entity_saver
-            .fetch_chunks(&self.level_folder, &[pos], tx)
-            .await;
+        self.entity_saver.fetch_chunks(&[pos], tx).await;
 
         match rx.recv().await {
             Some(LoadedData::Loaded(chunk)) => Ok((chunk, false)),
-            Some(LoadedData::Error((_, err))) => Err(err),
+            Some(LoadedData::Error { error, .. }) => Err(ChunkReadingError::IoError(
+                std::io::Error::other(error.to_string()).kind(),
+            )),
             _ => Err(ChunkReadingError::ChunkNotExist),
         }
     }
@@ -618,23 +627,22 @@ impl Level {
                     .collect();
 
                 if !to_fetch.is_empty() {
-                    let (tx, mut rx) = tokio::sync::mpsc::channel::<
-                        LoadedData<SyncEntityChunk, ChunkReadingError>,
-                    >(to_fetch.len());
+                    let (tx, mut rx) =
+                        tokio::sync::mpsc::channel::<LoadedData<SyncEntityChunk>>(to_fetch.len());
 
-                    level
-                        .entity_saver
-                        .fetch_chunks(&level.level_folder, &to_fetch, tx)
-                        .await;
+                    level.entity_saver.fetch_chunks(&to_fetch, tx).await;
 
                     while let Some(data) = rx.recv().await {
-                        match data {
-                            LoadedData::Loaded(chunk) => {
-                                let pos = Vector2::new(chunk.x, chunk.z);
-                                level.loaded_entity_chunks.insert(pos, chunk.clone());
-                                let _ = sender.send((chunk, false));
-                            }
-                            LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                        let (chunk_opt, missing_pos) = match data {
+                            LoadedData::Loaded(chunk) => (Some(chunk), None),
+                            LoadedData::Missing(pos) => (None, Some(pos)),
+                            LoadedData::Error { pos, .. } => (None, Some(pos)),
+                        };
+                        if let Some(chunk) = chunk_opt {
+                            let pos = Vector2::new(chunk.x, chunk.z);
+                            level.loaded_entity_chunks.insert(pos, chunk.clone());
+                            let _ = sender.send((chunk, false));
+                        } else if let Some(pos) = missing_pos {
                                 let sender_clone = sender.clone();
                                 let level_clone = level.clone();
 
@@ -653,7 +661,6 @@ impl Level {
                                         let _ = sender_clone.send((chunk, true));
                                     }
                                 });
-                            }
                         }
                     }
                 }
@@ -745,13 +752,9 @@ impl Level {
         }
 
         let chunk_saver = self.chunk_saver.clone();
-        let level_folder = self.level_folder.clone();
 
         trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
-        if let Err(error) = chunk_saver
-            .save_chunks(&level_folder, chunks_to_write)
-            .await
-        {
+        if let Err(error) = chunk_saver.save_chunks(chunks_to_write).await {
             error!("Failed writing Chunk to disk {error}");
         }
     }
@@ -762,13 +765,9 @@ impl Level {
         }
 
         let chunk_saver = self.entity_saver.clone();
-        let level_folder = self.level_folder.clone();
 
         trace!("Sending chunks to ChunkIO {:}", chunks_to_write.len());
-        if let Err(error) = chunk_saver
-            .save_chunks(&level_folder, chunks_to_write)
-            .await
-        {
+        if let Err(error) = chunk_saver.save_chunks(chunks_to_write).await {
             error!("Failed writing Chunk to disk {error}");
         }
     }
