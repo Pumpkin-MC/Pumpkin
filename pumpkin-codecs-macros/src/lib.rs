@@ -24,9 +24,20 @@ mod encode;
 mod field;
 
 use proc_macro::TokenStream;
-use proc_macro_error2::__export::proc_macro2::Ident;
-use quote::format_ident;
+use proc_macro_crate::{FoundCrate, crate_name};
+use proc_macro_error2::__export::proc_macro2;
+use proc_macro_error2::__export::proc_macro2::{Ident, Span};
+use quote::{ToTokens, quote};
 use syn::{Attribute, DeriveInput, Error, LitStr, Type, parse_macro_input};
+
+/// Returns the tokens corresponding to the `pumpkin_codecs` crate.
+fn crate_token() -> proc_macro2::TokenStream {
+    match crate_name("pumpkin-codecs") {
+        Ok(FoundCrate::Itself) => quote! { crate },
+        Ok(FoundCrate::Name(name)) => Ident::new(&name, Span::call_site()).into_token_stream(),
+        Err(_) => Ident::new("pumpkin_codecs", Span::call_site()).into_token_stream(),
+    }
+}
 
 /// Derives the `Encode` trait for a struct.
 ///
@@ -36,9 +47,8 @@ use syn::{Attribute, DeriveInput, Error, LitStr, Type, parse_macro_input};
 /// Check the module's documentation for every attribute you can use.
 #[proc_macro_derive(Encode, attributes(field, tag_key, tag))]
 pub fn derive_encode(input: TokenStream) -> TokenStream {
-    let ident = format_ident!("crate");
     let input = parse_macro_input!(input as DeriveInput);
-    encode::derive_encode(&ident, &input).unwrap_or_else(|e| e.to_compile_error().into())
+    encode::derive_encode(&crate_token(), &input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// Derives the `Decode` trait for a struct.
@@ -49,9 +59,8 @@ pub fn derive_encode(input: TokenStream) -> TokenStream {
 /// Check the module's documentation for every attribute you can use.
 #[proc_macro_derive(Decode, attributes(field, tag_key, tag))]
 pub fn derive_decode(input: TokenStream) -> TokenStream {
-    let ident = format_ident!("crate");
     let input = parse_macro_input!(input as DeriveInput);
-    decode::derive_decode(&ident, &input).unwrap_or_else(|e| e.to_compile_error().into())
+    decode::derive_decode(&crate_token(), &input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 struct EnumDispatchData {
