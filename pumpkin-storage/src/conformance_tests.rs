@@ -13,11 +13,14 @@ use std::net::{IpAddr, Ipv4Addr};
 use pumpkin_util::permission::PermissionLvl;
 
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::banned_ip::BannedIpStorage;
 use crate::banned_player::BannedPlayerStorage;
+use crate::chunk::{ChunkStorage, LoadedData};
 use crate::error::StorageError;
+use crate::memory::MemoryChunkStorage;
 use crate::op::OpStorage;
 use crate::poi::{POI_TYPE_NETHER_PORTAL, PoiStorage};
 use crate::whitelist::WhitelistStorage;
@@ -464,6 +467,49 @@ async fn poi_null_always_empty() {
             .unwrap()
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn chunk_round_trip_memory() {
+    let store: MemoryChunkStorage<i32> = MemoryChunkStorage::new();
+    let a = Vector2::new(0, 0);
+    let b = Vector2::new(1, 2);
+
+    store.save_chunks(vec![(a, 42), (b, 7)]).await.unwrap();
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+    store.fetch_chunks(&[a, b, Vector2::new(99, 99)], tx).await;
+
+    let mut hits = std::collections::HashMap::new();
+    let mut missing = Vec::new();
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            LoadedData::Loaded(v) => {
+                hits.insert(v, ());
+            }
+            LoadedData::Missing(p) => missing.push(p),
+            LoadedData::Error { error, .. } => panic!("unexpected error: {error}"),
+        }
+    }
+    assert!(hits.contains_key(&42));
+    assert!(hits.contains_key(&7));
+    assert_eq!(missing, vec![Vector2::new(99, 99)]);
+}
+
+#[tokio::test]
+async fn chunk_null_always_missing() {
+    use crate::NullStorage;
+    let store = NullStorage::new();
+    let pos = Vector2::new(3, 4);
+    ChunkStorage::<i32>::save_chunks(&store, vec![(pos, 1)])
+        .await
+        .unwrap();
+    let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+    ChunkStorage::<i32>::fetch_chunks(&store, &[pos], tx).await;
+    match rx.recv().await.unwrap() {
+        LoadedData::Missing(p) => assert_eq!(p, pos),
+        _ => panic!("expected missing"),
+    }
 }
 
 #[tokio::test]

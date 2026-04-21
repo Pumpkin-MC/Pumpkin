@@ -10,6 +10,7 @@
 pub mod banlist;
 pub mod banned_ip;
 pub mod banned_player;
+pub mod chunk;
 pub mod error;
 pub mod level_info;
 pub mod op;
@@ -23,7 +24,7 @@ mod null;
 mod vanilla;
 
 pub use error::StorageError;
-pub use memory::MemoryStorage;
+pub use memory::{MemoryChunkStorage, MemoryStorage};
 pub use null::NullStorage;
 pub use vanilla::VanillaStorage;
 

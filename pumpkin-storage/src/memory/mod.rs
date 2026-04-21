@@ -13,12 +13,15 @@ use crate::user_cache::UserCacheEntry;
 
 mod banned_ip;
 mod banned_player;
+pub mod chunk;
 mod level_info;
 mod op;
 mod player_data;
 mod poi;
 mod user_cache;
 mod whitelist;
+
+pub use chunk::MemoryChunkStorage;
 
 /// Format-agnostic, in-memory storage.
 ///

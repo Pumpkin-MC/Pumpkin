@@ -17,11 +17,14 @@ use std::net::IpAddr;
 use pumpkin_config::op::Op;
 use pumpkin_config::whitelist::WhitelistEntry;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::PermissionLvl;
+use tokio::sync::mpsc;
 
 use crate::banlist::{BannedIpEntry, BannedPlayerEntry};
 use crate::banned_ip::BannedIpStorage;
 use crate::banned_player::BannedPlayerStorage;
+use crate::chunk::{ChunkStorage, LoadedData};
 use crate::error::StorageError;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::op::OpStorage;
@@ -69,6 +72,33 @@ impl PlayerDataStorage for NullStorage {
     async fn list(&self) -> Result<Vec<Uuid>, StorageError> {
         Ok(Vec::new())
     }
+}
+
+#[async_trait]
+impl<T: Send + Sync + 'static> ChunkStorage<T> for NullStorage {
+    async fn fetch_chunks(
+        &self,
+        chunk_coords: &[Vector2<i32>],
+        stream: mpsc::Sender<LoadedData<T>>,
+    ) {
+        for coord in chunk_coords {
+            if stream.send(LoadedData::Missing(*coord)).await.is_err() {
+                break;
+            }
+        }
+    }
+
+    async fn save_chunks(
+        &self,
+        _chunks: Vec<(Vector2<i32>, T)>,
+    ) -> Result<(), StorageError> {
+        Ok(())
+    }
+
+    async fn watch_chunks(&self, _chunks: &[Vector2<i32>]) {}
+    async fn unwatch_chunks(&self, _chunks: &[Vector2<i32>]) {}
+    async fn clear_watched_chunks(&self) {}
+    async fn block_and_await_ongoing_tasks(&self) {}
 }
 
 #[async_trait]
