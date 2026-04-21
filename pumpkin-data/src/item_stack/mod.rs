@@ -3,12 +3,14 @@ use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
     MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, get, get_mut, read_data,
+    read_data_pnbt,
 };
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
 use crate::tag::Taggable;
 use crate::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use pumpkin_util::GameMode;
 use rand;
 use std::borrow::Cow;
@@ -479,6 +481,25 @@ impl ItemStack {
         compound.put_compound("components", tag);
     }
 
+    pub fn write_item_stack_pnbt(&self, nbt: &mut PNbtCompound) {
+        // Positional: write ID as string, then count as u8
+        nbt.put_string(&format!("minecraft:{}", self.item.registry_key));
+        nbt.put_u8(self.item_count);
+
+        // Positional: write number of components
+        nbt.put_u32(self.patch.len() as u32);
+        for (id, data) in &self.patch {
+            // Write component ID as u8 (matching DataComponent enum)
+            nbt.put_u8(*id as u8);
+            if let Some(data) = data {
+                nbt.put_bool(true); // Is presence
+                data.write_data_pnbt(nbt);
+            } else {
+                nbt.put_bool(false); // Is deletion (!)
+            }
+        }
+    }
+
     #[must_use]
     pub fn read_item_stack(compound: &NbtCompound) -> Option<Self> {
         // Get ID, which is a string like "minecraft:diamond_sword"
@@ -506,6 +527,35 @@ impl ItemStack {
                     let id = DataComponent::try_from_name(name)?;
                     item_stack.patch.push((id, Some(read_data(id, data)?)));
                 }
+            }
+        }
+
+        Some(item_stack)
+    }
+
+    #[must_use]
+    pub fn read_item_stack_pnbt(nbt: &mut PNbtCompound) -> Option<Self> {
+        // Read ID as string
+        let full_id = nbt.get_string().ok()?;
+        let registry_key = full_id.strip_prefix("minecraft:").unwrap_or(&full_id);
+        let item = Item::from_registry_key(registry_key)?;
+
+        // Read count as u8
+        let count = nbt.get_u8().ok()?;
+
+        let mut item_stack = Self::new(count, item);
+
+        // Read components
+        let patch_len = nbt.get_u32().ok()? as usize;
+        for _ in 0..patch_len {
+            let component_id_raw = nbt.get_u8().ok()?;
+            let id = DataComponent::try_from_u8(component_id_raw)?;
+            let is_present = nbt.get_bool().ok()?;
+
+            if is_present {
+                item_stack.patch.push((id, Some(read_data_pnbt(id, nbt)?)));
+            } else {
+                item_stack.patch.push((id, None));
             }
         }
 

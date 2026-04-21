@@ -289,10 +289,13 @@ impl RedstoneWireTurbo {
         self.current_walk_layer = 1;
 
         while !self.update_queue[0].is_empty() || !self.update_queue[1].is_empty() {
-            for node_id in self.update_queue[0].clone() {
+            let mut current_queue = self.update_queue.remove(0);
+            self.update_queue.push(Vec::new());
+
+            for node_id in &current_queue {
                 let block = Block::from_state_id(self.nodes[node_id.index].state.id);
                 if block == &Block::REDSTONE_WIRE {
-                    self.update_node(world, node_id, self.current_walk_layer)
+                    self.update_node(world, *node_id, self.current_walk_layer)
                         .await;
                 } else {
                     // This only works because updating any other block than a wire will
@@ -304,7 +307,10 @@ impl RedstoneWireTurbo {
                 }
             }
 
-            self.shift_queue();
+            current_queue.clear();
+            let last_idx = self.update_queue.len() - 1;
+            self.update_queue[last_idx] = current_queue;
+
             self.current_walk_layer += 1;
         }
 

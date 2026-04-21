@@ -1,0 +1,38 @@
+interface text {
+    use common.{named-color, rgb-color, argb-color};
+
+    resource text-component {
+        text: static func(plain: string) -> text-component;
+        translate: static func(key: string, %with: list<text-component>) -> text-component;
+
+        add-child: func(child: text-component) -> text-component;
+        add-text: func(text: string) -> text-component;
+        get-text: func() -> string;
+        encode: func() -> list<u8>;
+
+        // Style
+        color-named: func(color: named-color) -> text-component;
+        color-rgb: func(color: rgb-color) -> text-component;
+        bold: func(value: bool) -> text-component;
+        italic: func(value: bool) -> text-component;
+        underlined: func(value: bool) -> text-component;
+        strikethrough: func(value: bool) -> text-component;
+        obfuscated: func(value: bool) -> text-component;
+        /// Text inserted into chat when shift-clicked
+        insertion: func(text: string) -> text-component;
+        font: func(font: string) -> text-component;
+        shadow-color: func(color: argb-color) -> text-component;
+
+        // Click events
+        click-open-url: func(url: string) -> text-component;
+        click-run-command: func(command: string) -> text-component;
+        click-suggest-command: func(command: string) -> text-component;
+        click-copy-to-clipboard: func(text: string) -> text-component;
+
+        // Hover events
+        hover-show-text: func(text: text-component) -> text-component;
+        /// Item data as SNBT string
+        hover-show-item: func(item: string) -> text-component;
+        hover-show-entity: func(entity-type: string, id: string, name: option<text-component>) -> text-component;
+    }
+}
