@@ -2,6 +2,7 @@ interface server {
     use player.{player};
     use common.{game-mode};
     use %world.{%world};
+    use text.{text-component};
 
     /// Represents the difficulty setting of a Minecraft server.
     enum difficulty {
@@ -48,6 +49,9 @@ interface server {
 
         /// Broadcasts a system chat message to all players.
         broadcast: func(message: string);
+
+        /// Broadcasts a tab list header and footer to all players.
+        broadcast-tab-list-header-footer: func(header: text-component, footer: text-component);
 
         /// Returns the maximum number of players allowed on the server.
         get-max-players: func() -> u32;

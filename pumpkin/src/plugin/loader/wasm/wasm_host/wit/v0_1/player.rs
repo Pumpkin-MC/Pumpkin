@@ -34,7 +34,7 @@ fn player_from_resource(
         .map(|resource| resource.provider.clone())
 }
 
-fn text_component_from_resource(
+pub(crate) fn text_component_from_resource(
     state: &PluginHostState,
     text: &Resource<pumpkin::plugin::text::TextComponent>,
 ) -> pumpkin_util::text::TextComponent {
@@ -248,6 +248,17 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
     }
 
+    async fn set_display_name(
+        &mut self,
+        player: Resource<Player>,
+        display_name: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let display_name = text_component_from_resource(self, &display_name);
+        let player = player_from_resource(self, &player)?;
+        player.set_display_name(Some(display_name)).await;
+        Ok(())
+    }
+
     async fn send_system_message(
         &mut self,
         player: Resource<Player>,
@@ -257,6 +268,49 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let component = text_component_from_resource(self, &text);
         let player = player_from_resource(self, &player)?;
         player.send_system_message_raw(&component, overlay).await;
+        Ok(())
+    }
+
+    async fn set_tab_list_header_footer(
+        &mut self,
+        player: Resource<Player>,
+        header: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        footer: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+    ) -> wasmtime::Result<()> {
+        let header = text_component_from_resource(self, &header);
+        let footer = text_component_from_resource(self, &footer);
+        let player = player_from_resource(self, &player)?;
+        player.set_tab_list_header_footer(header, footer).await;
+        Ok(())
+    }
+
+    async fn set_tab_list_order(
+        &mut self,
+        player: Resource<Player>,
+        order: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_tab_list_order(order).await;
+        Ok(())
+    }
+
+    async fn set_tab_list_latency(
+        &mut self,
+        player: Resource<Player>,
+        latency: i32,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_tab_list_latency(latency).await;
+        Ok(())
+    }
+
+    async fn set_tab_list_listed(
+        &mut self,
+        player: Resource<Player>,
+        listed: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.set_tab_list_listed(listed).await;
         Ok(())
     }
 

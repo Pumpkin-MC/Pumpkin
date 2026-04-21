@@ -5,34 +5,37 @@ interface text {
         text: static func(plain: string) -> text-component;
         translate: static func(key: string, %with: list<text-component>) -> text-component;
 
-        add-child: func(child: text-component) -> text-component;
-        add-text: func(text: string) -> text-component;
+        add-child: func(child: text-component);
+        add-text: func(text: string);
         get-text: func() -> string;
         encode: func() -> list<u8>;
 
         // Style
-        color-named: func(color: named-color) -> text-component;
-        color-rgb: func(color: rgb-color) -> text-component;
-        bold: func(value: bool) -> text-component;
-        italic: func(value: bool) -> text-component;
-        underlined: func(value: bool) -> text-component;
-        strikethrough: func(value: bool) -> text-component;
-        obfuscated: func(value: bool) -> text-component;
+
+        color-named: func(color: named-color);
+        color-rgb: func(color: rgb-color);
+        bold: func(value: bool);
+        italic: func(value: bool);
+        underlined: func(value: bool);
+        strikethrough: func(value: bool);
+        obfuscated: func(value: bool);
         /// Text inserted into chat when shift-clicked
-        insertion: func(text: string) -> text-component;
-        font: func(font: string) -> text-component;
-        shadow-color: func(color: argb-color) -> text-component;
+        insertion: func(text: string);
+        font: func(font: string);
+        shadow-color: func(color: argb-color);
 
         // Click events
-        click-open-url: func(url: string) -> text-component;
-        click-run-command: func(command: string) -> text-component;
-        click-suggest-command: func(command: string) -> text-component;
-        click-copy-to-clipboard: func(text: string) -> text-component;
+
+        click-open-url: func(url: string);
+        click-run-command: func(command: string);
+        click-suggest-command: func(command: string);
+        click-copy-to-clipboard: func(text: string);
 
         // Hover events
-        hover-show-text: func(text: text-component) -> text-component;
+
+        hover-show-text: func(text: text-component);
         /// Item data as SNBT string
-        hover-show-item: func(item: string) -> text-component;
-        hover-show-entity: func(entity-type: string, id: string, name: option<text-component>) -> text-component;
+        hover-show-item: func(item: string);
+        hover-show-entity: func(entity-type: string, id: string, name: option<text-component>);
     }
 }

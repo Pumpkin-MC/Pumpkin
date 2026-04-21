@@ -59,9 +59,9 @@ use pumpkin_protocol::java::client::play::{
     COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
     CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
     CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
-    CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTitleAnimation,
-    CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata, PlayerAction,
-    PlayerInfoFlags, PreviousMessage,
+    CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
+    CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata,
+    PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::SClickSlot;
 use pumpkin_util::math::{
@@ -107,10 +107,6 @@ const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 pub const DATA_VERSION: i32 = 4790; // 26.1.2
 
-enum BatchState {
-    Count(u8),
-}
-
 struct HeapNode(i32, Vector2<i32>, SyncChunk);
 
 impl Eq for HeapNode {}
@@ -141,7 +137,7 @@ pub struct ChunkManager {
     chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
     chunk_queue: BinaryHeap<HeapNode>,
     entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
-    batches_sent_since_ack: BatchState,
+    batches_sent_since_ack: u8,
     last_chunk_batch_sent_at: Instant,
     /// The current world for chunk loading. Updated on dimension change.
     world: Arc<World>,
@@ -165,7 +161,7 @@ impl ChunkManager {
             chunk_sent: HashMap::new(),
             chunk_queue: BinaryHeap::new(),
             entity_chunk_queue: VecDeque::new(),
-            batches_sent_since_ack: BatchState::Count(0),
+            batches_sent_since_ack: 0,
             last_chunk_batch_sent_at: Instant::now(),
             world,
         }
@@ -186,9 +182,7 @@ impl ChunkManager {
 
     #[must_use]
     const fn ack_window_open(&self) -> bool {
-        match self.batches_sent_since_ack {
-            BatchState::Count(count) => count < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE,
-        }
+        self.batches_sent_since_ack < Self::NOTCHIAN_BATCHES_WITHOUT_ACK_UNTIL_PAUSE
     }
 
     #[must_use]
@@ -198,28 +192,19 @@ impl ChunkManager {
     }
 
     pub fn pull_new_chunks(&mut self) {
-        let mut new_nodes = Vec::new();
         while let Ok((pos, chunk)) = self.chunk_listener.try_recv() {
-            let dst = (pos.x - self.center.x)
-                .abs()
-                .max((pos.y - self.center.y).abs());
+            let dst = Self::chebyshev(pos, self.center);
             if dst > i32::from(self.view_distance) {
                 continue;
             }
             if self.should_enqueue_chunk(pos, &chunk) {
-                new_nodes.push(HeapNode(dst, pos, chunk));
+                self.chunk_queue.push(HeapNode(dst, pos, chunk));
             }
         }
+    }
 
-        if !new_nodes.is_empty() {
-            if self.chunk_queue.is_empty() {
-                self.chunk_queue = BinaryHeap::from(new_nodes);
-            } else {
-                for node in new_nodes {
-                    self.chunk_queue.push(node);
-                }
-            }
-        }
+    fn chebyshev(a: Vector2<i32>, b: Vector2<i32>) -> i32 {
+        (a.x - b.x).abs().max((a.y - b.y).abs())
     }
 
     pub fn update_center_and_view_distance(
@@ -259,14 +244,15 @@ impl ChunkManager {
                 && !unloading_chunks.contains(pos)
         });
 
-        let mut tasks: Vec<_> = self.chunk_queue.drain().collect();
-        tasks.retain(|node| {
-            let dst = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-            dst <= view_distance_i32 && !unloading_chunks.contains(&node.1)
-        });
-        for node in &mut tasks {
-            node.0 = (node.1.x - center.x).abs().max((node.1.y - center.y).abs());
-        }
+        let mut tasks: Vec<_> = self
+            .chunk_queue
+            .drain()
+            .filter_map(|node| {
+                let dst = Self::chebyshev(node.1, center);
+                (dst <= view_distance_i32 && !unloading_chunks.contains(&node.1))
+                    .then(|| HeapNode(dst, node.1, node.2))
+            })
+            .collect();
 
         for pos in loading_chunks {
             if !self.chunk_sent.contains_key(pos)
@@ -297,7 +283,7 @@ impl ChunkManager {
         self.chunk_sent.clear();
         self.chunk_queue.clear();
         self.entity_chunk_queue.clear();
-        self.batches_sent_since_ack = BatchState::Count(0);
+        self.batches_sent_since_ack = 0;
         self.last_chunk_batch_sent_at = Instant::now();
     }
 
@@ -314,12 +300,12 @@ impl ChunkManager {
         self.chunk_queue.clear();
         self.world = new_world;
         // Reset batch state so chunks can be sent immediately in the new dimension
-        self.batches_sent_since_ack = BatchState::Count(0);
+        self.batches_sent_since_ack = 0;
         self.last_chunk_batch_sent_at = Instant::now();
     }
 
     pub const fn handle_acknowledge(&mut self, chunks_per_tick: f32) {
-        self.batches_sent_since_ack = BatchState::Count(0);
+        self.batches_sent_since_ack = 0;
         self.chunks_per_tick = chunks_per_tick.ceil() as usize;
     }
 
@@ -344,17 +330,12 @@ impl ChunkManager {
     }
 
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
-        let mut chunk_size = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
-        let mut chunks = Vec::<Arc<ChunkData>>::with_capacity(chunk_size);
-        while chunk_size > 0 {
+        let take = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
+        let mut chunks = Vec::with_capacity(take);
+        for _ in 0..take {
             chunks.push(self.chunk_queue.pop().unwrap().2);
-            chunk_size -= 1;
         }
-        match &mut self.batches_sent_since_ack {
-            BatchState::Count(count) => {
-                *count = count.saturating_add(1);
-            }
-        }
+        self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
         self.last_chunk_batch_sent_at = Instant::now();
 
         chunks.into_boxed_slice()
@@ -372,11 +353,7 @@ impl ChunkManager {
             .map(|(_, chunk)| chunk)
             .collect();
 
-        match &mut self.batches_sent_since_ack {
-            BatchState::Count(count) => {
-                *count = count.saturating_add(1);
-            }
-        }
+        self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
         self.last_chunk_batch_sent_at = Instant::now();
 
         chunks
@@ -480,9 +457,16 @@ pub struct Player {
     pub screen_handler_sync_id: AtomicU8,
     pub screen_handler_listener: Arc<dyn ScreenHandlerListener>,
     pub screen_handler_sync_handler: Arc<SyncHandler>,
+    pub tab_list_header: Mutex<TextComponent>,
+    pub tab_list_footer: Mutex<TextComponent>,
+    pub display_name: Mutex<Option<TextComponent>>,
+    pub tab_list_order: AtomicI32,
+    pub tab_list_latency: AtomicI32,
+    pub tab_list_listed: AtomicBool,
 }
 
 impl Player {
+    #[expect(clippy::too_many_lines)]
     pub async fn new(
         client: ClientPlatform,
         gameprofile: GameProfile,
@@ -603,9 +587,80 @@ impl Player {
             player_screen_handler: player_screen_handler.clone(),
             current_screen_handler: Mutex::new(player_screen_handler),
             screen_handler_sync_id: AtomicU8::new(0),
-            screen_handler_listener: Arc::new(ScreenListener {}),
+            screen_handler_listener: Arc::new(ScreenListener),
             screen_handler_sync_handler: Arc::new(SyncHandler::new()),
+            tab_list_header: Mutex::new(TextComponent::text("")),
+            tab_list_footer: Mutex::new(TextComponent::text("")),
+            display_name: Mutex::new(None),
+            tab_list_order: AtomicI32::new(0),
+            tab_list_latency: AtomicI32::new(0),
+            tab_list_listed: AtomicBool::new(true),
         }
+    }
+
+    pub async fn set_tab_list_header_footer(&self, header: TextComponent, footer: TextComponent) {
+        *self.tab_list_header.lock().await = header.clone();
+        *self.tab_list_footer.lock().await = footer.clone();
+        self.client
+            .enqueue_packet(&CTabList::new(&header, &footer))
+            .await;
+    }
+
+    pub async fn set_display_name(&self, display_name: Option<TextComponent>) {
+        *self.display_name.lock().await = display_name.clone();
+        // Update the tab list for everyone
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
+                }],
+            ))
+            .await;
+    }
+
+    pub async fn set_tab_list_order(&self, order: i32) {
+        self.tab_list_order.store(order, Ordering::Relaxed);
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::UpdateListOrder(VarInt(order))],
+                }],
+            ))
+            .await;
+    }
+
+    pub async fn set_tab_list_latency(&self, latency: i32) {
+        self.tab_list_latency.store(latency, Ordering::Relaxed);
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_LATENCY.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::UpdateLatency(VarInt(latency))],
+                }],
+            ))
+            .await;
+    }
+
+    pub async fn set_tab_list_listed(&self, listed: bool) {
+        self.tab_list_listed.store(listed, Ordering::Relaxed);
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_LISTED.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::UpdateListed(listed)],
+                }],
+            ))
+            .await;
     }
 
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
@@ -3533,17 +3588,22 @@ impl EntityBase for Player {
     }
 
     fn get_display_name(&self) -> EntityBaseFuture<'_, TextComponent> {
-        let name = self.get_name();
-        let name_clone = name.clone();
-        let mut name = name.click_event(ClickEvent::SuggestCommand {
-            command: format!("/tell {} ", self.gameprofile.name.clone()).into(),
-        });
-        name = name.hover_event(HoverEvent::show_entity(
-            self.living_entity.entity.entity_uuid.to_string(),
-            self.living_entity.entity.entity_type.resource_name.into(),
-            Some(name_clone),
-        ));
-        Box::pin(async move { name.insertion(self.gameprofile.name.clone()) })
+        Box::pin(async move {
+            if let Some(display_name) = self.display_name.lock().await.as_ref() {
+                return display_name.clone();
+            }
+            let name = self.get_name();
+            let name_clone = name.clone();
+            let mut name = name.click_event(ClickEvent::SuggestCommand {
+                command: format!("/tell {} ", self.gameprofile.name.clone()).into(),
+            });
+            name = name.hover_event(HoverEvent::show_entity(
+                self.living_entity.entity.entity_uuid.to_string(),
+                self.living_entity.entity.entity_type.resource_name.into(),
+                Some(name_clone),
+            ));
+            name.insertion(self.gameprofile.name.clone())
+        })
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
