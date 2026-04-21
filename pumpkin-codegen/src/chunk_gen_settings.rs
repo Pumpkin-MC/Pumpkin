@@ -1,459 +1,395 @@
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs};
 
-/// Deserialized block reference used in chunk generation settings (e.g., default block or fluid).
+// ── Deserialized input types (unchanged from original) ────────────────────────
+
 #[derive(Deserialize)]
 pub struct BlockStateCodecStruct {
-    /// Block registry name including the `minecraft:` namespace prefix.
     #[serde(rename = "Name")]
     pub name: String,
-    /// Optional block state properties (e.g., `{"facing": "north"}`).
     #[serde(rename = "Properties")]
     pub properties: Option<BTreeMap<String, String>>,
 }
 
-/// Deserialized chunk generation settings for a dimension, sourced from `chunk_gen_settings.json`.
 #[derive(Deserialize)]
 pub struct GenerationSettingsStruct {
-    /// Whether aquifer (underground water pocket) generation is enabled.
     #[serde(default)]
     pub aquifers_enabled: bool,
-    /// Whether ore-vein generation is enabled.
     #[serde(default)]
     pub ore_veins_enabled: bool,
-    /// Whether to use the legacy random number source for this dimension.
     #[serde(default)]
     pub legacy_random_source: bool,
-    /// Y-level treated as sea level for this dimension.
     pub sea_level: i32,
-    /// Default fluid block (usually water or lava) placed by the aquifer generator.
     pub default_fluid: BlockStateCodecStruct,
-    /// Default solid block used to fill the terrain.
     pub default_block: BlockStateCodecStruct,
-    /// Noise shape parameters controlling vertical and horizontal cell sizes.
     #[serde(rename = "noise")]
     pub shape: GenerationShapeConfigStruct,
-    /// Hierarchical surface material rule determining which block is placed at each surface point.
     pub surface_rule: MaterialRuleStruct,
 }
 
-/// Deserialized noise-shape configuration controlling terrain cell dimensions.
 #[derive(Deserialize)]
 pub struct GenerationShapeConfigStruct {
-    /// Minimum Y level for terrain generation.
     pub min_y: i8,
-    /// Total vertical span of the generation region in blocks.
     pub height: u16,
-    /// Log₂ of the horizontal cell block count (cell width = `1 << size_horizontal`).
     pub size_horizontal: u8,
-    /// Log₂ of the vertical cell block count (cell height = `1 << size_vertical`).
     pub size_vertical: u8,
 }
 
-/// Deserialized surface material rule that determines which block to place at a given surface point.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum MaterialRuleStruct {
-    /// Place a specific block state unconditionally.
     #[serde(rename = "minecraft:block")]
-    Block {
-        /// The block state to place.
-        result_state: BlockStateCodecStruct,
-    },
-    /// Evaluate each rule in order, stopping at the first match.
+    Block { result_state: BlockStateCodecStruct },
     #[serde(rename = "minecraft:sequence")]
-    Sequence {
-        /// The ordered list of child rules.
-        sequence: Vec<Self>,
-    },
-    /// Apply `then_run` only when `if_true` evaluates to true.
+    Sequence { sequence: Vec<Self> },
     #[serde(rename = "minecraft:condition")]
     Condition {
-        /// The condition that must be satisfied.
         if_true: MaterialConditionStruct,
-        /// The rule to apply when the condition is met.
         then_run: Box<Self>,
     },
-    /// Special Badlands terrain coloring rule.
     #[serde(rename = "minecraft:bandlands")]
     Badlands,
 }
 
-/// Deserialized surface material condition that gates a material rule.
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum MaterialConditionStruct {
-    /// True when the current position is in one of the listed biomes.
     #[serde(rename = "minecraft:biome")]
-    Biome {
-        /// List of biome resource locations to match against.
-        biome_is: Vec<String>,
-    },
-    /// True when a named noise value is within the given range.
+    Biome { biome_is: Vec<String> },
     #[serde(rename = "minecraft:noise_threshold")]
     NoiseThreshold {
-        /// Resource location of the noise parameter.
         noise: String,
-        /// Minimum threshold (inclusive).
         min_threshold: f64,
-        /// Maximum threshold (inclusive).
         max_threshold: f64,
     },
-    /// True below a Y offset and false above another, with a linear gradient in between.
     #[serde(rename = "minecraft:vertical_gradient")]
     VerticalGradient {
-        /// Name of the random source used for this gradient.
         random_name: String,
-        /// Y offset below which the condition is always true.
         true_at_and_below: YOffsetStruct,
-        /// Y offset above which the condition is always false.
         false_at_and_above: YOffsetStruct,
     },
-    /// True when the position is above a given Y anchor.
     #[serde(rename = "minecraft:y_above")]
     YAbove {
-        /// The Y offset anchor to compare against.
         anchor: YOffsetStruct,
-        /// Multiplier applied to surface depth when computing the threshold.
         surface_depth_multiplier: i32,
-        /// Whether to add stone depth to the comparison value.
         add_stone_depth: bool,
     },
-    /// True when the position is above a water surface within a certain offset.
     #[serde(rename = "minecraft:water")]
     Water {
-        /// Y offset relative to the water surface.
         offset: i32,
-        /// Multiplier applied to surface depth.
         surface_depth_multiplier: i32,
-        /// Whether to add stone depth to the comparison value.
         add_stone_depth: bool,
     },
-    /// True when the biome temperature is cold (below freezing).
     #[serde(rename = "minecraft:temperature")]
     Temperature,
-    /// True when the terrain is steep (high slope).
     #[serde(rename = "minecraft:steep")]
     Steep,
-    /// Inverts the inner condition.
     #[serde(rename = "minecraft:not")]
-    Not {
-        /// The condition to invert.
-        invert: Box<Self>,
-    },
-    /// True when there is a hole (cave opening) at the position.
+    Not { invert: Box<Self> },
     #[serde(rename = "minecraft:hole")]
     Hole,
-    /// True when the position is above the preliminary surface estimate.
     #[serde(rename = "minecraft:above_preliminary_surface")]
     AbovePreliminarySurface,
-    /// True based on the depth of stone/ceiling relative to the surface.
     #[serde(rename = "minecraft:stone_depth")]
     StoneDepth {
-        /// Y offset added to the depth value.
         offset: i32,
-        /// Whether to include surface depth in the calculation.
         add_surface_depth: bool,
-        /// Additional secondary depth range.
         secondary_depth_range: i32,
-        /// Surface type to measure from: `"ceiling"` or `"floor"`.
         surface_type: String,
     },
 }
 
-/// Deserialized Y offset that can be expressed relative to different reference points.
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum YOffsetStruct {
-    /// An absolute Y coordinate.
-    Absolute {
-        /// The absolute Y level.
-        absolute: i16,
-    },
-    /// A Y level measured upward from the dimension's minimum Y.
-    AboveBottom {
-        /// Number of blocks above the bottom of the dimension.
-        above_bottom: i8,
-    },
-    /// A Y level measured downward from the dimension's maximum Y.
-    BelowTop {
-        /// Number of blocks below the top of the dimension.
-        below_top: i8,
-    },
+    Absolute { absolute: i16 },
+    AboveBottom { above_bottom: i8 },
+    BelowTop { below_top: i8 },
 }
 
-// --- ToTokens Implementations ---
+// ── Flat bytecode compiler ────────────────────────────────────────────────────
 
-impl ToTokens for BlockStateCodecStruct {
-    /// Emits a `BlockBlueprint` literal, stripping the `minecraft:` namespace prefix from the block name.
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let name = &self.name.strip_prefix("minecraft:").unwrap_or(&self.name);
-        let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
-        let block_ident =
-            quote::format_ident!("{}", name_stripped.to_uppercase().replace([':', '-'], "_"));
-        // TODO: use props
-        tokens.extend(quote! {
-            crate::Block::#block_ident.default_state
-        });
+/// Compiles a `MaterialRuleStruct` tree into a flat Vec of `TokenStream`s,
+/// each representing one `SurfaceInstruction` literal.
+///
+/// Layout rules:
+///   - `Sequence`  → children in order, no instruction of its own
+///   - `Condition` → `Test*` instruction (with a `skip` field) followed by the
+///                   body instructions; skip jumps past the body on failure
+///   - `Block`     → `PlaceBlock` terminal
+///   - `Badlands`  → `PlaceBadlands` terminal
+struct Compiler {
+    out: Vec<TokenStream>,
+}
+
+impl Compiler {
+    fn new() -> Self {
+        Self { out: Vec::new() }
+    }
+
+    /// Appends instructions for `rule` and returns the number of instructions emitted.
+    fn compile_rule(&mut self, rule: &MaterialRuleStruct) -> usize {
+        let before = self.out.len();
+        match rule {
+            MaterialRuleStruct::Block { result_state } => {
+                let ts = block_state_tokens(result_state);
+                self.out
+                    .push(quote!(SurfaceInstruction::PlaceBlock { state: #ts }));
+            }
+            MaterialRuleStruct::Badlands => {
+                self.out.push(quote!(SurfaceInstruction::PlaceBadlands));
+            }
+            MaterialRuleStruct::Sequence { sequence } => {
+                // Sequences have no instruction of their own; children are inline
+                for child in sequence {
+                    self.compile_rule(child);
+                }
+            }
+            MaterialRuleStruct::Condition { if_true, then_run } => {
+                // Reserve a slot for the Test instruction; we need body size first
+                let test_slot = self.out.len();
+                self.out.push(TokenStream::new()); // placeholder
+
+                let body_len = self.compile_rule(then_run);
+                let skip = body_len as u16;
+
+                // Patch placeholder with the real instruction now that skip is known
+                self.out[test_slot] = compile_condition(if_true, skip);
+            }
+        }
+        self.out.len() - before
     }
 }
 
-impl ToTokens for GenerationSettingsStruct {
-    /// Emits a `GenerationSettings` struct literal with all fields populated from the deserialized data.
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let aquifers = self.aquifers_enabled;
-        let ores = self.ore_veins_enabled;
-        let legacy = self.legacy_random_source;
-        let sea_level = self.sea_level;
-        let fluid = &self.default_fluid;
-        let block = &self.default_block;
-        let shape = &self.shape;
-        let rule = &self.surface_rule;
+/// Emits a `SurfaceInstruction::Test*` token stream for the given condition.
+/// `skip` is the number of instructions to jump past on failure.
+fn compile_condition(cond: &MaterialConditionStruct, skip: u16) -> TokenStream {
+    match cond {
+        MaterialConditionStruct::Biome { biome_is } => {
+            let refs: Vec<TokenStream> = biome_is
+                .iter()
+                .map(|b| {
+                    let ident = format_ident!(
+                        "{}",
+                        b.strip_prefix("minecraft:").unwrap_or(b).to_uppercase()
+                    );
+                    quote!(&crate::biome::Biome::#ident)
+                })
+                .collect();
+            quote!(SurfaceInstruction::TestBiome {
+                biome_is: &[#(#refs),*],
+                skip: #skip,
+            })
+        }
 
-        tokens.extend(quote!(
-            GenerationSettings {
-                aquifers_enabled: #aquifers,
-                ore_veins_enabled: #ores,
-                legacy_random_source: #legacy,
-                sea_level: #sea_level,
-                default_fluid: #fluid,
-                shape: #shape,
-                surface_rule: #rule,
-                default_block: #block,
+        MaterialConditionStruct::NoiseThreshold {
+            noise,
+            min_threshold,
+            max_threshold,
+        } => {
+            let noise_id = format_ident!(
+                "{}",
+                noise
+                    .strip_prefix("minecraft:")
+                    .unwrap()
+                    .to_shouty_snake_case()
+            );
+            // f64::MAX (or near it) means "no upper bound" — emit the cheaper variant
+            if *max_threshold >= f64::MAX / 2.0 {
+                quote!(SurfaceInstruction::TestNoiseAbove {
+                    noise: DoublePerlinNoiseParameters::#noise_id,
+                    min: #min_threshold,
+                    skip: #skip,
+                })
+            } else {
+                quote!(SurfaceInstruction::TestNoiseRange {
+                    noise: DoublePerlinNoiseParameters::#noise_id,
+                    min: #min_threshold,
+                    max: #max_threshold,
+                    skip: #skip,
+                })
             }
-        ));
-    }
-}
+        }
 
-impl ToTokens for GenerationShapeConfigStruct {
-    /// Emits a `GenerationShapeConfig` struct literal with all noise-shape dimensions.
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let min_y = self.min_y;
-        let height = self.height;
-        let hor = self.size_horizontal;
-        let ver = self.size_vertical;
-        tokens.extend(quote!(
-            GenerationShapeConfig { min_y: #min_y, height: #height, size_horizontal: #hor, size_vertical: #ver }
-        ));
-    }
-}
+        MaterialConditionStruct::VerticalGradient {
+            random_name,
+            true_at_and_below,
+            false_at_and_above,
+        } => {
+            let bytes = md5::compute(random_name.as_bytes());
+            let lo = u64::from_be_bytes(bytes[0..8].try_into().expect("md5 slice"));
+            let hi = u64::from_be_bytes(bytes[8..16].try_into().expect("md5 slice"));
+            let below = y_offset_tokens(true_at_and_below);
+            let above = y_offset_tokens(false_at_and_above);
+            quote!(SurfaceInstruction::TestVerticalGradient {
+                random_lo: #lo,
+                random_hi: #hi,
+                true_at_and_below: #below,
+                false_at_and_above: #above,
+                skip: #skip,
+            })
+        }
 
-impl ToTokens for YOffsetStruct {
-    /// Emits a `YOffset` enum variant literal corresponding to the deserialized offset kind.
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Absolute { absolute } => {
-                tokens.extend(quote!(YOffset::Absolute(pumpkin_util::y_offset::Absolute { absolute: #absolute })));
-            }
-            Self::AboveBottom { above_bottom } => {
-                tokens.extend(quote!(YOffset::AboveBottom(pumpkin_util::y_offset::AboveBottom { above_bottom: #above_bottom })));
-            }
-            Self::BelowTop { below_top } => {
-                tokens.extend(quote!(YOffset::BelowTop(pumpkin_util::y_offset::BelowTop { below_top: #below_top })));
-            }
+        MaterialConditionStruct::YAbove {
+            anchor,
+            surface_depth_multiplier,
+            add_stone_depth,
+        } => {
+            let anchor_ts = y_offset_tokens(anchor);
+            quote!(SurfaceInstruction::TestYAbove {
+                anchor: #anchor_ts,
+                surface_depth_multiplier: #surface_depth_multiplier,
+                add_stone_depth: #add_stone_depth,
+                skip: #skip,
+            })
+        }
+
+        MaterialConditionStruct::Water {
+            offset,
+            surface_depth_multiplier,
+            add_stone_depth,
+        } => {
+            quote!(SurfaceInstruction::TestWater {
+                offset: #offset,
+                surface_depth_multiplier: #surface_depth_multiplier,
+                add_stone_depth: #add_stone_depth,
+                skip: #skip,
+            })
+        }
+
+        MaterialConditionStruct::StoneDepth {
+            offset,
+            add_surface_depth,
+            secondary_depth_range,
+            surface_type,
+        } => {
+            let st = match surface_type.as_str() {
+                "ceiling" => quote!(VerticalSurfaceType::Ceiling),
+                _ => quote!(VerticalSurfaceType::Floor),
+            };
+            quote!(SurfaceInstruction::TestStoneDepth {
+                offset: #offset,
+                add_surface_depth: #add_surface_depth,
+                secondary_depth_range: #secondary_depth_range,
+                surface_type: #st,
+                skip: #skip,
+            })
+        }
+
+        MaterialConditionStruct::Not { invert } => {
+            // Compile the inner condition with skip=0; the Not wrapper flips the result
+            let inner = compile_condition(invert, 0);
+            quote!(SurfaceInstruction::TestNot {
+                inner: &#inner,
+                skip: #skip,
+            })
+        }
+
+        MaterialConditionStruct::AbovePreliminarySurface => {
+            quote!(SurfaceInstruction::TestAbovePreliminarySurface { skip: #skip })
+        }
+        MaterialConditionStruct::Hole => {
+            quote!(SurfaceInstruction::TestHole { skip: #skip })
+        }
+        MaterialConditionStruct::Steep => {
+            quote!(SurfaceInstruction::TestSteep { skip: #skip })
+        }
+        MaterialConditionStruct::Temperature => {
+            quote!(SurfaceInstruction::TestTemperature { skip: #skip })
         }
     }
 }
 
-impl ToTokens for MaterialConditionStruct {
-    /// Emits a `MaterialCondition` enum variant literal for each surface condition kind.
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Biome { biome_is } => {
-                let biomes = biome_is
-                    .iter()
-                    .map(|b| b.strip_prefix("minecraft:").unwrap_or(b).to_uppercase());
-                let biome_refs: Vec<TokenStream> = biomes
-                    .map(|b| {
-                        let ident = format_ident!("{}", b);
-                        quote!(&crate::biome::Biome::#ident)
-                    })
-                    .collect();
+// ── Small token helpers ───────────────────────────────────────────────────────
 
-                tokens.extend(quote!(
-                    MaterialCondition::Biome(BiomeMaterialCondition {
-                        biome_is: &[#(#biome_refs),*],
-                    })
-                ));
-            }
-            Self::NoiseThreshold {
-                noise,
-                min_threshold,
-                max_threshold,
-            } => {
-                let noise_id = quote::format_ident!(
-                    "{}",
-                    noise
-                        .strip_prefix("minecraft:")
-                        .unwrap()
-                        .to_shouty_snake_case()
-                );
+fn block_state_tokens(b: &BlockStateCodecStruct) -> TokenStream {
+    let name = b.name.strip_prefix("minecraft:").unwrap_or(&b.name);
+    let ident = format_ident!("{}", name.to_uppercase().replace([':', '-'], "_"));
+    quote!(crate::Block::#ident.default_state)
+}
 
-                tokens.extend(quote!(
-                    MaterialCondition::NoiseThreshold(NoiseThresholdMaterialCondition {
-                        noise: DoublePerlinNoiseParameters::#noise_id,
-                        min_threshold: #min_threshold,
-                        max_threshold: #max_threshold,
-                    })
-                ));
-            }
-            Self::VerticalGradient {
-                random_name,
-                true_at_and_below,
-                false_at_and_above,
-            } => {
-                // Pre calc for speed :D
-                let bytes = md5::compute(random_name.as_bytes());
-                let lo = u64::from_be_bytes(bytes[0..8].try_into().expect("incorrect length"));
-                let hi = u64::from_be_bytes(bytes[8..16].try_into().expect("incorrect length"));
-                tokens.extend(quote!(
-                    MaterialCondition::VerticalGradient(VerticalGradientMaterialCondition {
-                        random_lo: #lo,
-                        random_hi: #hi,
-                        true_at_and_below: #true_at_and_below,
-                        false_at_and_above: #false_at_and_above,
-                    })
-                ));
-            }
-            Self::YAbove {
-                anchor,
-                surface_depth_multiplier,
-                add_stone_depth,
-            } => {
-                tokens.extend(quote!(
-                    MaterialCondition::YAbove(AboveYMaterialCondition {
-                        anchor: #anchor,
-                        surface_depth_multiplier: #surface_depth_multiplier,
-                        add_stone_depth: #add_stone_depth,
-                    })
-                ));
-            }
-            Self::Water {
-                offset,
-                surface_depth_multiplier,
-                add_stone_depth,
-            } => {
-                tokens.extend(quote!(
-                    MaterialCondition::Water(WaterMaterialCondition {
-                        offset: #offset,
-                        surface_depth_multiplier: #surface_depth_multiplier,
-                        add_stone_depth: #add_stone_depth,
-                    })
-                ));
-            }
-            Self::Temperature => {
-                tokens.extend(quote!(MaterialCondition::Temperature));
-            }
-            Self::Steep => {
-                tokens.extend(quote!(MaterialCondition::Steep));
-            }
-            Self::Not { invert } => {
-                tokens.extend(quote!(
-                    MaterialCondition::Not(NotMaterialCondition {
-                        invert: &#invert,
-                    })
-                ));
-            }
-            Self::Hole => {
-                tokens.extend(quote!(MaterialCondition::Hole(HoleMaterialCondition)));
-            }
-            Self::AbovePreliminarySurface => {
-                tokens.extend(quote!(MaterialCondition::AbovePreliminarySurface(
-                    SurfaceMaterialCondition
-                )));
-            }
-            Self::StoneDepth {
-                offset,
-                add_surface_depth,
-                secondary_depth_range,
-                surface_type,
-            } => {
-                let surface_type_token = match surface_type.as_str() {
-                    "ceiling" => quote!(
-                        pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Ceiling
-                    ),
-                    "floor" => quote!(
-                        pumpkin_util::math::vertical_surface_type::VerticalSurfaceType::Floor
-                    ),
-                    _ => quote!(panic!("Unknown surface type")),
-                };
-
-                tokens.extend(quote!(
-                    MaterialCondition::StoneDepth(StoneDepthMaterialCondition {
-                        offset: #offset,
-                        add_surface_depth: #add_surface_depth,
-                        secondary_depth_range: #secondary_depth_range,
-                        surface_type: #surface_type_token,
-                    })
-                ));
-            }
+fn y_offset_tokens(y: &YOffsetStruct) -> TokenStream {
+    match y {
+        YOffsetStruct::Absolute { absolute } => {
+            quote!(YOffset::Absolute(pumpkin_util::y_offset::Absolute { absolute: #absolute }))
+        }
+        YOffsetStruct::AboveBottom { above_bottom } => {
+            quote!(YOffset::AboveBottom(pumpkin_util::y_offset::AboveBottom { above_bottom: #above_bottom }))
+        }
+        YOffsetStruct::BelowTop { below_top } => {
+            quote!(YOffset::BelowTop(pumpkin_util::y_offset::BelowTop { below_top: #below_top }))
         }
     }
 }
 
-impl ToTokens for MaterialRuleStruct {
-    /// Emits a `MaterialRule` enum variant literal for each surface placement rule kind.
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Self::Block { result_state } => {
-                tokens.extend(quote!(
-                    MaterialRule::Block(BlockMaterialRule {
-                        result_state: #result_state
-                    })
-                ));
-            }
-            Self::Sequence { sequence } => {
-                tokens.extend(quote!(
-                    MaterialRule::Sequence(SequenceMaterialRule {
-                        sequence: &[#(#sequence),*]
-                    })
-                ));
-            }
-            Self::Condition { if_true, then_run } => {
-                tokens.extend(quote!(
-                    MaterialRule::Condition(ConditionMaterialRule {
-                        if_true: #if_true,
-                        then_run: &#then_run
-                    })
-                ));
-            }
-            Self::Badlands => {
-                tokens.extend(quote!(MaterialRule::Badlands(BadLandsMaterialRule)));
-            }
-        }
-    }
+fn shape_tokens(s: &GenerationShapeConfigStruct) -> TokenStream {
+    let min_y = s.min_y;
+    let height = s.height;
+    let hor = s.size_horizontal;
+    let ver = s.size_vertical;
+    quote!(GenerationShapeConfig {
+        min_y: #min_y,
+        height: #height,
+        size_horizontal: #hor,
+        size_vertical: #ver,
+    })
 }
 
-/// Reads `chunk_gen_settings.json` and emits the complete chunk generation settings `TokenStream`.
+fn settings_tokens(s: &GenerationSettingsStruct) -> TokenStream {
+    let aquifers = s.aquifers_enabled;
+    let ores = s.ore_veins_enabled;
+    let legacy = s.legacy_random_source;
+    let sea_level = s.sea_level;
+    let fluid = block_state_tokens(&s.default_fluid);
+    let block = block_state_tokens(&s.default_block);
+    let shape = shape_tokens(&s.shape);
+
+    let mut compiler = Compiler::new();
+    compiler.compile_rule(&s.surface_rule);
+    let instructions = &compiler.out;
+
+    quote!(GenerationSettings {
+        aquifers_enabled: #aquifers,
+        ore_veins_enabled: #ores,
+        legacy_random_source: #legacy,
+        sea_level: #sea_level,
+        default_fluid: #fluid,
+        default_block: #block,
+        shape: #shape,
+        surface_rule: CompiledSurfaceRule {
+            instructions: &[#(#instructions),*],
+        },
+    })
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+
 pub fn build() -> TokenStream {
     let json: BTreeMap<String, GenerationSettingsStruct> =
         serde_json::from_str(&fs::read_to_string("../assets/chunk_gen_settings.json").unwrap())
-            .expect("Failed to parse settings.json");
+            .expect("Failed to parse chunk_gen_settings.json");
 
-    let mut const_defs = TokenStream::new();
-
-    for (name, settings) in &json {
-        let upper_name = name.to_uppercase();
-        let const_name = format_ident!("{}", upper_name);
-
-        const_defs.extend(quote!(
-            pub const #const_name: GenerationSettings = #settings;
-        ));
-    }
+    let const_defs: TokenStream = json
+        .iter()
+        .map(|(name, settings)| {
+            let const_name = format_ident!("{}", name.to_uppercase());
+            let body = settings_tokens(settings);
+            quote!(pub const #const_name: GenerationSettings = #body;)
+        })
+        .collect();
 
     quote!(
         use crate::dimension::Dimension;
         use crate::chunk::DoublePerlinNoiseParameters;
         use crate::BlockState;
-
-        use std::{cell::RefCell, num::NonZeroUsize};
-        use pumpkin_util::random::RandomDeriver;
         use pumpkin_util::y_offset::YOffset;
+        use pumpkin_util::math::vertical_surface_type::VerticalSurfaceType;
         use crate::biome::Biome;
-        use pumpkin_util::y_offset::Absolute;
+
+        // ── Core settings struct ──────────────────────────────────────────────
 
         pub struct GenerationSettings {
             pub aquifers_enabled: bool,
@@ -461,9 +397,10 @@ pub fn build() -> TokenStream {
             pub legacy_random_source: bool,
             pub sea_level: i32,
             pub default_fluid: &'static BlockState,
-            pub shape: GenerationShapeConfig,
-            pub surface_rule: MaterialRule,
             pub default_block: &'static BlockState,
+            pub shape: GenerationShapeConfig,
+            /// Flat compiled surface rule — no recursion at runtime.
+            pub surface_rule: CompiledSurfaceRule,
         }
 
         pub struct GenerationShapeConfig {
@@ -474,12 +411,9 @@ pub fn build() -> TokenStream {
         }
 
         impl GenerationShapeConfig {
-            #[inline]
-            #[must_use]
+            #[inline] #[must_use]
             pub const fn vertical_cell_block_count(&self) -> u8 { self.size_vertical << 2 }
-
-            #[inline]
-            #[must_use]
+            #[inline] #[must_use]
             pub const fn horizontal_cell_block_count(&self) -> u8 { self.size_horizontal << 2 }
 
             #[must_use]
@@ -504,107 +438,148 @@ pub fn build() -> TokenStream {
                 } else {
                     new_top + new_min.unsigned_abs() as u16
                 };
-
-                Self {
-                    min_y: new_min,
-                    height: new_height,
-                    size_horizontal: self.size_horizontal,
-                    size_vertical: self.size_vertical,
-                }
+                Self { min_y: new_min, height: new_height,
+                       size_horizontal: self.size_horizontal, size_vertical: self.size_vertical }
             }
         }
 
-        pub struct BlockMaterialRule {
-            pub result_state: &'static BlockState,
+        // ── Flat bytecode types ───────────────────────────────────────────────
+
+        /// A compiled, flat representation of a surface rule tree.
+        /// Evaluated by a simple index-advancing loop — no recursion.
+        pub struct CompiledSurfaceRule {
+            pub instructions: &'static [SurfaceInstruction],
         }
 
-        pub struct SequenceMaterialRule {
-            pub sequence: &'static [MaterialRule],
+        /// One instruction in the flat surface rule bytecode.
+        ///
+        /// Test instructions carry a `skip: u16` field. On failure the evaluator
+        /// advances the program counter by `skip + 1` (past the body). On success
+        /// it advances by 1 (into the body). Terminals end evaluation immediately.
+        pub enum SurfaceInstruction {
+            // ── Terminals ────────────────────────────────────────────────────
+            PlaceBlock    { state: &'static BlockState },
+            PlaceBadlands,
+
+            // ── Conditions ───────────────────────────────────────────────────
+            TestBiome {
+                biome_is: &'static [&'static Biome],
+                skip: u16,
+            },
+            /// Noise >= min  (the f64::MAX upper-bound fast path)
+            TestNoiseAbove {
+                noise: DoublePerlinNoiseParameters,
+                min: f64,
+                skip: u16,
+            },
+            /// min <= noise <= max
+            TestNoiseRange {
+                noise: DoublePerlinNoiseParameters,
+                min: f64,
+                max: f64,
+                skip: u16,
+            },
+            TestVerticalGradient {
+                random_lo: u64,
+                random_hi: u64,
+                true_at_and_below: YOffset,
+                false_at_and_above: YOffset,
+                skip: u16,
+            },
+            TestYAbove {
+                anchor: YOffset,
+                surface_depth_multiplier: i32,
+                add_stone_depth: bool,
+                skip: u16,
+            },
+            TestWater {
+                offset: i32,
+                surface_depth_multiplier: i32,
+                add_stone_depth: bool,
+                skip: u16,
+            },
+            TestStoneDepth {
+                offset: i32,
+                add_surface_depth: bool,
+                secondary_depth_range: i32,
+                surface_type: VerticalSurfaceType,
+                skip: u16,
+            },
+            TestAbovePreliminarySurface { skip: u16 },
+            TestHole                    { skip: u16 },
+            TestSteep                   { skip: u16 },
+            TestTemperature             { skip: u16 },
+            /// Inverts a single inner condition.
+            /// The inner condition is stored inline — it must not itself contain
+            /// a body (i.e. it always has inner skip = 0).
+            TestNot {
+                inner: &'static SurfaceInstruction,
+                skip: u16,
+            },
         }
 
-        pub struct ConditionMaterialRule {
-            pub if_true: MaterialCondition,
-            pub then_run: &'static MaterialRule,
+        // ── Per-column noise cache ────────────────────────────────────────────
+
+        /// Caches noise samples for one (x, z) column.
+        /// Call `invalidate(x, z)` once per column; `get` then returns the cached
+        /// value on subsequent calls for the same noise parameter.
+        pub struct ColumnNoiseCache {
+            values: [f64; DoublePerlinNoiseParameters::COUNT],
+            valid:  [bool; DoublePerlinNoiseParameters::COUNT],
+            col_x: i32,
+            col_z: i32,
         }
 
-        pub struct BadLandsMaterialRule;
+        impl ColumnNoiseCache {
+            pub const fn new() -> Self {
+                Self {
+                    values: [0.0; DoublePerlinNoiseParameters::COUNT],
+                    valid:  [false; DoublePerlinNoiseParameters::COUNT],
+                    col_x: i32::MIN,
+                    col_z: i32::MIN,
+                }
+            }
 
-        pub enum MaterialRule {
-            Block(BlockMaterialRule),
-            Sequence(SequenceMaterialRule),
-            Condition(ConditionMaterialRule),
-            Badlands(BadLandsMaterialRule),
+            /// Must be called at the start of each new (x, z) column.
+            #[inline]
+            pub fn invalidate(&mut self, x: i32, z: i32) {
+                if self.col_x != x || self.col_z != z {
+                    self.valid = [false; DoublePerlinNoiseParameters::COUNT];
+                    self.col_x = x;
+                    self.col_z = z;
+                }
+            }
+
+            /// Returns the cached noise value, sampling it on first access.
+            #[inline]
+            pub fn get(
+                &mut self,
+                noise: &DoublePerlinNoiseParameters,
+                sample: impl FnOnce() -> f64,
+            ) -> f64 {
+                let idx = noise.id;
+                if !self.valid[idx] {
+                    self.values[idx] = sample();
+                    self.valid[idx] = true;
+                }
+                self.values[idx]
+            }
         }
 
-
-        pub struct BiomeMaterialCondition {
-            pub biome_is: &'static [&'static Biome],
+        impl Default for ColumnNoiseCache {
+            fn default() -> Self { Self::new() }
         }
 
-        pub struct NoiseThresholdMaterialCondition {
-            pub noise: DoublePerlinNoiseParameters,
-            pub min_threshold: f64,
-            pub max_threshold: f64,
-        }
-
-        pub struct VerticalGradientMaterialCondition {
-            pub random_lo: u64,
-            pub random_hi: u64,
-            pub true_at_and_below: YOffset,
-            pub false_at_and_above: YOffset,
-        }
-
-        pub struct AboveYMaterialCondition {
-            pub anchor: YOffset,
-            pub surface_depth_multiplier: i32,
-            pub add_stone_depth: bool,
-        }
-
-        pub struct WaterMaterialCondition {
-            pub offset: i32,
-            pub surface_depth_multiplier: i32,
-            pub add_stone_depth: bool,
-        }
-
-        pub struct HoleMaterialCondition;
-
-        pub struct NotMaterialCondition {
-            pub invert: &'static MaterialCondition,
-        }
-
-        pub struct SurfaceMaterialCondition;
-
-        pub struct StoneDepthMaterialCondition {
-            pub offset: i32,
-            pub add_surface_depth: bool,
-            pub secondary_depth_range: i32,
-            pub surface_type: pumpkin_util::math::vertical_surface_type::VerticalSurfaceType,
-        }
-
-        pub enum MaterialCondition {
-            Biome(BiomeMaterialCondition),
-            NoiseThreshold(NoiseThresholdMaterialCondition),
-            VerticalGradient(VerticalGradientMaterialCondition),
-            YAbove(AboveYMaterialCondition),
-            Water(WaterMaterialCondition),
-            Temperature,
-            Steep,
-            Not(NotMaterialCondition),
-            Hole(HoleMaterialCondition),
-            AbovePreliminarySurface(SurfaceMaterialCondition),
-            StoneDepth(StoneDepthMaterialCondition),
-        }
+        // ── Generated constants ───────────────────────────────────────────────
 
         impl GenerationSettings {
             #const_defs
 
             pub fn from_dimension(dimension: &Dimension) -> &'static Self {
-                if dimension == &Dimension::OVERWORLD {
-                    &Self::OVERWORLD
-                } else if dimension == &Dimension::THE_NETHER {
-                    &Self::NETHER
-                } else {
-                    &Self::END
+                match dimension {
+                    d if d == &Dimension::OVERWORLD   => &Self::OVERWORLD,
+                    d if d == &Dimension::THE_NETHER  => &Self::NETHER,
+                    _                                  => &Self::END,
                 }
             }
         }

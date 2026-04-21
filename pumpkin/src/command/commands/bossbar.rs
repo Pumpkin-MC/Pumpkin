@@ -296,7 +296,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_color(server, namespace.to_string(), color.clone())
+                        .update_color(server, namespace.to_string(), *color)
                         .await
                     {
                         Ok(()) => {}
@@ -450,7 +450,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_division(server, namespace.to_string(), style.clone())
+                        .update_division(server, namespace.to_string(), *style)
                         .await
                     {
                         Ok(()) => {}

@@ -2,10 +2,11 @@ use crate::plugin::loader::wasm::wasm_host::{
     state::{BossBarResource, PlayerResource, PluginHostState},
     wit::v0_1::pumpkin::plugin::boss_bar::{
         self, BossBar, BossBarColor as WitColor, BossBarDivision as WitDivision,
+        BossBarMetadata as WitMetadata,
     },
 };
 use crate::server::Server;
-use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};
+use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags};
 use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -41,6 +42,72 @@ fn player_from_resource(
         .map(|resource| resource.provider.clone())
 }
 
+const fn to_wit_color(color: BossbarColor) -> WitColor {
+    match color {
+        BossbarColor::Pink => WitColor::Pink,
+        BossbarColor::Blue => WitColor::Blue,
+        BossbarColor::Red => WitColor::Red,
+        BossbarColor::Green => WitColor::Green,
+        BossbarColor::Yellow => WitColor::Yellow,
+        BossbarColor::Purple => WitColor::Purple,
+        BossbarColor::White => WitColor::White,
+    }
+}
+
+const fn from_wit_color(color: WitColor) -> BossbarColor {
+    match color {
+        WitColor::Pink => BossbarColor::Pink,
+        WitColor::Blue => BossbarColor::Blue,
+        WitColor::Red => BossbarColor::Red,
+        WitColor::Green => BossbarColor::Green,
+        WitColor::Yellow => BossbarColor::Yellow,
+        WitColor::Purple => BossbarColor::Purple,
+        WitColor::White => BossbarColor::White,
+    }
+}
+
+const fn to_wit_division(division: BossbarDivisions) -> WitDivision {
+    match division {
+        BossbarDivisions::NoDivision => WitDivision::NoDivision,
+        BossbarDivisions::Notches6 => WitDivision::Notches6,
+        BossbarDivisions::Notches10 => WitDivision::Notches10,
+        BossbarDivisions::Notches12 => WitDivision::Notches12,
+        BossbarDivisions::Notches20 => WitDivision::Notches20,
+    }
+}
+
+const fn from_wit_division(division: WitDivision) -> BossbarDivisions {
+    match division {
+        WitDivision::NoDivision => BossbarDivisions::NoDivision,
+        WitDivision::Notches6 => BossbarDivisions::Notches6,
+        WitDivision::Notches10 => BossbarDivisions::Notches10,
+        WitDivision::Notches12 => BossbarDivisions::Notches12,
+        WitDivision::Notches20 => BossbarDivisions::Notches20,
+    }
+}
+
+const fn to_wit_metadata(flags: BossbarFlags) -> WitMetadata {
+    WitMetadata {
+        darken_sky: flags.contains(BossbarFlags::DARKEN_SKY),
+        dragon_bar: flags.contains(BossbarFlags::DRAGON_BAR),
+        create_fog: flags.contains(BossbarFlags::CREATE_FOG),
+    }
+}
+
+fn from_wit_metadata(metadata: WitMetadata) -> BossbarFlags {
+    let mut f = BossbarFlags::empty();
+    if metadata.darken_sky {
+        f |= BossbarFlags::DARKEN_SKY;
+    }
+    if metadata.dragon_bar {
+        f |= BossbarFlags::DRAGON_BAR;
+    }
+    if metadata.create_fog {
+        f |= BossbarFlags::CREATE_FOG;
+    }
+    f
+}
+
 impl PluginHostState {
     fn get_bossbar_res(&self, res: &Resource<BossBar>) -> wasmtime::Result<&BossBarResource> {
         self.resource_table
@@ -63,23 +130,8 @@ impl boss_bar::HostBossBar for PluginHostState {
         let title = self.get_text_provider(&title)?;
         let mut bossbar = Bossbar::new(title);
 
-        bossbar.color = match color {
-            WitColor::Pink => BossbarColor::Pink,
-            WitColor::Blue => BossbarColor::Blue,
-            WitColor::Red => BossbarColor::Red,
-            WitColor::Green => BossbarColor::Green,
-            WitColor::Yellow => BossbarColor::Yellow,
-            WitColor::Purple => BossbarColor::Purple,
-            WitColor::White => BossbarColor::White,
-        };
-
-        bossbar.division = match division {
-            WitDivision::NoDivision => BossbarDivisions::NoDivision,
-            WitDivision::Notches6 => BossbarDivisions::Notches6,
-            WitDivision::Notches10 => BossbarDivisions::Notches10,
-            WitDivision::Notches12 => BossbarDivisions::Notches12,
-            WitDivision::Notches20 => BossbarDivisions::Notches20,
-        };
+        bossbar.color = from_wit_color(color);
+        bossbar.division = from_wit_division(division);
 
         let server = self.server.as_ref().expect("server not available").clone();
         let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
@@ -147,29 +199,85 @@ impl boss_bar::HostBossBar for PluginHostState {
         Ok(())
     }
 
-    async fn get_color(&mut self, _res: Resource<BossBar>) -> wasmtime::Result<WitColor> {
-        todo!()
+    async fn get_color(&mut self, res: Resource<BossBar>) -> wasmtime::Result<WitColor> {
+        let pbb = self.get_bossbar_res(&res)?.provider.lock().await;
+        Ok(to_wit_color(pbb.bossbar.color))
     }
-    async fn set_color(
-        &mut self,
-        _res: Resource<BossBar>,
-        _color: WitColor,
-    ) -> wasmtime::Result<()> {
-        todo!()
+
+    async fn set_color(&mut self, res: Resource<BossBar>, color: WitColor) -> wasmtime::Result<()> {
+        let mut pbb = self.get_bossbar_res(&res)?.provider.lock().await;
+        pbb.bossbar.color = from_wit_color(color);
+        if let Some(server) = pbb.server.upgrade() {
+            for uuid in &pbb.players {
+                if let Some(player) = server.get_player_by_uuid(*uuid) {
+                    player
+                        .update_bossbar_style(
+                            &pbb.bossbar.uuid,
+                            pbb.bossbar.color,
+                            pbb.bossbar.division,
+                        )
+                        .await;
+                }
+            }
+        }
+        Ok(())
     }
-    async fn get_division(&mut self, _res: Resource<BossBar>) -> wasmtime::Result<WitDivision> {
-        todo!()
+
+    async fn get_division(&mut self, res: Resource<BossBar>) -> wasmtime::Result<WitDivision> {
+        let pbb = self.get_bossbar_res(&res)?.provider.lock().await;
+        Ok(to_wit_division(pbb.bossbar.division))
     }
+
     async fn set_division(
         &mut self,
-        _res: Resource<BossBar>,
-        _division: WitDivision,
+        res: Resource<BossBar>,
+        division: WitDivision,
     ) -> wasmtime::Result<()> {
-        todo!()
+        let mut pbb = self.get_bossbar_res(&res)?.provider.lock().await;
+        pbb.bossbar.division = from_wit_division(division);
+        if let Some(server) = pbb.server.upgrade() {
+            for uuid in &pbb.players {
+                if let Some(player) = server.get_player_by_uuid(*uuid) {
+                    player
+                        .update_bossbar_style(
+                            &pbb.bossbar.uuid,
+                            pbb.bossbar.color,
+                            pbb.bossbar.division,
+                        )
+                        .await;
+                }
+            }
+        }
+        Ok(())
     }
+
+    async fn get_metadata(&mut self, res: Resource<BossBar>) -> wasmtime::Result<WitMetadata> {
+        let pbb = self.get_bossbar_res(&res)?.provider.lock().await;
+        Ok(to_wit_metadata(pbb.bossbar.flags))
+    }
+
+    async fn set_metadata(
+        &mut self,
+        res: Resource<BossBar>,
+        metadata: WitMetadata,
+    ) -> wasmtime::Result<()> {
+        let mut pbb = self.get_bossbar_res(&res)?.provider.lock().await;
+        pbb.bossbar.flags = from_wit_metadata(metadata);
+        if let Some(server) = pbb.server.upgrade() {
+            for uuid in &pbb.players {
+                if let Some(player) = server.get_player_by_uuid(*uuid) {
+                    player
+                        .update_bossbar_flags(&pbb.bossbar.uuid, pbb.bossbar.flags)
+                        .await;
+                }
+            }
+        }
+        Ok(())
+    }
+
     async fn get_players(
         &mut self,
-        _res: Resource<BossBar>,
+        res: Resource<BossBar>,
     ) -> wasmtime::Result<
         Vec<
             Resource<
@@ -177,7 +285,23 @@ impl boss_bar::HostBossBar for PluginHostState {
             >,
         >,
     > {
-        todo!()
+        let players = {
+            let pbb = self.get_bossbar_res(&res)?.provider.lock().await;
+            pbb.players.clone()
+        };
+
+        let server = self
+            .server
+            .clone()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        let mut wit_players = Vec::new();
+        for uuid in players {
+            if let Some(player) = server.get_player_by_uuid(uuid) {
+                wit_players.push(self.add_player(player)?);
+            }
+        }
+        Ok(wit_players)
     }
 
     async fn add_player(
