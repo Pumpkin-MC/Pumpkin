@@ -92,7 +92,7 @@ strip = false
 
 [workspace.dependencies]
 tokio = { version = "1.52", default-features = false }
-syn = { version = "2.0", default-features = false, features = ["printing"] }
+syn = { version = "2.0", default-features = false, features = ["printing", "derive"] }
 
 thiserror = "2.0"
 
