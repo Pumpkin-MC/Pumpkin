@@ -107,9 +107,6 @@ tracing-serde-structured = { workspace = true }
 
 bitflags = { workspace = true }
 
-[dev-dependencies]
-tempfile.workspace = true
-
 [features]
 console-subscriber = ["dep:console-subscriber"]
 tokio_taskdump = ["pumpkin-world/tokio_taskdump"]

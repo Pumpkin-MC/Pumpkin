@@ -61,8 +61,6 @@ crossfire.workspace = true
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports", "async_tokio"] }
 temp-dir.workspace = true
-# Deserialize NaN and Inf
-serde_json5.workspace = true
 
 [[bench]]
 name = "chunk"
