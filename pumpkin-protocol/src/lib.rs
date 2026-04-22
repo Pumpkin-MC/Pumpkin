@@ -5,9 +5,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use aes::cipher::{BlockDecryptMut, BlockEncryptMut, BlockSizeUser, generic_array::GenericArray};
+use aes::cipher::BlockSizeUser;
 use bytes::Bytes;
 use codec::var_int::VarInt;
+use hybrid_array::{Array, sizes::U1};
 use pumpkin_util::{
     resource_location::ResourceLocation,
     text::{TextComponent, style::Style},
@@ -216,7 +217,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for StreamDecryptor<R> {
         if matches!(internal_poll, Poll::Ready(Ok(()))) {
             // Decrypt the raw data in-place, note that our block size is 1 byte, so this is always safe
             for block in buf.filled_mut()[original_fill..].chunks_mut(Aes128Cfb8Dec::block_size()) {
-                cipher.decrypt_block_mut(block.into());
+                cipher.decrypt(block);
             }
         }
 
@@ -265,8 +266,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
                 // This should never panic
                 out[0] = out_to_use;
             } else {
-                let out_block = GenericArray::from_mut_slice(&mut out);
-                cipher.encrypt_block_b2b_mut(block.into(), out_block);
+                let out_block: &mut Array<u8, U1> = (&mut out[..])
+                    .try_into()
+                    .expect("Output slice size does not match block size");
+                cipher.encrypt_b2b(block, out_block).unwrap();
             }
 
             let write = Pin::new(&mut ref_self.write);

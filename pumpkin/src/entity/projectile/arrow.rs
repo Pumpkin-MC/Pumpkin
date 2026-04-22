@@ -191,7 +191,7 @@ impl EntityBase for ArrowEntity {
     #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -469,6 +469,10 @@ impl EntityBase for ArrowEntity {
                 self.get_entity().remove().await;
             }
         })
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

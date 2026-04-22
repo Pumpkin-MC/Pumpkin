@@ -12,6 +12,7 @@ use crate::chunk::io::Dirtiable;
 use crate::level::{Level, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
+use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_util::math::vector2::Vector2;
 use slotmap::Key;
 use std::cmp::{Ordering, max};
@@ -66,10 +67,14 @@ pub struct GenerationSchedule {
 
     io_lock: IOLock,
     running_task_count: u16,
+    max_in_flight: u16,
+    queue_dirty: bool,
     recv_chunk: crossfire::compat::MRx<(ChunkPos, RecvChunk)>,
-    io_read: crossfire::compat::MTx<ChunkPos>,
+    io_read: crossfire::compat::MTx<Vec<ChunkPos>>,
     io_write: crossfire::compat::Tx<Vec<(ChunkPos, Chunk)>>,
     generate: crossfire::compat::MTx<(ChunkPos, Cache, StagedChunkEnum)>,
+    send_chunk: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+    gen_pool: Option<Arc<rayon::ThreadPool>>,
     listener: Arc<ChunkListener>,
     lighting_config: LightingEngineConfig,
 }
@@ -82,6 +87,7 @@ impl GenerationSchedule {
         level_channel: Arc<LevelChannel>,
         listener: Arc<ChunkListener>,
         thread_tracker: &mut Vec<thread::JoinHandle<()>>,
+        gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) {
         let (send_chunk, recv_chunk) = crossfire::compat::mpmc::unbounded_blocking();
 
@@ -110,20 +116,28 @@ impl GenerationSchedule {
             io_lock.clone(),
         ));
 
-        for i in 0..gen_thread_count {
-            let recv_gen = recv_gen.clone();
-            let send_chunk = send_chunk.clone();
-            let level_clone = level.clone();
+        if gen_pool.is_none() {
+            for i in 0..gen_thread_count {
+                let recv_gen = recv_gen.clone();
+                let send_chunk = send_chunk.clone();
+                let level_clone = level.clone();
 
-            let handle = thread::Builder::new()
-                .name(format!("Gen-{i}"))
-                .spawn(move || {
-                    generation_work(recv_gen, send_chunk, level_clone);
-                })
-                .expect("Failed to spawn Generation Thread");
+                let handle = thread::Builder::new()
+                    .name(format!("Gen-{i}"))
+                    .spawn(move || {
+                        generation_work(recv_gen, send_chunk, level_clone);
+                    })
+                    .expect("Failed to spawn Generation Thread");
 
-            thread_tracker.push(handle);
+                thread_tracker.push(handle);
+            }
         }
+
+        let max_in_flight = if gen_pool.is_some() {
+            (num_cpus::get() * 4) as u16
+        } else {
+            gen_thread_count as u16
+        };
 
         let level_sched = level;
         let lighting_config = level_sched.lighting_config;
@@ -141,10 +155,14 @@ impl GenerationSchedule {
                     waiting_for_chunks: HashSetType::default(),
                     io_lock,
                     running_task_count: 0,
+                    max_in_flight,
+                    queue_dirty: false,
                     recv_chunk,
                     io_read: send_read_io,
                     io_write: send_write_io,
                     generate: send_gen,
+                    send_chunk,
+                    gen_pool,
                     listener,
                     chunk_map: Default::default(),
                     lighting_config,
@@ -204,21 +222,21 @@ impl GenerationSchedule {
     }
 
     fn sort_queue(&mut self) {
-        let mut new_queue = BinaryHeap::with_capacity(self.queue.len());
-        for i in &self.queue {
+        if self.queue.is_empty() {
+            return;
+        }
+        let mut tasks: Vec<_> = self.queue.drain().collect();
+        for i in &mut tasks {
             if let Some(node) = self.graph.nodes.get(i.1) {
-                new_queue.push(TaskHeapNode(
-                    Self::calc_priority(
-                        &self.last_level,
-                        &self.last_high_priority,
-                        node.pos,
-                        node.stage,
-                    ),
-                    i.1,
-                ));
+                i.0 = Self::calc_priority(
+                    &self.last_level,
+                    &self.last_high_priority,
+                    node.pos,
+                    node.stage,
+                );
             }
         }
-        self.queue = new_queue;
+        self.queue = BinaryHeap::from(tasks);
     }
 
     /// Ensure that the dependency chain for `req_stage` exists on `holder` (for chunk at
@@ -395,9 +413,9 @@ impl GenerationSchedule {
         }
         if let Some(high_priority) = new_data.1 {
             self.last_high_priority = high_priority;
+            self.queue_dirty = true;
         }
         let Some(new_level) = new_data.0 else {
-            self.sort_queue();
             return true;
         };
         for (pos, (old_stage, new_stage)) in new_level.0 {
@@ -503,7 +521,7 @@ impl GenerationSchedule {
             self.chunk_map.insert(pos, holder);
         }
         self.last_level = new_level.1;
-        self.sort_queue();
+        self.queue_dirty = true;
         true
     }
 
@@ -915,6 +933,22 @@ impl GenerationSchedule {
                 break;
             }
 
+            // 1. Get latest world state (player moves, etc)
+            self.resort_work(self.send_level.get());
+
+            // 2. Process all pending chunk results from workers
+            while let Ok((pos, data)) = self.recv_chunk.try_recv() {
+                self.receive_chunk(pos, data);
+            }
+
+            // 3. Re-sort if world state changed or new tasks added
+            if self.queue_dirty {
+                self.sort_queue();
+                self.queue_dirty = false;
+            }
+
+            // 4. Process ready tasks in the queue (up to max_in_flight)
+            let mut io_batch = Vec::with_capacity(16);
             'out2: while let Some(task) = self.queue.pop() {
                 if level.shut_down_chunk_system.load(Relaxed) {
                     self.queue.push(task);
@@ -923,13 +957,22 @@ impl GenerationSchedule {
                     break 'out2;
                 }
 
-                if self.resort_work(self.send_level.get()) {
+                if self.running_task_count >= self.max_in_flight {
                     self.queue.push(task);
                     break 'out2;
                 }
+
+                // Briefly check for high-priority results or world changes to avoid stalling
                 while let Ok((pos, data)) = self.recv_chunk.try_recv() {
                     self.receive_chunk(pos, data);
+                    if self.resort_work(self.send_level.get()) {
+                        // If world state changed, we MUST re-sort before continuing
+                        self.queue.push(task);
+                        self.queue_dirty = true;
+                        break 'out2;
+                    }
                 }
+
                 if let Some(node) = self.graph.nodes.get_mut(task.1) {
                     if node.in_degree != 0 {
                         node.in_queue = false;
@@ -951,12 +994,24 @@ impl GenerationSchedule {
                         }
                         holder.occupied = occupy;
 
-                        if self.io_read.send(node.pos).is_err() {
+                        io_batch.push(node.pos);
+                        if io_batch.len() >= 16
+                            && self.io_read.send(std::mem::take(&mut io_batch)).is_err()
+                        {
                             info!("IO read thread closed, saving remaining chunks...");
                             self.save_all_chunk(true);
                             break 'out2;
                         }
                     } else {
+                        // Send any pending IO batch before starting generation
+                        if !io_batch.is_empty()
+                            && self.io_read.send(std::mem::take(&mut io_batch)).is_err()
+                        {
+                            info!("IO read thread closed, saving remaining chunks...");
+                            self.save_all_chunk(true);
+                            break 'out2;
+                        }
+
                         let write_radius = node.stage.get_write_radius();
 
                         // Pre-validate that every chunk in the write area (including the
@@ -1058,7 +1113,21 @@ impl GenerationSchedule {
                         }
 
                         self.running_task_count += 1;
-                        if self.generate.send((node.pos, cache, node.stage)).is_err() {
+                        if let Some(pool) = &self.gen_pool {
+                            let pos = node.pos;
+                            let stage = node.stage;
+                            let send_chunk = self.send_chunk.clone();
+                            let level = level.clone();
+                            let settings =
+                                GenerationSettings::from_dimension(&level.world_gen.dimension);
+
+                            pool.spawn(move || {
+                                let result = crate::chunk_system::worker_logic::run_generation(
+                                    pos, cache, stage, &level, settings,
+                                );
+                                let _ = send_chunk.send((pos, result));
+                            });
+                        } else if self.generate.send((node.pos, cache, node.stage)).is_err() {
                             self.running_task_count = self.running_task_count.saturating_sub(1);
                             info!("Generation thread closed, saving remaining chunks...");
                             self.save_all_chunk(true);
@@ -1068,25 +1137,40 @@ impl GenerationSchedule {
                 }
             }
 
+            // Flush any remaining IO batch
+            if !io_batch.is_empty() && self.io_read.send(std::mem::take(&mut io_batch)).is_err() {
+                info!("IO read thread closed, saving remaining chunks...");
+                self.save_all_chunk(true);
+            }
+
+            // 3. If queue is empty, wait for work or results
             if self.queue.is_empty() {
-                // Wait while there are in-flight tasks OR tasks parked waiting for chunk data.
-                while (self.running_task_count > 0 || !self.waiting_for_chunks.is_empty())
-                    && self.queue.is_empty()
-                {
-                    if let Ok((pos, data)) = self.recv_chunk.try_recv() {
-                        self.receive_chunk(pos, data);
-                        self.resort_work(self.send_level.get());
-                    } else {
-                        if level.shut_down_chunk_system.load(Relaxed) {
-                            break;
+                // If we have tasks in flight, wait for them with timeout
+                if self.running_task_count > 0 || !self.waiting_for_chunks.is_empty() {
+                    match self.recv_chunk.recv_timeout(Duration::from_millis(5)) {
+                        Ok((pos, data)) => {
+                            self.receive_chunk(pos, data);
+                            self.resort_work(self.send_level.get());
                         }
-                        thread::sleep(Duration::from_millis(50));
+                        Err(crossfire::compat::RecvTimeoutError::Timeout) => {
+                            // Periodically check LevelChannel for new requests
+                            self.resort_work(self.send_level.get());
+                        }
+                        Err(crossfire::compat::RecvTimeoutError::Disconnected) => break,
                     }
-                }
-                if self.queue.is_empty() && self.waiting_for_chunks.is_empty() {
+                    if self.queue_dirty {
+                        self.sort_queue();
+                        self.queue_dirty = false;
+                    }
+                } else {
+                    // No tasks in flight, wait indefinitely for LevelChannel changes
                     debug_assert!(self.debug_check());
                     debug_assert_eq!(self.running_task_count, 0);
                     self.resort_work(self.send_level.wait_and_get(&level));
+                    if self.queue_dirty {
+                        self.sort_queue();
+                        self.queue_dirty = false;
+                    }
                 }
             }
         }

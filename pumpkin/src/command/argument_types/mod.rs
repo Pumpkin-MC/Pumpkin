@@ -4,6 +4,7 @@ use crate::command::errors::error_types::{
 };
 use crate::command::string_reader::StringReader;
 use pumpkin_data::translation;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::math::bounds::{Bounds, DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;
 use std::str::FromStr;
@@ -67,6 +68,8 @@ const EMPTY_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::ARGUMENT_RANGE_EMPTY);
 const SWAPPED_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::ARGUMENT_RANGE_SWAPPED);
+const INVALID_IDENTIFIER_ERROR_TYPE: CommandErrorType<0> =
+    CommandErrorType::new(translation::ARGUMENT_ID_INVALID);
 
 /// A trait to try getting a value from a [`StringReader`].
 pub trait FromStringReader: Sized {
@@ -185,10 +188,35 @@ impl FromStringReader for FloatDegreeBounds {
     }
 }
 
+impl FromStringReader for Identifier {
+    fn from_reader(reader: &mut StringReader) -> Result<Self, CommandSyntaxError> {
+        let start = reader.cursor();
+        while let Some(c) = reader.peek()
+            && Self::is_valid_char(c)
+        {
+            reader.skip();
+        }
+
+        let raw_identifier = &reader.string()[start..reader.cursor()];
+        let identifier_result = Self::parse(raw_identifier);
+
+        identifier_result.map_or_else(
+            |_| {
+                reader.set_cursor(start);
+                Err(INVALID_IDENTIFIER_ERROR_TYPE.create(reader))
+            },
+            Ok,
+        )
+    }
+}
+
 pub mod argument_type;
 pub mod coordinates;
 pub mod core;
 pub mod entity;
+pub mod entity_anchor;
 pub mod entity_selector;
+pub mod game_profile;
+pub mod identifier;
 pub mod range;
 pub mod time;

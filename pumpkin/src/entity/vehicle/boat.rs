@@ -104,7 +104,7 @@ impl EntityBase for BoatEntity {
 
     fn tick<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a Arc<dyn EntityBase>,
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -229,6 +229,10 @@ impl EntityBase for BoatEntity {
     }
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 }

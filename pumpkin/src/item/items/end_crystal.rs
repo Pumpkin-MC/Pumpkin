@@ -10,6 +10,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, BlockDirection};
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -40,6 +41,19 @@ impl ItemBehaviour for EndCrystalItem {
             }
 
             let location = location.up();
+            let location_vec = location.0.to_f64();
+
+            if !world.get_block_state(&location).await.is_air()
+                || !world
+                    .get_entities_at_box(&BoundingBox::new(
+                        Vector3::new(location_vec.x, location_vec.y, location_vec.z),
+                        Vector3::new(location_vec.x + 1.0, location_vec.y + 2.0, location_vec.z),
+                    ))
+                    .is_empty()
+            {
+                return;
+            }
+
             let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::END_CRYSTAL);
             let end_crystal = Arc::new(EndCrystalEntity::new(entity));
             world.spawn_entity(end_crystal.clone()).await;

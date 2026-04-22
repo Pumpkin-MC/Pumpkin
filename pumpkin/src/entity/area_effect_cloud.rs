@@ -206,7 +206,7 @@ impl EntityBase for AreaEffectCloudEntity {
     #[allow(clippy::semicolon_outside_block)]
     fn tick<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a Arc<dyn EntityBase>,
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -417,5 +417,9 @@ impl EntityBase for AreaEffectCloudEntity {
 
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

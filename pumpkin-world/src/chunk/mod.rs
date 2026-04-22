@@ -8,7 +8,6 @@ use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
 use pumpkin_data::{Block, BlockState};
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_long_array;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
@@ -87,12 +86,14 @@ pub struct ChunkData {
     pub dirty: AtomicBool,
 }
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 pub struct ChunkEntityData {
     /// Chunk X
     pub x: i32,
     /// Chunk Z
     pub z: i32,
-    pub data: Mutex<FxHashMap<uuid::Uuid, NbtCompound>>,
+    pub data: Mutex<FxHashMap<uuid::Uuid, PNbtCompound>>,
 
     pub dirty: AtomicBool,
 }

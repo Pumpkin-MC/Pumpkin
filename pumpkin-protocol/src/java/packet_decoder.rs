@@ -157,7 +157,9 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         let payload_len_hint = expected_packet_data_len.saturating_sub(packet_id_len);
         self.payload_scratch.clear();
         self.payload_scratch.reserve(payload_len_hint);
-        loop {
+
+        let mut total_read = 0;
+        while total_read < payload_len_hint {
             let bytes_read = reader
                 .read_buf(&mut self.payload_scratch)
                 .await
@@ -165,6 +167,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             if bytes_read == 0 {
                 break;
             }
+            total_read += bytes_read;
         }
 
         if let Some(expected_uncompressed_packet_data_len) = expected_uncompressed_packet_data_len {
@@ -195,7 +198,6 @@ mod tests {
     use super::*;
     use aes::Aes128;
     use cfb8::Encryptor as Cfb8Encryptor;
-    use cfb8::cipher::AsyncStreamCipher;
     use flate2::Compression;
     use flate2::write::ZlibEncoder;
 
@@ -210,7 +212,8 @@ mod tests {
 
     /// Helper function to encrypt data using AES-128 CFB-8 mode
     fn encrypt_aes128(data: &mut [u8], key: &[u8; 16], iv: &[u8; 16]) {
-        let encryptor = Cfb8Encryptor::<Aes128>::new_from_slices(key, iv).expect("Invalid key/iv");
+        let mut encryptor =
+            Cfb8Encryptor::<Aes128>::new_from_slices(key, iv).expect("Invalid key/iv");
         encryptor.encrypt(data);
     }
 

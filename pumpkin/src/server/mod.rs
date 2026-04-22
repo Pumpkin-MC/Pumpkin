@@ -27,7 +27,7 @@ use tracing::{debug, error, info, warn};
 use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
-use pumpkin_protocol::java::client::play::CChangeDifficulty;
+use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
@@ -254,6 +254,15 @@ impl Server {
         };
         let server = Arc::new(server);
 
+        let total_cores = num_cpus::get().saturating_sub(2).max(1);
+        let gen_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(total_cores)
+                .thread_name(|i| format!("Gen-Pool-{i}"))
+                .build()
+                .expect("Failed to build generation thread pool"),
+        );
+
         let server_clone = server.clone();
         tokio::spawn(async move {
             server_clone
@@ -268,6 +277,7 @@ impl Server {
             let l_info = server.level_info.clone(); // Access from struct
             let weak = Arc::downgrade(&server);
             let config = Arc::new(server.advanced_config.world.clone());
+            let pool = gen_pool.clone();
 
             tokio::task::spawn_blocking(move || {
                 info!(
@@ -277,7 +287,7 @@ impl Server {
                         .to_pretty_console()
                 );
                 World::load(
-                    into_level(dim, &config, path, registry.clone(), seed),
+                    into_level(dim, &config, path, registry.clone(), seed, Some(pool)),
                     l_info,
                     dim,
                     registry,
@@ -366,41 +376,47 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
-        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
-            if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = Dimension::from_name(dimension_key) {
-                    let world = self.get_world_from_dimension(dimension);
-                    (world, Some(data))
+        let (world, nbt) =
+            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id) {
+                let _version = data.get_int().unwrap_or(0);
+                if let Ok(dimension_key) = data.get_string() {
+                    if let Some(dimension) = Dimension::from_name(&dimension_key) {
+                        let world = self.get_world_from_dimension(dimension);
+                        // Reset read position so player.read_nbt can read everything from start
+                        data.read_pos = 0;
+                        (world, Some(data))
+                    } else {
+                        warn!("Invalid dimension key in player data: {dimension_key}");
+                        let default_world = self
+                            .worlds
+                            .load()
+                            .first()
+                            .expect("Default world should exist")
+                            .clone();
+                        data.read_pos = 0;
+                        (default_world, Some(data))
+                    }
                 } else {
-                    warn!("Invalid dimension key in player data: {dimension_key}");
+                    // Player data exists but doesn't have a dimension entry.
                     let default_world = self
                         .worlds
                         .load()
                         .first()
                         .expect("Default world should exist")
                         .clone();
+                    data.read_pos = 0;
                     (default_world, Some(data))
                 }
             } else {
-                // Player data exists but doesn't have a "Dimension" key.
+                // No player data found or an error occurred, default to the Overworld.
                 let default_world = self
                     .worlds
                     .load()
                     .first()
                     .expect("Default world should exist")
                     .clone();
-                (default_world, Some(data))
-            }
-        } else {
-            // No player data found or an error occurred, default to the Overworld.
-            let default_world = self
-                .worlds
-                .load()
-                .first()
-                .expect("Default world should exist")
-                .clone();
-            (default_world, None)
-        };
+                (default_world, None)
+            };
 
         let mut player = Player::new(
             client,
@@ -487,6 +503,21 @@ impl Server {
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.load().iter() {
             world.broadcast_packet_all(packet).await;
+        }
+    }
+
+    pub async fn broadcast_tab_list_header_footer(
+        &self,
+        header: &TextComponent,
+        footer: &TextComponent,
+    ) {
+        let packet = CTabList::new(header, footer);
+        for world in self.worlds.load().iter() {
+            for player in world.players.load().iter() {
+                *player.tab_list_header.lock().await = header.clone();
+                *player.tab_list_footer.lock().await = footer.clone();
+                player.client.enqueue_packet(&packet).await;
+            }
         }
     }
 
@@ -723,22 +754,25 @@ impl Server {
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
     pub async fn tick_players_and_network(&self) {
-        // First, flush pending block updates and synced block events to clients
-        for world in self.worlds.load().iter() {
+        let worlds = self.worlds.load();
+
+        for world in worlds.iter() {
             world.flush_block_updates().await;
             world.flush_synced_block_events().await;
         }
 
-        let players_to_tick: Vec<_> = self.get_all_players();
-        for player in players_to_tick {
-            player.tick(self).await;
+        for world in worlds.iter() {
+            let players = world.players.load();
+            for player in players.iter() {
+                player.tick(self).await;
+            }
         }
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
-        let mut set = JoinSet::new();
-
         self.task_scheduler.tick(self).await;
+
+        let mut set = JoinSet::new();
 
         for world in self.worlds.load().iter() {
             let world = world.clone();

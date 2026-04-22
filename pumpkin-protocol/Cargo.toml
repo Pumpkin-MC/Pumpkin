@@ -21,12 +21,13 @@ pumpkin-util.workspace = true
 uuid.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["net"] }
 bytes.workspace = true
 
 # encryption
 aes.workspace = true
 cfb8.workspace = true
+hybrid-array = "0.4"
 
 # compression
 async-compression = { workspace = true, features = ["tokio", "zlib"] }

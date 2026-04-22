@@ -1,55 +1,93 @@
-use std::{ffi::CString, io::Cursor};
+use std::{ffi::CString, fmt, io::Cursor};
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 
+// Padding bytes are fixed by the vanilla server implementation.
+// Some query checkers (incorrectly) depend on these exact bytes.
 const PADDING_START: [u8; 11] = [
     0x73, 0x70, 0x6C, 0x69, 0x74, 0x6E, 0x75, 0x6D, 0x00, 0x80, 0x00,
 ];
 
+// 11 bytes: 10 padding bytes + 1 null terminator for the key-value section.
 const PADDING_END: [u8; 11] = [
     0x00, 0x01, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x5F, 0x00, 0x00,
 ];
 
+/// The magic number that all Query protocol packets start with.
+const MAGIC: u16 = 0xFEFD;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DecodeError {
+    /// The byte stream ended before a complete packet could be read.
+    UnexpectedEof,
+    /// The first two bytes were not the expected magic value (0xFEFD).
+    BadMagic,
+    /// The packet type byte does not correspond to a known type.
+    UnknownPacketType(u8),
+    /// The packet was structurally valid but contained an unexpected payload length.
+    MalformedPayload,
+}
+
+impl fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnexpectedEof => write!(f, "unexpected end of packet"),
+            Self::BadMagic => write!(f, "bad magic bytes (expected 0xFEFD)"),
+            Self::UnknownPacketType(t) => write!(f, "unknown packet type: {t:#04x}"),
+            Self::MalformedPayload => write!(f, "malformed packet payload"),
+        }
+    }
+}
+
+impl std::error::Error for DecodeError {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PacketType {
-    // There could be other types, but they are not documented.
-    // Besides, these types are enough to get the server status.
     Handshake = 9,
     Status = 0,
 }
 
-pub struct InvalidPacketType;
-
 impl TryFrom<u8> for PacketType {
-    type Error = InvalidPacketType;
+    type Error = DecodeError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             9 => Ok(Self::Handshake),
             0 => Ok(Self::Status),
-            _ => Err(InvalidPacketType),
+            other => Err(DecodeError::UnknownPacketType(other)),
         }
     }
 }
 
+/// A partially-decoded packet: magic verified, type extracted, payload buffered.
+#[derive(Debug, PartialEq, Eq)]
 pub struct RawQueryPacket {
     pub packet_type: PacketType,
     reader: Cursor<Vec<u8>>,
 }
 
 impl RawQueryPacket {
-    pub async fn decode(bytes: Vec<u8>) -> Result<Self, ()> {
+    pub async fn decode(bytes: Vec<u8>) -> Result<Self, DecodeError> {
         let mut reader = Cursor::new(bytes);
 
-        match reader.read_u16().await.map_err(|_| ())? {
-            // Magic should always equal 65277 since it denotes the protocol being used.
-            // We should not attempt to decode packets with other magic values.
-            65277 => Ok(Self {
-                packet_type: PacketType::try_from(reader.read_u8().await.map_err(|_| ())?)
-                    .map_err(|_| ())?,
-                reader,
-            }),
-            _ => Err(()),
+        let magic = reader
+            .read_u16()
+            .await
+            .map_err(|_| DecodeError::UnexpectedEof)?;
+        if magic != MAGIC {
+            return Err(DecodeError::BadMagic);
         }
+
+        let type_byte = reader
+            .read_u8()
+            .await
+            .map_err(|_| DecodeError::UnexpectedEof)?;
+        let packet_type = PacketType::try_from(type_byte)?;
+
+        Ok(Self {
+            packet_type,
+            reader,
+        })
     }
 }
 
@@ -59,10 +97,13 @@ pub struct SHandshake {
 }
 
 impl SHandshake {
-    pub async fn decode(packet: &mut RawQueryPacket) -> Result<Self, ()> {
-        Ok(Self {
-            session_id: packet.reader.read_i32().await.map_err(|_| ())?,
-        })
+    pub async fn decode(packet: &mut RawQueryPacket) -> Result<Self, DecodeError> {
+        let session_id = packet
+            .reader
+            .read_i32()
+            .await
+            .map_err(|_| DecodeError::UnexpectedEof)?;
+        Ok(Self { session_id })
     }
 }
 
@@ -70,137 +111,119 @@ impl SHandshake {
 pub struct SStatusRequest {
     pub session_id: i32,
     pub challenge_token: i32,
-    // A full status request and a basic status request are pretty similar,
-    // so we might as well just use the same struct.
+    /// `true` for a full-status request (payload padded to 8 extra bytes),
+    /// `false` for a basic-status request (no padding).
     pub is_full_request: bool,
 }
 
 impl SStatusRequest {
-    pub async fn decode(packet: &mut RawQueryPacket) -> Result<Self, ()> {
-        Ok(Self {
-            session_id: packet.reader.read_i32().await.map_err(|_| ())?,
-            challenge_token: packet.reader.read_i32().await.map_err(|_| ())?,
-            is_full_request: {
-                let mut buf = [0; 4];
+    pub async fn decode(packet: &mut RawQueryPacket) -> Result<Self, DecodeError> {
+        let session_id = packet
+            .reader
+            .read_i32()
+            .await
+            .map_err(|_| DecodeError::UnexpectedEof)?;
+        let challenge_token = packet
+            .reader
+            .read_i32()
+            .await
+            .map_err(|_| DecodeError::UnexpectedEof)?;
 
-                // If payload is padded to 8 bytes, the client is requesting full status response
-                // In other terms, check if there are 4 extra bytes at the end.
-                // The extra bytes should be meaningless.
-                // Otherwise, the client is requesting basic status response.
-                match packet.reader.read(&mut buf).await {
-                    Ok(0) => false,
-                    Ok(4) => true,
-                    _ => {
-                        // Just ignore malformed packets or errors
-                        return Err(());
-                    }
-                }
-            },
+        let mut buf = [0u8; 4];
+        let is_full_request = match packet.reader.read(&mut buf).await {
+            Ok(0) => false,
+            Ok(4) => true,
+            // Any other byte count is malformed.
+            _ => return Err(DecodeError::MalformedPayload),
+        };
+
+        Ok(Self {
+            session_id,
+            challenge_token,
+            is_full_request,
         })
     }
 }
 
+#[derive(Debug)]
 pub struct CHandshake {
     pub session_id: i32,
-    // For simplicity, use a number type.
-    // It should be encoded as string here;
-    // it will be converted in encoding.
+    /// Encoded as a decimal string in the wire format.
     pub challenge_token: i32,
 }
 
 impl CHandshake {
-    pub async fn encode(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
+        let token = CString::new(self.challenge_token.to_string())
+            .expect("challenge_token string contains no interior nul bytes");
 
-        // Packet Type
-        buf.write_u8(9).await.unwrap();
-        // Session ID
-        buf.write_i32(self.session_id).await.unwrap();
-        // Challenge token
-        // Use CString to add null terminator and ensure no null bytes are in the middle of the data
-        // Unwrap here since there should be no errors with nulls in the middle of data
-        let token = CString::new(self.challenge_token.to_string()).unwrap();
+        let mut buf = Vec::with_capacity(6 + token.as_bytes_with_nul().len());
+        buf.push(PacketType::Handshake as u8);
+        buf.extend_from_slice(&self.session_id.to_be_bytes());
         buf.extend_from_slice(token.as_bytes_with_nul());
-
         buf
     }
 }
 
+#[derive(Debug)]
 pub struct CBasicStatus {
     pub session_id: i32,
-    // Use CString, as the protocol requires nul terminated strings
     pub motd: CString,
-    // Game type is hardcoded
     pub map: CString,
     pub num_players: usize,
     pub max_players: usize,
+    /// Little-endian on the wire (Notchian quirk).
     pub host_port: u16,
     pub host_ip: CString,
 }
 
 impl CBasicStatus {
-    pub async fn encode(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
-
-        // Packet Type
-        buf.write_u8(0).await.unwrap();
-        // Session ID
-        buf.write_i32(self.session_id).await.unwrap();
-        // MOTD
-        buf.extend_from_slice(self.motd.as_bytes_with_nul());
-        // Game Type
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
         let game_type = CString::new("SMP").unwrap();
-        buf.extend_from_slice(game_type.as_bytes_with_nul());
-        // Map
-        buf.extend_from_slice(self.map.as_bytes_with_nul());
-        // Num players
         let num_players = CString::new(self.num_players.to_string()).unwrap();
-        buf.extend_from_slice(num_players.as_bytes_with_nul());
-        // Max players
         let max_players = CString::new(self.max_players.to_string()).unwrap();
-        buf.extend_from_slice(max_players.as_bytes_with_nul());
-        // Port
-        // No idea why the port needs to be in little endian
-        buf.write_u16_le(self.host_port).await.unwrap();
-        // IP
-        buf.extend_from_slice(self.host_ip.as_bytes_with_nul());
 
+        let mut buf = Vec::new();
+        buf.push(PacketType::Status as u8);
+        buf.extend_from_slice(&self.session_id.to_be_bytes());
+        buf.extend_from_slice(self.motd.as_bytes_with_nul());
+        buf.extend_from_slice(game_type.as_bytes_with_nul());
+        buf.extend_from_slice(self.map.as_bytes_with_nul());
+        buf.extend_from_slice(num_players.as_bytes_with_nul());
+        buf.extend_from_slice(max_players.as_bytes_with_nul());
+        // The port is written little-endian — this is a known Notchian quirk.
+        buf.extend_from_slice(&self.host_port.to_le_bytes());
+        buf.extend_from_slice(self.host_ip.as_bytes_with_nul());
         buf
     }
 }
 
+#[derive(Debug)]
 pub struct CFullStatus {
     pub session_id: i32,
     pub hostname: CString,
-    // Game type and game id are hardcoded into the protocol.
-    // They are not here as they cannot be changed.
     pub version: CString,
     pub plugins: CString,
     pub map: CString,
     pub num_players: usize,
     pub max_players: usize,
+    /// Little-endian on the wire (Notchian quirk).
     pub host_port: u16,
     pub host_ip: CString,
     pub players: Vec<CString>,
 }
 
 impl CFullStatus {
-    pub async fn encode(&self) -> Vec<u8> {
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
         let mut buf = Vec::new();
+        buf.push(PacketType::Status as u8);
+        buf.extend_from_slice(&self.session_id.to_be_bytes());
+        buf.extend_from_slice(&PADDING_START);
 
-        // Packet type
-        buf.write_u8(0).await.unwrap();
-        // Session ID
-        buf.write_i32(self.session_id).await.unwrap();
-
-        // Padding (11 bytes, meaningless)
-        // This is the padding used by vanilla.
-        // Although meaningless, it seems in testing some query checkers depend on these bytes?
-        buf.extend_from_slice(PADDING_START.as_slice());
-
-        // Key-value pairs
-        // Keys will not error when encoding as CString
-        for (key, value) in [
+        let kv_pairs: &[(&str, &CString)] = &[
             ("hostname", &self.hostname),
             ("gametype", &CString::new("SMP").unwrap()),
             ("game_id", &CString::new("MINECRAFT").unwrap()),
@@ -220,143 +243,168 @@ impl CFullStatus {
                 &CString::new(self.host_port.to_string()).unwrap(),
             ),
             ("hostip", &self.host_ip),
-        ] {
-            buf.extend_from_slice(CString::new(key).unwrap().as_bytes_with_nul());
+        ];
+
+        for (key, value) in kv_pairs {
+            buf.extend_from_slice(CString::new(*key).unwrap().as_bytes_with_nul());
             buf.extend_from_slice(value.as_bytes_with_nul());
         }
 
-        // Padding (10 bytes, meaningless), with one extra 0x00 for the extra required null terminator after the key-value section
+        // End padding + null terminator for the key-value section.
+        buf.extend_from_slice(&PADDING_END);
 
-        buf.extend_from_slice(PADDING_END.as_slice());
-
-        // Players
+        // Player list, each null-terminated, followed by a final null.
         for player in &self.players {
             buf.extend_from_slice(player.as_bytes_with_nul());
         }
-        // Required extra null terminator
-        buf.write_u8(0).await.unwrap();
+        buf.push(0x00);
 
         buf
     }
 }
 
-// All test bytes/packets are from protocol documentation
-#[tokio::test]
-async fn handshake_request() {
-    let bytes = vec![0xFE, 0xFD, 0x09, 0x00, 0x00, 0x00, 0x01];
-    let mut raw_packet = RawQueryPacket::decode(bytes).await.unwrap();
-    let packet = SHandshake::decode(&mut raw_packet).await.unwrap();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    // What the decoded packet should look like
-    let actual_packet = SHandshake { session_id: 1 };
+    #[tokio::test]
+    async fn handshake_request() {
+        let bytes = vec![0xFE, 0xFD, 0x09, 0x00, 0x00, 0x00, 0x01];
+        let mut raw = RawQueryPacket::decode(bytes).await.unwrap();
+        assert_eq!(raw.packet_type, PacketType::Handshake);
+        let pkt = SHandshake::decode(&mut raw).await.unwrap();
+        assert_eq!(pkt, SHandshake { session_id: 1 });
+    }
 
-    assert_eq!(packet, actual_packet);
-}
+    #[tokio::test]
+    async fn handshake_response() {
+        let expected = vec![
+            0x09, 0x00, 0x00, 0x00, 0x01, 0x39, 0x35, 0x31, 0x33, 0x33, 0x30, 0x37, 0x00,
+        ];
+        let pkt = CHandshake {
+            session_id: 1,
+            challenge_token: 9513307,
+        };
+        assert_eq!(pkt.encode(), expected);
+    }
 
-#[tokio::test]
-async fn handshake_response() {
-    let bytes = vec![
-        0x09, 0x00, 0x00, 0x00, 0x01, 0x39, 0x35, 0x31, 0x33, 0x33, 0x30, 0x37, 0x00,
-    ];
+    #[tokio::test]
+    async fn basic_stat_request() {
+        let bytes = vec![
+            0xFE, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x91, 0x29, 0x5B,
+        ];
+        let mut raw = RawQueryPacket::decode(bytes).await.unwrap();
+        let pkt = SStatusRequest::decode(&mut raw).await.unwrap();
+        assert_eq!(
+            pkt,
+            SStatusRequest {
+                session_id: 1,
+                challenge_token: 9513307,
+                is_full_request: false
+            }
+        );
+    }
 
-    let packet = CHandshake {
-        session_id: 1,
-        challenge_token: 9513307,
-    };
+    #[tokio::test]
+    async fn basic_stat_response() {
+        let expected = vec![
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x41, 0x20, 0x4D, 0x69, 0x6E, 0x65, 0x63, 0x72, 0x61,
+            0x66, 0x74, 0x20, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x00, 0x53, 0x4D, 0x50, 0x00,
+            0x77, 0x6F, 0x72, 0x6C, 0x64, 0x00, 0x32, 0x00, 0x32, 0x30, 0x00, 0xDD, 0x63, 0x31,
+            0x32, 0x37, 0x2E, 0x30, 0x2E, 0x30, 0x2E, 0x31, 0x00,
+        ];
+        let pkt = CBasicStatus {
+            session_id: 1,
+            motd: CString::new("A Minecraft Server").unwrap(),
+            map: CString::new("world").unwrap(),
+            num_players: 2,
+            max_players: 20,
+            host_port: 25565,
+            host_ip: CString::new("127.0.0.1").unwrap(),
+        };
+        assert_eq!(pkt.encode(), expected);
+    }
 
-    assert_eq!(bytes, packet.encode().await);
-}
+    #[tokio::test]
+    async fn full_stat_request() {
+        let bytes = vec![
+            0xFE, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x91, 0x29, 0x5B, 0x00, 0x00, 0x00,
+            0x00,
+        ];
+        let mut raw = RawQueryPacket::decode(bytes).await.unwrap();
+        let pkt = SStatusRequest::decode(&mut raw).await.unwrap();
+        assert_eq!(
+            pkt,
+            SStatusRequest {
+                session_id: 1,
+                challenge_token: 9513307,
+                is_full_request: true
+            }
+        );
+    }
 
-#[tokio::test]
-async fn basic_stat_request() {
-    let bytes = vec![
-        0xFE, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x91, 0x29, 0x5B,
-    ];
-    let mut raw_packet = RawQueryPacket::decode(bytes).await.unwrap();
-    let packet = SStatusRequest::decode(&mut raw_packet).await.unwrap();
+    #[tokio::test]
+    async fn full_stat_response() {
+        let expected = vec![
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x73, 0x70, 0x6C, 0x69, 0x74, 0x6E, 0x75, 0x6D, 0x00,
+            0x80, 0x00, 0x68, 0x6F, 0x73, 0x74, 0x6E, 0x61, 0x6D, 0x65, 0x00, 0x41, 0x20, 0x4D,
+            0x69, 0x6E, 0x65, 0x63, 0x72, 0x61, 0x66, 0x74, 0x20, 0x53, 0x65, 0x72, 0x76, 0x65,
+            0x72, 0x00, 0x67, 0x61, 0x6D, 0x65, 0x74, 0x79, 0x70, 0x65, 0x00, 0x53, 0x4D, 0x50,
+            0x00, 0x67, 0x61, 0x6D, 0x65, 0x5F, 0x69, 0x64, 0x00, 0x4D, 0x49, 0x4E, 0x45, 0x43,
+            0x52, 0x41, 0x46, 0x54, 0x00, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E, 0x00, 0x42,
+            0x65, 0x74, 0x61, 0x20, 0x31, 0x2E, 0x39, 0x20, 0x50, 0x72, 0x65, 0x72, 0x65, 0x6C,
+            0x65, 0x61, 0x73, 0x65, 0x20, 0x34, 0x00, 0x70, 0x6C, 0x75, 0x67, 0x69, 0x6E, 0x73,
+            0x00, 0x00, 0x6D, 0x61, 0x70, 0x00, 0x77, 0x6F, 0x72, 0x6C, 0x64, 0x00, 0x6E, 0x75,
+            0x6D, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x73, 0x00, 0x32, 0x00, 0x6D, 0x61, 0x78,
+            0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x73, 0x00, 0x32, 0x30, 0x00, 0x68, 0x6F, 0x73,
+            0x74, 0x70, 0x6F, 0x72, 0x74, 0x00, 0x32, 0x35, 0x35, 0x36, 0x35, 0x00, 0x68, 0x6F,
+            0x73, 0x74, 0x69, 0x70, 0x00, 0x31, 0x32, 0x37, 0x2E, 0x30, 0x2E, 0x30, 0x2E, 0x31,
+            0x00, 0x00, 0x01, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x5F, 0x00, 0x00, 0x62, 0x61,
+            0x72, 0x6E, 0x65, 0x79, 0x67, 0x61, 0x6C, 0x65, 0x00, 0x56, 0x69, 0x76, 0x61, 0x6C,
+            0x61, 0x68, 0x65, 0x6C, 0x76, 0x69, 0x67, 0x00, 0x00,
+        ];
+        let pkt = CFullStatus {
+            session_id: 1,
+            hostname: CString::new("A Minecraft Server").unwrap(),
+            version: CString::new("Beta 1.9 Prerelease 4").unwrap(),
+            plugins: CString::new("").unwrap(),
+            map: CString::new("world").unwrap(),
+            num_players: 2,
+            max_players: 20,
+            host_port: 25565,
+            host_ip: CString::new("127.0.0.1").unwrap(),
+            players: vec![
+                CString::new("barneygale").unwrap(),
+                CString::new("Vivalahelvig").unwrap(),
+            ],
+        };
+        assert_eq!(pkt.encode(), expected);
+    }
 
-    let actual_packet = SStatusRequest {
-        session_id: 1,
-        challenge_token: 9513307,
-        is_full_request: false,
-    };
+    #[tokio::test]
+    async fn bad_magic_rejected() {
+        let bytes = vec![0xDE, 0xAD, 0x09, 0x00, 0x00, 0x00, 0x01];
+        assert_eq!(
+            RawQueryPacket::decode(bytes).await,
+            Err(DecodeError::BadMagic)
+        );
+    }
 
-    assert_eq!(packet, actual_packet);
-}
+    #[tokio::test]
+    async fn unknown_packet_type_rejected() {
+        let bytes = vec![0xFE, 0xFD, 0xFF];
+        assert_eq!(
+            RawQueryPacket::decode(bytes).await,
+            Err(DecodeError::UnknownPacketType(0xFF))
+        );
+    }
 
-#[tokio::test]
-async fn basic_stat_response() {
-    let bytes = vec![
-        0x00, 0x00, 0x00, 0x00, 0x01, 0x41, 0x20, 0x4D, 0x69, 0x6E, 0x65, 0x63, 0x72, 0x61, 0x66,
-        0x74, 0x20, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x00, 0x53, 0x4D, 0x50, 0x00, 0x77, 0x6F,
-        0x72, 0x6C, 0x64, 0x00, 0x32, 0x00, 0x32, 0x30, 0x00, 0xDD, 0x63, 0x31, 0x32, 0x37, 0x2E,
-        0x30, 0x2E, 0x30, 0x2E, 0x31, 0x00,
-    ];
-
-    let packet = CBasicStatus {
-        session_id: 1,
-        motd: CString::new("A Minecraft Server").unwrap(),
-        map: CString::new("world").unwrap(),
-        num_players: 2,
-        max_players: 20,
-        host_port: 25565,
-        host_ip: CString::new("127.0.0.1").unwrap(),
-    };
-
-    assert_eq!(bytes, packet.encode().await);
-}
-
-#[tokio::test]
-async fn full_stat_request() {
-    let bytes = vec![
-        0xFE, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x91, 0x29, 0x5B, 0x00, 0x00, 0x00, 0x00,
-    ];
-    let mut raw_packet = RawQueryPacket::decode(bytes).await.unwrap();
-    let packet = SStatusRequest::decode(&mut raw_packet).await.unwrap();
-
-    let actual_packet = SStatusRequest {
-        session_id: 1,
-        challenge_token: 9513307,
-        is_full_request: true,
-    };
-
-    assert_eq!(packet, actual_packet);
-}
-#[tokio::test]
-async fn full_stat_response() {
-    let bytes = vec![
-        0x00, 0x00, 0x00, 0x00, 0x01, 0x73, 0x70, 0x6C, 0x69, 0x74, 0x6E, 0x75, 0x6D, 0x00, 0x80,
-        0x00, 0x68, 0x6F, 0x73, 0x74, 0x6E, 0x61, 0x6D, 0x65, 0x00, 0x41, 0x20, 0x4D, 0x69, 0x6E,
-        0x65, 0x63, 0x72, 0x61, 0x66, 0x74, 0x20, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x00, 0x67,
-        0x61, 0x6D, 0x65, 0x74, 0x79, 0x70, 0x65, 0x00, 0x53, 0x4D, 0x50, 0x00, 0x67, 0x61, 0x6D,
-        0x65, 0x5F, 0x69, 0x64, 0x00, 0x4D, 0x49, 0x4E, 0x45, 0x43, 0x52, 0x41, 0x46, 0x54, 0x00,
-        0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E, 0x00, 0x42, 0x65, 0x74, 0x61, 0x20, 0x31, 0x2E,
-        0x39, 0x20, 0x50, 0x72, 0x65, 0x72, 0x65, 0x6C, 0x65, 0x61, 0x73, 0x65, 0x20, 0x34, 0x00,
-        0x70, 0x6C, 0x75, 0x67, 0x69, 0x6E, 0x73, 0x00, 0x00, 0x6D, 0x61, 0x70, 0x00, 0x77, 0x6F,
-        0x72, 0x6C, 0x64, 0x00, 0x6E, 0x75, 0x6D, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x73, 0x00,
-        0x32, 0x00, 0x6D, 0x61, 0x78, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x73, 0x00, 0x32, 0x30,
-        0x00, 0x68, 0x6F, 0x73, 0x74, 0x70, 0x6F, 0x72, 0x74, 0x00, 0x32, 0x35, 0x35, 0x36, 0x35,
-        0x00, 0x68, 0x6F, 0x73, 0x74, 0x69, 0x70, 0x00, 0x31, 0x32, 0x37, 0x2E, 0x30, 0x2E, 0x30,
-        0x2E, 0x31, 0x00, 0x00, 0x01, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x5F, 0x00, 0x00, 0x62,
-        0x61, 0x72, 0x6E, 0x65, 0x79, 0x67, 0x61, 0x6C, 0x65, 0x00, 0x56, 0x69, 0x76, 0x61, 0x6C,
-        0x61, 0x68, 0x65, 0x6C, 0x76, 0x69, 0x67, 0x00, 0x00,
-    ];
-
-    let packet = CFullStatus {
-        session_id: 1,
-        hostname: CString::new("A Minecraft Server").unwrap(),
-        version: CString::new("Beta 1.9 Prerelease 4").unwrap(),
-        plugins: CString::new("").unwrap(),
-        map: CString::new("world").unwrap(),
-        num_players: 2,
-        max_players: 20,
-        host_port: 25565,
-        host_ip: CString::new("127.0.0.1").unwrap(),
-        players: vec![
-            CString::new("barneygale").unwrap(),
-            CString::new("Vivalahelvig").unwrap(),
-        ],
-    };
-
-    assert_eq!(bytes, packet.encode().await);
+    #[tokio::test]
+    async fn truncated_packet_rejected() {
+        let bytes = vec![0xFE, 0xFD];
+        assert_eq!(
+            RawQueryPacket::decode(bytes).await,
+            Err(DecodeError::UnexpectedEof)
+        );
+    }
 }

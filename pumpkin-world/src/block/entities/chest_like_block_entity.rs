@@ -278,8 +278,7 @@ macro_rules! impl_chest_helper_methods {
                     pumpkin_util::random::get_seed(),
                 );
 
-                let block = world.get_block(&self.position).await;
-                let state = world.get_block_state(&self.position).await;
+                let (block, state) = world.get_block_and_state(&self.position).await;
                 let properties = pumpkin_data::block_properties::ChestLikeProperties::from_state_id(
                     state.id, block,
                 );

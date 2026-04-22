@@ -103,7 +103,7 @@ impl NBTStorage for FireworkRocketEntity {}
 impl EntityBase for FireworkRocketEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -157,6 +157,10 @@ impl EntityBase for FireworkRocketEntity {
     }
 
     fn as_nbt_storage(&self) -> &dyn crate::entity::NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
         self
     }
 }
