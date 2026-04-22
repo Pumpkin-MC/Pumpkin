@@ -263,6 +263,21 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn has_permission_set(
+        &mut self,
+        player: Resource<Player>,
+        node: String,
+    ) -> wasmtime::Result<Option<bool>> {
+        let player = player_from_resource(self, &player)?;
+        let server = self.server.as_ref().expect("server not available");
+    
+        let perm_manager = server.permission_manager.read().await;
+        let attachment = perm_manager.get_attachment(player.gameprofile.id);
+        drop(perm_manager);
+    
+        Ok(attachment.read().await.has_permission_set(&node))
+    }
+
     async fn has_permission(
         &mut self,
         player: Resource<Player>,
