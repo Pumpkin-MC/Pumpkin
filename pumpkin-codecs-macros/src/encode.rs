@@ -1,5 +1,5 @@
 use crate::field::{FieldData, ParsedField};
-use crate::{option_type, parse_enum_dispatch_attributes, parse_enum_dispatch_variant_attributes};
+use crate::{option_type, parse_enum_dispatch_attributes, parse_enum_variant_attributes};
 use proc_macro::TokenStream;
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::{Ident, Span};
@@ -45,15 +45,12 @@ fn derive_struct_encode(
 ) -> TokenStream {
     // Add a special case for unit structs.
     if matches!(&data.fields, Fields::Unit) {
-        let encode_impl = encode_delegate_impl(name, codecs_crate);
         return quote! {
-            impl #codecs_crate::codec::MapEncode for #name {
-                fn map_encode<O: #codecs_crate::DynamicOps, B: #codecs_crate::struct_builder::StructBuilder<Value=O::Value>>(&self, ops: &'static O, prefix: B) -> B {
-                    prefix
+            impl #codecs_crate::codec::Encode for #name {
+                fn encode<O: #codecs_crate::DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> #codecs_crate::DataResult<O::Value> {
+                    #codecs_crate::DynamicOps::merge_map_like_into_map(ops, prefix, #codecs_crate::EmptyMapLike::new())
                 }
             }
-
-            #encode_impl
         }.into();
     }
     let variant_encode = derive_single_variant_encode(codecs_crate, &data.fields);
@@ -86,7 +83,7 @@ fn derive_enum_encode(
         let mut match_arms = Vec::new();
         for variant in &data.variants {
             let ident = &variant.ident;
-            let ty = parse_enum_dispatch_variant_attributes(&variant.ident, &variant.attrs)?;
+            let ty = parse_enum_variant_attributes(&variant.ident, &variant.attrs)?;
             let ty_lit = LitStr::new(&ty, Span::call_site());
             match_arms.push(quote! {
                 Self::#ident => #ty_lit
@@ -104,12 +101,12 @@ fn derive_enum_encode(
         );
     }
 
-    let dispatch_data = parse_enum_dispatch_attributes(name, attrs)?;
+    let dispatch_data = parse_enum_dispatch_attributes(attrs)?;
     let tag_key_lit = LitStr::new(&dispatch_data.tag_key, Span::call_site());
 
     let mut match_arms = Vec::new();
     for variant in &data.variants {
-        let ty = parse_enum_dispatch_variant_attributes(&variant.ident, &variant.attrs)?;
+        let ty = parse_enum_variant_attributes(&variant.ident, &variant.attrs)?;
         let ty_lit = LitStr::new(&ty, Span::call_site());
 
         let fields: Vec<_> = variant
