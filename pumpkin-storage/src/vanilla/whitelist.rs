@@ -37,7 +37,7 @@ impl WhitelistStorage for VanillaStorage {
         let entries = guard.as_mut().expect("loaded");
         entries.retain(|e| e.uuid != uuid);
         entries.push(WhitelistEntry::new(uuid, name.to_string()));
-        let snapshot = entries.to_vec();
+        let snapshot = entries.clone();
         drop(guard);
         save_json_list(&self.whitelist_path(), &snapshot).await
     }
@@ -50,7 +50,7 @@ impl WhitelistStorage for VanillaStorage {
         if entries.len() == before {
             return Ok(());
         }
-        let snapshot = entries.to_vec();
+        let snapshot = entries.clone();
         drop(guard);
         save_json_list(&self.whitelist_path(), &snapshot).await
     }
@@ -76,7 +76,7 @@ impl WhitelistStorage for VanillaStorage {
 
     async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError> {
         let guard = self.whitelist_load_locked().await?;
-        Ok(guard.as_ref().expect("loaded").to_vec())
+        Ok(guard.as_ref().expect("loaded").clone())
     }
 
     async fn reload(&self) -> Result<(), StorageError> {
