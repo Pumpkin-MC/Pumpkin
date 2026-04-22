@@ -15,6 +15,7 @@ pub use crate::data_result::FlatTryInto;
 pub use crate::dynamic_ops::DynamicOps;
 pub use crate::lifecycle::Lifecycle;
 pub use crate::list_builder::ListBuilder;
+pub use crate::map_like::EmptyMapLike;
 pub use crate::map_like::MapLike;
 pub use number::Number;
 
