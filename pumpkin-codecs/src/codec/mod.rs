@@ -70,9 +70,9 @@ impl<T: Encode> FieldEncode for T {
         Self: PartialEq,
     {
         if default == *self {
-            prefix.add_string_key_value_result(name, self.encode_start(ops))
-        } else {
             prefix
+        } else {
+            prefix.add_string_key_value_result(name, self.encode_start(ops))
         }
     }
 }

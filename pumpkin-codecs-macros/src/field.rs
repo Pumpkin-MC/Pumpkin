@@ -1,3 +1,4 @@
+use crate::attribute::{ParsedAttribute, add_attribute_branch};
 use crate::duplicate_attribute_error;
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::Ident;
@@ -22,7 +23,7 @@ pub enum FieldData {
 
 /// A [`Field`] reference wrapper to easily tell if the field
 /// is named or not.
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub enum ParsedField<'a> {
     Named(&'a Field),
     Unnamed(&'a Field, usize),
@@ -36,15 +37,7 @@ pub enum ParsedFieldAttribute {
     Skip,
 }
 
-macro_rules! add_attribute_branch {
-    ($path:ident, $ident:literal, $var:ident) => {
-        if $path.is_ident($ident) {
-            return Some(Self::$var);
-        }
-    };
-}
-
-impl ParsedFieldAttribute {
+impl ParsedAttribute for ParsedFieldAttribute {
     fn from_path(path: &Path) -> Option<Self> {
         add_attribute_branch!(path, "default", Default);
         add_attribute_branch!(path, "lenient", Lenient);
@@ -112,56 +105,47 @@ impl<'a> ParsedField<'a> {
         let mut skipped = false;
         let mut lenient = false;
 
-        for attr in self.attrs() {
-            if attr.path().is_ident("field") {
-                attr.parse_nested_meta(|meta| {
-                    let ident = meta.path.get_ident().expect("Ident should exist");
-                    if let Some(attribute) = ParsedFieldAttribute::from_path(&meta.path) {
-                        match attribute {
-                            // default or default = ..
-                            ParsedFieldAttribute::Default => {
-                                if default.is_some() {
-                                    return Err(duplicate_attribute_error(ident));
-                                }
-                                if meta.input.peek(Token![=]) {
-                                    let _: Token![=] = meta.input.parse()?;
-                                    default = Some(meta.input.parse()?);
-                                } else {
-                                    default = None;
-                                    implicit_default = true;
-                                }
-                            }
-                            // lenient
-                            ParsedFieldAttribute::Lenient => {
-                                if lenient {
-                                    return Err(duplicate_attribute_error(ident));
-                                }
-                                lenient = true;
-                            }
-                            // name = "x"
-                            ParsedFieldAttribute::Name => {
-                                if field_name.is_some() {
-                                    return Err(duplicate_attribute_error(ident));
-                                }
-                                let value = meta.value()?;
-                                let lit = value.parse::<LitStr>()?;
-                                field_name = Some(lit.value());
-                            }
-                            // skip
-                            ParsedFieldAttribute::Skip => {
-                                if skipped {
-                                    return Err(duplicate_attribute_error(ident));
-                                }
-                                skipped = true;
-                            }
-                        }
-                        Ok(())
-                    } else {
-                        Err(Error::new_spanned(ident, "Invalid attribute"))
+        ParsedAttribute::parse_attributes(self.attrs(), |attribute, meta, ident| {
+            match attribute {
+                // default or default = ..
+                ParsedFieldAttribute::Default => {
+                    if default.is_some() {
+                        return Err(duplicate_attribute_error(ident));
                     }
-                })?;
+                    if meta.input.peek(Token![=]) {
+                        let _: Token![=] = meta.input.parse()?;
+                        default = Some(meta.input.parse()?);
+                    } else {
+                        default = None;
+                        implicit_default = true;
+                    }
+                }
+                // lenient
+                ParsedFieldAttribute::Lenient => {
+                    if lenient {
+                        return Err(duplicate_attribute_error(ident));
+                    }
+                    lenient = true;
+                }
+                // name = "x"
+                ParsedFieldAttribute::Name => {
+                    if field_name.is_some() {
+                        return Err(duplicate_attribute_error(ident));
+                    }
+                    let value = meta.value()?;
+                    let lit = value.parse::<LitStr>()?;
+                    field_name = Some(lit.value());
+                }
+                // skip
+                ParsedFieldAttribute::Skip => {
+                    if skipped {
+                        return Err(duplicate_attribute_error(ident));
+                    }
+                    skipped = true;
+                }
             }
-        }
+            Ok(())
+        })?;
 
         if skipped {
             if field_name.is_some() || lenient {

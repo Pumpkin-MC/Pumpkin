@@ -1,5 +1,5 @@
 use crate::field::{FieldData, ParsedField};
-use crate::{option_type, parse_enum_dispatch_attributes, parse_enum_dispatch_variant_attributes};
+use crate::{option_type, parse_enum_dispatch_attributes, parse_enum_variant_attributes};
 use proc_macro::TokenStream;
 use proc_macro_error2::__export::proc_macro2;
 use proc_macro_error2::__export::proc_macro2::Span;
@@ -37,7 +37,7 @@ fn decode_delegate_impl(
                     .flat_map(|map| {
                         #codecs_crate::codec::MapDecode::map_decode(map, ops)
                 });
-                crate::DataResult::map(single_result, |s| (s, input))
+                #codecs_crate::DataResult::map(single_result, |s| (s, input))
             }
         }
     }
@@ -50,18 +50,14 @@ fn derive_struct_decode(
 ) -> TokenStream {
     // Add a special case for unit structs.
     if matches!(&data.fields, Fields::Unit) {
-        let decode_impl = decode_delegate_impl(name, codecs_crate);
         return quote! {
-            impl MapDecode for T {
-                fn map_decode<O: DynamicOps>(
-                    input: impl MapLike<Value = O::Value>,
-                    ops: &'static O,
-                ) -> DataResult<Self> {
-                    DataResult::new_success(Self)
+            impl #codecs_crate::codec::Decode for #name {
+                fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> #codecs_crate::DataResult<(Self, O::Value)> {
+                    let map = #codecs_crate::DynamicOps::get_map(ops, &input);
+                    let result = #codecs_crate::DataResult::map(map, |_| ());
+                    #codecs_crate::DataResult::map(result, |()| (Self, input))
                 }
             }
-
-            #decode_impl
         }
         .into();
     }
@@ -74,7 +70,7 @@ fn derive_struct_decode(
             fn map_decode<O: #codecs_crate::DynamicOps>(
                     map: impl #codecs_crate::MapLike<Value = O::Value>,
                     ops: &'static O,
-                ) -> DataResult<Self> {
+                ) -> #codecs_crate::DataResult<Self> {
                 #variant_decode
             }
         }
@@ -99,7 +95,7 @@ fn derive_enum_decode(
         let mut match_arms = Vec::new();
         for variant in &data.variants {
             let ident = &variant.ident;
-            let ty = parse_enum_dispatch_variant_attributes(&variant.ident, &variant.attrs)?;
+            let ty = parse_enum_variant_attributes(&variant.ident, &variant.attrs)?;
             let ty_lit = LitStr::new(&ty, Span::call_site());
             match_arms.push(quote! {
                 #ty_lit => #codecs_crate::DataResult::new_success((Self::#ident, p))
@@ -107,13 +103,13 @@ fn derive_enum_decode(
         }
         return Ok(
             quote! {
-                impl #codecs_crate::codec::Decode for Test {
+                impl #codecs_crate::codec::Decode for #name {
                     fn decode<O: #codecs_crate::DynamicOps>(input: O::Value, ops: &'static O) -> #codecs_crate::DataResult<(Self, O::Value)> {
-                        let string: DataResult<(String, O::Value)> = #codecs_crate::codec::Decode::decode(input, ops);
+                        let string: #codecs_crate::DataResult<(String, O::Value)> = #codecs_crate::codec::Decode::decode(input, ops);
                         string.flat_map(|(s, p)| {
                             match s.as_str() {
                                 #( #match_arms ),* ,
-                                _ => DataResult::new_error(format!("Invalid type '{s}'"))
+                                _ => #codecs_crate::DataResult::new_error(format!("Invalid type '{s}'"))
                             }
                         })
                     }
@@ -122,12 +118,12 @@ fn derive_enum_decode(
         );
     }
 
-    let dispatch_data = parse_enum_dispatch_attributes(name, attrs)?;
+    let dispatch_data = parse_enum_dispatch_attributes(attrs)?;
     let tag_key_lit = LitStr::new(&dispatch_data.tag_key, Span::call_site());
     let mut match_arms = Vec::new();
     for variant in &data.variants {
         // Try to get the variant's differentiator value first.
-        let ty = parse_enum_dispatch_variant_attributes(&variant.ident, &variant.attrs)?;
+        let ty = parse_enum_variant_attributes(&variant.ident, &variant.attrs)?;
         let ty_lit = LitStr::new(&ty, Span::call_site());
         let ident = &variant.ident;
         let qualified_variant_ident = quote! { Self::#ident };
@@ -150,11 +146,11 @@ fn derive_enum_decode(
     let decode_impl = decode_delegate_impl(name, codecs_crate);
     Ok(
         quote! {
-            impl #codecs_crate::codec::MapDecode for T {
+            impl #codecs_crate::codec::MapDecode for #name {
                 fn map_decode<O: #codecs_crate::DynamicOps>(
                     map: impl #codecs_crate::MapLike<Value = O::Value>,
                     ops: &'static O,
-                ) -> DataResult<Self> {
+                ) -> #codecs_crate::DataResult<Self> {
                     let ty: #codecs_crate::DataResult<String> = #codecs_crate::codec::FieldDecode::decode_field::<O>(#tag_key_lit, &map, ops);
                     ty.flat_map(|ty| {
                         match ty.as_str() {
@@ -261,14 +257,14 @@ fn decode_field_tokens(
                     // For an Option, it can be lenient.
                     let lenient_token = LitBool::new(lenient, Span::call_site());
                     quote! {
-                        let #decoded_ident: DataResult<Option<#ty>> = #codecs_crate::codec::optional_field::OptionalFieldDecode::decode_optional_field::<O>(#encoded_name_lit, &map, ops, #lenient_token);
+                        let #decoded_ident: #codecs_crate::DataResult<Option<#ty>> = #codecs_crate::codec::optional_field::OptionalFieldDecode::decode_optional_field::<O>(#encoded_name_lit, &map, ops, #lenient_token);
                     }
                 } else if default.is_some() || implicit_default {
                     let lenient_token = LitBool::new(lenient, Span::call_site());
                     let default_tokens = default.unwrap_or_else(|| quote! {Default::default()});
                     let ty = field.ty();
                     quote! {
-                        let #decoded_ident: DataResult<#ty> = #codecs_crate::codec::FieldDecode::decode_defaulted_field::<O>(#encoded_name_lit, &map, ops, #default_tokens, #lenient_token);
+                        let #decoded_ident: #codecs_crate::DataResult<#ty> = #codecs_crate::codec::FieldDecode::decode_defaulted_field::<O>(#encoded_name_lit, &map, ops, #default_tokens, #lenient_token);
                     }
                 } else {
                     if lenient {
