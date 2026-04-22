@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use crate::item_stack::ItemStack;
 use crate::potion_brewing::ItemRecipe;
 use pumpkin_util::resource_location::ResourceLocation;
@@ -5,6 +6,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
+use crate::Advancement;
 
 pub struct AdvancementDisplay {
     pub title: &'static str,
@@ -62,7 +64,7 @@ impl AdvancementDisplay {
     }
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize, Default)]
+#[derive(Clone, Copy, Deserialize, Serialize, Default,Debug)]
 #[repr(i32)]
 #[serde(rename_all = "lowercase")]
 pub enum FrameType {
@@ -80,11 +82,25 @@ impl FrameType {
             FrameType::Goal => NamedColor::Green,
         }
     }
+
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            FrameType::Task => "task",
+            FrameType::Challenge => "challenge",
+            FrameType::Goal => "goal",
+        }
+    }
 }
 
 pub struct AdvancementReward {
     pub experience: u32,
     pub recipes: &'static [ItemRecipe],
+}
+
+impl AdvancementReward {
+
+    pub fn grant()
+
 }
 
 pub trait Criterion {}

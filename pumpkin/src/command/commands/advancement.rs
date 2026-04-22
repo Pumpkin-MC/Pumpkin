@@ -10,14 +10,14 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::text::TextComponent;
 use crate::command::context::command_source::CommandSource;
-use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::command_syntax_error::{CommandSyntaxError, ContextProvider};
+use crate::command::errors::error_types::{AnyCommandErrorType, CommandErrorType, DirectCommandErrorType, TemplateText};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 
 const NAME: &str = "advancement";
 const DESCRIPTION: &str = "manage advancement of the player";
-const PERMISSION: &str = "minecraft:command.help";
+const PERMISSION: &str = "minecraft:command.advancement";
 
 
 const ARG_TARGETS: &str = "targets";

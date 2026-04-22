@@ -5,6 +5,7 @@ use crate::item_stack::ItemStack;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::{color::Color, color::NamedColor, hover::HoverEvent, style::Style};
 use std::sync::LazyLock;
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Advancement {
     pub id: &'static str,
     pub parent: Option<&'static str>,
@@ -16559,7 +16560,7 @@ impl Advancement {
             recipes: &[],
         },
     };
-    fn option_name(&self) -> Option<TextComponent> {
+    pub fn option_name(&self) -> Option<TextComponent> {
         match self.display {
             Some(display) => {
                 let mut over = display.get_title();

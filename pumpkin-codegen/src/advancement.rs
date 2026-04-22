@@ -193,6 +193,7 @@ pub(crate) fn build() -> TokenStream {
             hover::HoverEvent,
             color::Color};
 
+        #[derive(Debug,Hash,PartialEq,Eq,PartialOrd,Ord)]
         pub struct Advancement {
             pub id : &'static str,
             pub parent : Option<&'static str>,
