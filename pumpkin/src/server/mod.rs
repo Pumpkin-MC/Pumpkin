@@ -30,7 +30,7 @@ use pumpkin_protocol::java::client::play::CChangeDifficulty;
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::lock::LevelLocker;
+use pumpkin_world::lock::{LevelLocker, LockGuard};
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use pumpkin_storage::banned_ip::BannedIpStorage;
 use pumpkin_storage::banned_player::BannedPlayerStorage;
@@ -129,9 +129,8 @@ pub struct Server {
     pub op_storage: Arc<dyn OpStorage>,
     pub whitelist_storage: Arc<dyn WhitelistStorage>,
     pub user_cache_storage: Arc<dyn UserCacheStorage>,
-    // Gets unlocked when dropped
-    // TODO: Make this a trait
-    _locker: Arc<Option<AnvilLevelLocker>>,
+    // Released on drop.
+    _locker: Arc<Option<Box<dyn LockGuard>>>,
 }
 
 impl Server {
@@ -169,8 +168,8 @@ impl Server {
                 }
             }
         }
-        let locker = match AnvilLevelLocker::lock(&world_path) {
-            Ok(l) => Some(l),
+        let locker: Option<Box<dyn LockGuard>> = match AnvilLevelLocker::lock(&world_path) {
+            Ok(l) => Some(Box::new(l)),
             Err(err) => {
                 warn!(
                     "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
