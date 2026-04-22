@@ -9,6 +9,7 @@ use crate::banlist::{BannedIpEntry, BannedPlayerEntry};
 
 mod banned_ip;
 mod banned_player;
+mod json_list;
 mod level_info;
 mod op;
 mod player_data;

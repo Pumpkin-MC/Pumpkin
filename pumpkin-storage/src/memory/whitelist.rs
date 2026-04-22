@@ -28,13 +28,7 @@ impl WhitelistStorage for MemoryStorage {
     }
 
     async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError> {
-        Ok(self
-            .whitelist
-            .read()
-            .await
-            .iter()
-            .map(|e| WhitelistEntry::new(e.uuid, e.name.clone()))
-            .collect())
+        Ok(self.whitelist.read().await.to_vec())
     }
 
     async fn reload(&self) -> Result<(), StorageError> {

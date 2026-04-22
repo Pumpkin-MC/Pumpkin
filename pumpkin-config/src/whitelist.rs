@@ -4,7 +4,7 @@ use uuid::Uuid;
 /// Represents an entry in the server whitelist.
 ///
 /// Stores the player's UUID and username.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WhitelistEntry {
     /// The UUID of the whitelisted player.
     pub uuid: Uuid,

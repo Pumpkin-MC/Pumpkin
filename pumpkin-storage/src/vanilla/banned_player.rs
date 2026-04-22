@@ -6,13 +6,13 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use time::OffsetDateTime;
-use tokio::fs;
 use uuid::Uuid;
 
 use crate::banlist::BannedPlayerEntry;
 use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
 use crate::vanilla::VanillaStorage;
+use crate::vanilla::json_list::{load_json_list, save_json_list};
 
 const BANNED_PLAYERS_FILE: &str = "banned-players.json";
 
@@ -23,49 +23,14 @@ impl VanillaStorage {
 
     async fn banned_players_load_locked(
         &self,
-    ) -> Result<
-        tokio::sync::RwLockWriteGuard<'_, Option<Vec<BannedPlayerEntry>>>,
-        StorageError,
-    > {
+    ) -> Result<tokio::sync::RwLockWriteGuard<'_, Option<Vec<BannedPlayerEntry>>>, StorageError>
+    {
         let mut guard = self.banned_players.write().await;
         if guard.is_none() {
-            *guard = Some(load_banned_players(&self.banned_players_path()).await?);
+            *guard = Some(load_json_list(&self.banned_players_path()).await?);
         }
         Ok(guard)
     }
-
-    async fn banned_players_flush(
-        &self,
-        entries: &[BannedPlayerEntry],
-    ) -> Result<(), StorageError> {
-        save_banned_players(&self.banned_players_path(), entries).await
-    }
-}
-
-async fn load_banned_players(path: &std::path::Path) -> Result<Vec<BannedPlayerEntry>, StorageError> {
-    match fs::read_to_string(path).await {
-        Ok(content) => serde_json::from_str::<Vec<BannedPlayerEntry>>(&content)
-            .map_err(|e| StorageError::Deserialize(e.to_string())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(e) => Err(StorageError::io_at(path, e)),
-    }
-}
-
-async fn save_banned_players(
-    path: &std::path::Path,
-    entries: &[BannedPlayerEntry],
-) -> Result<(), StorageError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .map_err(|e| StorageError::io_at(parent, e))?;
-    }
-    let content = serde_json::to_string_pretty(entries)
-        .map_err(|e| StorageError::Serialize(e.to_string()))?;
-    fs::write(path, content)
-        .await
-        .map_err(|e| StorageError::io_at(path, e))?;
-    Ok(())
 }
 
 fn is_active(entry: &BannedPlayerEntry) -> bool {
@@ -96,7 +61,7 @@ impl BannedPlayerStorage for VanillaStorage {
         ));
         let snapshot = entries.clone();
         drop(guard);
-        self.banned_players_flush(&snapshot).await
+        save_json_list(&self.banned_players_path(), &snapshot).await
     }
 
     async fn unban(&self, uuid: Uuid) -> Result<(), StorageError> {
@@ -109,7 +74,7 @@ impl BannedPlayerStorage for VanillaStorage {
         }
         let snapshot = entries.clone();
         drop(guard);
-        self.banned_players_flush(&snapshot).await
+        save_json_list(&self.banned_players_path(), &snapshot).await
     }
 
     async fn is_banned(&self, uuid: Uuid) -> Result<bool, StorageError> {
