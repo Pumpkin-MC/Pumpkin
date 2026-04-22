@@ -271,7 +271,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         let player = player_from_resource(self, &player)?;
         let server = self.server.as_ref().expect("server not available");
     
-        let perm_manager = server.permission_manager.read().await;
+        let perm_manager = server.permission_manager.write().await;
         let attachment = perm_manager.get_attachment(player.gameprofile.id);
         drop(perm_manager);
     
