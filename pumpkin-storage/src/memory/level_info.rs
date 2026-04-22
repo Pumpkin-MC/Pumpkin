@@ -1,3 +1,5 @@
+//! In-memory [`LevelInfoStorage`] holding a single `Option<LevelData>`.
+
 use async_trait::async_trait;
 
 use crate::error::StorageError;

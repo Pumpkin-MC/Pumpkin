@@ -1,3 +1,7 @@
+//! Vanilla-compatible `banned-players.json` under the server data directory.
+//! Expired bans are filtered at read time but remain on disk until the next
+//! write.
+
 use std::path::PathBuf;
 
 use async_trait::async_trait;

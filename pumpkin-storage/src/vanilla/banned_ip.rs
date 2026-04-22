@@ -1,3 +1,7 @@
+//! Vanilla-compatible `banned-ips.json` under the server data directory.
+//! Expired bans are filtered at read time but remain on disk until the next
+//! write.
+
 use std::net::IpAddr;
 use std::path::PathBuf;
 

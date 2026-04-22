@@ -1,3 +1,6 @@
+//! In-memory [`PlayerDataStorage`] — `HashMap<Uuid, NbtCompound>`. Save
+//! clones the input; load clones out.
+
 use async_trait::async_trait;
 use pumpkin_nbt::compound::NbtCompound;
 use uuid::Uuid;

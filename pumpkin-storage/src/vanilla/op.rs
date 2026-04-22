@@ -1,3 +1,5 @@
+//! Vanilla-compatible `ops.json` under the server data directory.
+
 use std::path::PathBuf;
 
 use async_trait::async_trait;

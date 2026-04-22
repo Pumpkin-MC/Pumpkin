@@ -1,3 +1,6 @@
+//! In-memory [`WhitelistStorage`] backed by `Vec<WhitelistEntry>`. `reload`
+//! is a no-op since there is no underlying source.
+
 use async_trait::async_trait;
 use pumpkin_config::whitelist::WhitelistEntry;
 use uuid::Uuid;

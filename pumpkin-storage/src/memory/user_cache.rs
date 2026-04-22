@@ -1,3 +1,6 @@
+//! In-memory [`UserCacheStorage`] — `HashMap<Uuid, UserCacheEntry>`. Entries
+//! expire 30 days after insert but are not proactively evicted.
+
 use async_trait::async_trait;
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;

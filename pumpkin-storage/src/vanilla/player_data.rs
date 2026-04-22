@@ -1,3 +1,6 @@
+//! Vanilla-compatible per-player NBT under `<world_dir>/playerdata/<uuid>.dat`,
+//! gzipped.
+
 use std::io::Cursor;
 use std::path::PathBuf;
 

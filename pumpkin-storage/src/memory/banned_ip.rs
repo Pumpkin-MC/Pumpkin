@@ -1,3 +1,6 @@
+//! In-memory [`BannedIpStorage`] implementation. Stores entries in a
+//! `Vec<BannedIpEntry>` behind a `RwLock`; filters expired bans at read time.
+
 use std::net::IpAddr;
 
 use async_trait::async_trait;

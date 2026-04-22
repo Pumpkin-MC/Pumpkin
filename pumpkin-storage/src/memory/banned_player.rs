@@ -1,3 +1,7 @@
+//! In-memory [`BannedPlayerStorage`] implementation. Stores entries in a
+//! `Vec<BannedPlayerEntry>` behind a `RwLock`; filters expired bans at read
+//! time.
+
 use async_trait::async_trait;
 use time::OffsetDateTime;
 use uuid::Uuid;

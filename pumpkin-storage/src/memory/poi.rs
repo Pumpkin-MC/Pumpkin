@@ -1,3 +1,6 @@
+//! In-memory [`PoiStorage`] keyed by `(x, y, z)`. No persistence —
+//! `save_all` is a no-op.
+
 use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 

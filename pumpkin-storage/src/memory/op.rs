@@ -1,3 +1,5 @@
+//! In-memory [`OpStorage`] backed by `Vec<Op>` under a `RwLock`.
+
 use async_trait::async_trait;
 use pumpkin_config::op::Op;
 use pumpkin_util::permission::PermissionLvl;

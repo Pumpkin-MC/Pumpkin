@@ -1,3 +1,6 @@
+//! Vanilla-compatible `whitelist.json` under the server data directory.
+//! Supports in-place reload via the `/whitelist reload` command.
+
 use std::path::PathBuf;
 
 use async_trait::async_trait;

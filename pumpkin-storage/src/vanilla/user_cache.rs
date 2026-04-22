@@ -1,3 +1,7 @@
+//! Vanilla-compatible `usercache.json` MRU cache with a 1000-entry soft cap.
+//! Loaded lazily on first access; snapshots keep the most-recently-used
+//! entries.
+
 use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

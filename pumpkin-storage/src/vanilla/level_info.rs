@@ -1,3 +1,6 @@
+//! Vanilla-compatible `level.dat` — gzipped NBT at the world root. A
+//! `level.dat_old` backup is written on each successful load.
+
 use std::io::{Cursor, Read};
 
 use async_trait::async_trait;
