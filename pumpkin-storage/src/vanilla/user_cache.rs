@@ -160,7 +160,10 @@ async fn save_snapshot(path: &Path, snapshot: Vec<InternalEntry>) -> Result<(), 
         .map(|entry| UserCacheEntryDisk {
             uuid: entry.uuid,
             name: entry.name,
-            expires_on: entry.expiration_date.format(&Rfc3339).unwrap_or_default(),
+            expires_on: entry
+                .expiration_date
+                .format(&Rfc3339)
+                .expect("Rfc3339 format is infallible for OffsetDateTime"),
         })
         .collect();
     let content = serde_json::to_string(&to_save)
