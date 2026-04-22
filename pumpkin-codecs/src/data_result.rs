@@ -629,6 +629,12 @@ macro_rules! assert_success {
 }
 
 /// Asserts that encoding the left expression will lead to a complete result (success) whose stored result is `$right`.
+///
+/// # Parameters
+///
+/// - `left`: The expression to encode.
+/// - `ops`: The `DynamicOps` to use to encode (without the `&`).
+/// - `right`: The expected encoded value from encoding, as a success.
 #[macro_export]
 macro_rules! assert_encode_success {
     ($left:expr, $ops:expr, $right:expr $(,)?) => {{
@@ -647,6 +653,13 @@ macro_rules! assert_encode_success {
 }
 
 /// Asserts that decoding the left expression will lead to a `DataResult` whose provided method returns `true`.
+///
+/// # Parameters
+///
+/// - `ty`: The type to decode into.
+/// - `input`: The value to decode.
+/// - `ops`: The `DynamicOps` to use to decode (without the `&`).
+/// - `func`: The provided `DataResult` value that should return `true`.
 #[macro_export]
 macro_rules! assert_decode {
     ($ty:ty, $input:expr, $ops:expr, $func:ident $(,)?) => {{
@@ -659,6 +672,31 @@ macro_rules! assert_decode {
                 ", got: {:?}"
             ),
             result
+        );
+    }};
+}
+
+/// Asserts that decoding the left expression will lead to a complete result (success) whose stored result is `$right`.
+///
+/// # Parameters
+///
+/// - `ty`: The type to decode into.
+/// - `input`: The value to decode.
+/// - `ops`: The `DynamicOps` to use to decode (without the `&`).
+/// - `result`: The expected decoded value from decoding, as a success.
+#[macro_export]
+macro_rules! assert_decode_success {
+    ($ty:ty, $input:expr, $ops:expr, $result:expr $(,)?) => {{
+        let result = <$ty as $crate::codec::Decode>::parse($input, &$ops);
+        assert!(
+            result.is_success(),
+            "Expected a `DataResult` success, got: {:?}",
+            result
+        );
+        assert_eq!(
+            result.unwrap(),
+            $result,
+            "`DataResult` was successful but the value doesn't match"
         );
     }};
 }
