@@ -53,6 +53,23 @@ impl StorageError {
             source,
         }
     }
+
+    /// Suggested log level for reporting this error.
+    ///
+    /// `NotFound` is routine (e.g. first-time player with no saved data) so
+    /// it maps to `DEBUG`. Filesystem I/O is usually transient, hence
+    /// `WARN`. Format or version mismatches point at data corruption and
+    /// are `ERROR`.
+    #[must_use]
+    pub fn severity(&self) -> tracing::Level {
+        match self {
+            Self::NotFound { .. } => tracing::Level::DEBUG,
+            Self::Io { .. } => tracing::Level::WARN,
+            Self::UnsupportedVersion(_) | Self::Deserialize(_) | Self::Serialize(_) => {
+                tracing::Level::ERROR
+            }
+        }
+    }
 }
 
 impl From<std::io::Error> for StorageError {
