@@ -400,6 +400,9 @@ impl ConfiguredFeature {
             Self::ChorusPlant(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::EndIsland(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
             _ => false, // TODO
         }
     }

@@ -87,6 +87,7 @@ pub fn plugin_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 authors: env!("CARGO_PKG_AUTHORS").split(',').map(String::from).collect(),
                 description: env!("CARGO_PKG_DESCRIPTION").to_string(),
+                dependencies: Vec::new(),
             }
         });
 

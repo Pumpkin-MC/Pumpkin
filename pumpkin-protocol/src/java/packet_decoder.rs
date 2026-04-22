@@ -157,7 +157,9 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
         let payload_len_hint = expected_packet_data_len.saturating_sub(packet_id_len);
         self.payload_scratch.clear();
         self.payload_scratch.reserve(payload_len_hint);
-        loop {
+
+        let mut total_read = 0;
+        while total_read < payload_len_hint {
             let bytes_read = reader
                 .read_buf(&mut self.payload_scratch)
                 .await
@@ -165,6 +167,7 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             if bytes_read == 0 {
                 break;
             }
+            total_read += bytes_read;
         }
 
         if let Some(expected_uncompressed_packet_data_len) = expected_uncompressed_packet_data_len {

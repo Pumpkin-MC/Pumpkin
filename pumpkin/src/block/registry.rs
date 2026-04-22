@@ -45,6 +45,8 @@ use crate::block::blocks::piston::piston_extension::PistonExtensionBlock;
 use crate::block::blocks::piston::piston_head::PistonHeadBlock;
 use crate::block::blocks::plant::bamboo::BambooBlock;
 use crate::block::blocks::plant::bamboo_sapling::BambooSaplingBlock;
+use crate::block::blocks::plant::big_dripleaf::BigDripleafBlock;
+use crate::block::blocks::plant::big_dripleaf_stem::BigDripleafStemBlock;
 use crate::block::blocks::plant::bush::BushBlock;
 use crate::block::blocks::plant::cactus::CactusBlock;
 use crate::block::blocks::plant::cactus_flower::CactusFlowerBlock;
@@ -284,6 +286,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(CactusFlowerBlock);
     manager.register(CoralFanBlock);
     manager.register(CoralPlantBlock);
+    manager.register(BigDripleafStemBlock);
+    manager.register(BigDripleafBlock);
 
     manager.register(FallingBlock);
 

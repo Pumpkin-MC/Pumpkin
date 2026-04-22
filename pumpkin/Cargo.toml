@@ -45,6 +45,7 @@ tokio = { workspace = true, features = [
 ] }
 thiserror.workspace = true
 futures.workspace = true
+notify.workspace = true
 
 # config
 serde.workspace = true
@@ -78,7 +79,6 @@ base64.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
-chrono.workspace = true
 time = { workspace = true, features = ["parsing", "macros", "local-offset"] }
 
 # plugins

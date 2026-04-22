@@ -17,7 +17,6 @@ use crate::world::custom_bossbar::BossbarUpdateError;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use std::fmt::Write as _;
 use uuid::Uuid;
 
 const NAMES: [&str; 1] = ["bossbar"];
@@ -297,7 +296,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_color(server, namespace.to_string(), color.clone())
+                        .update_color(server, namespace.to_string(), *color)
                         .await
                     {
                         Ok(()) => {}
@@ -451,7 +450,7 @@ impl CommandExecutor for SetExecutor {
                         .bossbars
                         .lock()
                         .await
-                        .update_division(server, namespace.to_string(), style.clone())
+                        .update_division(server, namespace.to_string(), *style)
                         .await
                     {
                         Ok(()) => {}
@@ -642,12 +641,10 @@ fn handle_bossbar_error(error: BossbarUpdateError) -> CommandError {
             ))
         }
         BossbarUpdateError::NoChanges(value, variation) => {
-            let mut key = "commands.bossbar.set.".to_string();
-            key.push_str(value);
-            key.push_str(".unchanged");
-            if let Some(variation) = variation {
-                write!(key, ".{variation}").unwrap();
-            }
+            let key = variation.map_or_else(
+                || format!("commands.bossbar.set.{value}.unchanged"),
+                |var| format!("commands.bossbar.set.{value}.unchanged.{var}"),
+            );
 
             CommandError::CommandFailed(TextComponent::translate(key, []))
         }

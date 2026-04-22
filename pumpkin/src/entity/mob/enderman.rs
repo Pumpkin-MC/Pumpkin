@@ -22,7 +22,6 @@ use pumpkin_data::{
     tag::Taggable,
     tracked_data::TrackedData,
 };
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{
     codec::var_int::VarInt,
     java::client::play::{CEntityPositionSync, Metadata},
@@ -394,18 +393,24 @@ impl EndermanEntity {
     }
 }
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 impl NBTStorage for EndermanEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             if let Some(block_state) = self.carried_block.load() {
-                nbt.put_int("carriedBlockState", block_state as i32);
+                nbt.put_bool(true);
+                nbt.put_int(block_state as i32);
+            } else {
+                nbt.put_bool(false);
             }
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            if let Some(block_state) = nbt.get_int("carriedBlockState") {
+            if nbt.get_bool().unwrap_or(false) {
+                let block_state = nbt.get_int().unwrap_or(0);
                 self.set_carried_block(Some(block_state as u16)).await;
             }
         })

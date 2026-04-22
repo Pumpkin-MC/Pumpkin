@@ -7,10 +7,11 @@ use fancy::LargeOakFoliagePlacer;
 use jungle::JungleFoliagePlacer;
 use mega_pine::MegaPineFoliagePlacer;
 use pine::PineFoliagePlacer;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockState;
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
-    random::RandomGenerator,
+    random::{RandomGenerator, RandomImpl},
 };
 use random_spread::RandomSpreadFoliagePlacer;
 
@@ -128,12 +129,110 @@ impl FoliagePlacer {
         chunk: &mut T,
         pos: BlockPos,
         block_state: &BlockState,
-    ) {
+    ) -> bool {
         let block = GenerationCache::get_block_state(chunk, &pos.0);
         if !TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
-            return;
+            return false;
         }
         chunk.set_block_state(&pos.0, block_state);
+        true
+    }
+
+    pub fn is_set<T: GenerationCache>(
+        chunk: &T,
+        pos: BlockPos,
+        foliage_provider: &BlockState,
+    ) -> bool {
+        GenerationCache::get_block_state(chunk, &pos.0).0 == foliage_provider.id
+    }
+
+    fn try_place_extension<T: GenerationCache>(
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        chance: f32,
+        log_pos: BlockPos,
+        pos: BlockPos,
+        foliage_provider: &BlockState,
+    ) -> bool {
+        if pos.manhattan_distance(log_pos) >= 7 || random.next_f32() > chance {
+            false
+        } else {
+            Self::place_foliage_block(chunk, pos, foliage_provider)
+        }
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    pub fn generate_square_with_hanging_leaves<T: LeaveValidator, T2: GenerationCache>(
+        validator: &T,
+        chunk: &mut T2,
+        random: &mut RandomGenerator,
+        center_pos: BlockPos,
+        radius: i32,
+        y: i32,
+        giant_trunk: bool,
+        foliage_provider: &BlockState,
+        hanging_leaves_chance: f32,
+        hanging_leaves_extension_chance: f32,
+    ) {
+        Self::generate_square(
+            validator,
+            chunk,
+            random,
+            center_pos,
+            radius,
+            y,
+            giant_trunk,
+            foliage_provider,
+        );
+
+        let i = i32::from(giant_trunk);
+        let log_pos = center_pos.down();
+
+        let directions = [
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::East,
+            BlockDirection::West,
+        ];
+
+        for along_edge in directions {
+            let to_edge = along_edge.rotate_clockwise();
+
+            let offset_to_edge = if to_edge.positive() {
+                radius + i
+            } else {
+                radius
+            };
+
+            let mut pos = center_pos
+                .add(0, y - 1, 0)
+                .offset_dir(to_edge.to_offset(), offset_to_edge)
+                .offset_dir(along_edge.to_offset(), -radius);
+
+            for _ in -radius..(radius + i) {
+                let leaves_above = Self::is_set(chunk, pos.up(), foliage_provider);
+                if leaves_above
+                    && Self::try_place_extension(
+                        chunk,
+                        random,
+                        hanging_leaves_chance,
+                        log_pos,
+                        pos,
+                        foliage_provider,
+                    )
+                {
+                    Self::try_place_extension(
+                        chunk,
+                        random,
+                        hanging_leaves_extension_chance,
+                        log_pos,
+                        pos.down(),
+                        foliage_provider,
+                    );
+                }
+                pos = pos.offset_dir(along_edge.to_offset(), 1);
+            }
+        }
     }
 }
 
