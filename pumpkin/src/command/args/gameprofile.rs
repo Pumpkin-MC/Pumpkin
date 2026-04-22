@@ -299,10 +299,8 @@ async fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<Ga
         return Some(profile_from_uuid_name(entry.uuid, entry.name));
     }
 
-    if let Ok(whitelist) = server.whitelist_storage.list().await
-        && let Some(entry) = whitelist.iter().find(|entry| entry.uuid == uuid)
-    {
-        return Some(profile_from_uuid_name(entry.uuid, entry.name.clone()));
+    if let Ok(Some(entry)) = server.whitelist_storage.get(uuid).await {
+        return Some(profile_from_uuid_name(entry.uuid, entry.name));
     }
 
     None

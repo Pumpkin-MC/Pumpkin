@@ -13,6 +13,9 @@ pub trait WhitelistStorage: Send + Sync {
 
     async fn is_whitelisted(&self, uuid: Uuid) -> Result<bool, StorageError>;
 
+    /// Returns the whitelist entry for `uuid`, if any.
+    async fn get(&self, uuid: Uuid) -> Result<Option<WhitelistEntry>, StorageError>;
+
     async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError>;
 
     /// Drops any in-memory cache so the next read re-reads the underlying

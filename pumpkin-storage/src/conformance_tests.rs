@@ -348,13 +348,17 @@ async fn whitelist_round_trip(store: &dyn WhitelistStorage) {
     let uuid = Uuid::from_u128(0x99);
     assert!(store.list().await.unwrap().is_empty());
     assert!(!store.is_whitelisted(uuid).await.unwrap());
+    assert!(store.get(uuid).await.unwrap().is_none());
 
     store.add(uuid, "Alice").await.unwrap();
     assert!(store.is_whitelisted(uuid).await.unwrap());
     assert_eq!(store.list().await.unwrap().len(), 1);
+    let entry = store.get(uuid).await.unwrap().unwrap();
+    assert_eq!(entry.name, "Alice");
 
     store.remove(uuid).await.unwrap();
     assert!(!store.is_whitelisted(uuid).await.unwrap());
+    assert!(store.get(uuid).await.unwrap().is_none());
 }
 
 #[tokio::test]

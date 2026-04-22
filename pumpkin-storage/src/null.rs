@@ -154,6 +154,10 @@ impl WhitelistStorage for NullStorage {
         Ok(false)
     }
 
+    async fn get(&self, _uuid: Uuid) -> Result<Option<WhitelistEntry>, StorageError> {
+        Ok(None)
+    }
+
     async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError> {
         Ok(Vec::new())
     }

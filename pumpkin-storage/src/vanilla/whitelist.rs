@@ -64,6 +64,16 @@ impl WhitelistStorage for VanillaStorage {
             .any(|e| e.uuid == uuid))
     }
 
+    async fn get(&self, uuid: Uuid) -> Result<Option<WhitelistEntry>, StorageError> {
+        let guard = self.whitelist_load_locked().await?;
+        Ok(guard
+            .as_ref()
+            .expect("loaded")
+            .iter()
+            .find(|e| e.uuid == uuid)
+            .cloned())
+    }
+
     async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError> {
         let guard = self.whitelist_load_locked().await?;
         Ok(guard.as_ref().expect("loaded").to_vec())

@@ -27,6 +27,16 @@ impl WhitelistStorage for MemoryStorage {
         Ok(self.whitelist.read().await.iter().any(|e| e.uuid == uuid))
     }
 
+    async fn get(&self, uuid: Uuid) -> Result<Option<WhitelistEntry>, StorageError> {
+        Ok(self
+            .whitelist
+            .read()
+            .await
+            .iter()
+            .find(|e| e.uuid == uuid)
+            .cloned())
+    }
+
     async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError> {
         Ok(self.whitelist.read().await.to_vec())
     }
