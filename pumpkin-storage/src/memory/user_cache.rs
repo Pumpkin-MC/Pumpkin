@@ -13,6 +13,10 @@ fn one_month_from_now() -> OffsetDateTime {
     OffsetDateTime::now_utc() + Duration::days(30)
 }
 
+fn is_expired(entry: &UserCacheEntry) -> bool {
+    OffsetDateTime::now_utc() >= entry.expiration_date
+}
+
 #[async_trait]
 impl UserCacheStorage for MemoryStorage {
     async fn upsert(&self, uuid: Uuid, name: &str) -> Result<(), StorageError> {
@@ -27,17 +31,32 @@ impl UserCacheStorage for MemoryStorage {
     }
 
     async fn get_by_uuid(&self, uuid: Uuid) -> Result<Option<UserCacheEntry>, StorageError> {
-        Ok(self.user_cache.read().await.get(&uuid).cloned())
+        let mut guard = self.user_cache.write().await;
+        let Some(entry) = guard.get(&uuid) else {
+            return Ok(None);
+        };
+        if is_expired(entry) {
+            guard.remove(&uuid);
+            return Ok(None);
+        }
+        Ok(Some(entry.clone()))
     }
 
     async fn get_by_name(&self, name: &str) -> Result<Option<UserCacheEntry>, StorageError> {
         let lower = name.to_ascii_lowercase();
-        Ok(self
-            .user_cache
-            .read()
-            .await
+        let mut guard = self.user_cache.write().await;
+        let Some(hit_uuid) = guard
             .values()
             .find(|e| e.name.to_ascii_lowercase() == lower)
-            .cloned())
+            .map(|e| e.uuid)
+        else {
+            return Ok(None);
+        };
+        let entry = guard.get(&hit_uuid).expect("just looked up");
+        if is_expired(entry) {
+            guard.remove(&hit_uuid);
+            return Ok(None);
+        }
+        Ok(Some(entry.clone()))
     }
 }

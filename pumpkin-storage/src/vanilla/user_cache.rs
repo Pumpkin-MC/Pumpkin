@@ -199,9 +199,31 @@ impl UserCacheStorage for VanillaStorage {
         let mut guard = self.user_cache_inner.lock().await;
         guard.ensure_loaded(&path).await?;
 
-        let Some(mut entry) = guard.profiles_by_uuid.get(&uuid).cloned() else {
+        let lookup = guard.profiles_by_uuid.get(&uuid).cloned();
+
+        let (profile, needs_save) = if let Some(entry) = lookup {
+            if is_expired(entry.expiration_date) {
+                guard.profiles_by_uuid.remove(&entry.uuid);
+                guard
+                    .profiles_by_name
+                    .remove(&entry.name.to_ascii_lowercase());
+                (None, true)
+            } else {
+                (Some(entry), false)
+            }
+        } else {
+            (None, false)
+        };
+
+        let Some(mut entry) = profile else {
+            if needs_save {
+                let snapshot = guard.top_mru_profiles(USER_CACHE_MRU_LIMIT);
+                drop(guard);
+                save_snapshot(&path, snapshot).await?;
+            }
             return Ok(None);
         };
+
         entry.last_access = guard.next_operation();
         guard
             .profiles_by_name

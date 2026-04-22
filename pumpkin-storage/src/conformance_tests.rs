@@ -23,6 +23,7 @@ use crate::error::StorageError;
 use crate::memory::MemoryChunkStorage;
 use crate::op::OpStorage;
 use crate::poi::{POI_TYPE_NETHER_PORTAL, PoiStorage};
+use crate::user_cache::UserCacheStorage;
 use crate::whitelist::WhitelistStorage;
 use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::player_data::PlayerDataStorage;
@@ -380,6 +381,61 @@ async fn whitelist_null_always_empty() {
             .unwrap()
     );
     assert!(WhitelistStorage::list(&store).await.unwrap().is_empty());
+}
+
+async fn user_cache_round_trip(store: &dyn UserCacheStorage) {
+    let uuid = Uuid::from_u128(0xBEEF);
+    assert!(store.get_by_uuid(uuid).await.unwrap().is_none());
+    assert!(store.get_by_name("alice").await.unwrap().is_none());
+
+    store.upsert(uuid, "Alice").await.unwrap();
+
+    let by_u = store.get_by_uuid(uuid).await.unwrap().unwrap();
+    assert_eq!(by_u.name, "Alice");
+    assert_eq!(by_u.uuid, uuid);
+
+    // Case-insensitive name lookup.
+    let by_n = store.get_by_name("ALICE").await.unwrap().unwrap();
+    assert_eq!(by_n.uuid, uuid);
+
+    // Re-upsert overwrites name.
+    store.upsert(uuid, "Alice2").await.unwrap();
+    assert_eq!(
+        store.get_by_uuid(uuid).await.unwrap().unwrap().name,
+        "Alice2"
+    );
+}
+
+#[tokio::test]
+async fn user_cache_round_trip_memory() {
+    user_cache_round_trip(&MemoryStorage::new()).await;
+}
+
+#[tokio::test]
+async fn user_cache_round_trip_vanilla() {
+    let dir = TempDir::new().unwrap();
+    let store = VanillaStorage::new(dir.path(), dir.path().join("data"));
+    user_cache_round_trip(&store).await;
+}
+
+#[tokio::test]
+async fn user_cache_null_returns_none() {
+    let store = NullStorage::new();
+    UserCacheStorage::upsert(&store, Uuid::from_u128(1), "Alice")
+        .await
+        .unwrap();
+    assert!(
+        UserCacheStorage::get_by_uuid(&store, Uuid::from_u128(1))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        UserCacheStorage::get_by_name(&store, "Alice")
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 async fn poi_round_trip(store: &dyn PoiStorage) {
