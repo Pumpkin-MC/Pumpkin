@@ -43,8 +43,7 @@ use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::tag::NbtTag;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CEntityAnimation, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity,
@@ -729,7 +728,7 @@ impl LivingEntity {
             .await;
     }
 
-    async fn tick_movement(&self, server: &Server, caller: Arc<dyn EntityBase>) {
+    async fn tick_movement<'a>(&'a self, server: &'a Server, caller: &'a Arc<dyn EntityBase>) {
         if self.jumping_cooldown.load(Relaxed) != 0 {
             self.jumping_cooldown.fetch_sub(1, Relaxed);
         }
@@ -800,24 +799,24 @@ impl LivingEntity {
             && should_swim_in_fluids
             && self.entity.entity_type != &EntityType::STRIDER
         {
-            self.travel_in_fluid(caller.clone(), touching_water).await;
+            self.travel_in_fluid(caller, touching_water).await;
         } else {
             // TODO: Gliding
 
-            self.travel_in_air(caller.clone()).await;
+            self.travel_in_air(caller).await;
         }
 
         // TODO: Apply Soul Speed boot durability when tick_block_underneath is implemented.
         //self.entity.tick_block_underneath(&caller);
 
-        let suffocating = self.entity.tick_block_collisions(&caller, server).await;
+        let suffocating = self.entity.tick_block_collisions(caller, server).await;
 
         if suffocating {
-            self.damage(&*caller, 1.0, DamageType::IN_WALL).await;
+            self.damage(&**caller, 1.0, DamageType::IN_WALL).await;
         }
     }
 
-    async fn travel_in_air(&self, caller: Arc<dyn EntityBase>) {
+    async fn travel_in_air<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
         // applyMovementInput
 
         let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
@@ -854,7 +853,7 @@ impl LivingEntity {
 
         self.apply_climbing_speed();
 
-        self.make_move(caller.clone()).await;
+        self.make_move(caller).await;
 
         let mut velo = self.entity.velocity.load();
 
@@ -875,7 +874,7 @@ impl LivingEntity {
         if let Some(lev) = levitation {
             velo.y += 0.05f64.mul_add(f64::from(lev.amplifier + 1), -velo.y) * 0.2;
         } else {
-            velo.y -= self.get_effective_gravity(&caller).await;
+            velo.y -= self.get_effective_gravity(caller).await;
 
             // TODO: If world is not loaded: replace effective gravity with:
 
@@ -899,11 +898,11 @@ impl LivingEntity {
         self.entity.velocity.store(velo);
     }
 
-    async fn travel_in_fluid(&self, caller: Arc<dyn EntityBase>, water: bool) {
+    async fn travel_in_fluid<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, water: bool) {
         let movement_input = self.movement_input.load();
 
         let falling = self.entity.velocity.load().y <= 0.0;
-        let gravity = self.get_effective_gravity(&caller).await;
+        let gravity = self.get_effective_gravity(caller).await;
         let effective_speed = self.get_attribute_value(&Attributes::MOVEMENT_SPEED);
 
         if water {
@@ -996,7 +995,7 @@ impl LivingEntity {
         }
     }
 
-    async fn make_move(&self, caller: Arc<dyn EntityBase>) {
+    async fn make_move<'a>(&'a self, caller: &'a Arc<dyn EntityBase>) {
         self.entity
             .move_entity(caller, self.entity.velocity.load())
             .await;
@@ -1755,10 +1754,10 @@ impl LivingEntity {
 }
 
 impl NBTStorage for LivingEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.entity.write_nbt(nbt).await;
-            nbt.put("Health", NbtTag::Float(self.health.load()));
+            nbt.put_float(self.health.load());
             // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
             let fall_distance = if self.dead.load(Relaxed) {
                 0.0
@@ -1766,19 +1765,13 @@ impl NBTStorage for LivingEntity {
                 self.fall_distance.load()
             };
             // Persist current absorption amount
-            nbt.put("AbsorptionAmount", NbtTag::Float(self.absorption.load()));
-            nbt.put("fall_distance", NbtTag::Float(fall_distance));
+            nbt.put_float(self.absorption.load());
+            nbt.put_float(fall_distance);
             {
                 let effects = self.active_effects.lock().await;
-                if !effects.is_empty() {
-                    // Iterate effects and create Box<[NbtTag]>
-                    let mut effects_list = Vec::with_capacity(effects.len());
-                    for effect in effects.values() {
-                        let mut effect_nbt = pumpkin_nbt::compound::NbtCompound::new();
-                        effect.write_nbt(&mut effect_nbt).await;
-                        effects_list.push(NbtTag::Compound(effect_nbt));
-                    }
-                    nbt.put("active_effects", NbtTag::List(effects_list));
+                nbt.put_u32(effects.len() as u32);
+                for effect in effects.values() {
+                    effect.write_nbt(nbt).await;
                 }
             }
             //TODO: write equipment
@@ -1786,20 +1779,20 @@ impl NBTStorage for LivingEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.entity.read_nbt_non_mut(nbt).await;
-            self.health.store(nbt.get_float("Health").unwrap_or(0.0));
+            self.health.store(nbt.get_float().unwrap_or(0.0));
 
             // Clamp any persisted absorption to the entity's configured max
-            let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
+            let raw_abs = nbt.get_float().unwrap_or(0.0);
             let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
             let clamped_abs = raw_abs.max(0.0).min(max_abs);
             self.absorption.store(clamped_abs);
 
             // Load fall distance, but if this entity is currently marked dead ensure we don't restore
             // a lethal fall distance that would immediately re-kill on spawn.
-            let fd = nbt.get_float("fall_distance").unwrap_or(0.0);
+            let fd = nbt.get_float().unwrap_or(0.0);
             if self.dead.load(Relaxed) {
                 self.fall_distance.store(0.0);
             } else {
@@ -1807,20 +1800,16 @@ impl NBTStorage for LivingEntity {
             }
             {
                 let mut active_effects = self.active_effects.lock().await;
-                let nbt_effects = nbt.get_list("active_effects");
-                if let Some(nbt_effects) = nbt_effects {
-                    for effect in nbt_effects {
-                        if let NbtTag::Compound(effect_nbt) = effect {
-                            let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
-                            if effect.is_none() {
-                                warn!("Unable to read effect from nbt");
-                                continue;
-                            }
-                            let mut effect = effect.unwrap();
-                            effect.blend = true; // TODO: change, is taken from effect give command
-                            active_effects.insert(effect.effect_type, effect);
-                        }
+                let effects_len = nbt.get_u32().unwrap_or(0);
+                for _ in 0..effects_len {
+                    let effect = Effect::create_from_nbt(nbt).await;
+                    if effect.is_none() {
+                        warn!("Unable to read effect from nbt");
+                        continue;
                     }
+                    let mut effect = effect.unwrap();
+                    effect.blend = true; // TODO: change, is taken from effect give command
+                    active_effects.insert(effect.effect_type, effect);
                 }
             }
         })
@@ -2039,11 +2028,11 @@ impl EntityBase for LivingEntity {
     #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.tick(caller.clone(), server).await;
+            self.entity.tick(caller, server).await;
 
             // Only tick movement if the entity is alive. This prevents a dead "corpse"
             // from continuing to be simulated (accumulating fall_distance/velocity).
@@ -2052,7 +2041,7 @@ impl EntityBase for LivingEntity {
             let in_death_animation =
                 self.health.load() <= 0.0 && self.death_time.load(Relaxed) < 20;
             if is_alive || (in_death_animation && self.entity.entity_type != &EntityType::PLAYER) {
-                self.tick_movement(server, caller.clone()).await;
+                self.tick_movement(server, caller).await;
                 // Vanilla-like order: freeze logic runs after movement/collisions.
                 self.entity.tick_frozen(caller.as_ref()).await;
             }

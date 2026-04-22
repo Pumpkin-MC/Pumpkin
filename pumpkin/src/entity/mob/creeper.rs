@@ -11,7 +11,6 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     tracked_data::TrackedData,
 };
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 
 use crate::entity::{
@@ -117,40 +116,34 @@ impl CreeperEntity {
     }
 }
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 impl NBTStorage for CreeperEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity.living_entity.entity.write_nbt(nbt).await;
-            nbt.put_bool("powered", self.charged.load(Ordering::Relaxed));
-            nbt.put_short("Fuse", self.fuse_time.load(Ordering::Relaxed) as i16);
-            nbt.put_byte(
-                "ExplosionRadius",
-                self.explosion_radius.load(Ordering::Relaxed) as i8,
-            );
-            nbt.put_bool("ignited", self.ignited.load(Ordering::Relaxed));
+            nbt.put_bool(self.charged.load(Ordering::Relaxed));
+            nbt.put_short(self.fuse_time.load(Ordering::Relaxed) as i16);
+            nbt.put_byte(self.explosion_radius.load(Ordering::Relaxed) as i8);
+            nbt.put_bool(self.ignited.load(Ordering::Relaxed));
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity
                 .living_entity
                 .entity
                 .read_nbt_non_mut(nbt)
                 .await;
-            if let Some(powered) = nbt.get_bool("powered") {
-                self.charged.store(powered, Ordering::Relaxed);
-            }
-            if let Some(fuse) = nbt.get_short("Fuse") {
-                self.fuse_time.store(i32::from(fuse), Ordering::Relaxed);
-            }
-            if let Some(radius) = nbt.get_byte("ExplosionRadius") {
-                self.explosion_radius
-                    .store(i32::from(radius), Ordering::Relaxed);
-            }
-            if let Some(ignited) = nbt.get_bool("ignited") {
-                self.ignited.store(ignited, Ordering::Relaxed);
-            }
+            self.charged
+                .store(nbt.get_bool().unwrap_or(false), Ordering::Relaxed);
+            self.fuse_time
+                .store(i32::from(nbt.get_short().unwrap_or(30)), Ordering::Relaxed);
+            self.explosion_radius
+                .store(i32::from(nbt.get_byte().unwrap_or(3)), Ordering::Relaxed);
+            self.ignited
+                .store(nbt.get_bool().unwrap_or(false), Ordering::Relaxed);
         })
     }
 }

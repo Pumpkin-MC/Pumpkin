@@ -1,8 +1,8 @@
-//! In-memory [`PlayerDataStorage`] — `HashMap<Uuid, NbtCompound>`. Save
+//! In-memory [`PlayerDataStorage`] — `HashMap<Uuid, PNbtCompound>`. Save
 //! clones the input; load clones out.
 
 use async_trait::async_trait;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use uuid::Uuid;
 
 use crate::error::StorageError;
@@ -11,7 +11,7 @@ use crate::player_data::PlayerDataStorage;
 
 #[async_trait]
 impl PlayerDataStorage for MemoryStorage {
-    async fn load(&self, uuid: Uuid) -> Result<NbtCompound, StorageError> {
+    async fn load(&self, uuid: Uuid) -> Result<PNbtCompound, StorageError> {
         self.player_data
             .read()
             .await
@@ -22,7 +22,7 @@ impl PlayerDataStorage for MemoryStorage {
             })
     }
 
-    async fn save(&self, uuid: Uuid, data: &NbtCompound) -> Result<(), StorageError> {
+    async fn save(&self, uuid: Uuid, data: &PNbtCompound) -> Result<(), StorageError> {
         self.player_data.write().await.insert(uuid, data.clone());
         Ok(())
     }

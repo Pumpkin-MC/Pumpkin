@@ -26,7 +26,7 @@ use tracing::{debug, error, info, warn};
 use crate::command::CommandSender;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
-use pumpkin_protocol::java::client::play::CChangeDifficulty;
+use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
@@ -391,12 +391,15 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
-        let (world, nbt) = if let Ok(Some(data)) =
+        let (world, nbt) = if let Ok(Some(mut data)) =
             self.player_data_storage.load_data(profile.id).await
         {
-            if let Some(dimension_key) = data.get_string("Dimension") {
-                if let Some(dimension) = Dimension::from_name(dimension_key) {
+            let _version = data.get_int().unwrap_or(0);
+            if let Ok(dimension_key) = data.get_string() {
+                if let Some(dimension) = Dimension::from_name(&dimension_key) {
                     let world = self.get_world_from_dimension(dimension);
+                    // Reset read position so player.read_nbt can read everything from start
+                    data.read_pos = 0;
                     (world, Some(data))
                 } else {
                     warn!("Invalid dimension key in player data: {dimension_key}");
@@ -406,16 +409,18 @@ impl Server {
                         .first()
                         .expect("Default world should exist")
                         .clone();
+                    data.read_pos = 0;
                     (default_world, Some(data))
                 }
             } else {
-                // Player data exists but doesn't have a "Dimension" key.
+                // Player data exists but doesn't have a dimension entry.
                 let default_world = self
                     .worlds
                     .load()
                     .first()
                     .expect("Default world should exist")
                     .clone();
+                data.read_pos = 0;
                 (default_world, Some(data))
             }
         } else {
@@ -516,6 +521,21 @@ impl Server {
     pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.load().iter() {
             world.broadcast_packet_all(packet).await;
+        }
+    }
+
+    pub async fn broadcast_tab_list_header_footer(
+        &self,
+        header: &TextComponent,
+        footer: &TextComponent,
+    ) {
+        let packet = CTabList::new(header, footer);
+        for world in self.worlds.load().iter() {
+            for player in world.players.load().iter() {
+                *player.tab_list_header.lock().await = header.clone();
+                *player.tab_list_footer.lock().await = footer.clone();
+                player.client.enqueue_packet(&packet).await;
+            }
         }
     }
 

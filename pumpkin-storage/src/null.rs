@@ -8,7 +8,7 @@
 //! desired.
 
 use async_trait::async_trait;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -61,11 +61,11 @@ impl LevelInfoStorage for NullStorage {
 
 #[async_trait]
 impl PlayerDataStorage for NullStorage {
-    async fn load(&self, uuid: Uuid) -> Result<NbtCompound, StorageError> {
+    async fn load(&self, uuid: Uuid) -> Result<PNbtCompound, StorageError> {
         Err(not_found(&format!("player data for {uuid}")))
     }
 
-    async fn save(&self, _uuid: Uuid, _data: &NbtCompound) -> Result<(), StorageError> {
+    async fn save(&self, _uuid: Uuid, _data: &PNbtCompound) -> Result<(), StorageError> {
         Ok(())
     }
 

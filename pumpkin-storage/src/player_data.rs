@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use uuid::Uuid;
 
 use crate::error::StorageError;
@@ -11,10 +11,10 @@ pub trait PlayerDataStorage: Send + Sync {
     ///
     /// Returns an error for which [`StorageError::is_not_found`] is `true`
     /// when no data has been stored for that player.
-    async fn load(&self, uuid: Uuid) -> Result<NbtCompound, StorageError>;
+    async fn load(&self, uuid: Uuid) -> Result<PNbtCompound, StorageError>;
 
     /// Persists `data` as the current NBT for `uuid`, overwriting any prior value.
-    async fn save(&self, uuid: Uuid, data: &NbtCompound) -> Result<(), StorageError>;
+    async fn save(&self, uuid: Uuid, data: &PNbtCompound) -> Result<(), StorageError>;
 
     /// Lists every UUID for which data is currently stored.
     ///

@@ -4,7 +4,7 @@ use crate::{
 };
 use crossbeam::atomic::AtomicCell;
 use pumpkin_inventory::screen_handler::ScreenHandler;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use pumpkin_storage::StorageError;
 use pumpkin_storage::player_data::PlayerDataStorage;
 use std::sync::Arc;
@@ -44,7 +44,7 @@ impl ServerPlayerData {
             .await;
         player.on_handled_screen_closed().await;
 
-        let mut nbt = NbtCompound::new();
+        let mut nbt = PNbtCompound::new();
         player.write_nbt(&mut nbt).await;
 
         self.storage.save(player.gameprofile.id, &nbt).await
@@ -61,7 +61,7 @@ impl ServerPlayerData {
             self.last_save.store(now);
             for world in server.worlds.load().iter() {
                 for player in world.players.load().iter() {
-                    let mut nbt = NbtCompound::new();
+                    let mut nbt = PNbtCompound::new();
                     player.write_nbt(&mut nbt).await;
 
                     if let Err(e) = self.storage.save(player.gameprofile.id, &nbt).await {
@@ -98,7 +98,7 @@ impl ServerPlayerData {
     pub async fn load_data(
         &self,
         uuid: uuid::Uuid,
-    ) -> Result<Option<NbtCompound>, StorageError> {
+    ) -> Result<Option<PNbtCompound>, StorageError> {
         match self.storage.load(uuid).await {
             Ok(nbt) => Ok(Some(nbt)),
             Err(e) if e.is_not_found() => Ok(None),
@@ -114,7 +114,7 @@ impl ServerPlayerData {
         &self,
         player: &Player,
     ) -> Result<(), StorageError> {
-        let mut nbt = NbtCompound::new();
+        let mut nbt = PNbtCompound::new();
         player.write_nbt(&mut nbt).await;
         self.storage.save(player.gameprofile.id, &nbt).await
     }

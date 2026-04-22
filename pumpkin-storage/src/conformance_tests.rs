@@ -2,7 +2,7 @@
 //! backend calls into these helpers from its own `#[test]` function so
 //! fixtures (temp dirs, fresh maps) stay local.
 
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use pumpkin_util::world_seed::Seed;
 use temp_dir::TempDir;
 use time::OffsetDateTime;
@@ -92,30 +92,27 @@ async fn player_data_round_trip(store: &dyn PlayerDataStorage) {
     assert!(err.is_not_found(), "{err}");
     assert!(store.list().await.unwrap().is_empty());
 
-    let mut nbt = NbtCompound::new();
-    nbt.put_string("name", "Alice".to_string());
-    nbt.put_int("level", 7);
+    let mut nbt = PNbtCompound::new();
+    nbt.put_string("Alice");
+    nbt.put_i32(7);
     store.save(uuid, &nbt).await.unwrap();
 
-    let loaded = store.load(uuid).await.unwrap();
-    assert_eq!(loaded.get_string("name").unwrap(), "Alice");
-    assert_eq!(loaded.get_int("level").unwrap(), 7);
+    let mut loaded = store.load(uuid).await.unwrap();
+    assert_eq!(loaded.get_string().unwrap(), "Alice");
+    assert_eq!(loaded.get_i32().unwrap(), 7);
 
     let ids = store.list().await.unwrap();
     assert_eq!(ids, vec![uuid]);
 
     // Overwrite.
-    let mut nbt = NbtCompound::new();
-    nbt.put_int("level", 10);
+    let mut nbt = PNbtCompound::new();
+    nbt.put_i32(10);
     store.save(uuid, &nbt).await.unwrap();
-    assert_eq!(
-        store.load(uuid).await.unwrap().get_int("level").unwrap(),
-        10
-    );
+    assert_eq!(store.load(uuid).await.unwrap().get_i32().unwrap(), 10);
 
     // Second uuid.
     let other = Uuid::from_u128(0xAA);
-    store.save(other, &NbtCompound::new()).await.unwrap();
+    store.save(other, &PNbtCompound::new()).await.unwrap();
     let mut ids = store.list().await.unwrap();
     ids.sort();
     let mut expected = vec![uuid, other];
@@ -141,7 +138,7 @@ async fn player_data_null_always_empty() {
     let store = NullStorage::new();
     let uuid = Uuid::from_u128(1);
     assert!(PlayerDataStorage::load(&store, uuid).await.unwrap_err().is_not_found());
-    PlayerDataStorage::save(&store, uuid, &NbtCompound::new())
+    PlayerDataStorage::save(&store, uuid, &PNbtCompound::new())
         .await
         .unwrap();
     assert!(PlayerDataStorage::load(&store, uuid).await.unwrap_err().is_not_found());

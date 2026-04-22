@@ -1,11 +1,10 @@
-//! Vanilla-compatible per-player NBT under `<world_dir>/playerdata/<uuid>.dat`,
-//! gzipped.
+//! Per-player PNBT (raw) under `<world_dir>/playerdata/<uuid>.dat`. Bytes
+//! are written as-is — PNBT is pumpkin-internal and not vanilla-compatible.
 
-use std::io::Cursor;
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use tokio::fs;
 use uuid::Uuid;
 
@@ -27,7 +26,7 @@ impl VanillaStorage {
 
 #[async_trait]
 impl PlayerDataStorage for VanillaStorage {
-    async fn load(&self, uuid: Uuid) -> Result<NbtCompound, StorageError> {
+    async fn load(&self, uuid: Uuid) -> Result<PNbtCompound, StorageError> {
         let path = self.player_data_path(uuid);
         let bytes = fs::read(&path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -38,22 +37,17 @@ impl PlayerDataStorage for VanillaStorage {
                 StorageError::io_at(&path, e)
             }
         })?;
-        pumpkin_nbt::nbt_compress::read_gzip_compound_tag(Cursor::new(bytes))
-            .map_err(|e| StorageError::Deserialize(e.to_string()))
+        Ok(PNbtCompound::from_bytes(bytes))
     }
 
-    async fn save(&self, uuid: Uuid, data: &NbtCompound) -> Result<(), StorageError> {
+    async fn save(&self, uuid: Uuid, data: &PNbtCompound) -> Result<(), StorageError> {
         let dir = self.player_data_dir();
         fs::create_dir_all(&dir)
             .await
             .map_err(|e| StorageError::io_at(&dir, e))?;
 
-        let mut buf = Vec::new();
-        pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data.clone(), &mut buf)
-            .map_err(|e| StorageError::Serialize(e.to_string()))?;
-
         let path = self.player_data_path(uuid);
-        fs::write(&path, &buf)
+        fs::write(&path, data.as_bytes())
             .await
             .map_err(|e| StorageError::io_at(&path, e))?;
         Ok(())

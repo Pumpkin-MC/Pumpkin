@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pumpkin_config::op::Op;
 use pumpkin_config::whitelist::WhitelistEntry;
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -31,7 +31,7 @@ pub use chunk::MemoryChunkStorage;
 #[derive(Debug, Default)]
 pub struct MemoryStorage {
     pub(crate) level_info: RwLock<Option<LevelData>>,
-    pub(crate) player_data: RwLock<HashMap<Uuid, NbtCompound>>,
+    pub(crate) player_data: RwLock<HashMap<Uuid, PNbtCompound>>,
     pub(crate) banned_players: RwLock<Vec<BannedPlayerEntry>>,
     pub(crate) banned_ips: RwLock<Vec<BannedIpEntry>>,
     pub(crate) ops: RwLock<Vec<Op>>,

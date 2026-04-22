@@ -454,20 +454,22 @@ impl DynamicLightEngine {
     ) -> Option<u8> {
         let (chunk_pos, relative) = position.chunk_and_chunk_relative_position();
 
-        let chunk = level.get_chunk(chunk_pos).await;
+        level
+            .get_or_fetch_chunk(chunk_pos, |chunk| {
+                let section_idx = (relative.y - chunk.section.min_y) as usize / 16;
+                let light_engine = chunk.light_engine.lock().ok()?;
 
-        let section_idx = (relative.y - chunk.section.min_y) as usize / 16;
-        let light_engine = chunk.light_engine.lock().ok()?;
-
-        light_engine
-            .block_light
-            .get(section_idx)?
-            .get(
-                relative.x as usize,
-                (relative.y - chunk.section.min_y) as usize % 16,
-                relative.z as usize,
-            )
-            .into()
+                light_engine
+                    .block_light
+                    .get(section_idx)?
+                    .get(
+                        relative.x as usize,
+                        (relative.y - chunk.section.min_y) as usize % 16,
+                        relative.z as usize,
+                    )
+                    .into()
+            })
+            .await
     }
 
     pub async fn set_block_light_level(
@@ -477,43 +479,51 @@ impl DynamicLightEngine {
         light_level: u8,
     ) -> Result<(), String> {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let chunk = level.get_chunk(chunk_coordinate).await;
-        let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
-        // Bounds check for section index
-        let mut light_engine = chunk.light_engine.lock().unwrap();
-        if section_index >= light_engine.block_light.len() {
-            return Err("Invalid section index".to_string());
-        }
-        let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
-        light_engine.block_light[section_index].set(
-            relative.x as usize,
-            relative_y,
-            relative.z as usize,
-            light_level,
-        );
-        // Mark chunk as dirty so lighting changes are saved to disk
-        if !chunk.is_dirty() {
-            chunk.mark_dirty(true);
-        }
-        Ok(())
+        level
+            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+                let section_index =
+                    (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+                // Bounds check for section index
+                let mut light_engine = chunk.light_engine.lock().unwrap();
+                if section_index >= light_engine.block_light.len() {
+                    return Err("Invalid section index".to_string());
+                }
+                let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
+                light_engine.block_light[section_index].set(
+                    relative.x as usize,
+                    relative_y,
+                    relative.z as usize,
+                    light_level,
+                );
+                // Mark chunk as dirty so lighting changes are saved to disk
+                if !chunk.is_dirty() {
+                    chunk.mark_dirty(true);
+                }
+                Ok(())
+            })
+            .await
     }
 
     pub async fn get_sky_light_level(&self, level: &Arc<Level>, position: &BlockPos) -> u8 {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let chunk = level.get_chunk(chunk_coordinate).await;
-        let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+        level
+            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+                let section_index =
+                    (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
 
-        let light_engine = chunk.light_engine.lock().unwrap();
-        // Bounds check for section index (lock the light engine)
-        if section_index >= light_engine.sky_light.len() {
-            return 15;
-        }
+                let light_engine = chunk.light_engine.lock().unwrap();
+                // Bounds check for section index (lock the light engine)
+                if section_index >= light_engine.sky_light.len() {
+                    return 15;
+                }
 
-        light_engine.sky_light[section_index].get(
-            relative.x as usize,
-            (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
-            relative.z as usize,
-        )
+                light_engine.sky_light[section_index].get(
+                    relative.x as usize,
+                    (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
+                    relative.z as usize,
+                )
+            })
+            .await
     }
 
     pub async fn set_sky_light_level(
@@ -523,24 +533,28 @@ impl DynamicLightEngine {
         light_level: u8,
     ) -> Result<(), String> {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let chunk = level.get_chunk(chunk_coordinate).await;
-        let section_index = (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
-        // Bounds check for section index
-        let mut light_engine = chunk.light_engine.lock().unwrap();
-        if section_index >= light_engine.sky_light.len() {
-            return Err("Invalid section index".to_string());
-        }
-        let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
-        light_engine.sky_light[section_index].set(
-            relative.x as usize,
-            relative_y,
-            relative.z as usize,
-            light_level,
-        );
-        // Mark chunk as dirty so lighting changes are saved to disk
-        if !chunk.is_dirty() {
-            chunk.mark_dirty(true);
-        }
-        Ok(())
+        level
+            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+                let section_index =
+                    (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+                // Bounds check for section index
+                let mut light_engine = chunk.light_engine.lock().unwrap();
+                if section_index >= light_engine.sky_light.len() {
+                    return Err("Invalid section index".to_string());
+                }
+                let relative_y = (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE;
+                light_engine.sky_light[section_index].set(
+                    relative.x as usize,
+                    relative_y,
+                    relative.z as usize,
+                    light_level,
+                );
+                // Mark chunk as dirty so lighting changes are saved to disk
+                if !chunk.is_dirty() {
+                    chunk.mark_dirty(true);
+                }
+                Ok(())
+            })
+            .await
     }
 }
