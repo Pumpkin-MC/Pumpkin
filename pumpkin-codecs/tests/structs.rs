@@ -66,7 +66,7 @@ fn simple() {
         json!({"name": "Untitled Book 2", "author": "Untitled Author", "pages": "98"}),
         JsonOps,
         is_error
-    )
+    );
 }
 
 #[test]
