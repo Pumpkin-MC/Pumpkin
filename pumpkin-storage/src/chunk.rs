@@ -39,10 +39,7 @@ pub trait ChunkStorage<T: Send + Sync + 'static>: Send + Sync {
     );
 
     /// Persists chunks. Batched so region-based backends can group writes.
-    async fn save_chunks(
-        &self,
-        chunks: Vec<(Vector2<i32>, T)>,
-    ) -> Result<(), StorageError>;
+    async fn save_chunks(&self, chunks: Vec<(Vector2<i32>, T)>) -> Result<(), StorageError>;
 
     /// Marks chunks as resident in memory — region-file backends use this to
     /// keep serializer caches alive while any chunk in a region is watched.

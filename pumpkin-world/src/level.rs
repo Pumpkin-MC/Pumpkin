@@ -15,15 +15,13 @@ use crate::{
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
-use pumpkin_storage::MemoryChunkStorage;
-use pumpkin_storage::chunk::{ChunkStorage, LoadedData};
 use dashmap::{DashMap, Entry};
-use pumpkin_config::{
-    chunk::ChunkConfig, lighting::LightingEngineConfig, storage::StorageConfig,
-};
+use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, storage::StorageConfig};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
+use pumpkin_storage::MemoryChunkStorage;
+use pumpkin_storage::chunk::{ChunkStorage, LoadedData};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rustc_hash::FxHashMap;
@@ -177,26 +175,35 @@ impl Level {
         ) = match storage_config {
             StorageConfig::Vanilla(level_config) => {
                 let raw_chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
-                    ChunkConfig::Linear(config) => Arc::new(
-                        ChunkFileManager::<LinearV2File<ChunkData>>::new(config.clone()),
-                    ),
-                    ChunkConfig::Anvil(config) => Arc::new(
-                        ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
-                    ),
+                    ChunkConfig::Linear(config) => {
+                        Arc::new(ChunkFileManager::<LinearV2File<ChunkData>>::new(
+                            config.clone(),
+                        ))
+                    }
+                    ChunkConfig::Anvil(config) => {
+                        Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
+                            config.clone(),
+                        ))
+                    }
                 };
                 let raw_entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
                     match &level_config.chunk {
-                        ChunkConfig::Linear(config) => Arc::new(ChunkFileManager::<
-                            LinearV2File<ChunkEntityData>,
-                        >::new(config.clone())),
-                        ChunkConfig::Anvil(config) => Arc::new(ChunkFileManager::<
-                            AnvilChunkFile<ChunkEntityData>,
-                        >::new(
-                            config.clone()
-                        )),
+                        ChunkConfig::Linear(config) => {
+                            Arc::new(ChunkFileManager::<LinearV2File<ChunkEntityData>>::new(
+                                config.clone(),
+                            ))
+                        }
+                        ChunkConfig::Anvil(config) => {
+                            Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkEntityData>>::new(
+                                config.clone(),
+                            ))
+                        }
                     };
                 (
-                    Arc::new(FolderBoundFileIO::new(raw_chunk_saver, level_folder.clone())),
+                    Arc::new(FolderBoundFileIO::new(
+                        raw_chunk_saver,
+                        level_folder.clone(),
+                    )),
                     Arc::new(FolderBoundFileIO::new(
                         raw_entity_saver,
                         level_folder.clone(),
@@ -401,9 +408,7 @@ impl Level {
                 .or_insert(1);
         }
 
-        self.entity_saver
-            .watch_chunks(chunks)
-            .await;
+        self.entity_saver.watch_chunks(chunks).await;
     }
 
     /// Marks chunks no longer "watched" by a unique player. When no players are watching a chunk,
@@ -421,9 +426,7 @@ impl Level {
             }
         }
 
-        self.entity_saver
-            .unwatch_chunks(chunks)
-            .await;
+        self.entity_saver.unwatch_chunks(chunks).await;
         chunks_to_clean
     }
 

@@ -3,13 +3,13 @@ use super::generation_cache::Cache;
 use super::{ChunkPos, IOLock};
 use crate::ProtoChunk;
 use crate::chunk::format::LightContainer;
-use pumpkin_storage::chunk::{LoadedData, LoadedData::Loaded};
 use crate::level::Level;
 use crossfire::compat::AsyncRx;
 use itertools::Itertools;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
+use pumpkin_storage::chunk::{LoadedData, LoadedData::Loaded};
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
@@ -77,10 +77,7 @@ pub async fn io_read_work(
             });
         }
 
-        level
-            .chunk_saver
-            .fetch_chunks(&batch, t_send.clone())
-            .await;
+        level.chunk_saver.fetch_chunks(&batch, t_send.clone()).await;
 
         for _ in 0..batch.len() {
             let data = match t_recv.recv().await {

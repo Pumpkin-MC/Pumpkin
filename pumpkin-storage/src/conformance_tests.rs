@@ -20,17 +20,20 @@ use crate::banned_ip::BannedIpStorage;
 use crate::banned_player::BannedPlayerStorage;
 use crate::chunk::{ChunkStorage, LoadedData};
 use crate::error::StorageError;
+use crate::level_info::{LevelData, LevelInfoStorage};
 use crate::memory::MemoryChunkStorage;
 use crate::op::OpStorage;
+use crate::player_data::PlayerDataStorage;
 use crate::poi::{POI_TYPE_NETHER_PORTAL, PoiStorage};
 use crate::user_cache::UserCacheStorage;
 use crate::whitelist::WhitelistStorage;
-use crate::level_info::{LevelData, LevelInfoStorage};
-use crate::player_data::PlayerDataStorage;
 use crate::{MemoryStorage, NullStorage, VanillaStorage};
 
 async fn level_info_round_trip(store: &dyn LevelInfoStorage) {
-    let err = store.load().await.expect_err("empty store must report not found");
+    let err = store
+        .load()
+        .await
+        .expect_err("empty store must report not found");
     assert!(err.is_not_found(), "unexpected error: {err}");
 
     let mut data = LevelData::default(Seed(42));
@@ -137,11 +140,21 @@ async fn player_data_round_trip_vanilla() {
 async fn player_data_null_always_empty() {
     let store = NullStorage::new();
     let uuid = Uuid::from_u128(1);
-    assert!(PlayerDataStorage::load(&store, uuid).await.unwrap_err().is_not_found());
+    assert!(
+        PlayerDataStorage::load(&store, uuid)
+            .await
+            .unwrap_err()
+            .is_not_found()
+    );
     PlayerDataStorage::save(&store, uuid, &PNbtCompound::new())
         .await
         .unwrap();
-    assert!(PlayerDataStorage::load(&store, uuid).await.unwrap_err().is_not_found());
+    assert!(
+        PlayerDataStorage::load(&store, uuid)
+            .await
+            .unwrap_err()
+            .is_not_found()
+    );
     assert!(PlayerDataStorage::list(&store).await.unwrap().is_empty());
 }
 
@@ -153,13 +166,7 @@ async fn banned_player_round_trip(store: &dyn BannedPlayerStorage) {
     assert!(!store.is_banned(uuid).await.unwrap());
 
     store
-        .ban(
-            uuid,
-            "Alice",
-            "Admin".to_string(),
-            None,
-            "spam".to_string(),
-        )
+        .ban(uuid, "Alice", "Admin".to_string(), None, "spam".to_string())
         .await
         .unwrap();
 
@@ -171,13 +178,7 @@ async fn banned_player_round_trip(store: &dyn BannedPlayerStorage) {
 
     // Re-banning replaces the existing entry.
     store
-        .ban(
-            uuid,
-            "Alice",
-            "Mod".to_string(),
-            None,
-            "grief".to_string(),
-        )
+        .ban(uuid, "Alice", "Mod".to_string(), None, "grief".to_string())
         .await
         .unwrap();
     let entry = store.get(uuid).await.unwrap().unwrap();

@@ -24,15 +24,11 @@ use pumpkin_world::dimension::into_level;
 use tracing::{debug, error, info, warn};
 
 use crate::command::CommandSender;
+use pumpkin_config::storage::StorageConfig;
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
-use pumpkin_util::Difficulty;
-use pumpkin_util::text::TextComponent;
-use pumpkin_world::lock::{LevelLocker, LockGuard};
-use pumpkin_world::lock::anvil::AnvilLevelLocker;
-use pumpkin_config::storage::StorageConfig;
 use pumpkin_storage::banned_ip::BannedIpStorage;
 use pumpkin_storage::banned_player::BannedPlayerStorage;
 use pumpkin_storage::level_info::{LevelData, LevelInfoStorage};
@@ -41,6 +37,10 @@ use pumpkin_storage::player_data::PlayerDataStorage;
 use pumpkin_storage::user_cache::UserCacheStorage;
 use pumpkin_storage::whitelist::WhitelistStorage;
 use pumpkin_storage::{MemoryStorage, NullStorage, StorageError, VanillaStorage};
+use pumpkin_util::Difficulty;
+use pumpkin_util::text::TextComponent;
+use pumpkin_world::lock::anvil::AnvilLevelLocker;
+use pumpkin_world::lock::{LevelLocker, LockGuard};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
@@ -216,20 +216,22 @@ impl Server {
         }
         // The on-disk session lock is meaningful only for the file-backed
         // backend; in-memory servers have no shared state to guard.
-        let locker: Option<Box<dyn LockGuard>> =
-            if matches!(&advanced_config.storage, StorageConfig::Vanilla(_)) {
-                match AnvilLevelLocker::lock(&world_path) {
-                    Ok(l) => Some(Box::new(l)),
-                    Err(err) => {
-                        warn!(
-                            "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
-                        );
-                        None
-                    }
+        let locker: Option<Box<dyn LockGuard>> = if matches!(
+            &advanced_config.storage,
+            StorageConfig::Vanilla(_)
+        ) {
+            match AnvilLevelLocker::lock(&world_path) {
+                Ok(l) => Some(Box::new(l)),
+                Err(err) => {
+                    warn!(
+                        "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
+                    );
+                    None
                 }
-            } else {
-                None
-            };
+            }
+        } else {
+            None
+        };
 
         let level_info = level_info.unwrap_or_else(|err| {
             warn!("Failed to get level_info, using default instead: {err}");
@@ -439,18 +441,28 @@ impl Server {
     ) -> Option<(Arc<Player>, Arc<World>)> {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
-        let (world, nbt) = if let Ok(Some(mut data)) =
-            self.player_data_storage.load_data(profile.id).await
-        {
-            let _version = data.get_int().unwrap_or(0);
-            if let Ok(dimension_key) = data.get_string() {
-                if let Some(dimension) = Dimension::from_name(&dimension_key) {
-                    let world = self.get_world_from_dimension(dimension);
-                    // Reset read position so player.read_nbt can read everything from start
-                    data.read_pos = 0;
-                    (world, Some(data))
+        let (world, nbt) =
+            if let Ok(Some(mut data)) = self.player_data_storage.load_data(profile.id).await {
+                let _version = data.get_int().unwrap_or(0);
+                if let Ok(dimension_key) = data.get_string() {
+                    if let Some(dimension) = Dimension::from_name(&dimension_key) {
+                        let world = self.get_world_from_dimension(dimension);
+                        // Reset read position so player.read_nbt can read everything from start
+                        data.read_pos = 0;
+                        (world, Some(data))
+                    } else {
+                        warn!("Invalid dimension key in player data: {dimension_key}");
+                        let default_world = self
+                            .worlds
+                            .load()
+                            .first()
+                            .expect("Default world should exist")
+                            .clone();
+                        data.read_pos = 0;
+                        (default_world, Some(data))
+                    }
                 } else {
-                    warn!("Invalid dimension key in player data: {dimension_key}");
+                    // Player data exists but doesn't have a dimension entry.
                     let default_world = self
                         .worlds
                         .load()
@@ -461,26 +473,15 @@ impl Server {
                     (default_world, Some(data))
                 }
             } else {
-                // Player data exists but doesn't have a dimension entry.
+                // No player data found or an error occurred, default to the Overworld.
                 let default_world = self
                     .worlds
                     .load()
                     .first()
                     .expect("Default world should exist")
                     .clone();
-                data.read_pos = 0;
-                (default_world, Some(data))
-            }
-        } else {
-            // No player data found or an error occurred, default to the Overworld.
-            let default_world = self
-                .worlds
-                .load()
-                .first()
-                .expect("Default world should exist")
-                .clone();
-            (default_world, None)
-        };
+                (default_world, None)
+            };
 
         let mut player = Player::new(
             client,

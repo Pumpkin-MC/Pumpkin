@@ -40,10 +40,7 @@ impl BannedPlayerStorage for MemoryStorage {
     }
 
     async fn unban(&self, uuid: Uuid) -> Result<(), StorageError> {
-        self.banned_players
-            .write()
-            .await
-            .retain(|e| e.uuid != uuid);
+        self.banned_players.write().await.retain(|e| e.uuid != uuid);
         Ok(())
     }
 

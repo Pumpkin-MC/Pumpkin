@@ -161,9 +161,9 @@ impl CommandExecutor for ReloadExecutor {
     ) -> CommandResult<'a> {
         Box::pin(async move {
             if let Err(e) = server.whitelist_storage.reload().await {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    format!("Failed to reload whitelist: {e}"),
-                )));
+                return Err(CommandError::CommandFailed(TextComponent::text(format!(
+                    "Failed to reload whitelist: {e}"
+                ))));
             }
             kick_non_whitelisted_players(server).await;
             sender

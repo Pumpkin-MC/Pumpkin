@@ -42,7 +42,12 @@ impl OpStorage for VanillaStorage {
         let mut guard = self.ops_load_locked().await?;
         let entries = guard.as_mut().expect("loaded");
         entries.retain(|e| e.uuid != uuid);
-        entries.push(Op::new(uuid, name.to_string(), level, bypasses_player_limit));
+        entries.push(Op::new(
+            uuid,
+            name.to_string(),
+            level,
+            bypasses_player_limit,
+        ));
         let snapshot = entries.clone();
         drop(guard);
         save_json_list(&self.ops_path(), &snapshot).await

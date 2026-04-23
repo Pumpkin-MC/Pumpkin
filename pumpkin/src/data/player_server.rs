@@ -95,10 +95,7 @@ impl ServerPlayerData {
     /// Loads player data, returning `Ok(None)` when none is stored (fresh
     /// player). Other errors are logged and treated as missing data so a
     /// corrupt file cannot block login.
-    pub async fn load_data(
-        &self,
-        uuid: uuid::Uuid,
-    ) -> Result<Option<PNbtCompound>, StorageError> {
+    pub async fn load_data(&self, uuid: uuid::Uuid) -> Result<Option<PNbtCompound>, StorageError> {
         match self.storage.load(uuid).await {
             Ok(nbt) => Ok(Some(nbt)),
             Err(e) if e.is_not_found() => Ok(None),
@@ -110,10 +107,7 @@ impl ServerPlayerData {
     }
 
     /// Builds and saves NBT for the given player.
-    pub async fn extract_data_and_save_player(
-        &self,
-        player: &Player,
-    ) -> Result<(), StorageError> {
+    pub async fn extract_data_and_save_player(&self, player: &Player) -> Result<(), StorageError> {
         let mut nbt = PNbtCompound::new();
         player.write_nbt(&mut nbt).await;
         self.storage.save(player.gameprofile.id, &nbt).await

@@ -166,8 +166,8 @@ async fn save_snapshot(path: &Path, snapshot: Vec<InternalEntry>) -> Result<(), 
                 .expect("Rfc3339 format is infallible for OffsetDateTime"),
         })
         .collect();
-    let content = serde_json::to_string(&to_save)
-        .map_err(|e| StorageError::Serialize(e.to_string()))?;
+    let content =
+        serde_json::to_string(&to_save).map_err(|e| StorageError::Serialize(e.to_string()))?;
     fs::write(path, content)
         .await
         .map_err(|e| StorageError::io_at(path, e))?;

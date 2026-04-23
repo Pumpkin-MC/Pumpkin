@@ -36,12 +36,7 @@ impl CommandExecutor for Executor {
                 .min(sender.permission_lvl());
 
             for profile in targets {
-                let existing = server
-                    .op_storage
-                    .get(profile.id)
-                    .await
-                    .ok()
-                    .flatten();
+                let existing = server.op_storage.get(profile.id).await.ok().flatten();
 
                 if let Some(op) = &existing
                     && op.level == new_level

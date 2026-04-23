@@ -40,10 +40,7 @@ impl StorageError {
 
     /// Wraps an I/O error with no associated path.
     pub fn io(source: std::io::Error) -> Self {
-        Self::Io {
-            path: None,
-            source,
-        }
+        Self::Io { path: None, source }
     }
 
     /// Wraps an I/O error tagged with the path that caused it.

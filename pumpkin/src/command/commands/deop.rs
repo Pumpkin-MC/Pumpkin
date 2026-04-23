@@ -31,12 +31,7 @@ impl CommandExecutor for Executor {
 
             let mut succeeded_deops: i32 = 0;
             for profile in targets {
-                if !server
-                    .op_storage
-                    .is_op(profile.id)
-                    .await
-                    .unwrap_or(false)
-                {
+                if !server.op_storage.is_op(profile.id).await.unwrap_or(false) {
                     continue;
                 }
                 if let Err(e) = server.op_storage.deop(profile.id).await {

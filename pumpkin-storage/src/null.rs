@@ -88,10 +88,7 @@ impl<T: Send + Sync + 'static> ChunkStorage<T> for NullStorage {
         }
     }
 
-    async fn save_chunks(
-        &self,
-        _chunks: Vec<(Vector2<i32>, T)>,
-    ) -> Result<(), StorageError> {
+    async fn save_chunks(&self, _chunks: Vec<(Vector2<i32>, T)>) -> Result<(), StorageError> {
         Ok(())
     }
 

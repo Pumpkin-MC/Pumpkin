@@ -47,10 +47,7 @@ impl<T: Clone + Send + Sync + 'static> ChunkStorage<T> for MemoryChunkStorage<T>
         }
     }
 
-    async fn save_chunks(
-        &self,
-        chunks: Vec<(Vector2<i32>, T)>,
-    ) -> Result<(), StorageError> {
+    async fn save_chunks(&self, chunks: Vec<(Vector2<i32>, T)>) -> Result<(), StorageError> {
         let mut guard = self.data.write().await;
         for (pos, data) in chunks {
             guard.insert(pos, data);

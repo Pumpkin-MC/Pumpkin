@@ -242,8 +242,7 @@ mod tests {
         let mut decoder = GzDecoder::new(&raw_compressed_nbt[..]);
         let mut buf = Vec::new();
         decoder.read_to_end(&mut buf).unwrap();
-        let level_dat: LevelDat =
-            from_bytes(Cursor::new(buf)).expect("Failed to decode from file");
+        let level_dat: LevelDat = from_bytes(Cursor::new(buf)).expect("Failed to decode from file");
 
         assert_eq!(level_dat, *LEVEL_DAT);
     }

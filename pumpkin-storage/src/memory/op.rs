@@ -20,7 +20,12 @@ impl OpStorage for MemoryStorage {
     ) -> Result<(), StorageError> {
         let mut guard = self.ops.write().await;
         guard.retain(|e| e.uuid != uuid);
-        guard.push(Op::new(uuid, name.to_string(), level, bypasses_player_limit));
+        guard.push(Op::new(
+            uuid,
+            name.to_string(),
+            level,
+            bypasses_player_limit,
+        ));
         Ok(())
     }
 

@@ -242,10 +242,7 @@ async fn resolve_profiles_from_token(
             &server.advanced_config.networking.authentication,
         ) {
             Ok(Some((uuid, resolved_name))) => {
-                let _ = server
-                    .user_cache_storage
-                    .upsert(uuid, &resolved_name)
-                    .await;
+                let _ = server.user_cache_storage.upsert(uuid, &resolved_name).await;
                 return Ok(vec![profile_from_uuid_name(uuid, resolved_name)]);
             }
             Ok(None) | Err(_) => return Err(syntax_player_unknown(raw_arg)),

@@ -49,11 +49,7 @@ impl<T: Send + Sync + 'static> FolderBoundFileIO<T> {
 
 #[async_trait]
 impl<T: Send + Sync + 'static> ChunkStorage<T> for FolderBoundFileIO<T> {
-    async fn fetch_chunks(
-        &self,
-        chunk_coords: &[Vector2<i32>],
-        out: mpsc::Sender<LoadedData<T>>,
-    ) {
+    async fn fetch_chunks(&self, chunk_coords: &[Vector2<i32>], out: mpsc::Sender<LoadedData<T>>) {
         let (old_tx, mut old_rx) = mpsc::channel(chunk_coords.len().max(1));
 
         let fetch = self.inner.fetch_chunks(&self.folder, chunk_coords, old_tx);
@@ -75,10 +71,7 @@ impl<T: Send + Sync + 'static> ChunkStorage<T> for FolderBoundFileIO<T> {
         tokio::join!(fetch, forward);
     }
 
-    async fn save_chunks(
-        &self,
-        chunks: Vec<(Vector2<i32>, T)>,
-    ) -> Result<(), StorageError> {
+    async fn save_chunks(&self, chunks: Vec<(Vector2<i32>, T)>) -> Result<(), StorageError> {
         self.inner
             .save_chunks(&self.folder, chunks)
             .await
