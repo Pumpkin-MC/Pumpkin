@@ -17,15 +17,29 @@ impl Ticker {
 
             manager.tick();
 
-            if manager.is_sprinting() {
-                manager.start_sprint_tick_work();
-                server.tick().await;
+            let tick_body = async {
+                if manager.is_sprinting() {
+                    manager.start_sprint_tick_work();
+                    server.tick().await;
 
-                if manager.end_sprint_tick_work() {
-                    manager.finish_tick_sprint(server).await;
+                    if manager.end_sprint_tick_work() {
+                        manager.finish_tick_sprint(server).await;
+                    }
+                } else {
+                    server.tick().await;
                 }
-            } else {
-                server.tick().await;
+            };
+
+            // Make the in-flight tick cancellable at shutdown. Without this,
+            // a hung await inside `server.tick()` (e.g. left-over state
+            // after a player disconnects) keeps the Ticker task alive and
+            // blocks `server.tasks.wait()` in `Server::shutdown`.
+            tokio::select! {
+                biased;
+                () = STOP_INTERRUPT.cancelled() => {
+                    break 'ticker;
+                }
+                () = tick_body => {}
             }
 
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;
