@@ -59,6 +59,7 @@ pub mod ticker;
 use crate::command::args::entities::{
     EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
 };
+use crate::data::advancement_data::AdvancementManager;
 use crate::server::scheduler::TaskScheduler;
 
 /// Represents a Minecraft server instance.
@@ -103,6 +104,8 @@ pub struct Server {
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
+    // Manages player advancement
+    pub advancement_manager: AdvancementManager,
     // Whether the server whitelist is on or off
     pub white_list: AtomicBool,
     /// Manages the server's tick rate, freezing, and sprinting
@@ -194,7 +197,7 @@ impl Server {
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
             advanced_config.player_data.save_player_data,
         );
-        let advancement_data_storage = AdvancementManager::new(
+        let advancement_manager = AdvancementManager::new(
             world_path.join("advancement"),
         );
         let white_list = AtomicBool::new(basic_config.white_list);
@@ -241,6 +244,7 @@ impl Server {
             bossbars: Mutex::new(CustomBossbars::new()),
             defaultgamemode,
             player_data_storage,
+            advancement_manager,
             white_list,
             tick_rate_manager,
             tick_times_nanos: Mutex::new([0; 100]),

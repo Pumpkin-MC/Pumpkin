@@ -1,0 +1,23 @@
+use std::path::PathBuf;
+use pumpkin_data::Advancement;
+use crate::entity::player::advancement::PlayerAdvancement;
+
+pub struct AdvancementManager{
+    advancement_path:PathBuf,
+}
+
+impl AdvancementManager {
+    pub fn new(player_data_path:PathBuf) -> Self {
+        AdvancementManager{
+            advancement_path:player_data_path.join("advancements"),
+        }
+    }
+
+    pub fn get_advancement_path(&self) -> PathBuf {
+        self.advancement_path.clone()
+    }
+
+    pub fn get_advancement(&self) -> PlayerAdvancement {
+        PlayerAdvancement::new(true,self.get_advancement_path())
+    }
+}

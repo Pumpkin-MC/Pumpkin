@@ -512,7 +512,6 @@ impl Player {
         // Initialize abilities based on gamemode (like vanilla's GameMode.setAbilities())
         let mut abilities = Abilities::default();
         abilities.set_for_gamemode(gamemode);
-        let advancement = PlayerAdvancement::new(true,path,);
 
         Self {
             living_entity,
@@ -601,7 +600,7 @@ impl Player {
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(true),
-            advancements: Arc::new(Mutex::new(server.player_data_storage.get_advancement())),
+            advancements: Arc::new(Mutex::new(server.advancement_manager.get_advancement())),
         }
     }
 

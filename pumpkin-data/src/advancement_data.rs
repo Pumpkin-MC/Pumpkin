@@ -8,6 +8,7 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use crate::Advancement;
 
+#[derive(Clone)]
 pub struct AdvancementDisplay {
     pub title: &'static str,
     pub description: &'static str,
@@ -93,14 +94,8 @@ impl FrameType {
 }
 
 pub struct AdvancementReward {
-    pub experience: u32,
+    pub experience: i32,
     pub recipes: &'static [ItemRecipe],
-}
-
-impl AdvancementReward {
-
-    pub fn grant()
-
 }
 
 pub trait Criterion {}

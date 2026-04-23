@@ -1,19 +1,19 @@
-use std::sync::Arc;
 use crate::command::argument_builder::{argument, command, literal, ArgumentBuilder};
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::argument_types::resource_key::{ResourceKeyArgument, ADVANCEMENT_REGISTRY};
 use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::CommandSource;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::{AnyCommandErrorType, CommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::entity::player::Player;
+use crate::entity::EntityBase;
 use pumpkin_data::{translation, Advancement};
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
-use pumpkin_util::PermissionLvl;
 use pumpkin_util::text::TextComponent;
-use crate::command::context::command_source::CommandSource;
-use crate::command::errors::command_syntax_error::{CommandSyntaxError, ContextProvider};
-use crate::command::errors::error_types::{AnyCommandErrorType, CommandErrorType, DirectCommandErrorType, TemplateText};
-use crate::entity::EntityBase;
-use crate::entity::player::Player;
+use pumpkin_util::PermissionLvl;
+use std::sync::Arc;
 
 const NAME: &str = "advancement";
 const DESCRIPTION: &str = "manage advancement of the player";
@@ -41,43 +41,44 @@ enum Action {
 }
 
 impl Action {
-    fn perform(&self, player: &Arc<Player>, advancements: &Vec<&Advancement>,grant_everything: bool) -> i32 {
+    async fn perform(&self, player: &Arc<Player>, advancements: &Vec<&'static Advancement>,grant_everything: bool) -> i32 {
         let mut count = 0;
 
         if !grant_everything {
-            player.advancements.flush_dirty(true);
+            player.advancements.lock().await.flush_dirty(true);
         }
 
         for advancement in advancements {
-            if self.perform_single(player, &advancement) {
+            if self.perform_single(player, advancement).await {
                 count += 1;
             }
         }
 
         if !grant_everything {
-            player.advancements.flush_dirty(false);
+            player.advancements.lock().await.flush_dirty(false);
         }
         count
     }
 
-    fn perform_single(&self, player: &Arc<Player>, advancement: &Advancement) -> bool {
+    async fn perform_single(&self, player: &Arc<Player>, advancement: &'static Advancement) -> bool {
+        let mut guard = player.advancements.lock().await;
         match self {
             Action::Grant => {
-                let progress = player.advancements.get_or_start_progress(advancement);
+                let progress = guard.get_or_start_progress(advancement);
                 if progress.is_done() {
                     false
                 } else {
-                    player.advancements.award(advancement);
+                    guard.award(advancement).await;
                     true
                 }
             }
 
             Action::Revoke => {
-                let progress = player.advancements.get_or_start_progress(advancement);
+                let progress = guard.get_or_start_progress(advancement);
                 if !progress.has_progress() {
                     false
                 } else {
-                    player.advancements.revoke(advancement);
+                    guard.revoke(advancement);
                     true
                 }
             }
@@ -136,14 +137,14 @@ fn get_advancement<'a>(_context : &CommandContext, advancement :&'a Advancement,
     result
 }
 
-async fn perform_everything(context: Arc<CommandSource>, players: Vec<Arc<Player>>, action: Action, advancements : Vec<&Advancement>)->Result<i32,CommandSyntaxError>{
+async fn perform_everything(context: Arc<CommandSource>, players: Vec<Arc<Player>>, action: Action, advancements : Vec<&'static Advancement>)->Result<i32,CommandSyntaxError>{
     perform(context,players,action,advancements,true).await
 }
 
-async fn perform(context: Arc<CommandSource>, targets: Vec<Arc<Player>>, action: Action, advancements : Vec<&Advancement>, grant_everything:bool) -> Result<i32,CommandSyntaxError> {
+async fn perform(context: Arc<CommandSource>, targets: Vec<Arc<Player>>, action: Action, advancements : Vec<&'static Advancement>, grant_everything:bool) -> Result<i32,CommandSyntaxError> {
     let mut i = 0;
     for player in &targets {
-        i += action.perform(player, &advancements, grant_everything);
+        i += action.perform(player, &advancements, grant_everything).await;
     }
     if i == 0 {
         return if let [first_advancement] = advancements[..] {

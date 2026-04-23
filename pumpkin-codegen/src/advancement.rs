@@ -1,14 +1,11 @@
 use std::{collections::BTreeMap, fs};
-
+use std::hash::{Hash, Hasher};
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::TextContent::{Text, Translate};
-use pumpkin_util::text::color::{Color, NamedColor};
-use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::style::Style;
-use quote::{ToTokens, format_ident, quote};
+use pumpkin_util::text::TextContent::Translate;
+use quote::{format_ident, quote, ToTokens};
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Deserialize, Default)]
@@ -125,7 +122,7 @@ impl ToTokens for FrameTypeStruct {
 #[derive(Deserialize, Default)]
 pub struct AdvancementRewards {
     #[serde(default)]
-    experience: u32,
+    experience: i32,
     //loot: Vec<ResourceLocation> TODO,
     #[serde(default)]
     recipes: Vec<ResourceLocation>,
@@ -192,8 +189,8 @@ pub(crate) fn build() -> TokenStream {
             style::Style,
             hover::HoverEvent,
             color::Color};
+        use std::hash::{Hash,Hasher};
 
-        #[derive(Debug,Hash,PartialEq,Eq,PartialOrd,Ord)]
         pub struct Advancement {
             pub id : &'static str,
             pub parent : Option<&'static str>,
@@ -201,6 +198,20 @@ pub(crate) fn build() -> TokenStream {
             pub display : Option<&'static AdvancementDisplay>,
             pub reward : &'static AdvancementReward,
         }
+
+        impl Hash for Advancement {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.id.hash(state);
+            }
+        }
+
+        impl PartialEq<Self> for Advancement {
+            fn eq(&self, other: &Self) -> bool {
+                other.id.eq(self.id)
+            }
+        }
+
+        impl Eq for Advancement {}
 
         impl Advancement {
             #variants

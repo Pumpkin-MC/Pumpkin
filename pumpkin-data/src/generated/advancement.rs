@@ -4,8 +4,8 @@ use crate::item::Item;
 use crate::item_stack::ItemStack;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::{color::Color, color::NamedColor, hover::HoverEvent, style::Style};
+use std::hash::{Hash, Hasher};
 use std::sync::LazyLock;
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Advancement {
     pub id: &'static str,
     pub parent: Option<&'static str>,
@@ -13,6 +13,17 @@ pub struct Advancement {
     pub display: Option<&'static AdvancementDisplay>,
     pub reward: &'static AdvancementReward,
 }
+impl Hash for Advancement {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+impl PartialEq<Self> for Advancement {
+    fn eq(&self, other: &Self) -> bool {
+        other.id.eq(self.id)
+    }
+}
+impl Eq for Advancement {}
 impl Advancement {
     pub const ADVENTURE_ADVENTURING_TIME: &Self = &Self {
         id: "adventure/adventuring_time",
@@ -29,7 +40,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 500u32,
+            experience: 500i32,
             recipes: &[],
         },
     };
@@ -48,7 +59,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 85u32,
+            experience: 85i32,
             recipes: &[],
         },
     };
@@ -67,7 +78,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -86,7 +97,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 40u32,
+            experience: 40i32,
             recipes: &[],
         },
     };
@@ -105,7 +116,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -124,7 +135,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 50u32,
+            experience: 50i32,
             recipes: &[],
         },
     };
@@ -143,7 +154,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -162,7 +173,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -181,7 +192,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -200,7 +211,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -219,7 +230,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -238,7 +249,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -257,7 +268,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -276,7 +287,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -295,7 +306,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -314,7 +325,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -333,7 +344,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -352,7 +363,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -371,7 +382,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -390,7 +401,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 50u32,
+            experience: 50i32,
             recipes: &[],
         },
     };
@@ -409,7 +420,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -428,7 +439,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -447,7 +458,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -466,7 +477,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -485,7 +496,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -504,7 +515,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -523,7 +534,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -542,7 +553,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 50u32,
+            experience: 50i32,
             recipes: &[],
         },
     };
@@ -561,7 +572,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -580,7 +591,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -599,7 +610,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -618,7 +629,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -637,7 +648,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -656,7 +667,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -675,7 +686,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -694,7 +705,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -713,7 +724,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -732,7 +743,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 150u32,
+            experience: 150i32,
             recipes: &[],
         },
     };
@@ -751,7 +762,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -770,7 +781,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 65u32,
+            experience: 65i32,
             recipes: &[],
         },
     };
@@ -789,7 +800,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -808,7 +819,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -827,7 +838,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -846,7 +857,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -865,7 +876,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -884,7 +895,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -903,7 +914,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -922,7 +933,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -941,7 +952,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -960,7 +971,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -979,7 +990,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -998,7 +1009,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1017,7 +1028,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1036,7 +1047,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 50u32,
+            experience: 50i32,
             recipes: &[],
         },
     };
@@ -1055,7 +1066,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1074,7 +1085,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1093,7 +1104,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1112,7 +1123,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1131,7 +1142,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1150,7 +1161,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -1169,7 +1180,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -1188,7 +1199,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1207,7 +1218,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 50u32,
+            experience: 50i32,
             recipes: &[],
         },
     };
@@ -1226,7 +1237,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1245,7 +1256,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1264,7 +1275,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1283,7 +1294,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1302,7 +1313,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1321,7 +1332,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1340,7 +1351,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -1359,7 +1370,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1378,7 +1389,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1397,7 +1408,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1416,7 +1427,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1435,7 +1446,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1454,7 +1465,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1473,7 +1484,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1492,7 +1503,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1511,7 +1522,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1530,7 +1541,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1549,7 +1560,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1568,7 +1579,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1587,7 +1598,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1606,7 +1617,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1625,7 +1636,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1644,7 +1655,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 50u32,
+            experience: 50i32,
             recipes: &[],
         },
     };
@@ -1663,7 +1674,7 @@ impl Advancement {
             true,
         )),
         reward: &AdvancementReward {
-            experience: 1000u32,
+            experience: 1000i32,
             recipes: &[],
         },
     };
@@ -1682,7 +1693,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -1701,7 +1712,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1720,7 +1731,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1739,7 +1750,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1758,7 +1769,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1777,7 +1788,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1796,7 +1807,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 500u32,
+            experience: 500i32,
             recipes: &[],
         },
     };
@@ -1815,7 +1826,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -1834,7 +1845,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1853,7 +1864,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1872,7 +1883,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1891,7 +1902,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1910,7 +1921,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -1929,7 +1940,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1948,7 +1959,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1967,7 +1978,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -1986,7 +1997,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 50u32,
+            experience: 50i32,
             recipes: &[],
         },
     };
@@ -2005,7 +2016,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2024,7 +2035,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2043,7 +2054,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2062,7 +2073,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2081,7 +2092,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 100u32,
+            experience: 100i32,
             recipes: &[],
         },
     };
@@ -2091,7 +2102,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2101,7 +2112,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2111,7 +2122,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2121,7 +2132,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2131,7 +2142,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2141,7 +2152,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2151,7 +2162,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2161,7 +2172,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2171,7 +2182,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2181,7 +2192,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2191,7 +2202,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2201,7 +2212,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2211,7 +2222,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2221,7 +2232,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2231,7 +2242,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2241,7 +2252,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2251,7 +2262,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2261,7 +2272,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2271,7 +2282,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2281,7 +2292,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2291,7 +2302,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2301,7 +2312,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2311,7 +2322,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2321,7 +2332,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2331,7 +2342,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2341,7 +2352,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2351,7 +2362,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2361,7 +2372,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2371,7 +2382,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2381,7 +2392,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2391,7 +2402,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2401,7 +2412,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2411,7 +2422,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2421,7 +2432,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2432,7 +2443,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2442,7 +2453,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2452,7 +2463,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2462,7 +2473,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2472,7 +2483,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2482,7 +2493,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2492,7 +2503,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2502,7 +2513,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2512,7 +2523,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2522,7 +2533,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2532,7 +2543,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2542,7 +2553,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2552,7 +2563,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2562,7 +2573,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2572,7 +2583,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2582,7 +2593,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2592,7 +2603,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2602,7 +2613,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2612,7 +2623,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2622,7 +2633,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2632,7 +2643,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2643,7 +2654,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2653,7 +2664,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2663,7 +2674,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2674,7 +2685,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2684,7 +2695,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2695,7 +2706,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2705,7 +2716,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2716,18 +2727,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_CHISELED_POLISHED_BLACKSTONE_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/chiseled_polished_blackstone_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_CHISELED_POLISHED_BLACKSTONE_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/chiseled_polished_blackstone_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_CHISELED_QUARTZ_BLOCK: &Self = &Self {
         id: "recipes/building_blocks/chiseled_quartz_block",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2738,7 +2749,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2748,7 +2759,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2759,7 +2770,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2769,7 +2780,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2780,7 +2791,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2790,7 +2801,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2801,7 +2812,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2811,7 +2822,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2822,7 +2833,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2833,7 +2844,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2843,7 +2854,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2853,7 +2864,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2864,7 +2875,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2875,7 +2886,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2885,7 +2896,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2895,7 +2906,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2905,7 +2916,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2915,7 +2926,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2925,7 +2936,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2935,7 +2946,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2946,7 +2957,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2956,18 +2967,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/cobbled_deepslate_stairs_from_cobbled_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_COBBLED_DEEPSLATE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/cobbled_deepslate_stairs_from_cobbled_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_COBBLESTONE_SLAB: &Self = &Self {
         id: "recipes/building_blocks/cobblestone_slab",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2978,7 +2989,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -2988,7 +2999,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -2999,7 +3010,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3009,7 +3020,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3019,7 +3030,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3029,7 +3040,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3039,7 +3050,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3049,7 +3060,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3059,7 +3070,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3069,7 +3080,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3079,7 +3090,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3089,7 +3100,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3099,7 +3110,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3109,7 +3120,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3119,7 +3130,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3129,7 +3140,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3139,7 +3150,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3149,7 +3160,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3160,7 +3171,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3170,7 +3181,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3180,7 +3191,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3191,7 +3202,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3202,7 +3213,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3212,7 +3223,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3223,7 +3234,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3233,7 +3244,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3244,7 +3255,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3255,7 +3266,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3265,7 +3276,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3275,7 +3286,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3285,7 +3296,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3296,7 +3307,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3307,7 +3318,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3317,7 +3328,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3327,7 +3338,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3337,7 +3348,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3347,7 +3358,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3357,7 +3368,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3367,7 +3378,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3377,7 +3388,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3387,7 +3398,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3397,7 +3408,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3408,7 +3419,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3418,7 +3429,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3429,7 +3440,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3439,7 +3450,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3449,7 +3460,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3460,7 +3471,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3471,7 +3482,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3482,7 +3493,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3492,7 +3503,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3503,7 +3514,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3514,18 +3525,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/deepslate_brick_stairs_from_polished_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICK_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/deepslate_brick_stairs_from_polished_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_DEEPSLATE_BRICKS: &Self = &Self {
         id: "recipes/building_blocks/deepslate_bricks",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3536,7 +3547,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3547,7 +3558,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3557,7 +3568,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3568,7 +3579,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3579,7 +3590,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3590,7 +3601,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3601,7 +3612,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3611,7 +3622,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3622,7 +3633,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3633,7 +3644,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3644,7 +3655,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3655,7 +3666,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3665,7 +3676,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3676,7 +3687,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3687,7 +3698,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3698,7 +3709,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -3708,7 +3719,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3718,7 +3729,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3728,7 +3739,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3738,7 +3749,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3748,7 +3759,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3758,7 +3769,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3768,7 +3779,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3778,7 +3789,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3788,7 +3799,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3798,7 +3809,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3808,7 +3819,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3818,7 +3829,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3828,7 +3839,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3838,7 +3849,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3848,7 +3859,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3858,7 +3869,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3868,7 +3879,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3878,7 +3889,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3888,7 +3899,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3898,7 +3909,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3908,7 +3919,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3918,7 +3929,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3928,7 +3939,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3938,7 +3949,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3948,7 +3959,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3958,7 +3969,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3968,7 +3979,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3979,7 +3990,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -3990,7 +4001,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -4000,7 +4011,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4011,7 +4022,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4022,7 +4033,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -4032,7 +4043,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4042,7 +4053,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4052,7 +4063,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4063,18 +4074,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CHISELED_COPPER_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/exposed_chiseled_copper_from_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CHISELED_COPPER_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/exposed_chiseled_copper_from_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_COPPER_GRATE: &Self = &Self {
         id: "recipes/building_blocks/exposed_copper_grate",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4085,7 +4096,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -4095,7 +4106,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4106,7 +4117,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -4116,7 +4127,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4127,18 +4138,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_SLAB_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/exposed_cut_copper_slab_from_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_SLAB_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/exposed_cut_copper_slab_from_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/exposed_cut_copper_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4149,18 +4160,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_STAIRS_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/exposed_cut_copper_stairs_from_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_EXPOSED_CUT_COPPER_STAIRS_FROM_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/exposed_cut_copper_stairs_from_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_GLASS: &Self = &Self {
         id: "recipes/building_blocks/glass",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4170,7 +4181,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4180,7 +4191,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4190,7 +4201,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4200,7 +4211,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4210,7 +4221,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4220,7 +4231,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4230,7 +4241,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4240,7 +4251,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4250,7 +4261,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4260,7 +4271,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4270,7 +4281,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4280,7 +4291,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4290,7 +4301,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4300,7 +4311,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4310,7 +4321,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4320,7 +4331,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4330,7 +4341,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4340,7 +4351,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4350,7 +4361,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4360,7 +4371,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4370,7 +4381,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4380,7 +4391,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4390,7 +4401,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4400,7 +4411,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4410,7 +4421,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4420,7 +4431,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4430,7 +4441,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4440,7 +4451,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4450,7 +4461,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4460,7 +4471,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4470,7 +4481,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4480,7 +4491,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4490,7 +4501,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4500,7 +4511,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4510,7 +4521,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4520,7 +4531,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4530,7 +4541,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4540,7 +4551,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4550,7 +4561,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4560,7 +4571,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4570,7 +4581,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4580,7 +4591,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4591,7 +4602,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4601,18 +4612,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_STAIRS_FROM_MOSSY_COBBLESTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/mossy_cobblestone_stairs_from_mossy_cobblestone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_MOSSY_COBBLESTONE_STAIRS_FROM_MOSSY_COBBLESTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/mossy_cobblestone_stairs_from_mossy_cobblestone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_SLAB: &Self = &Self {
         id: "recipes/building_blocks/mossy_stone_brick_slab",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4623,7 +4634,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4633,18 +4644,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_STAIRS_FROM_MOSSY_STONE_BRICK_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/mossy_stone_brick_stairs_from_mossy_stone_brick_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICK_STAIRS_FROM_MOSSY_STONE_BRICK_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/mossy_stone_brick_stairs_from_mossy_stone_brick_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_MOSSY_STONE_BRICKS_FROM_MOSS_BLOCK: &Self = &Self {
         id: "recipes/building_blocks/mossy_stone_bricks_from_moss_block",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4654,7 +4665,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4664,7 +4675,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4674,7 +4685,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4684,7 +4695,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4695,7 +4706,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -4705,7 +4716,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4715,7 +4726,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4725,7 +4736,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4736,7 +4747,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -4746,7 +4757,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4757,7 +4768,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -4767,7 +4778,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4777,7 +4788,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4787,7 +4798,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4797,7 +4808,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4807,7 +4818,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4817,7 +4828,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4827,7 +4838,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4837,7 +4848,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4847,7 +4858,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4857,7 +4868,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4867,7 +4878,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4878,18 +4889,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CHISELED_COPPER_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/oxidized_chiseled_copper_from_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CHISELED_COPPER_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/oxidized_chiseled_copper_from_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_COPPER_GRATE: &Self = &Self {
         id: "recipes/building_blocks/oxidized_copper_grate",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4900,7 +4911,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4910,7 +4921,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4921,7 +4932,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -4931,7 +4942,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4942,30 +4953,30 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_SLAB_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/oxidized_cut_copper_slab_from_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_SLAB_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/oxidized_cut_copper_slab_from_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/oxidized_cut_copper_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS_FROM_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/oxidized_cut_copper_stairs_from_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/oxidized_cut_copper_stairs_from_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS_FROM_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/oxidized_cut_copper_stairs_from_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_OXIDIZED_CUT_COPPER_STAIRS_FROM_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/oxidized_cut_copper_stairs_from_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_PACKED_ICE: &Self = &Self {
         id: "recipes/building_blocks/packed_ice",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4975,7 +4986,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4985,7 +4996,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -4995,7 +5006,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5005,7 +5016,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5015,7 +5026,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5025,7 +5036,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5035,7 +5046,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5045,7 +5056,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5055,7 +5066,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5065,7 +5076,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5075,7 +5086,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5086,7 +5097,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5097,7 +5108,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5107,7 +5118,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5118,18 +5129,18 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_STAIRS_FROM_POLISHED_ANDESITE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_andesite_stairs_from_polished_andesite_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_ANDESITE_STAIRS_FROM_POLISHED_ANDESITE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_andesite_stairs_from_polished_andesite_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BASALT: &Self = &Self {
         id: "recipes/building_blocks/polished_basalt",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5139,7 +5150,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5149,7 +5160,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5159,33 +5170,33 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_slab_from_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_slab_from_polished_blackstone_bricks_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_slab_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_slab_from_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_slab_from_polished_blackstone_bricks_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_SLAB_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_slab_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/polished_blackstone_brick_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_stairs_from_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_stairs_from_polished_blackstone_bricks_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_stairs_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_stairs_from_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_stairs_from_polished_blackstone_bricks_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICK_STAIRS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_brick_stairs_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICKS: &Self = &Self {
         id: "recipes/building_blocks/polished_blackstone_bricks",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5196,11 +5207,11 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICKS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_bricks_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_BRICKS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_bricks_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_FROM_BLACKSTONE_STONECUTTING: &Self =
         &Self {
             id: "recipes/building_blocks/polished_blackstone_from_blackstone_stonecutting",
@@ -5208,7 +5219,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5218,7 +5229,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5229,18 +5240,18 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_SLAB_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_slab_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_SLAB_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_slab_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/polished_blackstone_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5251,18 +5262,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_STAIRS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_stairs_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_BLACKSTONE_STAIRS_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_blackstone_stairs_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE: &Self = &Self {
         id: "recipes/building_blocks/polished_deepslate",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5273,7 +5284,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5283,31 +5294,31 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_deepslate_slab_from_cobbled_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_deepslate_slab_from_polished_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_deepslate_slab_from_cobbled_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_SLAB_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_deepslate_slab_from_polished_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/polished_deepslate_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_deepslate_stairs_from_cobbled_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_deepslate_stairs_from_polished_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_COBBLED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_deepslate_stairs_from_cobbled_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_POLISHED_DEEPSLATE_STAIRS_FROM_POLISHED_DEEPSLATE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/polished_deepslate_stairs_from_polished_deepslate_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_POLISHED_DIORITE: &Self = &Self {
         id: "recipes/building_blocks/polished_diorite",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5317,7 +5328,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5327,7 +5338,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5338,7 +5349,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5349,7 +5360,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5359,7 +5370,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5370,7 +5381,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5381,7 +5392,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5391,7 +5402,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5401,7 +5412,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5411,7 +5422,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5422,7 +5433,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5433,7 +5444,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5443,7 +5454,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5454,7 +5465,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5465,7 +5476,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5475,7 +5486,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5485,7 +5496,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5495,7 +5506,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5506,7 +5517,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5516,7 +5527,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5526,7 +5537,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5537,7 +5548,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5547,7 +5558,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5557,7 +5568,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5567,7 +5578,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5578,7 +5589,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5588,7 +5599,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5599,7 +5610,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5609,7 +5620,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5619,7 +5630,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5629,7 +5640,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5639,7 +5650,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5650,7 +5661,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5660,7 +5671,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5670,7 +5681,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5680,7 +5691,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5690,7 +5701,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5700,7 +5711,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5710,7 +5721,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5720,7 +5731,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5730,7 +5741,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5740,7 +5751,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5750,7 +5761,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5760,7 +5771,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5770,7 +5781,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5780,7 +5791,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5790,7 +5801,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5800,7 +5811,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5810,7 +5821,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5820,7 +5831,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5830,7 +5841,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5840,7 +5851,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5850,7 +5861,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5860,7 +5871,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5870,7 +5881,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5880,7 +5891,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5890,7 +5901,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5901,7 +5912,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5911,18 +5922,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICK_STAIRS_FROM_RED_NETHER_BRICKS_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/red_nether_brick_stairs_from_red_nether_bricks_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICK_STAIRS_FROM_RED_NETHER_BRICKS_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/red_nether_brick_stairs_from_red_nether_bricks_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_RED_NETHER_BRICKS: &Self = &Self {
         id: "recipes/building_blocks/red_nether_bricks",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5932,7 +5943,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5942,7 +5953,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5953,7 +5964,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5963,7 +5974,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5974,7 +5985,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -5984,7 +5995,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -5994,7 +6005,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6004,7 +6015,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6014,7 +6025,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6025,7 +6036,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6035,7 +6046,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6046,7 +6057,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6056,7 +6067,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6066,7 +6077,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6076,7 +6087,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6086,7 +6097,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6096,7 +6107,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6106,7 +6117,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6116,7 +6127,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6126,7 +6137,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6136,7 +6147,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6146,7 +6157,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6157,7 +6168,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6167,7 +6178,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6178,7 +6189,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6188,7 +6199,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6198,29 +6209,29 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_SLAB_FROM_SMOOTH_RED_SANDSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/smooth_red_sandstone_slab_from_smooth_red_sandstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_SLAB_FROM_SMOOTH_RED_SANDSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/smooth_red_sandstone_slab_from_smooth_red_sandstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/smooth_red_sandstone_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_STAIRS_FROM_SMOOTH_RED_SANDSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/smooth_red_sandstone_stairs_from_smooth_red_sandstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_SMOOTH_RED_SANDSTONE_STAIRS_FROM_SMOOTH_RED_SANDSTONE_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/smooth_red_sandstone_stairs_from_smooth_red_sandstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_SMOOTH_SANDSTONE: &Self = &Self {
         id: "recipes/building_blocks/smooth_sandstone",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6230,7 +6241,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6241,7 +6252,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6251,7 +6262,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6262,7 +6273,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6272,7 +6283,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6282,7 +6293,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6293,7 +6304,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6303,7 +6314,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6313,7 +6324,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6323,7 +6334,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6333,7 +6344,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6343,7 +6354,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6353,7 +6364,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6363,7 +6374,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6373,7 +6384,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6384,7 +6395,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6394,7 +6405,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6404,7 +6415,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6415,7 +6426,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6425,7 +6436,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6435,7 +6446,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6445,7 +6456,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6455,7 +6466,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6465,7 +6476,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6475,7 +6486,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6485,7 +6496,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6495,7 +6506,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6505,7 +6516,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6515,7 +6526,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6525,7 +6536,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6535,7 +6546,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6545,7 +6556,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6555,7 +6566,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6565,7 +6576,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6575,7 +6586,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6585,7 +6596,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6595,7 +6606,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6605,7 +6616,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6615,7 +6626,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6625,7 +6636,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6636,7 +6647,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6647,7 +6658,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6657,7 +6668,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6667,7 +6678,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6678,7 +6689,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6689,7 +6700,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6699,7 +6710,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6709,7 +6720,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6719,7 +6730,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6729,7 +6740,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6739,7 +6750,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6749,7 +6760,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6759,7 +6770,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6769,7 +6780,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6779,7 +6790,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6789,7 +6800,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6799,7 +6810,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6809,7 +6820,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6819,7 +6830,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6829,7 +6840,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6840,7 +6851,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6851,7 +6862,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6861,7 +6872,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6871,7 +6882,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6881,7 +6892,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6891,7 +6902,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6901,7 +6912,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6911,7 +6922,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6921,7 +6932,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6932,7 +6943,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6942,7 +6953,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6952,7 +6963,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6962,7 +6973,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6973,7 +6984,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -6983,7 +6994,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -6993,7 +7004,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7004,7 +7015,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7015,7 +7026,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7025,7 +7036,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7035,11 +7046,11 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_STAIRS_FROM_WAXED_COPPER_BLOCK_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_cut_copper_stairs_from_waxed_copper_block_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_STAIRS_FROM_WAXED_COPPER_BLOCK_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_cut_copper_stairs_from_waxed_copper_block_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_CUT_COPPER_STAIRS_FROM_WAXED_CUT_COPPER_STONECUTTING:
         &Self = &Self {
         id: "recipes/building_blocks/waxed_cut_copper_stairs_from_waxed_cut_copper_stonecutting",
@@ -7047,7 +7058,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7057,7 +7068,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7067,19 +7078,19 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_chiseled_copper_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_chiseled_copper_from_waxed_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_chiseled_copper_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CHISELED_COPPER_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_chiseled_copper_from_waxed_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_BARS_FROM_HONEYCOMB: &Self = &Self {
         id: "recipes/building_blocks/waxed_exposed_copper_bars_from_honeycomb",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7089,7 +7100,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7099,7 +7110,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7109,7 +7120,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7120,7 +7131,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -7130,7 +7141,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7140,18 +7151,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_GRATE_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_copper_grate_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_GRATE_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_copper_grate_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_COPPER_LANTERN_FROM_HONEYCOMB: &Self = &Self {
         id: "recipes/building_blocks/waxed_exposed_copper_lantern_from_honeycomb",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7161,7 +7172,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7171,18 +7182,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB: &Self = &Self {
         id: "recipes/building_blocks/waxed_exposed_cut_copper_slab",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7192,19 +7203,19 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_slab_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_slab_from_waxed_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_slab_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_SLAB_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_slab_from_waxed_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/waxed_exposed_cut_copper_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7215,19 +7226,19 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_stairs_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_stairs_from_waxed_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_WAXED_EXPOSED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_stairs_from_waxed_exposed_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_CUT_COPPER_STAIRS_FROM_WAXED_EXPOSED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_exposed_cut_copper_stairs_from_waxed_exposed_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_EXPOSED_LIGHTNING_ROD_FROM_HONEYCOMB: &Self = &Self {
         id: "recipes/building_blocks/waxed_exposed_lightning_rod_from_honeycomb",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7237,7 +7248,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7247,7 +7258,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7258,19 +7269,19 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_chiseled_copper_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_chiseled_copper_from_waxed_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_chiseled_copper_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CHISELED_COPPER_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_chiseled_copper_from_waxed_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_BARS_FROM_HONEYCOMB: &Self = &Self {
         id: "recipes/building_blocks/waxed_oxidized_copper_bars_from_honeycomb",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7280,7 +7291,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7290,7 +7301,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7300,7 +7311,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7311,7 +7322,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -7321,7 +7332,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7331,18 +7342,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_GRATE_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_copper_grate_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_GRATE_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_copper_grate_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_COPPER_LANTERN_FROM_HONEYCOMB: &Self = &Self {
         id: "recipes/building_blocks/waxed_oxidized_copper_lantern_from_honeycomb",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7352,7 +7363,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7362,18 +7373,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB: &Self = &Self {
         id: "recipes/building_blocks/waxed_oxidized_cut_copper_slab",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7384,19 +7395,19 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_slab_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_slab_from_waxed_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_slab_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_SLAB_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_slab_from_waxed_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/waxed_oxidized_cut_copper_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7407,19 +7418,19 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_stairs_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_stairs_from_waxed_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_WAXED_OXIDIZED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_stairs_from_waxed_oxidized_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_CUT_COPPER_STAIRS_FROM_WAXED_OXIDIZED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_oxidized_cut_copper_stairs_from_waxed_oxidized_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_OXIDIZED_LIGHTNING_ROD_FROM_HONEYCOMB: &Self = &Self {
         id: "recipes/building_blocks/waxed_oxidized_lightning_rod_from_honeycomb",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7429,7 +7440,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7440,19 +7451,19 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_chiseled_copper_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_chiseled_copper_from_waxed_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_chiseled_copper_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CHISELED_COPPER_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_chiseled_copper_from_waxed_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_BARS_FROM_HONEYCOMB: &Self = &Self {
         id: "recipes/building_blocks/waxed_weathered_copper_bars_from_honeycomb",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7462,7 +7473,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7472,7 +7483,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7482,7 +7493,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7493,7 +7504,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -7503,7 +7514,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7513,11 +7524,11 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_GRATE_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_copper_grate_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_GRATE_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_copper_grate_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_COPPER_LANTERN_FROM_HONEYCOMB: &Self =
         &Self {
             id: "recipes/building_blocks/waxed_weathered_copper_lantern_from_honeycomb",
@@ -7525,7 +7536,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -7535,7 +7546,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7545,18 +7556,18 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB: &Self = &Self {
         id: "recipes/building_blocks/waxed_weathered_cut_copper_slab",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7567,19 +7578,19 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_slab_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_slab_from_waxed_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_slab_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_SLAB_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_slab_from_waxed_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/waxed_weathered_cut_copper_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7590,19 +7601,19 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_stairs_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_stairs_from_waxed_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_WAXED_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_stairs_from_waxed_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_CUT_COPPER_STAIRS_FROM_WAXED_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/waxed_weathered_cut_copper_stairs_from_waxed_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WAXED_WEATHERED_LIGHTNING_ROD_FROM_HONEYCOMB: &Self = &Self {
         id: "recipes/building_blocks/waxed_weathered_lightning_rod_from_honeycomb",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7612,19 +7623,19 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_chiseled_copper_from_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_chiseled_copper_from_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_chiseled_copper_from_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CHISELED_COPPER_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_chiseled_copper_from_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_COPPER_GRATE: &Self = &Self {
         id: "recipes/building_blocks/weathered_copper_grate",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7635,7 +7646,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7645,7 +7656,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7656,7 +7667,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7666,31 +7677,31 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_cut_copper_slab_from_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_cut_copper_slab_from_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_cut_copper_slab_from_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_SLAB_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_cut_copper_slab_from_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS: &Self = &Self {
         id: "recipes/building_blocks/weathered_cut_copper_stairs",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_cut_copper_stairs_from_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_cut_copper_stairs_from_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS_FROM_WEATHERED_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_cut_copper_stairs_from_weathered_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_BUILDING_BLOCKS_WEATHERED_CUT_COPPER_STAIRS_FROM_WEATHERED_CUT_COPPER_STONECUTTING : & Self = & Self { id : "recipes/building_blocks/weathered_cut_copper_stairs_from_weathered_cut_copper_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_BUILDING_BLOCKS_WHITE_CONCRETE_POWDER: &Self = &Self {
         id: "recipes/building_blocks/white_concrete_powder",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7700,7 +7711,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7710,7 +7721,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7720,7 +7731,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7730,7 +7741,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7740,7 +7751,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7750,7 +7761,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7760,7 +7771,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7770,7 +7781,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7780,7 +7791,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7790,7 +7801,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7800,7 +7811,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7810,7 +7821,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7820,7 +7831,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7830,7 +7841,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7840,7 +7851,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7850,7 +7861,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7860,7 +7871,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7870,7 +7881,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7880,7 +7891,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7890,7 +7901,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7900,7 +7911,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7910,7 +7921,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7920,7 +7931,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7930,7 +7941,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7940,7 +7951,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7950,7 +7961,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7960,7 +7971,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7970,7 +7981,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7980,7 +7991,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -7990,7 +8001,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8000,7 +8011,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8010,7 +8021,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8020,7 +8031,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8030,7 +8041,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8040,7 +8051,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8050,7 +8061,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8060,7 +8071,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8070,7 +8081,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8080,7 +8091,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8090,7 +8101,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8100,7 +8111,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8110,7 +8121,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8120,7 +8131,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8130,7 +8141,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8140,7 +8151,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8150,7 +8161,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8160,7 +8171,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8170,7 +8181,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8180,7 +8191,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8190,7 +8201,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8200,7 +8211,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8210,7 +8221,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8220,7 +8231,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8230,7 +8241,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8240,7 +8251,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8250,7 +8261,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8260,7 +8271,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8270,7 +8281,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8280,7 +8291,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8290,7 +8301,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8300,7 +8311,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8310,7 +8321,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8320,7 +8331,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8330,7 +8341,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8340,7 +8351,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8350,7 +8361,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8360,7 +8371,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8370,7 +8381,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8380,7 +8391,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8390,7 +8401,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8400,7 +8411,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8410,7 +8421,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8420,7 +8431,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8430,7 +8441,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8440,7 +8451,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8450,7 +8461,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8460,7 +8471,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8470,7 +8481,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8480,7 +8491,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8490,7 +8501,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8500,7 +8511,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8510,7 +8521,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8520,7 +8531,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8530,7 +8541,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8540,7 +8551,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8550,7 +8561,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8560,7 +8571,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8570,7 +8581,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8580,7 +8591,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8590,7 +8601,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8600,7 +8611,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8610,7 +8621,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8620,7 +8631,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8630,7 +8641,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8640,7 +8651,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8650,7 +8661,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8660,7 +8671,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8670,7 +8681,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8680,7 +8691,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8690,7 +8701,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8700,7 +8711,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8710,7 +8721,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8720,7 +8731,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8730,7 +8741,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8740,7 +8751,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8750,7 +8761,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8760,7 +8771,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8770,7 +8781,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8780,7 +8791,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8790,7 +8801,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8800,7 +8811,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8810,7 +8821,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8820,7 +8831,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8830,7 +8841,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8840,7 +8851,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8850,7 +8861,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8860,7 +8871,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8870,7 +8881,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8880,7 +8891,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8890,7 +8901,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8900,7 +8911,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8910,7 +8921,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8920,7 +8931,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8930,7 +8941,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8940,7 +8951,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8950,7 +8961,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8960,7 +8971,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8970,7 +8981,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8980,7 +8991,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -8990,7 +9001,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9000,7 +9011,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9010,7 +9021,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9020,7 +9031,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9030,7 +9041,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9040,7 +9051,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9050,7 +9061,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9060,7 +9071,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9070,7 +9081,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9080,7 +9091,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9090,7 +9101,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9100,7 +9111,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9110,7 +9121,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9120,7 +9131,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9130,7 +9141,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9141,7 +9152,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9151,7 +9162,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9161,7 +9172,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9171,7 +9182,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9181,7 +9192,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9191,7 +9202,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9201,7 +9212,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9211,7 +9222,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9221,7 +9232,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9231,7 +9242,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9241,7 +9252,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9251,7 +9262,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9261,7 +9272,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9271,7 +9282,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9281,7 +9292,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9291,7 +9302,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9301,7 +9312,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9311,7 +9322,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9321,7 +9332,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9331,7 +9342,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9341,7 +9352,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9351,7 +9362,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9361,7 +9372,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9371,7 +9382,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9381,7 +9392,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9391,7 +9402,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9401,7 +9412,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9411,7 +9422,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9422,7 +9433,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -9433,7 +9444,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -9444,7 +9455,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -9454,7 +9465,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9465,7 +9476,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -9476,7 +9487,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -9487,7 +9498,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -9498,7 +9509,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -9508,7 +9519,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9518,7 +9529,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9528,7 +9539,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9538,7 +9549,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9548,7 +9559,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9558,7 +9569,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9568,7 +9579,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9578,7 +9589,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9588,7 +9599,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9598,7 +9609,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9608,7 +9619,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9618,7 +9629,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9628,7 +9639,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9638,7 +9649,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9648,7 +9659,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9658,7 +9669,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9668,7 +9679,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9678,7 +9689,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9688,7 +9699,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9698,7 +9709,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9708,7 +9719,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9718,7 +9729,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9728,7 +9739,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9738,7 +9749,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9748,7 +9759,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9758,7 +9769,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9768,7 +9779,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9778,7 +9789,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9788,7 +9799,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9798,7 +9809,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9808,7 +9819,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9818,7 +9829,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9828,7 +9839,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9838,7 +9849,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9848,7 +9859,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9858,7 +9869,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9868,7 +9879,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9878,7 +9889,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9889,7 +9900,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -9899,7 +9910,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9909,7 +9920,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9919,7 +9930,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9929,7 +9940,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9939,7 +9950,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9949,7 +9960,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9959,7 +9970,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9969,7 +9980,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9979,7 +9990,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9989,7 +10000,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -9999,7 +10010,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10009,7 +10020,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10019,7 +10030,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10029,7 +10040,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10039,7 +10050,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10049,7 +10060,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10059,7 +10070,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10069,7 +10080,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10079,7 +10090,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10089,7 +10100,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10099,7 +10110,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10109,7 +10120,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10119,7 +10130,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10129,7 +10140,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10139,7 +10150,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10149,7 +10160,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10159,7 +10170,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10169,7 +10180,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10179,7 +10190,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10189,7 +10200,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10199,7 +10210,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10209,7 +10220,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10219,7 +10230,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10229,7 +10240,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10239,7 +10250,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10249,7 +10260,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10259,7 +10270,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10269,7 +10280,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10279,7 +10290,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10289,7 +10300,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10299,7 +10310,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10309,7 +10320,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10319,7 +10330,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10329,7 +10340,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10339,7 +10350,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10349,7 +10360,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10359,7 +10370,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10369,7 +10380,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10379,7 +10390,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10389,7 +10400,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10399,7 +10410,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10409,7 +10420,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10419,7 +10430,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10429,7 +10440,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10439,7 +10450,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10449,7 +10460,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10459,7 +10470,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10469,7 +10480,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10479,7 +10490,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10489,7 +10500,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10499,7 +10510,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10509,7 +10520,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10519,7 +10530,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10529,7 +10540,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10539,7 +10550,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10549,7 +10560,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10559,7 +10570,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10569,7 +10580,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10579,7 +10590,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10589,7 +10600,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10599,7 +10610,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10609,7 +10620,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10619,7 +10630,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10629,7 +10640,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10639,7 +10650,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10649,7 +10660,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10659,7 +10670,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10670,7 +10681,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10680,7 +10691,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10691,7 +10702,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10701,7 +10712,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10711,7 +10722,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10721,7 +10732,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10731,7 +10742,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10742,7 +10753,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -10752,7 +10763,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10762,7 +10773,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10772,7 +10783,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10782,7 +10793,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10792,7 +10803,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10802,7 +10813,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10812,7 +10823,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10822,7 +10833,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10832,7 +10843,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10842,7 +10853,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10852,7 +10863,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10862,7 +10873,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10872,7 +10883,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10882,7 +10893,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10892,7 +10903,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10902,7 +10913,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10912,7 +10923,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10922,7 +10933,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10932,7 +10943,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10942,7 +10953,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10952,7 +10963,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10962,7 +10973,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10972,7 +10983,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10982,7 +10993,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -10992,7 +11003,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11002,7 +11013,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11012,7 +11023,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11023,19 +11034,19 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
-    pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : "recipes/decorations/polished_blackstone_brick_wall_from_polished_blackstone_bricks_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
-    pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/decorations/polished_blackstone_brick_wall_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0u32 , recipes : & [] , } , } ;
+    pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_POLISHED_BLACKSTONE_BRICKS_STONECUTTING : & Self = & Self { id : "recipes/decorations/polished_blackstone_brick_wall_from_polished_blackstone_bricks_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
+    pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_BRICK_WALL_FROM_POLISHED_BLACKSTONE_STONECUTTING : & Self = & Self { id : "recipes/decorations/polished_blackstone_brick_wall_from_polished_blackstone_stonecutting" , parent : Some ("minecraft:recipes/root") , send_telemetry : false , display : None , reward : & AdvancementReward { experience : 0i32 , recipes : & [] , } , } ;
     pub const RECIPES_DECORATIONS_POLISHED_BLACKSTONE_WALL: &Self = &Self {
         id: "recipes/decorations/polished_blackstone_wall",
         parent: Some("minecraft:recipes/root"),
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11046,7 +11057,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -11057,7 +11068,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11067,7 +11078,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11078,7 +11089,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11089,7 +11100,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11099,7 +11110,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11110,7 +11121,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -11120,7 +11131,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11130,7 +11141,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11140,7 +11151,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11150,7 +11161,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11160,7 +11171,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11170,7 +11181,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11180,7 +11191,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11190,7 +11201,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11200,7 +11211,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11210,7 +11221,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11220,7 +11231,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11230,7 +11241,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11240,7 +11251,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11250,7 +11261,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11260,7 +11271,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11270,7 +11281,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11280,7 +11291,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11291,7 +11302,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -11301,7 +11312,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11312,7 +11323,7 @@ impl Advancement {
             send_telemetry: false,
             display: None,
             reward: &AdvancementReward {
-                experience: 0u32,
+                experience: 0i32,
                 recipes: &[],
             },
         };
@@ -11322,7 +11333,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11332,7 +11343,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11342,7 +11353,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11352,7 +11363,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11362,7 +11373,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11372,7 +11383,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11382,7 +11393,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11392,7 +11403,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11402,7 +11413,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11412,7 +11423,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11422,7 +11433,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11432,7 +11443,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11442,7 +11453,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11452,7 +11463,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11462,7 +11473,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11472,7 +11483,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11482,7 +11493,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11492,7 +11503,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11502,7 +11513,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11512,7 +11523,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11522,7 +11533,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11532,7 +11543,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11542,7 +11553,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11552,7 +11563,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11562,7 +11573,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11572,7 +11583,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11582,7 +11593,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11592,7 +11603,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11602,7 +11613,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11612,7 +11623,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11622,7 +11633,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11632,7 +11643,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11642,7 +11653,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11652,7 +11663,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11662,7 +11673,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11672,7 +11683,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11682,7 +11693,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11692,7 +11703,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11702,7 +11713,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11712,7 +11723,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11722,7 +11733,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11732,7 +11743,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11742,7 +11753,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11752,7 +11763,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11762,7 +11773,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11772,7 +11783,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11782,7 +11793,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11792,7 +11803,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11802,7 +11813,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11812,7 +11823,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11822,7 +11833,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11832,7 +11843,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11842,7 +11853,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11852,7 +11863,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11862,7 +11873,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11872,7 +11883,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11882,7 +11893,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11892,7 +11903,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11902,7 +11913,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11912,7 +11923,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11922,7 +11933,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11932,7 +11943,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11942,7 +11953,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11952,7 +11963,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11962,7 +11973,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11972,7 +11983,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11982,7 +11993,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -11992,7 +12003,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12002,7 +12013,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12012,7 +12023,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12022,7 +12033,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12032,7 +12043,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12042,7 +12053,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12052,7 +12063,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12062,7 +12073,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12072,7 +12083,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12082,7 +12093,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12092,7 +12103,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12102,7 +12113,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12112,7 +12123,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12122,7 +12133,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12132,7 +12143,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12142,7 +12153,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12152,7 +12163,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12162,7 +12173,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12172,7 +12183,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12182,7 +12193,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12192,7 +12203,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12202,7 +12213,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12212,7 +12223,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12222,7 +12233,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12232,7 +12243,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12242,7 +12253,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12252,7 +12263,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12262,7 +12273,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12272,7 +12283,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12282,7 +12293,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12292,7 +12303,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12302,7 +12313,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12312,7 +12323,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12322,7 +12333,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12332,7 +12343,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12342,7 +12353,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12352,7 +12363,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12362,7 +12373,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12372,7 +12383,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12382,7 +12393,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12392,7 +12403,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12402,7 +12413,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12412,7 +12423,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12422,7 +12433,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12432,7 +12443,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12442,7 +12453,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12452,7 +12463,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12462,7 +12473,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12472,7 +12483,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12482,7 +12493,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12492,7 +12503,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12502,7 +12513,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12512,7 +12523,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12522,7 +12533,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12532,7 +12543,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12542,7 +12553,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12552,7 +12563,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12562,7 +12573,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12572,7 +12583,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12582,7 +12593,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12592,7 +12603,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12602,7 +12613,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12612,7 +12623,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12622,7 +12633,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12632,7 +12643,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12642,7 +12653,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12652,7 +12663,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12662,7 +12673,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12672,7 +12683,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12682,7 +12693,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12692,7 +12703,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12702,7 +12713,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12712,7 +12723,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12722,7 +12733,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12732,7 +12743,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12742,7 +12753,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12752,7 +12763,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12762,7 +12773,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12772,7 +12783,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12782,7 +12793,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12792,7 +12803,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12802,7 +12813,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12812,7 +12823,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12822,7 +12833,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12832,7 +12843,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12842,7 +12853,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12852,7 +12863,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12862,7 +12873,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12872,7 +12883,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12882,7 +12893,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12892,7 +12903,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12902,7 +12913,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12912,7 +12923,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12922,7 +12933,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12932,7 +12943,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12942,7 +12953,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12952,7 +12963,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12962,7 +12973,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12972,7 +12983,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12982,7 +12993,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -12992,7 +13003,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13002,7 +13013,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13012,7 +13023,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13022,7 +13033,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13032,7 +13043,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13042,7 +13053,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13052,7 +13063,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13062,7 +13073,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13072,7 +13083,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13082,7 +13093,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13092,7 +13103,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13102,7 +13113,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13112,7 +13123,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13122,7 +13133,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13132,7 +13143,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13142,7 +13153,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13152,7 +13163,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13162,7 +13173,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13172,7 +13183,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13182,7 +13193,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13192,7 +13203,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13202,7 +13213,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13212,7 +13223,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13222,7 +13233,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13232,7 +13243,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13242,7 +13253,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13252,7 +13263,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13262,7 +13273,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13272,7 +13283,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13282,7 +13293,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13292,7 +13303,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13302,7 +13313,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13312,7 +13323,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13322,7 +13333,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13332,7 +13343,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13342,7 +13353,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13352,7 +13363,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13362,7 +13373,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13372,7 +13383,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13382,7 +13393,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13392,7 +13403,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13402,7 +13413,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13412,7 +13423,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13422,7 +13433,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13432,7 +13443,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13442,7 +13453,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13452,7 +13463,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13462,7 +13473,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13472,7 +13483,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13482,7 +13493,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13492,7 +13503,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13502,7 +13513,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13512,7 +13523,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13522,7 +13533,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13532,7 +13543,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13542,7 +13553,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13552,7 +13563,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13562,7 +13573,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13572,7 +13583,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13582,7 +13593,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13592,7 +13603,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13602,7 +13613,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13612,7 +13623,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13622,7 +13633,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13632,7 +13643,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13642,7 +13653,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13652,7 +13663,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13662,7 +13673,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13672,7 +13683,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13682,7 +13693,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13692,7 +13703,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13702,7 +13713,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13712,7 +13723,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13722,7 +13733,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13732,7 +13743,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13742,7 +13753,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13752,7 +13763,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13762,7 +13773,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13772,7 +13783,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13782,7 +13793,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13792,7 +13803,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13802,7 +13813,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13812,7 +13823,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13822,7 +13833,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13832,7 +13843,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13842,7 +13853,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13852,7 +13863,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13862,7 +13873,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13872,7 +13883,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13882,7 +13893,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13892,7 +13903,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13902,7 +13913,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13912,7 +13923,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13922,7 +13933,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13932,7 +13943,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13942,7 +13953,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13952,7 +13963,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13962,7 +13973,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13972,7 +13983,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13982,7 +13993,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -13992,7 +14003,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14002,7 +14013,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14012,7 +14023,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14022,7 +14033,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14032,7 +14043,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14042,7 +14053,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14052,7 +14063,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14062,7 +14073,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14072,7 +14083,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14082,7 +14093,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14092,7 +14103,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14102,7 +14113,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14112,7 +14123,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14122,7 +14133,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14132,7 +14143,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14142,7 +14153,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14152,7 +14163,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14162,7 +14173,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14172,7 +14183,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14182,7 +14193,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14192,7 +14203,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14202,7 +14213,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14212,7 +14223,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14222,7 +14233,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14232,7 +14243,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14242,7 +14253,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14252,7 +14263,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14262,7 +14273,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14272,7 +14283,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14282,7 +14293,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14292,7 +14303,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14302,7 +14313,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14312,7 +14323,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14322,7 +14333,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14332,7 +14343,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14342,7 +14353,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14352,7 +14363,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14362,7 +14373,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14372,7 +14383,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14382,7 +14393,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14392,7 +14403,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14402,7 +14413,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14412,7 +14423,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14422,7 +14433,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14432,7 +14443,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14442,7 +14453,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14452,7 +14463,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14462,7 +14473,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14472,7 +14483,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14482,7 +14493,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14492,7 +14503,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14502,7 +14513,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14512,7 +14523,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14522,7 +14533,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14532,7 +14543,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14542,7 +14553,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14552,7 +14563,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14562,7 +14573,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14572,7 +14583,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14582,7 +14593,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14592,7 +14603,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14602,7 +14613,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14612,7 +14623,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14622,7 +14633,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14632,7 +14643,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14642,7 +14653,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14652,7 +14663,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14662,7 +14673,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14672,7 +14683,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14682,7 +14693,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14692,7 +14703,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14702,7 +14713,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14712,7 +14723,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14722,7 +14733,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14732,7 +14743,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14742,7 +14753,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14752,7 +14763,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14762,7 +14773,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14772,7 +14783,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14782,7 +14793,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14792,7 +14803,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14802,7 +14813,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14812,7 +14823,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14822,7 +14833,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14832,7 +14843,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14842,7 +14853,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14852,7 +14863,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14862,7 +14873,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14872,7 +14883,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14882,7 +14893,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14892,7 +14903,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14902,7 +14913,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14912,7 +14923,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14922,7 +14933,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14932,7 +14943,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14942,7 +14953,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14952,7 +14963,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14962,7 +14973,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14972,7 +14983,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14982,7 +14993,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -14992,7 +15003,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15002,7 +15013,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15012,7 +15023,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15022,7 +15033,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15032,7 +15043,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15042,7 +15053,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15052,7 +15063,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15062,7 +15073,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15072,7 +15083,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15082,7 +15093,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15092,7 +15103,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15102,7 +15113,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15112,7 +15123,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15122,7 +15133,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15132,7 +15143,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15142,7 +15153,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15152,7 +15163,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15162,7 +15173,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15172,7 +15183,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15182,7 +15193,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15192,7 +15203,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15202,7 +15213,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15212,7 +15223,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15222,7 +15233,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15232,7 +15243,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15242,7 +15253,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15252,7 +15263,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15262,7 +15273,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15272,7 +15283,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15282,7 +15293,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15292,7 +15303,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15302,7 +15313,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15312,7 +15323,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15322,7 +15333,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15332,7 +15343,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15342,7 +15353,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15352,7 +15363,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15362,7 +15373,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15372,7 +15383,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15382,7 +15393,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15392,7 +15403,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15402,7 +15413,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15412,7 +15423,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15422,7 +15433,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15432,7 +15443,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15442,7 +15453,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15452,7 +15463,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15462,7 +15473,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15472,7 +15483,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15482,7 +15493,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15492,7 +15503,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15502,7 +15513,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15512,7 +15523,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15522,7 +15533,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15532,7 +15543,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15542,7 +15553,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15552,7 +15563,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15562,7 +15573,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15572,7 +15583,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15582,7 +15593,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15592,7 +15603,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15602,7 +15613,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15612,7 +15623,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15622,7 +15633,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15632,7 +15643,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15642,7 +15653,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15652,7 +15663,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15662,7 +15673,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15672,7 +15683,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15682,7 +15693,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15692,7 +15703,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15702,7 +15713,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15712,7 +15723,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15722,7 +15733,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15732,7 +15743,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15742,7 +15753,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15752,7 +15763,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15762,7 +15773,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15772,7 +15783,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15782,7 +15793,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15792,7 +15803,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15802,7 +15813,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15812,7 +15823,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15822,7 +15833,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15832,7 +15843,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15842,7 +15853,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15852,7 +15863,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15862,7 +15873,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15872,7 +15883,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15882,7 +15893,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15892,7 +15903,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15902,7 +15913,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15912,7 +15923,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15922,7 +15933,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15932,7 +15943,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15942,7 +15953,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15952,7 +15963,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15962,7 +15973,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15972,7 +15983,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15982,7 +15993,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -15992,7 +16003,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16002,7 +16013,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16012,7 +16023,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16022,7 +16033,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16032,7 +16043,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16042,7 +16053,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16052,7 +16063,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16062,7 +16073,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16072,7 +16083,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16082,7 +16093,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16092,7 +16103,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16102,7 +16113,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16112,7 +16123,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16122,7 +16133,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16132,7 +16143,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16142,7 +16153,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16152,7 +16163,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16162,7 +16173,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16172,7 +16183,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16182,7 +16193,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16192,7 +16203,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16202,7 +16213,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16212,7 +16223,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16222,7 +16233,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16232,7 +16243,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16242,7 +16253,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16252,7 +16263,7 @@ impl Advancement {
         send_telemetry: false,
         display: None,
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16271,7 +16282,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16290,7 +16301,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16309,7 +16320,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16328,7 +16339,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16347,7 +16358,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16366,7 +16377,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16385,7 +16396,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16404,7 +16415,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16423,7 +16434,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16442,7 +16453,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16461,7 +16472,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16480,7 +16491,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16499,7 +16510,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16518,7 +16529,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16537,7 +16548,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
@@ -16556,7 +16567,7 @@ impl Advancement {
             false,
         )),
         reward: &AdvancementReward {
-            experience: 0u32,
+            experience: 0i32,
             recipes: &[],
         },
     };
