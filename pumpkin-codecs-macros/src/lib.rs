@@ -46,7 +46,7 @@ fn crate_token() -> proc_macro2::TokenStream {
 
 /// Derives the `Encode` trait for a struct.
 ///
-/// This trait also derives `MapEncode` (except for enums whose variants are all units),
+/// This trait also derives `MapEncode` (except for enums whose variants are all units and unit structs),
 /// though this trait may only be useful directly for certain cases,
 /// which is then used to derive `Encode`.
 ///
@@ -59,7 +59,7 @@ pub fn derive_encode(input: TokenStream) -> TokenStream {
 
 /// Derives the `Decode` trait for a struct.
 ///
-/// This trait also derives `MapDecode` (except for enums whose variants are all units),
+/// This trait also derives `MapDecode` (except for enums whose variants are all units and unit structs),
 /// though this trait may only be useful directly for certain cases,
 /// which is then used to derive `Decode`.
 ///
