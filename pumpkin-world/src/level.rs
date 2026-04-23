@@ -15,9 +15,12 @@ use crate::{
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::BlockRegistryExt,
 };
+use pumpkin_storage::MemoryChunkStorage;
 use pumpkin_storage::chunk::{ChunkStorage, LoadedData};
 use dashmap::{DashMap, Entry};
-use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
+use pumpkin_config::{
+    chunk::ChunkConfig, lighting::LightingEngineConfig, storage::StorageConfig,
+};
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
@@ -141,7 +144,7 @@ pub async fn dump() {
 
 impl Level {
     pub fn from_root_folder(
-        level_config: &LevelConfig,
+        storage_config: &StorageConfig,
         root_folder: PathBuf,
         block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
@@ -151,8 +154,12 @@ impl Level {
         let region_folder = root_folder.join("region");
         let entities_folder = root_folder.join("entities");
 
-        std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
-        std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
+        // The in-memory backend never touches disk, so skip creating the
+        // region/entities folders that only exist for the vanilla layout.
+        if matches!(storage_config, StorageConfig::Vanilla(_)) {
+            std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
+            std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
+        }
 
         let level_folder = LevelFolder {
             root_folder,
@@ -163,28 +170,44 @@ impl Level {
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
 
-        let raw_chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
-            ChunkConfig::Linear(config) => Arc::new(
-                ChunkFileManager::<LinearV2File<ChunkData>>::new(config.clone()),
-            ),
-            ChunkConfig::Anvil(config) => Arc::new(
-                ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
+        let level_settings = storage_config.level();
+        let (chunk_saver, entity_saver): (
+            Arc<dyn ChunkStorage<SyncChunk>>,
+            Arc<dyn ChunkStorage<SyncEntityChunk>>,
+        ) = match storage_config {
+            StorageConfig::Vanilla(level_config) => {
+                let raw_chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
+                    ChunkConfig::Linear(config) => Arc::new(
+                        ChunkFileManager::<LinearV2File<ChunkData>>::new(config.clone()),
+                    ),
+                    ChunkConfig::Anvil(config) => Arc::new(
+                        ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(config.clone()),
+                    ),
+                };
+                let raw_entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
+                    match &level_config.chunk {
+                        ChunkConfig::Linear(config) => Arc::new(ChunkFileManager::<
+                            LinearV2File<ChunkEntityData>,
+                        >::new(config.clone())),
+                        ChunkConfig::Anvil(config) => Arc::new(ChunkFileManager::<
+                            AnvilChunkFile<ChunkEntityData>,
+                        >::new(
+                            config.clone()
+                        )),
+                    };
+                (
+                    Arc::new(FolderBoundFileIO::new(raw_chunk_saver, level_folder.clone())),
+                    Arc::new(FolderBoundFileIO::new(
+                        raw_entity_saver,
+                        level_folder.clone(),
+                    )),
+                )
+            }
+            StorageConfig::InMemory => (
+                Arc::new(MemoryChunkStorage::<SyncChunk>::new()),
+                Arc::new(MemoryChunkStorage::<SyncEntityChunk>::new()),
             ),
         };
-        let raw_entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> = match &level_config.chunk {
-            ChunkConfig::Linear(config) => Arc::new(ChunkFileManager::<
-                LinearV2File<ChunkEntityData>,
-            >::new(config.clone())),
-            ChunkConfig::Anvil(config) => Arc::new(ChunkFileManager::<
-                AnvilChunkFile<ChunkEntityData>,
-            >::new(config.clone())),
-        };
-        let chunk_saver: Arc<dyn ChunkStorage<SyncChunk>> = Arc::new(
-            FolderBoundFileIO::new(raw_chunk_saver, level_folder.clone()),
-        );
-        let entity_saver: Arc<dyn ChunkStorage<SyncEntityChunk>> = Arc::new(
-            FolderBoundFileIO::new(raw_entity_saver, level_folder.clone()),
-        );
 
         let pending_entity_generations = Arc::new(DashMap::new());
         let level_channel = Arc::new(LevelChannel::new());
@@ -196,7 +219,7 @@ impl Level {
             block_registry,
             world_gen,
             level_folder,
-            lighting_config: level_config.lighting,
+            lighting_config: level_settings.lighting,
             light_engine: DynamicLightEngine::new(),
             chunk_saver,
             entity_saver,
@@ -211,7 +234,7 @@ impl Level {
             shut_down_chunk_system: AtomicBool::new(false),
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
-            autosave_ticks: level_config.autosave_ticks,
+            autosave_ticks: level_settings.autosave_ticks,
             pending_entity_generations: pending_entity_generations.clone(),
             level_channel: level_channel.clone(),
             thread_tracker,

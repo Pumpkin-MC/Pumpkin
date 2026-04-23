@@ -35,13 +35,14 @@ pub mod op;
 mod player_data;
 mod pvp;
 mod server_links;
+pub mod storage;
 pub mod whitelist;
 pub mod world;
 
 use networking::NetworkingConfig;
 use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
-use world::LevelConfig;
+use storage::StorageConfig;
 
 /// Advanced configuration for optional and feature-specific server settings.
 ///
@@ -56,8 +57,8 @@ pub struct AdvancedConfiguration {
     pub logging: LoggingConfig,
     /// Resource pack configuration, including enforcement and pack metadata.
     pub resource_pack: ResourcePackConfig,
-    /// World and level-related settings beyond basic configuration.
-    pub world: LevelConfig,
+    /// Storage backend selection; wraps world/level settings when file-backed.
+    pub storage: StorageConfig,
     /// Networking-related features such as compression, authentication, and LAN broadcast.
     pub networking: NetworkingConfig,
     /// Command system configuration, including availability and permissions.

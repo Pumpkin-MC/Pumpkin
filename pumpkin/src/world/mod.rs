@@ -264,7 +264,7 @@ impl World {
     pub fn get_lighting_config(&self) -> LightingEngineConfig {
         self.server
             .upgrade()
-            .map(|s| s.advanced_config.world.lighting)
+            .map(|s| s.advanced_config.storage.level().lighting)
             .unwrap_or_default()
     }
 

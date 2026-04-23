@@ -32,6 +32,7 @@ use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::lock::{LevelLocker, LockGuard};
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
+use pumpkin_config::storage::StorageConfig;
 use pumpkin_storage::banned_ip::BannedIpStorage;
 use pumpkin_storage::banned_player::BannedPlayerStorage;
 use pumpkin_storage::level_info::{LevelData, LevelInfoStorage};
@@ -39,7 +40,7 @@ use pumpkin_storage::op::OpStorage;
 use pumpkin_storage::player_data::PlayerDataStorage;
 use pumpkin_storage::user_cache::UserCacheStorage;
 use pumpkin_storage::whitelist::WhitelistStorage;
-use pumpkin_storage::{NullStorage, StorageError, VanillaStorage};
+use pumpkin_storage::{MemoryStorage, NullStorage, StorageError, VanillaStorage};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
@@ -151,8 +152,53 @@ impl Server {
         let server_data_dir = std::env::current_dir()
             .unwrap_or_else(|_| ".".into())
             .join("data");
-        let vanilla_storage = Arc::new(VanillaStorage::new(&world_path, &server_data_dir));
-        let level_info_storage: Arc<dyn LevelInfoStorage> = vanilla_storage.clone();
+
+        // Build the domain-storage trait objects from the configured backend.
+        // Vanilla persists to disk under the world/server-data dirs; InMemory
+        // is ephemeral and shares a single MemoryStorage across every trait.
+        let (
+            level_info_storage,
+            persistent_player_data,
+            banned_player_storage,
+            banned_ip_storage,
+            op_storage,
+            whitelist_storage,
+            user_cache_storage,
+        ): (
+            Arc<dyn LevelInfoStorage>,
+            Arc<dyn PlayerDataStorage>,
+            Arc<dyn BannedPlayerStorage>,
+            Arc<dyn BannedIpStorage>,
+            Arc<dyn OpStorage>,
+            Arc<dyn WhitelistStorage>,
+            Arc<dyn UserCacheStorage>,
+        ) = match &advanced_config.storage {
+            StorageConfig::Vanilla(_) => {
+                let vanilla = Arc::new(VanillaStorage::new(&world_path, &server_data_dir));
+                (
+                    vanilla.clone(),
+                    vanilla.clone(),
+                    vanilla.clone(),
+                    vanilla.clone(),
+                    vanilla.clone(),
+                    vanilla.clone(),
+                    vanilla,
+                )
+            }
+            StorageConfig::InMemory => {
+                let memory = Arc::new(MemoryStorage::new());
+                (
+                    memory.clone(),
+                    memory.clone(),
+                    memory.clone(),
+                    memory.clone(),
+                    memory.clone(),
+                    memory.clone(),
+                    memory,
+                )
+            }
+        };
+
         let level_info = level_info_storage.load().await;
         if let Err(error) = &level_info {
             if error.is_not_found() {
@@ -168,15 +214,22 @@ impl Server {
                 }
             }
         }
-        let locker: Option<Box<dyn LockGuard>> = match AnvilLevelLocker::lock(&world_path) {
-            Ok(l) => Some(Box::new(l)),
-            Err(err) => {
-                warn!(
-                    "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
-                );
+        // The on-disk session lock is meaningful only for the file-backed
+        // backend; in-memory servers have no shared state to guard.
+        let locker: Option<Box<dyn LockGuard>> =
+            if matches!(&advanced_config.storage, StorageConfig::Vanilla(_)) {
+                match AnvilLevelLocker::lock(&world_path) {
+                    Ok(l) => Some(Box::new(l)),
+                    Err(err) => {
+                        warn!(
+                            "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
+                        );
+                        None
+                    }
+                }
+            } else {
                 None
-            }
-        };
+            };
 
         let level_info = level_info.unwrap_or_else(|err| {
             warn!("Failed to get level_info, using default instead: {err}");
@@ -192,15 +245,10 @@ impl Server {
         });
         let player_data_backend: Arc<dyn PlayerDataStorage> =
             if advanced_config.player_data.save_player_data {
-                vanilla_storage.clone()
+                persistent_player_data
             } else {
                 Arc::new(NullStorage::new())
             };
-        let banned_player_storage: Arc<dyn BannedPlayerStorage> = vanilla_storage.clone();
-        let banned_ip_storage: Arc<dyn BannedIpStorage> = vanilla_storage.clone();
-        let op_storage: Arc<dyn OpStorage> = vanilla_storage.clone();
-        let whitelist_storage: Arc<dyn WhitelistStorage> = vanilla_storage.clone();
-        let user_cache_storage: Arc<dyn UserCacheStorage> = vanilla_storage.clone();
         let player_data_storage = ServerPlayerData::new(
             player_data_backend,
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
@@ -291,7 +339,7 @@ impl Server {
             let registry = block_registry.clone();
             let l_info = server.level_info.clone(); // Access from struct
             let weak = Arc::downgrade(&server);
-            let config = Arc::new(server.advanced_config.world.clone());
+            let config = Arc::new(server.advanced_config.storage.clone());
             let pool = gen_pool.clone();
 
             tokio::task::spawn_blocking(move || {
