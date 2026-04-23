@@ -142,7 +142,16 @@ impl TrunkType {
                 below_trunk_provider,
                 trunk_state,
             ),
-            Self::Forking(_) => (vec![], vec![]), // TODO
+            Self::Forking(_) => ForkingTrunkPlacer::generate(
+                block_registry,
+                placer,
+                height,
+                start_pos,
+                chunk,
+                random,
+                below_trunk_provider,
+                trunk_state,
+            ),
             Self::Giant(_) => GiantTrunkPlacer::generate(
                 block_registry,
                 placer,
@@ -193,8 +202,26 @@ impl TrunkType {
                 below_trunk_provider,
                 trunk_state,
             ),
-            Self::UpwardsBranching(_) => (vec![], vec![]), // TODO
-            Self::Cherry(_) => (vec![], vec![]),           // TODO
+            Self::UpwardsBranching(upwards_branching) => upwards_branching.generate(
+                block_registry,
+                placer,
+                height,
+                start_pos,
+                chunk,
+                random,
+                below_trunk_provider,
+                trunk_state,
+            ),
+            Self::Cherry(cherry) => cherry.generate(
+                block_registry,
+                placer,
+                height,
+                start_pos,
+                chunk,
+                random,
+                below_trunk_provider,
+                trunk_state,
+            ),
         }
     }
 }

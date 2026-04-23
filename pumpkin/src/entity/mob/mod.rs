@@ -311,11 +311,10 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 }
-
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -324,11 +323,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
                 mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
             }
+
             if mob_entity.love_ticks.load(Relaxed) > 0 {
                 mob_entity.love_ticks.fetch_sub(1, Relaxed);
             }
 
-            self.mob_tick(&caller).await;
+            self.mob_tick(caller).await;
 
             // AI runs before physics (vanilla order: goals → navigator → look → physics)
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
@@ -568,8 +568,7 @@ pub trait SunSensitive: Mob + Send + Sync {
                 .level
                 .light_engine
                 .get_sky_light_level(&world.level, &pos.to_block_pos())
-                .await
-                .unwrap_or(0) as f32
+                .await as f32
                 / 15.0;
 
             if brightness < 0.5 {

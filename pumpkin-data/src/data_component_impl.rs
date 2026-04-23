@@ -5,7 +5,8 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
     DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
-    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, Tool, Unbreakable, Weapon,
+    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, StoredEnchantments, Tool,
+    Unbreakable, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -31,10 +32,13 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 pub trait DataComponentImpl: Send + Sync {
     fn write_data(&self) -> NbtTag {
         NbtTag::End
     }
+    fn write_data_pnbt(&self, _nbt: &mut PNbtCompound) {}
     fn get_hash(&self) -> i32 {
         todo!()
     }
@@ -63,6 +67,21 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
+        StoredEnchantments => Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn()),
+        _ => None,
+    }
+}
+
+#[must_use]
+pub fn read_data_pnbt(
+    id: DataComponent,
+    nbt: &mut PNbtCompound,
+) -> Option<Box<dyn DataComponentImpl>> {
+    match id {
+        MaxStackSize => Some(MaxStackSizeImpl::read_data_pnbt(nbt)?.to_dyn()),
+        Enchantments => Some(EnchantmentsImpl::read_data_pnbt(nbt)?.to_dyn()),
+        Damage => Some(DamageImpl::read_data_pnbt(nbt)?.to_dyn()),
+        Unbreakable => Some(UnbreakableImpl::read_data_pnbt(nbt)?.to_dyn()),
         _ => None,
     }
 }
@@ -132,10 +151,17 @@ impl MaxStackSizeImpl {
     fn read_data(data: &NbtTag) -> Option<Self> {
         data.extract_int().map(|size| Self { size: size as u8 })
     }
+
+    fn read_data_pnbt(nbt: &mut PNbtCompound) -> Option<Self> {
+        nbt.get_u8().ok().map(|size| Self { size })
+    }
 }
 impl DataComponentImpl for MaxStackSizeImpl {
     fn write_data(&self) -> NbtTag {
         NbtTag::Int(i32::from(self.size))
+    }
+    fn write_data_pnbt(&self, nbt: &mut PNbtCompound) {
+        nbt.put_u8(self.size);
     }
     fn get_hash(&self) -> i32 {
         get_i32_hash(i32::from(self.size)) as i32
@@ -158,10 +184,18 @@ impl DamageImpl {
     fn read_data(data: &NbtTag) -> Option<Self> {
         data.extract_int().map(|damage| Self { damage })
     }
+
+    fn read_data_pnbt(nbt: &mut PNbtCompound) -> Option<Self> {
+        nbt.get_int().ok().map(|damage| Self { damage })
+    }
 }
 impl DataComponentImpl for DamageImpl {
     fn write_data(&self) -> NbtTag {
         NbtTag::Int(self.damage)
+    }
+
+    fn write_data_pnbt(&self, nbt: &mut PNbtCompound) {
+        nbt.put_int(self.damage);
     }
     fn get_hash(&self) -> i32 {
         get_i32_hash(self.damage) as i32
@@ -174,11 +208,16 @@ impl UnbreakableImpl {
     const fn read_data(_data: &NbtTag) -> Option<Self> {
         Some(Self)
     }
+
+    fn read_data_pnbt(_nbt: &mut PNbtCompound) -> Option<Self> {
+        Some(Self)
+    }
 }
 impl DataComponentImpl for UnbreakableImpl {
     fn write_data(&self) -> NbtTag {
         NbtTag::Compound(NbtCompound::new())
     }
+    fn write_data_pnbt(&self, _nbt: &mut PNbtCompound) {}
     fn get_hash(&self) -> i32 {
         0
     }
@@ -236,6 +275,19 @@ impl EnchantmentsImpl {
         let mut enc = Vec::with_capacity(data.len());
         for (name, level) in data {
             enc.push((Enchantment::from_name(name.as_str())?, level.extract_int()?));
+        }
+        Some(Self {
+            enchantment: Cow::from(enc),
+        })
+    }
+
+    fn read_data_pnbt(nbt: &mut PNbtCompound) -> Option<Self> {
+        let len = nbt.get_u32().ok()? as usize;
+        let mut enc = Vec::with_capacity(len);
+        for _ in 0..len {
+            let name = nbt.get_string().ok()?;
+            let level = nbt.get_int().ok()?;
+            enc.push((Enchantment::from_name(name.as_str())?, level));
         }
         Some(Self {
             enchantment: Cow::from(enc),
@@ -357,12 +409,21 @@ fn hash() {
 
 impl DataComponentImpl for EnchantmentsImpl {
     fn write_data(&self) -> NbtTag {
-        let mut data = NbtCompound::new();
+        let mut compound = NbtCompound::new();
         for (enc, level) in self.enchantment.iter() {
-            data.put_int(enc.name, *level);
+            compound.put_int(enc.name, *level);
         }
-        NbtTag::Compound(data)
+        NbtTag::Compound(compound)
     }
+
+    fn write_data_pnbt(&self, nbt: &mut PNbtCompound) {
+        nbt.put_u32(self.enchantment.len() as u32);
+        for (enc, level) in self.enchantment.iter() {
+            nbt.put_string(enc.name);
+            nbt.put_int(*level);
+        }
+    }
+
     fn get_hash(&self) -> i32 {
         let mut digest = Digest::new(Crc32Iscsi);
         digest.update(&[2u8]);
@@ -698,7 +759,7 @@ pub enum DamageResistantType {
     NoKnockback,
     PanicCauses,
     PanicEnvironmentalCauses,
-    /// Reducese damage dealt to witches by 85%
+    /// Reduces damage dealt to witches by 85%
     WitchResistantTo,
     WitherImmuneTo,
     /// Generic fallback
@@ -1027,15 +1088,18 @@ impl DataComponentImpl for WeaponImpl {
     default_impl!(Weapon);
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum EquipmentType {
+    #[default]
+    Any,
     Hand,
     HumanoidArmor,
     AnimalArmor,
+    Body,
     Saddle,
 }
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq, Default)]
 pub struct EquipmentSlotData {
     pub slot_type: EquipmentType,
     pub entity_id: i32,
@@ -1101,7 +1165,7 @@ impl EquipmentSlot {
         name: Cow::Borrowed("head"),
     });
     pub const BODY: Self = Self::Body(EquipmentSlotData {
-        slot_type: EquipmentType::AnimalArmor,
+        slot_type: EquipmentType::Body,
         entity_id: 0,
         index: 6,
         max_count: 1,
@@ -1382,8 +1446,45 @@ pub struct BlocksAttacksImpl;
 impl DataComponentImpl for BlocksAttacksImpl {
     default_impl!(BlocksAttacks);
 }
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct StoredEnchantmentsImpl;
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub struct StoredEnchantmentsImpl {
+    pub enchantment: Cow<'static, [(&'static Enchantment, i32)]>,
+}
+
+impl StoredEnchantmentsImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        let data = &data.extract_compound()?.child_tags;
+        let mut enc = Vec::with_capacity(data.len());
+        for (name, level) in data {
+            enc.push((Enchantment::from_name(name.as_str())?, level.extract_int()?));
+        }
+        Some(Self {
+            enchantment: Cow::from(enc),
+        })
+    }
+}
+impl DataComponentImpl for StoredEnchantmentsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut data = NbtCompound::new();
+        for (enc, level) in self.enchantment.iter() {
+            data.put_int(enc.name, *level);
+        }
+        NbtTag::Compound(data)
+    }
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&[2u8]);
+        for (enc, level) in self.enchantment.iter() {
+            digest.update(&get_str_hash(enc.name).to_le_bytes());
+            digest.update(&get_i32_hash(*level).to_le_bytes());
+        }
+        digest.update(&[3u8]);
+        digest.finalize() as i32
+    }
+
+    default_impl!(StoredEnchantments);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DyedColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

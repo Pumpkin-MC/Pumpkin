@@ -410,8 +410,6 @@ impl NetherFortressPiece {
         }
     }
 
-    // ---- opening helpers --------------------------------------------------
-
     #[allow(clippy::too_many_arguments)]
     pub fn fill_forward_opening(
         &self,

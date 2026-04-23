@@ -178,6 +178,11 @@ impl CrashReport {
             "Message: {}",
             self.payload.as_deref().unwrap_or("<unknown>")
         );
+
+        if let Some(panic_location) = &self.panic_location {
+            writeln_output!(&mut output, "Panic Location: {}", panic_location);
+        }
+
         writeln_output!(&mut output);
         writeln_output!(&mut output, "--- Panicking Thread ---");
         writeln_output!(&mut output, "ID: {:?}", self.thread.id());

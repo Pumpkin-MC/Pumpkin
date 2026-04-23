@@ -103,7 +103,7 @@ impl NBTStorage for FireworkRocketEntity {}
 impl EntityBase for FireworkRocketEntity {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {

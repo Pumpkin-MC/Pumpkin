@@ -206,7 +206,7 @@ impl EntityBase for AreaEffectCloudEntity {
     #[allow(clippy::semicolon_outside_block)]
     fn tick<'a>(
         &'a self,
-        _caller: Arc<dyn EntityBase>,
+        _caller: &'a Arc<dyn EntityBase>,
         _server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {

@@ -588,6 +588,9 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:ice_spike" => {
             quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
         }
+        "minecraft:spike" => {
+            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
+        }
         "minecraft:iceberg" => {
             let state = value_to_block_state_codec(&config["state"]);
             quote! { ConfiguredFeature::Iceberg(crate::generation::feature::features::iceberg::IcebergFeature { main_block: #state }) }
@@ -595,7 +598,16 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:chorus_plant" => {
             quote! { ConfiguredFeature::ChorusPlant(crate::generation::feature::features::chorus_plant::ChorusPlantFeature {}) }
         }
-        
+        "minecraft:end_platform" => {
+            quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
+        }
+        "minecraft:end_island" => {
+            quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
+        }
+        "minecraft:kelp" => {
+            quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
+        }
+
         // All TODO/empty features
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
@@ -609,9 +621,6 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:huge_red_mushroom" => {
             quote! { ConfiguredFeature::HugeRedMushroom(crate::generation::feature::features::huge_red_mushroom::HugeRedMushroomFeature {}) }
         }
-        "minecraft:spike" => {
-            quote! { ConfiguredFeature::IceSpike(crate::generation::feature::features::ice_spike::IceSpikeFeature {}) }
-        }
         "minecraft:vines" => {
             quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) }
         }
@@ -624,17 +633,8 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:blue_ice" => {
             quote! { ConfiguredFeature::BlueIce(crate::generation::feature::features::blue_ice::BlueIceFeature {}) }
         }
-        "minecraft:end_platform" => {
-            quote! { ConfiguredFeature::EndPlatform(crate::generation::feature::features::end_platform::EndPlatformFeature) }
-        }
-        "minecraft:end_island" => {
-            quote! { ConfiguredFeature::EndIsland(crate::generation::feature::features::end_island::EndIslandFeature {}) }
-        }
         "minecraft:end_gateway" => {
             quote! { ConfiguredFeature::EndGateway(crate::generation::feature::features::end_gateway::EndGatewayFeature {}) }
-        }
-        "minecraft:kelp" => {
-            quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
         "minecraft:coral_tree" => {
             quote! { ConfiguredFeature::CoralTree(crate::generation::feature::features::coral::coral_tree::CoralTreeFeature) }
@@ -965,6 +965,30 @@ fn value_to_tree_feature(config: &Value) -> TokenStream {
     }
 }
 
+fn value_to_block_list(v: &Value) -> TokenStream {
+    if let Some(s) = v.as_str() {
+        if let Some(tag) = s.strip_prefix('#') {
+            let name = format!(
+                "MINECRAFT_{}",
+                tag.strip_prefix("minecraft:").unwrap_or(tag).to_uppercase()
+            );
+            let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+            return quote! { &pumpkin_data::tag::Block::#ident.1 };
+        }
+    }
+    let mut blocks = Vec::new();
+    if let Some(arr) = v.as_array() {
+        for b in arr {
+            if let Some(s) = b.as_str() {
+                let name = s.strip_prefix("minecraft:").unwrap_or(s).to_uppercase();
+                let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+                blocks.push(quote! { pumpkin_data::Block::#ident.id });
+            }
+        }
+    }
+    quote! { &[#(#blocks),*] }
+}
+
 /// Converts a trunk-placer JSON object into a `TrunkPlacer` token stream.
 ///
 /// # Arguments
@@ -994,10 +1018,37 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
             }
         }
         "minecraft:upwards_branching_trunk_placer" => {
-            quote! { TrunkType::UpwardsBranching(UpwardsBranchingTrunkPlacer {}) }
+            let extra_branch_steps = value_to_int_provider(&v["extra_branch_steps"]);
+            let place_branch_per_log_probability = v["place_branch_per_log_probability"]
+                .as_f64()
+                .unwrap_or(0.0) as f32;
+            let extra_branch_length = value_to_int_provider(&v["extra_branch_length"]);
+            let can_grow_through = value_to_block_list(&v["can_grow_through"]);
+            quote! {
+                TrunkType::UpwardsBranching(UpwardsBranchingTrunkPlacer {
+                    extra_branch_steps: #extra_branch_steps,
+                    place_branch_per_log_probability: #place_branch_per_log_probability,
+                    extra_branch_length: #extra_branch_length,
+                    can_grow_through: #can_grow_through,
+                })
+            }
         }
         "minecraft:cherry_trunk_placer" => {
-            quote! { TrunkType::Cherry(CherryTrunkPlacer {}) }
+            let branch_count = value_to_int_provider(&v["branch_count"]);
+            let branch_horizontal_length = value_to_int_provider(&v["branch_horizontal_length"]);
+            let branch_start_offset_v = &v["branch_start_offset_from_top"];
+            let min = branch_start_offset_v["min_inclusive"].as_i64().unwrap_or(0) as i32;
+            let max = branch_start_offset_v["max_inclusive"].as_i64().unwrap_or(0) as i32;
+            let branch_end_offset_from_top =
+                value_to_int_provider(&v["branch_end_offset_from_top"]);
+            quote! {
+                TrunkType::Cherry(CherryTrunkPlacer {
+                    branch_count: #branch_count,
+                    branch_horizontal_length: #branch_horizontal_length,
+                    branch_start_offset_from_top: UniformIntProvider { min_inclusive: #min, max_inclusive: #max },
+                    branch_end_offset_from_top: #branch_end_offset_from_top,
+                })
+            }
         }
         _ => quote! { TrunkType::Straight(StraightTrunkPlacer) },
     };

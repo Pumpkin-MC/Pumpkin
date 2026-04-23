@@ -35,6 +35,7 @@ pub fn can_be_replaced(block_state: &BlockState, block: &Block, fluid: &Fluid) -
         || id == Block::BELL.id
         || id == Block::BIG_DRIPLEAF.id
         || id == Block::BIG_DRIPLEAF_STEM.id
+        || id == Block::SMALL_DRIPLEAF.id
         || id == Block::CAKE.id
         || id == Block::CONDUIT.id
         || id == Block::CAMPFIRE.id
