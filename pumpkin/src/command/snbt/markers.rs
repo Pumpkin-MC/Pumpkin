@@ -20,5 +20,5 @@ pub enum TypeSuffix {
 pub struct IntegerSuffix(pub SignedPrefix, pub TypeSuffix);
 
 impl IntegerSuffix {
-    pub const EMPTY: IntegerSuffix = IntegerSuffix(SignedPrefix::None, TypeSuffix::None);
+    pub const EMPTY: Self = Self(SignedPrefix::None, TypeSuffix::None);
 }

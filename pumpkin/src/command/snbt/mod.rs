@@ -48,21 +48,23 @@ pub enum Numeral {
 }
 
 impl Numeral {
-    pub fn should_allow(self, c: char) -> bool {
-        match (self, c) {
-            (_, '_') => true,
-            (Numeral::Binary, '0' | '1') => true,
-            (Numeral::Decimal, '0'..='9') => true,
-            (Numeral::Hexadecimal, '0'..='9' | 'A'..='F' | 'a'..='f') => true,
-            _ => false,
-        }
+    #[must_use]
+    pub const fn should_allow(self, c: char) -> bool {
+        matches!(
+            (self, c),
+            (_, '_') |
+            (Self::Binary, '0' | '1') |
+            (Self::Decimal, '0'..='9') |
+            (Self::Hexadecimal, '0'..='9' | 'A'..='F' | 'a'..='f')
+        )
     }
 
-    pub fn no_value_error_type(self) -> &'static CommandErrorType<0> {
+    #[must_use]
+    pub const fn no_value_error_type(self) -> &'static CommandErrorType<0> {
         match self {
-            Numeral::Binary => &EXPECTED_BINARY_NUMERAL,
-            Numeral::Decimal => &EXPECTED_DECIMAL_NUMERAL,
-            Numeral::Hexadecimal => &EXPECTED_HEX_NUMERAL,
+            Self::Binary => &EXPECTED_BINARY_NUMERAL,
+            Self::Decimal => &EXPECTED_DECIMAL_NUMERAL,
+            Self::Hexadecimal => &EXPECTED_HEX_NUMERAL,
         }
     }
 }
@@ -70,7 +72,7 @@ impl Numeral {
 //
 // RULES
 //
-impl<'a, E: ErrorEntries> SnbtParser<'a, E> {
+impl<E: ErrorEntries> SnbtParser<'_, E> {
     fn sign(&mut self) -> Option<Sign> {
         self.reader.skip_whitespace();
         match self.reader.peek() {
@@ -96,14 +98,14 @@ impl<'a, E: ErrorEntries> SnbtParser<'a, E> {
     fn integer_suffix(&mut self) -> Option<IntegerSuffix> {
         self.reader.skip_whitespace();
         match self.reader.peek() {
-            Some('u') | Some('U') => {
+            Some('u' | 'U') => {
                 self.reader.skip();
                 Some(IntegerSuffix(
                     SignedPrefix::Unsigned,
                     self.integer_type_suffix()?,
                 ))
             }
-            Some('s') | Some('S') => {
+            Some('s' | 'S') => {
                 self.reader.skip();
                 Some(IntegerSuffix(
                     SignedPrefix::Signed,
@@ -147,7 +149,7 @@ impl<'a, E: ErrorEntries> SnbtParser<'a, E> {
 //
 // HELPER FUNCTIONS
 //
-impl<'a, E: ErrorEntries> SnbtParser<'a, E> {
+impl<E: ErrorEntries> SnbtParser<'_, E> {
     /// Records that a simple error occurred while parsing, and adds suggestions to counteract it.
     fn store_simple_error_and_suggest(
         &mut self,
@@ -175,7 +177,7 @@ impl<'a, E: ErrorEntries> SnbtParser<'a, E> {
     fn store_simple_error(&mut self, error_type: &'static CommandErrorType<0>) {
         self.errors
             .entries
-            .simple(&self.reader, error_type, || vec![]);
+            .simple(&self.reader, error_type, std::vec::Vec::new);
     }
 
     /// Records that a dynamic error occurred while parsing.
@@ -186,26 +188,26 @@ impl<'a, E: ErrorEntries> SnbtParser<'a, E> {
     ) {
         self.errors
             .entries
-            .dynamic(&self.reader, error_type, arg1, || vec![]);
+            .dynamic(&self.reader, error_type, arg1, std::vec::Vec::new);
     }
 
     /// Utility method that parses a type suffix of an integer.
     fn integer_type_suffix(&mut self) -> Option<TypeSuffix> {
         self.reader.skip_whitespace();
         match self.reader.peek() {
-            Some('b') | Some('B') => {
+            Some('b' | 'B') => {
                 self.reader.skip();
                 Some(TypeSuffix::Byte)
             }
-            Some('s') | Some('S') => {
+            Some('s' | 'S') => {
                 self.reader.skip();
                 Some(TypeSuffix::Short)
             }
-            Some('i') | Some('I') => {
+            Some('i' | 'I') => {
                 self.reader.skip();
                 Some(TypeSuffix::Int)
             }
-            Some('l') | Some('L') => {
+            Some('l' | 'L') => {
                 self.reader.skip();
                 Some(TypeSuffix::Long)
             }
