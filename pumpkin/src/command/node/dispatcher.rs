@@ -525,7 +525,7 @@ impl CommandDispatcher {
                         let node = &self.tree[argument_node_id];
                         node.meta
                             .argument_type
-                            .list_suggestions(&context, &mut builder)
+                            .list_suggestions(&context, builder)
                     }
                 };
 

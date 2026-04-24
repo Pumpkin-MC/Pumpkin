@@ -1,4 +1,6 @@
-use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
+use std::borrow::Cow;
+use std::pin::Pin;
+use crate::command::argument_types::argument_type::{AnyArgumentType, ArgumentType, JavaClientArgumentType};
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
@@ -8,7 +10,10 @@ use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_key::ResourceKey;
 use pumpkin_util::text::TextComponent;
 use std::string::ToString;
+use tracing::info;
+use pumpkin_protocol::java::client::play::SuggestionProviders;
 use crate::command::argument_types::FromStringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 
 pub static ADVANCEMENT_REGISTRY: Identifier = Identifier::vanilla_static("advancement");
 
@@ -27,9 +32,34 @@ impl ArgumentType for ResourceKeyArgument {
         Ok(ResourceKey::new(self.0.clone(),identifier))
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
-        JavaClientArgumentType::ResourceKey {identifier: self.0.path()}
+    fn list_suggestions(
+        &self,
+        context: &CommandContext,
+        mut suggestions_builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
+        if &self.0 == &ADVANCEMENT_REGISTRY {
+            let advancements = context.server().advancement_manager.get_advancements();
+            Box::pin(async move {
+                let string = suggestions_builder.remaining().to_lowercase();
+                for identifier in advancements {
+                    if identifier.starts_with(&string) {
+                        suggestions_builder = suggestions_builder.suggest(identifier);
+                    }
+                };
+                suggestions_builder.build()
+            })
+        }else {
+            Box::pin(async move { Suggestions::empty() })
+        }
     }
+
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
+        JavaClientArgumentType::ResourceKey {
+            identifier: self.0.clone(),
+        }
+    }
+
+
 }
 
 impl ResourceKeyArgument {

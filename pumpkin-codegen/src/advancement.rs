@@ -154,7 +154,8 @@ pub(crate) fn build() -> TokenStream {
     let mut variants = TokenStream::new();
     let mut name_to_type = TokenStream::new();
     let mut minecraft_name_to_type = TokenStream::new();
-
+    let mut minecraft_namespaces = TokenStream::new();
+    let capacity = advancements.len();
     for (minecraft_name, advancement) in advancements {
         let raw_name = minecraft_name.strip_prefix("minecraft:").unwrap();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
@@ -175,8 +176,10 @@ pub(crate) fn build() -> TokenStream {
                 reward : &#reward,
             };
         }]);
+
         name_to_type.extend(quote! { #raw_name => Some(&Self::#format_name), });
         minecraft_name_to_type.extend(quote! { #minecraft_name => Some(&Self::#format_name), });
+        minecraft_namespaces.extend(quote! { #minecraft_name,})
     }
 
     quote! {
@@ -248,6 +251,10 @@ pub(crate) fn build() -> TokenStream {
                     #minecraft_name_to_type
                     _ => None
                 }
+            }
+
+            pub fn get_list() -> [&'static str;#capacity] {
+                [#minecraft_namespaces]
             }
         }
     }

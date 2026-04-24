@@ -1,6 +1,6 @@
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
-
+use pumpkin_util::identifier::Identifier;
 use crate::command::{
     CommandSender,
     args::{
@@ -15,9 +15,9 @@ use crate::server::Server;
 pub struct EffectTypeArgumentConsumer;
 
 impl GetClientSideArgParser for EffectTypeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Resource {
-            identifier: "mob_effect",
+            identifier: Identifier::vanilla_static("mob_effect"),
         }
     }
 

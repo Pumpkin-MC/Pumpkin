@@ -198,7 +198,7 @@ impl Server {
             advanced_config.player_data.save_player_data,
         );
         let advancement_manager = AdvancementManager::new(
-            world_path.join("advancement"),
+            world_path.clone(),
         );
         let white_list = AtomicBool::new(basic_config.white_list);
 

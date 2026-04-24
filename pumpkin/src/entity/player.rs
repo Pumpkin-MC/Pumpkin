@@ -600,7 +600,7 @@ impl Player {
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(true),
-            advancements: Arc::new(Mutex::new(server.advancement_manager.get_advancement())),
+            advancements: Arc::new(Mutex::new(server.advancement_manager.new_advancement())),
         }
     }
 

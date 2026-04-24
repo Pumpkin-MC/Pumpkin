@@ -31,7 +31,7 @@ impl EntityAnchor {
 pub struct EntityAnchorArgumentConsumer;
 
 impl GetClientSideArgParser for EntityAnchorArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::EntityAnchor
     }
 

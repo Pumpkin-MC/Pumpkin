@@ -49,8 +49,6 @@ pub enum AdvancementDataError {
 
 impl PlayerAdvancement {
 
-    const PATH: &'static str = "advancement";
-
     pub(crate) fn new(save_enabled:bool,advancement_path:impl Into<PathBuf>) -> Self {
         let path = advancement_path.into();
         if !path.exists()
@@ -84,10 +82,14 @@ impl PlayerAdvancement {
         if !self.is_save_enabled() {
             return Ok(());
         }
+
         if let Some(parent) = &self.advancement_path.parent()
             && let Err(e) = create_dir_all(parent){
-            error!("Failed to create player advancement directory for {}: {e}",
-                self.advancement_path.file_prefix().to_string());
+            let file_name = self.advancement_path
+                .file_prefix()
+                .and_then(|prefix| prefix.to_str())
+                .unwrap_or("unknow");
+            error!("Failed to create player advancement directory for {}: {e}", file_name);
             return Err(AdvancementDataError::Io(e));
         }
         let file = std::fs::File::create(&self.advancement_path)
@@ -127,19 +129,16 @@ impl PlayerAdvancement {
         self.is_first_packet = false;
     }
 
-    fn start_progress(&mut self,advancement : &'static Advancement, advancement_progress : AdvancementProgress){
-        self.advancements.insert(advancement, advancement_progress);
+    fn start_progress(&mut self,_advancement : &'static Advancement, advancement_progress : AdvancementProgress) -> AdvancementProgress{
+        advancement_progress
     }
 
     pub fn get_or_start_progress(&mut self,advancement:&'static Advancement) -> &AdvancementProgress{
-        self.advancements.entry(advancement).or_insert_with(AdvancementProgress::default)
+        self.get_mut_or_start_progress(advancement)
     }
 
     pub fn get_mut_or_start_progress(&mut self,advancement:&'static Advancement) -> &mut AdvancementProgress{
-        self.advancements.get_mut(advancement).map(|progress| progress).unwrap_or_else(|| {
-            self.start_progress(advancement, AdvancementProgress::default());
-            self.advancements.get_mut(advancement).map(|progress| progress).unwrap()
-        })
+        self.advancements.entry(advancement).or_insert_with(AdvancementProgress::default)
     }
 
     pub async fn grant_reward(player:Arc<Player>,reward:&AdvancementReward){
@@ -147,9 +146,9 @@ impl PlayerAdvancement {
     }
 
     pub async fn award(&mut self,advancement:&'static Advancement){
-        //TODO call and creates Events
+        //TODO call and creates Events for plugins
         let player = self.player.upgrade().unwrap().clone();
-        let mut progress = self.get_mut_or_start_progress(advancement);
+        let progress = self.get_mut_or_start_progress(advancement);
         let is_done = progress.is_done();
         if !progress.is_done() {
             progress.complete = true;

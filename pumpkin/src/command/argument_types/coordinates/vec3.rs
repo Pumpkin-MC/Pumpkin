@@ -45,7 +45,7 @@ impl ArgumentType for Vec3ArgumentType {
         }
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Vec3
     }
 

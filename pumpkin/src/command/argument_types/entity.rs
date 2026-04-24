@@ -72,7 +72,7 @@ impl ArgumentType for EntityArgumentType {
         self.parse_with_allow_selectors(reader, true)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Entity {
             flags: (self.is_single() as u8 * JavaClientArgumentType::ENTITY_FLAG_ONLY_SINGLE)
                 | (self.is_players_only() as u8 * JavaClientArgumentType::ENTITY_FLAG_PLAYERS_ONLY),

@@ -317,7 +317,7 @@ fn parse_selector_filter(
 pub struct EntitiesArgumentConsumer;
 
 impl GetClientSideArgParser for EntitiesArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         // todo: investigate why this does not accept target selectors
         ArgumentType::Entity { flags: 0 }
     }

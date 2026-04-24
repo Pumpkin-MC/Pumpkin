@@ -1,6 +1,6 @@
 use pumpkin_data::particle::Particle;
 use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
-
+use pumpkin_util::identifier::Identifier;
 use crate::command::{
     CommandSender,
     args::{
@@ -15,9 +15,9 @@ use crate::server::Server;
 pub struct ParticleArgumentConsumer;
 
 impl GetClientSideArgParser for ParticleArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Resource {
-            identifier: "particle_type",
+            identifier: Identifier::vanilla_static("particle_type"),
         }
     }
 

@@ -62,7 +62,7 @@ impl ArgumentType for GameProfileArgumentType {
         Self::parse_with_allow_selectors(reader, true)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::GameProfile
     }
 

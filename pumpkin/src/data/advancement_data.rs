@@ -13,11 +13,15 @@ impl AdvancementManager {
         }
     }
 
+    pub fn get_advancements(&self)->Vec<&'static str>{
+        Advancement::get_list().to_vec()
+    }
+
     pub fn get_advancement_path(&self) -> PathBuf {
         self.advancement_path.clone()
     }
 
-    pub fn get_advancement(&self) -> PlayerAdvancement {
+    pub fn new_advancement(&self) -> PlayerAdvancement {
         PlayerAdvancement::new(true,self.get_advancement_path())
     }
 }

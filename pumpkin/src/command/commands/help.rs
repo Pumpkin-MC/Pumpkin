@@ -91,7 +91,7 @@ impl ArgumentType for HelpArgumentType {
         }
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::String(StringProtoArgBehavior::GreedyPhrase)
     }
 }

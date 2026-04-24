@@ -17,7 +17,7 @@ use super::{
 pub struct BlockArgumentConsumer;
 
 impl GetClientSideArgParser for BlockArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::BlockState
     }
 
@@ -81,7 +81,7 @@ pub enum BlockPredicate {
 }
 
 impl GetClientSideArgParser for BlockPredicateArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::BlockPredicate
     }
 
