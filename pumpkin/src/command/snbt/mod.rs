@@ -57,7 +57,7 @@ impl Numeral {
             _ => false,
         }
     }
-    
+
     pub fn no_value_error_type(self) -> &'static CommandErrorType<0> {
         match self {
             Numeral::Binary => &EXPECTED_BINARY_NUMERAL,
@@ -172,10 +172,7 @@ impl<'a, E: ErrorEntries> SnbtParser<'a, E> {
     }
 
     /// Records that a simple error occurred while parsing.
-    fn store_simple_error(
-        &mut self,
-        error_type: &'static CommandErrorType<0>
-    ) {
+    fn store_simple_error(&mut self, error_type: &'static CommandErrorType<0>) {
         self.errors
             .entries
             .simple(&self.reader, error_type, || vec![]);
@@ -185,7 +182,7 @@ impl<'a, E: ErrorEntries> SnbtParser<'a, E> {
     fn store_dynamic_error(
         &mut self,
         error_type: &'static CommandErrorType<1>,
-        arg1: impl FnOnce() -> TextComponent
+        arg1: impl FnOnce() -> TextComponent,
     ) {
         self.errors
             .entries
