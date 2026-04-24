@@ -33,6 +33,7 @@ pub mod context;
 pub mod dispatcher;
 pub mod errors;
 pub mod node;
+pub mod snbt;
 pub mod string_reader;
 pub mod suggestion;
 pub mod tree;
