@@ -22,7 +22,7 @@ use std::io::{Cursor, ErrorKind, IsTerminal, stdin};
 use std::process::exit;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{Arc, Mutex as StdMutex, OnceLock};
+use std::sync::{Arc, Mutex as StdMutex, MutexGuard as StdMutexGuard, OnceLock};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
@@ -178,11 +178,17 @@ pub static SERVER_IS_STOPPING: AtomicBool = AtomicBool::new(false);
 pub static CRASH_REPORT: OnceLock<CrashReport> = OnceLock::new();
 pub static SERVER_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 
+fn lock_or_recover<T>(mutex: &StdMutex<T>) -> StdMutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 pub fn stop_server() {
     SHOULD_STOP.store(true, Ordering::Relaxed);
     STOP_INTERRUPT.cancel();
 
-    if let Some(ticker_thread) = TICKER_THREAD.lock().unwrap().as_ref() {
+    if let Some(ticker_thread) = lock_or_recover(&TICKER_THREAD).as_ref() {
         ticker_thread.unpark();
     }
 }
@@ -221,7 +227,7 @@ impl TickerThread {
             })
             .expect("Failed to spawn tick loop thread");
 
-        *TICKER_THREAD.lock().unwrap() = Some(join_handle.thread().clone());
+        *lock_or_recover(&TICKER_THREAD) = Some(join_handle.thread().clone());
 
         Self {
             join_handle: StdMutex::new(Some(join_handle)),
@@ -229,7 +235,7 @@ impl TickerThread {
     }
 
     async fn join(&self) {
-        let Some(join_handle) = self.join_handle.lock().unwrap().take() else {
+        let Some(join_handle) = lock_or_recover(&self.join_handle).take() else {
             return;
         };
 
@@ -241,7 +247,7 @@ impl TickerThread {
             error!("Tick loop thread panicked during shutdown");
         }
 
-        *TICKER_THREAD.lock().unwrap() = None;
+        *lock_or_recover(&TICKER_THREAD) = None;
     }
 }
 
