@@ -28,7 +28,7 @@ use std::{net::SocketAddr, sync::LazyLock};
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::select;
 use tokio::sync::Mutex;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, info, warn};
@@ -442,40 +442,54 @@ impl PumpkinServer {
                         };
                         debug!("Accepted connection from Java Edition: {formatted_address} (id {client_id})");
                         let server_clone = self.server.clone();
+                        let login_timeout = server_clone.advanced_config.networking.login_timeout;
 
                         tasks.spawn(async move {
                             let mut java_client = JavaClient::new(connection, client_addr, client_id);
                             java_client.start_outgoing_packet_task();
-                            let login_result = java_client.handle_login_sequence(&server_clone).await;
+                            let login_result = if login_timeout == 0 {
+                                Ok(java_client.handle_login_sequence(&server_clone).await)
+                            } else {
+                                timeout(
+                                    Duration::from_millis(u64::from(login_timeout)),
+                                    java_client.handle_login_sequence(&server_clone),
+                                )
+                                .await
+                            };
 
                             match login_result {
-                                PacketHandlerResult::Stop => {
-                                     java_client.close();
-                                     java_client.await_tasks().await;
-                                },
-                                PacketHandlerResult::ReadyToPlay(profile,config) => {
-                                     if let Some((player, world)) = server_clone
-                                     .add_player(ClientPlatform::Java(java_client), profile, Some(config))
-                                          .await
-                                {
-                                    world
-                                        .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
-                                        .await;
-                                    if let ClientPlatform::Java(client) = &player.client {
-                                        client.progress_player_packets(&player, &server_clone).await;
-                                        // Close when done
-                                        client.close();
-                                        client.await_tasks().await;
-                                    }
-                                    player.remove().await;
-                                    server_clone.remove_player(&player).await;
-                                    if let Err(e) = server_clone.player_data_storage
-                                        .handle_player_leave(&player)
-                                        .await {
+                                Ok(PacketHandlerResult::Stop) => {
+                                    java_client.close();
+                                    java_client.await_tasks().await;
+                                }
+                                Ok(PacketHandlerResult::ReadyToPlay(profile, config)) => {
+                                    if let Some((player, world)) = server_clone
+                                        .add_player(ClientPlatform::Java(java_client), profile, Some(config))
+                                        .await
+                                    {
+                                        world
+                                            .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
+                                            .await;
+                                        if let ClientPlatform::Java(client) = &player.client {
+                                            client.progress_player_packets(&player, &server_clone).await;
+                                            // Close when done
+                                            client.close();
+                                            client.await_tasks().await;
+                                        }
+                                        player.remove().await;
+                                        server_clone.remove_player(&player).await;
+                                        if let Err(e) = server_clone.player_data_storage
+                                            .handle_player_leave(&player)
+                                            .await
+                                        {
                                             error!("Failed to save player data on disconnect: {e}");
                                         }
                                     }
-                                },
+                                }
+                                Err(_) => {
+                                    java_client.kick(TextComponent::text("Login timed out")).await;
+                                    java_client.await_tasks().await;
+                                }
                             }
                         });
                     }
@@ -510,15 +524,33 @@ impl PumpkinServer {
                                     });
                                 } else if let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
                                     *master_client_id_counter += 1;
+                                    let login_timeout = self.server.advanced_config.networking.login_timeout;
 
                                     let mut platform = BedrockClient::new(self.udp_socket.clone().unwrap(), client_addr, be_clients);
                                     platform.handle_connection_request(packet).await;
                                     platform.start_outgoing_packet_task();
 
-                                    clients_guard.insert(client_addr,
-                                    Arc::new(
-                                        platform
-                                    ));
+                                    let platform = Arc::new(platform);
+
+                                    if login_timeout > 0 {
+                                        let platform_clone = platform.clone();
+                                        platform.spawn_task(async move {
+                                            sleep(Duration::from_millis(u64::from(login_timeout))).await;
+
+                                            if !platform_clone.is_closed()
+                                                && platform_clone.player.lock().await.is_none()
+                                            {
+                                                platform_clone
+                                                    .kick(
+                                                        DisconnectReason::Timeout,
+                                                        "Login timed out".to_string(),
+                                                    )
+                                                    .await;
+                                            }
+                                        });
+                                    }
+
+                                    clients_guard.insert(client_addr, platform);
                                 }
                             } else {
                                 // Please keep the function as simple as possible!
