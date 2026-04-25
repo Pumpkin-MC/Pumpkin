@@ -25,6 +25,7 @@ use crate::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
                 StructurePiecesCollector, StructurePosition,
             },
+            template::{BlockMirror, BlockRotation, BlockStateResolver},
         },
     },
 };
@@ -43,7 +44,14 @@ impl StructureGenerator for JungleTempleGenerator {
         let x = start_block_x(context.chunk_x);
         let z = start_block_z(context.chunk_z);
 
-        let facing = BlockDirection::get_random_horizontal_direction(&mut context.random);
+        let rotation_index = context.random.next_bounded_i32(4) as u8;
+        let rotation = BlockRotation::from_index(rotation_index);
+        let facing = match rotation_index {
+            0 => BlockDirection::North,
+            1 => BlockDirection::East,
+            2 => BlockDirection::South,
+            _ => BlockDirection::West,
+        };
 
         let mut piece = StructurePiece::new(
             StructurePieceType::JungleTemple,
@@ -60,6 +68,8 @@ impl StructureGenerator for JungleTempleGenerator {
             placed_hidden_chest: true,
             placed_trap_1: true,
             placed_trap_2: true,
+            rotation,
+            mirror: BlockMirror::None,
         }));
 
         Some(StructurePosition {
@@ -77,6 +87,8 @@ pub struct JungleTemplePiece {
     placed_hidden_chest: bool,
     placed_trap_1: bool,
     placed_trap_2: bool,
+    rotation: BlockRotation,
+    mirror: BlockMirror,
 }
 impl StructurePieceBase for JungleTemplePiece {
     fn clone_box(&self) -> Box<dyn StructurePieceBase> {
@@ -196,10 +208,38 @@ impl StructurePieceBase for JungleTemplePiece {
             .fill(chunk, bb, 7, 9, 10, 7, 9, 10, Self::SS.next(random));
         self.piece
             .fill(chunk, bb, 5, 9, 7, 6, 9, 7, Self::SS.next(random));
-        let east_stairs = Self::cobblestone_stairs(HorizontalFacing::East);
+        println!("{} {}", chunk.x, chunk.z);
+        let north_stairs = BlockStateResolver::resolve_from_block_state(
+            Self::cobblestone_stairs(HorizontalFacing::North),
+            self.rotation,
+            self.mirror,
+        )
+        .unwrap();
+
+        let east_stairs = BlockStateResolver::resolve_from_block_state(
+            Self::cobblestone_stairs(HorizontalFacing::East),
+            self.rotation,
+            self.mirror,
+        )
+        .unwrap();
+
+        let west_stairs = BlockStateResolver::resolve_from_block_state(
+            Self::cobblestone_stairs(HorizontalFacing::West),
+            self.rotation,
+            self.mirror,
+        )
+        .unwrap();
+
+        let south_stairs = BlockStateResolver::resolve_from_block_state(
+            Self::cobblestone_stairs(HorizontalFacing::South),
+            self.rotation,
+            self.mirror,
+        )
+        .unwrap();
+        /*let east_stairs = Self::cobblestone_stairs(HorizontalFacing::East);
         let west_stairs = Self::cobblestone_stairs(HorizontalFacing::West);
         let south_stairs = Self::cobblestone_stairs(HorizontalFacing::South);
-        let north_stairs = Self::cobblestone_stairs(HorizontalFacing::North);
+        let north_stairs = Self::cobblestone_stairs(HorizontalFacing::North);*/
         self.piece.add_block(chunk, north_stairs, 5, 9, 6, bb);
         self.piece.add_block(chunk, north_stairs, 6, 9, 6, bb);
         self.piece.add_block(chunk, south_stairs, 5, 9, 8, bb);
