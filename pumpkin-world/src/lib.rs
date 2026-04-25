@@ -47,10 +47,7 @@ pub use generation::{
 
 use crate::generation::{
     biome_coords,
-    noise::{
-        CHUNK_DIM, ChunkNoiseGenerator,
-        aquifer_sampler::{FluidLevel, FluidLevelSampler},
-    },
+    noise::{CHUNK_DIM, ChunkNoiseGenerator, aquifer_sampler::FluidLevel},
     positions::chunk_pos,
     proto_chunk::TerrainCache,
 };
@@ -74,13 +71,13 @@ pub fn bench_create_and_populate_noise(
     // Create noise sampler and other required components
     let generation_shape = &settings.shape;
     let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
-    let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
+    let sampler = StandardChunkFluidLevelSampler::new(
         FluidLevel::new(
             settings.sea_level,
             Block::from_state_id(settings.default_fluid.id),
         ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
-    ));
+    );
 
     let start_x = chunk_pos::start_block_x(0);
     let start_z = chunk_pos::start_block_z(0);
@@ -204,13 +201,13 @@ pub fn bench_create_and_populate_noise_with_surface(
         MultiNoiseSampler::generate(&base_router.multi_noise, &multi_noise_config);
 
     // Noise sampler
-    let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
+    let sampler = StandardChunkFluidLevelSampler::new(
         FluidLevel::new(
             settings.sea_level,
             Block::from_state_id(settings.default_fluid.id),
         ),
         FluidLevel::new(-54, &pumpkin_data::Block::LAVA),
-    ));
+    );
 
     let mut noise_sampler = ChunkNoiseGenerator::new(
         &base_router.noise,

@@ -175,10 +175,8 @@ impl Level {
         ) = match storage_config {
             StorageConfig::Vanilla(level_config) => {
                 let raw_chunk_saver: Arc<dyn FileIO<Data = SyncChunk>> = match &level_config.chunk {
-                    ChunkConfig::Linear(config) => {
-                        Arc::new(ChunkFileManager::<LinearV2File<ChunkData>>::new(
-                            config.clone(),
-                        ))
+                    ChunkConfig::Linear => {
+                        Arc::new(ChunkFileManager::<LinearV2File<ChunkData>>::new(()))
                     }
                     ChunkConfig::Anvil(config) => {
                         Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkData>>::new(
@@ -188,10 +186,8 @@ impl Level {
                 };
                 let raw_entity_saver: Arc<dyn FileIO<Data = SyncEntityChunk>> =
                     match &level_config.chunk {
-                        ChunkConfig::Linear(config) => {
-                            Arc::new(ChunkFileManager::<LinearV2File<ChunkEntityData>>::new(
-                                config.clone(),
-                            ))
+                        ChunkConfig::Linear => {
+                            Arc::new(ChunkFileManager::<LinearV2File<ChunkEntityData>>::new(()))
                         }
                         ChunkConfig::Anvil(config) => {
                             Arc::new(ChunkFileManager::<AnvilChunkFile<ChunkEntityData>>::new(
@@ -250,7 +246,11 @@ impl Level {
         });
 
         // TODO
-        let total_cores = num_cpus::get().saturating_sub(2).max(1);
+        let total_cores = thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .saturating_sub(2)
+            .max(1);
         let threads_per_dimension = (total_cores / 2).max(1);
 
         GenerationSchedule::create(
