@@ -1,15 +1,53 @@
+#![allow(unused)] // temporary
+
 pub mod error_entries;
 mod markers;
 
-use std::ops::Range;
-
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
 use crate::command::snbt::error_entries::ErrorEntries;
-use crate::command::snbt::markers::{IntegerSuffix, SignedPrefix, TypeSuffix};
+use crate::command::snbt::markers::{
+    Base, FloatingPointLiteral, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix,
+    TypeSuffix,
+};
 use crate::command::string_reader::StringReader;
-use num_bigint::Sign;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
+
+pub const NUMBER_PARSE_FAILURE: CommandErrorType<1> =
+    CommandErrorType::new(translation::SNBT_PARSER_NUMBER_PARSE_FAILURE);
+
+pub const EXPECTED_HEX_ESCAPE: CommandErrorType<1> =
+    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_HEX_ESCAPE);
+
+pub const INVALID_CODEPOINT: CommandErrorType<1> =
+    CommandErrorType::new(translation::SNBT_PARSER_INVALID_CODEPOINT);
+
+pub const NO_SUCH_OPERATION: CommandErrorType<1> =
+    CommandErrorType::new(translation::SNBT_PARSER_NO_SUCH_OPERATION);
+
+pub const EXPECTED_INTEGER_TYPE: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_INTEGER_TYPE);
+
+pub const EXPECTED_FLOAT_TYPE: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_FLOAT_TYPE);
+
+pub const EXPECTED_NON_NEGATIVE_NUMBER: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_NON_NEGATIVE_NUMBER);
+
+pub const INVALID_CHARACTER_NAME: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_INVALID_CHARACTER_NAME);
+
+pub const INVALID_ARRAY_ELEMENT_TYPE: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_INVALID_ARRAY_ELEMENT_TYPE);
+
+pub const INVALID_UNQUOTED_START: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_INVALID_UNQUOTED_START);
+
+pub const EXPECTED_UNQUOTED_STRING: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_UNQUOTED_STRING);
+
+pub const INVALID_STRING_CONTENTS: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_INVALID_STRING_CONTENTS);
 
 pub const EXPECTED_BINARY_NUMERAL: CommandErrorType<0> =
     CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_BINARY_NUMERAL);
@@ -23,50 +61,47 @@ pub const EXPECTED_HEX_NUMERAL: CommandErrorType<0> =
 pub const UNDERSCORE_NOT_ALLOWED: CommandErrorType<0> =
     CommandErrorType::new(translation::SNBT_PARSER_UNDESCORE_NOT_ALLOWED);
 
+pub const EMPTY_KEY: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_EMPTY_KEY);
+
+pub const LEADING_ZERO_NOT_ALLOWED: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_LEADING_ZERO_NOT_ALLOWED);
+
+pub const INFINITY_NOT_ALLOWED: CommandErrorType<0> =
+    CommandErrorType::new(translation::SNBT_PARSER_INFINITY_NOT_ALLOWED);
+
+/// Traverses through each alternative from left to right,
+/// stopping at the first successful parse.
+macro_rules! alternatives {
+    ($reader: expr, $($alternative:block),*) => {
+        'result: {
+            let start = $reader.cursor();
+            $(
+                let result = $alternative;
+                if result.is_some() {
+                    break 'result result;
+                }
+                $reader.set_cursor(start);
+            )*
+            None
+        }
+    };
+}
+
 /// A structure that parses SNBT.
 ///
 /// This stores a reader and gives the furthest error, or suggestions
 /// to fix errors that have ever occurred while parsing.
-struct SnbtParser<'a, E: ErrorEntries> {
+pub struct SnbtParser<'a, E: ErrorEntries> {
     reader: StringReader<'a>,
     errors: SnbtErrors<E>,
 }
 
 /// A structure that represents
 /// errors recorded while parsing.
-struct SnbtErrors<E: ErrorEntries> {
+pub struct SnbtErrors<E: ErrorEntries> {
     cursor: usize,
     entries: E,
-}
-
-/// Represents a type of numeral.
-#[derive(Copy, Clone, Debug)]
-pub enum Numeral {
-    Binary,
-    Decimal,
-    Hexadecimal,
-}
-
-impl Numeral {
-    #[must_use]
-    pub const fn should_allow(self, c: char) -> bool {
-        matches!(
-            (self, c),
-            (_, '_') |
-            (Self::Binary, '0' | '1') |
-            (Self::Decimal, '0'..='9') |
-            (Self::Hexadecimal, '0'..='9' | 'A'..='F' | 'a'..='f')
-        )
-    }
-
-    #[must_use]
-    pub const fn no_value_error_type(self) -> &'static CommandErrorType<0> {
-        match self {
-            Self::Binary => &EXPECTED_BINARY_NUMERAL,
-            Self::Decimal => &EXPECTED_DECIMAL_NUMERAL,
-            Self::Hexadecimal => &EXPECTED_HEX_NUMERAL,
-        }
-    }
 }
 
 //
@@ -74,75 +109,327 @@ impl Numeral {
 //
 impl<E: ErrorEntries> SnbtParser<'_, E> {
     fn sign(&mut self) -> Option<Sign> {
-        self.reader.skip_whitespace();
-        match self.reader.peek() {
-            Some('+') => {
-                self.reader.skip();
-                Some(Sign::Plus)
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            match parser.reader.peek() {
+                Some('+') => {
+                    parser.reader.skip();
+                    Some(Sign::Plus)
+                }
+                Some('-') => {
+                    parser.reader.skip();
+                    Some(Sign::Minus)
+                }
+                _ => {
+                    parser.store_dynamic_error_and_suggest(
+                        &LITERAL_INCORRECT,
+                        || TextComponent::text("+"),
+                        || vec!['+'.to_string(), '-'.to_string()],
+                    );
+                    None
+                }
             }
-            Some('-') => {
-                self.reader.skip();
-                Some(Sign::Minus)
-            }
-            _ => {
-                self.store_dynamic_error_and_suggest(
-                    &LITERAL_INCORRECT,
-                    || TextComponent::text("+"),
-                    || vec!['+'.to_string(), '-'.to_string()],
-                );
-                None
-            }
-        }
+        })
     }
 
     fn integer_suffix(&mut self) -> Option<IntegerSuffix> {
-        self.reader.skip_whitespace();
-        match self.reader.peek() {
-            Some('u' | 'U') => {
-                self.reader.skip();
-                Some(IntegerSuffix(
-                    SignedPrefix::Unsigned,
-                    self.integer_type_suffix()?,
-                ))
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            match parser.reader.peek() {
+                Some('u' | 'U') => {
+                    parser.reader.skip();
+                    Some(IntegerSuffix(
+                        SignedPrefix::Unsigned,
+                        parser.integer_type_suffix()?,
+                    ))
+                }
+                Some('s' | 'S') => {
+                    parser.reader.skip();
+                    Some(IntegerSuffix(
+                        SignedPrefix::Signed,
+                        parser.integer_type_suffix()?,
+                    ))
+                }
+                _ => {
+                    parser.store_dynamic_error_and_suggest(
+                        &LITERAL_INCORRECT,
+                        || TextComponent::text("u|U"),
+                        || {
+                            vec![
+                                'u'.to_string(),
+                                'U'.to_string(),
+                                's'.to_string(),
+                                'S'.to_string(),
+                            ]
+                        },
+                    );
+                    None
+                }
             }
-            Some('s' | 'S') => {
-                self.reader.skip();
-                Some(IntegerSuffix(
-                    SignedPrefix::Signed,
-                    self.integer_type_suffix()?,
-                ))
+        })
+    }
+
+    fn binary_numeral(&mut self) -> Option<String> {
+        self.parse_numeral(Base::Binary)
+    }
+
+    fn decimal_numeral(&mut self) -> Option<String> {
+        self.parse_numeral(Base::Decimal)
+    }
+
+    fn hexadecimal_numeral(&mut self) -> Option<String> {
+        self.parse_numeral(Base::Hexadecimal)
+    }
+
+    /// Parses an integer literal.
+    fn integer_literal(&mut self) -> Option<IntegerLiteral> {
+        todo!("bro add errors plz");
+        let mut result = self.parse_or_revert(|parser| {
+            let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
+            if parser.reader.peek() == Some('0') {
+                parser.reader.skip();
+                match parser.reader.peek() {
+                    Some('x' | 'X') => {
+                        parser.reader.skip();
+                        if let Some(number) = parser.hexadecimal_numeral() {
+                            return Some(IntegerLiteral {
+                                sign,
+                                base: Base::Hexadecimal,
+                                suffix: IntegerSuffix::EMPTY,
+                                digits: number,
+                            });
+                        }
+                    }
+                    Some('b' | 'B') => {
+                        parser.reader.skip();
+                        if let Some(number) = parser.binary_numeral() {
+                            return Some(IntegerLiteral {
+                                sign,
+                                base: Base::Binary,
+                                suffix: IntegerSuffix::EMPTY,
+                                digits: number,
+                            });
+                        }
+                    }
+                    _ => {
+                        if parser.decimal_numeral().is_none() {
+                            return Some(IntegerLiteral {
+                                sign,
+                                base: Base::Decimal,
+                                suffix: IntegerSuffix::EMPTY,
+                                digits: "0".to_string(),
+                            });
+                        }
+                    }
+                }
+            } else if let Some(number) = parser.decimal_numeral() {
+                return Some(IntegerLiteral {
+                    sign,
+                    base: Base::Decimal,
+                    suffix: IntegerSuffix::EMPTY,
+                    digits: number,
+                });
             }
-            _ => {
-                self.store_dynamic_error_and_suggest(
+            None
+        })?;
+
+        result.suffix = self
+            .parse_or_revert(Self::integer_suffix)
+            .unwrap_or(IntegerSuffix::EMPTY);
+
+        Some(result)
+    }
+
+    fn float_type_suffix(&mut self) -> Option<TypeSuffix> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            match parser.reader.peek() {
+                Some('f' | 'F') => {
+                    parser.reader.skip();
+                    Some(TypeSuffix::Float)
+                }
+                Some('d' | 'D') => {
+                    parser.reader.skip();
+                    Some(TypeSuffix::Double)
+                }
+                _ => {
+                    parser.store_dynamic_error_and_suggest(
+                        &LITERAL_INCORRECT,
+                        || TextComponent::text("f|F"),
+                        || {
+                            vec![
+                                'f'.to_string(),
+                                'F'.to_string(),
+                                'd'.to_string(),
+                                'D'.to_string(),
+                            ]
+                        },
+                    );
+                    None
+                }
+            }
+        })
+    }
+
+    fn float_exponent_part(&mut self) -> Option<Signed<String>> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            if !matches!(parser.reader.peek(), Some('e' | 'E')) {
+                parser.store_dynamic_error_and_suggest(
                     &LITERAL_INCORRECT,
-                    || TextComponent::text("u|U"),
-                    || {
-                        vec![
-                            'u'.to_string(),
-                            'U'.to_string(),
-                            's'.to_string(),
-                            'S'.to_string(),
-                        ]
-                    },
+                    || TextComponent::text("e|E"),
+                    || vec!['e'.to_string(), 'E'.to_string()],
                 );
                 None
+            } else {
+                parser.reader.skip();
+                let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
+                let value = parser.decimal_numeral()?;
+
+                Some(Signed { sign, value })
             }
-        }
+        })
     }
 
-    /// If successful, returns the range of the indices bordering the successfully parsed numeral.
-    fn binary_numeral(&mut self) -> Option<Range<usize>> {
-        self.parse_numeral(Numeral::Binary)
-    }
+    fn float_literal(&mut self) -> Option<FloatingPointLiteral> {
+        self.parse_or_revert(|parser| {
+            // Paths:
+            // A --- XXX.[yyy][eZZZ][suffix]
+            // B --- .yyy[eZZZ][suffix]
+            // C --- XXXeZZZ[suffix]
+            // D --- XXX[eZZZ]suffix
+            //
+            // where [a] means 'optionally parse a',
+            //       XXX is the whole part, yyy is the decimal part,
+            //       eZZZ is the float exponent path, and
+            //       suffix is float type suffix.
+            //
+            // Ruleset:
+            // If we encounter a digit, we must parse a decimal number. Then:
+            //     If we encounter a decimal point, we must choose path A.
+            //     Try to parse [eZZZ] AND [suffix]:
+            //         if [eZZZ] parses, then irrespective of [suffix], choose path D.
+            //         if ONLY [suffix] parses, choose path C.
+            //         if none parse, FAIL.
+            // If we encounter a decimal point, we must choose path B.
+            // FAIL if nether a period or a digit
 
-    /// If successful, returns the range of the indices bordering the successfully parsed numeral.
-    fn decimal_numeral(&mut self) -> Option<Range<usize>> {
-        self.parse_numeral(Numeral::Decimal)
-    }
+            let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
 
-    /// If successful, returns the range of the indices bordering the successfully parsed numeral.
-    fn hexadecimal_numeral(&mut self) -> Option<Range<usize>> {
-        self.parse_numeral(Numeral::Hexadecimal)
+            struct FloatingPointIntermediate {
+                whole_part: String,
+                fraction_part: Option<String>,
+                exponent_part: Option<Signed<String>>,
+                type_suffix: Option<TypeSuffix>,
+            }
+
+            let intermediate = parser.parse_or_revert(|parser| {
+                if let Some(whole_part) = parser.parse_or_revert(Self::decimal_numeral) {
+                    // Must be pathway A, C, or D.
+                    if parser.reader.peek() == Some('.') {
+                        // We choose pathway A.
+                        parser.reader.skip();
+
+                        let fraction_part = parser.decimal_numeral();
+                        let exponent_part = parser.float_exponent_part();
+                        let type_suffix = parser.float_type_suffix();
+
+                        Some(FloatingPointIntermediate {
+                            whole_part,
+                            fraction_part,
+                            exponent_part,
+                            type_suffix,
+                        })
+                    } else {
+                        // Must be pathway C or D.
+                        let exponent_part = parser.float_exponent_part();
+                        let type_suffix = parser.float_type_suffix();
+
+                        if exponent_part.is_some() || type_suffix.is_some() {
+                            Some(FloatingPointIntermediate {
+                                whole_part,
+                                fraction_part: None,
+                                exponent_part,
+                                type_suffix,
+                            })
+                        } else {
+                            None
+                        }
+                    }
+                } else {
+                    // We must parse a decimal point.
+                    if parser.reader.peek() != Some('.') {
+                        // We cannot choose a pathway.
+                        None
+                    } else {
+                        parser.reader.skip();
+                        // We choose pathway B.
+                        let fraction_part = parser.decimal_numeral()?;
+                        let exponent_part = parser.float_exponent_part();
+                        let type_suffix = parser.float_type_suffix();
+
+                        Some(FloatingPointIntermediate {
+                            whole_part: String::new(),
+                            fraction_part: Some(fraction_part),
+                            exponent_part,
+                            type_suffix,
+                        })
+                    }
+                }
+            })?;
+
+            // Parsing the float:
+            let mut buffer = String::with_capacity(
+                sign.minimum_size_parsable()
+                    + intermediate.whole_part.len()
+                    + intermediate
+                        .fraction_part
+                        .as_ref()
+                        .map(|s| 1 + s.len())
+                        .unwrap_or(0)
+                    + intermediate
+                        .exponent_part
+                        .as_ref()
+                        .map(|s| 1 + s.sign.minimum_size_parsable() + s.value.len())
+                        .unwrap_or(0),
+            );
+
+            sign.append_minimum_str_parsable(&mut buffer);
+            Self::clean_and_append(&mut buffer, &intermediate.whole_part);
+            if let Some(fraction) = &intermediate.fraction_part {
+                buffer.push('.');
+                Self::clean_and_append(&mut buffer, fraction);
+            }
+            if let Some(exponent) = &intermediate.exponent_part {
+                buffer.push('e');
+                exponent.sign.append_minimum_str_parsable(&mut buffer);
+                Self::clean_and_append(&mut buffer, &exponent.value);
+            }
+
+            match intermediate.type_suffix {
+                None | Some(TypeSuffix::Double) => match buffer.parse::<f64>() {
+                    Err(error) => parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, || {
+                        TextComponent::text(error.to_string())
+                    }),
+                    Ok(value) if value.is_finite() => {
+                        return Some(FloatingPointLiteral::Double(value));
+                    }
+                    Ok(_) => parser.store_simple_error(&INFINITY_NOT_ALLOWED),
+                },
+                Some(TypeSuffix::Float) => match buffer.parse::<f32>() {
+                    Err(error) => parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, || {
+                        TextComponent::text(error.to_string())
+                    }),
+                    Ok(value) if value.is_finite() => {
+                        return Some(FloatingPointLiteral::Float(value));
+                    }
+                    Ok(_) => parser.store_simple_error(&INFINITY_NOT_ALLOWED),
+                },
+                _ => parser.store_simple_error(&EXPECTED_FLOAT_TYPE),
+            }
+
+            None
+        })
     }
 }
 
@@ -212,7 +499,7 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                 Some(TypeSuffix::Long)
             }
             _ => {
-                // Only B|b is given as the error, being the first erroneous choice.
+                // Only B|b is given as the error, being the first errored choice.
                 self.store_dynamic_error_and_suggest(
                     &LITERAL_INCORRECT,
                     || TextComponent::text("B|b"),
@@ -234,30 +521,55 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
         }
     }
 
-    /// Utility method that parses an integer of a specific radix.
-    /// If successful, returns the range of the indices bordering the successfully parsed string.
-    fn parse_numeral(&mut self, numeral: Numeral) -> Option<Range<usize>> {
-        self.reader.skip_whitespace();
-        let slice = self.reader.string();
+    /// General method that parses an integer of a specific base.
+    fn parse_numeral(&mut self, base: Base) -> Option<String> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            let slice = parser.reader.string();
 
-        let start = self.reader.cursor();
+            let start = parser.reader.cursor();
 
-        let mut end = slice.len();
-        for (i, c) in slice[start..].char_indices() {
-            if !numeral.should_allow(c) {
-                end = start + i;
-                break;
+            let mut end = slice.len();
+            for (i, c) in slice[start..].char_indices() {
+                if !base.should_allow(c) {
+                    end = start + i;
+                    break;
+                }
             }
-        }
 
-        if start == end {
-            self.store_simple_error(numeral.no_value_error_type());
-            None
-        } else if slice.as_bytes()[start] == b'_' || slice.as_bytes()[end - 1] == b'_' {
-            self.store_simple_error(&UNDERSCORE_NOT_ALLOWED);
-            None
-        } else {
-            Some(start..end)
+            if start == end {
+                parser.store_simple_error(base.no_value_error_type());
+                None
+            } else if slice.as_bytes()[start] == b'_' || slice.as_bytes()[end - 1] == b'_' {
+                parser.store_simple_error(&UNDERSCORE_NOT_ALLOWED);
+                None
+            } else {
+                Some(parser.reader.string()[start..end].to_string())
+            }
+        })
+    }
+
+    /// Parses a value, and if unsuccessful, reverts back to what the state initially was.
+    #[inline]
+    fn parse_or_revert<T>(&mut self, closure: impl FnOnce(&mut Self) -> Option<T>) -> Option<T> {
+        let start = self.reader.cursor();
+        let result = closure(self);
+        if result.is_none() {
+            self.reader.set_cursor(start);
+        }
+        result
+    }
+
+    /// Appends every character given in the `reference` slice except `_` in the provided `buffer`.
+    fn clean_and_append(buffer: &mut String, reference: &str) {
+        // This could really be optimized further
+        // with bytes instead of chars, but that
+        // probably requires unsafe code. Is that worth it?
+        // TODO
+        for c in reference.chars() {
+            if c != '_' {
+                buffer.push(c);
+            }
         }
     }
 }

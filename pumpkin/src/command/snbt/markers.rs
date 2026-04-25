@@ -1,24 +1,106 @@
+use crate::command::{
+    errors::error_types::CommandErrorType,
+    snbt::{EXPECTED_BINARY_NUMERAL, EXPECTED_DECIMAL_NUMERAL, EXPECTED_HEX_NUMERAL},
+};
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Sign {
-    Plus,
-    Minus,
+    Plus = 0,
+    Minus = 1,
 }
 
+impl Sign {
+    /// Returns the minimum number of characters required to express this sign to be parsed.
+    ///
+    /// For example, between `5.0` and `+5.0`, the former takes no space for the `+` symbol,
+    /// while for `-5.0`, there must be a `-` symbol, so the minimum size there is `1` instead of `0`.
+    #[must_use]
+    #[inline]
+    pub const fn minimum_size_parsable(self) -> usize {
+        self as usize
+    }
+
+    /// Appends the slice containing the minimum characters required to express this sign to be parsed to a String
+    /// referred by the given mutable reference.
+    ///
+    /// This is a no-op for [`Sign::Plus`], while for [`Sign::Minus`], a `-` is appended.
+    #[inline]
+    pub fn append_minimum_str_parsable(self, buffer: &mut String) {
+        if self == Sign::Minus {
+            buffer.push('-');
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum SignedPrefix {
     None,
     Unsigned,
     Signed,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum TypeSuffix {
     None,
     Byte,
     Short,
     Int,
     Long,
+    Float,
+    Double,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct IntegerSuffix(pub SignedPrefix, pub TypeSuffix);
 
 impl IntegerSuffix {
     pub const EMPTY: Self = Self(SignedPrefix::None, TypeSuffix::None);
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum Base {
+    Binary,
+    Decimal,
+    Hexadecimal,
+}
+
+impl Base {
+    #[must_use]
+    pub const fn should_allow(self, c: char) -> bool {
+        matches!(
+            (self, c),
+            (_, '_') |
+            (Self::Binary, '0' | '1') |
+            (Self::Decimal, '0'..='9') |
+            (Self::Hexadecimal, '0'..='9' | 'A'..='F' | 'a'..='f')
+        )
+    }
+
+    #[must_use]
+    pub const fn no_value_error_type(self) -> &'static CommandErrorType<0> {
+        match self {
+            Self::Binary => &EXPECTED_BINARY_NUMERAL,
+            Self::Decimal => &EXPECTED_DECIMAL_NUMERAL,
+            Self::Hexadecimal => &EXPECTED_HEX_NUMERAL,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct IntegerLiteral {
+    pub sign: Sign,
+    pub base: Base,
+    pub digits: String,
+    pub suffix: IntegerSuffix,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum FloatingPointLiteral {
+    Float(f32),
+    Double(f64),
+}
+
+pub struct Signed<T> {
+    pub sign: Sign,
+    pub value: T,
 }
