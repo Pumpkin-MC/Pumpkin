@@ -166,6 +166,7 @@ tracing-subscriber = { version = "0.3.23", features = [
     "fmt",
     "time",
 ] }
+spin_sleep = "1.3"
 slotmap = "1.1"
 take_mut = "0.2.2"
 temp-dir = "0.2.0"
