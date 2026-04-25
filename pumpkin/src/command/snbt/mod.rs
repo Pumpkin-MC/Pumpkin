@@ -274,24 +274,31 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
     fn float_exponent_part(&mut self) -> Option<Signed<String>> {
         self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
-            if !matches!(parser.reader.peek(), Some('e' | 'E')) {
+            if matches!(parser.reader.peek(), Some('e' | 'E')) {
+                parser.reader.skip();
+                let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
+                let value = parser.decimal_numeral()?;
+
+                Some(Signed { sign, value })
+            } else {
                 parser.store_dynamic_error_and_suggest(
                     &LITERAL_INCORRECT,
                     || TextComponent::text("e|E"),
                     || vec!['e'.to_string(), 'E'.to_string()],
                 );
                 None
-            } else {
-                parser.reader.skip();
-                let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
-                let value = parser.decimal_numeral()?;
-
-                Some(Signed { sign, value })
             }
         })
     }
 
     fn float_literal(&mut self) -> Option<FloatingPointLiteral> {
+        struct FloatingPointIntermediate {
+            whole_part: String,
+            fraction_part: Option<String>,
+            exponent_part: Option<Signed<String>>,
+            type_suffix: Option<TypeSuffix>,
+        }
+
         self.parse_or_revert(|parser| {
             // Paths:
             // A --- XXX.[yyy][eZZZ][suffix]
@@ -316,13 +323,6 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
 
             let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
 
-            struct FloatingPointIntermediate {
-                whole_part: String,
-                fraction_part: Option<String>,
-                exponent_part: Option<Signed<String>>,
-                type_suffix: Option<TypeSuffix>,
-            }
-
             let intermediate = parser.parse_or_revert(|parser| {
                 if let Some(whole_part) = parser.parse_or_revert(Self::decimal_numeral) {
                     // Must be pathway A, C, or D.
@@ -345,23 +345,18 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                         let exponent_part = parser.float_exponent_part();
                         let type_suffix = parser.float_type_suffix();
 
-                        if exponent_part.is_some() || type_suffix.is_some() {
-                            Some(FloatingPointIntermediate {
+                        (exponent_part.is_some() || type_suffix.is_some()).then_some(
+                            FloatingPointIntermediate {
                                 whole_part,
                                 fraction_part: None,
                                 exponent_part,
                                 type_suffix,
-                            })
-                        } else {
-                            None
-                        }
+                            },
+                        )
                     }
                 } else {
                     // We must parse a decimal point.
-                    if parser.reader.peek() != Some('.') {
-                        // We cannot choose a pathway.
-                        None
-                    } else {
+                    if parser.reader.peek() == Some('.') {
                         parser.reader.skip();
                         // We choose pathway B.
                         let fraction_part = parser.decimal_numeral()?;
@@ -374,6 +369,9 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                             exponent_part,
                             type_suffix,
                         })
+                    } else {
+                        // We cannot choose a pathway.
+                        None
                     }
                 }
             })?;
@@ -385,13 +383,11 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                     + intermediate
                         .fraction_part
                         .as_ref()
-                        .map(|s| 1 + s.len())
-                        .unwrap_or(0)
+                        .map_or(0, |s| 1 + s.len())
                     + intermediate
                         .exponent_part
                         .as_ref()
-                        .map(|s| 1 + s.sign.minimum_size_parsable() + s.value.len())
-                        .unwrap_or(0),
+                        .map_or(0, |s| 1 + s.sign.minimum_size_parsable() + s.value.len()),
             );
 
             sign.append_minimum_str_parsable(&mut buffer);

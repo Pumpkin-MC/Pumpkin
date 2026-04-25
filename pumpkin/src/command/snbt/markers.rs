@@ -26,7 +26,7 @@ impl Sign {
     /// This is a no-op for [`Sign::Plus`], while for [`Sign::Minus`], a `-` is appended.
     #[inline]
     pub fn append_minimum_str_parsable(self, buffer: &mut String) {
-        if self == Sign::Minus {
+        if self == Self::Minus {
             buffer.push('-');
         }
     }
