@@ -764,24 +764,15 @@ impl ProtoChunk {
                                 noise_sampler.interpolate_z(local_z as f64 * delta_x_z_step);
                                 let block_z = block_z_base + local_z;
 
-                                // The `cell_offset` calculations are still a good idea for clarity and correctness
-                                // but let's confirm the values.
-                                // block_x = start_block_x + cell_x*H + local_x
-                                // sample_start_x = start_cell_x*H + cell_x*H = (start_cell_x+cell_x)*H
-                                // These can be simplified.
-                                let cell_offset_x = local_x;
-                                let cell_offset_y = block_y - sample_start_y;
-                                let cell_offset_z = local_z;
-
                                 let block_state = noise_sampler
                                     .sample_block_state(
                                         ore_random_deriver,
                                         sample_start_x,
                                         sample_start_y,
                                         sample_start_z,
-                                        cell_offset_x,
-                                        cell_offset_y,
-                                        cell_offset_z,
+                                        local_x,
+                                        block_y - sample_start_y,
+                                        local_z,
                                         surface_height_estimate_sampler,
                                     )
                                     .unwrap_or(self.default_block);
@@ -1132,31 +1123,10 @@ impl ProtoChunk {
         &mut self,
         random_config: &GlobalRandomConfig,
         settings: &GenerationSettings,
-        dimension: &Dimension,            // <-- Added Parameter
-        noise_router: &ProtoNoiseRouters, // <-- Added Parameter
         global_cache: &GlobalStructureCache,
     ) {
         let seed = random_config.seed;
         let calculator = StructurePlacementCalculator::new(seed as i64);
-
-        // Initialize mathematical biome tools for ConcentricRings snapping
-        let active_supplier = if *dimension == Dimension::THE_END {
-            ActiveSupplier::End(TheEndBiomeSupplier)
-        } else if *dimension == Dimension::THE_NETHER {
-            ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
-        } else {
-            ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
-        };
-
-        let base_supplier: &dyn BiomeSupplier = match &active_supplier {
-            ActiveSupplier::End(s) => s,
-            ActiveSupplier::Nether(s) => s,
-            ActiveSupplier::Overworld(s) => s,
-        };
-        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
-        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
-        let mut multi_noise_sampler =
-            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
 
         for set in StructureSet::ALL {
             let allowed_biomes = Self::get_allowed_biomes(set);
@@ -1167,8 +1137,7 @@ impl ProtoChunk {
                 self.x,
                 self.z,
                 global_cache,
-                &biome_supplier,
-                &mut multi_noise_sampler,
+                self,
                 &allowed_biomes,
             ) {
                 continue;
@@ -1305,8 +1274,7 @@ impl ProtoChunk {
                     let strongholds = global_cache.get_or_calculate_strongholds(
                         seed,
                         rings,
-                        &biome_supplier,
-                        &mut multi_noise_sampler,
+                        self,
                         &allowed_biomes,
                     );
                     for &(cx, cz) in strongholds {

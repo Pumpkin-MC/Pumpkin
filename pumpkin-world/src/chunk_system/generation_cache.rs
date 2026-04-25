@@ -360,8 +360,6 @@ impl Cache {
                 self.chunks[mid].get_proto_chunk_mut().set_structure_starts(
                     random_config,
                     settings,
-                    &dimension,
-                    noise_router,
                     global_structure_cache,
                 );
             }

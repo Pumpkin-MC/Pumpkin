@@ -37,6 +37,7 @@ impl ArgumentType for ResourceKeyArgument {
         context: &CommandContext,
         mut suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
+        info!("list suggestions {:?}", &self.0);
         if &self.0 == &ADVANCEMENT_REGISTRY {
             let advancements = context.server().advancement_manager.get_advancements();
             Box::pin(async move {
