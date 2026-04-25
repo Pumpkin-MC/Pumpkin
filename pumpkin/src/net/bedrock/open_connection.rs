@@ -1,9 +1,13 @@
 use std::net::SocketAddr;
 
 use pumpkin_protocol::bedrock::{
-    client::raknet::open_connection::{COpenConnectionReply1, COpenConnectionReply2},
+    client::raknet::{
+        incompatible_protocol::CIncompatibleProtocolVersion,
+        open_connection::{COpenConnectionReply1, COpenConnectionReply2},
+    },
     server::raknet::open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
 };
+use pumpkin_world::CURRENT_BEDROCK_MC_PROTOCOL;
 use tokio::net::UdpSocket;
 
 use crate::{net::bedrock::BedrockClient, server::Server};
@@ -11,10 +15,23 @@ use crate::{net::bedrock::BedrockClient, server::Server};
 impl BedrockClient {
     pub async fn handle_open_connection_1(
         server: &Server,
-        _packet: SOpenConnectionRequest1,
+        packet: SOpenConnectionRequest1,
         addr: SocketAddr,
         socket: &UdpSocket,
     ) {
+        if packet.protocol_version != CURRENT_BEDROCK_MC_PROTOCOL as u8 {
+            Self::send_offline_packet(
+                &CIncompatibleProtocolVersion::new(
+                    CURRENT_BEDROCK_MC_PROTOCOL as u8,
+                    server.server_guid,
+                ),
+                addr,
+                socket,
+            )
+            .await;
+            return;
+        }
+
         Self::send_offline_packet(
             &COpenConnectionReply1::new(server.server_guid, false, 1400),
             addr,
