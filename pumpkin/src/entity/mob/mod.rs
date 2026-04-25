@@ -29,6 +29,7 @@ pub mod bat;
 pub mod blaze;
 pub mod creeper;
 pub mod enderman;
+pub mod shulker;
 pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
@@ -270,6 +271,10 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    fn modify_incoming_damage(&self, amount: f32, _damage_type: DamageType) -> f32 {
+        amount
+    }
+
     fn can_attack_with_owner(&self, _target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
         true
     }
@@ -413,6 +418,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             if !self.pre_damage(damage_type, source).await {
                 return false;
             }
+            // Mob-specific damage modifier (e.g. shulker armor when closed).
+            let amount = self.modify_incoming_damage(amount, damage_type);
             let damaged = self
                 .get_mob_entity()
                 .living_entity
