@@ -17,7 +17,7 @@ mod packet;
 pub struct RCONServer;
 
 impl RCONServer {
-    pub async fn run(config: &RCONConfig, server: Arc<Server>) -> Result<(), std::io::Error> {
+    pub async fn run(config: &RCONConfig, server: Arc<Server>) {
         let listener = tokio::net::TcpListener::bind(config.address).await.unwrap();
 
         let password = Arc::new(config.password.clone());
@@ -35,10 +35,9 @@ impl RCONServer {
             };
             // Asynchronously wait for an inbound socket.
 
-            let Some(result) = await_new_client().await else {
+            let Some(Ok((connection, address))) = await_new_client().await else {
                 break;
             };
-            let (connection, address) = result?;
 
             if config.max_connections != 0 && connections >= config.max_connections {
                 continue;
@@ -53,7 +52,6 @@ impl RCONServer {
             debug!("closed RCON connection");
             connections -= 1;
         }
-        Ok(())
     }
 }
 

@@ -923,7 +923,7 @@ impl ProtoChunk {
 
                     terrain_cache.terrain_builder.place_iceberg(
                         self,
-                        Biome::from_id(this_biome).unwrap(),
+                        Biome::from_id(this_biome).unwrap_or(&Biome::PLAINS),
                         x,
                         z,
                         surface_estimate,

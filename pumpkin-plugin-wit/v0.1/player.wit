@@ -170,6 +170,26 @@ interface player {
         is-sprinting: func() -> bool;
         /// Sets whether the player is currently sprinting.
         set-sprinting: func(sprinting: bool);
+        /// Returns whether the player is currently swimming.
+        is-swimming: func() -> bool;
+        /// Sets whether the player is currently swimming.
+        set-swimming: func(swimming: bool);
+        /// Returns whether the player is currently invisible.
+        is-invisible: func() -> bool;
+        /// Sets whether the player is currently invisible.
+        set-invisible: func(invisible: bool);
+        /// Returns whether the player is currently glowing.
+        is-glowing: func() -> bool;
+        /// Sets whether the player is currently glowing.
+        set-glowing: func(glowing: bool);
+        /// Returns whether the player is currently flying due to a fall.
+        is-fall-flying: func() -> bool;
+        /// Sets whether the player is currently flying due to a fall.
+        set-fall-flying: func(fall-flying: bool);
+        /// Returns whether the player is currently on fire. Note: this is only visually like fire, there is no actual logic.
+        is-on-fire: func() -> bool;
+        /// Sets whether the player is visually on fire. Note: this is only visually like fire, there is no actual logic.
+        set-on-fire: func(on-fire: bool);
         /// Returns whether the player is currently on the ground.
         is-on-ground: func() -> bool;
         /// Returns whether the player is currently flying.

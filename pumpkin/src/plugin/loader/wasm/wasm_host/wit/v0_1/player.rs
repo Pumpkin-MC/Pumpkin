@@ -685,6 +685,81 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn is_swimming(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_entity().swimming.load(Ordering::Relaxed))
+    }
+
+    async fn set_swimming(
+        &mut self,
+        player: Resource<Player>,
+        swimming: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.get_entity().set_swimming(swimming).await;
+        Ok(())
+    }
+
+    async fn is_invisible(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_entity().invisible.load(Ordering::Relaxed))
+    }
+
+    async fn set_invisible(
+        &mut self,
+        player: Resource<Player>,
+        invisible: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.get_entity().set_invisible(invisible).await;
+        Ok(())
+    }
+
+    async fn is_glowing(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_entity().glowing.load(Ordering::Relaxed))
+    }
+
+    async fn set_glowing(
+        &mut self,
+        player: Resource<Player>,
+        glowing: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.get_entity().set_glowing(glowing).await;
+        Ok(())
+    }
+
+    async fn is_fall_flying(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_entity().fall_flying.load(Ordering::Relaxed))
+    }
+
+    async fn set_fall_flying(
+        &mut self,
+        player: Resource<Player>,
+        fall_flying: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.get_entity().set_fall_flying(fall_flying).await;
+        Ok(())
+    }
+
+    async fn is_on_fire(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player.get_entity().has_visual_fire.load(Ordering::Relaxed))
+    }
+
+    async fn set_on_fire(
+        &mut self,
+        player: Resource<Player>,
+        on_fire: bool,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        player.get_entity().set_on_fire(on_fire).await;
+        Ok(())
+    }
+
     async fn is_on_ground(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
         let player = player_from_resource(self, &player)?;
         Ok(player.get_entity().on_ground.load(Ordering::Relaxed))

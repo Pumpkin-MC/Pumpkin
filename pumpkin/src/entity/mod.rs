@@ -413,6 +413,8 @@ pub struct Entity {
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
     pub sprinting: AtomicBool,
+    /// Indicates whether the entity is swimming
+    pub swimming: AtomicBool,
     /// Indicates whether the entity is invisible
     pub invisible: AtomicBool,
     /// Indicates whether the entity is glowing
@@ -568,6 +570,7 @@ impl Entity {
                 get_section_cord(floor_z),
             )),
             sneaking: AtomicBool::new(false),
+            swimming: AtomicBool::new(false),
             invisible: AtomicBool::new(false),
             glowing: AtomicBool::new(false),
             world: ArcSwap::new(world),
@@ -2019,6 +2022,13 @@ impl Entity {
         //assert!(self.sneaking.load(Relaxed) != sneaking);
         self.sneaking.store(sneaking, Relaxed);
         self.set_flag(Flag::Sneaking, sneaking).await;
+    }
+
+    pub async fn set_swimming(&self, invisible: bool) {
+        if self.swimming.load(Ordering::Relaxed) != invisible {
+            self.swimming.store(invisible, Relaxed);
+            self.set_flag(Flag::Swimming, invisible).await;
+        }
     }
 
     /// Sets whether the entity is invisible and sends updated metadata.

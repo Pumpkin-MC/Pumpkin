@@ -372,7 +372,7 @@ impl DynamicLightEngine {
                 return;
             }
             LightingEngineConfig::Dark => {
-                self.set_sky_light_level(level, &pos, 0).await.unwrap();
+                self.set_sky_light_level(level, &pos, 0).await.ok();
                 return;
             }
             LightingEngineConfig::Default => {}
@@ -484,7 +484,7 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
                 // Bounds check for section index
-                let mut light_engine = chunk.light_engine.lock().unwrap();
+                let mut light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
                 if section_index >= light_engine.block_light.len() {
                     return Err("Invalid section index".to_string());
                 }
@@ -511,7 +511,7 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
 
-                let light_engine = chunk.light_engine.lock().unwrap();
+                let light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
                 // Bounds check for section index (lock the light engine)
                 if section_index >= light_engine.sky_light.len() {
                     return 15;
@@ -538,7 +538,7 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
                 // Bounds check for section index
-                let mut light_engine = chunk.light_engine.lock().unwrap();
+                let mut light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
                 if section_index >= light_engine.sky_light.len() {
                     return Err("Invalid section index".to_string());
                 }
