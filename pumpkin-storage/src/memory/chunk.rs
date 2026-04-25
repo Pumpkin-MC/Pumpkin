@@ -36,10 +36,10 @@ impl<T: Clone + Send + Sync + 'static> ChunkStorage<T> for MemoryChunkStorage<T>
     ) {
         let guard = self.data.read().await;
         for coord in chunk_coords {
-            let msg = match guard.get(coord).cloned() {
-                Some(v) => LoadedData::Loaded(v),
-                None => LoadedData::Missing(*coord),
-            };
+            let msg = guard
+                .get(coord)
+                .cloned()
+                .map_or(LoadedData::Missing(*coord), LoadedData::Loaded);
             if stream.send(msg).await.is_err() {
                 // Receiver dropped; stop pushing.
                 break;

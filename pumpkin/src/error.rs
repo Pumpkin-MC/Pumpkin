@@ -75,7 +75,7 @@ impl PumpkinError for StorageError {
     }
 
     fn severity(&self) -> Level {
-        StorageError::severity(self)
+        Self::severity(self)
     }
 
     fn client_kick_reason(&self) -> Option<String> {

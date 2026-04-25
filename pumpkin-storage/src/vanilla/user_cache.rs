@@ -21,7 +21,7 @@ const USER_CACHE_FILE: &str = "usercache.json";
 const USER_CACHE_MRU_LIMIT: usize = 1000;
 
 #[derive(Debug, Default)]
-pub(crate) struct UserCacheInner {
+pub struct UserCacheInner {
     loaded: bool,
     profiles_by_name: HashMap<String, InternalEntry>,
     profiles_by_uuid: HashMap<Uuid, InternalEntry>,
@@ -74,7 +74,7 @@ impl UserCacheInner {
         Ok(())
     }
 
-    fn next_operation(&mut self) -> u64 {
+    const fn next_operation(&mut self) -> u64 {
         self.operation_count += 1;
         self.operation_count
     }

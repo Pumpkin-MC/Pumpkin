@@ -109,12 +109,12 @@ impl LevelInfoStorage for VanillaStorage {
         Ok(dat.data)
     }
 
+    #[allow(clippy::semicolon_outside_block)]
     async fn save(&self, data: &LevelData) -> Result<(), StorageError> {
         use std::time::{SystemTime, UNIX_EPOCH};
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_millis() as i64);
         let mut stamped = data.clone();
         stamped.last_played = now_ms;
         let dat = LevelDat { data: stamped };

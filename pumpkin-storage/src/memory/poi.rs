@@ -49,7 +49,7 @@ impl PoiStorage for MemoryStorage {
                     && (entry.x - center.0.x).abs() <= radius
                     && (entry.z - center.0.z).abs() <= radius
             })
-            .map(|entry| entry.pos())
+            .map(PoiEntry::pos)
             .collect())
     }
 

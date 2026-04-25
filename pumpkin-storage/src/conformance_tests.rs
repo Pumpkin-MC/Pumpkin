@@ -237,6 +237,7 @@ async fn banned_player_null_always_empty() {
 }
 
 #[tokio::test]
+#[allow(clippy::semicolon_outside_block)]
 async fn banned_player_vanilla_persists_across_instances() {
     let dir = TempDir::new().unwrap();
     {
@@ -484,6 +485,7 @@ async fn poi_round_trip_vanilla() {
 }
 
 #[tokio::test]
+#[allow(clippy::semicolon_outside_block)]
 async fn poi_vanilla_persists_across_instances() {
     let dir = TempDir::new().unwrap();
     {
@@ -538,19 +540,19 @@ async fn chunk_round_trip_memory() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(4);
     store.fetch_chunks(&[a, b, Vector2::new(99, 99)], tx).await;
 
-    let mut hits = std::collections::HashMap::new();
+    let mut hits = std::collections::HashSet::new();
     let mut missing = Vec::new();
     while let Some(msg) = rx.recv().await {
         match msg {
             LoadedData::Loaded(v) => {
-                hits.insert(v, ());
+                hits.insert(v);
             }
             LoadedData::Missing(p) => missing.push(p),
             LoadedData::Error { error, .. } => panic!("unexpected error: {error}"),
         }
     }
-    assert!(hits.contains_key(&42));
-    assert!(hits.contains_key(&7));
+    assert!(hits.contains(&42));
+    assert!(hits.contains(&7));
     assert_eq!(missing, vec![Vector2::new(99, 99)]);
 }
 

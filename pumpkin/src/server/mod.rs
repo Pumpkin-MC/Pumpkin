@@ -134,6 +134,16 @@ pub struct Server {
     _locker: Arc<Option<Box<dyn LockGuard>>>,
 }
 
+type StorageBundle = (
+    Arc<dyn LevelInfoStorage>,
+    Arc<dyn PlayerDataStorage>,
+    Arc<dyn BannedPlayerStorage>,
+    Arc<dyn BannedIpStorage>,
+    Arc<dyn OpStorage>,
+    Arc<dyn WhitelistStorage>,
+    Arc<dyn UserCacheStorage>,
+);
+
 impl Server {
     #[expect(clippy::too_many_lines)]
     #[must_use]
@@ -164,15 +174,7 @@ impl Server {
             op_storage,
             whitelist_storage,
             user_cache_storage,
-        ): (
-            Arc<dyn LevelInfoStorage>,
-            Arc<dyn PlayerDataStorage>,
-            Arc<dyn BannedPlayerStorage>,
-            Arc<dyn BannedIpStorage>,
-            Arc<dyn OpStorage>,
-            Arc<dyn WhitelistStorage>,
-            Arc<dyn UserCacheStorage>,
-        ) = match &advanced_config.storage {
+        ): StorageBundle = match &advanced_config.storage {
             StorageConfig::Vanilla(_) => {
                 let vanilla = Arc::new(VanillaStorage::new(&world_path, &server_data_dir));
                 (

@@ -263,7 +263,7 @@ fn decompress_chunk(compressed: &[u8]) -> std::io::Result<PoiChunkData> {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct PoiInner {
+pub struct PoiInner {
     regions: HashMap<(i32, i32), PoiRegion>,
 }
 
@@ -318,6 +318,7 @@ impl PoiStorage for VanillaStorage {
         Ok(region.remove(pos))
     }
 
+    #[allow(clippy::similar_names)]
     async fn get_in_square(
         &self,
         center: BlockPos,
@@ -363,7 +364,7 @@ impl PoiStorage for VanillaStorage {
             .map_err(|e| StorageError::io_at(&folder, e))?;
 
         let mut guard = self.poi_inner.lock().await;
-        for ((rx, rz), region) in guard.regions.iter_mut() {
+        for ((rx, rz), region) in &mut guard.regions {
             if region.dirty {
                 let path = folder.join(format!("r.{rx}.{rz}.mca"));
                 region

@@ -39,7 +39,8 @@ impl StorageError {
     }
 
     /// Wraps an I/O error with no associated path.
-    pub fn io(source: std::io::Error) -> Self {
+    #[must_use]
+    pub const fn io(source: std::io::Error) -> Self {
         Self::Io { path: None, source }
     }
 
@@ -58,7 +59,7 @@ impl StorageError {
     /// `WARN`. Format or version mismatches point at data corruption and
     /// are `ERROR`.
     #[must_use]
-    pub fn severity(&self) -> tracing::Level {
+    pub const fn severity(&self) -> tracing::Level {
         match self {
             Self::NotFound { .. } => tracing::Level::DEBUG,
             Self::Io { .. } => tracing::Level::WARN,

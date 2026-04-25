@@ -37,6 +37,7 @@ use crate::whitelist::WhitelistStorage;
 pub struct NullStorage;
 
 impl NullStorage {
+    #[must_use]
     pub const fn new() -> Self {
         Self
     }
