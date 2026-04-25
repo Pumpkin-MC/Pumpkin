@@ -1,4 +1,6 @@
 use crate::{SHOULD_STOP, server::Server};
+#[cfg(windows)]
+use spin_sleep::{SpinSleeper, SpinStrategy};
 use std::sync::atomic::Ordering;
 use std::{
     sync::Arc,
@@ -8,6 +10,22 @@ use tokio::runtime::Handle;
 use tracing::debug;
 
 pub struct Ticker;
+
+#[cfg(windows)]
+fn sleep_until_tick(deadline: Instant) {
+    SpinSleeper::new(100_000)
+        .with_spin_strategy(SpinStrategy::YieldThread)
+        .sleep_until(deadline);
+}
+
+#[cfg(not(windows))]
+fn sleep_until_tick(deadline: Instant) {
+    if let Some(sleep_time) = deadline.checked_duration_since(Instant::now())
+        && !sleep_time.is_zero()
+    {
+        std::thread::sleep(sleep_time);
+    }
+}
 
 impl Ticker {
     pub fn run(server: &Arc<Server>, handle: &Handle) {
@@ -51,12 +69,10 @@ impl Ticker {
 
             next_tick += tick_interval;
 
-            if let Some(sleep_time) = next_tick.checked_duration_since(Instant::now()) {
-                if !sleep_time.is_zero() {
-                    std::thread::sleep(sleep_time);
-                }
-            } else {
+            if next_tick <= Instant::now() {
                 next_tick = Instant::now();
+            } else {
+                sleep_until_tick(next_tick);
             }
         }
         debug!("Ticker stopped");
