@@ -254,10 +254,8 @@ impl Server {
         };
         let server = Arc::new(server);
 
-        let total_cores = num_cpus::get().saturating_sub(2).max(1);
         let gen_pool = Arc::new(
             rayon::ThreadPoolBuilder::new()
-                .num_threads(total_cores)
                 .thread_name(|i| format!("Gen-Pool-{i}"))
                 .build()
                 .expect("Failed to build generation thread pool"),

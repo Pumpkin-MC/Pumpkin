@@ -52,7 +52,6 @@ rayon.workspace = true
 
 tokio-util = { workspace = true, features = ["rt"] }
 rand.workspace = true
-num_cpus.workspace = true
 rustc-hash.workspace = true
 slotmap.workspace = true
 crossfire.workspace = true

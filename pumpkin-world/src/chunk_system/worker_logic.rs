@@ -7,7 +7,6 @@ use crate::chunk::io::LoadedData;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::level::Level;
 use crossfire::compat::AsyncRx;
-use itertools::Itertools;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
@@ -182,7 +181,10 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
         };
         // debug!("io write thread receive chunks size {}", data.len());
         let mut vec = Vec::with_capacity(data.len());
+        let mut positions = Vec::with_capacity(data.len());
         for (pos, chunk) in data {
+            positions.push(pos);
+
             match chunk {
                 Chunk::Level(chunk) => vec.push((pos, chunk)),
                 Chunk::Proto(chunk) => {
@@ -193,7 +195,6 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                 }
             }
         }
-        let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
         if let Err(e) = level
             .chunk_saver
             .save_chunks(&level.level_folder, vec)
@@ -202,7 +203,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             error!("Failed to save chunks: {:?}", e);
         }
 
-        for i in pos {
+        for i in positions {
             let mut data = lock.0.lock().unwrap();
             match data.entry(i) {
                 Entry::Occupied(mut entry) => {

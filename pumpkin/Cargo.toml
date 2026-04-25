@@ -20,7 +20,6 @@ doctest = false
 # pumpkin
 arc-swap.workspace = true
 rayon.workspace = true
-num_cpus.workspace = true
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true

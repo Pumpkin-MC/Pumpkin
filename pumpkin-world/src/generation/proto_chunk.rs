@@ -39,9 +39,7 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::height_limit::HeightLimitView;
-use crate::generation::noise::aquifer_sampler::{
-    FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl,
-};
+use crate::generation::noise::aquifer_sampler::{FluidLevel, FluidLevelSamplerImpl};
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
@@ -580,13 +578,13 @@ impl ProtoChunk {
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
 
-        let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
+        let sampler = StandardChunkFluidLevelSampler::new(
             FluidLevel::new(
                 settings.sea_level,
                 Block::from_state_id(settings.default_fluid.id),
             ),
             FluidLevel::new(-54, &Block::LAVA),
-        ));
+        );
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
             &noise_router.noise,
