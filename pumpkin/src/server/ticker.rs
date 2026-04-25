@@ -11,7 +11,7 @@ pub struct Ticker;
 
 impl Ticker {
     pub fn run(server: &Arc<Server>, handle: &Handle) {
-        let mut last_tick = Instant::now();
+        let mut next_tick = Instant::now();
         loop {
             if SHOULD_STOP.load(Ordering::Relaxed) {
                 break;
@@ -38,22 +38,26 @@ impl Ticker {
                 server.update_tick_times(tick_duration_nanos).await;
             });
 
-            let now = Instant::now();
-            let elapsed = now.duration_since(last_tick);
-
             let tick_interval = if manager.is_sprinting() {
                 Duration::ZERO
             } else {
                 Duration::from_nanos(manager.nanoseconds_per_tick() as u64)
             };
 
-            if let Some(sleep_time) = tick_interval.checked_sub(elapsed)
-                && !sleep_time.is_zero()
-            {
-                std::thread::park_timeout(sleep_time);
+            if tick_interval.is_zero() {
+                next_tick = Instant::now();
+                continue;
             }
 
-            last_tick = Instant::now();
+            next_tick += tick_interval;
+
+            if let Some(sleep_time) = next_tick.checked_duration_since(Instant::now()) {
+                if !sleep_time.is_zero() {
+                    std::thread::sleep(sleep_time);
+                }
+            } else {
+                next_tick = Instant::now();
+            }
         }
         debug!("Ticker stopped");
     }
