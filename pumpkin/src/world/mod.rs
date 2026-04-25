@@ -954,59 +954,59 @@ impl World {
             }
         }
 
-        let mut spawning_chunks_map = HashMap::new();
-        // TODO use FixedPlayerDistanceChunkTracker
+        // let mut spawning_chunks_map = HashMap::new();
+        // // TODO use FixedPlayerDistanceChunkTracker
 
-        for i in self.players.load().iter() {
-            let center = i.living_entity.entity.chunk_pos.load();
-            for dx in -8..=8 {
-                for dy in -8..=8 {
-                    // if dx.abs() <= 2 || dy.abs() <= 2 || dx.abs() >= 6 || dy.abs() >= 6 { // this is only for debug, spawning runs too slow
-                    //     continue;
-                    // }
-                    let chunk_pos = center.add_raw(dx, dy);
-                    if !spawning_chunks_map.contains_key(&chunk_pos)
-                        && let Some(chunk) = self.level.try_get_chunk(&chunk_pos)
-                    {
-                        spawning_chunks_map.entry(chunk_pos).or_insert(chunk);
-                    }
-                }
-            }
-        }
+        // for i in self.players.load().iter() {
+        //     let center = i.living_entity.entity.chunk_pos.load();
+        //     for dx in -8..=8 {
+        //         for dy in -8..=8 {
+        //             // if dx.abs() <= 2 || dy.abs() <= 2 || dx.abs() >= 6 || dy.abs() >= 6 { // this is only for debug, spawning runs too slow
+        //             //     continue;
+        //             // }
+        //             let chunk_pos = center.add_raw(dx, dy);
+        //             if !spawning_chunks_map.contains_key(&chunk_pos)
+        //                 && let Some(chunk) = self.level.try_get_chunk(&chunk_pos)
+        //             {
+        //                 spawning_chunks_map.entry(chunk_pos).or_insert(chunk);
+        //             }
+        //         }
+        //     }
+        // }
 
-        let mut spawn_state =
-            SpawnState::new(spawning_chunks_map.len() as i32, &self.entities, self).await; // TODO store it
+        // let mut spawn_state =
+        //     SpawnState::new(spawning_chunks_map.len() as i32, &self.entities, self).await; // TODO store it
 
-        // TODO gamerule this.spawnEnemies || this.spawnFriendlies
-        let (spawn_mobs, spawn_monsters, peaceful) = {
-            let lock = self.level_info.load();
-            (
-                lock.game_rules.spawn_mobs,
-                lock.game_rules.spawn_monsters,
-                lock.difficulty == Difficulty::Peaceful,
-            )
-        };
-        let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
-        let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
-        let spawn_passives = spawn_passives && spawn_mobs;
-        let spawn_list: Vec<&'static MobCategory> =
-            natural_spawner::get_filtered_spawning_categories(
-                &spawn_state,
-                spawn_mobs,
-                spawn_enemies,
-                spawn_passives,
-            );
+        // // TODO gamerule this.spawnEnemies || this.spawnFriendlies
+        // let (spawn_mobs, spawn_monsters, peaceful) = {
+        //     let lock = self.level_info.load();
+        //     (
+        //         lock.game_rules.spawn_mobs,
+        //         lock.game_rules.spawn_monsters,
+        //         lock.difficulty == Difficulty::Peaceful,
+        //     )
+        // };
+        // let spawn_passives = self.level_time.lock().await.time_of_day % 400 == 0;
+        // let spawn_enemies = !peaceful && spawn_monsters && spawn_mobs;
+        // let spawn_passives = spawn_passives && spawn_mobs;
+        // let spawn_list: Vec<&'static MobCategory> =
+        //     natural_spawner::get_filtered_spawning_categories(
+        //         &spawn_state,
+        //         spawn_mobs,
+        //         spawn_enemies,
+        //         spawn_passives,
+        //     );
 
-        // log::debug!("spawning list size {}", spawn_list.len());
-        let mut spawning_chunks: Vec<(Vector2<i32>, Arc<ChunkData>)> =
-            spawning_chunks_map.into_iter().collect();
-        spawning_chunks.shuffle(&mut rng());
+        // // log::debug!("spawning list size {}", spawn_list.len());
+        // let mut spawning_chunks: Vec<(Vector2<i32>, Arc<ChunkData>)> =
+        //     spawning_chunks_map.into_iter().collect();
+        // spawning_chunks.shuffle(&mut rng());
 
-        // TODO i think it can be multithread
-        for (pos, chunk) in spawning_chunks {
-            self.tick_spawning_chunk(pos, &chunk, &spawn_list, &mut spawn_state)
-                .await;
-        }
+        // // TODO i think it can be multithread
+        // for (pos, chunk) in spawning_chunks {
+        //     self.tick_spawning_chunk(pos, &chunk, &spawn_list, &mut spawn_state)
+        //         .await;
+        // }
 
         let world: Arc<dyn SimpleWorld> = self.clone();
 
