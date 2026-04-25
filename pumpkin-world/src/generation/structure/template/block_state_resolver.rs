@@ -73,11 +73,12 @@ impl BlockStateResolver {
         // Find the block
         let block = Block::from_state_id(block_state.id);
 
+        let props = match block.properties(block_state.id) {
+            Some(value) => value.to_props(),
+            None => return None,
+        };
         // Transform properties for rotation/mirror
-        let transformed_props: Vec<(&str, &str)> = block
-            .properties(block_state.id)
-            .unwrap()
-            .to_props()
+        let transformed_props: Vec<(&str, &str)> = props
             .iter()
             .map(|&(key, value)| {
                 let new_value = Self::transform_property(key, value, rotation, mirror);
