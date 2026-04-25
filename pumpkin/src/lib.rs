@@ -181,7 +181,7 @@ pub static SERVER_EXIT_CODE: AtomicI32 = AtomicI32::new(0);
 fn lock_or_recover<T>(mutex: &StdMutex<T>) -> StdMutexGuard<'_, T> {
     mutex
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 pub fn stop_server() {
