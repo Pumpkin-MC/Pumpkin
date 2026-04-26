@@ -523,9 +523,7 @@ impl CommandDispatcher {
                     }),
                     NodeIdClassification::Argument(argument_node_id) => {
                         let node = &self.tree[argument_node_id];
-                        node.meta
-                            .argument_type
-                            .list_suggestions(&context, builder)
+                        node.meta.argument_type.list_suggestions(&context, builder)
                     }
                 };
 

@@ -79,7 +79,7 @@ impl OwnedArg {
             Arg::Effect(e) => Self::Effect(e),
             Arg::Enchantment(e) => Self::Enchantment(e),
             Arg::EntityAnchor(a) => Self::EntityAnchor(*a),
-            Arg::Advancement(a) => Self::Advancement(a)
+            Arg::Advancement(a) => Self::Advancement(a),
         }
     }
 }

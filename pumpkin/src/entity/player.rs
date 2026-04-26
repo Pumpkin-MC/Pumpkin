@@ -102,9 +102,9 @@ use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
+use advancement::PlayerAdvancement;
 use pumpkin_data::potion::Effect;
 use pumpkin_world::chunk_system::ChunkLoading;
-use advancement::PlayerAdvancement;
 
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
 const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
@@ -467,7 +467,7 @@ pub struct Player {
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
-    pub advancements : Arc<Mutex<PlayerAdvancement>>,
+    pub advancements: Arc<Mutex<PlayerAdvancement>>,
 }
 
 impl Player {

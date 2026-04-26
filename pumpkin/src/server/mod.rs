@@ -197,9 +197,7 @@ impl Server {
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
             advanced_config.player_data.save_player_data,
         );
-        let advancement_manager = AdvancementManager::new(
-            world_path.clone(),
-        );
+        let advancement_manager = AdvancementManager::new(world_path.clone());
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
@@ -440,6 +438,7 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
+        player.advancements.lock().await.player = Arc::downgrade(&player);
 
         send_cancellable! {{
             self;

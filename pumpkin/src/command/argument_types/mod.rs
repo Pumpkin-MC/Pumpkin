@@ -219,5 +219,5 @@ pub mod entity_selector;
 pub mod game_profile;
 pub mod identifier;
 pub mod range;
-pub mod time;
 pub mod resource_key;
+pub mod time;

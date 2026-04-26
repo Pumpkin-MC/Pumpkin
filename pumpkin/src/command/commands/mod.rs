@@ -6,6 +6,7 @@ use pumpkin_util::{
 };
 use tokio::sync::RwLock;
 
+mod advancement;
 mod ban;
 mod banip;
 mod banlist;
@@ -57,7 +58,6 @@ mod transfer;
 mod weather;
 mod whitelist;
 mod worldborder;
-mod advancement;
 
 #[must_use]
 pub async fn default_dispatcher(

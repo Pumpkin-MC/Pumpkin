@@ -1,6 +1,3 @@
-use pumpkin_data::effect::StatusEffect;
-use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
-use pumpkin_util::identifier::Identifier;
 use crate::command::{
     CommandSender,
     args::{
@@ -11,6 +8,9 @@ use crate::command::{
     tree::RawArgs,
 };
 use crate::server::Server;
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
+use pumpkin_util::identifier::Identifier;
 
 pub struct EffectTypeArgumentConsumer;
 

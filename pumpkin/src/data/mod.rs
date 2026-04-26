@@ -8,13 +8,13 @@ const DATA_FOLDER: &str = "data/";
 
 pub mod op;
 
+pub mod advancement_data;
 pub mod banlist_serializer;
 pub mod banned_ip;
 pub mod banned_player;
 pub mod player_server;
 pub mod usercache;
 pub mod whitelist;
-pub mod advancement_data;
 
 pub struct VanillaData {
     pub banned_ip_list: RwLock<banned_ip::BannedIpList>,
