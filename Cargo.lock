@@ -2916,7 +2916,6 @@ dependencies = [
 name = "pumpkin-storage"
 version = "0.1.0-dev+26.1"
 dependencies = [
- "async-trait",
  "flate2",
  "pumpkin-config",
  "pumpkin-data",
@@ -2960,7 +2959,6 @@ dependencies = [
 name = "pumpkin-world"
 version = "0.1.0-dev+26.1"
 dependencies = [
- "async-trait",
  "bitflags 2.11.1",
  "bytes",
  "criterion",

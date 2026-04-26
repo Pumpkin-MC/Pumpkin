@@ -1,27 +1,26 @@
 use std::net::IpAddr;
 
-use async_trait::async_trait;
 use time::OffsetDateTime;
 
+use crate::BoxFuture;
 use crate::banlist::BannedIpEntry;
 use crate::error::StorageError;
 
 /// Persistent storage for banned IPs (vanilla's `banned-ips.json`).
-#[async_trait]
 pub trait BannedIpStorage: Send + Sync {
-    async fn ban(
+    fn ban(
         &self,
         ip: IpAddr,
         source: String,
         expires: Option<OffsetDateTime>,
         reason: String,
-    ) -> Result<(), StorageError>;
+    ) -> BoxFuture<'_, Result<(), StorageError>>;
 
-    async fn unban(&self, ip: IpAddr) -> Result<(), StorageError>;
+    fn unban(&self, ip: IpAddr) -> BoxFuture<'_, Result<(), StorageError>>;
 
-    async fn is_banned(&self, ip: IpAddr) -> Result<bool, StorageError>;
+    fn is_banned(&self, ip: IpAddr) -> BoxFuture<'_, Result<bool, StorageError>>;
 
-    async fn get(&self, ip: IpAddr) -> Result<Option<BannedIpEntry>, StorageError>;
+    fn get(&self, ip: IpAddr) -> BoxFuture<'_, Result<Option<BannedIpEntry>, StorageError>>;
 
-    async fn list(&self) -> Result<Vec<BannedIpEntry>, StorageError>;
+    fn list(&self) -> BoxFuture<'_, Result<Vec<BannedIpEntry>, StorageError>>;
 }

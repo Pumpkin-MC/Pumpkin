@@ -6,10 +6,10 @@
 
 use std::collections::HashMap;
 
-use async_trait::async_trait;
 use pumpkin_util::math::vector2::Vector2;
 use tokio::sync::{RwLock, mpsc};
 
+use crate::BoxFuture;
 use crate::chunk::{ChunkStorage, LoadedData};
 use crate::error::StorageError;
 
@@ -27,36 +27,50 @@ impl<T> MemoryChunkStorage<T> {
     }
 }
 
-#[async_trait]
 impl<T: Clone + Send + Sync + 'static> ChunkStorage<T> for MemoryChunkStorage<T> {
-    async fn fetch_chunks(
-        &self,
-        chunk_coords: &[Vector2<i32>],
+    fn fetch_chunks<'a>(
+        &'a self,
+        chunk_coords: &'a [Vector2<i32>],
         stream: mpsc::Sender<LoadedData<T>>,
-    ) {
-        let guard = self.data.read().await;
-        for coord in chunk_coords {
-            let msg = guard
-                .get(coord)
-                .cloned()
-                .map_or(LoadedData::Missing(*coord), LoadedData::Loaded);
-            if stream.send(msg).await.is_err() {
-                // Receiver dropped; stop pushing.
-                break;
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let guard = self.data.read().await;
+            for coord in chunk_coords {
+                let msg = guard
+                    .get(coord)
+                    .cloned()
+                    .map_or(LoadedData::Missing(*coord), LoadedData::Loaded);
+                if stream.send(msg).await.is_err() {
+                    // Receiver dropped; stop pushing.
+                    break;
+                }
             }
-        }
+        })
     }
 
-    async fn save_chunks(&self, chunks: Vec<(Vector2<i32>, T)>) -> Result<(), StorageError> {
-        let mut guard = self.data.write().await;
-        for (pos, data) in chunks {
-            guard.insert(pos, data);
-        }
-        Ok(())
+    fn save_chunks(
+        &self,
+        chunks: Vec<(Vector2<i32>, T)>,
+    ) -> BoxFuture<'_, Result<(), StorageError>> {
+        Box::pin(async move {
+            let mut guard = self.data.write().await;
+            for (pos, data) in chunks {
+                guard.insert(pos, data);
+            }
+            Ok(())
+        })
     }
 
-    async fn watch_chunks(&self, _chunks: &[Vector2<i32>]) {}
-    async fn unwatch_chunks(&self, _chunks: &[Vector2<i32>]) {}
-    async fn clear_watched_chunks(&self) {}
-    async fn block_and_await_ongoing_tasks(&self) {}
+    fn watch_chunks<'a>(&'a self, _chunks: &'a [Vector2<i32>]) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
+    }
+    fn unwatch_chunks<'a>(&'a self, _chunks: &'a [Vector2<i32>]) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
+    }
+    fn clear_watched_chunks(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
+    fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async {})
+    }
 }

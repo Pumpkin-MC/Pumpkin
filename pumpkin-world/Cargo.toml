@@ -12,7 +12,6 @@ pumpkin-config.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-storage.workspace = true
 
-async-trait.workspace = true
 futures.workspace = true
 
 bytes.workspace = true

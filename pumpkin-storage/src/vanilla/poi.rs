@@ -5,7 +5,6 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
-use async_trait::async_trait;
 use flate2::Compression;
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
@@ -14,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tracing::warn;
 
+use crate::BoxFuture;
 use crate::error::StorageError;
 use crate::poi::{PoiEntry, PoiStorage};
 use crate::vanilla::VanillaStorage;
@@ -293,86 +293,97 @@ impl PoiInner {
     }
 }
 
-#[async_trait]
 impl PoiStorage for VanillaStorage {
-    async fn add(&self, pos: BlockPos, poi_type: &str) -> Result<(), StorageError> {
-        let (rx, rz) = region_coords(pos);
-        let path = self.poi_region_path(rx, rz);
-        let mut guard = self.poi_inner.lock().await;
-        let region = guard.get_or_load_region(rx, rz, &path).await;
-        region.add(PoiEntry {
-            x: pos.0.x,
-            y: pos.0.y,
-            z: pos.0.z,
-            poi_type: poi_type.to_string(),
-            free_tickets: 0,
-        });
-        Ok(())
+    fn add<'a>(
+        &'a self,
+        pos: BlockPos,
+        poi_type: &'a str,
+    ) -> BoxFuture<'a, Result<(), StorageError>> {
+        Box::pin(async move {
+            let (rx, rz) = region_coords(pos);
+            let path = self.poi_region_path(rx, rz);
+            let mut guard = self.poi_inner.lock().await;
+            let region = guard.get_or_load_region(rx, rz, &path).await;
+            region.add(PoiEntry {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+                poi_type: poi_type.to_string(),
+                free_tickets: 0,
+            });
+            Ok(())
+        })
     }
 
-    async fn remove(&self, pos: BlockPos) -> Result<bool, StorageError> {
-        let (rx, rz) = region_coords(pos);
-        let path = self.poi_region_path(rx, rz);
-        let mut guard = self.poi_inner.lock().await;
-        let region = guard.get_or_load_region(rx, rz, &path).await;
-        Ok(region.remove(pos))
+    fn remove(&self, pos: BlockPos) -> BoxFuture<'_, Result<bool, StorageError>> {
+        Box::pin(async move {
+            let (rx, rz) = region_coords(pos);
+            let path = self.poi_region_path(rx, rz);
+            let mut guard = self.poi_inner.lock().await;
+            let region = guard.get_or_load_region(rx, rz, &path).await;
+            Ok(region.remove(pos))
+        })
     }
 
     #[allow(clippy::similar_names)]
-    async fn get_in_square(
-        &self,
+    fn get_in_square<'a>(
+        &'a self,
         center: BlockPos,
         radius: i32,
-        poi_type: Option<&str>,
-    ) -> Result<Vec<BlockPos>, StorageError> {
-        let min_x = center.0.x - radius;
-        let max_x = center.0.x + radius;
-        let min_z = center.0.z - radius;
-        let max_z = center.0.z + radius;
-        let min_rx = (min_x >> 4) >> 5;
-        let max_rx = (max_x >> 4) >> 5;
-        let min_rz = (min_z >> 4) >> 5;
-        let max_rz = (max_z >> 4) >> 5;
+        poi_type: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<Vec<BlockPos>, StorageError>> {
+        Box::pin(async move {
+            let min_x = center.0.x - radius;
+            let max_x = center.0.x + radius;
+            let min_z = center.0.z - radius;
+            let max_z = center.0.z + radius;
+            let min_rx = (min_x >> 4) >> 5;
+            let max_rx = (max_x >> 4) >> 5;
+            let min_rz = (min_z >> 4) >> 5;
+            let max_rz = (max_z >> 4) >> 5;
 
-        let mut guard = self.poi_inner.lock().await;
-        let mut results = Vec::new();
-        for rx in min_rx..=max_rx {
-            for rz in min_rz..=max_rz {
-                let path = self.poi_region_path(rx, rz);
-                let region = guard.get_or_load_region(rx, rz, &path).await;
-                for entry in region.entries() {
-                    if let Some(filter) = poi_type
-                        && entry.poi_type != filter
-                    {
-                        continue;
-                    }
-                    let dx = (entry.x - center.0.x).abs();
-                    let dz = (entry.z - center.0.z).abs();
-                    if dx <= radius && dz <= radius {
-                        results.push(entry.pos());
+            let mut guard = self.poi_inner.lock().await;
+            let mut results = Vec::new();
+            for rx in min_rx..=max_rx {
+                for rz in min_rz..=max_rz {
+                    let path = self.poi_region_path(rx, rz);
+                    let region = guard.get_or_load_region(rx, rz, &path).await;
+                    for entry in region.entries() {
+                        if let Some(filter) = poi_type
+                            && entry.poi_type != filter
+                        {
+                            continue;
+                        }
+                        let dx = (entry.x - center.0.x).abs();
+                        let dz = (entry.z - center.0.z).abs();
+                        if dx <= radius && dz <= radius {
+                            results.push(entry.pos());
+                        }
                     }
                 }
             }
-        }
-        Ok(results)
+            Ok(results)
+        })
     }
 
-    async fn save_all(&self) -> Result<(), StorageError> {
-        let folder = self.poi_folder();
-        fs::create_dir_all(&folder)
-            .await
-            .map_err(|e| StorageError::io_at(&folder, e))?;
+    fn save_all(&self) -> BoxFuture<'_, Result<(), StorageError>> {
+        Box::pin(async move {
+            let folder = self.poi_folder();
+            fs::create_dir_all(&folder)
+                .await
+                .map_err(|e| StorageError::io_at(&folder, e))?;
 
-        let mut guard = self.poi_inner.lock().await;
-        for ((rx, rz), region) in &mut guard.regions {
-            if region.dirty {
-                let path = folder.join(format!("r.{rx}.{rz}.mca"));
-                region
-                    .save(&path)
-                    .await
-                    .map_err(|e| StorageError::io_at(&path, e))?;
+            let mut guard = self.poi_inner.lock().await;
+            for ((rx, rz), region) in &mut guard.regions {
+                if region.dirty {
+                    let path = folder.join(format!("r.{rx}.{rz}.mca"));
+                    region
+                        .save(&path)
+                        .await
+                        .map_err(|e| StorageError::io_at(&path, e))?;
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 }

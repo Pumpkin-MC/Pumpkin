@@ -3,10 +3,10 @@
 
 use std::path::PathBuf;
 
-use async_trait::async_trait;
 use pumpkin_config::whitelist::WhitelistEntry;
 use uuid::Uuid;
 
+use crate::BoxFuture;
 use crate::error::StorageError;
 use crate::vanilla::VanillaStorage;
 use crate::vanilla::json_list::{load_json_list, save_json_list};
@@ -30,57 +30,68 @@ impl VanillaStorage {
     }
 }
 
-#[async_trait]
 impl WhitelistStorage for VanillaStorage {
-    async fn add(&self, uuid: Uuid, name: &str) -> Result<(), StorageError> {
-        let mut guard = self.whitelist_load_locked().await?;
-        let entries = guard.as_mut().expect("loaded");
-        entries.retain(|e| e.uuid != uuid);
-        entries.push(WhitelistEntry::new(uuid, name.to_string()));
-        let snapshot = entries.clone();
-        drop(guard);
-        save_json_list(&self.whitelist_path(), &snapshot).await
+    fn add<'a>(&'a self, uuid: Uuid, name: &'a str) -> BoxFuture<'a, Result<(), StorageError>> {
+        Box::pin(async move {
+            let mut guard = self.whitelist_load_locked().await?;
+            let entries = guard.as_mut().expect("loaded");
+            entries.retain(|e| e.uuid != uuid);
+            entries.push(WhitelistEntry::new(uuid, name.to_string()));
+            let snapshot = entries.clone();
+            drop(guard);
+            save_json_list(&self.whitelist_path(), &snapshot).await
+        })
     }
 
-    async fn remove(&self, uuid: Uuid) -> Result<(), StorageError> {
-        let mut guard = self.whitelist_load_locked().await?;
-        let entries = guard.as_mut().expect("loaded");
-        let before = entries.len();
-        entries.retain(|e| e.uuid != uuid);
-        if entries.len() == before {
-            return Ok(());
-        }
-        let snapshot = entries.clone();
-        drop(guard);
-        save_json_list(&self.whitelist_path(), &snapshot).await
+    fn remove(&self, uuid: Uuid) -> BoxFuture<'_, Result<(), StorageError>> {
+        Box::pin(async move {
+            let mut guard = self.whitelist_load_locked().await?;
+            let entries = guard.as_mut().expect("loaded");
+            let before = entries.len();
+            entries.retain(|e| e.uuid != uuid);
+            if entries.len() == before {
+                return Ok(());
+            }
+            let snapshot = entries.clone();
+            drop(guard);
+            save_json_list(&self.whitelist_path(), &snapshot).await
+        })
     }
 
-    async fn is_whitelisted(&self, uuid: Uuid) -> Result<bool, StorageError> {
-        let guard = self.whitelist_load_locked().await?;
-        Ok(guard
-            .as_ref()
-            .expect("loaded")
-            .iter()
-            .any(|e| e.uuid == uuid))
+    fn is_whitelisted(&self, uuid: Uuid) -> BoxFuture<'_, Result<bool, StorageError>> {
+        Box::pin(async move {
+            let guard = self.whitelist_load_locked().await?;
+            Ok(guard
+                .as_ref()
+                .expect("loaded")
+                .iter()
+                .any(|e| e.uuid == uuid))
+        })
     }
 
-    async fn get(&self, uuid: Uuid) -> Result<Option<WhitelistEntry>, StorageError> {
-        let guard = self.whitelist_load_locked().await?;
-        Ok(guard
-            .as_ref()
-            .expect("loaded")
-            .iter()
-            .find(|e| e.uuid == uuid)
-            .cloned())
+    fn get(&self, uuid: Uuid) -> BoxFuture<'_, Result<Option<WhitelistEntry>, StorageError>> {
+        Box::pin(async move {
+            let guard = self.whitelist_load_locked().await?;
+            Ok(guard
+                .as_ref()
+                .expect("loaded")
+                .iter()
+                .find(|e| e.uuid == uuid)
+                .cloned())
+        })
     }
 
-    async fn list(&self) -> Result<Vec<WhitelistEntry>, StorageError> {
-        let guard = self.whitelist_load_locked().await?;
-        Ok(guard.as_ref().expect("loaded").clone())
+    fn list(&self) -> BoxFuture<'_, Result<Vec<WhitelistEntry>, StorageError>> {
+        Box::pin(async move {
+            let guard = self.whitelist_load_locked().await?;
+            Ok(guard.as_ref().expect("loaded").clone())
+        })
     }
 
-    async fn reload(&self) -> Result<(), StorageError> {
-        *self.whitelist.write().await = None;
-        Ok(())
+    fn reload(&self) -> BoxFuture<'_, Result<(), StorageError>> {
+        Box::pin(async move {
+            *self.whitelist.write().await = None;
+            Ok(())
+        })
     }
 }

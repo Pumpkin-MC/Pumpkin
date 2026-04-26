@@ -6,13 +6,13 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 use tokio::fs;
 use uuid::Uuid;
 
+use crate::BoxFuture;
 use crate::error::StorageError;
 use crate::user_cache::{UserCacheEntry, UserCacheStorage};
 use crate::vanilla::VanillaStorage;
@@ -182,92 +182,103 @@ fn one_month_from_now() -> OffsetDateTime {
     OffsetDateTime::now_utc() + Duration::days(30)
 }
 
-#[async_trait]
 impl UserCacheStorage for VanillaStorage {
-    async fn upsert(&self, uuid: Uuid, name: &str) -> Result<(), StorageError> {
-        let path = self.user_cache_path();
-        let mut guard = self.user_cache_inner.lock().await;
-        guard.ensure_loaded(&path).await?;
-        guard.add_fresh(uuid, name.to_string());
-        let snapshot = guard.top_mru_profiles(USER_CACHE_MRU_LIMIT);
-        drop(guard);
-        save_snapshot(&path, snapshot).await
+    fn upsert<'a>(&'a self, uuid: Uuid, name: &'a str) -> BoxFuture<'a, Result<(), StorageError>> {
+        Box::pin(async move {
+            let path = self.user_cache_path();
+            let mut guard = self.user_cache_inner.lock().await;
+            guard.ensure_loaded(&path).await?;
+            guard.add_fresh(uuid, name.to_string());
+            let snapshot = guard.top_mru_profiles(USER_CACHE_MRU_LIMIT);
+            drop(guard);
+            save_snapshot(&path, snapshot).await
+        })
     }
 
-    async fn get_by_uuid(&self, uuid: Uuid) -> Result<Option<UserCacheEntry>, StorageError> {
-        let path = self.user_cache_path();
-        let mut guard = self.user_cache_inner.lock().await;
-        guard.ensure_loaded(&path).await?;
+    fn get_by_uuid(
+        &self,
+        uuid: Uuid,
+    ) -> BoxFuture<'_, Result<Option<UserCacheEntry>, StorageError>> {
+        Box::pin(async move {
+            let path = self.user_cache_path();
+            let mut guard = self.user_cache_inner.lock().await;
+            guard.ensure_loaded(&path).await?;
 
-        let lookup = guard.profiles_by_uuid.get(&uuid).cloned();
+            let lookup = guard.profiles_by_uuid.get(&uuid).cloned();
 
-        let (profile, needs_save) = if let Some(entry) = lookup {
-            if is_expired(entry.expiration_date) {
-                guard.profiles_by_uuid.remove(&entry.uuid);
-                guard
-                    .profiles_by_name
-                    .remove(&entry.name.to_ascii_lowercase());
-                (None, true)
+            let (profile, needs_save) = if let Some(entry) = lookup {
+                if is_expired(entry.expiration_date) {
+                    guard.profiles_by_uuid.remove(&entry.uuid);
+                    guard
+                        .profiles_by_name
+                        .remove(&entry.name.to_ascii_lowercase());
+                    (None, true)
+                } else {
+                    (Some(entry), false)
+                }
             } else {
-                (Some(entry), false)
-            }
-        } else {
-            (None, false)
-        };
+                (None, false)
+            };
 
-        let Some(mut entry) = profile else {
-            if needs_save {
-                let snapshot = guard.top_mru_profiles(USER_CACHE_MRU_LIMIT);
-                drop(guard);
-                save_snapshot(&path, snapshot).await?;
-            }
-            return Ok(None);
-        };
+            let Some(mut entry) = profile else {
+                if needs_save {
+                    let snapshot = guard.top_mru_profiles(USER_CACHE_MRU_LIMIT);
+                    drop(guard);
+                    save_snapshot(&path, snapshot).await?;
+                }
+                return Ok(None);
+            };
 
-        entry.last_access = guard.next_operation();
-        guard
-            .profiles_by_name
-            .insert(entry.name.to_ascii_lowercase(), entry.clone());
-        guard.profiles_by_uuid.insert(entry.uuid, entry.clone());
-        Ok(Some(entry.to_public()))
+            entry.last_access = guard.next_operation();
+            guard
+                .profiles_by_name
+                .insert(entry.name.to_ascii_lowercase(), entry.clone());
+            guard.profiles_by_uuid.insert(entry.uuid, entry.clone());
+            Ok(Some(entry.to_public()))
+        })
     }
 
-    async fn get_by_name(&self, name: &str) -> Result<Option<UserCacheEntry>, StorageError> {
-        let path = self.user_cache_path();
-        let mut guard = self.user_cache_inner.lock().await;
-        guard.ensure_loaded(&path).await?;
+    fn get_by_name<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<Option<UserCacheEntry>, StorageError>> {
+        Box::pin(async move {
+            let path = self.user_cache_path();
+            let mut guard = self.user_cache_inner.lock().await;
+            guard.ensure_loaded(&path).await?;
 
-        let lowercase_name = name.to_ascii_lowercase();
-        let lookup = guard.profiles_by_name.get(&lowercase_name).cloned();
+            let lowercase_name = name.to_ascii_lowercase();
+            let lookup = guard.profiles_by_name.get(&lowercase_name).cloned();
 
-        let (profile, needs_save) = if let Some(entry) = lookup {
-            if is_expired(entry.expiration_date) {
-                guard.profiles_by_uuid.remove(&entry.uuid);
-                guard
-                    .profiles_by_name
-                    .remove(&entry.name.to_ascii_lowercase());
-                (None, true)
+            let (profile, needs_save) = if let Some(entry) = lookup {
+                if is_expired(entry.expiration_date) {
+                    guard.profiles_by_uuid.remove(&entry.uuid);
+                    guard
+                        .profiles_by_name
+                        .remove(&entry.name.to_ascii_lowercase());
+                    (None, true)
+                } else {
+                    (Some(entry), false)
+                }
             } else {
-                (Some(entry), false)
-            }
-        } else {
-            (None, false)
-        };
+                (None, false)
+            };
 
-        let Some(mut entry) = profile else {
-            if needs_save {
-                let snapshot = guard.top_mru_profiles(USER_CACHE_MRU_LIMIT);
-                drop(guard);
-                save_snapshot(&path, snapshot).await?;
-            }
-            return Ok(None);
-        };
+            let Some(mut entry) = profile else {
+                if needs_save {
+                    let snapshot = guard.top_mru_profiles(USER_CACHE_MRU_LIMIT);
+                    drop(guard);
+                    save_snapshot(&path, snapshot).await?;
+                }
+                return Ok(None);
+            };
 
-        entry.last_access = guard.next_operation();
-        guard
-            .profiles_by_name
-            .insert(entry.name.to_ascii_lowercase(), entry.clone());
-        guard.profiles_by_uuid.insert(entry.uuid, entry.clone());
-        Ok(Some(entry.to_public()))
+            entry.last_access = guard.next_operation();
+            guard
+                .profiles_by_name
+                .insert(entry.name.to_ascii_lowercase(), entry.clone());
+            guard.profiles_by_uuid.insert(entry.uuid, entry.clone());
+            Ok(Some(entry.to_public()))
+        })
     }
 }

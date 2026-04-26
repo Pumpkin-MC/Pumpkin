@@ -1,10 +1,10 @@
 //! Points of Interest storage.
 
-use async_trait::async_trait;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use serde::{Deserialize, Serialize};
 
+use crate::BoxFuture;
 use crate::error::StorageError;
 
 pub const POI_TYPE_NETHER_PORTAL: &str = "minecraft:nether_portal";
@@ -26,21 +26,24 @@ impl PoiEntry {
     }
 }
 
-#[async_trait]
 pub trait PoiStorage: Send + Sync {
-    async fn add(&self, pos: BlockPos, poi_type: &str) -> Result<(), StorageError>;
+    fn add<'a>(
+        &'a self,
+        pos: BlockPos,
+        poi_type: &'a str,
+    ) -> BoxFuture<'a, Result<(), StorageError>>;
 
-    async fn remove(&self, pos: BlockPos) -> Result<bool, StorageError>;
+    fn remove(&self, pos: BlockPos) -> BoxFuture<'_, Result<bool, StorageError>>;
 
     /// Returns every POI whose Chebyshev distance (max of |dx|, |dz|) from
     /// `center` is `<= radius`, optionally filtered by `poi_type`.
-    async fn get_in_square(
-        &self,
+    fn get_in_square<'a>(
+        &'a self,
         center: BlockPos,
         radius: i32,
-        poi_type: Option<&str>,
-    ) -> Result<Vec<BlockPos>, StorageError>;
+        poi_type: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<Vec<BlockPos>, StorageError>>;
 
     /// Flushes any in-memory state to persistent storage.
-    async fn save_all(&self) -> Result<(), StorageError>;
+    fn save_all(&self) -> BoxFuture<'_, Result<(), StorageError>>;
 }

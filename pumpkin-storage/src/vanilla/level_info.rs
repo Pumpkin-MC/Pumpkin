@@ -3,11 +3,11 @@
 
 use std::io::{Cursor, Read};
 
-use async_trait::async_trait;
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use serde::Deserialize;
 use tokio::fs;
 
+use crate::BoxFuture;
 use crate::error::StorageError;
 use crate::level_info::{
     LevelData, LevelInfoStorage, MAXIMUM_SUPPORTED_LEVEL_VERSION,
@@ -72,73 +72,76 @@ fn check_level_version(raw_nbt: &[u8]) -> Result<(), StorageError> {
     }
 }
 
-#[async_trait]
 impl LevelInfoStorage for VanillaStorage {
-    async fn load(&self) -> Result<LevelData, StorageError> {
-        let path = self.world_dir().join(LEVEL_DAT_FILE_NAME);
-        let compressed = fs::read(&path).await.map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                StorageError::NotFound {
-                    message: format!("level.dat not found at {}", path.display()),
+    fn load(&self) -> BoxFuture<'_, Result<LevelData, StorageError>> {
+        Box::pin(async move {
+            let path = self.world_dir().join(LEVEL_DAT_FILE_NAME);
+            let compressed = fs::read(&path).await.map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    StorageError::NotFound {
+                        message: format!("level.dat not found at {}", path.display()),
+                    }
+                } else {
+                    StorageError::io_at(&path, e)
                 }
-            } else {
-                StorageError::io_at(&path, e)
+            })?;
+
+            let mut buf = Vec::new();
+            GzDecoder::new(Cursor::new(compressed))
+                .read_to_end(&mut buf)
+                .map_err(StorageError::io)?;
+
+            check_data_version(&buf)?;
+            check_level_version(&buf)?;
+
+            let dat: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(buf))
+                .map_err(|e| StorageError::Deserialize(e.to_string()))?;
+
+            let backup = self.world_dir().join(LEVEL_DAT_BACKUP_FILE_NAME);
+            if let Err(e) = fs::copy(&path, &backup).await {
+                // Backup is best-effort; surface as a hard error only if the source
+                // disappeared between read and copy (unlikely).
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    return Err(StorageError::io_at(&backup, e));
+                }
             }
-        })?;
 
-        let mut buf = Vec::new();
-        GzDecoder::new(Cursor::new(compressed))
-            .read_to_end(&mut buf)
-            .map_err(StorageError::io)?;
-
-        check_data_version(&buf)?;
-        check_level_version(&buf)?;
-
-        let dat: LevelDat = pumpkin_nbt::from_bytes(Cursor::new(buf))
-            .map_err(|e| StorageError::Deserialize(e.to_string()))?;
-
-        let backup = self.world_dir().join(LEVEL_DAT_BACKUP_FILE_NAME);
-        if let Err(e) = fs::copy(&path, &backup).await {
-            // Backup is best-effort; surface as a hard error only if the source
-            // disappeared between read and copy (unlikely).
-            if e.kind() != std::io::ErrorKind::NotFound {
-                return Err(StorageError::io_at(&backup, e));
-            }
-        }
-
-        Ok(dat.data)
+            Ok(dat.data)
+        })
     }
 
     #[allow(clippy::semicolon_outside_block)]
-    async fn save(&self, data: &LevelData) -> Result<(), StorageError> {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |d| d.as_millis() as i64);
-        let mut stamped = data.clone();
-        stamped.last_played = now_ms;
-        let dat = LevelDat { data: stamped };
+    fn save<'a>(&'a self, data: &'a LevelData) -> BoxFuture<'a, Result<(), StorageError>> {
+        Box::pin(async move {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let now_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis() as i64);
+            let mut stamped = data.clone();
+            stamped.last_played = now_ms;
+            let dat = LevelDat { data: stamped };
 
-        let mut compressed = Vec::new();
-        {
-            let mut encoder = GzEncoder::new(&mut compressed, Compression::best());
-            pumpkin_nbt::to_bytes(&dat, &mut encoder)
-                .map_err(|e| StorageError::Serialize(e.to_string()))?;
-            encoder.finish().map_err(StorageError::io)?;
-        }
+            let mut compressed = Vec::new();
+            {
+                let mut encoder = GzEncoder::new(&mut compressed, Compression::best());
+                pumpkin_nbt::to_bytes(&dat, &mut encoder)
+                    .map_err(|e| StorageError::Serialize(e.to_string()))?;
+                encoder.finish().map_err(StorageError::io)?;
+            }
 
-        let path = self.world_dir().join(LEVEL_DAT_FILE_NAME);
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            fs::create_dir_all(parent)
+            let path = self.world_dir().join(LEVEL_DAT_FILE_NAME);
+            if let Some(parent) = path.parent()
+                && !parent.as_os_str().is_empty()
+            {
+                fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| StorageError::io_at(parent, e))?;
+            }
+            fs::write(&path, &compressed)
                 .await
-                .map_err(|e| StorageError::io_at(parent, e))?;
-        }
-        fs::write(&path, &compressed)
-            .await
-            .map_err(|e| StorageError::io_at(&path, e))?;
-        Ok(())
+                .map_err(|e| StorageError::io_at(&path, e))?;
+            Ok(())
+        })
     }
 }
 

@@ -7,6 +7,8 @@
 //!
 //! Additional domain traits are added in subsequent commits.
 
+use std::pin::Pin;
+
 pub mod banlist;
 pub mod banned_ip;
 pub mod banned_player;
@@ -30,3 +32,9 @@ pub use vanilla::VanillaStorage;
 
 #[cfg(test)]
 mod conformance_tests;
+
+/// Boxed `Send` future returned from dyn-compatible storage trait methods.
+///
+/// Native `async fn` in traits is not dyn-compatible, so each storage trait
+/// returns this manually-boxed future instead.
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

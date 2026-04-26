@@ -5,10 +5,10 @@
 //! implemented for blocks-per-chunk and entity-per-chunk storage, and so
 //! callers can plug in alternative payload types in tests or custom backends.
 
-use async_trait::async_trait;
 use pumpkin_util::math::vector2::Vector2;
 use tokio::sync::mpsc;
 
+use crate::BoxFuture;
 use crate::error::StorageError;
 
 /// Outcome of a single-chunk read.
@@ -28,27 +28,29 @@ pub enum LoadedData<T> {
 /// The payload type `T` is typically an `Arc<ChunkData>` /
 /// `Arc<ChunkEntityData>` so callers can share chunk state cheaply. `T` is
 /// left unconstrained by this crate — callers choose the shape they need.
-#[async_trait]
 pub trait ChunkStorage<T: Send + Sync + 'static>: Send + Sync {
     /// Reads the requested chunks, emitting one [`LoadedData`] per requested
     /// coord through `stream`. Order of delivery is implementation-defined.
-    async fn fetch_chunks(
-        &self,
-        chunk_coords: &[Vector2<i32>],
+    fn fetch_chunks<'a>(
+        &'a self,
+        chunk_coords: &'a [Vector2<i32>],
         stream: mpsc::Sender<LoadedData<T>>,
-    );
+    ) -> BoxFuture<'a, ()>;
 
     /// Persists chunks. Batched so region-based backends can group writes.
-    async fn save_chunks(&self, chunks: Vec<(Vector2<i32>, T)>) -> Result<(), StorageError>;
+    fn save_chunks(
+        &self,
+        chunks: Vec<(Vector2<i32>, T)>,
+    ) -> BoxFuture<'_, Result<(), StorageError>>;
 
     /// Marks chunks as resident in memory — region-file backends use this to
     /// keep serializer caches alive while any chunk in a region is watched.
-    async fn watch_chunks(&self, chunks: &[Vector2<i32>]);
+    fn watch_chunks<'a>(&'a self, chunks: &'a [Vector2<i32>]) -> BoxFuture<'a, ()>;
 
-    async fn unwatch_chunks(&self, chunks: &[Vector2<i32>]);
+    fn unwatch_chunks<'a>(&'a self, chunks: &'a [Vector2<i32>]) -> BoxFuture<'a, ()>;
 
-    async fn clear_watched_chunks(&self);
+    fn clear_watched_chunks(&self) -> BoxFuture<'_, ()>;
 
     /// Waits until any in-flight saves/fetches have completed.
-    async fn block_and_await_ongoing_tasks(&self);
+    fn block_and_await_ongoing_tasks(&self) -> BoxFuture<'_, ()>;
 }

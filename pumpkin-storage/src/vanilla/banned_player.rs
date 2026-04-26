@@ -4,10 +4,10 @@
 
 use std::path::PathBuf;
 
-use async_trait::async_trait;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::BoxFuture;
 use crate::banlist::BannedPlayerEntry;
 use crate::banned_player::BannedPlayerStorage;
 use crate::error::StorageError;
@@ -39,66 +39,73 @@ fn is_active(entry: &BannedPlayerEntry) -> bool {
         .is_none_or(|expires| expires >= OffsetDateTime::now_utc())
 }
 
-#[async_trait]
 impl BannedPlayerStorage for VanillaStorage {
-    async fn ban(
-        &self,
+    fn ban<'a>(
+        &'a self,
         uuid: Uuid,
-        name: &str,
+        name: &'a str,
         source: String,
         expires: Option<OffsetDateTime>,
         reason: String,
-    ) -> Result<(), StorageError> {
-        let mut guard = self.banned_players_load_locked().await?;
-        let entries = guard.as_mut().expect("loaded");
-        entries.retain(|e| e.uuid != uuid);
-        entries.push(BannedPlayerEntry::new(
-            uuid,
-            name.to_string(),
-            source,
-            expires,
-            reason,
-        ));
-        let snapshot = entries.clone();
-        drop(guard);
-        save_json_list(&self.banned_players_path(), &snapshot).await
+    ) -> BoxFuture<'a, Result<(), StorageError>> {
+        Box::pin(async move {
+            let mut guard = self.banned_players_load_locked().await?;
+            let entries = guard.as_mut().expect("loaded");
+            entries.retain(|e| e.uuid != uuid);
+            entries.push(BannedPlayerEntry::new(
+                uuid,
+                name.to_string(),
+                source,
+                expires,
+                reason,
+            ));
+            let snapshot = entries.clone();
+            drop(guard);
+            save_json_list(&self.banned_players_path(), &snapshot).await
+        })
     }
 
-    async fn unban(&self, uuid: Uuid) -> Result<(), StorageError> {
-        let mut guard = self.banned_players_load_locked().await?;
-        let entries = guard.as_mut().expect("loaded");
-        let before = entries.len();
-        entries.retain(|e| e.uuid != uuid);
-        if entries.len() == before {
-            return Ok(());
-        }
-        let snapshot = entries.clone();
-        drop(guard);
-        save_json_list(&self.banned_players_path(), &snapshot).await
+    fn unban(&self, uuid: Uuid) -> BoxFuture<'_, Result<(), StorageError>> {
+        Box::pin(async move {
+            let mut guard = self.banned_players_load_locked().await?;
+            let entries = guard.as_mut().expect("loaded");
+            let before = entries.len();
+            entries.retain(|e| e.uuid != uuid);
+            if entries.len() == before {
+                return Ok(());
+            }
+            let snapshot = entries.clone();
+            drop(guard);
+            save_json_list(&self.banned_players_path(), &snapshot).await
+        })
     }
 
-    async fn is_banned(&self, uuid: Uuid) -> Result<bool, StorageError> {
-        Ok(self.get(uuid).await?.is_some())
+    fn is_banned(&self, uuid: Uuid) -> BoxFuture<'_, Result<bool, StorageError>> {
+        Box::pin(async move { Ok(BannedPlayerStorage::get(self, uuid).await?.is_some()) })
     }
 
-    async fn get(&self, uuid: Uuid) -> Result<Option<BannedPlayerEntry>, StorageError> {
-        let guard = self.banned_players_load_locked().await?;
-        Ok(guard
-            .as_ref()
-            .expect("loaded")
-            .iter()
-            .find(|e| e.uuid == uuid && is_active(e))
-            .cloned())
+    fn get(&self, uuid: Uuid) -> BoxFuture<'_, Result<Option<BannedPlayerEntry>, StorageError>> {
+        Box::pin(async move {
+            let guard = self.banned_players_load_locked().await?;
+            Ok(guard
+                .as_ref()
+                .expect("loaded")
+                .iter()
+                .find(|e| e.uuid == uuid && is_active(e))
+                .cloned())
+        })
     }
 
-    async fn list(&self) -> Result<Vec<BannedPlayerEntry>, StorageError> {
-        let guard = self.banned_players_load_locked().await?;
-        Ok(guard
-            .as_ref()
-            .expect("loaded")
-            .iter()
-            .filter(|e| is_active(e))
-            .cloned()
-            .collect())
+    fn list(&self) -> BoxFuture<'_, Result<Vec<BannedPlayerEntry>, StorageError>> {
+        Box::pin(async move {
+            let guard = self.banned_players_load_locked().await?;
+            Ok(guard
+                .as_ref()
+                .expect("loaded")
+                .iter()
+                .filter(|e| is_active(e))
+                .cloned()
+                .collect())
+        })
     }
 }
