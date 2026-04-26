@@ -41,8 +41,11 @@ pub struct PlayerAdvancement {
     pub player: Weak<Player>,
 }
 
+#[derive(Debug, thiserror::Error)]
 pub enum AdvancementDataError {
+    #[error("IO error: {0}")]
     Io(std::io::Error),
+    #[error("JSON error: {0}")]
     Json(serde_json::Error),
 }
 
@@ -123,7 +126,7 @@ impl PlayerAdvancement {
         Ok(())
     }
 
-    pub fn flush_dirty(&mut self) {
+    pub fn flush_dirty(&mut self, _flag:bool) {
         if self.is_first_packet || !self.to_update.is_empty() {
             todo!("send advancement tree with the complete ones");
         }
@@ -173,9 +176,6 @@ impl PlayerAdvancement {
                     format!("chat.type.advancement.{}", display.frame_type.get_name()),
                     [player.get_display_name().await, advancement.name()],
                 );
-                player
-                    .send_system_message(&TextComponent::text("test"))
-                    .await;
                 player
                     .world()
                     .broadcast_system_message(&component, false)

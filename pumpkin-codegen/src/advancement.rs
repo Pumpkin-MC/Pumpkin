@@ -1,12 +1,11 @@
-use std::{collections::BTreeMap, fs};
-use std::hash::{Hash, Hasher};
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::TextContent::Translate;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::{collections::BTreeMap, fs};
 
 #[derive(Deserialize, Default)]
 pub struct AdvancementStruct {
@@ -33,6 +32,10 @@ where
     Ok(icon.id)
 }
 
+fn r#true() -> bool {
+    true
+}
+
 #[derive(Deserialize)]
 pub struct AdvancementDisplay {
     pub title: TextComponent,
@@ -43,11 +46,11 @@ pub struct AdvancementDisplay {
     pub frame_type: FrameTypeStruct,
     #[serde(default, rename = "background")]
     pub background_texture: Option<ResourceLocation>,
-    #[serde(default)]
+    #[serde(default = "r#true")]
     pub show_toast: bool,
     #[serde(default)]
     pub hidden: bool,
-    #[serde(default)]
+    #[serde(default = "r#true")]
     pub announce_to_chat: bool,
 }
 
@@ -91,9 +94,9 @@ impl ToTokens for AdvancementDisplay {
                 ItemStack::new(1,&Item::#item_icon),
                 #frame_type,
                 #background_texture,
-                #announce_to_chat,
                 #show_toast,
                 #hidden,
+                #announce_to_chat,
             )
         });
     }

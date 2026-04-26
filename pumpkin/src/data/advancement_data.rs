@@ -1,4 +1,4 @@
-use crate::entity::player::advancement::PlayerAdvancement;
+use crate::entity::player::advancement::{AdvancementDataError, PlayerAdvancement};
 use pumpkin_data::Advancement;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -29,15 +29,15 @@ impl AdvancementManager {
         PlayerAdvancement::new(true, self.get_advancement_path())
     }
 
-    pub async fn save_all_players(players : Vec<Arc<Player>>) -> Result<(), PlayerDataError> {
+    pub async fn save_all_players(players : Vec<Arc<Player>>) -> Result<(), AdvancementDataError> {
         for player in players {
-            player.advancements.lock().await.save().await?;
+            player.advancements.lock().await.save()?;
         }
         Ok(())
     }
 
-    pub async fn save_player(player : Arc<Player>) -> Result<(), PlayerDataError> {
-        player.advancements.lock().await.save().await?;
+    pub async fn save_player(player : Arc<Player>) -> Result<(), AdvancementDataError> {
+        player.advancements.lock().await.save()?;
         Ok(())
     }
 }

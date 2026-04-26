@@ -4,7 +4,7 @@ use crate::command::argument_types::resource_key::{ADVANCEMENT_REGISTRY, Resourc
 use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::{AnyCommandErrorType, CommandErrorType};
+use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
