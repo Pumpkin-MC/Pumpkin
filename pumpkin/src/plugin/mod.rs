@@ -525,6 +525,44 @@ impl PluginManager {
             // Initialize the plugin
             match instance.on_load(context.clone()).await {
                 Ok(()) => {
+                    // Flush commands queued via `register_command_sync`.
+                    //
+                    // We do the actual HashMap work here, inside the server binary, so
+                    // that hashbrown uses the right `Group::static_empty()` sentinel.
+                    {
+                        let pending = {
+                            let mut lock = context
+                                .pending_commands
+                                .lock()
+                                .expect("pending_commands poisoned");
+                            std::mem::take(&mut *lock)
+                        };
+                        if !pending.is_empty() {
+                            let mut dispatcher =
+                                context.server.command_dispatcher.write().await;
+                            for (tree, perm) in pending {
+                                dispatcher.fallback_dispatcher.register(tree, perm);
+                            }
+                        }
+                    }
+
+                    // Flush event handlers queued via `register_event_sync`.
+                    {
+                        let pending = {
+                            let mut lock = context
+                                .pending_handlers
+                                .lock()
+                                .expect("pending_handlers poisoned");
+                            std::mem::take(&mut *lock)
+                        };
+                        if !pending.is_empty() {
+                            let mut handlers = self_ref_clone.handlers.write().await;
+                            for (name, boxed) in pending {
+                                handlers.entry(name).or_insert_with(Vec::new).push(boxed);
+                            }
+                        }
+                    }
+
                     // Update plugin state to loaded
                     {
                         let mut plugins = self_ref_clone.plugins.write().await;
