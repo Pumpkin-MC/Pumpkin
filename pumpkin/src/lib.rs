@@ -35,6 +35,8 @@ use tracing::{debug, error, info, warn};
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use crate::command::args::Arg::Advancement;
+use crate::data::advancement_data::AdvancementManager;
 
 pub mod block;
 pub mod command;
@@ -385,6 +387,10 @@ impl PumpkinServer {
             .await
         {
             error!("Error saving all players during shutdown: {e}");
+        }
+
+        if let Err(e) = AdvancementManager::save_all_players(self.server.get_all_players()).await{
+            error!("Error saving all players advancements during shutdown: {e}");
         }
 
         let kick_message = TextComponent::text("Server stopped");

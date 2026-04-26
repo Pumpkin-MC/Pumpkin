@@ -1,6 +1,10 @@
 use crate::entity::player::advancement::PlayerAdvancement;
 use pumpkin_data::Advancement;
 use std::path::PathBuf;
+use std::sync::Arc;
+use pumpkin_world::data::player_data::PlayerDataError;
+use crate::entity::player::Player;
+use crate::server::Server;
 
 pub struct AdvancementManager {
     advancement_path: PathBuf,
@@ -23,5 +27,17 @@ impl AdvancementManager {
 
     pub fn new_advancement(&self) -> PlayerAdvancement {
         PlayerAdvancement::new(true, self.get_advancement_path())
+    }
+
+    pub async fn save_all_players(players : Vec<Arc<Player>>) -> Result<(), PlayerDataError> {
+        for player in players {
+            player.advancements.lock().await.save().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn save_player(player : Arc<Player>) -> Result<(), PlayerDataError> {
+        player.advancements.lock().await.save().await?;
+        Ok(())
     }
 }
