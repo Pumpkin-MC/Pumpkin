@@ -538,8 +538,7 @@ impl PluginManager {
                             std::mem::take(&mut *lock)
                         };
                         if !pending.is_empty() {
-                            let mut dispatcher =
-                                context.server.command_dispatcher.write().await;
+                            let mut dispatcher = context.server.command_dispatcher.write().await;
                             for (tree, perm) in pending {
                                 dispatcher.fallback_dispatcher.register(tree, perm);
                             }

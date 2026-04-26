@@ -45,9 +45,7 @@ impl PluginLoader for NativePluginLoader {
             // export the static directly (only works when the static itself IS the pointer,
             // e.g. a C plugin or a plugin using unsafe pointer transmutation).
             let metadata: &PluginMetadata = unsafe {
-                if let Ok(get_fn) =
-                    library.get::<fn() -> *const PluginMetadata>(b"get_metadata")
-                {
+                if let Ok(get_fn) = library.get::<fn() -> *const PluginMetadata>(b"get_metadata") {
                     &*get_fn()
                 } else {
                     &**library
