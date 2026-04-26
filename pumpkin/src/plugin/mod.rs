@@ -461,6 +461,41 @@ impl PluginManager {
         Ok(sorted)
     }
 
+    /// Drain commands and event handlers queued by the plugin during `on_load`.
+    ///
+    /// All `HashMap` work is done here, inside the server binary, so that hashbrown
+    /// uses the correct `Group::static_empty()` sentinel (see [`Context`] for details).
+    async fn flush_pending_registrations(
+        context: &Arc<Context>,
+        handlers: &Arc<RwLock<HandlerMap>>,
+    ) {
+        let pending_cmds = std::mem::take(
+            &mut *context
+                .pending_commands
+                .lock()
+                .expect("pending_commands poisoned"),
+        );
+        if !pending_cmds.is_empty() {
+            let mut dispatcher = context.server.command_dispatcher.write().await;
+            for (tree, perm) in pending_cmds {
+                dispatcher.fallback_dispatcher.register(tree, perm);
+            }
+        }
+
+        let pending_hdls = std::mem::take(
+            &mut *context
+                .pending_handlers
+                .lock()
+                .expect("pending_handlers poisoned"),
+        );
+        if !pending_hdls.is_empty() {
+            let mut map = handlers.write().await;
+            for (name, boxed) in pending_hdls {
+                map.entry(name).or_default().push(boxed);
+            }
+        }
+    }
+
     /// Spawn initialization for a single plugin
     async fn spawn_plugin_initialization(
         &self,
@@ -525,42 +560,7 @@ impl PluginManager {
             // Initialize the plugin
             match instance.on_load(context.clone()).await {
                 Ok(()) => {
-                    // Flush commands queued via `register_command_sync`.
-                    //
-                    // We do the actual HashMap work here, inside the server binary, so
-                    // that hashbrown uses the right `Group::static_empty()` sentinel.
-                    {
-                        let pending = {
-                            let mut lock = context
-                                .pending_commands
-                                .lock()
-                                .expect("pending_commands poisoned");
-                            std::mem::take(&mut *lock)
-                        };
-                        if !pending.is_empty() {
-                            let mut dispatcher = context.server.command_dispatcher.write().await;
-                            for (tree, perm) in pending {
-                                dispatcher.fallback_dispatcher.register(tree, perm);
-                            }
-                        }
-                    }
-
-                    // Flush event handlers queued via `register_event_sync`.
-                    {
-                        let pending = {
-                            let mut lock = context
-                                .pending_handlers
-                                .lock()
-                                .expect("pending_handlers poisoned");
-                            std::mem::take(&mut *lock)
-                        };
-                        if !pending.is_empty() {
-                            let mut handlers = self_ref_clone.handlers.write().await;
-                            for (name, boxed) in pending {
-                                handlers.entry(name).or_insert_with(Vec::new).push(boxed);
-                            }
-                        }
-                    }
+                    Self::flush_pending_registrations(&context, &self_ref_clone.handlers).await;
 
                     // Update plugin state to loaded
                     {

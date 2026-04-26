@@ -22,6 +22,9 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use super::{EventPriority, Payload};
 
+type PendingCommands = Arc<std::sync::Mutex<Vec<(crate::command::tree::CommandTree, String)>>>;
+type PendingHandlers = Arc<std::sync::Mutex<Vec<(&'static str, Box<dyn DynEventHandler>)>>>;
+
 /// The `Context` struct represents the context of a plugin, containing metadata,
 /// a server reference, and event handlers.
 ///
@@ -47,10 +50,8 @@ pub struct Context {
     // The fix: plugin code only pushes to these plain `Vec`s (no hashmap involved);
     // the loader drains them *after* `on_load` returns, doing all hashmap work inside
     // the server binary where the right hashbrown copy is in scope.
-    pub(crate) pending_commands:
-        Arc<std::sync::Mutex<Vec<(crate::command::tree::CommandTree, String)>>>,
-    pub(crate) pending_handlers:
-        Arc<std::sync::Mutex<Vec<(&'static str, Box<dyn DynEventHandler>)>>>,
+    pub(crate) pending_commands: PendingCommands,
+    pub(crate) pending_handlers: PendingHandlers,
 }
 impl Context {
     /// Creates a new instance of `Context`.
