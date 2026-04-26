@@ -18,7 +18,7 @@ use pumpkin_protocol::{
     codec::var_uint::VarUInt,
 };
 use pumpkin_util::jwt::{AuthError, verify_chain};
-use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
+use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use serde::Deserialize;
 use std::sync::Arc;
 use thiserror::Error;
@@ -49,7 +49,14 @@ struct CertificateChainPayload {
 }
 
 impl BedrockClient {
-    pub async fn handle_request_network_settings(&self, _packet: SRequestNetworkSettings) {
+    pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
+        if packet.protocol_version < CURRENT_BEDROCK_MC_PROTOCOL as i32 {
+            self.send_game_packet(&CPlayStatus::OutdatedClient).await;
+            return;
+        } else if packet.protocol_version > CURRENT_BEDROCK_MC_PROTOCOL as i32 {
+            self.send_game_packet(&CPlayStatus::OutdatedServer).await;
+            return;
+        }
         self.send_game_packet(&CNetworkSettings::new(0, 0, false, 0, 0.0))
             .await;
         self.set_compression(CompressionInfo::default()).await;

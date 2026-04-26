@@ -26,9 +26,9 @@ async fn ring_bell(
     world: &Arc<World>,
     hit_direction: Option<HorizontalFacing>,
 ) {
-    let state = world.get_block_state(&position).await;
+    let (block, state_id) = world.get_block_and_state_id(&position).await;
 
-    let props = BellLikeProperties::from_state_id(state.id, world.get_block(&position).await);
+    let props = BellLikeProperties::from_state_id(state_id, block);
     let direction = hit_direction.map_or(props.facing, |direction3| direction3);
 
     if let Some(block_entity) = world.get_block_entity(&position).await

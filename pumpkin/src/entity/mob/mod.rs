@@ -29,6 +29,7 @@ pub mod bat;
 pub mod blaze;
 pub mod creeper;
 pub mod enderman;
+pub mod shulker;
 pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
@@ -270,6 +271,10 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    fn modify_incoming_damage(&self, amount: f32, _damage_type: DamageType) -> f32 {
+        amount
+    }
+
     fn can_attack_with_owner(&self, _target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
         true
     }
@@ -306,11 +311,10 @@ pub trait Mob: EntityBase + Send + Sync {
         false
     }
 }
-
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn tick<'a>(
         &'a self,
-        caller: Arc<dyn EntityBase>,
+        caller: &'a Arc<dyn EntityBase>,
         server: &'a Server,
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
@@ -319,11 +323,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
                 mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
             }
+
             if mob_entity.love_ticks.load(Relaxed) > 0 {
                 mob_entity.love_ticks.fetch_sub(1, Relaxed);
             }
 
-            self.mob_tick(&caller).await;
+            self.mob_tick(caller).await;
 
             // AI runs before physics (vanilla order: goals → navigator → look → physics)
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
@@ -350,7 +355,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             drop(navigator);
 
             let mut look_control = mob_entity.look_control.lock().await;
-            look_control.tick(self).await;
+            look_control.tick(self);
             drop(look_control);
 
             mob_entity.living_entity.tick(caller, server).await;
@@ -413,6 +418,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             if !self.pre_damage(damage_type, source).await {
                 return false;
             }
+            // Mob-specific damage modifier (e.g. shulker armor when closed).
+            let amount = self.modify_incoming_damage(amount, damage_type);
             let damaged = self
                 .get_mob_entity()
                 .living_entity
@@ -561,8 +568,7 @@ pub trait SunSensitive: Mob + Send + Sync {
                 .level
                 .light_engine
                 .get_sky_light_level(&world.level, &pos.to_block_pos())
-                .await
-                .unwrap_or(0) as f32
+                .await as f32
                 / 15.0;
 
             if brightness < 0.5 {

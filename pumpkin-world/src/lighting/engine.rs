@@ -369,7 +369,8 @@ impl SkyLightPropagator {
                             }
                         }
                         Chunk::Level(c) => {
-                            let mut light_engine = c.light_engine.lock().unwrap();
+                            let mut light_engine =
+                                c.light_engine.lock().unwrap_or_else(|e| e.into_inner());
                             if section_idx < light_engine.sky_light.len() {
                                 light_engine.sky_light[section_idx]
                                     .set(local_x, local_y, local_z, 15);
@@ -406,7 +407,8 @@ impl SkyLightPropagator {
                             }
                         }
                         Chunk::Level(c) => {
-                            let mut light_engine = c.light_engine.lock().unwrap();
+                            let mut light_engine =
+                                c.light_engine.lock().unwrap_or_else(|e| e.into_inner());
                             if section_idx < light_engine.sky_light.len() {
                                 light_engine.sky_light[section_idx]
                                     .set(local_x, local_y, local_z, light_val);

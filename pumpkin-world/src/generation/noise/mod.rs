@@ -12,11 +12,11 @@ use pumpkin_util::{
 use crate::generation::{
     noise::{
         aquifer_sampler::{
-            AquiferSampler, AquiferSamplerImpl, FluidLevelSampler, SeaLevelAquiferSampler,
-            WorldAquiferSampler,
+            AquiferSampler, AquiferSamplerImpl, SeaLevelAquiferSampler, WorldAquiferSampler,
         },
         ore_sampler::OreVeinSampler,
     },
+    proto_chunk::StandardChunkFluidLevelSampler,
     section_coords,
 };
 
@@ -182,7 +182,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         start_block_x: i32,
         start_block_z: i32,
         generation_shape: &'a GenerationShapeConfig,
-        level_sampler: FluidLevelSampler,
+        level_sampler: StandardChunkFluidLevelSampler,
         aquifers: bool,
         ore_veins: bool,
     ) -> Self {

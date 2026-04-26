@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use tokio::sync::Mutex;
 use tracing::{debug, info};
 use uuid::Uuid;
 
@@ -131,45 +132,67 @@ impl DragonFight {
 
     // ── Main tick ─────────────────────────────────────────────────────────────
 
-    pub async fn tick(&mut self, world: &Arc<World>) {
+    pub async fn tick(fight_mutex: &Mutex<Self>, world: &Arc<World>) {
+        let (
+            ticks_since_last_player_scan,
+            needs_state_scanning,
+            respawn_stage,
+            dragon_killed,
+            dragon_uuid,
+        ) = {
+            let mut fight = fight_mutex.lock().await;
+            fight.ticks_since_last_player_scan += 1;
+            (
+                fight.ticks_since_last_player_scan,
+                fight.needs_state_scanning,
+                fight.respawn_stage,
+                fight.dragon_killed,
+                fight.dragon_uuid,
+            )
+        };
+
         // 1. Update boss-bar recipients every 20 ticks.
-        self.ticks_since_last_player_scan += 1;
-        if self.ticks_since_last_player_scan >= PLAYER_SCAN_INTERVAL {
-            self.update_players(world).await;
-            self.ticks_since_last_player_scan = 0;
+        if ticks_since_last_player_scan >= PLAYER_SCAN_INTERVAL {
+            let mut fight = fight_mutex.lock().await;
+            fight.update_players(world).await;
+            fight.ticks_since_last_player_scan = 0;
         }
 
+        let is_empty = { fight_mutex.lock().await.bossbar_players.is_empty() };
         // Nothing to do without nearby players.
-        if self.bossbar_players.is_empty() {
+        if is_empty {
             return;
         }
 
         // 2. One-time state scan on the first populated tick.
-        if self.needs_state_scanning {
-            self.scan_state(world).await;
-            self.needs_state_scanning = false;
+        if needs_state_scanning {
+            let mut fight = fight_mutex.lock().await;
+            fight.scan_state(world).await;
+            fight.needs_state_scanning = false;
         }
 
         // 3. Respawn sequence (takes priority over normal dragon-missing logic).
-        if self.respawn_stage.is_some() {
-            self.tick_respawn(world).await;
+        if respawn_stage.is_some() {
+            let mut fight = fight_mutex.lock().await;
+            fight.tick_respawn(world).await;
             return;
         }
 
         // 4. Normal fight ticking.
-        if !self.dragon_killed {
-            self.ticks_since_dragon_seen += 1;
-            if self.dragon_uuid.is_none()
-                || self.ticks_since_dragon_seen >= MAX_TICKS_BEFORE_DRAGON_RESPAWN
+        if !dragon_killed {
+            let mut fight = fight_mutex.lock().await;
+            fight.ticks_since_dragon_seen += 1;
+            if dragon_uuid.is_none()
+                || fight.ticks_since_dragon_seen >= MAX_TICKS_BEFORE_DRAGON_RESPAWN
             {
-                self.find_or_create_dragon(world).await;
-                self.ticks_since_dragon_seen = 0;
+                fight.find_or_create_dragon(world).await;
+                fight.ticks_since_dragon_seen = 0;
             }
 
-            self.ticks_since_crystals_scanned += 1;
-            if self.ticks_since_crystals_scanned >= CRYSTAL_SCAN_INTERVAL {
-                self.update_crystal_count(world);
-                self.ticks_since_crystals_scanned = 0;
+            fight.ticks_since_crystals_scanned += 1;
+            if fight.ticks_since_crystals_scanned >= CRYSTAL_SCAN_INTERVAL {
+                fight.update_crystal_count(world);
+                fight.ticks_since_crystals_scanned = 0;
             }
         }
     }
@@ -603,7 +626,7 @@ impl DragonFight {
             health: 1.0,
             color: BossbarColor::Pink,
             division: BossbarDivisions::NoDivision,
-            flags: BossbarFlags::DragonBar,
+            flags: BossbarFlags::DRAGON_BAR,
         }
     }
 

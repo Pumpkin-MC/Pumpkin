@@ -1,5 +1,4 @@
 use std::{
-    io::Cursor,
     path::PathBuf,
     pin::Pin,
     sync::{
@@ -11,11 +10,10 @@ use std::{
 use bytes::Bytes;
 use futures::future::join_all;
 use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
-use pumpkin_nbt::{compound::NbtCompound, from_bytes, nbt_long_array};
+use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
 use tracing::debug;
-use uuid::Uuid;
 
 use crate::{
     block::entities::block_entity_from_nbt,
@@ -35,8 +33,6 @@ use super::{
     ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
     palette::{BiomePalette, BlockPalette},
 };
-use crate::block::BlockStateCodec;
-
 pub mod anvil;
 pub mod linear;
 
@@ -108,7 +104,7 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_data = from_bytes::<ChunkNbt>(Cursor::new(chunk_data))
+        let chunk_data = pumpkin_nbt::from_pnbt::<ChunkNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
@@ -198,44 +194,6 @@ impl ChunkData {
             .light_populated
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        let sections = {
-            let light_lock = self.light_engine.lock().unwrap();
-            let block_lock = self.section.block_sections.read().unwrap();
-            let biome_lock = self.section.biome_sections.read().unwrap();
-            let min_section_y = (self.section.min_y >> 4) as i8;
-
-            (0..self.section.count)
-                .map(|i| ChunkSectionNBT {
-                    y: i as i8 + min_section_y,
-                    block_states: Some(block_lock[i].to_disk_nbt()),
-                    biomes: Some(biome_lock[i].to_disk_nbt()),
-
-                    block_light: match light_lock.block_light.get(i) {
-                        Some(LightContainer::Empty(default)) if *default == 0 => None,
-                        Some(LightContainer::Empty(default)) => {
-                            let value = (*default << 4) | *default;
-                            Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
-                        }
-                        Some(LightContainer::Full(data)) => Some(data.clone()),
-                        None => None,
-                    },
-                    sky_light: match light_lock.sky_light.get(i) {
-                        Some(LightContainer::Empty(default)) if *default == 0 => None,
-                        Some(LightContainer::Empty(default)) => {
-                            let value = (*default << 4) | *default;
-                            Some(vec![value; LightContainer::ARRAY_SIZE].into_boxed_slice())
-                        }
-                        Some(LightContainer::Full(data)) => Some(data.clone()),
-                        None => None,
-                    },
-                })
-                .collect::<Vec<_>>()
-        };
-
-        // Lock and clone heightmaps
-        let heightmaps = self.heightmap.lock().unwrap().clone();
-
-        // Lock and clone entities
         let entities_to_serialize = {
             let entities_guard = self.block_entities.lock().unwrap();
             entities_guard.values().cloned().collect::<Vec<_>>()
@@ -250,24 +208,47 @@ impl ChunkData {
         ))
         .await;
 
-        // Build the final NBT
-        let nbt = ChunkNbt {
+        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
+            match light {
+                Some(LightContainer::Full(data)) => Some(data.as_ref()),
+                _ => None,
+            }
+        }
+
+        let light_lock = self.light_engine.lock().unwrap();
+        let heightmap_lock = self.heightmap.lock().unwrap();
+        let block_lock = self.section.block_sections.read().unwrap();
+        let biome_lock = self.section.biome_sections.read().unwrap();
+
+        let min_section_y = (self.section.min_y >> 4) as i8;
+
+        let sections = (0..self.section.count)
+            .map(|i| ChunkSectionNbtRef {
+                y: i as i8 + min_section_y,
+                block_states: Some(block_lock[i].to_disk_nbt()),
+                biomes: Some(biome_lock[i].to_disk_nbt()),
+                block_light: extract_light_ref(light_lock.block_light.get(i)),
+                sky_light: extract_light_ref(light_lock.sky_light.get(i)),
+            })
+            .collect::<Vec<_>>();
+
+        let nbt_ref = ChunkNbtRef {
             data_version: WORLD_DATA_VERSION,
             x_pos: self.x,
             z_pos: self.z,
             min_y_section: section_coords::block_to_section(self.section.min_y),
-            status: self.status,
-            heightmaps,
+            status: &self.status,
+            heightmaps: &heightmap_lock,
             sections,
-            block_ticks: self.block_ticks.to_vec(),
-            fluid_ticks: self.fluid_ticks.to_vec(),
-            block_entities: block_entities_nbt,
+            block_ticks: &self.block_ticks.to_vec(),
+            fluid_ticks: &self.fluid_ticks.to_vec(),
+            block_entities: &block_entities_nbt,
             light_correct: is_light_correct,
         };
 
-        let mut result = Vec::new();
-        pumpkin_nbt::to_bytes(&nbt, &mut result)
-            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        let result =
+            pumpkin_nbt::to_pnbt(&nbt_ref).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+
         Ok(result.into())
     }
 }
@@ -315,7 +296,7 @@ impl ChunkEntityData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_entity_data = pumpkin_nbt::from_bytes::<EntityNbt>(Cursor::new(chunk_data))
+        let chunk_entity_data = pumpkin_nbt::from_pnbt::<EntityNbt>(chunk_data)
             .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_entity_data.position[0] != position.x
@@ -330,27 +311,16 @@ impl ChunkEntityData {
             )));
         }
         let mut map = FxHashMap::default();
-        for entity_nbt in chunk_entity_data.entities {
-            let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
-                if uuid.len() != 4 {
-                    debug!(
-                        "Entity in chunk {},{} has invalid UUID array length {}: {:?}",
-                        position.x,
-                        position.y,
-                        uuid.len(),
-                        entity_nbt
-                    );
-                    continue;
-                }
-                Uuid::from_u128(
-                    (uuid[0] as u128) << 96
-                        | (uuid[1] as u128) << 64
-                        | (uuid[2] as u128) << 32
-                        | (uuid[3] as u128),
-                )
-            } else {
+        for mut entity_nbt in chunk_entity_data.entities {
+            let uuid = {
+                let _id = entity_nbt.get_string().ok();
+                entity_nbt.get_uuid().ok()
+            };
+            entity_nbt.read_pos = 0;
+
+            let Some(uuid) = uuid else {
                 debug!(
-                    "Entity in chunk {},{} is missing UUID: {:?}",
+                    "Entity in chunk {},{} is missing UUID or ID: {:?}",
                     position.x, position.y, entity_nbt
                 );
                 continue;
@@ -374,9 +344,8 @@ impl ChunkEntityData {
             entities: self.data.lock().await.values().cloned().collect(),
         };
 
-        let mut result = Vec::new();
-        pumpkin_nbt::to_bytes(&nbt, &mut result)
-            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        let result =
+            pumpkin_nbt::to_pnbt(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
         Ok(result.into())
     }
 }
@@ -395,6 +364,20 @@ struct ChunkSectionNBT {
     y: i8,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct ChunkSectionNbtRef<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_states: Option<ChunkSectionBlockStates>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    biomes: Option<ChunkSectionBiomes>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_light: Option<&'a [u8]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sky_light: Option<&'a [u8]>,
+    y: i8,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ChunkSectionBiomes {
     #[serde(
@@ -402,15 +385,7 @@ pub struct ChunkSectionBiomes {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<PaletteBiomeEntry>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-// NOTE: Change not documented in the wiki; biome palettes are directly just the name now
-#[serde(rename_all = "PascalCase", transparent)]
-pub struct PaletteBiomeEntry {
-    /// Biome name
-    pub name: String,
+    pub(crate) palette: Box<[u8]>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -420,7 +395,7 @@ pub struct ChunkSectionBlockStates {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) data: Option<Box<[i64]>>,
-    pub(crate) palette: Vec<BlockStateCodec>,
+    pub(crate) palette: Box<[u16]>,
 }
 
 #[derive(Debug, Clone)]
@@ -528,10 +503,37 @@ struct ChunkNbt {
     light_correct: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+// Used ONLY for saving (to_bytes). Borrows data, zero clones.
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct ChunkNbtRef<'a> {
+    data_version: i32,
+    #[serde(rename = "xPos")]
+    x_pos: i32,
+    #[serde(rename = "zPos")]
+    z_pos: i32,
+    #[serde(rename = "yPos")]
+    min_y_section: i32,
+    status: &'a ChunkStatus,
+    #[serde(rename = "sections")]
+    sections: Vec<ChunkSectionNbtRef<'a>>,
+    heightmaps: &'a ChunkHeightmaps,
+    #[serde(rename = "block_ticks")]
+    block_ticks: &'a [ScheduledTick<&'static Block>],
+    #[serde(rename = "fluid_ticks")]
+    fluid_ticks: &'a [ScheduledTick<&'static Fluid>],
+    #[serde(rename = "block_entities")]
+    block_entities: &'a [NbtCompound],
+    #[serde(rename = "isLightOn", default)]
+    light_correct: bool,
+}
+
+use pumpkin_nbt::pnbt::PNbtCompound;
+
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct EntityNbt {
     data_version: i32,
     position: [i32; 2],
-    entities: Vec<NbtCompound>,
+    entities: Vec<PNbtCompound>,
 }

@@ -6,7 +6,6 @@ use std::sync::{
 use pumpkin_data::{
     entity::EntityType, item::Item, meta_data_type::MetaDataType, tracked_data::TrackedData,
 };
-use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
@@ -97,24 +96,26 @@ impl SheepEntity {
     }
 }
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 impl NBTStorage for SheepEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity.living_entity.entity.write_nbt(nbt).await;
-            nbt.put_bool("Sheared", self.is_sheared());
-            nbt.put_byte("Color", self.get_color() as i8);
+            nbt.put_bool(self.is_sheared());
+            nbt.put_byte(self.get_color() as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.mob_entity
                 .living_entity
                 .entity
                 .read_nbt_non_mut(nbt)
                 .await;
-            let sheared = nbt.get_bool("Sheared").unwrap_or(false);
-            let color = nbt.get_byte("Color").unwrap_or(0) as u8;
+            let sheared = nbt.get_bool().unwrap_or(false);
+            let color = nbt.get_byte().unwrap_or(0) as u8;
             let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
             self.color_and_sheared.store(byte, Ordering::Relaxed);
         })

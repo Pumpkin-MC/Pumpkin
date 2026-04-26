@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
 use pumpkin_data::sound::Sound;
-use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
     Entity, NBTStorage, NbtFuture,
@@ -29,15 +28,24 @@ impl SlimeEntity {
     }
 }
 
+use pumpkin_nbt::pnbt::PNbtCompound;
+
 impl NBTStorage for SlimeEntity {
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.entity.living_entity.entity.write_nbt(nbt).await;
+            nbt.put_int(self.entity.living_entity.entity.data.load(Relaxed));
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.entity.living_entity.entity.read_nbt_non_mut(nbt).await;
             self.entity
                 .living_entity
                 .entity
                 .data
-                .store(nbt.get_int("Size").unwrap_or(0), Relaxed);
+                .store(nbt.get_int().unwrap_or(0), Relaxed);
         })
     }
 }

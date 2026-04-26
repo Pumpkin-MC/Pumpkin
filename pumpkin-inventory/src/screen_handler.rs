@@ -772,6 +772,13 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Cancels any client-side changes and resynchronizes the state.
+    fn cancel(&mut self) -> ScreenHandlerFuture<'_, ()> {
+        Box::pin(async move {
+            self.sync_state().await;
+        })
+    }
+
     /// Public entry point for slot click handling.
     fn on_slot_click<'a>(
         &'a mut self,
@@ -1234,6 +1241,26 @@ pub struct ScreenHandlerBehaviour {
     pub window_type: Option<WindowType>,
     /// Slots selected during a drag operation (for multi-slot distribution).
     pub drag_slots: Vec<u32>,
+    /// Whether players can grab items out of the inventory.
+    pub allow_grab_items: bool,
+    /// Whether players can put items into the inventory from their own.
+    pub allow_put_items: bool,
+    /// Number of slots that belong to the container (not the player inventory).
+    pub container_slots: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClickType {
+    Left,
+    Right,
+    ShiftLeft,
+    ShiftRight,
+    Middle,
+    Drop,
+    ControlDrop,
+    DoubleClick,
+    NumberKey(u8),
+    Unknown,
 }
 
 impl ScreenHandlerBehaviour {
@@ -1254,6 +1281,9 @@ impl ScreenHandlerBehaviour {
             tracked_property_values: Vec::new(),
             window_type,
             drag_slots: Vec::new(),
+            allow_grab_items: true,
+            allow_put_items: true,
+            container_slots: 0,
         }
     }
 

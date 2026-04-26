@@ -6,6 +6,7 @@ pub mod packet_decoder;
 pub mod packet_encoder;
 pub mod server;
 
+pub const RAKNET_PROTOCOL_VERSION: u8 = 11;
 pub const UDP_HEADER_SIZE: u16 = 28;
 pub const MTU: usize = 1400;
 

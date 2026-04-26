@@ -6,7 +6,12 @@ use uuid::Uuid;
 
 use crate::entity::boss::ender_dragon::EnderDragonEntity;
 use crate::entity::mob::blaze::BlazeEntity;
+use crate::entity::mob::shulker::ShulkerEntity;
 use crate::entity::mob::zombie::zombie_villager::ZombieVillagerEntity;
+use crate::entity::projectile::egg::EggEntity;
+use crate::entity::projectile::ender_pearl::EnderPearlEntity;
+use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
+use crate::entity::projectile::snowball::SnowballEntity;
 use crate::{
     entity::{
         Entity, EntityBase,
@@ -80,8 +85,17 @@ pub async fn from_type(
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
+        id if id == EntityType::ENDER_PEARL.id => Arc::new(EnderPearlEntity::new(entity).await),
+        id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity).await),
+        id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity).await),
         id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity).await,
         id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
+        id if id == EntityType::SHULKER.id => ShulkerEntity::new(entity).await,
+        id if id == EntityType::SHULKER_BULLET.id => {
+            // Shulker bullets are normally spawned by ShulkerEntity directly;
+            // when loaded from the world we create a no-target bullet at the given position.
+            Arc::new(ShulkerBulletEntity::orphan(entity))
+        }
         // Fallback Entity
         _ => {
             if entity_type.attributes.is_empty() {

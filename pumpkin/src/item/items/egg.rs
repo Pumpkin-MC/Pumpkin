@@ -51,6 +51,26 @@ impl ItemBehaviour for EggItem {
             egg.thrown
                 .set_velocity_from(&player.living_entity.entity, pitch, yaw, 0.0, POWER, 1.0);
             world.spawn_entity(Arc::new(egg)).await;
+
+            // Consume item
+            let held_item = player.inventory.held_item();
+            let consumed = {
+                let mut main_hand = held_item.lock().await;
+                if !main_hand.is_empty() && Self::ids().contains(&main_hand.item.id) {
+                    main_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if !consumed {
+                let off_hand_item = player.inventory.off_hand_item().await;
+                let mut off_hand = off_hand_item.lock().await;
+                if !off_hand.is_empty() && Self::ids().contains(&off_hand.item.id) {
+                    off_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                }
+            }
         })
     }
 

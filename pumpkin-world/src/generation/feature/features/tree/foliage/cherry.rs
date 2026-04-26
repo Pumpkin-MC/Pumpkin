@@ -24,18 +24,18 @@ impl CherryFoliagePlacer {
         random: &mut RandomGenerator,
         node: &TreeNode,
         foliage_height: i32,
-        radius: i32,
+        leaf_radius: i32,
         offset: i32,
         foliage_provider: &BlockState,
     ) {
         let pos = node.center.up_height(offset);
-        let radius = radius + node.foliage_radius - 1;
+        let current_radius = leaf_radius + node.foliage_radius - 1;
         FoliagePlacer::generate_square(
             self,
             chunk,
             random,
             pos,
-            radius - 2,
+            current_radius - 2,
             foliage_height - 3,
             node.giant_trunk,
             foliage_provider,
@@ -45,44 +45,48 @@ impl CherryFoliagePlacer {
             chunk,
             random,
             pos,
-            radius - 1,
+            current_radius - 1,
             foliage_height - 4,
             node.giant_trunk,
             foliage_provider,
         );
-        for y in foliage_height - 5..0 {
+        for y in (0..=foliage_height - 5).rev() {
             FoliagePlacer::generate_square(
                 self,
                 chunk,
                 random,
                 pos,
-                radius,
+                current_radius,
                 y,
                 node.giant_trunk,
                 foliage_provider,
             );
         }
-        // TODO: generateSquareWithHangingLeaves
-        FoliagePlacer::generate_square(
+
+        FoliagePlacer::generate_square_with_hanging_leaves(
             self,
             chunk,
             random,
             pos,
-            radius,
+            current_radius,
             -1,
             node.giant_trunk,
             foliage_provider,
+            self.hanging_leaves_chance,
+            self.hanging_leaves_extension_chance,
         );
-        // TODO: generateSquareWithHangingLeaves
-        FoliagePlacer::generate_square(
+
+        FoliagePlacer::generate_square_with_hanging_leaves(
             self,
             chunk,
             random,
             pos,
-            radius - 1,
+            current_radius - 1,
             -2,
             node.giant_trunk,
             foliage_provider,
+            self.hanging_leaves_chance,
+            self.hanging_leaves_extension_chance,
         );
     }
     pub fn get_random_height(&self, random: &mut RandomGenerator) -> i32 {
@@ -97,20 +101,24 @@ impl LeaveValidator for CherryFoliagePlacer {
         dx: i32,
         y: i32,
         dz: i32,
-        radius: i32,
+        current_radius: i32,
         _giant_trunk: bool,
     ) -> bool {
         if y == -1
-            && (dx == radius || dz == radius)
+            && (dx == current_radius || dz == current_radius)
             && random.next_f32() < self.wide_bottom_layer_hole_chance
         {
             return true;
         }
-        let in_radius = dx == radius && dz == radius;
-        if radius > 2 {
-            return in_radius
-                || dx + dz > radius * 2 - 2 && random.next_f32() < self.corner_hole_chance;
+
+        let corner = dx == current_radius && dz == current_radius;
+        let wide_layer = current_radius > 2;
+
+        if wide_layer {
+            corner
+                || dx + dz > current_radius * 2 - 2 && random.next_f32() < self.corner_hole_chance
+        } else {
+            corner && random.next_f32() < self.corner_hole_chance
         }
-        in_radius && random.next_f32() < self.corner_hole_chance
     }
 }

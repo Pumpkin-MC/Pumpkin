@@ -9,7 +9,7 @@ use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
 use pumpkin_data::{Block, BlockDirection, BlockState};
-use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::get_section_cord;
@@ -22,40 +22,60 @@ use pumpkin_world::chunk::io::Dirtiable;
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use rand::seq::IndexedRandom;
 use rand::{RngExt, rng};
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::fmt;
 use std::sync::Arc;
 use uuid::Uuid;
 
 const MAGIC_NUMBER: i32 = 17 * 17;
 
-#[derive(Default, Debug)]
-pub struct MobCounts([i32; 8]);
+use dashmap::DashMap;
+use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 
-impl MobCounts {
-    #[inline]
-    const fn add(&mut self, category: &'static MobCategory) {
-        self.0[category.id] += 1;
-    }
-    #[inline]
-    const fn can_spawn(&self, category: &'static MobCategory) -> bool {
-        self.0[category.id] < category.max
+pub struct MobCounts([AtomicI32; 8]);
+
+impl Default for MobCounts {
+    fn default() -> Self {
+        Self(std::array::from_fn(|_| AtomicI32::new(0)))
     }
 }
 
-#[derive(Default)]
+impl fmt::Debug for MobCounts {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list()
+            .entries(self.0.iter().map(|a| a.load(Relaxed)))
+            .finish()
+    }
+}
+
+impl MobCounts {
+    #[inline]
+    pub fn add(&self, category: &'static MobCategory) {
+        self.0[category.id].fetch_add(1, Relaxed);
+    }
+    #[inline]
+    pub fn can_spawn(&self, category: &'static MobCategory) -> bool {
+        self.0[category.id].load(Relaxed) < category.max
+    }
+}
+
 pub struct LocalMobCapCalculator {
-    player_mob_counts: HashMap<i32, MobCounts>,
-    players_near_chunk: HashMap<Vector2<i32>, Vec<i32>>,
+    player_mob_counts: DashMap<i32, MobCounts>,
+    players_near_chunk: DashMap<Vector2<i32>, Vec<i32>>,
+}
+
+impl Default for LocalMobCapCalculator {
+    fn default() -> Self {
+        Self {
+            player_mob_counts: DashMap::new(),
+            players_near_chunk: DashMap::new(),
+        }
+    }
 }
 
 impl fmt::Debug for LocalMobCapCalculator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("LocalMobCapCalculator")
             .field("world", &"<skipped>")
-            .field("player_mob_counts", &self.player_mob_counts)
-            .field("players_near_chunk", &self.players_near_chunk)
             .finish()
     }
 }
@@ -67,54 +87,48 @@ impl LocalMobCapCalculator {
         dx * dx + dy * dy
     }
 
-    fn get_players_near<'b>(
-        players_near_chunk: &'b mut HashMap<Vector2<i32>, Vec<i32>>,
-        world: &Arc<World>,
-        chunk_pos: Vector2<i32>,
-    ) -> &'b Vec<i32> {
-        match players_near_chunk.entry(chunk_pos) {
-            Entry::Occupied(value) => value.into_mut(),
-            Entry::Vacant(entry) => {
-                let mut players = Vec::new();
-                for player in world.players.load().iter() {
-                    if player.gamemode.load() == GameMode::Spectator {
-                        continue;
-                    }
-                    if Self::calc_distance(chunk_pos, &player.position()) < 16384. {
-                        players.push(player.entity_id());
-                    }
-                }
-                entry.insert(players)
+    fn get_players_near(&self, world: &Arc<World>, chunk_pos: Vector2<i32>) -> Vec<i32> {
+        if let Some(players) = self.players_near_chunk.get(&chunk_pos) {
+            return players.value().clone();
+        }
+
+        let mut players = Vec::new();
+        for player in world.players.load().iter() {
+            if player.gamemode.load() == GameMode::Spectator {
+                continue;
+            }
+            if Self::calc_distance(chunk_pos, &player.position()) < 16384. {
+                players.push(player.entity_id());
             }
         }
+        self.players_near_chunk.insert(chunk_pos, players.clone());
+        players
     }
+
     pub fn add_mob(
-        &mut self,
+        &self,
         chunk_pos: Vector2<i32>,
         world: &Arc<World>,
         category: &'static MobCategory,
     ) {
-        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos);
+        let players = self.get_players_near(world, chunk_pos);
         for player in players {
             self.player_mob_counts
-                .entry(*player)
+                .entry(player)
                 .or_default()
                 .add(category);
         }
-        // debug!("player_mob_counts {:?}", self.player_mob_counts);
-        // debug!("players_near_chunk {:?}", self.players_near_chunk);
-        // debug!("chunk_pos {:?}", chunk_pos);
-        // debug!("players {:?}", players);
     }
+
     pub fn can_spawn(
-        &mut self,
+        &self,
         category: &'static MobCategory,
         world: &Arc<World>,
         chunk_pos: Vector2<i32>,
     ) -> bool {
-        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos);
+        let players = self.get_players_near(world, chunk_pos);
         for player in players {
-            if let Some(count) = self.player_mob_counts.get(player) {
+            if let Some(count) = self.player_mob_counts.get(&player) {
                 if count.can_spawn(category) {
                     return true;
                 }
@@ -137,12 +151,15 @@ impl PointCharge {
 }
 
 #[derive(Default, Debug)]
-struct PotentialCalculator(Vec<PointCharge>);
+struct PotentialCalculator(std::sync::Mutex<Vec<PointCharge>>);
 
 impl PotentialCalculator {
-    pub fn add_charge(&mut self, pos: &BlockPos, charge: f64) {
+    pub fn add_charge(&self, pos: &BlockPos, charge: f64) {
         if charge != 0. {
-            self.0.push(PointCharge(pos.to_f64(), charge));
+            self.0
+                .lock()
+                .unwrap()
+                .push(PointCharge(pos.to_f64(), charge));
         }
     }
     pub fn get_potential_energy_change(&self, pos: &BlockPos, charge: f64) -> f64 {
@@ -150,12 +167,15 @@ impl PotentialCalculator {
             return 0.;
         }
         let mut sum: f64 = 0.;
-        for i in &self.0 {
+        let charges = self.0.lock().unwrap();
+        for i in charges.iter() {
             sum += i.get_potential_change(pos);
         }
         sum * charge
     }
 }
+
+use crossbeam::atomic::AtomicCell;
 
 pub struct SpawnState {
     spawnable_chunk_count: i32,
@@ -163,9 +183,7 @@ pub struct SpawnState {
     spawn_potential: PotentialCalculator,
     local_mob_cap_calculator: LocalMobCapCalculator,
     // unmodifiable_mob_category_counts: MobCounts, seems only for debug
-    last_checked_pos: BlockPos,
-    last_checked_type: &'static EntityType,
-    last_charge: f64,
+    last_checked: AtomicCell<Option<(BlockPos, &'static EntityType, f64)>>,
 }
 
 impl fmt::Debug for SpawnState {
@@ -175,9 +193,7 @@ impl fmt::Debug for SpawnState {
             .field("mob_category_counts", &self.mob_category_counts)
             .field("spawn_potential", &self.spawn_potential)
             .field("local_mob_cap_calculator", &self.local_mob_cap_calculator)
-            .field("last_checked_pos", &self.last_checked_pos)
-            .field("last_checked_type", &self.last_checked_type.resource_name)
-            .field("last_charge", &self.last_charge)
+            .field("last_checked", &self.last_checked)
             .finish()
     }
 }
@@ -188,9 +204,9 @@ impl SpawnState {
         entities: &ArcSwap<Vec<Arc<dyn EntityBase>>>,
         world: &Arc<World>,
     ) -> Self {
-        let mut potential = PotentialCalculator::default();
-        let mut local_mob_cap = LocalMobCapCalculator::default();
-        let mut counter = MobCounts::default();
+        let potential = PotentialCalculator::default();
+        let local_mob_cap = LocalMobCapCalculator::default();
+        let counter = MobCounts::default();
         for entity in entities.load().iter() {
             let entity = entity.get_entity();
             let entity_type = entity.entity_type;
@@ -213,19 +229,16 @@ impl SpawnState {
             mob_category_counts: counter,
             spawn_potential: potential,
             local_mob_cap_calculator: local_mob_cap,
-            // unmodifiable_mob_category_counts: counter,
-            last_checked_pos: BlockPos::new(i32::MAX, i32::MAX, i32::MAX),
-            last_checked_type: &EntityType::PLAYER,
-            last_charge: 0.,
+            last_checked: AtomicCell::new(None),
         }
     }
     #[inline]
-    const fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
-        self.mob_category_counts.0[category.id]
+    pub fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
+        self.mob_category_counts.0[category.id].load(Relaxed)
             < category.max * self.spawnable_chunk_count / MAGIC_NUMBER
     }
-    fn can_spawn_for_category_local(
-        &mut self,
+    pub fn can_spawn_for_category_local(
+        &self,
         world: &Arc<World>,
         category: &'static MobCategory,
         chunk_pos: Vector2<i32>,
@@ -233,44 +246,56 @@ impl SpawnState {
         self.local_mob_cap_calculator
             .can_spawn(category, world, chunk_pos)
     }
-    async fn can_spawn(
-        &mut self,
+    pub async fn can_spawn(
+        &self,
         entity_type: &'static EntityType,
         pos: &BlockPos,
         world: &Arc<World>,
     ) -> bool {
-        self.last_checked_pos = *pos;
-        self.last_checked_type = entity_type;
         // TODO get biome
         let biome = world.level.get_rough_biome(pos).await;
-        if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-            self.last_charge = cost.charge;
-            self.spawn_potential
-                .get_potential_energy_change(pos, cost.charge)
-                <= cost.energy_budget
-        } else {
-            self.last_charge = 0.;
-            true
-        }
+        biome
+            .spawn_costs
+            .get(entity_type.resource_name)
+            .map_or_else(
+                || {
+                    self.last_checked.store(Some((*pos, entity_type, 0.)));
+                    true
+                },
+                |cost| {
+                    self.last_checked
+                        .store(Some((*pos, entity_type, cost.charge)));
+                    self.spawn_potential
+                        .get_potential_energy_change(pos, cost.charge)
+                        <= cost.energy_budget
+                },
+            )
     }
-    async fn after_spawn(
-        &mut self,
+    pub async fn after_spawn(
+        &self,
         entity_type: &'static EntityType,
         pos: &BlockPos,
         world: &Arc<World>,
     ) {
-        let charge;
-        if self.last_checked_pos.eq(pos) && self.last_checked_type == entity_type {
-            charge = self.last_charge;
+        let charge = if let Some((l_pos, l_type, l_charge)) = self.last_checked.load()
+            && l_pos.eq(pos)
+            && l_type == entity_type
+        {
+            Some(l_charge)
+        } else {
+            None
+        };
+
+        let charge = if let Some(charge) = charge {
+            charge
         } else {
             // TODO get biome
             let biome = world.level.get_rough_biome(pos).await;
-            if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-                charge = cost.charge;
-            } else {
-                charge = 0.;
-            }
-        }
+            biome
+                .spawn_costs
+                .get(entity_type.resource_name)
+                .map_or(0., |cost| cost.charge)
+        };
 
         self.spawn_potential.add_charge(pos, charge);
         self.mob_category_counts.add(entity_type.category);
@@ -316,7 +341,7 @@ pub async fn spawn_for_chunk(
     world: &Arc<World>,
     chunk_pos: Vector2<i32>,
     chunk: &Arc<ChunkData>,
-    spawn_state: &mut SpawnState,
+    spawn_state: &SpawnState,
     spawn_list: &Vec<&'static MobCategory>,
 ) {
     // debug!("spawn for chunk {:?}", chunk_pos);
@@ -354,14 +379,13 @@ pub async fn spawn_category_for_position(
     world: &Arc<World>,
     pos: BlockPos,
     chunk_pos: &Vector2<i32>,
-    spawn_state: &mut SpawnState,
+    spawn_state: &SpawnState,
 ) {
-    // TODO StructureManager structureManager = level.structureManager();
-    // TODO blockState.isRedstoneConductor(chunk, pos) is true then return
     let mut batch_buffer = vec![];
     let mut spawn_cluster_size = 0;
     let mut new_pos = pos;
     let player_positions: Vec<_> = world.players.load().iter().map(|p| p.position()).collect();
+
     for _ in 0..3 {
         let mut new_x = new_pos.0.x;
         let mut new_z = new_pos.0.z;
@@ -373,18 +397,27 @@ pub async fn spawn_category_for_position(
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
             new_pos = BlockPos::new(new_x, new_pos.0.y, new_z);
-            let new_pos_center = new_pos.to_centered_f64();
-            let player_distance = get_nearest_player(&new_pos_center, &player_positions);
+
+            let spawn_pos_f64 = Vector3::new(
+                f64::from(new_pos.0.x) + 0.5,
+                f64::from(new_pos.0.y),
+                f64::from(new_pos.0.z) + 0.5,
+            );
+
+            let player_distance = get_nearest_player(&spawn_pos_f64, &player_positions);
             if !is_right_distance_to_player_and_spawn_point(&new_pos, player_distance, chunk_pos) {
                 inc += 1;
                 continue;
             }
+
             let Some(spawner) = get_random_spawn_mob_at(world, category, &new_pos).await else {
                 break 'outer;
             };
+
             random_group_size = rng().random_range(spawner.min_count..=spawner.max_count);
             let entity_type =
                 &EntityType::from_name(spawner.r#type.strip_prefix("minecraft:").unwrap()).unwrap();
+
             if !is_valid_spawn_position_for_type(
                 world,
                 &new_pos,
@@ -401,21 +434,19 @@ pub async fn spawn_category_for_position(
                 inc += 1;
                 continue;
             }
-            let entity = from_type(entity_type, new_pos_center, world, Uuid::new_v4()).await;
+
+            let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4()).await;
             entity
                 .get_entity()
                 .set_rotation(rng().random::<f32>() * 360., 0.);
-            // TODO isValidPositionForMob(level, mob, f)
-            // TODO spawnGroupData = mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), EntitySpawnReason.NATURAL, spawnGroupData);
+
             spawn_cluster_size += 1;
-            //group_size += 1;
             batch_buffer.push(entity);
             spawn_state.after_spawn(entity_type, &new_pos, world).await;
             if spawn_cluster_size >= entity_type.limit_per_chunk {
                 return;
             }
 
-            //TODO mob.isMaxGroupSizeReached(p)
             inc += 1;
         }
     }
@@ -428,36 +459,34 @@ pub async fn spawn_category_for_position(
             entity.init_data_tracker().await;
             let base_entity = entity.get_entity();
             let packet = base_entity.create_spawn_packet();
-            let mut nbt = NbtCompound::new();
+            let mut nbt = PNbtCompound::new();
             entity.write_nbt(&mut nbt).await;
             // Keep the entity reference here so we don't have to "find" it later
             prepared_data.push((base_entity.entity_uuid, nbt, packet, entity.clone()));
         }
 
-        {
-            let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
-            let mut data = chunk_handle.data.lock().await;
+        let chunk_handle = world.level.get_entity_chunk(*chunk_pos).await;
+        let mut data = chunk_handle.data.lock().await;
 
-            for (uuid, nbt, _, _) in &prepared_data {
-                data.insert(*uuid, nbt.clone());
-            }
-            drop(data);
-            chunk_handle.mark_dirty(true);
+        for (uuid, nbt, _, _) in &prepared_data {
+            data.insert(*uuid, nbt.clone());
+        }
+        drop(data);
+        chunk_handle.mark_dirty(true);
 
-            world.entities.rcu(|current_entities| {
-                let mut new_entities = (**current_entities).clone();
+        world.entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
 
-                for (uuid, _, _, entity_ref) in &prepared_data {
-                    if !new_entities
-                        .iter()
-                        .any(|e| e.get_entity().entity_uuid == *uuid)
-                    {
-                        new_entities.push(entity_ref.clone());
-                    }
+            for (uuid, _, _, entity_ref) in &prepared_data {
+                if !new_entities
+                    .iter()
+                    .any(|e| e.get_entity().entity_uuid == *uuid)
+                {
+                    new_entities.push(entity_ref.clone());
                 }
-                new_entities
-            });
-        };
+            }
+            new_entities
+        });
 
         for (_, _, packet, _) in prepared_data {
             world.broadcast_packet_all(&packet).await;
@@ -578,14 +607,19 @@ pub async fn is_spawn_position_ok(
         SpawnLocation::InLava => world.get_fluid(block_pos).await.has_tag(&MINECRAFT_LAVA),
         SpawnLocation::InWater => {
             // TODO !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)
+            let above_state = world.get_block_state(&block_pos.up()).await;
             world.get_fluid(block_pos).await.has_tag(&MINECRAFT_WATER)
+                && !above_state.is_full_cube()
         }
         SpawnLocation::OnGround => {
             let down = world.get_block_state(&block_pos.down()).await;
             let up = world.get_block_state(&block_pos.up()).await;
             let cur = world.get_block_state(block_pos).await;
             // TODO: blockState.allowsSpawning
-            if down.is_side_solid(BlockDirection::Up) {
+            let is_valid_spawn_below =
+                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+
+            if is_valid_spawn_below {
                 is_valid_empty_spawn_block(cur) && is_valid_empty_spawn_block(up)
             } else {
                 false
@@ -597,10 +631,20 @@ pub async fn is_spawn_position_ok(
 
 #[must_use]
 pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
-    // TODO: emitsRedstonePower
-    if state.is_full_cube() || state.is_liquid() {
+    if state.is_full_cube() {
         return false;
     }
-    // TODO !entityType.isBlockDangerous(blockState);
-    !Block::from_state_id(state.id).has_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
+    // if state.is_signal_source() {
+    //     return false;
+    // }
+    if state.is_liquid() {
+        return false;
+    }
+    if Block::from_state_id(state.id).has_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE) {
+        return false;
+    }
+
+    // TODO: !entityType.isBlockDangerous(blockState)
+    // (e.g., preventing spawns inside Sweet Berry Bushes, Wither Roses, or Fire)
+    true
 }

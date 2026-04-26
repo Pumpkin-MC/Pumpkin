@@ -50,8 +50,7 @@ impl CommandBlock {
     }
 
     async fn conditions_met(world: &Arc<World>, pos: &BlockPos, facing: Facing) -> bool {
-        let state_id = world.get_block_state_id(pos).await;
-        let block = world.get_block(pos).await;
+        let (block, state_id) = world.get_block_and_state_id(pos).await;
         let props = CommandBlockLikeProperties::from_state_id(state_id, block);
 
         if !props.conditional {

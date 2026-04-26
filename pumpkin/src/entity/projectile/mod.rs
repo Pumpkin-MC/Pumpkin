@@ -11,9 +11,11 @@ use std::{
 };
 pub mod arrow;
 pub mod egg;
+pub mod ender_pearl;
 pub mod eye_of_ender;
 pub mod firework_rocket;
 pub mod lingering_potion;
+pub mod shulker_bullet;
 pub mod snowball;
 pub mod splash_potion;
 pub mod wind_charge;
@@ -27,6 +29,8 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::WIND_CHARGE
         || *entity_type == EntityType::SPLASH_POTION
         || *entity_type == EntityType::LINGERING_POTION
+        || *entity_type == EntityType::ENDER_PEARL
+        || *entity_type == EntityType::SHULKER_BULLET
 }
 
 pub struct ThrownItemEntity {
@@ -101,7 +105,7 @@ impl NBTStorage for ThrownItemEntity {}
 
 impl ThrownItemEntity {
     /// Process a tick for projectile movement and collisions
-    pub async fn process_tick(&self, caller: Arc<dyn EntityBase>, _server: &Server) {
+    pub async fn process_tick<'a>(&'a self, caller: &'a Arc<dyn EntityBase>, _server: &'a Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
 

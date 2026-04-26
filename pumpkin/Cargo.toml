@@ -20,7 +20,6 @@ doctest = false
 # pumpkin
 arc-swap.workspace = true
 rayon.workspace = true
-num_cpus.workspace = true
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
@@ -30,6 +29,7 @@ pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
 pumpkin-macros.workspace = true
 
+dashmap.workspace = true
 crossbeam.workspace = true
 uuid.workspace = true
 tokio = { workspace = true, features = [
@@ -45,6 +45,7 @@ tokio = { workspace = true, features = [
 ] }
 thiserror.workspace = true
 futures.workspace = true
+notify.workspace = true
 
 # config
 serde.workspace = true
@@ -78,7 +79,6 @@ base64.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
-chrono.workspace = true
 time = { workspace = true, features = ["parsing", "macros", "local-offset"] }
 
 # plugins
