@@ -381,12 +381,11 @@ pub async fn spawn_category_for_position(
     chunk_pos: &Vector2<i32>,
     spawn_state: &SpawnState,
 ) {
-    // TODO StructureManager structureManager = level.structureManager();
-    // TODO blockState.isRedstoneConductor(chunk, pos) is true then return
     let mut batch_buffer = vec![];
     let mut spawn_cluster_size = 0;
     let mut new_pos = pos;
     let player_positions: Vec<_> = world.players.load().iter().map(|p| p.position()).collect();
+
     for _ in 0..3 {
         let mut new_x = new_pos.0.x;
         let mut new_z = new_pos.0.z;
@@ -398,18 +397,27 @@ pub async fn spawn_category_for_position(
             new_x += rng().random_range(0..6) - rng().random_range(0..6);
             new_z += rng().random_range(0..6) - rng().random_range(0..6);
             new_pos = BlockPos::new(new_x, new_pos.0.y, new_z);
-            let new_pos_center = new_pos.to_centered_f64();
-            let player_distance = get_nearest_player(&new_pos_center, &player_positions);
+
+            let spawn_pos_f64 = Vector3::new(
+                f64::from(new_pos.0.x) + 0.5,
+                f64::from(new_pos.0.y),
+                f64::from(new_pos.0.z) + 0.5,
+            );
+
+            let player_distance = get_nearest_player(&spawn_pos_f64, &player_positions);
             if !is_right_distance_to_player_and_spawn_point(&new_pos, player_distance, chunk_pos) {
                 inc += 1;
                 continue;
             }
+
             let Some(spawner) = get_random_spawn_mob_at(world, category, &new_pos).await else {
                 break 'outer;
             };
+
             random_group_size = rng().random_range(spawner.min_count..=spawner.max_count);
             let entity_type =
                 &EntityType::from_name(spawner.r#type.strip_prefix("minecraft:").unwrap()).unwrap();
+
             if !is_valid_spawn_position_for_type(
                 world,
                 &new_pos,
@@ -426,21 +434,19 @@ pub async fn spawn_category_for_position(
                 inc += 1;
                 continue;
             }
-            let entity = from_type(entity_type, new_pos_center, world, Uuid::new_v4()).await;
+
+            let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4()).await;
             entity
                 .get_entity()
                 .set_rotation(rng().random::<f32>() * 360., 0.);
-            // TODO isValidPositionForMob(level, mob, f)
-            // TODO spawnGroupData = mob.finalizeSpawn(level, level.getCurrentDifficultyAt(mob.blockPosition()), EntitySpawnReason.NATURAL, spawnGroupData);
+
             spawn_cluster_size += 1;
-            //group_size += 1;
             batch_buffer.push(entity);
             spawn_state.after_spawn(entity_type, &new_pos, world).await;
             if spawn_cluster_size >= entity_type.limit_per_chunk {
                 return;
             }
 
-            //TODO mob.isMaxGroupSizeReached(p)
             inc += 1;
         }
     }
@@ -601,14 +607,19 @@ pub async fn is_spawn_position_ok(
         SpawnLocation::InLava => world.get_fluid(block_pos).await.has_tag(&MINECRAFT_LAVA),
         SpawnLocation::InWater => {
             // TODO !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)
+            let above_state = world.get_block_state(&block_pos.up()).await;
             world.get_fluid(block_pos).await.has_tag(&MINECRAFT_WATER)
+                && !above_state.is_full_cube()
         }
         SpawnLocation::OnGround => {
             let down = world.get_block_state(&block_pos.down()).await;
             let up = world.get_block_state(&block_pos.up()).await;
             let cur = world.get_block_state(block_pos).await;
             // TODO: blockState.allowsSpawning
-            if down.is_side_solid(BlockDirection::Up) {
+            let is_valid_spawn_below =
+                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+
+            if is_valid_spawn_below {
                 is_valid_empty_spawn_block(cur) && is_valid_empty_spawn_block(up)
             } else {
                 false
@@ -620,10 +631,20 @@ pub async fn is_spawn_position_ok(
 
 #[must_use]
 pub fn is_valid_empty_spawn_block(state: &'static BlockState) -> bool {
-    // TODO: emitsRedstonePower
-    if state.is_full_cube() || state.is_liquid() {
+    if state.is_full_cube() {
         return false;
     }
-    // TODO !entityType.isBlockDangerous(blockState);
-    !Block::from_state_id(state.id).has_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE)
+    // if state.is_signal_source() {
+    //     return false;
+    // }
+    if state.is_liquid() {
+        return false;
+    }
+    if Block::from_state_id(state.id).has_tag(&MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE) {
+        return false;
+    }
+
+    // TODO: !entityType.isBlockDangerous(blockState)
+    // (e.g., preventing spawns inside Sweet Berry Bushes, Wither Roses, or Fire)
+    true
 }

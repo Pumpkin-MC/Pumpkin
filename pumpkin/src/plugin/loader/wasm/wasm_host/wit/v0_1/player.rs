@@ -16,14 +16,18 @@ use crate::{
             events::{
                 from_wasm_game_mode, from_wasm_position, to_wasm_game_mode, to_wasm_position,
             },
-            pumpkin::{self, plugin::player::Player, plugin::world::World},
+            pumpkin::{
+                self,
+                plugin::player::{Player, PlayerSkin, SkinParts},
+                plugin::world::World,
+            },
         },
     },
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_util::permission::PermissionLvl;
 
-fn player_from_resource(
+pub fn player_from_resource(
     state: &PluginHostState,
     player: &Resource<Player>,
 ) -> wasmtime::Result<std::sync::Arc<crate::entity::player::Player>> {
@@ -657,116 +661,6 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn is_sneaking(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = player_from_resource(self, &player)?;
-        Ok(player.get_entity().sneaking.load(Ordering::Relaxed))
-    }
-
-    async fn set_sneaking(
-        &mut self,
-        player: Resource<Player>,
-        sneaking: bool,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        player.get_entity().set_sneaking(sneaking).await;
-        Ok(())
-    }
-
-    async fn is_sprinting(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = player_from_resource(self, &player)?;
-        Ok(player.get_entity().sprinting.load(Ordering::Relaxed))
-    }
-
-    async fn set_sprinting(
-        &mut self,
-        player: Resource<Player>,
-        sprinting: bool,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        player.get_entity().set_sprinting(sprinting).await;
-        Ok(())
-    }
-
-    async fn is_swimming(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = player_from_resource(self, &player)?;
-        Ok(player.get_entity().swimming.load(Ordering::Relaxed))
-    }
-
-    async fn set_swimming(
-        &mut self,
-        player: Resource<Player>,
-        swimming: bool,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        player.get_entity().set_swimming(swimming).await;
-        Ok(())
-    }
-
-    async fn is_invisible(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = player_from_resource(self, &player)?;
-        Ok(player.get_entity().invisible.load(Ordering::Relaxed))
-    }
-
-    async fn set_invisible(
-        &mut self,
-        player: Resource<Player>,
-        invisible: bool,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        player.get_entity().set_invisible(invisible).await;
-        Ok(())
-    }
-
-    async fn is_glowing(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = player_from_resource(self, &player)?;
-        Ok(player.get_entity().glowing.load(Ordering::Relaxed))
-    }
-
-    async fn set_glowing(
-        &mut self,
-        player: Resource<Player>,
-        glowing: bool,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        player.get_entity().set_glowing(glowing).await;
-        Ok(())
-    }
-
-    async fn is_fall_flying(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = player_from_resource(self, &player)?;
-        Ok(player.get_entity().fall_flying.load(Ordering::Relaxed))
-    }
-
-    async fn set_fall_flying(
-        &mut self,
-        player: Resource<Player>,
-        fall_flying: bool,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        player.get_entity().set_fall_flying(fall_flying).await;
-        Ok(())
-    }
-
-    async fn is_on_fire(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = player_from_resource(self, &player)?;
-        Ok(player.get_entity().has_visual_fire.load(Ordering::Relaxed))
-    }
-
-    async fn set_on_fire(
-        &mut self,
-        player: Resource<Player>,
-        on_fire: bool,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        player.get_entity().set_on_fire(on_fire).await;
-        Ok(())
-    }
-
-    async fn is_on_ground(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
-        let player = player_from_resource(self, &player)?;
-        Ok(player.get_entity().on_ground.load(Ordering::Relaxed))
-    }
-
     async fn is_flying(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
         let player = player_from_resource(self, &player)?;
         Ok(player.is_flying().await)
@@ -822,6 +716,85 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     async fn get_ip(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
         let player = player_from_resource(self, &player)?;
         Ok(player.get_ip().await)
+    }
+
+    async fn get_skin(&mut self, player: Resource<Player>) -> wasmtime::Result<Option<PlayerSkin>> {
+        let player = player_from_resource(self, &player)?;
+        Ok(player
+            .gameprofile
+            .properties
+            .iter()
+            .find(|p| p.name == "textures")
+            .map(|p| PlayerSkin {
+                value: p.value.clone(),
+                signature: p.signature.clone(),
+            }))
+    }
+
+    async fn get_skin_parts(&mut self, player: Resource<Player>) -> wasmtime::Result<SkinParts> {
+        let player = player_from_resource(self, &player)?;
+        let mask = player.config.load().skin_parts;
+        let mut parts = SkinParts::empty();
+        if mask & 0x01 != 0 {
+            parts |= SkinParts::CAPE;
+        }
+        if mask & 0x02 != 0 {
+            parts |= SkinParts::JACKET;
+        }
+        if mask & 0x04 != 0 {
+            parts |= SkinParts::LEFT_SLEEVE;
+        }
+        if mask & 0x08 != 0 {
+            parts |= SkinParts::RIGHT_SLEEVE;
+        }
+        if mask & 0x10 != 0 {
+            parts |= SkinParts::LEFT_PANTS_LEG;
+        }
+        if mask & 0x20 != 0 {
+            parts |= SkinParts::RIGHT_PANTS_LEG;
+        }
+        if mask & 0x40 != 0 {
+            parts |= SkinParts::HAT;
+        }
+        Ok(parts)
+    }
+
+    async fn set_skin_parts(
+        &mut self,
+        player: Resource<Player>,
+        parts: SkinParts,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let mut mask = 0u8;
+        if parts.contains(SkinParts::CAPE) {
+            mask |= 0x01;
+        }
+        if parts.contains(SkinParts::JACKET) {
+            mask |= 0x02;
+        }
+        if parts.contains(SkinParts::LEFT_SLEEVE) {
+            mask |= 0x04;
+        }
+        if parts.contains(SkinParts::RIGHT_SLEEVE) {
+            mask |= 0x08;
+        }
+        if parts.contains(SkinParts::LEFT_PANTS_LEG) {
+            mask |= 0x10;
+        }
+        if parts.contains(SkinParts::RIGHT_PANTS_LEG) {
+            mask |= 0x20;
+        }
+        if parts.contains(SkinParts::HAT) {
+            mask |= 0x40;
+        }
+
+        {
+            let mut config = (**player.config.load()).clone();
+            config.skin_parts = mask;
+            player.config.store(Arc::new(config));
+        };
+        player.send_client_information().await;
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {

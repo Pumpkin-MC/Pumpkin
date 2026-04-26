@@ -2,6 +2,9 @@ use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 use wasmtime::component::Resource;
 
+use crate::command::CommandSender;
+use pumpkin::plugin::server::CommandSender as WasmCommandSender;
+
 use super::player::text_component_from_resource;
 use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, ServerResource},
@@ -9,7 +12,7 @@ use crate::plugin::loader::wasm::wasm_host::{
         self,
         plugin::{
             player::Player,
-            server::{Difficulty, Server},
+            server::{Difficulty, Dimension, Server},
         },
     },
 };
@@ -156,6 +159,28 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             }))
     }
 
+    async fn create_world(
+        &mut self,
+        _rep: Resource<Server>,
+        name: String,
+        dimension: Dimension,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::World>> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        let internal_dim = match dimension {
+            Dimension::Overworld => pumpkin_data::dimension::Dimension::OVERWORLD,
+            Dimension::Nether => pumpkin_data::dimension::Dimension::THE_NETHER,
+            Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
+        };
+
+        let world = server.create_world(name, internal_dim).await;
+        self.add_world(world)
+            .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+    }
+
     async fn broadcast(&mut self, _rep: Resource<Server>, message: String) -> wasmtime::Result<()> {
         let server = self
             .server
@@ -189,6 +214,39 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         server
             .broadcast_tab_list_header_footer(&header, &footer)
             .await;
+        Ok(())
+    }
+
+    async fn execute_command(
+        &mut self,
+        _rep: Resource<Server>,
+        command: String,
+        sender: WasmCommandSender,
+    ) -> wasmtime::Result<()> {
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+
+        let native_sender = match sender {
+            WasmCommandSender::Console => CommandSender::Console,
+            WasmCommandSender::Player(player_res) => {
+                // Extract the native Player reference from the WASM resource
+                let player_resource =
+                    self.resource_table
+                        .get::<crate::plugin::loader::wasm::wasm_host::state::PlayerResource>(
+                        &Resource::new_own(player_res.rep()),
+                    )?;
+
+                CommandSender::Player(player_resource.provider.clone())
+            }
+        };
+
+        let dispatcher = server.command_dispatcher.read().await;
+        dispatcher
+            .handle_command(&native_sender.into_source(server).await, &command)
+            .await;
+
         Ok(())
     }
 

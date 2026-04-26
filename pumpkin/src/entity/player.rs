@@ -88,7 +88,6 @@ use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
-use crate::plugin::player::inventory_close::InventoryCloseEvent;
 use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
@@ -466,14 +465,9 @@ pub struct Player {
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
-    pub this: Weak<Self>,
 }
 
 impl Player {
-    pub fn this(&self) -> Arc<Self> {
-        self.this.upgrade().expect("Player should have a reference")
-    }
-
     #[expect(clippy::too_many_lines)]
     pub async fn new(
         client: ClientPlatform,
@@ -603,7 +597,6 @@ impl Player {
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(false),
-            this: Weak::new(),
         }
     }
 
@@ -2897,20 +2890,21 @@ impl Player {
     }
 
     pub async fn on_handled_screen_closed(&self) {
-        let window_type = {
-            let handler_lock = self.current_screen_handler.lock().await;
-            let mut handler = handler_lock.lock().await;
-            let wt = handler.window_type();
-            handler.on_closed(self).await;
-            wt
-        };
+        // let window_type = {
+        //     let handler_lock = self.current_screen_handler.lock().await;
+        //     let mut handler = handler_lock.lock().await;
+        //     let wt = handler.window_type();
+        //     handler.on_closed(self).await;
+        //     wt
+        // };
 
-        if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
-            server
-                .plugin_manager
-                .fire(InventoryCloseEvent::new(&self.this(), window_type))
-                .await;
-        }
+        // TODO
+        // if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
+        //     server
+        //         .plugin_manager
+        //         .fire(InventoryCloseEvent::new(&self, window_type))
+        //         .await;
+        // }
 
         let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
             self.player_screen_handler.clone();
@@ -3026,7 +3020,7 @@ impl Player {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn on_slot_click(&self, packet: SClickSlot, server: &Server) {
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Server) {
         self.update_last_action_time();
         let screen_handler_arc = self.current_screen_handler.lock().await.clone();
         let mut screen_handler = screen_handler_arc.lock().await;
@@ -3050,7 +3044,7 @@ impl Player {
             return;
         }
 
-        if !screen_handler.can_use(self) {
+        if !screen_handler.can_use(self.as_ref()) {
             warn!(
                 "Player {} interacted with invalid menu {:?}",
                 self.gameprofile.name,
@@ -3133,7 +3127,7 @@ impl Player {
         send_cancellable! {{
             server;
             InventoryClickEvent::new(
-                &self.this(),
+                self,
                 screen_handler.window_type(),
                 click_type,
                 slot,
@@ -3144,7 +3138,7 @@ impl Player {
             );
             'after: {}
             'cancelled: {
-                screen_handler.cancel(self).await;
+                screen_handler.cancel().await;
                 return;
             }
         }}
@@ -3158,48 +3152,48 @@ impl Player {
                 if is_container_slot {
                     if !cursor_stack.is_empty() && !allow_put_items {
                         drop(cursor_stack);
-                        screen_handler.cancel(self).await;
+                        screen_handler.cancel().await;
                         return;
                     }
                     if cursor_stack.is_empty() && !allow_grab_items {
                         drop(cursor_stack);
-                        screen_handler.cancel(self).await;
+                        screen_handler.cancel().await;
                         return;
                     }
                 }
             }
             SlotActionType::QuickMove => {
                 if is_container_slot && !allow_grab_items {
-                    screen_handler.cancel(self).await;
+                    screen_handler.cancel().await;
                     return;
                 }
                 if !is_container_slot && !allow_put_items {
-                    screen_handler.cancel(self).await;
+                    screen_handler.cancel().await;
                     return;
                 }
             }
             SlotActionType::Swap => {
                 if is_container_slot && (!allow_grab_items || !allow_put_items) {
-                    screen_handler.cancel(self).await;
+                    screen_handler.cancel().await;
                     return;
                 }
             }
             SlotActionType::Throw => {
                 if is_container_slot && !allow_grab_items {
-                    screen_handler.cancel(self).await;
+                    screen_handler.cancel().await;
                     return;
                 }
             }
             SlotActionType::QuickCraft => {
                 if !allow_put_items {
                     // Dragging items into slots
-                    screen_handler.cancel(self).await;
+                    screen_handler.cancel().await;
                     return;
                 }
             }
             SlotActionType::PickupAll => {
                 if !allow_grab_items {
-                    screen_handler.cancel(self).await;
+                    screen_handler.cancel().await;
                     return;
                 }
             }
@@ -3218,7 +3212,7 @@ impl Player {
                 i32::from(slot),
                 i32::from(packet.button),
                 packet.mode.clone(),
-                self,
+                self.as_ref(),
             )
             .await;
 

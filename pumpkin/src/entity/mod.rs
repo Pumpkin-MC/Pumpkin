@@ -136,6 +136,15 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         self
     }
 
+    fn get_eye_pos(&self) -> Vector3<f64> {
+        self.get_entity().get_eye_pos()
+    }
+
+    fn get_looking_vector(&self) -> Vector3<f64> {
+        let entity = self.get_entity();
+        Vector3::from_yaw_pitch(entity.yaw.load(), entity.pitch.load())
+    }
+
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             let entity = self.get_entity();

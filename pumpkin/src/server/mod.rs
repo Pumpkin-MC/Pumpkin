@@ -341,6 +341,54 @@ impl Server {
         .unwrap()
     }
 
+    pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+        {
+            let worlds = self.worlds.load();
+            if let Some(world) = worlds
+                .iter()
+                .find(|w| w.get_world_name() == name && w.dimension == dimension)
+            {
+                return world.clone();
+            }
+        }
+
+        let server = self.clone();
+        let name_clone = name.clone();
+        tokio::task::spawn_blocking(move || {
+            let world_path = server.basic_config.get_world_path().join(name_clone);
+            let registry = server.block_registry.clone();
+            let l_info = server.level_info.clone();
+            let weak = Arc::downgrade(&server);
+            let config = Arc::new(server.advanced_config.world.clone());
+            let seed = server.level_info.load().world_gen_settings.seed;
+
+            // TODO: gen_pool should be reused
+            let world = World::load(
+                pumpkin_world::dimension::into_level(
+                    dimension,
+                    &config,
+                    world_path,
+                    registry.clone(),
+                    seed,
+                    None,
+                ),
+                l_info,
+                dimension,
+                registry,
+                weak,
+            );
+            let world_arc = Arc::new(world);
+            server.worlds.rcu(|worlds| {
+                let mut new_worlds = (**worlds).clone();
+                new_worlds.push(world_arc.clone());
+                new_worlds
+            });
+            world_arc
+        })
+        .await
+        .expect("World creation panicked")
+    }
+
     /// Adds a new player to the server.
     ///
     /// This function takes an `Arc<Client>` representing the connected client and performs the following actions:
@@ -430,8 +478,7 @@ impl Server {
         }
 
         // Wrap in Arc after data is loaded
-        let mut player = Arc::new(player);
-        Arc::get_mut(&mut player).unwrap().this = Arc::downgrade(&player);
+        let player = Arc::new(player);
 
         send_cancellable! {{
             self;

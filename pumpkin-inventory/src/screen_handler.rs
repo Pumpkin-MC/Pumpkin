@@ -773,7 +773,7 @@ pub trait ScreenHandler: Send + Sync {
     }
 
     /// Cancels any client-side changes and resynchronizes the state.
-    fn cancel<'a>(&'a mut self, _player: &'a dyn InventoryPlayer) -> ScreenHandlerFuture<'a, ()> {
+    fn cancel(&mut self) -> ScreenHandlerFuture<'_, ()> {
         Box::pin(async move {
             self.sync_state().await;
         })
