@@ -1,5 +1,5 @@
 interface event {
-    use common.{block-position, game-mode, hand, item-stack, position};
+    use common.{block-position, game-mode, hand, item-stack, position, click-type};
     use player.{player};
     use text.{text-component};
     use %world.{%world};
@@ -179,6 +179,23 @@ interface event {
         cancelled: bool
     }
 
+    record inventory-click-event-data {
+        player: player,
+        window-type: option<string>,
+        click-type: click-type,
+        slot: s16,
+        raw-slot: s16,
+        clicked-item: option<item-stack>,
+        cursor: option<item-stack>,
+        hotbar-button: s32,
+        cancelled: bool
+    }
+
+    record inventory-close-event-data {
+        player: player,
+        window-type: option<string>
+    }
+
     record block-redstone-event-data {
         target-world: %world,
         state-id: u16,
@@ -272,6 +289,8 @@ interface event {
         player-toggle-sneak-event,
         player-toggle-flight-event,
         player-toggle-sprint-event,
+        inventory-click-event,
+        inventory-close-event,
         block-redstone-event,
         block-break-event,
         block-burn-event,
@@ -305,6 +324,8 @@ interface event {
         player-toggle-sneak-event(player-toggle-sneak-event-data),
         player-toggle-flight-event(player-toggle-flight-event-data),
         player-toggle-sprint-event(player-toggle-sprint-event-data),
+        inventory-click-event(inventory-click-event-data),
+        inventory-close-event(inventory-close-event-data),
         block-redstone-event(block-redstone-event-data),
         block-break-event(block-break-event-data),
         block-burn-event(block-burn-event-data),

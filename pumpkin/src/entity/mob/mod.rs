@@ -355,7 +355,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             drop(navigator);
 
             let mut look_control = mob_entity.look_control.lock().await;
-            look_control.tick(self).await;
+            look_control.tick(self);
             drop(look_control);
 
             mob_entity.living_entity.tick(caller, server).await;

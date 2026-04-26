@@ -22,40 +22,60 @@ use pumpkin_world::chunk::io::Dirtiable;
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
 use rand::seq::IndexedRandom;
 use rand::{RngExt, rng};
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::fmt;
 use std::sync::Arc;
 use uuid::Uuid;
 
 const MAGIC_NUMBER: i32 = 17 * 17;
 
-#[derive(Default, Debug)]
-pub struct MobCounts([i32; 8]);
+use dashmap::DashMap;
+use std::sync::atomic::{AtomicI32, Ordering::Relaxed};
 
-impl MobCounts {
-    #[inline]
-    const fn add(&mut self, category: &'static MobCategory) {
-        self.0[category.id] += 1;
-    }
-    #[inline]
-    const fn can_spawn(&self, category: &'static MobCategory) -> bool {
-        self.0[category.id] < category.max
+pub struct MobCounts([AtomicI32; 8]);
+
+impl Default for MobCounts {
+    fn default() -> Self {
+        Self(std::array::from_fn(|_| AtomicI32::new(0)))
     }
 }
 
-#[derive(Default)]
+impl fmt::Debug for MobCounts {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list()
+            .entries(self.0.iter().map(|a| a.load(Relaxed)))
+            .finish()
+    }
+}
+
+impl MobCounts {
+    #[inline]
+    pub fn add(&self, category: &'static MobCategory) {
+        self.0[category.id].fetch_add(1, Relaxed);
+    }
+    #[inline]
+    pub fn can_spawn(&self, category: &'static MobCategory) -> bool {
+        self.0[category.id].load(Relaxed) < category.max
+    }
+}
+
 pub struct LocalMobCapCalculator {
-    player_mob_counts: HashMap<i32, MobCounts>,
-    players_near_chunk: HashMap<Vector2<i32>, Vec<i32>>,
+    player_mob_counts: DashMap<i32, MobCounts>,
+    players_near_chunk: DashMap<Vector2<i32>, Vec<i32>>,
+}
+
+impl Default for LocalMobCapCalculator {
+    fn default() -> Self {
+        Self {
+            player_mob_counts: DashMap::new(),
+            players_near_chunk: DashMap::new(),
+        }
+    }
 }
 
 impl fmt::Debug for LocalMobCapCalculator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("LocalMobCapCalculator")
             .field("world", &"<skipped>")
-            .field("player_mob_counts", &self.player_mob_counts)
-            .field("players_near_chunk", &self.players_near_chunk)
             .finish()
     }
 }
@@ -67,54 +87,48 @@ impl LocalMobCapCalculator {
         dx * dx + dy * dy
     }
 
-    fn get_players_near<'b>(
-        players_near_chunk: &'b mut HashMap<Vector2<i32>, Vec<i32>>,
-        world: &Arc<World>,
-        chunk_pos: Vector2<i32>,
-    ) -> &'b Vec<i32> {
-        match players_near_chunk.entry(chunk_pos) {
-            Entry::Occupied(value) => value.into_mut(),
-            Entry::Vacant(entry) => {
-                let mut players = Vec::new();
-                for player in world.players.load().iter() {
-                    if player.gamemode.load() == GameMode::Spectator {
-                        continue;
-                    }
-                    if Self::calc_distance(chunk_pos, &player.position()) < 16384. {
-                        players.push(player.entity_id());
-                    }
-                }
-                entry.insert(players)
+    fn get_players_near(&self, world: &Arc<World>, chunk_pos: Vector2<i32>) -> Vec<i32> {
+        if let Some(players) = self.players_near_chunk.get(&chunk_pos) {
+            return players.value().clone();
+        }
+
+        let mut players = Vec::new();
+        for player in world.players.load().iter() {
+            if player.gamemode.load() == GameMode::Spectator {
+                continue;
+            }
+            if Self::calc_distance(chunk_pos, &player.position()) < 16384. {
+                players.push(player.entity_id());
             }
         }
+        self.players_near_chunk.insert(chunk_pos, players.clone());
+        players
     }
+
     pub fn add_mob(
-        &mut self,
+        &self,
         chunk_pos: Vector2<i32>,
         world: &Arc<World>,
         category: &'static MobCategory,
     ) {
-        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos);
+        let players = self.get_players_near(world, chunk_pos);
         for player in players {
             self.player_mob_counts
-                .entry(*player)
+                .entry(player)
                 .or_default()
                 .add(category);
         }
-        // debug!("player_mob_counts {:?}", self.player_mob_counts);
-        // debug!("players_near_chunk {:?}", self.players_near_chunk);
-        // debug!("chunk_pos {:?}", chunk_pos);
-        // debug!("players {:?}", players);
     }
+
     pub fn can_spawn(
-        &mut self,
+        &self,
         category: &'static MobCategory,
         world: &Arc<World>,
         chunk_pos: Vector2<i32>,
     ) -> bool {
-        let players = Self::get_players_near(&mut self.players_near_chunk, world, chunk_pos);
+        let players = self.get_players_near(world, chunk_pos);
         for player in players {
-            if let Some(count) = self.player_mob_counts.get(player) {
+            if let Some(count) = self.player_mob_counts.get(&player) {
                 if count.can_spawn(category) {
                     return true;
                 }
@@ -137,12 +151,15 @@ impl PointCharge {
 }
 
 #[derive(Default, Debug)]
-struct PotentialCalculator(Vec<PointCharge>);
+struct PotentialCalculator(std::sync::Mutex<Vec<PointCharge>>);
 
 impl PotentialCalculator {
-    pub fn add_charge(&mut self, pos: &BlockPos, charge: f64) {
+    pub fn add_charge(&self, pos: &BlockPos, charge: f64) {
         if charge != 0. {
-            self.0.push(PointCharge(pos.to_f64(), charge));
+            self.0
+                .lock()
+                .unwrap()
+                .push(PointCharge(pos.to_f64(), charge));
         }
     }
     pub fn get_potential_energy_change(&self, pos: &BlockPos, charge: f64) -> f64 {
@@ -150,12 +167,15 @@ impl PotentialCalculator {
             return 0.;
         }
         let mut sum: f64 = 0.;
-        for i in &self.0 {
+        let charges = self.0.lock().unwrap();
+        for i in charges.iter() {
             sum += i.get_potential_change(pos);
         }
         sum * charge
     }
 }
+
+use crossbeam::atomic::AtomicCell;
 
 pub struct SpawnState {
     spawnable_chunk_count: i32,
@@ -163,9 +183,7 @@ pub struct SpawnState {
     spawn_potential: PotentialCalculator,
     local_mob_cap_calculator: LocalMobCapCalculator,
     // unmodifiable_mob_category_counts: MobCounts, seems only for debug
-    last_checked_pos: BlockPos,
-    last_checked_type: &'static EntityType,
-    last_charge: f64,
+    last_checked: AtomicCell<Option<(BlockPos, &'static EntityType, f64)>>,
 }
 
 impl fmt::Debug for SpawnState {
@@ -175,9 +193,7 @@ impl fmt::Debug for SpawnState {
             .field("mob_category_counts", &self.mob_category_counts)
             .field("spawn_potential", &self.spawn_potential)
             .field("local_mob_cap_calculator", &self.local_mob_cap_calculator)
-            .field("last_checked_pos", &self.last_checked_pos)
-            .field("last_checked_type", &self.last_checked_type.resource_name)
-            .field("last_charge", &self.last_charge)
+            .field("last_checked", &self.last_checked)
             .finish()
     }
 }
@@ -188,9 +204,9 @@ impl SpawnState {
         entities: &ArcSwap<Vec<Arc<dyn EntityBase>>>,
         world: &Arc<World>,
     ) -> Self {
-        let mut potential = PotentialCalculator::default();
-        let mut local_mob_cap = LocalMobCapCalculator::default();
-        let mut counter = MobCounts::default();
+        let potential = PotentialCalculator::default();
+        let local_mob_cap = LocalMobCapCalculator::default();
+        let counter = MobCounts::default();
         for entity in entities.load().iter() {
             let entity = entity.get_entity();
             let entity_type = entity.entity_type;
@@ -213,19 +229,16 @@ impl SpawnState {
             mob_category_counts: counter,
             spawn_potential: potential,
             local_mob_cap_calculator: local_mob_cap,
-            // unmodifiable_mob_category_counts: counter,
-            last_checked_pos: BlockPos::new(i32::MAX, i32::MAX, i32::MAX),
-            last_checked_type: &EntityType::PLAYER,
-            last_charge: 0.,
+            last_checked: AtomicCell::new(None),
         }
     }
     #[inline]
-    const fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
-        self.mob_category_counts.0[category.id]
+    pub fn can_spawn_for_category_global(&self, category: &'static MobCategory) -> bool {
+        self.mob_category_counts.0[category.id].load(Relaxed)
             < category.max * self.spawnable_chunk_count / MAGIC_NUMBER
     }
-    fn can_spawn_for_category_local(
-        &mut self,
+    pub fn can_spawn_for_category_local(
+        &self,
         world: &Arc<World>,
         category: &'static MobCategory,
         chunk_pos: Vector2<i32>,
@@ -233,44 +246,56 @@ impl SpawnState {
         self.local_mob_cap_calculator
             .can_spawn(category, world, chunk_pos)
     }
-    async fn can_spawn(
-        &mut self,
+    pub async fn can_spawn(
+        &self,
         entity_type: &'static EntityType,
         pos: &BlockPos,
         world: &Arc<World>,
     ) -> bool {
-        self.last_checked_pos = *pos;
-        self.last_checked_type = entity_type;
         // TODO get biome
         let biome = world.level.get_rough_biome(pos).await;
-        if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-            self.last_charge = cost.charge;
-            self.spawn_potential
-                .get_potential_energy_change(pos, cost.charge)
-                <= cost.energy_budget
-        } else {
-            self.last_charge = 0.;
-            true
-        }
+        biome
+            .spawn_costs
+            .get(entity_type.resource_name)
+            .map_or_else(
+                || {
+                    self.last_checked.store(Some((*pos, entity_type, 0.)));
+                    true
+                },
+                |cost| {
+                    self.last_checked
+                        .store(Some((*pos, entity_type, cost.charge)));
+                    self.spawn_potential
+                        .get_potential_energy_change(pos, cost.charge)
+                        <= cost.energy_budget
+                },
+            )
     }
-    async fn after_spawn(
-        &mut self,
+    pub async fn after_spawn(
+        &self,
         entity_type: &'static EntityType,
         pos: &BlockPos,
         world: &Arc<World>,
     ) {
-        let charge;
-        if self.last_checked_pos.eq(pos) && self.last_checked_type == entity_type {
-            charge = self.last_charge;
+        let charge = if let Some((l_pos, l_type, l_charge)) = self.last_checked.load()
+            && l_pos.eq(pos)
+            && l_type == entity_type
+        {
+            Some(l_charge)
+        } else {
+            None
+        };
+
+        let charge = if let Some(charge) = charge {
+            charge
         } else {
             // TODO get biome
             let biome = world.level.get_rough_biome(pos).await;
-            if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-                charge = cost.charge;
-            } else {
-                charge = 0.;
-            }
-        }
+            biome
+                .spawn_costs
+                .get(entity_type.resource_name)
+                .map_or(0., |cost| cost.charge)
+        };
 
         self.spawn_potential.add_charge(pos, charge);
         self.mob_category_counts.add(entity_type.category);
@@ -316,7 +341,7 @@ pub async fn spawn_for_chunk(
     world: &Arc<World>,
     chunk_pos: Vector2<i32>,
     chunk: &Arc<ChunkData>,
-    spawn_state: &mut SpawnState,
+    spawn_state: &SpawnState,
     spawn_list: &Vec<&'static MobCategory>,
 ) {
     // debug!("spawn for chunk {:?}", chunk_pos);
@@ -354,7 +379,7 @@ pub async fn spawn_category_for_position(
     world: &Arc<World>,
     pos: BlockPos,
     chunk_pos: &Vector2<i32>,
-    spawn_state: &mut SpawnState,
+    spawn_state: &SpawnState,
 ) {
     // TODO StructureManager structureManager = level.structureManager();
     // TODO blockState.isRedstoneConductor(chunk, pos) is true then return

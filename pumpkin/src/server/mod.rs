@@ -430,7 +430,8 @@ impl Server {
         }
 
         // Wrap in Arc after data is loaded
-        let player = Arc::new(player);
+        let mut player = Arc::new(player);
+        Arc::get_mut(&mut player).unwrap().this = Arc::downgrade(&player);
 
         send_cancellable! {{
             self;

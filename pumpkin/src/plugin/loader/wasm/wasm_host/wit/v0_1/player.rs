@@ -426,6 +426,8 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             sync_id,
             gui.window_type,
             &gui.inventory,
+            gui.allow_grab_items,
+            gui.allow_put_items,
         )));
 
         player

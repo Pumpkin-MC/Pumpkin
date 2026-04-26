@@ -1304,10 +1304,16 @@ impl LivingEntity {
 
             let block_pos = self.entity.block_pos.load();
 
-            for slot in self.equipment_slots.values() {
+            let armor_slots: Vec<Arc<Mutex<ItemStack>>> = {
+                let equipment_lock = self.entity_equipment.lock().await;
+                self.equipment_slots
+                    .values()
+                    .map(|slot| equipment_lock.get(slot))
+                    .collect()
+            };
+
+            for equipment in armor_slots {
                 let item = {
-                    let lock = self.entity_equipment.lock().await;
-                    let equipment = lock.get(slot);
                     let mut item_lock = equipment.lock().await;
                     mem::replace(&mut *item_lock, ItemStack::EMPTY.clone())
                 };
@@ -1532,12 +1538,16 @@ impl LivingEntity {
         // TODO: Falling anvil/stalactite should only damage the helmet slot.
         // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
 
-        for (slot_index, slot) in self.equipment_slots.iter() {
-            if !slot.is_armor_slot() {
-                continue;
-            }
+        let armor_slots: Vec<(usize, Arc<Mutex<ItemStack>>, EquipmentSlot)> = {
+            let equipment_lock = self.entity_equipment.lock().await;
+            self.equipment_slots
+                .iter()
+                .filter(|(_, slot)| slot.is_armor_slot())
+                .map(|(index, slot)| (*index, equipment_lock.get(slot), slot.clone()))
+                .collect()
+        };
 
-            let equipment = self.entity_equipment.lock().await.get(slot);
+        for (slot_index, equipment, slot) in armor_slots {
             let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
@@ -1568,14 +1578,14 @@ impl LivingEntity {
                 if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
-                        .send_entity_status(&self.entity, super::equipment_break_status(slot))
+                        .send_entity_status(&self.entity, super::equipment_break_status(&slot))
                         .await;
                 }
                 equipment_updates.push((slot.clone(), updated_stack.clone()));
                 if let Some(player) = caller.get_player() {
                     player
                         .enqueue_slot_set_packet(&CSetPlayerInventory::new(
-                            (*slot_index as i32).into(),
+                            (slot_index as i32).into(),
                             &ItemStackSerializer::from(updated_stack),
                         ))
                         .await;

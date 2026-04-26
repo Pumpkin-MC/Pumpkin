@@ -29,6 +29,7 @@ pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
 pumpkin-macros.workspace = true
 
+dashmap.workspace = true
 crossbeam.workspace = true
 uuid.workspace = true
 tokio = { workspace = true, features = [

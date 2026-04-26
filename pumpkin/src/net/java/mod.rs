@@ -804,7 +804,7 @@ impl JavaClient {
             }
             id if id == SClickSlot::to_id(version) => {
                 player
-                    .on_slot_click(SClickSlot::read(payload, &version)?)
+                    .on_slot_click(SClickSlot::read(payload, &version)?, server)
                     .await;
             }
             id if id == SSetHeldItem::to_id(version) => {

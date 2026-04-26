@@ -135,6 +135,7 @@ use rand::{RngExt, rng};
 use scoreboard::Scoreboard;
 use time::LevelTime;
 use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 
 pub mod border;
 pub mod bossbar;
@@ -792,7 +793,7 @@ impl World {
 
         // Tick the End dragon fight (only on THE_END worlds).
         if let Some(ref fight_mutex) = self.dragon_fight {
-            fight_mutex.lock().await.tick(self).await;
+            dragon_fight::DragonFight::tick(fight_mutex, self).await;
         }
 
         let total_elapsed = start.elapsed();
@@ -848,44 +849,53 @@ impl World {
     }
 
     async fn tick_environment(&self) {
-        let mut level_time = self.level_time.lock().await;
-        let (advance_time, advance_weather) = {
-            let lock = self.level_info.load();
-            (
-                lock.game_rules.advance_time,
-                lock.game_rules.advance_weather,
-            )
-        };
-        level_time.tick_time(advance_time, advance_weather);
+        let (world_age, is_night, time_of_day) = {
+            let mut level_time = self.level_time.lock().await;
+            let (advance_time, advance_weather) = {
+                let lock = self.level_info.load();
+                (
+                    lock.game_rules.advance_time,
+                    lock.game_rules.advance_weather,
+                )
+            };
+            level_time.tick_time(advance_time, advance_weather);
 
-        // Auto-save logic
-        if level_time.world_age % 100 == 0 {
-            self.level.should_unload.store(true, Relaxed);
-            // If autosave is configured and this tick will trigger an autosave, don't double notify
-            if self.level.autosave_ticks == 0 {
-                self.level.level_channel.notify();
-            } else {
+            // Auto-save logic
+            if level_time.world_age % 100 == 0 {
+                self.level.should_unload.store(true, Relaxed);
+                // If autosave is configured and this tick will trigger an autosave, don't double notify
+                if self.level.autosave_ticks == 0 {
+                    self.level.level_channel.notify();
+                } else {
+                    let autosave = self.level.autosave_ticks as i64;
+                    if autosave == 0 || level_time.world_age % autosave != 0 {
+                        self.level.level_channel.notify();
+                    }
+                }
+            }
+            if self.level.autosave_ticks > 0 {
                 let autosave = self.level.autosave_ticks as i64;
-                if autosave == 0 || level_time.world_age % autosave != 0 {
+                if autosave > 0 && level_time.world_age % autosave == 0 {
+                    self.level.should_save.store(true, Relaxed);
                     self.level.level_channel.notify();
                 }
             }
-        }
-        if self.level.autosave_ticks > 0 {
-            let autosave = self.level.autosave_ticks as i64;
-            if autosave > 0 && level_time.world_age % autosave == 0 {
-                self.level.should_save.store(true, Relaxed);
-                self.level.level_channel.notify();
-            }
-        }
+            (
+                level_time.world_age,
+                level_time.is_night(),
+                level_time.time_of_day,
+            )
+        };
 
         let mut weather = self.weather.lock().await;
         weather.tick_weather(self).await;
 
-        if self.should_skip_night() && level_time.is_night() {
-            let time = level_time.time_of_day + 24000;
+        if self.should_skip_night() && is_night {
+            let mut level_time = self.level_time.lock().await;
+            let time = time_of_day + 24000;
             level_time.set_time(time - time % 24000);
             level_time.send_time(self).await;
+            drop(level_time);
 
             for player in self.players.load().iter() {
                 player.wake_up().await;
@@ -894,11 +904,13 @@ impl World {
             if weather.weather_cycle_enabled && (weather.raining || weather.thundering) {
                 weather.reset_weather_cycle(self).await;
             }
-        } else if level_time.world_age % 20 == 0 {
+        } else if world_age % 20 == 0 {
+            let level_time = self.level_time.lock().await;
             level_time.send_time(self).await;
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn tick_chunks(self: &Arc<Self>) {
         let tick_data = self.level.get_tick_data();
         for scheduled_tick in tick_data.block_ticks {
@@ -974,7 +986,7 @@ impl World {
             }
         }
 
-        let mut spawn_state =
+        let spawn_state =
             SpawnState::new(spawning_chunks_map.len() as i32, &self.entities, self).await; // TODO store it
 
         // TODO gamerule this.spawnEnemies || this.spawnFriendlies
@@ -1002,17 +1014,33 @@ impl World {
             spawning_chunks_map.into_iter().collect();
         spawning_chunks.shuffle(&mut rng());
 
-        // TODO i think it can be multithread
+        let mut spawn_tasks = JoinSet::new();
+        let spawn_state = Arc::new(spawn_state);
+        let spawn_list = Arc::new(spawn_list);
+
         for (pos, chunk) in spawning_chunks {
-            self.tick_spawning_chunk(pos, &chunk, &spawn_list, &mut spawn_state)
-                .await;
+            let world = self.clone();
+            let spawn_list = spawn_list.clone();
+            let spawn_state = spawn_state.clone();
+            let chunk = chunk.clone();
+            spawn_tasks.spawn(async move {
+                world
+                    .tick_spawning_chunk(pos, &chunk, &spawn_list, &spawn_state)
+                    .await;
+            });
         }
+        while spawn_tasks.join_next().await.is_some() {}
 
         let world: Arc<dyn SimpleWorld> = self.clone();
 
+        let mut block_entity_tasks = JoinSet::new();
         for block_entity in tick_data.block_entities {
-            block_entity.tick(&world).await;
+            let world = world.clone();
+            block_entity_tasks.spawn(async move {
+                block_entity.tick(&world).await;
+            });
         }
+        while block_entity_tasks.join_next().await.is_some() {}
     }
 
     pub async fn get_fluid_collisions(self: &Arc<Self>, bounding_box: BoundingBox) -> Vec<&Fluid> {
@@ -1349,12 +1377,16 @@ impl World {
         chunk_pos: Vector2<i32>,
         chunk: &Arc<ChunkData>,
         spawn_list: &Vec<&'static MobCategory>,
-        spawn_state: &mut SpawnState,
+        spawn_state: &Arc<SpawnState>,
     ) {
         // this.level.tickThunder(chunk);
         //TODO check in simulation distance
-        let weather = self.weather.lock().await;
-        if weather.raining && weather.thundering && rng().random_range(0..100_000) == 0 {
+        let (is_raining, is_thundering) = {
+            let weather = self.weather.lock().await;
+            (weather.raining, weather.thundering)
+        };
+
+        if is_raining && is_thundering && rng().random_range(0..100_000) == 0 {
             let rand_value = rng().random::<i32>() >> 2;
             let delta = Vector3::new(rand_value & 15, rand_value >> 16 & 15, rand_value >> 8 & 15);
             let random_pos = Vector3::new(
@@ -1395,7 +1427,6 @@ impl World {
                 self.spawn_entity(Arc::new(entity)).await;
             }
         }
-        drop(weather);
 
         if spawn_list.is_empty() {
             return;
