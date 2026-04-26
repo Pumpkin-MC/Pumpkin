@@ -88,7 +88,7 @@ impl PlayerAdvancement {
                 .advancement_path
                 .file_prefix()
                 .and_then(|prefix| prefix.to_str())
-                .unwrap_or("unknow");
+                .unwrap_or("unknown");
             error!(
                 "Failed to create player advancement directory for {}: {e}",
                 file_name
@@ -104,7 +104,7 @@ impl PlayerAdvancement {
 
     pub fn load(&mut self) -> Result<(), AdvancementDataError> {
         if !self.advancement_path.exists() {
-            return Ok(()); // Fichier inexistant, on garde la map vide
+            return Ok(());
         }
 
         let file = std::fs::File::open(&self.advancement_path).map_err(AdvancementDataError::Io)?;
