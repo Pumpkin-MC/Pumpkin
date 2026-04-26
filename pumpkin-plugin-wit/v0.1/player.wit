@@ -78,6 +78,12 @@ interface player {
         get-permission-level: func () -> permission-level;
         /// Sets the player's permission level.
         set-permission-level: func (level: permission-level);
+        /// Grants or denies a specific permission node for the player.
+	    set-permission: func(node: string, value: bool);
+	    /// Removes an explicitly set permission node from the player.
+	    unset-permission: func(node: string);
+        /// Returns `Some(true)` if granted, `Some(false)` if denied, or `None` if not set.
+        has-permission-set: func (node: string) -> option<bool>;
         /// Checks if the player has a specific permission node.
         has-permission: func (node: string) -> bool;
         /// Returns the player's display name, which may include formatting.
