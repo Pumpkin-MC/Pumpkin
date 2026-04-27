@@ -59,6 +59,14 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             .contains(&(pos, value))
     }
 
+    pub fn has_ticks(&self) -> bool {
+        !self
+            .queued_ticks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty()
+    }
+
     #[must_use]
     pub fn to_vec(&self) -> Vec<ScheduledTick<&'a T>> {
         let offset = self.offset.load(Ordering::SeqCst);

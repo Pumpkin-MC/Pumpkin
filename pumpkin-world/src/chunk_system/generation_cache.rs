@@ -194,7 +194,7 @@ impl GenerationCache for Cache {
         }
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
-                data.section.set_block_absolute_y(
+                data.set_block_absolute_y(
                     (pos.x & 15) as usize,
                     pos.y,
                     (pos.z & 15) as usize,

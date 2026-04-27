@@ -179,7 +179,11 @@ impl Server {
 
         let level_info = level_info.unwrap_or_else(|err| {
             warn!("Failed to get level_info, using default instead: {err}");
-            LevelData::default(basic_config.seed)
+            let default_data = LevelData::default(basic_config.seed);
+            if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
+                error!("Failed to save level.dat: {err}");
+            }
+            default_data
         });
 
         let seed = level_info.world_gen_settings.seed;
@@ -423,7 +427,7 @@ impl Server {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
         let (world, nbt) =
-            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id) {
+            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id).await {
                 let _version = data.get_int().unwrap_or(0);
                 if let Ok(dimension_key) = data.get_string() {
                     if let Some(dimension) = Dimension::from_name(&dimension_key) {
@@ -799,7 +803,7 @@ impl Server {
 
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
-    pub async fn tick_players_and_network(&self) {
+    pub async fn tick_players_and_network(self: &Arc<Self>) {
         let worlds = self.worlds.load();
 
         for world in worlds.iter() {
@@ -807,12 +811,18 @@ impl Server {
             world.flush_synced_block_events().await;
         }
 
+        let mut set = JoinSet::new();
         for world in worlds.iter() {
             let players = world.players.load();
             for player in players.iter() {
-                player.tick(self).await;
+                let player_clone = player.clone();
+                let server_clone = self.clone();
+                set.spawn(async move {
+                    player_clone.tick(&server_clone).await;
+                });
             }
         }
+        set.join_all().await;
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
@@ -825,7 +835,7 @@ impl Server {
             let server = self.clone();
 
             set.spawn(async move {
-                world.tick(&server).await;
+                world.tick(server).await;
             });
         }
 

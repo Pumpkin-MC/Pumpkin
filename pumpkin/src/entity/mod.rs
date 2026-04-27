@@ -14,6 +14,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
+use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
@@ -485,6 +486,9 @@ pub struct Entity {
 
     pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
 
+    pub current_biome: ArcSwap<&'static Biome>,
+    pub last_biome_update_pos: AtomicCell<BlockPos>,
+
     pub portal_cooldown: AtomicU32,
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
@@ -614,6 +618,8 @@ impl Entity {
             vehicle: Mutex::new(None),
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
+            current_biome: ArcSwap::new(Arc::new(&Biome::PLAINS)),
+            last_biome_update_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
             custom_name: ArcSwap::new(Arc::new(None)),
@@ -2781,6 +2787,15 @@ impl EntityBase for Entity {
             self.was_in_powder_snow
                 .store(was_in_powder_snow, Ordering::Relaxed);
             self.is_in_powder_snow.store(false, Ordering::Relaxed);
+
+            let block_pos = self.block_pos.load();
+            if self.last_biome_update_pos.load() != block_pos {
+                let world = self.world.load();
+                let biome = world.level.get_rough_biome(&block_pos).await;
+                self.current_biome.store(Arc::new(biome));
+                self.last_biome_update_pos.store(block_pos);
+            }
+
             self.update_last_pos();
             self.tick_portal(caller).await;
             self.update_fluid_state(caller).await;

@@ -22,7 +22,7 @@ use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Mutex;
 use std::time::Duration;
 use std::{
@@ -72,6 +72,7 @@ pub struct Level {
     // from the loaded chunks map and sent to the underlying ChunkIO
     pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
+    pub chunks_with_scheduled_ticks: Arc<dashmap::DashSet<Vector2<i32>>>,
     pub chunk_loading: Mutex<ChunkLoading>,
 
     chunk_watchers: Arc<DashMap<Vector2<i32>, usize>>,
@@ -194,6 +195,7 @@ impl Level {
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
+            chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
             chunk_watchers: Arc::new(DashMap::new()),
             tasks: TaskTracker::new(),
@@ -436,69 +438,83 @@ impl Level {
         });
     }
 
-    pub fn get_tick_data(&self) -> TickData {
+    pub fn get_tick_data(&self, active_chunks: &FxHashSet<Vector2<i32>>) -> TickData {
         let mut ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
-            random_ticks: Vec::with_capacity(self.loaded_chunks.len() * 3),
+            random_ticks: Vec::with_capacity(active_chunks.len() * 3),
             block_entities: Vec::new(),
         };
 
-        // Clone the Arcs quickly to release map shard locks!
-        let chunks_to_tick: Vec<SyncChunk> = self
-            .loaded_chunks
-            .iter()
-            .map(|entry| entry.value().clone())
-            .collect();
+        // 1. Process active chunks (random ticks, block entities)
+        for pos in active_chunks {
+            if let Some(chunk) = self.loaded_chunks.get(pos) {
+                let chunk = chunk.value();
+                let chunk_x_base = chunk.x * 16;
+                let chunk_z_base = chunk.z * 16;
+                let section_count = chunk.section.count;
 
-        for chunk in chunks_to_tick {
-            let chunk_x_base = chunk.x * 16;
-            let chunk_z_base = chunk.z * 16;
-            let section_count = chunk.section.count;
+                ticks
+                    .block_entities
+                    .extend(chunk.block_entities.lock().unwrap().values().cloned());
 
-            ticks
-                .block_entities
-                .extend(chunk.block_entities.lock().unwrap().values().cloned());
+                // Use the bitmask to skip sections
+                let mask = chunk.section.randomly_ticking_mask.load(Ordering::Relaxed);
+                if mask != 0 {
+                    let sections = chunk.section.block_sections.read().unwrap();
+                    let min_y = chunk.section.min_y;
 
-            // Acquire the read lock once per chunk to avoid per-section lock overhead
-            let sections = chunk.section.block_sections.read().unwrap();
-            let random_tick_sections = chunk.section.random_tick_sections.read().unwrap();
-            let min_y = chunk.section.min_y;
+                    for i in 0..section_count {
+                        if (mask & (1 << i)) == 0 {
+                            continue;
+                        }
+                        let y_base = min_y + (i as i32 * 16);
+                        for _ in 0..3 {
+                            let r = rand::random::<u32>();
+                            let x_offset = (r & 0xF) as usize;
+                            let z_offset = (r >> 8 & 0xF) as usize;
+                            let y_in_section = ((r >> 4) & 0xF) as usize;
 
-            for i in 0..section_count {
-                if !random_tick_sections[i].is_randomly_ticking() {
-                    continue;
-                }
-                let y_base = min_y + (i as i32 * 16);
-                for _ in 0..3 {
-                    // Generate a fresh random per tick attempt
-                    let r = rand::random::<u32>();
-                    let x_offset = (r & 0xF) as usize;
-                    let z_offset = (r >> 8 & 0xF) as usize;
-                    let y_in_section = ((r >> 4) & 0xF) as usize;
-
-                    // Read directly from the already-locked section palette
-                    let block_state_id = sections[i].get(x_offset, y_in_section, z_offset);
-                    let tick_block = has_random_ticks(block_state_id);
-                    let tick_fluid = has_random_ticking_fluid(block_state_id);
-                    if tick_block || tick_fluid {
-                        let absolute_y = y_base + y_in_section as i32;
-                        ticks.random_ticks.push(RandomTickSample {
-                            position: BlockPos::new(
-                                chunk_x_base + x_offset as i32,
-                                absolute_y,
-                                chunk_z_base + z_offset as i32,
-                            ),
-                            tick_block,
-                            tick_fluid,
-                        });
+                            let block_state_id = sections[i].get(x_offset, y_in_section, z_offset);
+                            let tick_block = has_random_ticks(block_state_id);
+                            let tick_fluid = has_random_ticking_fluid(block_state_id);
+                            if tick_block || tick_fluid {
+                                ticks.random_ticks.push(RandomTickSample {
+                                    position: BlockPos::new(
+                                        chunk_x_base + x_offset as i32,
+                                        y_base + y_in_section as i32,
+                                        chunk_z_base + z_offset as i32,
+                                    ),
+                                    tick_block,
+                                    tick_fluid,
+                                });
+                            }
+                        }
                     }
                 }
             }
-            drop(random_tick_sections);
-            drop(sections);
-            ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
-            ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
+        }
+
+        // 2. Process chunks with scheduled ticks
+        // We collect keys first to avoid holding DashSet shard lock while accessing loaded_chunks (deadlock risk)
+        let scheduled_chunk_pos: Vec<_> = self
+            .chunks_with_scheduled_ticks
+            .iter()
+            .map(|p| *p)
+            .collect();
+        for pos in scheduled_chunk_pos {
+            if let Some(chunk) = self.loaded_chunks.get(&pos) {
+                let chunk = chunk.value();
+                ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
+                ticks.fluid_ticks.append(&mut chunk.fluid_ticks.step_tick());
+
+                // Remove from set if it no longer has ticks
+                if !chunk.block_ticks.has_ticks() && !chunk.fluid_ticks.has_ticks() {
+                    self.chunks_with_scheduled_ticks.remove(&pos);
+                }
+            } else {
+                self.chunks_with_scheduled_ticks.remove(&pos); // Chunk unloaded
+            }
         }
 
         ticks.block_ticks.sort_unstable();
@@ -517,8 +533,17 @@ impl Level {
 
     pub fn clean_memory(&self) {
         self.chunk_watchers.retain(|_, watcher| *watcher != 0);
-        self.loaded_entity_chunks
-            .retain(|at, _| self.chunk_watchers.get(at).is_some());
+
+        let entity_chunks_to_remove: Vec<_> = self
+            .loaded_entity_chunks
+            .iter()
+            .filter(|entry| !self.chunk_watchers.contains_key(entry.key()))
+            .map(|entry| *entry.key())
+            .collect();
+
+        for pos in entity_chunks_to_remove {
+            self.loaded_entity_chunks.remove(&pos);
+        }
 
         // if the difference is too big, we can shrink the loaded chunks
         // (1024 chunks is the equivalent to a 32x32 chunks area)
@@ -713,7 +738,7 @@ impl Level {
     ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         self.get_or_fetch_chunk(chunk_coordinate, |chunk| {
-            let replaced_block_state_id = chunk.section.set_block_absolute_y(
+            let replaced_block_state_id = chunk.set_block_absolute_y(
                 relative.x as usize,
                 relative.y,
                 relative.z as usize,
@@ -823,10 +848,12 @@ impl Level {
             value: unsafe { &*std::ptr::from_ref::<Block>(block) },
         };
 
-        self.get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+        let chunk_pos = block_pos.chunk_position();
+        self.get_or_fetch_chunk(chunk_pos, |chunk| {
             chunk.block_ticks.schedule_tick(&scheduled_tick, tick_order);
         })
         .await;
+        self.chunks_with_scheduled_ticks.insert(chunk_pos);
     }
 
     pub async fn schedule_fluid_tick(
@@ -844,10 +871,12 @@ impl Level {
             value: unsafe { &*std::ptr::from_ref::<Fluid>(fluid) },
         };
 
-        self.get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+        let chunk_pos = block_pos.chunk_position();
+        self.get_or_fetch_chunk(chunk_pos, |chunk| {
             chunk.fluid_ticks.schedule_tick(&scheduled_tick, tick_order);
         })
         .await;
+        self.chunks_with_scheduled_ticks.insert(chunk_pos);
     }
 
     pub async fn is_block_tick_scheduled(
