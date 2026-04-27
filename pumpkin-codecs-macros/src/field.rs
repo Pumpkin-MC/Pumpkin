@@ -113,8 +113,8 @@ impl<'a> ParsedField<'a> {
                         return Err(duplicate_attribute_error(ident));
                     }
                     if meta.input.peek(Token![=]) {
-                        let _: Token![=] = meta.input.parse()?;
-                        default = Some(meta.input.parse()?);
+                        let expr: syn::Expr = meta.value()?.parse()?;
+                        default = Some(expr.into_token_stream());
                     } else {
                         default = None;
                         implicit_default = true;
