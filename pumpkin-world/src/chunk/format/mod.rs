@@ -113,38 +113,43 @@ impl ChunkData {
                 position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
             )));
         }
-        let section_count = chunk_data.sections.len();
-        let mut block_lights = Vec::with_capacity(section_count);
-        let mut sky_lights = Vec::with_capacity(section_count);
-        let mut block_palettes = Vec::with_capacity(section_count);
-        let mut biome_palettes = Vec::with_capacity(section_count);
+        let min_y_section = chunk_data.min_y_section;
+        let max_y_section = chunk_data
+            .sections
+            .iter()
+            .map(|s| s.y)
+            .max()
+            .unwrap_or(min_y_section as i8);
+
+        let section_count = (max_y_section as i32 - min_y_section + 1).max(0) as usize;
+        let mut block_lights = vec![LightContainer::Empty(0); section_count];
+        let mut sky_lights = vec![LightContainer::Empty(0); section_count];
+        let mut block_palettes = vec![BlockPalette::default(); section_count];
+        let mut biome_palettes = vec![BiomePalette::default(); section_count];
 
         for section in chunk_data.sections {
+            let index = (section.y as i32 - min_y_section) as usize;
+            if index >= section_count {
+                continue;
+            }
+
             // When loading light data, missing data should default to 0 (no light)
-            block_lights.push(
-                section
-                    .block_light
-                    .map_or(LightContainer::Empty(0), LightContainer::Full),
-            );
-            sky_lights.push(
-                section
-                    .sky_light
-                    .map_or(LightContainer::Empty(0), LightContainer::Full),
-            );
+            block_lights[index] = section
+                .block_light
+                .map_or(LightContainer::Empty(0), LightContainer::Full);
+            sky_lights[index] = section
+                .sky_light
+                .map_or(LightContainer::Empty(0), LightContainer::Full);
 
             // Convert NBT to Palettes
-            block_palettes.push(
-                section
-                    .block_states
-                    .map(BlockPalette::from_disk_nbt)
-                    .unwrap_or_default(),
-            );
-            biome_palettes.push(
-                section
-                    .biomes
-                    .map(BiomePalette::from_disk_nbt)
-                    .unwrap_or_default(),
-            );
+            block_palettes[index] = section
+                .block_states
+                .map(BlockPalette::from_disk_nbt)
+                .unwrap_or_default();
+            biome_palettes[index] = section
+                .biomes
+                .map(BiomePalette::from_disk_nbt)
+                .unwrap_or_default();
         }
 
         // Assemble the LightEngine
