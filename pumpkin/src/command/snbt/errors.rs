@@ -39,7 +39,7 @@ impl SnbtErrors {
         self.store(
             reader,
             || DelayedCommandSyntaxError {
-                error_type: error_type,
+                error_type,
                 translation_key: error_type.translation_key,
                 arguments: vec![],
             },
@@ -61,7 +61,7 @@ impl SnbtErrors {
         self.store(
             reader,
             || DelayedCommandSyntaxError {
-                error_type: error_type,
+                error_type,
                 translation_key: error_type.translation_key,
                 arguments: vec![arg1.into()],
             },
@@ -82,7 +82,7 @@ impl SnbtErrors {
         self.store(
             reader,
             || DelayedCommandSyntaxError {
-                error_type: error_type,
+                error_type,
                 translation_key: error_type.translation_key,
                 arguments: vec![],
             },
@@ -104,7 +104,7 @@ impl SnbtErrors {
         self.store(
             reader,
             || DelayedCommandSyntaxError {
-                error_type: error_type,
+                error_type,
                 translation_key: error_type.translation_key,
                 arguments: vec![arg1.into()],
             },

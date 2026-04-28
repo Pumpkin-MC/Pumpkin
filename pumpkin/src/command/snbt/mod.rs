@@ -176,7 +176,7 @@ impl<'r, 's> SnbtParser<'r, 's> {
 //
 // RULES
 //
-impl<'r, 's> SnbtParser<'r, 's> {
+impl SnbtParser<'_, '_> {
     fn sign(&mut self) -> Option<Sign> {
         self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
@@ -278,9 +278,8 @@ impl<'r, 's> SnbtParser<'r, 's> {
                                 suffix: IntegerSuffix::EMPTY,
                                 digits: "0".to_string(),
                             });
-                        } else {
-                            parser.store_simple_error(&LEADING_ZERO_NOT_ALLOWED);
                         }
+                        parser.store_simple_error(&LEADING_ZERO_NOT_ALLOWED);
                     }
                 }
             } else if let Some(number) = parser.decimal_numeral() {
@@ -464,18 +463,14 @@ impl<'r, 's> SnbtParser<'r, 's> {
 
             match intermediate.type_suffix {
                 None | Some(TypeSuffix::Double) => match buffer.parse::<f64>() {
-                    Err(_) => {
-                        parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal")
-                    }
+                    Err(_) => parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal"),
                     Ok(value) if value.is_finite() => {
                         return Some(NbtTag::Double(value));
                     }
                     Ok(_) => parser.store_simple_error(&INFINITY_NOT_ALLOWED),
                 },
                 Some(TypeSuffix::Float) => match buffer.parse::<f32>() {
-                    Err(error) => {
-                        parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal")
-                    }
+                    Err(error) => parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal"),
                     Ok(value) if value.is_finite() => {
                         return Some(NbtTag::Float(value));
                     }
@@ -558,7 +553,7 @@ impl<'r, 's> SnbtParser<'r, 's> {
                     if value <= 0x10FFFF {
                         Some(value)
                     } else {
-                        parser.store_dynamic_error(&INVALID_CODEPOINT, format!("U+{:08X}", value));
+                        parser.store_dynamic_error(&INVALID_CODEPOINT, format!("U+{value:08X}"));
                         None
                     }
                 }
@@ -621,7 +616,7 @@ impl<'r, 's> SnbtParser<'r, 's> {
                 Some('"') => parse_string_literal!(parser, '"'),
                 _ => {
                     parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "'", &["'", "\""]);
-                    return None;
+                    None
                 }
             }
         })
@@ -657,11 +652,11 @@ impl<'r, 's> SnbtParser<'r, 's> {
                 return None;
             }
             let arguments = parser.arguments()?;
-            if parser.reader.read() != Some(')') {
+            if parser.reader.read() == Some(')') {
+                Some(arguments)
+            } else {
                 parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ")", &[")"]);
                 None
-            } else {
-                Some(arguments)
             }
         });
 
@@ -676,7 +671,7 @@ impl<'r, 's> SnbtParser<'r, 's> {
 
         if let Some(arguments) = arguments {
             if let Some(operation) = SnbtOperations::search(&literal, arguments.len()) {
-                operation(self, arguments)
+                operation(self, &arguments[..])
             } else {
                 self.store_dynamic_error(&NO_SUCH_OPERATION, literal);
                 None
@@ -691,20 +686,14 @@ impl<'r, 's> SnbtParser<'r, 's> {
     }
 
     fn map_key(&mut self) -> Option<String> {
-        if let Some(literal) = self.quoted_string_literal() {
-            Some(literal)
-        } else if let Some(literal) = self.unquoted_string_literal() {
-            Some(literal)
-        } else {
-            None
-        }
+        self.quoted_string_literal().map_or_else(|| self.unquoted_string_literal(), Some)
     }
 }
 
 //
 // HELPER FUNCTIONS
 //
-impl<'r, 's> SnbtParser<'r, 's> {
+impl SnbtParser<'_, '_> {
     /// Records that a simple error occurred while parsing, and adds suggestions to counteract it.
     fn store_simple_error_and_suggest(
         &mut self,
@@ -712,7 +701,7 @@ impl<'r, 's> SnbtParser<'r, 's> {
         suggestions: &[&'static str],
     ) {
         self.errors
-            .simple_static(&self.reader, error_type, suggestions);
+            .simple_static(self.reader, error_type, suggestions);
     }
 
     /// Records that a dynamic error occurred while parsing, and adds suggestions to counteract it.
@@ -723,12 +712,12 @@ impl<'r, 's> SnbtParser<'r, 's> {
         suggestions: &[&'static str],
     ) {
         self.errors
-            .dynamic_static(&self.reader, error_type, arg1, suggestions);
+            .dynamic_static(self.reader, error_type, arg1, suggestions);
     }
 
     /// Records that a simple error occurred while parsing.
     fn store_simple_error(&mut self, error_type: &'static CommandErrorType<0>) {
-        self.errors.simple(&self.reader, error_type, Vec::new());
+        self.errors.simple(self.reader, error_type, Vec::new());
     }
 
     /// Records that a dynamic error occurred while parsing.
@@ -738,7 +727,7 @@ impl<'r, 's> SnbtParser<'r, 's> {
         arg1: impl Into<Cow<'static, str>>,
     ) {
         self.errors
-            .dynamic(&self.reader, error_type, arg1, Vec::new());
+            .dynamic(self.reader, error_type, arg1, Vec::new());
     }
 
     /// Utility method that parses a type suffix of an integer.
@@ -836,7 +825,7 @@ impl<'r, 's> SnbtParser<'r, 's> {
 
             let mut end = start;
             for (count, (i, c)) in slice[start..].char_indices().enumerate() {
-                if count == digits || !matches!(c, '0'..='9' | 'a'..='f' | 'A'..='F') {
+                if count == digits || !c.is_ascii_hexdigit() {
                     break;
                 }
                 end = start + i + c.len_utf8();
@@ -864,11 +853,11 @@ impl<'r, 's> SnbtParser<'r, 's> {
             if !first {
                 self.parse_or_revert(|parser| {
                     parser.reader.skip_whitespace();
-                    if parser.reader.read() != Some(',') {
+                    if parser.reader.read() == Some(',') {
+                        Some(())
+                    } else {
                         parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ",", &[","]);
                         None
-                    } else {
-                        Some(())
                     }
                 })?;
             }

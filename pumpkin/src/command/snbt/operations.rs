@@ -12,7 +12,7 @@ pub const EXPECTED_STRING_UUID: CommandErrorType<0> =
     CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_STRING_UUID);
 
 /// Represents a function that can take arguments and return a required value.
-pub type SnbtOperation = fn(parser: &mut SnbtParser, args: Vec<NbtTag>) -> Option<NbtTag>;
+pub type SnbtOperation = fn(parser: &mut SnbtParser, args: &[NbtTag]) -> Option<NbtTag>;
 
 /// A manager for SNBT operations baked at compile-time.
 pub struct SnbtOperations;
@@ -29,23 +29,23 @@ impl SnbtOperations {
         }
     }
 
-    /// Represents the `bool` function in SNBT.
+    /// Represents the `bool` unary operator in SNBT.
     ///
     /// Acts like an identity operation for booleans,
     /// and returns `true` for non-zero numbers.
-    fn bool(parser: &mut SnbtParser, args: Vec<NbtTag>) -> Option<NbtTag> {
-        if let Some(result) = NbtOps.get_bool(&args[0]).into_result() {
-            Some(NbtTag::Byte(result as i8))
-        } else {
+    fn bool(parser: &mut SnbtParser, args: &[NbtTag]) -> Option<NbtTag> {
+        NbtOps.get_bool(&args[0]).into_result().map_or_else(|| {
             parser.store_simple_error(&EXPECTED_NUMBER_OR_BOOLEAN);
             None
-        }
+        }, |result| Some(NbtTag::Byte(result as i8)))
     }
 
-    /// Represents the `uuid` function in SNBT.
-    fn uuid(parser: &mut SnbtParser, args: Vec<NbtTag>) -> Option<NbtTag> {
+    /// Represents the `uuid` unary operator in SNBT.
+    /// 
+    /// Parses a UUID in a string to an array of 4 integers.
+    fn uuid(parser: &mut SnbtParser, args: &[NbtTag]) -> Option<NbtTag> {
         if let NbtTag::String(string) = &args[0]
-            && let Some(ints) = SnbtOperations::parse_uuid(string)
+            && let Some(ints) = Self::parse_uuid(string)
         {
             Some(NbtTag::IntArray(ints))
         } else {
