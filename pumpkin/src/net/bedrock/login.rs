@@ -154,40 +154,76 @@ impl BedrockClient {
 
         self.send_frame_set(frame_set, 0x84).await;
 
-        if let Some((player, world)) = server
+        if let Some((player, _world)) = server
             .add_player(ClientPlatform::Bedrock(self.clone()), profile, None)
             .await
         {
-            world
-                .spawn_bedrock_player(&server.basic_config, player.clone(), server)
-                .await;
+            // player spawn happens after resource packs are resolved
             *self.player.lock().await = Some(player);
         }
 
         Ok(())
     }
 
-    pub async fn handle_resource_pack_response(&self, packet: SResourcePackResponse) {
-        // TODO: Add all
-        if packet.response == SResourcePackResponse::STATUS_HAVE_ALL_PACKS {
-            debug!("Bedrock: STATUS_HAVE_ALL_PACKS");
-            let mut frame_set = FrameSet::default();
+    pub async fn handle_resource_pack_response(
+        &self,
+        packet: SResourcePackResponse,
+        server: &Server,
+    ) {
+        // TODO: warn & ignore if the player is already spawned in
 
-            self.write_game_packet_to_set(
-                &CResourcePackStackPacket::new(
-                    false,
-                    VarUInt(0),
-                    CURRENT_BEDROCK_MC_VERSION.to_string(),
-                    Experiments {
-                        names_size: 0,
-                        experiments_ever_toggled: false,
-                    },
-                    false,
-                ),
-                &mut frame_set,
-            )
-            .await;
-            self.send_frame_set(frame_set, 0x84).await;
+        match packet.response {
+            SResourcePackResponse::STATUS_REFUSED => {
+                debug!("Bedrock: SResourcePackResponse::STATUS_REFUSED");
+                self.kick(
+                    DisconnectReason::ResourcePackProblem,
+                    "You must accept resource packs to join this server.".into(),
+                )
+                .await;
+            }
+            SResourcePackResponse::STATUS_SEND_PACKS => {
+                debug!("Bedrock: SResourcePackResponse::STATUS_SEND_PACKS");
+                // TODO: send packs
+            }
+            SResourcePackResponse::STATUS_HAVE_ALL_PACKS => {
+                debug!("Bedrock: SResourcePackResponse::STATUS_HAVE_ALL_PACKS");
+                let mut frame_set = FrameSet::default();
+
+                self.write_game_packet_to_set(
+                    &CResourcePackStackPacket::new(
+                        false,
+                        VarUInt(0),
+                        CURRENT_BEDROCK_MC_VERSION.to_string(),
+                        Experiments {
+                            names_size: 0,
+                            experiments_ever_toggled: false,
+                        },
+                        false,
+                    ),
+                    &mut frame_set,
+                )
+                .await;
+                self.send_frame_set(frame_set, 0x84).await;
+            }
+            SResourcePackResponse::STATUS_COMPLETED => {
+                debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");
+                if let Some(player) = &*self.player.lock().await {
+                    player
+                        .world()
+                        .spawn_bedrock_player(&server.basic_config, player.clone(), server)
+                        .await;
+                } else {
+                    tracing::error!(
+                        "Got SResourcePackResponse::STATUS_COMPLETED before authentication was completed."
+                    );
+                    self.kick(DisconnectReason::Disconnected, "".into()).await;
+                    return;
+                }
+            }
+            _ => {
+                tracing::error!("Bedrock: SResourcePackResponse bad response type");
+                self.kick(DisconnectReason::Disconnected, "".into()).await;
+            }
         }
     }
 }
