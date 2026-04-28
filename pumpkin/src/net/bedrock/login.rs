@@ -1,4 +1,3 @@
-use crate::net::authentication::MOJANG_BEDROCK_PUBLIC_KEY_BASE64;
 use crate::{
     net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
     server::Server,
@@ -17,9 +16,10 @@ use pumpkin_protocol::{
     },
     codec::var_uint::VarUInt,
 };
-use pumpkin_util::jwt::{AuthError, verify_chain};
+use pumpkin_util::jwt::AuthError;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use serde::Deserialize;
+use serde_repr::Deserialize_repr;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, warn};
@@ -27,7 +27,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum LoginError {
-    #[error("Login packet data is not a valid JSON array of tokens")]
+    #[error("Login packet data is not valid JSON")]
     InvalidTokenFormat(#[from] serde_json::Error),
     #[error("JWT chain validation failed: {0}")]
     ChainValidationFailed(#[from] AuthError),
@@ -35,17 +35,48 @@ pub enum LoginError {
     InvalidUsername,
     #[error("Could not parse UUID from validated token")]
     InvalidUuid,
+    #[error("Cannot accept self-signed token. Authentication is enforced by server config.")]
+    SelfSignedNotAllowed,
+    #[error("Got a guest/splitscreen login request. Currently unimplemented.")]
+    GuestUnimplemented,
+}
+
+#[derive(Deserialize_repr)]
+#[repr(u8)]
+enum AuthenticationType {
+    Full,
+    Guest,
+    SelfSigned,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct FullLoginPayload {
-    certificate: String,
+struct AuthPayload {
+    authentication_type: AuthenticationType,
+    token: String,
 }
 
-#[derive(Deserialize, Debug)]
-struct CertificateChainPayload {
-    chain: Vec<String>,
+/// Verifies OIDC tokens for Bedrock 1.26.10+ clients.
+fn verify_oidc_token_path(
+    server: &Server,
+    token: &str,
+    self_signed: bool,
+) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
+    if self_signed {
+        pumpkin_util::jwt::verify_oidc_token_self_signed(token)
+            .map_err(LoginError::ChainValidationFailed)
+    } else {
+        let (issuer, jwks) =
+            server
+                .bedrock_oidc_keys
+                .get()
+                .ok_or(LoginError::ChainValidationFailed(
+                    AuthError::PublicKeyBuild("OIDC keys not initialized".into()),
+                ))?;
+
+        pumpkin_util::jwt::verify_oidc_token(token, issuer, jwks)
+            .map_err(LoginError::ChainValidationFailed)
+    }
 }
 
 impl BedrockClient {
@@ -83,12 +114,26 @@ impl BedrockClient {
         packet: SLogin,
         server: &Server,
     ) -> Result<(), LoginError> {
-        let outer_payload: FullLoginPayload = serde_json::from_slice(&packet.jwt)?;
-        let inner_payload: CertificateChainPayload =
-            serde_json::from_str(&outer_payload.certificate)?;
+        let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
+        let player_data = if server.basic_config.online_mode {
+            match auth_payload.authentication_type {
+                AuthenticationType::Full => {
+                    verify_oidc_token_path(server, &auth_payload.token, false)?
+                }
+                AuthenticationType::SelfSigned => {
+                    if server.advanced_config.networking.authentication.enabled {
+                        return Err(LoginError::SelfSignedNotAllowed);
+                    }
 
-        let chain_vec: Vec<&str> = inner_payload.chain.iter().map(String::as_str).collect();
-        let player_data = verify_chain(&chain_vec, MOJANG_BEDROCK_PUBLIC_KEY_BASE64)?;
+                    verify_oidc_token_path(server, &auth_payload.token, true)?
+                }
+                AuthenticationType::Guest => {
+                    return Err(LoginError::GuestUnimplemented);
+                }
+            }
+        } else {
+            pumpkin_util::jwt::extract_oidc_token_player_claims(&auth_payload.token)?
+        };
 
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
@@ -96,13 +141,6 @@ impl BedrockClient {
             properties: Vec::new(),
             profile_actions: None,
         };
-
-        //let raw_token = unsafe { String::from_utf8_unchecked(packet.raw_token) };
-        //let raw_token: Vec<&str> = raw_token.split('.').collect();
-        // We dont care about the validation, we just want to get the data
-        //let _raw_token = unsafe {
-        //    String::from_utf8_unchecked(general_purpose::URL_SAFE_NO_PAD.decode(raw_token[1]).unwrap())
-        //};
 
         let mut frame_set = FrameSet::default();
 

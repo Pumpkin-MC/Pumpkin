@@ -278,25 +278,59 @@ impl ToTokens for BlockPropertyStruct {
             }
         });
 
-        let from_props_values = self.data.variant_mappings.iter().map(|entry| {
+        let from_props_values: Vec<_> = self
+            .data
+            .variant_mappings
+            .iter()
+            .map(|entry| {
+                let key = &entry.original_name;
+                let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
+                match &entry.property_type {
+                    PropertyType::Bool => quote! {
+                        #key => {
+                            block_props.#field_name = matches!(*value, "true")
+                        }
+                    },
+                    PropertyType::Enum { name } => {
+                        let enum_ident = Ident::new(name, Span::call_site());
+                        quote! {
+                            #key => {
+                                block_props.#field_name = #enum_ident::from_value(value)
+                            }
+                        }
+                    }
+                }
+            })
+            .collect();
+
+        let from_props_logic = if from_props_values.len() == 1 {
+            let entry = &self.data.variant_mappings[0];
             let key = &entry.original_name;
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
-            match &entry.property_type {
+            let assignment = match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    #key => {
-                        block_props.#field_name = matches!(*value, "true")
-                    }
+                    block_props.#field_name = matches!(*value, "true")
                 },
                 PropertyType::Enum { name } => {
                     let enum_ident = Ident::new(name, Span::call_site());
                     quote! {
-                        #key => {
-                            block_props.#field_name = #enum_ident::from_value(value)
-                        }
+                        block_props.#field_name = #enum_ident::from_value(value)
                     }
                 }
+            };
+            quote! {
+                if *key == #key {
+                    #assignment
+                }
             }
-        });
+        } else {
+            quote! {
+                match *key {
+                    #(#from_props_values),*,
+                    _ => {},
+                }
+            }
+        };
 
         tokens.extend(quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -371,10 +405,7 @@ impl ToTokens for BlockPropertyStruct {
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {
-                        match *key {
-                            #(#from_props_values),*,
-                            _ => {}, //
-                        }
+                        #from_props_logic
                     }
                     block_props
                 }
@@ -749,6 +780,63 @@ pub struct BlockAssets {
     pub block_entity_types: Vec<String>,
 }
 
+/// Matches a Java block state's properties against Bedrock variants to find the best matching ID.
+///
+/// # Arguments
+/// – `be_variants` – the list of Bedrock block variants with their properties for this block name
+/// – `java_props` – the Java properties to match against the Bedrock variants
+/// – `property_enums` – map of property names to their enum information
+/// – `property_mapping` – list of property mappings in reverse order
+/// – `state_index` – the state index used to decode Java properties from the property mapping
+fn match_bedrock_id(
+    be_variants: &[(u32, BTreeMap<String, String>)],
+    property_enums: &BTreeMap<String, PropertyStruct>,
+    property_mapping: &[PropertyVariantMapping],
+    state_index: u16,
+) -> u32 {
+    let mut temp_index = state_index;
+    let mut java_props_for_this_state = BTreeMap::new();
+
+    for mapping in property_mapping.iter().rev() {
+        match &mapping.property_type {
+            PropertyType::Bool => {
+                let val = temp_index % 2;
+                temp_index /= 2;
+                java_props_for_this_state.insert(
+                    mapping.original_name.clone(),
+                    if val == 0 { "true" } else { "false" }.to_string(),
+                );
+            }
+            PropertyType::Enum { name } => {
+                let enum_info = property_enums.get(name).unwrap();
+                let count = enum_info.values.len() as u16;
+                let val_idx = temp_index % count;
+                temp_index /= count;
+
+                let raw_val = &enum_info.values[val_idx as usize];
+                let val_str = if raw_val.starts_with('L') {
+                    raw_val.strip_prefix('L').unwrap().to_string()
+                } else {
+                    raw_val.clone()
+                };
+                java_props_for_this_state.insert(mapping.original_name.clone(), val_str);
+            }
+        }
+    }
+
+    be_variants
+        .iter()
+        .find(|(_, be_props)| {
+            java_props_for_this_state
+                .iter()
+                .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
+        })
+        .map_or_else(
+            || be_variants.first().map_or(1, |(id, _)| *id),
+            |(id, _)| *id,
+        )
+}
+
 /// Reads all block assets and generates the complete block registry `TokenStream`.
 pub fn build() -> TokenStream {
     let be_blocks_data = fs::read("../assets/bedrock_block_states.nbt").unwrap();
@@ -871,52 +959,11 @@ pub fn build() -> TokenStream {
                 liquid_states.push(state_id);
             }
 
-            let mut matched_be_id = 1;
-
-            if let Some(be_variants) = be_state_list {
-                let mut temp_index = i as u16;
-                let mut java_props_for_this_state = BTreeMap::new();
-
-                for mapping in property_mapping.iter().rev() {
-                    match &mapping.property_type {
-                        PropertyType::Bool => {
-                            let val = temp_index % 2;
-                            temp_index /= 2;
-                            java_props_for_this_state.insert(
-                                mapping.original_name.clone(),
-                                if val == 0 { "true" } else { "false" }.to_string(),
-                            );
-                        }
-                        PropertyType::Enum { name } => {
-                            let enum_info = property_enums.get(name).unwrap();
-                            let count = enum_info.values.len() as u16;
-                            let val_idx = temp_index % count;
-                            temp_index /= count;
-
-                            let raw_val = &enum_info.values[val_idx as usize];
-                            let val_str = if raw_val.starts_with('L') {
-                                raw_val.strip_prefix('L').unwrap().to_string()
-                            } else {
-                                raw_val.clone()
-                            };
-                            java_props_for_this_state
-                                .insert(mapping.original_name.clone(), val_str);
-                        }
-                    }
-                }
-
-                matched_be_id = be_variants
-                    .iter()
-                    .find(|(_, be_props)| {
-                        java_props_for_this_state
-                            .iter()
-                            .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
-                    })
-                    .map_or_else(
-                        || be_variants.first().map_or(1, |(id, _)| *id),
-                        |(id, _)| *id,
-                    );
-            }
+            let mut matched_be_id = if let Some(be_variants) = &be_state_list {
+                match_bedrock_id(be_variants, &property_enums, &property_mapping, i as u16)
+            } else {
+                1
+            };
 
             block_state_to_bedrock.push((state.id, matched_be_id));
             raw_id_from_state_id_array.push((state.id, id_lit.clone()));

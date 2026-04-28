@@ -78,6 +78,8 @@ pub struct Server {
 
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
+    /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
+    pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
     /// Manages server status information.
     listing: Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -233,6 +235,7 @@ impl Server {
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
+            bedrock_oidc_keys: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
@@ -313,6 +316,23 @@ impl Server {
         }
 
         info!("All worlds loaded successfully.");
+
+        if server.basic_config.online_mode {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                server_clone
+                    .bedrock_oidc_keys
+                    .get_or_init(|| async {
+                        tokio::task::block_in_place(|| {
+                            pumpkin_util::jwt::fetch_oidc_jwks().unwrap_or_else(|e| {
+                                error!("Failed to fetch Bedrock OIDC keys: {e}");
+                                (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                            })
+                        })
+                    })
+                    .await;
+            });
+        }
         server
     }
 
