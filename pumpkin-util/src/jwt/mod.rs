@@ -340,15 +340,11 @@ pub fn verify_oidc_token_self_signed(token: &str) -> Result<PlayerClaims, AuthEr
         .get("alg")
         .and_then(|v| v.as_str())
         .ok_or_else(|| AuthError::PublicKeyBuild("OIDC header missing alg".into()))?;
-
     if alg == "ES384" {
         verify_es384_signature(
-            &PublicKey::from_public_key_der(&decode_b64_url_nopad(
-                header
-                    .get("")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| AuthError::PublicKeyBuild("OIDC header missing x5u".into()))?,
-            )?)
+            &PublicKey::from_public_key_der(&decode_b64_standard(&decode_header_get_x5u(
+                header_b64,
+            )?)?)
             .map_err(|_| AuthError::PublicKeyBuild("Couldn't build public key from x5u".into()))?,
             &signing_input,
             signature_b64,
