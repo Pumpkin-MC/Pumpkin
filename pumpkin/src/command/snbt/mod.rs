@@ -1,16 +1,20 @@
 #![allow(unused)] // temporary
 
-pub mod error_entries;
+pub mod errors;
 mod markers;
+mod operations;
+
+use std::borrow::Cow;
 
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
-use crate::command::snbt::error_entries::ErrorEntries;
+use crate::command::snbt::errors::SnbtErrors;
 use crate::command::snbt::markers::{
-    Base, FloatingPointLiteral, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix,
-    TypeSuffix,
+    Base, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix, TypeSuffix,
 };
+use crate::command::snbt::operations::SnbtOperations;
 use crate::command::string_reader::StringReader;
 use pumpkin_data::translation;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 
 pub const NUMBER_PARSE_FAILURE: CommandErrorType<1> =
@@ -88,26 +92,91 @@ macro_rules! alternatives {
     };
 }
 
+/// Parses a string literal.
+macro_rules! parse_string_literal {
+    ($parser:expr, $quote:literal) => {{
+        let mut buffer = String::new();
+        let mut high_surrogate_queue: u32 = 0;
+
+        loop {
+            match $parser.reader.read() {
+                Some($quote) => break Some(buffer),
+                Some('\\') => {
+                    let i = $parser.escape_sequence()?;
+                    if let Some(c) = char::from_u32(i) {
+                        buffer.push(c);
+                    } else if high_surrogate_queue == 0 && matches!(i, 0xD800..=0xDBFF) {
+                        // High surrogate incoming.
+                        high_surrogate_queue = i;
+                    } else if high_surrogate_queue != 0 && matches!(i, 0xDC00..=0xDFFF) {
+                        // Low surrogate incoming.
+                        let high_bits = high_surrogate_queue - 0xD800;
+                        let low_bits = i - 0xDC00;
+                        let bits = high_bits << 10 | low_bits;
+                        let i = bits + 0x10000;
+                        // This really shouldn't fail though.
+                        if let Some(c) = char::from_u32(i) {
+                            buffer.push(c);
+                        } else {
+                            buffer.push('\u{FFFD}');
+                        }
+                        high_surrogate_queue = 0;
+                    } else {
+                        // Add replacement character.
+                        buffer.push('\u{FFFD}');
+                        if high_surrogate_queue != 0 {
+                            buffer.push('\u{FFFD}');
+                        }
+                        high_surrogate_queue = 0;
+                    }
+                }
+                Some(ch) => {
+                    if high_surrogate_queue != 0 {
+                        // Add replacement character.
+                        buffer.push('\u{FFFD}');
+                        high_surrogate_queue = 0;
+                    }
+                    buffer.push(ch);
+                }
+                None => {
+                    // reached EOL
+                    $parser.store_simple_error_and_suggest(
+                        &INVALID_STRING_CONTENTS,
+                        &["'", "\"", "\\"],
+                    );
+                    break None;
+                }
+            }
+        }
+    }};
+}
+
 /// A structure that parses SNBT.
 ///
 /// This stores a reader and gives the furthest error, or suggestions
 /// to fix errors that have ever occurred while parsing.
-pub struct SnbtParser<'a, E: ErrorEntries> {
-    reader: StringReader<'a>,
-    errors: SnbtErrors<E>,
+pub struct SnbtParser<'r, 's> {
+    reader: &'r mut StringReader<'s>,
+    errors: SnbtErrors,
 }
 
-/// A structure that represents
-/// errors recorded while parsing.
-pub struct SnbtErrors<E: ErrorEntries> {
-    cursor: usize,
-    entries: E,
+//
+// CREATION
+//
+impl<'r, 's> SnbtParser<'r, 's> {
+    /// Creates a new [`SnbtParser`] from a string reader.
+    fn new(reader: &'r mut StringReader<'s>) -> Self {
+        SnbtParser {
+            reader,
+            errors: SnbtErrors::default(),
+        }
+    }
 }
 
 //
 // RULES
 //
-impl<E: ErrorEntries> SnbtParser<'_, E> {
+impl<'r, 's> SnbtParser<'r, 's> {
     fn sign(&mut self) -> Option<Sign> {
         self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
@@ -121,11 +190,7 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                     Some(Sign::Minus)
                 }
                 _ => {
-                    parser.store_dynamic_error_and_suggest(
-                        &LITERAL_INCORRECT,
-                        || TextComponent::text("+"),
-                        || vec!['+'.to_string(), '-'.to_string()],
-                    );
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "+", &["+", "-"]);
                     None
                 }
             }
@@ -153,15 +218,8 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                 _ => {
                     parser.store_dynamic_error_and_suggest(
                         &LITERAL_INCORRECT,
-                        || TextComponent::text("u|U"),
-                        || {
-                            vec![
-                                'u'.to_string(),
-                                'U'.to_string(),
-                                's'.to_string(),
-                                'S'.to_string(),
-                            ]
-                        },
+                        "u|U",
+                        &["u", "U", "s", "S"],
                     );
                     None
                 }
@@ -183,11 +241,12 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
 
     /// Parses an integer literal.
     fn integer_literal(&mut self) -> Option<IntegerLiteral> {
-        todo!("bro add errors plz");
         let mut result = self.parse_or_revert(|parser| {
             let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
+            parser.reader.skip_whitespace();
             if parser.reader.peek() == Some('0') {
                 parser.reader.skip();
+                parser.reader.skip_whitespace();
                 match parser.reader.peek() {
                     Some('x' | 'X') => {
                         parser.reader.skip();
@@ -219,6 +278,8 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                                 suffix: IntegerSuffix::EMPTY,
                                 digits: "0".to_string(),
                             });
+                        } else {
+                            parser.store_simple_error(&LEADING_ZERO_NOT_ALLOWED);
                         }
                     }
                 }
@@ -229,6 +290,8 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                     suffix: IntegerSuffix::EMPTY,
                     digits: number,
                 });
+            } else {
+                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "0", &["0"]);
             }
             None
         })?;
@@ -255,15 +318,8 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                 _ => {
                     parser.store_dynamic_error_and_suggest(
                         &LITERAL_INCORRECT,
-                        || TextComponent::text("f|F"),
-                        || {
-                            vec![
-                                'f'.to_string(),
-                                'F'.to_string(),
-                                'd'.to_string(),
-                                'D'.to_string(),
-                            ]
-                        },
+                        "f|F",
+                        &["f", "F", "d", "D"],
                     );
                     None
                 }
@@ -281,17 +337,13 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
 
                 Some(Signed { sign, value })
             } else {
-                parser.store_dynamic_error_and_suggest(
-                    &LITERAL_INCORRECT,
-                    || TextComponent::text("e|E"),
-                    || vec!['e'.to_string(), 'E'.to_string()],
-                );
+                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "e|E", &["e", "E"]);
                 None
             }
         })
     }
 
-    fn float_literal(&mut self) -> Option<FloatingPointLiteral> {
+    fn float_literal(&mut self) -> Option<NbtTag> {
         struct FloatingPointIntermediate {
             whole_part: String,
             fraction_part: Option<String>,
@@ -324,8 +376,10 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
             let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
 
             let intermediate = parser.parse_or_revert(|parser| {
+                parser.reader.skip_whitespace();
                 if let Some(whole_part) = parser.parse_or_revert(Self::decimal_numeral) {
                     // Must be pathway A, C, or D.
+                    parser.reader.skip_whitespace();
                     if parser.reader.peek() == Some('.') {
                         // We choose pathway A.
                         parser.reader.skip();
@@ -341,6 +395,10 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                             type_suffix,
                         })
                     } else {
+                        // This error won't actually matter if the following part
+                        // parses successfully.
+                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ".", &["."]);
+
                         // Must be pathway C or D.
                         let exponent_part = parser.float_exponent_part();
                         let type_suffix = parser.float_type_suffix();
@@ -356,6 +414,7 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                     }
                 } else {
                     // We must parse a decimal point.
+                    parser.reader.skip_whitespace();
                     if parser.reader.peek() == Some('.') {
                         parser.reader.skip();
                         // We choose pathway B.
@@ -371,6 +430,7 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                         })
                     } else {
                         // We cannot choose a pathway.
+                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ".", &["."]);
                         None
                     }
                 }
@@ -404,20 +464,20 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
 
             match intermediate.type_suffix {
                 None | Some(TypeSuffix::Double) => match buffer.parse::<f64>() {
-                    Err(error) => parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, || {
-                        TextComponent::text(error.to_string())
-                    }),
+                    Err(_) => {
+                        parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal")
+                    }
                     Ok(value) if value.is_finite() => {
-                        return Some(FloatingPointLiteral::Double(value));
+                        return Some(NbtTag::Double(value));
                     }
                     Ok(_) => parser.store_simple_error(&INFINITY_NOT_ALLOWED),
                 },
                 Some(TypeSuffix::Float) => match buffer.parse::<f32>() {
-                    Err(error) => parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, || {
-                        TextComponent::text(error.to_string())
-                    }),
+                    Err(error) => {
+                        parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal")
+                    }
                     Ok(value) if value.is_finite() => {
-                        return Some(FloatingPointLiteral::Float(value));
+                        return Some(NbtTag::Float(value));
                     }
                     Ok(_) => parser.store_simple_error(&INFINITY_NOT_ALLOWED),
                 },
@@ -427,51 +487,258 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
             None
         })
     }
+
+    fn string_hex_2(&mut self) -> Option<String> {
+        self.hex_literal(2)
+    }
+
+    fn string_hex_4(&mut self) -> Option<String> {
+        self.hex_literal(4)
+    }
+
+    fn string_hex_8(&mut self) -> Option<String> {
+        self.hex_literal(8)
+    }
+
+    /// Parses a unicode name pattern.
+    fn string_unicode_name(&mut self) -> Option<String> {
+        self.parse_or_revert(|parser| {
+            let start = parser.reader.cursor();
+            let mut end = start;
+
+            // Since the only characters allowed are all ASCII, it should
+            // be fine to go byte by byte.
+            let bytes = parser.reader.string().as_bytes();
+
+            while end < bytes.len() {
+                let b = bytes[end];
+                if matches!(b, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b' ' | b'-') {
+                    end += 1;
+                } else {
+                    break;
+                }
+            }
+
+            if start == end {
+                parser.store_simple_error(&INVALID_CHARACTER_NAME);
+                None
+            } else {
+                parser.reader.set_cursor(end);
+                Some(parser.reader.string()[start..end].to_string())
+            }
+        })
+    }
+
+    /// Parses an escape sequence.
+    /// The returned character will be expressed as a `u32`
+    /// due to Rust's strictness on `char` of surrogate codepoints.
+    fn escape_sequence(&mut self) -> Option<u32> {
+        self.parse_or_revert(|parser| {
+            match parser.reader.read() {
+                Some('b') => Some('\x08' as u32),
+                Some('s') => Some(' ' as u32),
+                Some('t') => Some('\t' as u32),
+                Some('n') => Some('\n' as u32),
+                Some('f') => Some('\x0C' as u32),
+                Some('r') => Some('\r' as u32),
+                Some('\\') => Some('\\' as u32),
+                Some('\'') => Some('\'' as u32),
+                Some('x') => Some(
+                    u32::from_str_radix(&parser.string_hex_2()?, 16)
+                        .expect("Hexadecimal parsed should have been valid"),
+                ),
+                Some('u') => Some(
+                    u32::from_str_radix(&parser.string_hex_4()?, 16)
+                        .expect("Hexadecimal parsed should have been valid"),
+                ),
+                Some('U') => {
+                    let value = u32::from_str_radix(&parser.string_hex_8()?, 16)
+                        .expect("Hexadecimal parsed should have been valid");
+                    // Value must be <= 0x10FFFF
+                    if value <= 0x10FFFF {
+                        Some(value)
+                    } else {
+                        parser.store_dynamic_error(&INVALID_CODEPOINT, format!("U+{:08X}", value));
+                        None
+                    }
+                }
+                Some('N') => {
+                    if parser.reader.read() != Some('{') {
+                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "{", &["}"]);
+                        return None;
+                    }
+                    let string_unicode_name = parser.string_unicode_name()?;
+                    if parser.reader.read() != Some('}') {
+                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "}", &["}"]);
+                        return None;
+                    }
+                    todo!()
+                }
+                _ => {
+                    parser.store_dynamic_error_and_suggest(
+                        &LITERAL_INCORRECT,
+                        "b",
+                        &[
+                            "b", "s", "t", "n", "f", "r", "\\", "'", "\"", "x", "u", "U", "N",
+                        ],
+                    );
+                    None
+                }
+            }
+        })
+    }
+
+    /// Rule to parse any character except single and double quotes and backslashes.
+    fn plain_simple_chunk(&mut self) -> Option<String> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            let slice = parser.reader.string();
+            let start = parser.reader.cursor();
+
+            let mut end = start;
+            for (count, (i, c)) in slice[start..].char_indices().enumerate() {
+                if count == i32::MAX as usize || matches!(c, '\'' | '"' | '\\') {
+                    break;
+                }
+                end = start + i + c.len_utf8();
+            }
+
+            if start == end {
+                parser.store_simple_error(&INVALID_STRING_CONTENTS);
+                None
+            } else {
+                parser.reader.set_cursor(end);
+                Some(parser.reader.string()[start..end].to_string())
+            }
+        })
+    }
+
+    fn quoted_string_literal(&mut self) -> Option<String> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            match parser.reader.read() {
+                Some('\'') => parse_string_literal!(parser, '\''),
+                Some('"') => parse_string_literal!(parser, '"'),
+                _ => {
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "'", &["'", "\""]);
+                    return None;
+                }
+            }
+        })
+    }
+
+    fn unquoted_string_literal(&mut self) -> Option<String> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            let value = parser.reader.read_unquoted_string();
+            if value.is_empty() {
+                parser.store_simple_error(&EXPECTED_UNQUOTED_STRING);
+                None
+            } else {
+                Some(value)
+            }
+        })
+    }
+
+    fn arguments(&mut self) -> Option<Vec<NbtTag>> {
+        self.repeated_with_trailing_comma(Self::literal)
+    }
+
+    fn literal(&mut self) -> Option<NbtTag> {
+        todo!()
+    }
+
+    fn unquoted_string_or_built_in(&mut self) -> Option<NbtTag> {
+        let literal = self.unquoted_string_literal()?;
+        let arguments = self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            if parser.reader.read() != Some('(') {
+                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "(", &["("]);
+                return None;
+            }
+            let arguments = parser.arguments()?;
+            if parser.reader.read() != Some(')') {
+                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ")", &[")"]);
+                None
+            } else {
+                Some(arguments)
+            }
+        });
+
+        // This should be fine as the characters in the predicate are all ASCII.
+        if literal.is_empty() || matches!(literal.as_bytes()[0], b'0'..=b'9' | b'+' | b'-' | b'.') {
+            self.store_simple_error_and_suggest(
+                &INVALID_UNQUOTED_START,
+                SnbtOperations::BUILTIN_IDS,
+            );
+            return None;
+        }
+
+        if let Some(arguments) = arguments {
+            if let Some(operation) = SnbtOperations::search(&literal, arguments.len()) {
+                operation(self, arguments)
+            } else {
+                self.store_dynamic_error(&NO_SUCH_OPERATION, literal);
+                None
+            }
+        } else if literal.eq_ignore_ascii_case("true") {
+            Some(NbtTag::Byte(1))
+        } else if literal.eq_ignore_ascii_case("false") {
+            Some(NbtTag::Byte(0))
+        } else {
+            Some(NbtTag::String(literal))
+        }
+    }
+
+    fn map_key(&mut self) -> Option<String> {
+        if let Some(literal) = self.quoted_string_literal() {
+            Some(literal)
+        } else if let Some(literal) = self.unquoted_string_literal() {
+            Some(literal)
+        } else {
+            None
+        }
+    }
 }
 
 //
 // HELPER FUNCTIONS
 //
-impl<E: ErrorEntries> SnbtParser<'_, E> {
+impl<'r, 's> SnbtParser<'r, 's> {
     /// Records that a simple error occurred while parsing, and adds suggestions to counteract it.
     fn store_simple_error_and_suggest(
         &mut self,
         error_type: &'static CommandErrorType<0>,
-        suggestions: impl FnOnce() -> Vec<String>,
+        suggestions: &[&'static str],
     ) {
         self.errors
-            .entries
-            .simple(&self.reader, error_type, suggestions);
+            .simple_static(&self.reader, error_type, suggestions);
     }
 
     /// Records that a dynamic error occurred while parsing, and adds suggestions to counteract it.
     fn store_dynamic_error_and_suggest(
         &mut self,
         error_type: &'static CommandErrorType<1>,
-        arg1: impl FnOnce() -> TextComponent,
-        suggestions: impl FnOnce() -> Vec<String>,
+        arg1: impl Into<Cow<'static, str>>,
+        suggestions: &[&'static str],
     ) {
         self.errors
-            .entries
-            .dynamic(&self.reader, error_type, arg1, suggestions);
+            .dynamic_static(&self.reader, error_type, arg1, suggestions);
     }
 
     /// Records that a simple error occurred while parsing.
     fn store_simple_error(&mut self, error_type: &'static CommandErrorType<0>) {
-        self.errors
-            .entries
-            .simple(&self.reader, error_type, std::vec::Vec::new);
+        self.errors.simple(&self.reader, error_type, Vec::new());
     }
 
     /// Records that a dynamic error occurred while parsing.
     fn store_dynamic_error(
         &mut self,
         error_type: &'static CommandErrorType<1>,
-        arg1: impl FnOnce() -> TextComponent,
+        arg1: impl Into<Cow<'static, str>>,
     ) {
         self.errors
-            .entries
-            .dynamic(&self.reader, error_type, arg1, std::vec::Vec::new);
+            .dynamic(&self.reader, error_type, arg1, Vec::new());
     }
 
     /// Utility method that parses a type suffix of an integer.
@@ -498,19 +765,8 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                 // Only B|b is given as the error, being the first errored choice.
                 self.store_dynamic_error_and_suggest(
                     &LITERAL_INCORRECT,
-                    || TextComponent::text("B|b"),
-                    || {
-                        vec![
-                            'b'.to_string(),
-                            'B'.to_string(),
-                            's'.to_string(),
-                            'S'.to_string(),
-                            'i'.to_string(),
-                            'I'.to_string(),
-                            'l'.to_string(),
-                            'L'.to_string(),
-                        ]
-                    },
+                    "B|b",
+                    &["b", "B", "s", "S", "i", "I", "l", "L"],
                 );
                 None
             }
@@ -525,12 +781,12 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
 
             let start = parser.reader.cursor();
 
-            let mut end = slice.len();
+            let mut end = start;
             for (i, c) in slice[start..].char_indices() {
                 if !base.should_allow(c) {
-                    end = start + i;
                     break;
                 }
+                end = start + i + c.len_utf8();
             }
 
             if start == end {
@@ -540,6 +796,7 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
                 parser.store_simple_error(&UNDERSCORE_NOT_ALLOWED);
                 None
             } else {
+                parser.reader.set_cursor(end);
                 Some(parser.reader.string()[start..end].to_string())
             }
         })
@@ -568,4 +825,61 @@ impl<E: ErrorEntries> SnbtParser<'_, E> {
             }
         }
     }
+
+    /// General method to parse a specific number of hexadecimal digits greedily (no underscores are allowed).
+    fn hex_literal(&mut self, digits: usize) -> Option<String> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            let slice = parser.reader.string();
+
+            let start = parser.reader.cursor();
+
+            let mut end = start;
+            for (count, (i, c)) in slice[start..].char_indices().enumerate() {
+                if count == digits || !matches!(c, '0'..='9' | 'a'..='f' | 'A'..='F') {
+                    break;
+                }
+                end = start + i + c.len_utf8();
+            }
+
+            if end - start < digits {
+                parser.store_dynamic_error(&EXPECTED_HEX_ESCAPE, digits.to_string());
+                None
+            } else {
+                parser.reader.set_cursor(end);
+                Some(parser.reader.string()[start..end].to_string())
+            }
+        })
+    }
+
+    fn repeated_with_trailing_comma<T>(
+        &mut self,
+        rule: impl Fn(&mut Self) -> Option<T>,
+    ) -> Option<Vec<T>> {
+        let list_cursor = self.reader.cursor();
+        let mut elements = Vec::new();
+        let mut first = true;
+
+        loop {
+            if !first {
+                self.parse_or_revert(|parser| {
+                    parser.reader.skip_whitespace();
+                    if parser.reader.read() != Some(',') {
+                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ",", &[","]);
+                        None
+                    } else {
+                        Some(())
+                    }
+                })?;
+            }
+
+            elements.push(self.parse_or_revert(&rule)?);
+            first = false;
+        }
+
+        Some(elements)
+    }
 }
+
+#[cfg(test)]
+mod test {}

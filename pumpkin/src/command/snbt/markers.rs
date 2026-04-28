@@ -32,14 +32,14 @@ impl Sign {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SignedPrefix {
     None,
     Unsigned,
     Signed,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TypeSuffix {
     None,
     Byte,
@@ -50,14 +50,14 @@ pub enum TypeSuffix {
     Double,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct IntegerSuffix(pub SignedPrefix, pub TypeSuffix);
 
 impl IntegerSuffix {
     pub const EMPTY: Self = Self(SignedPrefix::None, TypeSuffix::None);
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Base {
     Binary,
     Decimal,
@@ -86,7 +86,7 @@ impl Base {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IntegerLiteral {
     pub sign: Sign,
     pub base: Base,
@@ -94,13 +94,14 @@ pub struct IntegerLiteral {
     pub suffix: IntegerSuffix,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum FloatingPointLiteral {
-    Float(f32),
-    Double(f64),
-}
-
 pub struct Signed<T> {
     pub sign: Sign,
     pub value: T,
+}
+
+/// Represents an intermediate way of representing either a scalar or surrogate.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Escaped {
+    Scalar(char),
+    Surrogate(u16),
 }
