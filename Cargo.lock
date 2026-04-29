@@ -2956,6 +2956,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-storage"
+version = "0.1.0-dev+26.1"
+dependencies = [
+ "flate2",
+ "pumpkin-data",
+ "pumpkin-nbt",
+ "pumpkin-util",
+ "serde",
+ "temp-dir",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "pumpkin-util"
 version = "0.1.0-dev+26.1"
 dependencies = [
