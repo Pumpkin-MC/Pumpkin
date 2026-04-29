@@ -33,8 +33,6 @@ use pumpkin_storage::world_info::{LevelData, WorldInfoStorage};
 use pumpkin_storage::{StorageError, VanillaStorage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::lock::LevelLocker;
-use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
@@ -121,9 +119,6 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_storage: Arc<dyn WorldInfoStorage>,
-    // Gets unlocked when dropped
-    // TODO: Make this a trait
-    _locker: Arc<Option<AnvilLevelLocker>>,
 }
 
 impl Server {
@@ -160,16 +155,6 @@ impl Server {
                 }
             }
         }
-        let locker = match AnvilLevelLocker::lock(&world_path) {
-            Ok(l) => Some(l),
-            Err(err) => {
-                warn!(
-                    "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
-                );
-                None
-            }
-        };
-
         let level_info = match level_info {
             Ok(data) => data,
             Err(err) => {
@@ -250,7 +235,6 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_storage,
             level_info,
-            _locker: Arc::new(locker),
         };
         let server = Arc::new(server);
 

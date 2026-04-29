@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{
-    BambooLeaves, BambooLikeProperties, BlockProperties, EnumVariants, Integer0To1,
-};
+use pumpkin_data::block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties};
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Block::MINECRAFT_SUPPORTS_BAMBOO;
 use pumpkin_data::tag::Taggable;
@@ -44,8 +42,8 @@ impl BlockBehaviour for BambooBlock {
                 } else if block_below == &Block::BAMBOO {
                     let props_below =
                         BambooLikeProperties::from_state_id(state_id_below, block_below);
-                    if props_below.age.to_index() > 0 {
-                        props.age = Integer0To1::L1;
+                    if props_below.age > 0 {
+                        props.age = 1;
                     }
                 } else {
                     let (block_above, state_id_above) =
@@ -119,10 +117,10 @@ impl BlockBehaviour for BambooBlock {
                 let neighbor_props =
                     BambooLikeProperties::from_state_id(args.neighbor_state_id, neighbor_block);
                 let mut props = BambooLikeProperties::from_state_id(args.state_id, args.block);
-                if neighbor_props.age.to_index() > props.age.to_index() {
+                if neighbor_props.age > props.age {
                     props.age = match props.age {
-                        Integer0To1::L0 => Integer0To1::L1,
-                        Integer0To1::L1 => Integer0To1::L0,
+                        0 => 1,
+                        _ => 0,
                     };
                     return props.to_state_id(args.block);
                 }
@@ -153,7 +151,7 @@ async fn update_leaves_and_grow(world: Arc<World>, position: &BlockPos) {
     }
 
     let mut props = BambooLikeProperties::from_state_id(state_id, block);
-    if props.stage != Integer0To1::L0 {
+    if props.stage != 0 {
         return;
     }
 
@@ -200,18 +198,11 @@ async fn update_leaves_and_grow(world: Arc<World>, position: &BlockPos) {
         }
     }
 
-    props.age = if props.age != Integer0To1::L1 && block_two_below == &Block::BAMBOO {
-        Integer0To1::L0
-    } else {
-        Integer0To1::L1
-    };
+    props.age = u8::from(!(props.age != 1 && block_two_below == &Block::BAMBOO));
 
-    props.stage =
-        if (bamboo_count < 11 || rand::rng().random::<f32>() >= 0.25) && bamboo_count != 15 {
-            Integer0To1::L0
-        } else {
-            Integer0To1::L1
-        };
+    props.stage = u8::from(
+        !((bamboo_count < 11 || rand::rng().random::<f32>() >= 0.25) && bamboo_count != 15),
+    );
 
     world
         .set_block_state(&above_pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
@@ -265,7 +256,7 @@ async fn bone_meal(world: Arc<World>, position: &BlockPos) {
         }
 
         let next_props = BambooLikeProperties::from_state_id(next_state.id, &Block::BAMBOO);
-        if next_props.stage == Integer0To1::L1 {
+        if next_props.stage == 1 {
             return;
         }
 

@@ -1,7 +1,7 @@
 use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
+    block_properties::{BlockProperties, EnumVariants, SeaPickleLikeProperties},
     tag,
 };
 use pumpkin_util::{
@@ -38,7 +38,7 @@ impl CoralFeature {
             );
         } else if random.next_f32() < 0.05 {
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
-            props.pickles = Integer1To4::from_index(random.next_bounded_i32(4) as u16); // TODO: vanilla adds + 1, but this can crash
+            props.pickles = (random.next_bounded_i32(4) as u8) + 1;
             chunk.set_block_state(
                 &pos.0,
                 BlockState::from_id(props.to_state_id(&Block::SEA_PICKLE)),
