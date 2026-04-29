@@ -9,11 +9,14 @@ use std::borrow::Cow;
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
 use crate::command::snbt::errors::SnbtErrors;
 use crate::command::snbt::markers::{
-    Base, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix, TypeSuffix,
+    ArrayPrefix, Base, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix, TypeSuffix,
 };
 use crate::command::snbt::operations::SnbtOperations;
 use crate::command::string_reader::StringReader;
+use pumpkin_codecs::{DynamicOps, Number};
 use pumpkin_data::translation;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::nbt_ops::NbtOps;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 
@@ -180,15 +183,9 @@ impl SnbtParser<'_, '_> {
     fn sign(&mut self) -> Option<Sign> {
         self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
-            match parser.reader.peek() {
-                Some('+') => {
-                    parser.reader.skip();
-                    Some(Sign::Plus)
-                }
-                Some('-') => {
-                    parser.reader.skip();
-                    Some(Sign::Minus)
-                }
+            match parser.reader.read() {
+                Some('+') => Some(Sign::Plus),
+                Some('-') => Some(Sign::Minus),
                 _ => {
                     parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "+", &["+", "-"]);
                     None
@@ -200,21 +197,15 @@ impl SnbtParser<'_, '_> {
     fn integer_suffix(&mut self) -> Option<IntegerSuffix> {
         self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
-            match parser.reader.peek() {
-                Some('u' | 'U') => {
-                    parser.reader.skip();
-                    Some(IntegerSuffix(
-                        SignedPrefix::Unsigned,
-                        parser.integer_type_suffix()?,
-                    ))
-                }
-                Some('s' | 'S') => {
-                    parser.reader.skip();
-                    Some(IntegerSuffix(
-                        SignedPrefix::Signed,
-                        parser.integer_type_suffix()?,
-                    ))
-                }
+            match parser.reader.read() {
+                Some('u' | 'U') => Some(IntegerSuffix(
+                    SignedPrefix::Unsigned,
+                    parser.integer_type_suffix()?,
+                )),
+                Some('s' | 'S') => Some(IntegerSuffix(
+                    SignedPrefix::Signed,
+                    parser.integer_type_suffix()?,
+                )),
                 _ => {
                     parser.store_dynamic_error_and_suggest(
                         &LITERAL_INCORRECT,
@@ -305,15 +296,9 @@ impl SnbtParser<'_, '_> {
     fn float_type_suffix(&mut self) -> Option<TypeSuffix> {
         self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
-            match parser.reader.peek() {
-                Some('f' | 'F') => {
-                    parser.reader.skip();
-                    Some(TypeSuffix::Float)
-                }
-                Some('d' | 'D') => {
-                    parser.reader.skip();
-                    Some(TypeSuffix::Double)
-                }
+            match parser.reader.read() {
+                Some('f' | 'F') => Some(TypeSuffix::Float),
+                Some('d' | 'D') => Some(TypeSuffix::Double),
                 _ => {
                     parser.store_dynamic_error_and_suggest(
                         &LITERAL_INCORRECT,
@@ -329,8 +314,7 @@ impl SnbtParser<'_, '_> {
     fn float_exponent_part(&mut self) -> Option<Signed<String>> {
         self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
-            if matches!(parser.reader.peek(), Some('e' | 'E')) {
-                parser.reader.skip();
+            if matches!(parser.reader.read(), Some('e' | 'E')) {
                 let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
                 let value = parser.decimal_numeral()?;
 
@@ -350,137 +334,137 @@ impl SnbtParser<'_, '_> {
             type_suffix: Option<TypeSuffix>,
         }
 
-        self.parse_or_revert(|parser| {
-            // Paths:
-            // A --- XXX.[yyy][eZZZ][suffix]
-            // B --- .yyy[eZZZ][suffix]
-            // C --- XXXeZZZ[suffix]
-            // D --- XXX[eZZZ]suffix
-            //
-            // where [a] means 'optionally parse a',
-            //       XXX is the whole part, yyy is the decimal part,
-            //       eZZZ is the float exponent path, and
-            //       suffix is float type suffix.
-            //
-            // Ruleset:
-            // If we encounter a digit, we must parse a decimal number. Then:
-            //     If we encounter a decimal point, we must choose path A.
-            //     Try to parse [eZZZ] AND [suffix]:
-            //         if [eZZZ] parses, then irrespective of [suffix], choose path D.
-            //         if ONLY [suffix] parses, choose path C.
-            //         if none parse, FAIL.
-            // If we encounter a decimal point, we must choose path B.
-            // FAIL if nether a period or a digit
+        // Paths:
+        // A --- XXX.[yyy][eZZZ][suffix]
+        // B --- .yyy[eZZZ][suffix]
+        // C --- XXXeZZZ[suffix]
+        // D --- XXX[eZZZ]suffix
+        //
+        // where [a] means 'optionally parse a',
+        //       XXX is the whole part, yyy is the decimal part,
+        //       eZZZ is the float exponent path, and
+        //       suffix is float type suffix.
+        //
+        // Ruleset:
+        // If we encounter a digit, we must parse a decimal number. Then:
+        //     If we encounter a decimal point, we must choose path A.
+        //     Try to parse [eZZZ] AND [suffix]:
+        //         if [eZZZ] parses, then irrespective of [suffix], choose path D.
+        //         if ONLY [suffix] parses, choose path C.
+        //         if none parse, FAIL.
+        // If we encounter a decimal point, we must choose path B.
+        // FAIL if nether a period or a digit
 
-            let sign = parser.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
+        let sign = self.parse_or_revert(Self::sign).unwrap_or(Sign::Plus);
 
-            let intermediate = parser.parse_or_revert(|parser| {
+        let intermediate = self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            if let Some(whole_part) = parser.parse_or_revert(Self::decimal_numeral) {
+                // Must be pathway A, C, or D.
                 parser.reader.skip_whitespace();
-                if let Some(whole_part) = parser.parse_or_revert(Self::decimal_numeral) {
-                    // Must be pathway A, C, or D.
-                    parser.reader.skip_whitespace();
-                    if parser.reader.peek() == Some('.') {
-                        // We choose pathway A.
-                        parser.reader.skip();
+                if parser.reader.peek() == Some('.') {
+                    // We choose pathway A.
+                    parser.reader.skip();
 
-                        let fraction_part = parser.decimal_numeral();
-                        let exponent_part = parser.float_exponent_part();
-                        let type_suffix = parser.float_type_suffix();
+                    let fraction_part = parser.decimal_numeral();
+                    let exponent_part = parser.float_exponent_part();
+                    let type_suffix = parser.float_type_suffix();
 
-                        Some(FloatingPointIntermediate {
-                            whole_part,
-                            fraction_part,
-                            exponent_part,
-                            type_suffix,
-                        })
-                    } else {
-                        // This error won't actually matter if the following part
-                        // parses successfully.
-                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ".", &["."]);
-
-                        // Must be pathway C or D.
-                        let exponent_part = parser.float_exponent_part();
-                        let type_suffix = parser.float_type_suffix();
-
-                        (exponent_part.is_some() || type_suffix.is_some()).then_some(
-                            FloatingPointIntermediate {
-                                whole_part,
-                                fraction_part: None,
-                                exponent_part,
-                                type_suffix,
-                            },
-                        )
-                    }
+                    Some(FloatingPointIntermediate {
+                        whole_part,
+                        fraction_part,
+                        exponent_part,
+                        type_suffix,
+                    })
                 } else {
-                    // We must parse a decimal point.
-                    parser.reader.skip_whitespace();
-                    if parser.reader.peek() == Some('.') {
-                        parser.reader.skip();
-                        // We choose pathway B.
-                        let fraction_part = parser.decimal_numeral()?;
-                        let exponent_part = parser.float_exponent_part();
-                        let type_suffix = parser.float_type_suffix();
+                    // This error won't actually matter if the following part
+                    // parses successfully.
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ".", &["."]);
 
-                        Some(FloatingPointIntermediate {
-                            whole_part: String::new(),
-                            fraction_part: Some(fraction_part),
+                    // Must be pathway C or D.
+                    let exponent_part = parser.float_exponent_part();
+                    let type_suffix = parser.float_type_suffix();
+
+                    (exponent_part.is_some() || type_suffix.is_some()).then_some(
+                        FloatingPointIntermediate {
+                            whole_part,
+                            fraction_part: None,
                             exponent_part,
                             type_suffix,
-                        })
-                    } else {
-                        // We cannot choose a pathway.
-                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ".", &["."]);
-                        None
-                    }
+                        },
+                    )
                 }
-            })?;
+            } else {
+                // We must parse a decimal point.
+                parser.reader.skip_whitespace();
+                if parser.reader.peek() == Some('.') {
+                    parser.reader.skip();
+                    // We choose pathway B.
+                    let fraction_part = parser.decimal_numeral()?;
+                    let exponent_part = parser.float_exponent_part();
+                    let type_suffix = parser.float_type_suffix();
 
-            // Parsing the float:
-            let mut buffer = String::with_capacity(
-                sign.minimum_size_parsable()
-                    + intermediate.whole_part.len()
-                    + intermediate
-                        .fraction_part
-                        .as_ref()
-                        .map_or(0, |s| 1 + s.len())
-                    + intermediate
-                        .exponent_part
-                        .as_ref()
-                        .map_or(0, |s| 1 + s.sign.minimum_size_parsable() + s.value.len()),
-            );
-
-            sign.append_minimum_str_parsable(&mut buffer);
-            Self::clean_and_append(&mut buffer, &intermediate.whole_part);
-            if let Some(fraction) = &intermediate.fraction_part {
-                buffer.push('.');
-                Self::clean_and_append(&mut buffer, fraction);
+                    Some(FloatingPointIntermediate {
+                        whole_part: String::new(),
+                        fraction_part: Some(fraction_part),
+                        exponent_part,
+                        type_suffix,
+                    })
+                } else {
+                    // We cannot choose a pathway.
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ".", &["."]);
+                    None
+                }
             }
-            if let Some(exponent) = &intermediate.exponent_part {
-                buffer.push('e');
-                exponent.sign.append_minimum_str_parsable(&mut buffer);
-                Self::clean_and_append(&mut buffer, &exponent.value);
-            }
+        })?;
 
-            match intermediate.type_suffix {
-                None | Some(TypeSuffix::Double) => match buffer.parse::<f64>() {
-                    Err(_) => parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal"),
-                    Ok(value) if value.is_finite() => {
-                        return Some(NbtTag::Double(value));
-                    }
-                    Ok(_) => parser.store_simple_error(&INFINITY_NOT_ALLOWED),
-                },
-                Some(TypeSuffix::Float) => match buffer.parse::<f32>() {
-                    Err(error) => parser.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal"),
-                    Ok(value) if value.is_finite() => {
-                        return Some(NbtTag::Float(value));
-                    }
-                    Ok(_) => parser.store_simple_error(&INFINITY_NOT_ALLOWED),
-                },
-                _ => parser.store_simple_error(&EXPECTED_FLOAT_TYPE),
-            }
+        // Parsing the float:
+        let mut buffer = String::with_capacity(
+            sign.minimum_size_parsable()
+                + intermediate.whole_part.len()
+                + intermediate
+                    .fraction_part
+                    .as_ref()
+                    .map_or(0, |s| 1 + s.len())
+                + intermediate
+                    .exponent_part
+                    .as_ref()
+                    .map_or(0, |s| 1 + s.sign.minimum_size_parsable() + s.value.len()),
+        );
 
-            None
-        })
+        sign.append_minimum_str_parsable(&mut buffer);
+        Self::clean_and_append(&mut buffer, &intermediate.whole_part);
+        if let Some(fraction) = &intermediate.fraction_part {
+            buffer.push('.');
+            Self::clean_and_append(&mut buffer, fraction);
+        }
+        if let Some(exponent) = &intermediate.exponent_part {
+            buffer.push('e');
+            exponent.sign.append_minimum_str_parsable(&mut buffer);
+            Self::clean_and_append(&mut buffer, &exponent.value);
+        }
+
+        match intermediate.type_suffix {
+            None | Some(TypeSuffix::Double) => match buffer.parse::<f64>() {
+                Err(_) => self.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal"),
+                Ok(value) if value.is_finite() => {
+                    return Some(NbtTag::Double(value));
+                }
+                Ok(_) => self.store_simple_error(&INFINITY_NOT_ALLOWED),
+            },
+            Some(TypeSuffix::Float) => match buffer.parse::<f32>() {
+                Err(error) => {
+                    self.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal")
+                }
+                Ok(value) if value.is_finite() => {
+                    return Some(NbtTag::Float(value));
+                }
+                Ok(_) => self.store_simple_error(&INFINITY_NOT_ALLOWED),
+            },
+            _ => self.store_simple_error(&EXPECTED_FLOAT_TYPE),
+        }
+
+        None
     }
 
     fn string_hex_2(&mut self) -> Option<String> {
@@ -528,84 +512,72 @@ impl SnbtParser<'_, '_> {
     /// The returned character will be expressed as a `u32`
     /// due to Rust's strictness on `char` of surrogate codepoints.
     fn escape_sequence(&mut self) -> Option<u32> {
-        self.parse_or_revert(|parser| {
-            match parser.reader.read() {
-                Some('b') => Some('\x08' as u32),
-                Some('s') => Some(' ' as u32),
-                Some('t') => Some('\t' as u32),
-                Some('n') => Some('\n' as u32),
-                Some('f') => Some('\x0C' as u32),
-                Some('r') => Some('\r' as u32),
-                Some('\\') => Some('\\' as u32),
-                Some('\'') => Some('\'' as u32),
-                Some('x') => Some(
-                    u32::from_str_radix(&parser.string_hex_2()?, 16)
-                        .expect("Hexadecimal parsed should have been valid"),
-                ),
-                Some('u') => Some(
-                    u32::from_str_radix(&parser.string_hex_4()?, 16)
-                        .expect("Hexadecimal parsed should have been valid"),
-                ),
-                Some('U') => {
-                    let value = u32::from_str_radix(&parser.string_hex_8()?, 16)
-                        .expect("Hexadecimal parsed should have been valid");
-                    // Value must be <= 0x10FFFF
-                    if value <= 0x10FFFF {
-                        Some(value)
-                    } else {
-                        parser.store_dynamic_error(&INVALID_CODEPOINT, format!("U+{value:08X}"));
-                        None
-                    }
+        enum EscapeSequenceBranch {
+            Return(char),
+            CheckValidity(u32),
+            UnicodeName(String),
+        };
+
+        let branch = self.parse_or_revert(|parser| match parser.reader.read() {
+            Some('b') => Some(EscapeSequenceBranch::Return('\x08')),
+            Some('s') => Some(EscapeSequenceBranch::Return(' ')),
+            Some('t') => Some(EscapeSequenceBranch::Return('\t')),
+            Some('n') => Some(EscapeSequenceBranch::Return('\n')),
+            Some('f') => Some(EscapeSequenceBranch::Return('\x0C')),
+            Some('r') => Some(EscapeSequenceBranch::Return('\r')),
+            Some('\\') => Some(EscapeSequenceBranch::Return('\\')),
+            Some('\'') => Some(EscapeSequenceBranch::Return('\'')),
+            Some('"') => Some(EscapeSequenceBranch::Return('"')),
+            Some('x') => Some(EscapeSequenceBranch::CheckValidity(
+                u32::from_str_radix(&parser.string_hex_2()?, 16)
+                    .expect("Hexadecimal parsed should have been valid"),
+            )),
+            Some('u') => Some(EscapeSequenceBranch::CheckValidity(
+                u32::from_str_radix(&parser.string_hex_4()?, 16)
+                    .expect("Hexadecimal parsed should have been valid"),
+            )),
+            Some('U') => Some(EscapeSequenceBranch::CheckValidity(
+                u32::from_str_radix(&parser.string_hex_8()?, 16)
+                    .expect("Hexadecimal parsed should have been valid"),
+            )),
+            Some('N') => {
+                if parser.reader.read() != Some('{') {
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "{", &["}"]);
+                    return None;
                 }
-                Some('N') => {
-                    if parser.reader.read() != Some('{') {
-                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "{", &["}"]);
-                        return None;
-                    }
-                    let string_unicode_name = parser.string_unicode_name()?;
-                    if parser.reader.read() != Some('}') {
-                        parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "}", &["}"]);
-                        return None;
-                    }
-                    todo!()
+                let string_unicode_name = parser.string_unicode_name()?;
+                if parser.reader.read() != Some('}') {
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "}", &["}"]);
+                    return None;
                 }
-                _ => {
-                    parser.store_dynamic_error_and_suggest(
-                        &LITERAL_INCORRECT,
-                        "b",
-                        &[
-                            "b", "s", "t", "n", "f", "r", "\\", "'", "\"", "x", "u", "U", "N",
-                        ],
-                    );
+                Some(EscapeSequenceBranch::UnicodeName(string_unicode_name))
+            }
+            _ => {
+                parser.store_dynamic_error_and_suggest(
+                    &LITERAL_INCORRECT,
+                    "b",
+                    &[
+                        "b", "s", "t", "n", "f", "r", "\\", "'", "\"", "x", "u", "U", "N",
+                    ],
+                );
+                None
+            }
+        })?;
+
+        match branch {
+            EscapeSequenceBranch::Return(ch) => Some(ch as u32),
+            EscapeSequenceBranch::CheckValidity(value) => {
+                // Value must be <= 0x10FFFF to be a valid codepoint.
+                // (Surrogates are handled outside this function)
+                if value <= 0x10FFFF {
+                    Some(value)
+                } else {
+                    self.store_dynamic_error(&INVALID_CODEPOINT, format!("U+{value:08X}"));
                     None
                 }
             }
-        })
-    }
-
-    /// Rule to parse any character except single and double quotes and backslashes.
-    fn plain_simple_chunk(&mut self) -> Option<String> {
-        self.parse_or_revert(|parser| {
-            parser.reader.skip_whitespace();
-            let slice = parser.reader.string();
-            let start = parser.reader.cursor();
-
-            let mut end = start;
-            for (count, (i, c)) in slice[start..].char_indices().enumerate() {
-                if count == i32::MAX as usize || matches!(c, '\'' | '"' | '\\') {
-                    break;
-                }
-                end = start + i + c.len_utf8();
-            }
-
-            if start == end {
-                parser.store_simple_error(&INVALID_STRING_CONTENTS);
-                None
-            } else {
-                parser.reader.set_cursor(end);
-                Some(parser.reader.string()[start..end].to_string())
-            }
-        })
+            EscapeSequenceBranch::UnicodeName(name) => todo!(),
+        }
     }
 
     fn quoted_string_literal(&mut self) -> Option<String> {
@@ -637,10 +609,6 @@ impl SnbtParser<'_, '_> {
 
     fn arguments(&mut self) -> Option<Vec<NbtTag>> {
         self.repeated_with_trailing_comma(Self::literal)
-    }
-
-    fn literal(&mut self) -> Option<NbtTag> {
-        todo!()
     }
 
     fn unquoted_string_or_built_in(&mut self) -> Option<NbtTag> {
@@ -686,7 +654,137 @@ impl SnbtParser<'_, '_> {
     }
 
     fn map_key(&mut self) -> Option<String> {
-        self.quoted_string_literal().map_or_else(|| self.unquoted_string_literal(), Some)
+        self.quoted_string_literal()
+            .map_or_else(|| self.unquoted_string_literal(), Some)
+    }
+
+    fn map_entry(&mut self) -> Option<(String, NbtTag)> {
+        let entry = self.parse_or_revert(|parser| {
+            let key = parser.map_key()?;
+            parser.reader.skip_whitespace();
+            if parser.reader.read() == Some(':') {
+                Some((key, parser.literal()?))
+            } else {
+                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ":", &[":"]);
+                None
+            }
+        })?;
+
+        if entry.0.is_empty() {
+            self.store_simple_error(&EMPTY_KEY);
+            None
+        } else {
+            Some(entry)
+        }
+    }
+
+    fn map_entries(&mut self) -> Option<Vec<(String, NbtTag)>> {
+        self.repeated_with_trailing_comma(Self::map_entry)
+    }
+
+    fn map_literal(&mut self) -> Option<NbtTag> {
+        let entries = self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            if parser.reader.read() != Some('{') {
+                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "{", &["}"]);
+                return None;
+            }
+            let entries = parser.map_entries()?;
+            if parser.reader.read() != Some('}') {
+                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "}", &["}"]);
+                return None;
+            }
+            Some(entries)
+        })?;
+
+        Some(NbtTag::Compound(NbtCompound {
+            child_tags: entries,
+        }))
+    }
+
+    fn list_entries(&mut self) -> Option<Vec<NbtTag>> {
+        self.repeated_with_trailing_comma(Self::literal)
+    }
+
+    fn array_prefix(&mut self) -> Option<ArrayPrefix> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            match parser.reader.read() {
+                Some('B') => Some(ArrayPrefix::Byte),
+                Some('I') => Some(ArrayPrefix::Int),
+                Some('L') => Some(ArrayPrefix::Long),
+                _ => {
+                    parser.store_dynamic_error_and_suggest(
+                        &LITERAL_INCORRECT,
+                        "B",
+                        &["B", "I", "L"],
+                    );
+                    None
+                }
+            }
+        })
+    }
+
+    fn int_array_entries(&mut self) -> Option<Vec<IntegerLiteral>> {
+        self.repeated_with_trailing_comma(Self::integer_literal)
+    }
+
+    fn list_literal(&mut self) -> Option<NbtTag> {
+        self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            if parser.reader.read() != Some('[') {
+                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "[", &["["]);
+                return None;
+            }
+
+            if let Some((prefix, literals)) = parser.parse_or_revert(|parser| {
+                let prefix = parser.array_prefix()?;
+                parser.reader.skip_whitespace();
+                if parser.reader.read() != Some(';') {
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ";", &[";"]);
+                    None
+                } else {
+                    Some((prefix, parser.int_array_entries()?))
+                }
+            }) {
+                parser.create_prefixed_array(&literals[..], prefix)
+            } else {
+                Some(NbtOps.create_list(parser.list_entries()?))
+            }
+        })
+    }
+
+    fn literal(&mut self) -> Option<NbtTag> {
+        enum Literal {
+            Tag(NbtTag),
+            Integer(IntegerLiteral),
+            String(String),
+        }
+
+        let literal = self.parse_or_revert(|parser| {
+            parser.reader.skip_whitespace();
+            match parser.reader.peek_byte() {
+                Some(b'0'..=b'9' | b'+' | b'-' | b'.') => {
+                    if let Some(result) = parser.parse_or_revert(Self::float_literal) {
+                        Some(Literal::Tag(result))
+                    } else {
+                        Some(Literal::Integer(parser.integer_literal()?))
+                    }
+                }
+                Some(b'"' | b'\'') => Some(Literal::String(parser.quoted_string_literal()?)),
+                Some(b'{') => Some(Literal::Tag(parser.map_literal()?)),
+                Some(b'[') => Some(Literal::Tag(parser.list_literal()?)),
+                _ => Some(Literal::Tag(parser.unquoted_string_or_built_in()?)),
+            }
+        })?;
+
+        Some(match literal {
+            Literal::Tag(tag) => tag,
+            Literal::Integer(int) => {
+                NbtOps.create_number(self.parse_integer_literal(&int, TypeSuffix::Int)?)
+            }
+            Literal::String(string) => NbtTag::String(string),
+        })
     }
 }
 
@@ -867,6 +965,184 @@ impl SnbtParser<'_, '_> {
         }
 
         Some(elements)
+    }
+
+    fn parse_integer_literal(
+        &mut self,
+        literal: &IntegerLiteral,
+        suffix: TypeSuffix,
+    ) -> Option<Number> {
+        let unsigned = literal.suffix.0 == SignedPrefix::Unsigned;
+        if unsigned && literal.sign == Sign::Minus {
+            self.store_simple_error(&EXPECTED_NON_NEGATIVE_NUMBER);
+            return None;
+        }
+
+        let mut number = String::with_capacity(literal.digits.len());
+        Self::clean_and_append(&mut number, &literal.digits);
+        let radix = literal.base.radix();
+
+        // The error messages vary by a lot to match the error messages in Java.
+        match (unsigned, suffix) {
+            (false, TypeSuffix::Byte) => {
+                let integer = self.parse_int_or_error(&number, radix)?;
+
+                if let Ok(byte) = integer.try_into() {
+                    Some(Number::Byte(byte))
+                } else {
+                    self.store_dynamic_error(
+                        &NUMBER_PARSE_FAILURE,
+                        format!("Value out of range. Value:\"{number}\" Radix:{radix}"),
+                    );
+                    None
+                }
+            }
+            (false, TypeSuffix::Short) => {
+                let integer = self.parse_int_or_error(&number, radix)?;
+
+                if let Ok(short) = integer.try_into() {
+                    Some(Number::Short(short))
+                } else {
+                    self.store_dynamic_error(
+                        &NUMBER_PARSE_FAILURE,
+                        format!("Value out of range. Value:\"{number}\" Radix:{radix}"),
+                    );
+                    None
+                }
+            }
+            (false, TypeSuffix::Int) => Some(Number::Int(self.parse_int_or_error(&number, radix)?)),
+            (false, TypeSuffix::Long) => {
+                if let Ok(long) = i64::from_str_radix(&number, radix) {
+                    Some(Number::Long(long))
+                } else {
+                    self.store_dynamic_error(
+                        &NUMBER_PARSE_FAILURE,
+                        format!("For input string: \"{number}\""),
+                    );
+                    None
+                }
+            }
+            (true, TypeSuffix::Byte) => {
+                let integer = self.parse_int_or_error(&number, radix)?;
+
+                if let Ok(byte) = TryInto::<u8>::try_into(integer) {
+                    Some(Number::Byte(byte as i8))
+                } else {
+                    self.store_dynamic_error(
+                        &NUMBER_PARSE_FAILURE,
+                        format!("out of range: {number}"),
+                    );
+                    None
+                }
+            }
+            (true, TypeSuffix::Short) => {
+                let integer = self.parse_int_or_error(&number, radix)?;
+
+                if let Ok(short) = TryInto::<u16>::try_into(integer) {
+                    Some(Number::Short(short as i16))
+                } else {
+                    self.store_dynamic_error(
+                        &NUMBER_PARSE_FAILURE,
+                        format!("out of range: {number}"),
+                    );
+                    None
+                }
+            }
+            (true, TypeSuffix::Int) => {
+                if let Ok(int) = u32::from_str_radix(&number, radix) {
+                    Some(Number::Int(int as i32))
+                } else {
+                    self.store_dynamic_error(
+                        &NUMBER_PARSE_FAILURE,
+                        format!("String value {number} exceeds range of unsigned int."),
+                    );
+                    None
+                }
+            }
+            (true, TypeSuffix::Long) => {
+                if let Ok(long) = u64::from_str_radix(&number, radix) {
+                    Some(Number::Long(long as i64))
+                } else {
+                    self.store_dynamic_error(
+                        &NUMBER_PARSE_FAILURE,
+                        format!("String value {number} exceeds range of unsigned long."),
+                    );
+                    None
+                }
+            }
+            _ => {
+                self.store_simple_error(&EXPECTED_INTEGER_TYPE);
+                None
+            }
+        }
+    }
+
+    fn parse_int_or_error(&mut self, number: &str, radix: u32) -> Option<i32> {
+        if let Ok(int) = i32::from_str_radix(&number, radix) {
+            Some(int)
+        } else {
+            self.store_dynamic_error(
+                &NUMBER_PARSE_FAILURE,
+                format!("For input string: \"{number}\""),
+            );
+            None
+        }
+    }
+
+    fn create_prefixed_array(
+        &mut self,
+        values: &[IntegerLiteral],
+        prefix: ArrayPrefix,
+    ) -> Option<NbtTag> {
+        match prefix {
+            ArrayPrefix::Byte => self.create_byte_array(values),
+            ArrayPrefix::Int => self.create_int_array(values),
+            ArrayPrefix::Long => self.create_long_array(values),
+        }
+    }
+
+    fn create_byte_array(&mut self, values: &[IntegerLiteral]) -> Option<NbtTag> {
+        let mut bytes = Vec::with_capacity(values.len());
+        for value in values {
+            if !matches!(value.suffix.1, TypeSuffix::None | TypeSuffix::Byte) {
+                self.store_simple_error(&INVALID_ARRAY_ELEMENT_TYPE);
+                return None;
+            }
+            bytes.push(self.parse_integer_literal(value, TypeSuffix::Byte)?.into());
+        }
+        Some(NbtTag::ByteArray(bytes.into_boxed_slice()))
+    }
+
+    fn create_int_array(&mut self, values: &[IntegerLiteral]) -> Option<NbtTag> {
+        let mut ints = Vec::with_capacity(values.len());
+        for value in values {
+            let suffix = value.suffix.1.or(TypeSuffix::Int);
+            if !matches!(
+                suffix,
+                TypeSuffix::Byte | TypeSuffix::Short | TypeSuffix::Int
+            ) {
+                self.store_simple_error(&INVALID_ARRAY_ELEMENT_TYPE);
+                return None;
+            }
+            ints.push(self.parse_integer_literal(value, suffix)?.into());
+        }
+        Some(NbtTag::IntArray(ints))
+    }
+
+    fn create_long_array(&mut self, values: &[IntegerLiteral]) -> Option<NbtTag> {
+        let mut longs = Vec::with_capacity(values.len());
+        for value in values {
+            let suffix = value.suffix.1.or(TypeSuffix::Long);
+            if !matches!(
+                suffix,
+                TypeSuffix::Byte | TypeSuffix::Short | TypeSuffix::Int | TypeSuffix::Long
+            ) {
+                self.store_simple_error(&INVALID_ARRAY_ELEMENT_TYPE);
+                return None;
+            }
+            longs.push(self.parse_integer_literal(value, suffix)?.into());
+        }
+        Some(NbtTag::LongArray(longs))
     }
 }
 

@@ -50,6 +50,19 @@ pub enum TypeSuffix {
     Double,
 }
 
+impl TypeSuffix {
+    #[must_use]
+    /// Returns the `default` suffix if this suffix is [`TypeSuffix::None`], otherwise
+    /// it returns itself.
+    pub fn or(self, default: Self) -> Self {
+        if self == TypeSuffix::None {
+            default
+        } else {
+            self
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct IntegerSuffix(pub SignedPrefix, pub TypeSuffix);
 
@@ -84,6 +97,15 @@ impl Base {
             Self::Hexadecimal => &EXPECTED_HEX_NUMERAL,
         }
     }
+
+    #[must_use]
+    pub const fn radix(self) -> u32 {
+        match self {
+            Self::Binary => 2,
+            Self::Decimal => 10,
+            Self::Hexadecimal => 16,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,9 +121,9 @@ pub struct Signed<T> {
     pub value: T,
 }
 
-/// Represents an intermediate way of representing either a scalar or surrogate.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Escaped {
-    Scalar(char),
-    Surrogate(u16),
+/// Represents a explicit prefix set for an array.
+pub enum ArrayPrefix {
+    Byte,
+    Long,
+    Int,
 }

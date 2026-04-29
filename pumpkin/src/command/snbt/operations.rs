@@ -11,7 +11,7 @@ pub const EXPECTED_NUMBER_OR_BOOLEAN: CommandErrorType<0> =
 pub const EXPECTED_STRING_UUID: CommandErrorType<0> =
     CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_STRING_UUID);
 
-/// Represents a function that can take arguments and return a required value.
+/// Represents an *operation* that can take *operands* and return a required *result*.
 pub type SnbtOperation = fn(parser: &mut SnbtParser, args: &[NbtTag]) -> Option<NbtTag>;
 
 /// A manager for SNBT operations baked at compile-time.
@@ -25,6 +25,7 @@ impl SnbtOperations {
     pub fn search(id: &str, arg_count: usize) -> Option<SnbtOperation> {
         match (id, arg_count) {
             ("bool", 1) => Some(Self::bool),
+            ("uuid", 1) => Some(Self::uuid),
             _ => None,
         }
     }
@@ -34,14 +35,17 @@ impl SnbtOperations {
     /// Acts like an identity operation for booleans,
     /// and returns `true` for non-zero numbers.
     fn bool(parser: &mut SnbtParser, args: &[NbtTag]) -> Option<NbtTag> {
-        NbtOps.get_bool(&args[0]).into_result().map_or_else(|| {
-            parser.store_simple_error(&EXPECTED_NUMBER_OR_BOOLEAN);
-            None
-        }, |result| Some(NbtTag::Byte(result as i8)))
+        NbtOps.get_bool(&args[0]).into_result().map_or_else(
+            || {
+                parser.store_simple_error(&EXPECTED_NUMBER_OR_BOOLEAN);
+                None
+            },
+            |result| Some(NbtTag::Byte(result as i8)),
+        )
     }
 
     /// Represents the `uuid` unary operator in SNBT.
-    /// 
+    ///
     /// Parses a UUID in a string to an array of 4 integers.
     fn uuid(parser: &mut SnbtParser, args: &[NbtTag]) -> Option<NbtTag> {
         if let NbtTag::String(string) = &args[0]
@@ -112,18 +116,12 @@ mod test {
             SnbtOperations::parse_uuid("3d53a-f-40-c-f69db9d37a56"),
             Some(vec![251194, 983104, 849565, -1177322922])
         );
-        assert_eq!(
-            SnbtOperations::parse_uuid("3d53a-f40-c-f69db9d37a56"),
-            None
-        );
+        assert_eq!(SnbtOperations::parse_uuid("3d53a-f40-c-f69db9d37a56"), None);
         assert_eq!(
             SnbtOperations::parse_uuid("fffffffffffffff-0-0-0-0"),
             Some(vec![-1, 0, 0, 0])
         );
-        assert_eq!(
-            SnbtOperations::parse_uuid("ffffffffffffffff-0-0-0-0"),
-            None
-        );
+        assert_eq!(SnbtOperations::parse_uuid("ffffffffffffffff-0-0-0-0"), None);
         assert_eq!(
             SnbtOperations::parse_uuid("+1-+2-+3-+4-+5"),
             Some(vec![1, 131075, 262144, 5])
