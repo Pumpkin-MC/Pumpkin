@@ -1,5 +1,10 @@
 use std::path::{Path, PathBuf};
 
+mod world_info;
+
+#[allow(unused_imports)]
+pub use world_info::{LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME};
+
 /// Filesystem-backed storage laid out the way vanilla Minecraft expects.
 ///
 /// `world_dir` is the world root (the directory containing `level.dat`,
