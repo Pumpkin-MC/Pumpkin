@@ -35,3 +35,17 @@ path = "fuzz_targets/decoder_bedrock.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "encoder_java"
+path = "fuzz_targets/encoder_java.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "encoder_bedrock"
+path = "fuzz_targets/encoder_bedrock.rs"
+test = false
+doc = false
+bench = false

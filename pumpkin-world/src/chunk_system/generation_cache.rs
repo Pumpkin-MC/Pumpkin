@@ -194,7 +194,7 @@ impl GenerationCache for Cache {
         }
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
-                data.section.set_block_absolute_y(
+                data.set_block_absolute_y(
                     (pos.x & 15) as usize,
                     pos.y,
                     (pos.z & 15) as usize,
@@ -360,8 +360,6 @@ impl Cache {
                 self.chunks[mid].get_proto_chunk_mut().set_structure_starts(
                     random_config,
                     settings,
-                    &dimension,
-                    noise_router,
                     global_structure_cache,
                 );
             }

@@ -15,6 +15,7 @@ use crate::{
         args::ConsumedArgs,
         tree::{CommandTree, builder::NonLeafNodeBuilder},
     },
+    entity::EntityBase,
     entity::player::Player,
     net::ClientPlatform,
     plugin::{
@@ -33,9 +34,13 @@ pub struct WasmResource<T> {
 pub type ServerResource = WasmResource<Arc<Server>>;
 pub type ContextResource = WasmResource<Arc<Context>>;
 pub type PlayerResource = WasmResource<Arc<Player>>;
+pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type WorldResource = WasmResource<Arc<World>>;
 pub type ScoreboardResource = WasmResource<Arc<World>>;
 pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
+pub type BossBarResource = WasmResource<
+    Arc<Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>>,
+>;
 pub type TextComponentResource = WasmResource<TextComponent>;
 pub type CommandResource = WasmResource<CommandTree>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
@@ -222,6 +227,14 @@ impl PluginHostState {
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
+    pub fn add_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(EntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
     pub fn add_world<T>(
         &mut self,
         provider: Arc<World>,
@@ -243,6 +256,16 @@ impl PluginHostState {
         provider: Arc<Mutex<PluginGui>>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(GuiResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_boss_bar<T>(
+        &mut self,
+        provider: Arc<
+            Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>,
+        >,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(BossBarResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

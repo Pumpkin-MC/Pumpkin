@@ -7,7 +7,6 @@ use crate::chunk::io::LoadedData;
 use crate::chunk::io::LoadedData::Loaded;
 use crate::level::Level;
 use crossfire::compat::AsyncRx;
-use itertools::Itertools;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
 use pumpkin_data::chunk_gen_settings::GenerationSettings;
@@ -64,24 +63,31 @@ pub async fn io_read_work(
     debug!("io read thread start");
     let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
     let dimension = &level.world_gen.dimension;
-    let (t_send, mut t_recv) = tokio::sync::mpsc::channel(16);
 
     // Cleaner loop and async recv
     while let Ok(batch) = recv.recv().await {
         for pos in &batch {
             // Lock handling
-            tokio::task::block_in_place(|| {
-                let mut data = lock.0.lock().unwrap();
-                while data.contains_key(pos) {
-                    data = lock.1.wait(data).unwrap();
+            loop {
+                let notified = lock.1.notified();
+                if !lock.0.lock().unwrap().contains_key(pos) {
+                    break;
                 }
-            });
+                notified.await;
+            }
         }
 
-        level
-            .chunk_saver
-            .fetch_chunks(&level.level_folder, &batch, t_send.clone())
-            .await;
+        let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1000);
+
+        let level_clone = level.clone();
+        let batch_clone = batch.clone();
+
+        let fetch_task = tokio::spawn(async move {
+            level_clone
+                .chunk_saver
+                .fetch_chunks(&level_clone.level_folder, &batch_clone, t_send)
+                .await;
+        });
 
         for _ in 0..batch.len() {
             let data = match t_recv.recv().await {
@@ -169,6 +175,7 @@ pub async fn io_read_work(
                 }
             }
         }
+        let _ = fetch_task.await;
     }
     debug!("io read thread stop");
 }
@@ -182,7 +189,10 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
         };
         // debug!("io write thread receive chunks size {}", data.len());
         let mut vec = Vec::with_capacity(data.len());
+        let mut positions = Vec::with_capacity(data.len());
         for (pos, chunk) in data {
+            positions.push(pos);
+
             match chunk {
                 Chunk::Level(chunk) => vec.push((pos, chunk)),
                 Chunk::Proto(chunk) => {
@@ -193,7 +203,6 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                 }
             }
         }
-        let pos = vec.iter().map(|(pos, _)| *pos).collect_vec();
         if let Err(e) = level
             .chunk_saver
             .save_chunks(&level.level_folder, vec)
@@ -202,7 +211,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
             error!("Failed to save chunks: {:?}", e);
         }
 
-        for i in pos {
+        for i in positions {
             let mut data = lock.0.lock().unwrap();
             match data.entry(i) {
                 Entry::Occupied(mut entry) => {
@@ -210,7 +219,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                     if *rc == 1 {
                         entry.remove();
                         drop(data);
-                        lock.1.notify_all();
+                        lock.1.notify_waiters();
                     } else {
                         *rc -= 1;
                     }

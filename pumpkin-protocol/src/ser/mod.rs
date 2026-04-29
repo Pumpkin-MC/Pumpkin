@@ -1,4 +1,5 @@
 use core::str;
+use serde::Serialize;
 use std::io::{Read, Write};
 
 use crate::{
@@ -154,13 +155,31 @@ impl<R: Read> NetworkReadExt for R {
     }
 
     fn get_string_bounded(&mut self, bound: usize) -> Result<String, ReadingError> {
-        let size = self.get_var_uint()?.0 as usize;
-        if size > bound {
-            return Err(ReadingError::TooLarge("string".to_string()));
+        let bytes_len = self.get_var_uint()?.0 as usize;
+
+        // We treat `bound` as the maximum number of Java `char`s allowed.
+
+        // First, check if there are too many bytes to even fit in the UTF-16 bound.
+        // 1 Java `char` takes a maximum of 3 bytes in UTF-8:
+        let maximum_utf8_bytes = bound.saturating_mul(3);
+        if bytes_len > maximum_utf8_bytes {
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many bytes ({bytes_len} > {maximum_utf8_bytes})"
+            )));
         }
 
-        let data = self.read_boxed_slice(size)?;
-        String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))
+        let data = self.read_boxed_slice(bytes_len)?;
+        let string =
+            String::from_utf8(data.into()).map_err(|e| ReadingError::Message(e.to_string()))?;
+
+        // Next, if we're able to find the (bound + 1)th UTF-16 character, the string is too big.
+        if string.encode_utf16().nth(bound).is_some() {
+            return Err(ReadingError::TooLarge(format!(
+                "string has too many UTF-16 characters (more than the maximum limit {bound})"
+            )));
+        }
+
+        Ok(string)
     }
 
     fn get_string(&mut self) -> Result<String, ReadingError> {
@@ -265,9 +284,7 @@ pub trait NetworkWriteExt {
         list: &[G],
         writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
-        self.write_var_int(&list.len().try_into().map_err(|_| {
-            WritingError::Message(format!("{} isn't representable as a VarInt", list.len()))
-        })?)?;
+        self.write_var_int(&(list.len() as i32).into())?;
 
         for data in list {
             writer(self, data)?;
@@ -275,6 +292,10 @@ pub trait NetworkWriteExt {
 
         Ok(())
     }
+
+    fn write_serialize<G: Serialize>(&mut self, data: &G) -> Result<(), WritingError>
+    where
+        Self: Sized;
 
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError>;
 }
@@ -380,11 +401,17 @@ impl<W: Write> NetworkWriteExt for W {
         writer: impl Fn(&mut Self, &G) -> Result<(), WritingError>,
     ) -> Result<(), WritingError> {
         self.write_var_int(&(list.len() as i32).into())?;
+
         for data in list {
             writer(self, data)?;
         }
 
         Ok(())
+    }
+
+    fn write_serialize<G: Serialize>(&mut self, data: &G) -> Result<(), WritingError> {
+        let mut serializer = serializer::Serializer::new(self);
+        data.serialize(&mut serializer)
     }
 
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {

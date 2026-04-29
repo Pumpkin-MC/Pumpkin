@@ -75,9 +75,9 @@ impl Goal for MeleeAttackGoal {
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async {
-            let target = mob.get_mob_entity().target.lock().await;
+            let target = mob.get_mob_entity().target.lock().await.clone();
 
-            let Some(target) = target.as_ref() else {
+            let Some(target) = target else {
                 return false;
             };
             if !target.get_entity().is_alive() {
@@ -85,7 +85,12 @@ impl Goal for MeleeAttackGoal {
             }
 
             if !self.pause_when_mob_idle {
-                return !mob.get_mob_entity().navigator.lock().await.is_idle();
+                let is_idle = mob
+                    .get_mob_entity()
+                    .navigator
+                    .try_lock()
+                    .is_ok_and(|navigator| navigator.is_idle());
+                return !is_idle;
             }
 
             let is_valid_target = !target
@@ -104,7 +109,8 @@ impl Goal for MeleeAttackGoal {
         Box::pin(async {
             // TODO: add missing fields like mob attacking to true and correct Navigation methods
 
-            if let Some(target) = mob.get_mob_entity().target.lock().await.as_ref() {
+            let target = mob.get_mob_entity().target.lock().await.clone();
+            if let Some(target) = target {
                 let mut navigator = mob.get_mob_entity().navigator.lock().await;
                 let target_pos = target.get_entity().pos.load();
                 navigator.set_progress(NavigatorGoal {
@@ -144,8 +150,8 @@ impl Goal for MeleeAttackGoal {
 
     fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            let target_lock = mob.get_mob_entity().target.lock().await;
-            let Some(target) = target_lock.as_ref() else {
+            let target = mob.get_mob_entity().target.lock().await.clone();
+            let Some(target) = target else {
                 return;
             };
 
@@ -153,7 +159,7 @@ impl Goal for MeleeAttackGoal {
                 .look_control
                 .lock()
                 .await
-                .look_at_entity_with_range(target, 30.0, 30.0);
+                .look_at_entity_with_range(&target, 30.0, 30.0);
 
             self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
 

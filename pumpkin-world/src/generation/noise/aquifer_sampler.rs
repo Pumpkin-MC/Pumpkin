@@ -45,40 +45,6 @@ impl FluidLevel {
     }
 }
 
-#[enum_dispatch(FluidLevelSamplerImpl)]
-pub enum FluidLevelSampler {
-    Static(StaticFluidLevelSampler),
-    Chunk(StandardChunkFluidLevelSampler),
-}
-
-impl FluidLevelSamplerImpl for FluidLevelSampler {
-    fn get_fluid_level(&self, x: i32, y: i32, z: i32) -> &FluidLevel {
-        match self {
-            Self::Static(sampler) => sampler.get_fluid_level(x, y, z),
-            Self::Chunk(sampler) => sampler.get_fluid_level(x, y, z),
-        }
-    }
-}
-
-pub struct StaticFluidLevelSampler {
-    fluid_level: FluidLevel,
-}
-
-impl StaticFluidLevelSampler {
-    #[must_use]
-    pub const fn new(y: i32, block: &'static Block) -> Self {
-        Self {
-            fluid_level: FluidLevel::new(y, block),
-        }
-    }
-}
-
-impl FluidLevelSamplerImpl for StaticFluidLevelSampler {
-    fn get_fluid_level(&self, _x: i32, _y: i32, _z: i32) -> &FluidLevel {
-        &self.fluid_level
-    }
-}
-
 pub trait FluidLevelSamplerImpl {
     fn get_fluid_level(&self, x: i32, y: i32, z: i32) -> &FluidLevel;
 }
@@ -108,7 +74,7 @@ macro_rules! local_y {
 }
 
 pub struct WorldAquiferSampler {
-    fluid_level_sampler: FluidLevelSampler,
+    fluid_level_sampler: StandardChunkFluidLevelSampler,
     start_x: i32,
     start_y: i32,
     start_z: i32,
@@ -142,7 +108,7 @@ impl WorldAquiferSampler {
         random_deriver: &XoroshiroSplitter,
         minimum_y: i8,
         height: u16,
-        fluid_level: FluidLevelSampler,
+        fluid_level: StandardChunkFluidLevelSampler,
     ) -> Self {
         let start_x = local_xz!(chunk_pos::start_block_x(chunk_x)) - 1;
         let end_x = local_xz!(chunk_pos::end_block_x(chunk_x)) + 1;
@@ -312,7 +278,7 @@ impl WorldAquiferSampler {
     }
 
     fn get_fluid_level(
-        fluid_level_sampler: &FluidLevelSampler,
+        fluid_level_sampler: &StandardChunkFluidLevelSampler,
         block_x: i32,
         block_y: i32,
         block_z: i32,
@@ -646,12 +612,12 @@ impl AquiferSamplerImpl for WorldAquiferSampler {
 }
 
 pub struct SeaLevelAquiferSampler {
-    level_sampler: FluidLevelSampler,
+    level_sampler: StandardChunkFluidLevelSampler,
 }
 
 impl SeaLevelAquiferSampler {
     #[must_use]
-    pub const fn new(level_sampler: FluidLevelSampler) -> Self {
+    pub const fn new(level_sampler: StandardChunkFluidLevelSampler) -> Self {
         Self { level_sampler }
     }
 }
@@ -720,7 +686,7 @@ mod random_positions_and_hypot {
         },
     };
 
-    use super::{AquiferSampler, FluidLevel, FluidLevelSampler, WorldAquiferSampler};
+    use super::{AquiferSampler, FluidLevel, WorldAquiferSampler};
 
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
@@ -743,10 +709,10 @@ mod random_positions_and_hypot {
         let chunk_x = 7;
         let chunk_z = 4;
 
-        let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
+        let sampler = StandardChunkFluidLevelSampler::new(
             FluidLevel::new(63, &WATER_BLOCK),
             FluidLevel::new(-54, &LAVA_BLOCK),
-        ));
+        );
         const CHUNK_WIDTH: usize = 16;
         let noise = ChunkNoiseGenerator::new(
             &base_router.noise,

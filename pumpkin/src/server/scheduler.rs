@@ -143,9 +143,7 @@ impl TaskScheduler {
             tokio::spawn(async move {
                 let mut store = plugin.store.lock().await;
                 match plugin.plugin_instance {
-                    crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1_0(
-                        ref instance,
-                    ) => {
+                    crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref instance) => {
                         if let Ok(server_res) = store.data_mut().add_server(server_clone) {
                             let _ = instance
                                 .call_handle_task(&mut *store, handler_id, server_res)

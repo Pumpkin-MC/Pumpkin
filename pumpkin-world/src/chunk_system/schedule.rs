@@ -19,7 +19,7 @@ use std::cmp::{Ordering, max};
 use std::collections::{BinaryHeap, HashMap};
 use std::mem::swap;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, trace, warn};
@@ -99,7 +99,10 @@ impl GenerationSchedule {
 
         let (send_gen, recv_gen) = crossfire::compat::mpmc::bounded_blocking(gen_thread_count + 5);
 
-        let io_lock = Arc::new((Mutex::new(HashMapType::default()), Condvar::new()));
+        let io_lock = Arc::new((
+            Mutex::new(HashMapType::default()),
+            tokio::sync::Notify::new(),
+        ));
 
         for _ in 0..io_read_thread_count {
             level.chunk_system_tasks.spawn(io_read_work(
@@ -134,7 +137,10 @@ impl GenerationSchedule {
         }
 
         let max_in_flight = if gen_pool.is_some() {
-            (num_cpus::get() * 4) as u16
+            (thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+                * 4) as u16
         } else {
             gen_thread_count as u16
         };

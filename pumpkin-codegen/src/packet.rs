@@ -24,6 +24,7 @@ pub struct Packets {
 /// all `serverbound`/`clientbound` packet ID constants.
 pub(crate) fn build() -> TokenStream {
     let assets = [
+        (MinecraftVersion::V_1_20_5, "1_20_5_packets.json"),
         (MinecraftVersion::V_1_21, "1_21_packets.json"),
         (MinecraftVersion::V_1_21_2, "1_21_2_packets.json"),
         (MinecraftVersion::V_1_21_4, "1_21_4_packets.json"),
@@ -57,7 +58,7 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::version::MinecraftVersion;
 
         pub const CURRENT_MC_VERSION: MinecraftVersion = #LATEST_VERSION;
-        pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_21;
+        pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_20_5;
 
         #packet_id_struct
 

@@ -74,9 +74,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Mobs (W.I.P)
   - [x] Animals (W.I.P)
   - [Entity AI](https://github.com/Pumpkin-MC/Pumpkin/issues/1406)
-  - [ ] Boss
+  - [x] Boss
   - [ ] Villagers
-  - [ ] Mobs Inventory
   - [X] Entity Saving
 - Server
   - [Plugins](https://github.com/Pumpkin-MC/Pumpkin/issues/1407)

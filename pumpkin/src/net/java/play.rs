@@ -215,9 +215,11 @@ impl JavaClient {
                 *awaiting_teleport = None;
                 drop(awaiting_teleport);
             } else {
+                drop(awaiting_teleport);
                 self.kick(TextComponent::text("Wrong teleport id")).await;
             }
         } else {
+            drop(awaiting_teleport);
             self.kick(TextComponent::text(
                 "Send Teleport confirm, but we did not teleport",
             ))
@@ -1005,8 +1007,16 @@ impl JavaClient {
             })
             .count();
 
-        let screen_handler_arc = player.current_screen_handler.lock().await.clone();
-        let mut handler = screen_handler_arc.lock().await;
+        let (grid_width, crafting_inv) = {
+            let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+            let handler = screen_handler_arc.lock().await;
+            let grid_width: usize = match handler.window_type() {
+                Some(WindowType::Crafting) => 3,
+                None => 2, // player inventory 2x2
+                _ => return,
+            };
+            (grid_width, handler.get_behaviour().slots[1].get_inventory())
+        };
 
         if target_id < crafting_display_count {
             // Crafting recipe
@@ -1025,11 +1035,6 @@ impl JavaClient {
             });
             let Some(recipe) = recipe else { return };
 
-            let grid_width: usize = match handler.window_type() {
-                Some(WindowType::Crafting) => 3,
-                None => 2, // player inventory 2x2
-                _ => return,
-            };
             let grid_size = grid_width * grid_width;
 
             // Map each grid position to its required ingredient (None = empty/unused).
@@ -1060,8 +1065,6 @@ impl JavaClient {
                 }
                 _ => return,
             }
-
-            let crafting_inv = handler.get_behaviour().slots[1].get_inventory();
 
             // Check if this exact recipe is already placed (determines stacking vs fresh fill).
             let recipe_matches = {
@@ -1124,7 +1127,8 @@ impl JavaClient {
             };
 
             if amount_to_craft == 0 {
-                handler.send_content_updates().await;
+                let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+                screen_handler_arc.lock().await.send_content_updates().await;
                 return;
             }
 
@@ -1143,10 +1147,16 @@ impl JavaClient {
                 return;
             };
 
-            match handler.window_type() {
-                Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker) => {}
-                _ => return,
-            }
+            let furnace_inv = {
+                let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+                let handler = screen_handler_arc.lock().await;
+                match handler.window_type() {
+                    Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker) => {
+                        handler.get_behaviour().slots[0].get_inventory()
+                    }
+                    _ => return,
+                }
+            };
 
             let ingredient = match recipe {
                 CookingRecipeType::Smelting(r)
@@ -1154,8 +1164,6 @@ impl JavaClient {
                 | CookingRecipeType::Smoking(r)
                 | CookingRecipeType::CampfireCooking(r) => &r.ingredient,
             };
-
-            let furnace_inv = handler.get_behaviour().slots[0].get_inventory();
 
             // Check if ingredient already matches (for stacking).
             let (recipe_matches, current_count) = {
@@ -1188,7 +1196,8 @@ impl JavaClient {
             }
         }
 
-        handler.send_content_updates().await;
+        let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+        screen_handler_arc.lock().await.send_content_updates().await;
     }
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
         player.update_last_action_time();
@@ -1196,9 +1205,6 @@ impl JavaClient {
             self.kick(TextComponent::text("Invalid hand")).await;
             return;
         };
-
-        let inventory = player.inventory();
-        let item = inventory.held_item();
 
         let (yaw, pitch) = player.rotation();
         let hit_result = player
@@ -1219,18 +1225,11 @@ impl JavaClient {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickBlock,
-                &item,
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
             )
         } else {
-            PlayerInteractEvent::new(
-                player,
-                InteractAction::LeftClickAir,
-                &item,
-                &Block::AIR,
-                None,
-            )
+            PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None)
         };
 
         let server = player.world().server.upgrade().unwrap();
@@ -1319,7 +1318,8 @@ impl JavaClient {
         chat_message: &SChatMessage,
     ) -> Result<(), ChatError> {
         // Check for oversized messages
-        if chat_message.message.len() > 256 {
+        // If we're able to find the 257th UTF-16 character, the message is too big.
+        if chat_message.message.encode_utf16().nth(256).is_some() {
             return Err(ChatError::OversizedMessage);
         }
         // Check for illegal characters
@@ -1555,15 +1555,17 @@ impl JavaClient {
                 }
                 player.world().clone().respawn_player(player, false).await;
 
-                let screen_handler = player.current_screen_handler.lock().await;
-                let mut screen_handler = screen_handler.lock().await;
-                screen_handler.sync_state().await;
-                drop(screen_handler);
+                {
+                    let screen_handler = player.current_screen_handler.lock().await;
+                    let mut screen_handler = screen_handler.lock().await;
+                    screen_handler.sync_state().await;
+                };
 
                 // Restore abilities based on gamemode after respawn
-                let mut abilities = player.abilities.lock().await;
-                abilities.set_for_gamemode(player.gamemode.load());
-                drop(abilities);
+                {
+                    let mut abilities = player.abilities.lock().await;
+                    abilities.set_for_gamemode(player.gamemode.load());
+                };
                 player.send_abilities_update().await;
             }
             1 => {
@@ -1976,19 +1978,22 @@ impl JavaClient {
         player_abilities: SPlayerAbilities,
         server: &Server,
     ) {
-        let mut abilities = player.abilities.lock().await;
+        let (flying, allow_flying) = {
+            let abilities = player.abilities.lock().await;
+            (abilities.flying, abilities.allow_flying)
+        };
 
         // Set the flying ability
-        let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
-        if abilities.flying != flying {
+        let new_flying = player_abilities.flags & 0x02 != 0 && allow_flying;
+        if flying != new_flying {
             send_cancellable! {{
                 server;
-                PlayerToggleFlightEvent::new(player.clone(), flying);
+                PlayerToggleFlightEvent::new(player.clone(), new_flying);
                 'after: {
                     if event.is_flying {
                         player.living_entity.fall_distance.store(0.0);
                     }
-                    abilities.flying = event.is_flying;
+                    player.abilities.lock().await.flying = event.is_flying;
                 }
                 'cancelled: {
                     player.send_abilities_update().await;
@@ -2263,18 +2268,11 @@ impl JavaClient {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
-                &item_in_hand,
                 player.world().get_block(&hit_pos).await,
                 Some(hit_pos),
             )
         } else {
-            PlayerInteractEvent::new(
-                player,
-                InteractAction::RightClickAir,
-                &item_in_hand,
-                &Block::AIR,
-                None,
-            )
+            PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None)
         };
         self.prepare_hand_item_for_use(player, hand, &item_in_hand)
             .await;

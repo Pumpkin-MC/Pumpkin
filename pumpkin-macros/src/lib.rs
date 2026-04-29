@@ -596,7 +596,7 @@ fn is_vec(ty: &Type) -> bool {
             .path
             .segments
             .iter()
-            .last()
+            .next_back()
             .is_some_and(|segment| segment.ident == "Vec")
     } else {
         false

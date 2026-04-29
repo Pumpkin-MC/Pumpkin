@@ -37,7 +37,7 @@ pub struct ChunkFileManager<S: ChunkSerializer<WriteBackend = PathBuf>> {
     // - Guarantee that there is only one serializer per file at a time
     // - Lazily load files as to support point 1
     // - Allow for ease of usage (able to return the serializer from a function)
-    file_locks: RwLock<BTreeMap<PathBuf, ChunkSerializerLazyLoader<S>>>,
+    file_locks: RwLock<BTreeMap<PathBuf, Arc<ChunkSerializerLazyLoader<S>>>>,
     watchers: RwLock<BTreeMap<PathBuf, usize>>,
 
     chunk_config: S::ChunkConfig,
@@ -62,8 +62,11 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkSerializerLazyLoader<S> {
 
     /// We can only remove this entry from the map if we are the only ones with a reference to it
     /// IMPORTANT: This must be called within the write lock of the parent map
-    fn can_remove(&self) -> bool {
-        match self.internal.get() {
+    fn can_remove(loader: &Arc<Self>) -> bool {
+        if Arc::strong_count(loader) > 1 {
+            return false;
+        }
+        match loader.internal.get() {
             Some(arc) => {
                 // A strong count of 1 means it's only in the map
                 Arc::strong_count(arc) == 1
@@ -128,16 +131,17 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf>> ChunkFileManager<S> {
 
         // We use a lazy loader here to quickly make an insertion into the map without holding the
         // lock for too long starving other threads
-        if let Some(serializer_loader) = self.file_locks.read().await.get(path) {
+        let loader = self.file_locks.read().await.get(path).cloned();
+        if let Some(serializer_loader) = loader {
             serializer_loader.get().await
         } else {
-            self.file_locks
-                .write()
-                .await
+            let mut locks = self.file_locks.write().await;
+            let loader = locks
                 .entry(path.into())
-                .or_insert_with(|| ChunkSerializerLazyLoader::new(path.into()))
-                .get()
-                .await
+                .or_insert_with(|| Arc::new(ChunkSerializerLazyLoader::new(path.into())))
+                .clone();
+            drop(locks);
+            loader.get().await
         }
     }
 }
@@ -320,7 +324,8 @@ where
 
                             // We only need to update the chunk if it is dirty
                             if chunk_is_dirty {
-                                chunk_serializer.write().await.update_chunk(&*chunk, &self.chunk_config).await?;
+                                let mut writer = chunk_serializer.write().await;
+                                writer.update_chunk(&*chunk, &self.chunk_config).await?;
                             }
                             Ok::<(), ChunkWritingError>(())
                         }
@@ -329,12 +334,10 @@ where
                     futures::future::try_join_all(update_tasks).await?;
                     trace!("Updated data for file {}", path.display());
 
-                    let is_watched = self
-                        .watchers
-                        .read()
-                        .await
-                        .get(&path)
-                        .is_some_and(|count| count != &0);
+                    let is_watched = {
+                        let watchers = self.watchers.read().await;
+                        watchers.get(&path).is_some_and(|count| count != &0)
+                    };
 
                     if !is_watched {
                         // With the modification done, we can drop the write lock but keep the read lock
@@ -352,18 +355,16 @@ where
                         // Decrement strong count
                         drop(chunk_serializer);
 
+                        let should_remove = {
+                            let watchers = self.watchers.read().await;
+                            watchers.get(&path).is_none_or(|count| count == &0)
+                        };
 
-                        if self
-                            .watchers
-                            .read()
-                            .await
-                            .get(&path)
-                            .is_none_or(|count| count == &0)
-                        {
+                        if should_remove {
                             let mut locks = self.file_locks.write().await;
 
                             let can_remove = if let Some(loader) = locks.get(&path) {
-                                loader.can_remove()
+                                ChunkSerializerLazyLoader::can_remove(loader)
                             } else {
                                 true
                             };
