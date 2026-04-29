@@ -1,7 +1,7 @@
 interface event {
     use common.{block-position, game-mode, hand, item-stack, position, click-type};
     use player.{player};
-    use packet.{raw-packet-event};
+    use packet.{packet-handle};
     use text.{text-component};
     use %world.{%world};
 
@@ -270,7 +270,7 @@ interface event {
 
     record raw-packet-event-data {
         player: option<player>,
-        packet: raw-packet-event,
+        packet: packet-handle,
     }
 
     enum event-type {

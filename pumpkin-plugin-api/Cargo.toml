@@ -17,3 +17,6 @@ serde_json = { workspace = true }
 
 [package.metadata.component]
 target = { path = "../pumpkin-plugin-wit" }
+
+[build-dependencies]
+syn = { workspace = true, features = ["full", "parsing"] }

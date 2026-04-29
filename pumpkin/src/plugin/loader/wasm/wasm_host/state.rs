@@ -41,6 +41,12 @@ pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
 pub type BossBarResource = WasmResource<
     Arc<Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>>,
 >;
+pub type PacketHandleResource =
+    WasmResource<crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketHandle>;
+pub type PacketReaderResource =
+    WasmResource<crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketReader>;
+pub type PacketWriterResource =
+    WasmResource<crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketWriter>;
 pub type TextComponentResource = WasmResource<TextComponent>;
 pub type CommandResource = WasmResource<CommandTree>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
@@ -256,6 +262,36 @@ impl PluginHostState {
         provider: Arc<Mutex<PluginGui>>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(GuiResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_packet_handle<T>(
+        &mut self,
+        provider: crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketHandle,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(PacketHandleResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_packet_reader<T>(
+        &mut self,
+        provider: crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketReader,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(PacketReaderResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_packet_writer<T>(
+        &mut self,
+        provider: crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketWriter,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(PacketWriterResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

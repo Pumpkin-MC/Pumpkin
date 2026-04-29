@@ -1,4 +1,6 @@
 interface packet {
+    use text.{text-component};
+
     /// A minimal plugin message packet payload (Java custom payload).
     record packet {
         /// The channel identifier (e.g. `myplugin:test`).
@@ -36,6 +38,158 @@ interface packet {
     variant connection-state {
         java(java-state),
         bedrock(bedrock-state),
+    }
+
+    record java-packet-key {
+        direction: packet-direction,
+        phase: string,
+        name: string,
+    }
+
+    record block-pos {
+        x: s32,
+        y: s32,
+        z: s32,
+    }
+
+    record vec3-f32 {
+        x: f32,
+        y: f32,
+        z: f32,
+    }
+
+    record vec3-f64 {
+        x: f64,
+        y: f64,
+        z: f64,
+    }
+
+    record vec3-i16 {
+        x: s16,
+        y: s16,
+        z: s16,
+    }
+
+    record vec3-i32 {
+        x: s32,
+        y: s32,
+        z: s32,
+    }
+
+    enum packet-read-error {
+        unexpected-eof,
+        varint-too-long,
+        string-too-long,
+        invalid-utf8,
+    }
+
+    enum packet-schema-error {
+        missing-schema,
+        decode-unexpected-eof,
+        decode-varint-too-long,
+        decode-string-too-long,
+        decode-invalid-utf8,
+    }
+
+    variant field-value {
+        u8-value(u8),
+        bool-value(bool),
+        u16-value(u16),
+        i8-value(s8),
+        i16-value(s16),
+        i32-value(s32),
+        i64-value(s64),
+        f32-value(f32),
+        f64-value(f64),
+        block-pos-value(block-pos),
+        vec3-f32-value(vec3-f32),
+        vec3-f64-value(vec3-f64),
+        vec3-i16-value(vec3-i16),
+        vec3-i32-value(vec3-i32),
+        varint-value(s32),
+        varlong-value(s64),
+        string-value(string),
+        bytes-value(list<u8>),
+        uuid-bytes-value(list<u8>),
+    }
+
+    record named-field-value {
+        name: string,
+        value: field-value,
+    }
+
+    resource packet-reader {
+        remaining: func() -> u32;
+        position: func() -> u32;
+        read-u8: func() -> result<u8, packet-read-error>;
+        read-bool: func() -> result<bool, packet-read-error>;
+        read-u16: func() -> result<u16, packet-read-error>;
+        read-i8: func() -> result<s8, packet-read-error>;
+        read-i16: func() -> result<s16, packet-read-error>;
+        read-i32: func() -> result<s32, packet-read-error>;
+        read-i64: func() -> result<s64, packet-read-error>;
+        read-f32: func() -> result<f32, packet-read-error>;
+        read-f64: func() -> result<f64, packet-read-error>;
+        read-block-pos: func() -> result<block-pos, packet-read-error>;
+        read-vec3-f32: func() -> result<vec3-f32, packet-read-error>;
+        read-vec3-f64: func() -> result<vec3-f64, packet-read-error>;
+        read-vec3-i16: func() -> result<vec3-i16, packet-read-error>;
+        read-vec3-i32: func() -> result<vec3-i32, packet-read-error>;
+        read-varint: func() -> result<s32, packet-read-error>;
+        read-varlong: func() -> result<s64, packet-read-error>;
+        read-bytes: func(len: u32) -> result<list<u8>, packet-read-error>;
+        read-uuid-bytes: func() -> result<list<u8>, packet-read-error>;
+        read-string: func(max-len: u32) -> result<string, packet-read-error>;
+    }
+
+    resource packet-writer {
+        write-u8: func(value: u8);
+        write-bool: func(value: bool);
+        write-u16: func(value: u16);
+        write-i8: func(value: s8);
+        write-i16: func(value: s16);
+        write-i32: func(value: s32);
+        write-i64: func(value: s64);
+        write-f32: func(value: f32);
+        write-f64: func(value: f64);
+        write-block-pos: func(value: block-pos);
+        write-vec3-f32: func(value: vec3-f32);
+        write-vec3-f64: func(value: vec3-f64);
+        write-vec3-i16: func(value: vec3-i16);
+        write-vec3-i32: func(value: vec3-i32);
+        write-varint: func(value: s32);
+        write-varlong: func(value: s64);
+        write-bytes: func(value: list<u8>);
+        write-uuid-bytes: func(value: list<u8>);
+        write-string: func(value: string);
+        bytes: func() -> list<u8>;
+        reset: func();
+    }
+
+    new-packet-writer: func() -> packet-writer;
+
+    resource packet-handle {
+        id: func() -> s32;
+        set-id: func(id: s32);
+        direction: func() -> packet-direction;
+        state: func() -> connection-state;
+        is-java: func() -> bool;
+        is-bedrock: func() -> bool;
+        is-cancelled: func() -> bool;
+        cancel: func();
+        protocol-version: func() -> option<u32>;
+        minecraft-version: func() -> option<string>;
+        java-packet-key: func() -> option<java-packet-key>;
+        java-packet-id: func(phase: string, name: string) -> option<s32>;
+        java-packet-id-for-key: func(key: java-packet-key) -> option<s32>;
+        payload: func() -> list<u8>;
+        payload-len: func() -> u32;
+        replace-payload: func(payload: list<u8>);
+        reader: func() -> packet-reader;
+        reply-system-message: func(text: text-component, overlay: bool) -> bool;
+        reply-raw-packet: func(packet: raw-packet) -> bool;
+        reply-packet: func(packet: packet) -> bool;
+        decode-java-registered-schema: func() -> result<list<named-field-value>, packet-schema-error>;
     }
 
     /// A raw packet event payload used by the event system.
