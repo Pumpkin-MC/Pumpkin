@@ -7,7 +7,6 @@ license.workspace = true
 
 [dependencies]
 pumpkin-nbt.workspace = true
-pumpkin-storage.workspace = true
 pumpkin-util.workspace = true
 pumpkin-config.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
