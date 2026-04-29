@@ -641,8 +641,6 @@ pub struct Block {
     pub states: Vec<BlockState>,
     /// Experience points dropped when the block is mined, if any.
     pub experience: Option<Experience>,
-    /// Calculated property descriptors for the block.
-    pub property_descriptors: Vec<TokenStream>,
 }
 
 impl ToTokens for Block {
@@ -685,7 +683,6 @@ impl ToTokens for Block {
         } else {
             quote! { None }
         };
-        let property_descriptors = &self.property_descriptors;
         tokens.extend(quote! {
             Block {
                 id: #id,
@@ -698,7 +695,6 @@ impl ToTokens for Block {
                 item_id: #item_id,
                 default_state: &#default_state,
                 states: &[#(#states),*],
-                properties: &[#(#property_descriptors),*],
                 flammable: #flammable,
                 loot_table: #loot_table,
                 experience: #experience,
@@ -898,11 +894,11 @@ pub fn build() -> TokenStream {
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
         let item_id = block.item_id;
 
-        let mut block_with_descriptors = block.clone();
-        block_with_descriptors.property_descriptors = property_descriptors;
+        // let mut block_with_descriptors = block.clone();
+        // block_with_descriptors.property_descriptors = property_descriptors;
 
         constants_list.push(quote! {
-            pub const #const_ident: Block = #block_with_descriptors;
+            pub const #const_ident: Block = #block;
         });
 
         type_from_raw_id_array.push((block.id, quote! { &Self::#const_ident }));
