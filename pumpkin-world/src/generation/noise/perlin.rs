@@ -32,6 +32,20 @@ impl DoublePerlinNoiseSampler {
         )
     }
 
+    pub fn get_amplitude(amplitudes: &[f64]) -> f64 {
+        let mut j = i32::MAX;
+        let mut k = i32::MIN;
+
+        for (index, amplitude) in amplitudes.iter().enumerate() {
+            if *amplitude != 0f64 {
+                j = i32::min(j, index as i32);
+                k = i32::max(k, index as i32);
+            }
+        }
+
+        0.16666666666666666f64 / Self::create_amplitude(k - j)
+    }
+
     pub fn new(
         rand: &mut impl RandomImpl,
         first_octave: i32,
@@ -76,7 +90,14 @@ mod double_perlin_noise_sampler_test {
         assert_eq!(rand.next_i32(), -1302745855);
 
         let mut rand_gen = RandomGenerator::Legacy(rand);
-        let params = DoublePerlinNoiseParameters::new(0, 0, &[4f64], 1, 1, 1.0);
+        let params = DoublePerlinNoiseParameters::new(
+            0,
+            0,
+            &[4f64],
+            0,
+            0,
+            DoublePerlinNoiseSampler::get_amplitude(&[4f64]),
+        );
         let sampler = DoublePerlinNoiseSampler::from_params(&mut rand_gen, &params, true);
 
         let values = [
@@ -174,7 +195,14 @@ mod double_perlin_noise_sampler_test {
 
         let mut rand_gen = RandomGenerator::Xoroshiro(rand);
 
-        let params = DoublePerlinNoiseParameters::new(0, 1, &[2f64, 4f64], 1, 1, 1.0);
+        let params = DoublePerlinNoiseParameters::new(
+            0,
+            1,
+            &[2f64, 4f64],
+            0,
+            0,
+            DoublePerlinNoiseSampler::get_amplitude(&[2f64, 4f64]),
+        );
 
         let sampler = DoublePerlinNoiseSampler::from_params(&mut rand_gen, &params, false);
 
