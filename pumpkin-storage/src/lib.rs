@@ -20,5 +20,8 @@ pub use error::StorageError;
 pub use memory::MemoryStorage;
 pub use vanilla::VanillaStorage;
 
+#[cfg(test)]
+mod conformance_tests;
+
 /// Boxed `Send` future returned from dyn-compatible storage trait methods.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
