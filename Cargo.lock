@@ -2811,6 +2811,7 @@ dependencies = [
  "pumpkin-macros",
  "pumpkin-nbt",
  "pumpkin-protocol",
+ "pumpkin-storage",
  "pumpkin-util",
  "pumpkin-world",
  "rand 0.10.1",

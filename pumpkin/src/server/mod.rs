@@ -31,16 +31,14 @@ use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
+use pumpkin_storage::world_info::WorldInfoStorage;
+use pumpkin_storage::{StorageError, VanillaStorage};
 use pumpkin_world::lock::LevelLocker;
 use pumpkin_world::lock::anvil::AnvilLevelLocker;
-use pumpkin_world::world_info::anvil::{
-    AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
-};
-use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
+use pumpkin_world::world_info::LevelData;
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
-use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
@@ -123,7 +121,7 @@ pub struct Server {
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
-    world_info_writer: Arc<dyn WorldInfoWriter>,
+    world_info_storage: Arc<dyn WorldInfoStorage>,
     // Gets unlocked when dropped
     // TODO: Make this a trait
     _locker: Arc<Option<AnvilLevelLocker>>,
@@ -145,13 +143,15 @@ impl Server {
 
         let block_registry = super::block::registry::default_registry();
 
-        let level_info = AnvilLevelInfo.read_world_info(&world_path);
-        if let Err(error) = &level_info {
+        let world_info_storage: Arc<dyn WorldInfoStorage> =
+            Arc::new(VanillaStorage::new(&world_path));
+
+        let level_info = world_info_storage.load().await;
+        if let Err(error) = &level_info
+            && !error.is_not_found()
+        {
             match error {
-                // If it doesn't exist, just make a new one
-                WorldInfoError::InfoNotFound => (),
-                WorldInfoError::UnsupportedDataVersion(_version)
-                | WorldInfoError::UnsupportedLevelVersion(_version) => {
+                StorageError::UnsupportedVersion(_) => {
                     error!("Failed to load world info!");
                     error!("{error}");
                     panic!("Unsupported world version! See the logs for more info.");
@@ -159,12 +159,6 @@ impl Server {
                 e => {
                     panic!("World Error {e}");
                 }
-            }
-        } else {
-            let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
-            if dat_path.exists() {
-                let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
-                fs::copy(dat_path, backup_path).unwrap();
             }
         }
         let locker = match AnvilLevelLocker::lock(&world_path) {
@@ -177,14 +171,17 @@ impl Server {
             }
         };
 
-        let level_info = level_info.unwrap_or_else(|err| {
-            warn!("Failed to get level_info, using default instead: {err}");
-            let default_data = LevelData::default(basic_config.seed);
-            if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
-                error!("Failed to save level.dat: {err}");
+        let level_info = match level_info {
+            Ok(data) => data,
+            Err(err) => {
+                warn!("Failed to get level_info, using default instead: {err}");
+                let default_data = LevelData::default(basic_config.seed);
+                if let Err(save_err) = world_info_storage.save(&default_data).await {
+                    error!("Failed to save level.dat: {save_err}");
+                }
+                default_data
             }
-            default_data
-        });
+        };
 
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
@@ -252,7 +249,7 @@ impl Server {
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
-            world_info_writer: Arc::new(AnvilLevelInfo),
+            world_info_storage,
             level_info,
             _locker: Arc::new(locker),
         };
@@ -534,10 +531,7 @@ impl Server {
         let level_data = self.level_info.load();
         // then lets save the world info
 
-        if let Err(err) = self
-            .world_info_writer
-            .write_world_info(&level_data, &self.basic_config.get_world_path())
-        {
+        if let Err(err) = self.world_info_storage.save(&level_data).await {
             error!("Failed to save level.dat: {err}");
         }
         info!("Completed worlds");
