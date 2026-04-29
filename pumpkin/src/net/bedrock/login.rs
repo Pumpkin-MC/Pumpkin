@@ -216,13 +216,14 @@ impl BedrockClient {
                     tracing::error!(
                         "Got SResourcePackResponse::STATUS_COMPLETED before authentication was completed."
                     );
-                    self.kick(DisconnectReason::Disconnected, "".into()).await;
-                    return;
+                    self.kick(DisconnectReason::Disconnected, String::new())
+                        .await;
                 }
             }
             _ => {
                 tracing::error!("Bedrock: SResourcePackResponse bad response type");
-                self.kick(DisconnectReason::Disconnected, "".into()).await;
+                self.kick(DisconnectReason::Disconnected, String::new())
+                    .await;
             }
         }
     }
