@@ -140,7 +140,9 @@ impl WithCancelled for RawPacketEvent {
 
 fn take_player(
     state: &mut PluginHostState,
-    player: &Resource<crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::Player>,
+    player: &Resource<
+        crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::Player,
+    >,
 ) -> std::sync::Arc<crate::entity::player::Player> {
     state
         .resource_table

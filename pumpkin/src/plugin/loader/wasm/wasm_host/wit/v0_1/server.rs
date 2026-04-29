@@ -237,7 +237,9 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             return Ok(());
         }
         for player in resource.provider.get_all_players() {
-            player.send_custom_payload(&packet.channel, &packet.data).await;
+            player
+                .send_custom_payload(&packet.channel, &packet.data)
+                .await;
         }
         Ok(())
     }
