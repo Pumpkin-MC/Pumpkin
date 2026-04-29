@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{BlockProperties, EnumVariants, HorizontalFacing, Integer1To4},
+    block_properties::{BlockProperties, HorizontalFacing},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -275,7 +275,7 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
 
     fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u8 {
         let props = RepeaterProperties::from_state_id(state_id, block);
-        (props.delay.to_index() as u8 + 1) * 2
+        props.delay * 2
     }
 }
 
@@ -288,12 +288,7 @@ impl RepeaterBlock {
         block: &Block,
     ) {
         let mut props = props;
-        props.delay = match props.delay {
-            Integer1To4::L1 => Integer1To4::L2,
-            Integer1To4::L2 => Integer1To4::L3,
-            Integer1To4::L3 => Integer1To4::L4,
-            Integer1To4::L4 => Integer1To4::L1,
-        };
+        props.delay = if props.delay == 4 { 1 } else { props.delay + 1 };
         let state = props.to_state_id(block);
         world
             .set_block_state(&block_pos, state, BlockFlags::empty())

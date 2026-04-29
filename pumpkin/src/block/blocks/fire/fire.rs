@@ -1,5 +1,5 @@
 use pumpkin_data::biome::Biome;
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalAxis};
+use pumpkin_data::block_properties::{BlockProperties, HorizontalAxis};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
@@ -152,7 +152,7 @@ impl FireBlock {
         )
     }
 
-    async fn try_spreading_fire(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u16) {
+    async fn try_spreading_fire(&self, world: &Arc<World>, pos: &BlockPos, chance: i32, age: u8) {
         let block = world.get_block(pos).await;
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
@@ -160,12 +160,12 @@ impl FireBlock {
             if rand::rng().random_range(0..(age + 10) as i32) < 5
                 && !Self::is_near_rain(world.as_ref(), pos)
             {
-                let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15);
+                let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15) as u8;
                 let state_id = self
                     .get_state_for_position(world.as_ref(), &Block::FIRE, pos)
                     .await;
                 let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
-                fire_props.age = EnumVariants::from_index(new_age);
+                fire_props.age = new_age;
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
                 world
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
@@ -244,7 +244,7 @@ impl BlockBehaviour for FireBlock {
                     .get_state_for_position(args.world, &Block::FIRE, args.position)
                     .await;
                 let mut fire_props = FireProperties::from_state_id(fire_state_id, &Block::FIRE);
-                fire_props.age = EnumVariants::from_index(old_fire_props.age.to_index());
+                fire_props.age = old_fire_props.age;
                 return fire_props.to_state_id(&Block::FIRE);
             }
             Block::AIR.default_state.id
@@ -323,7 +323,7 @@ impl BlockBehaviour for FireBlock {
             };
 
             let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
-            let age = fire_props.age.to_index();
+            let age = fire_props.age;
 
             // Check if rain should extinguish the fire
             if !infiniburn && Self::is_near_rain(world.as_ref(), pos) {
@@ -341,10 +341,10 @@ impl BlockBehaviour for FireBlock {
             }
 
             // Increment age
-            let random = rand::rng().random_range(0..3) / 2;
+            let random = (rand::rng().random_range(0..3) / 2) as u8;
             let new_age = (age + random).min(15);
             if new_age != age {
-                fire_props.age = EnumVariants::from_index(new_age);
+                fire_props.age = new_age;
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
                 world
                     .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
@@ -481,14 +481,15 @@ impl BlockBehaviour for FireBlock {
                                     && rand::rng().random_range(0..rate) <= odds
                                     && !Self::is_near_rain(world.as_ref(), &offset_pos)
                                 {
-                                    let spread_age =
-                                        (new_age + rand::rng().random_range(0..5) / 4).min(15);
+                                    let spread_age = (new_age + rand::rng().random_range(0..5) / 4)
+                                        .min(15)
+                                        as u8;
                                     let fire_state_id = self
                                         .get_state_for_position(world.as_ref(), block, &offset_pos)
                                         .await;
                                     let mut new_fire_props =
                                         FireProperties::from_state_id(fire_state_id, &Block::FIRE);
-                                    new_fire_props.age = EnumVariants::from_index(spread_age);
+                                    new_fire_props.age = spread_age;
 
                                     world
                                         .set_block_state(

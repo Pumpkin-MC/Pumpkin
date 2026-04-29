@@ -7,7 +7,7 @@ use pumpkin_data::block_properties::{Axis, NoteblockInstrument};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, EnumVariants, Integer0To24, NoteBlockLikeProperties},
+    block_properties::{BlockProperties, NoteBlockLikeProperties},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -85,13 +85,7 @@ impl BlockBehaviour for NoteBlock {
         Box::pin(async move {
             let block_state = args.world.get_block_state(args.position).await;
             let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
-            let next_index = note_props.note.to_index() + 1;
-            // Increment and check if max
-            note_props.note = if next_index >= Integer0To24::variant_count() {
-                Integer0To24::from_index(0)
-            } else {
-                Integer0To24::from_index(next_index)
-            };
+            note_props.note = (note_props.note + 1) % 25;
             args.world
                 .set_block_state(
                     args.position,
@@ -125,7 +119,7 @@ impl BlockBehaviour for NoteBlock {
             let instrument = note_props.instrument;
             let pitch = if is_base_block(instrument) {
                 // checks if can be pitched
-                Self::get_note_pitch(note_props.note.to_index())
+                Self::get_note_pitch(u16::from(note_props.note))
             } else {
                 1.0 // default pitch
             };

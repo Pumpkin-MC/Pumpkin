@@ -29,7 +29,7 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
+use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
@@ -1106,10 +1106,8 @@ impl Player {
 
         // Handle respawn anchor (Nether)
         if block == &Block::RESPAWN_ANCHOR {
-            use pumpkin_data::block_properties::Integer0To4;
-
             let anchor_props = AnchorProperties::from_state_id(state_id, block);
-            let charges = anchor_props.charges.to_index();
+            let charges = anchor_props.charges;
 
             // Anchor needs at least 1 charge to work
             if charges == 0 {
@@ -1121,7 +1119,7 @@ impl Player {
                 // Decrement charges after successful respawn position found
                 let new_charges = charges - 1;
                 let mut new_props = anchor_props;
-                new_props.charges = Integer0To4::from_index(new_charges);
+                new_props.charges = new_charges;
                 world
                     .set_block_state(
                         pos,
