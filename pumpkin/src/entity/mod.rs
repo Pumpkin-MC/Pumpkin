@@ -15,7 +15,7 @@ use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
 use pumpkin_data::biome::Biome;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
+use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
@@ -2082,33 +2082,14 @@ impl Entity {
         }
     }
 
-    pub fn get_rotation_16(&self) -> Integer0To15 {
+    pub fn get_rotation_16(&self) -> u8 {
         let adjusted_yaw = self.yaw.load().rem_euclid(360.0);
 
-        let index = (adjusted_yaw / 22.5).round() as u16 % 16;
-
-        Integer0To15::from_index(index)
+        ((adjusted_yaw / 22.5).round() as u8) % 16
     }
 
-    pub fn get_flipped_rotation_16(&self) -> Integer0To15 {
-        match self.get_rotation_16() {
-            Integer0To15::L0 => Integer0To15::L8,
-            Integer0To15::L1 => Integer0To15::L9,
-            Integer0To15::L2 => Integer0To15::L10,
-            Integer0To15::L3 => Integer0To15::L11,
-            Integer0To15::L4 => Integer0To15::L12,
-            Integer0To15::L5 => Integer0To15::L13,
-            Integer0To15::L6 => Integer0To15::L14,
-            Integer0To15::L7 => Integer0To15::L15,
-            Integer0To15::L8 => Integer0To15::L0,
-            Integer0To15::L9 => Integer0To15::L1,
-            Integer0To15::L10 => Integer0To15::L2,
-            Integer0To15::L11 => Integer0To15::L3,
-            Integer0To15::L12 => Integer0To15::L4,
-            Integer0To15::L13 => Integer0To15::L5,
-            Integer0To15::L14 => Integer0To15::L6,
-            Integer0To15::L15 => Integer0To15::L7,
-        }
+    pub fn get_flipped_rotation_16(&self) -> u8 {
+        (self.get_rotation_16() + 8) % 16
     }
 
     pub fn get_facing(&self) -> Facing {

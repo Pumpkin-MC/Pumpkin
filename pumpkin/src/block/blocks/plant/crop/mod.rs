@@ -3,9 +3,7 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block,
     BlockDirection::{East, North, South, West},
-    block_properties::{
-        BlockProperties, EnumVariants, FarmlandLikeProperties, Integer0To7, WheatLikeProperties,
-    },
+    block_properties::{BlockProperties, FarmlandLikeProperties, WheatLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::{
@@ -43,12 +41,12 @@ trait CropBlockBase: PlantBlockBase {
 
     fn get_age(&self, state: u16, block: &Block) -> i32 {
         let props = CropProperties::from_state_id(state, block);
-        i32::from(props.age.to_index())
+        i32::from(props.age)
     }
 
     fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
         let mut props = CropProperties::from_state_id(state, block);
-        props.age = Integer0To7::from_index(age as u16);
+        props.age = age as u8;
         props.to_state_id(block)
     }
 
@@ -98,7 +96,7 @@ pub async fn get_available_moisture(world: &Arc<World>, pos: &BlockPos, block: &
             if block == &Block::FARMLAND {
                 local_moisture = 1.0;
                 let props = FarmlandProperties::from_state_id(block_state, block);
-                if props.moisture != Integer0To7::L0 {
+                if props.moisture != 0 {
                     local_moisture = 3.0;
                 }
             }

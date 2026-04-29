@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties, Integer0To1},
+    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties},
     tag,
 };
 use pumpkin_util::{
@@ -60,13 +60,13 @@ impl BambooFeature {
                 if bpos.0.y - pos.0.y >= 3 {
                     let mut props = BambooLikeProperties::default(&Block::BAMBOO);
                     props.leaves = BambooLeaves::Large;
-                    props.stage = Integer0To1::L1;
+                    props.stage = 1;
 
                     chunk.set_block_state(
                         &bpos.0,
                         BlockState::from_id(props.to_state_id(&Block::BAMBOO)),
                     );
-                    props.stage = Integer0To1::L0;
+                    props.stage = 0;
 
                     chunk.set_block_state(
                         &bpos.down().0,
