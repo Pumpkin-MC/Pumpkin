@@ -86,6 +86,7 @@ impl<'a> Serialize for DisplaySerializer<'a> {
 
 #[derive(Serialize)]
 #[java_packet(PLAY_UPDATE_ADVANCEMENTS)]
+#[allow(unused)]
 pub struct CUpdateAdvancements {
     pub reset: bool,
     #[serde(serialize_with = "serialize_advancements")]
@@ -97,6 +98,7 @@ pub struct CUpdateAdvancements {
 
 impl CUpdateAdvancements {
     #[must_use]
+    #[allow(unused)]
     pub fn new(
         reset: bool,
         advancement: Vec<Advancement>,

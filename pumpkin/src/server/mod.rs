@@ -105,7 +105,7 @@ pub struct Server {
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
     // Manages player advancement
-    pub advancement_manager: AdvancementManager,
+    pub advancement_manager: Arc<AdvancementManager>,
     // Whether the server whitelist is on or off
     pub white_list: AtomicBool,
     /// Manages the server's tick rate, freezing, and sprinting
@@ -197,7 +197,7 @@ impl Server {
             Duration::from_secs(advanced_config.player_data.save_player_cron_interval),
             advanced_config.player_data.save_player_data,
         );
-        let advancement_manager = AdvancementManager::new(world_path.clone());
+        let advancement_manager = Arc::new(AdvancementManager::new(world_path.clone(), true));
         let white_list = AtomicBool::new(basic_config.white_list);
 
         let tick_rate_manager = Arc::new(ServerTickRateManager::new(basic_config.tps));
@@ -431,14 +431,15 @@ impl Server {
             gamemode,
         )
         .await;
-
         if let Some(mut nbt_data) = nbt {
             player.read_nbt(&mut nbt_data).await;
         }
 
+        let mut advancements= player.advancements.lock().await;
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
-        player.advancements.lock().await.player = Arc::downgrade(&player);
+        advancements.load().await;
+        advancements.player = Arc::downgrade(&player);
 
         send_cancellable! {{
             self;

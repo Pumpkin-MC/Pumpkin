@@ -35,7 +35,6 @@ use tracing::{debug, error, info, warn};
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use crate::command::args::Arg::Advancement;
 use crate::data::advancement_data::AdvancementManager;
 
 pub mod block;
@@ -477,6 +476,10 @@ impl PumpkinServer {
                                     server_clone.remove_player(&player).await;
                                     if let Err(e) = server_clone.player_data_storage
                                         .handle_player_leave(&player)
+                                        .await {
+                                            error!("Failed to save player data on disconnect: {e}");
+                                        }
+                                    if let Err(e) = AdvancementManager::save_player(&player)
                                         .await {
                                             error!("Failed to save player data on disconnect: {e}");
                                         }

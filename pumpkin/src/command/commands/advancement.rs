@@ -22,6 +22,7 @@ const PERMISSION: &str = "minecraft:command.advancement";
 const ARG_TARGETS: &str = "targets";
 const ARG_ADVANCEMENT: &str = "advancement";
 
+#[allow(unused)]
 const ERROR_CRITERION_NOT_FOUND: CommandErrorType<2> =
     CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND);
 const ERROR_GRANT_ONE_TO_ONE: CommandErrorType<2> =

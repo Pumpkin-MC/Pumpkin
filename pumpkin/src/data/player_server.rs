@@ -12,6 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
+use crate::data::advancement_data::AdvancementManager;
 
 /// Helper for managing player data in the server context.
 ///
@@ -85,6 +86,12 @@ impl ServerPlayerData {
                     if let Err(e) = self.storage.save_player_data(&player.gameprofile.id, nbt) {
                         error!(
                             "Failed to save player data for {}: {e}",
+                            player.gameprofile.id,
+                        );
+                    }
+                    if let Err(e) = AdvancementManager::save_player(&player).await {
+                        error!(
+                            "Failed to save player advancement for {}: {e}",
                             player.gameprofile.id,
                         );
                     }

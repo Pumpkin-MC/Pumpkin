@@ -1,18 +1,14 @@
 use crate::command::argument_types::FromStringReader;
-use crate::command::argument_types::argument_type::{
-    AnyArgumentType, ArgumentType, JavaClientArgumentType,
-};
+use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType,};
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::{Advancement, translation};
-use pumpkin_protocol::java::client::play::SuggestionProviders;
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource_key::ResourceKey;
 use pumpkin_util::text::TextComponent;
-use std::borrow::Cow;
 use std::pin::Pin;
 use std::string::ToString;
 use tracing::info;

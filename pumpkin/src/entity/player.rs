@@ -516,6 +516,7 @@ impl Player {
         Self {
             living_entity,
             config: ArcSwap::new(Arc::new(config)),
+            advancements: Arc::new(Mutex::new(server.advancement_manager.clone().new_advancement(gameprofile.id))),
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
@@ -600,7 +601,6 @@ impl Player {
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(true),
-            advancements: Arc::new(Mutex::new(server.advancement_manager.new_advancement())),
         }
     }
 
