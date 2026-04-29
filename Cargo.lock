@@ -3012,6 +3012,7 @@ dependencies = [
  "pumpkin-config",
  "pumpkin-data",
  "pumpkin-nbt",
+ "pumpkin-storage",
  "pumpkin-util",
  "rand 0.10.1",
  "rayon",

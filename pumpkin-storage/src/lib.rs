@@ -11,6 +11,7 @@
 use std::pin::Pin;
 
 pub mod error;
+pub mod world_info;
 
 pub use error::StorageError;
 
