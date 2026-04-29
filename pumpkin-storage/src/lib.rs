@@ -13,7 +13,12 @@ use std::pin::Pin;
 pub mod error;
 pub mod world_info;
 
+mod memory;
+mod vanilla;
+
 pub use error::StorageError;
+pub use memory::MemoryStorage;
+pub use vanilla::VanillaStorage;
 
 /// Boxed `Send` future returned from dyn-compatible storage trait methods.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
