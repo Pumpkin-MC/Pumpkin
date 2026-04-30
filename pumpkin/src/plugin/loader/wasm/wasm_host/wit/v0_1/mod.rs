@@ -62,10 +62,13 @@ pub async fn init_plugin(
         authors: metadata.authors,
         description: metadata.description,
         dependencies: metadata.dependencies,
-        permissions: metadata.permissions.clone(),
+        permissions: metadata.permissions,
     };
 
-    store.data_mut().permissions = metadata.permissions.clone();
+    store
+        .data_mut()
+        .permissions
+        .clone_from(&metadata.permissions);
 
     Ok((
         WasmPlugin {

@@ -1,7 +1,3 @@
-/// Constants for plugin permissions.
-///
-/// Use these in your `PluginMetadata` to request access to specific host features.
-
 /// Allows the plugin to perform DNS resolution.
 pub const NETWORK_DNS: &str = "network.dns";
 

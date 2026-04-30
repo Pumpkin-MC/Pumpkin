@@ -1,8 +1,3 @@
-/// Constants for plugin permissions.
-///
-/// Plugins can request these permissions in their metadata to access specific
-/// host features.
-
 /// Allows the plugin to perform DNS resolution (resolving hostnames to IP addresses).
 ///
 /// Corresponds to the `wasi:sockets/ip-name-lookup` interface.

@@ -138,6 +138,7 @@ fn load_component(
 }
 
 impl WasmPlugin {
+    #[expect(clippy::too_many_lines)]
     pub async fn on_load(
         &self,
         context: Arc<Context>,

@@ -37,11 +37,8 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         let mut sys = sysinfo::System::new_all();
         sys.refresh_all();
 
-        let cpu_count = if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_CPU) {
-            Some(sys.cpus().len() as u32)
-        } else {
-            None
-        };
+        let cpu_count = (has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_CPU))
+            .then(|| sys.cpus().len() as u32);
 
         let (total_memory, used_memory) =
             if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_RAM) {
