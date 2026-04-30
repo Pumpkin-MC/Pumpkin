@@ -9,15 +9,18 @@ use crate::command::CommandSender;
 use pumpkin::plugin::server::CommandSender as WasmCommandSender;
 
 use super::player::text_component_from_resource;
-use crate::plugin::loader::wasm::wasm_host::{
-    state::{PluginHostState, ServerResource},
-    wit::v0_1::pumpkin::{
-        self,
-        plugin::{
-            player::Player,
-            server::{Difficulty, Dimension, Server},
+use crate::plugin::{
+    loader::wasm::wasm_host::{
+        state::{PluginHostState, ServerResource},
+        wit::v0_1::pumpkin::{
+            self,
+            plugin::{
+                player::Player,
+                server::{Difficulty, Dimension, Server, SysInfo},
+            },
         },
     },
+    permissions,
 };
 
 impl PluginHostState {
@@ -31,6 +34,39 @@ impl PluginHostState {
 impl pumpkin::plugin::server::Host for PluginHostState {}
 
 impl pumpkin::plugin::server::HostServer for PluginHostState {
+    async fn get_sys_info(&mut self, _res: Resource<Server>) -> wasmtime::Result<SysInfo> {
+        let has_perm = |p: &str| self.permissions.iter().any(|perm| perm == p);
+
+        let mut sys = sysinfo::System::new_all();
+        sys.refresh_all();
+
+        let cpu_count = (has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_CPU))
+            .then(|| sys.cpus().len() as u32);
+
+        let (total_memory, used_memory) =
+            if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_RAM) {
+                (Some(sys.total_memory()), Some(sys.used_memory()))
+            } else {
+                (None, None)
+            };
+
+        let (os_name, os_version) =
+            if has_perm(permissions::SYS_INFO) || has_perm(permissions::SYS_INFO_OS) {
+                (sysinfo::System::name(), sysinfo::System::os_version())
+            } else {
+                (None, None)
+            };
+
+        Ok(SysInfo {
+            cpu_count,
+            total_memory,
+            used_memory,
+            os_name,
+            os_version,
+            pumpkin_version: env!("CARGO_PKG_VERSION").to_string(),
+        })
+    }
+
     async fn get_difficulty(&mut self, res: Resource<Server>) -> wasmtime::Result<Difficulty> {
         let resource = self.get_server_res(&res)?;
 

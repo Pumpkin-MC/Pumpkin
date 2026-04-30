@@ -166,6 +166,7 @@ pub struct PluginHostState {
     pub server: Option<Arc<Server>>,
     pub event_dispatch_depth: usize,
     pub pending_effects: Vec<PendingEffect>,
+    pub permissions: Vec<String>,
 }
 
 impl Default for PluginHostState {
@@ -185,6 +186,7 @@ impl PluginHostState {
             server: None,
             event_dispatch_depth: 0,
             pending_effects: Vec::new(),
+            permissions: Vec::new(),
         }
     }
 

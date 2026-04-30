@@ -24,6 +24,15 @@ interface server {
         end,
     }
 
+    record sys-info {
+        cpu-count: option<u32>,
+        total-memory: option<u64>,
+        used-memory: option<u64>,
+        os-name: option<string>,
+        os-version: option<string>,
+        pumpkin-version: string,
+    }
+
     variant command-sender {
         console,
         player(player),
@@ -31,6 +40,10 @@ interface server {
 
     /// Represents the global server instance.
     resource server {
+        /// Returns system information (CPU, Memory, OS).
+        /// Fields are returned only if the plugin has the corresponding permissions.
+        get-sys-info: func() -> sys-info;
+
         /// Returns the current difficulty level of the server.
         get-difficulty: func() -> difficulty;
 

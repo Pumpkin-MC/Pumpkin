@@ -59,10 +59,7 @@ pub async fn io_read_work(
     level: Arc<Level>,
     lock: IOLock,
 ) {
-    use crate::biome::hash_seed;
     debug!("io read thread start");
-    let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
-    let dimension = &level.world_gen.dimension;
 
     // Cleaner loop and async recv
     while let Ok(batch) = recv.recv().await {
@@ -108,12 +105,7 @@ pub async fn io_read_work(
                             );
 
                             // Create ProtoChunk using the async method
-                            let mut proto = ProtoChunk::from_chunk_data(
-                                &chunk,
-                                dimension,
-                                level.world_gen.default_block,
-                                biome_mixer_seed,
-                            );
+                            let mut proto = ProtoChunk::from_chunk_data(&chunk, &level.world_gen);
 
                             // Clear all lighting data
                             let section_count = proto.light.sky_light.len();
@@ -144,13 +136,9 @@ pub async fn io_read_work(
                         }
                     } else {
                         // Standard ProtoChunk handling for non-full chunks
-                        let val =
-                            RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
-                                &chunk,
-                                dimension,
-                                level.world_gen.default_block,
-                                biome_mixer_seed,
-                            ))));
+                        let val = RecvChunk::IO(Chunk::Proto(Box::new(
+                            ProtoChunk::from_chunk_data(&chunk, &level.world_gen),
+                        )));
                         if send.send((pos, val)).is_err() {
                             break;
                         }
@@ -163,9 +151,7 @@ pub async fn io_read_work(
                             RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::new(
                                 pos.x,
                                 pos.y,
-                                dimension,
-                                level.world_gen.default_block,
-                                biome_mixer_seed,
+                                &level.world_gen,
                             )))),
                         ))
                         .is_err()
@@ -241,20 +227,15 @@ pub fn run_generation(
     mut cache: Cache,
     stage: StagedChunkEnum,
     level: &Level,
-    settings: &GenerationSettings,
+    _settings: &GenerationSettings,
 ) -> RecvChunk {
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         cache.advance(
             stage,
-            &level.lighting_config,
+            &level.world_gen,
             level.block_registry.as_ref(),
-            settings,
-            &level.world_gen.random_config,
-            &level.world_gen.terrain_cache,
-            &level.world_gen.base_router,
-            level.world_gen.dimension,
-            &level.world_gen.global_structure_cache,
+            &level.lighting_config,
         );
         cache // Return cache on success
     }));

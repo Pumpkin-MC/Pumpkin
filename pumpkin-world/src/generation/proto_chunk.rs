@@ -3,12 +3,10 @@ use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::structures::{
-    Structure, StructureKeys, StructurePlacementCalculator, StructurePlacementType, StructureSet,
-    WeightedEntry,
+    Structure, StructureKeys, StructurePlacementType, StructureSet, WeightedEntry,
 };
 use pumpkin_data::tag;
 use pumpkin_data::tag::RegistryKey;
@@ -45,15 +43,14 @@ use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuil
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
 use crate::generation::structure::lazily_generate_structure;
-use crate::generation::structure::placement::GlobalStructureCache;
 use crate::generation::structure::placement::should_generate_structure;
 use crate::generation::structure::structures::{
     StructureGeneratorContext, StructureInstance, create_chunk_random,
 };
 use crate::generation::structure::try_generate_structure;
-use crate::generation::surface::evaluate_surface_rule;
+use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
-    BlockStateId, ProtoNoiseRouters,
+    BlockStateId,
     block::RawBlockState,
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
@@ -205,13 +202,8 @@ impl TerrainCache {
 
 impl ProtoChunk {
     #[must_use]
-    pub fn new(
-        x: i32,
-        z: i32,
-        dimension: &Dimension,
-        default_block: &'static BlockState,
-        biome_mixer_seed: i64,
-    ) -> Self {
+    pub fn new(x: i32, z: i32, generator: &super::generator::VanillaGenerator) -> Self {
+        let dimension = &generator.dimension;
         let height = dimension.logical_height as u16;
         let section_count = (height as usize) / 16;
 
@@ -219,7 +211,8 @@ impl ProtoChunk {
         Self {
             x,
             z,
-            default_block,
+            default_block: generator.default_block,
+            biome_mixer_seed: generator.biome_mixer_seed,
             flat_block_map: vec![0; CHUNK_AREA * height as usize].into_boxed_slice(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
@@ -228,7 +221,6 @@ impl ProtoChunk {
                     * biome_coords::from_block(height as i32) as usize
             ]
             .into_boxed_slice(),
-            biome_mixer_seed,
             flat_surface_height_map: default_heightmap.clone(),
             flat_ocean_floor_height_map: default_heightmap.clone(),
             flat_motion_blocking_height_map: default_heightmap.clone(),
@@ -241,38 +233,29 @@ impl ProtoChunk {
                 sky_light: (0..section_count)
                     .map(|_| {
                         if dimension.has_skylight {
-                            // Pre-allocate full arrays for sky light in dimensions with skylight
-                            // Initialize to 0 - lighting engine will calculate proper values
-                            LightContainer::new_filled(0)
+                            // Sky light starts at 0 and is calculated by the lighting engine
+                            LightContainer::new_empty(0)
                         } else {
-                            // No skylight in Nether/End, can use Empty
+                            // No skylight in Nether/End
                             LightContainer::new_empty(0)
                         }
                     })
                     .collect(),
                 block_light: (0..section_count)
-                    // Pre-allocate full arrays for block light
-                    // Initialize to 0 - lighting engine will set emissive blocks
-                    .map(|_| LightContainer::new_filled(0))
+                    // Block light starts at 0 and is set by emissive blocks
+                    .map(|_| LightContainer::new_empty(0))
                     .collect(),
             },
             pending_block_entities: Vec::new(),
         }
     }
-
+    #[must_use]
     pub fn from_chunk_data(
         chunk_data: &ChunkData,
-        dimension: &Dimension,
-        default_block: &'static BlockState,
-        biome_mixer_seed: i64,
+        generator: &super::generator::VanillaGenerator,
     ) -> Self {
-        let mut proto_chunk = Self::new(
-            chunk_data.x,
-            chunk_data.z,
-            dimension,
-            default_block,
-            biome_mixer_seed,
-        );
+        let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
+
         proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
 
         let section_data = &chunk_data.section;
@@ -549,7 +532,7 @@ impl ProtoChunk {
         self.flat_biome_map[index]
     }
 
-    pub fn step_to_biomes(&mut self, dimension: Dimension, noise_router: &ProtoNoiseRouters) {
+    pub fn step_to_biomes(&mut self, generator: &super::generator::VanillaGenerator) {
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
         let horizontal_biome_end = biome_coords::from_block(16);
@@ -560,19 +543,15 @@ impl ProtoChunk {
                 horizontal_biome_end as usize,
             );
         let mut multi_noise_sampler =
-            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
-        self.populate_biomes(dimension, &mut multi_noise_sampler);
+            MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
+        self.populate_biomes(generator, &mut multi_noise_sampler);
         self.stage = StagedChunkEnum::Biomes;
     }
 
-    pub fn step_to_noise(
-        &mut self,
-        settings: &GenerationSettings,
-        random_config: &GlobalRandomConfig,
-        noise_router: &ProtoNoiseRouters,
-    ) {
+    pub fn step_to_noise(&mut self, generator: &super::generator::VanillaGenerator) {
         //debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
 
+        let settings = generator.settings;
         let generation_shape = &settings.shape;
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
         let start_x = start_block_x(self.x);
@@ -587,8 +566,8 @@ impl ProtoChunk {
         );
 
         let mut noise_sampler = ChunkNoiseGenerator::new(
-            &noise_router.noise,
-            random_config,
+            &generator.base_router.noise,
+            &generator.random_config,
             horizontal_cell_count as usize,
             start_x,
             start_z,
@@ -610,30 +589,25 @@ impl ProtoChunk {
             generation_shape.vertical_cell_block_count() as usize,
         );
         let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
-            &noise_router.surface_estimator,
+            &generator.base_router.surface_estimator,
             &surface_config,
         );
         self.populate_noise(
+            generator,
             &mut noise_sampler,
-            &random_config.ore_random_deriver,
+            &generator.random_config.ore_random_deriver,
             &mut surface_height_estimate_sampler,
         );
 
         self.stage = StagedChunkEnum::Noise;
     }
 
-    pub fn step_to_surface(
-        &mut self,
-        settings: &GenerationSettings,
-        random_config: &GlobalRandomConfig,
-        terrain_cache: &TerrainCache,
-        noise_router: &ProtoNoiseRouters,
-    ) {
+    pub fn step_to_surface(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Noise);
         // Build surface
         let start_x = start_block_x(self.x);
         let start_z = start_block_z(self.z);
-        let generation_shape = &settings.shape;
+        let generation_shape = &generator.settings.shape;
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
         let horizontal_biome_end = biome_coords::from_block(
@@ -648,24 +622,20 @@ impl ProtoChunk {
             generation_shape.vertical_cell_block_count() as usize,
         );
         let mut surface_height_estimate_sampler = SurfaceHeightEstimateSampler::generate(
-            &noise_router.surface_estimator,
+            &generator.base_router.surface_estimator,
             &surface_config,
         );
 
-        self.build_surface(
-            settings,
-            random_config,
-            terrain_cache,
-            &mut surface_height_estimate_sampler,
-        );
+        self.build_surface(generator, &mut surface_height_estimate_sampler);
         self.stage = StagedChunkEnum::Surface;
     }
 
     pub fn populate_biomes(
         &mut self,
-        dimension: Dimension,
+        generator: &super::generator::VanillaGenerator,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
+        let dimension = generator.dimension;
         // Instantiate ONLY the supplier we actually need
         let active_supplier = if dimension == Dimension::THE_END {
             ActiveSupplier::End(TheEndBiomeSupplier)
@@ -721,6 +691,7 @@ impl ProtoChunk {
     #[expect(clippy::similar_names)]
     pub fn populate_noise(
         &mut self,
+        generator: &super::generator::VanillaGenerator,
         noise_sampler: &mut ChunkNoiseGenerator,
         ore_random_deriver: &XoroshiroSplitter,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
@@ -773,7 +744,7 @@ impl ProtoChunk {
                                         local_z,
                                         surface_height_estimate_sampler,
                                     )
-                                    .unwrap_or(self.default_block);
+                                    .unwrap_or(generator.default_block);
                                 self.set_block_state(block_x, block_y, block_z, block_state);
                             }
                         }
@@ -798,6 +769,7 @@ impl ProtoChunk {
 
         self.get_biome_id(seed_biome_pos.x, seed_biome_pos.y, seed_biome_pos.z)
     }
+
     #[must_use]
     pub fn get_terrain_gen_biome(&self, x: i32, y: i32, z: i32) -> &'static Biome {
         Biome::from_id(self.get_terrain_gen_biome_id(x, y, z)).unwrap()
@@ -809,14 +781,16 @@ impl ProtoChunk {
     /// It is crucial that biome assignments are determined before this process begins.
     pub fn build_surface(
         &mut self,
-        settings: &GenerationSettings,
-        random_config: &GlobalRandomConfig,
-        terrain_cache: &TerrainCache,
+        generator: &super::generator::VanillaGenerator,
         surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
     ) {
         let start_x = chunk_pos::start_block_x(self.x);
         let start_z = chunk_pos::start_block_z(self.z);
         let min_y = self.bottom_y();
+
+        let settings = generator.settings;
+        let random_config = &generator.random_config;
+        let terrain_cache = &generator.terrain_cache;
 
         let random = &random_config.base_random_deriver;
         let mut context = MaterialRuleContext::new(
@@ -905,7 +879,7 @@ impl ProtoChunk {
                             context.block_pos_y,
                             context.block_pos_z,
                         );
-                        let new_state = evaluate_surface_rule(
+                        let new_state = try_apply_material_rule(
                             &settings.surface_rule,
                             self,
                             &mut context,
@@ -1100,7 +1074,7 @@ impl ProtoChunk {
         }
     }
 
-    fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
+    pub fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
         let mut allowed_biomes = Vec::new();
         for entry in set.structures {
             let structure = Structure::get(&entry.structure);
@@ -1117,26 +1091,25 @@ impl ProtoChunk {
         allowed_biomes
     }
 
-    pub fn set_structure_starts(
-        &mut self,
-        random_config: &GlobalRandomConfig,
-        settings: &GenerationSettings,
-        global_cache: &GlobalStructureCache,
-    ) {
-        let seed = random_config.seed;
-        let calculator = StructurePlacementCalculator::new(seed as i64);
+    pub fn set_structure_starts(&mut self, generator: &super::generator::VanillaGenerator) {
+        let random_config = &generator.random_config;
+        let settings = generator.settings;
+        let global_cache = &generator.global_structure_cache;
+        let calculator = &generator.structure_calculator;
 
-        for set in StructureSet::ALL {
-            let allowed_biomes = Self::get_allowed_biomes(set);
+        let seed = random_config.seed;
+
+        for (i, set) in StructureSet::ALL.iter().enumerate() {
+            let allowed_biomes = &generator.structure_allowed_biomes[&i];
 
             if !should_generate_structure(
                 &set.placement,
-                &calculator,
+                calculator,
                 self.x,
                 self.z,
                 global_cache,
                 self,
-                &allowed_biomes,
+                allowed_biomes,
             ) {
                 continue;
             }
@@ -1205,14 +1178,13 @@ impl ProtoChunk {
         false
     }
 
-    pub fn set_structure_references(
-        &mut self,
-        random_config: &GlobalRandomConfig,
-        settings: &GenerationSettings,
-        dimension: &Dimension,
-        noise_router: &ProtoNoiseRouters,
-        global_cache: &GlobalStructureCache,
-    ) {
+    pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
+        let random_config = &generator.random_config;
+        let settings = generator.settings;
+        let dimension = &generator.dimension;
+        let noise_router = &generator.base_router;
+        let global_cache = &generator.global_structure_cache;
+
         let start_x = chunk_pos::start_block_x(self.x);
         let start_z = chunk_pos::start_block_z(self.z);
         let end_x = start_x + 15;

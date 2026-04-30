@@ -234,7 +234,12 @@ impl ToTokens for BlockPropertyStruct {
                 PropertyType::Bool => quote! { (!self.#field as u16, 2) },
                 PropertyType::Int { min, max } => {
                     let count = (max - min + 1) as u16;
-                    quote! { ((self.#field - #min) as u16, #count) }
+
+                    if *min > 0 {
+                        quote! { ((self.#field - #min) as u16, #count) }
+                    } else {
+                        quote! { (self.#field as u16, #count) }
+                    }
                 }
                 PropertyType::Enum { name } => {
                     let ty = Ident::new(name, Span::call_site());
@@ -260,11 +265,16 @@ impl ToTokens for BlockPropertyStruct {
                     },
                     PropertyType::Int { min, max } => {
                         let count = (max - min + 1) as u16;
+                        let val = if *min > 0 {
+                            quote! { value + #min }
+                        } else {
+                            quote! {value}
+                        };
                         quote! {
                             #field_name: {
                                 let value = (index % #count) as u8;
                                 index /= #count;
-                                value + #min
+                                #val
                             }
                         }
                     }
@@ -308,14 +318,16 @@ impl ToTokens for BlockPropertyStruct {
             }
         });
 
+        let from_props_keys = self
+            .data
+            .variant_mappings
+            .iter()
+            .map(|entry| &entry.original_name);
         let from_props_values = self.data.variant_mappings.iter().map(|entry| {
-            let key = &entry.original_name;
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    #key => {
-                        block_props.#field_name = matches!(*value, "true")
-                    }
+                    block_props.#field_name = matches!(*value, "true")
                 },
                 PropertyType::Int { min, max } => {
                     let mut arms = Vec::new();
@@ -324,24 +336,33 @@ impl ToTokens for BlockPropertyStruct {
                         arms.push(quote! { #i_str => #i });
                     }
                     quote! {
-                        #key => {
-                            block_props.#field_name = match *value {
-                                #(#arms,)*
-                                _ => #min,
-                            }
+                        block_props.#field_name = match *value {
+                            #(#arms,)*
+                            _ => #min,
                         }
                     }
                 }
                 PropertyType::Enum { name } => {
                     let enum_ident = Ident::new(name, Span::call_site());
                     quote! {
-                        #key => {
-                            block_props.#field_name = #enum_ident::from_value(value)
-                        }
+                        block_props.#field_name = #enum_ident::from_value(value)
                     }
                 }
             }
         });
+
+        let from_props_loop_body = if self.data.variant_mappings.len() > 1 {
+            quote! {
+                match *key {
+                    #(#from_props_keys => #from_props_values),*,
+                    _ => {}, //
+                }
+            }
+        } else {
+            let key = from_props_keys.into_iter().next();
+            let val = from_props_values.into_iter().next();
+            quote! { if *key == #key { #val } }
+        };
 
         tokens.extend(quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -416,10 +437,7 @@ impl ToTokens for BlockPropertyStruct {
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {
-                        match *key {
-                            #(#from_props_values),*,
-                            _ => {}, //
-                        }
+                        #from_props_loop_body
                     }
                     block_props
                 }
@@ -847,9 +865,10 @@ pub fn build() -> TokenStream {
 
             let property_type = match &generated_property.property_type {
                 GeneratedPropertyType::Boolean => PropertyType::Bool,
-                GeneratedPropertyType::Int { min, max } => {
-                    PropertyType::Int { min: *min, max: *max }
-                }
+                GeneratedPropertyType::Int { min, max } => PropertyType::Int {
+                    min: *min,
+                    max: *max,
+                },
                 GeneratedPropertyType::Enum { .. } => PropertyType::Enum {
                     name: renamed_property.clone(),
                 },
@@ -957,10 +976,8 @@ pub fn build() -> TokenStream {
                             let count = (*max - *min + 1) as u16;
                             let val = (temp_index % count) as u8;
                             temp_index /= count;
-                            java_props_for_this_state.insert(
-                                mapping.original_name.clone(),
-                                (val + *min).to_string(),
-                            );
+                            java_props_for_this_state
+                                .insert(mapping.original_name.clone(), (val + *min).to_string());
                         }
                         PropertyType::Enum { name } => {
                             let enum_info = property_enums.get(name).unwrap();

@@ -104,6 +104,7 @@ crossbeam = "0.8"
 
 uuid = { version = "1.23", features = ["serde", "v3", "v4"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_repr = { version = "0.1" }
 serde_json = "1.0"
 
 tempfile = { version = "3.27.0", default-features = false }
@@ -120,6 +121,7 @@ crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
 crossfire = { version = "3.1.7", features = ["compat"] }
+crypto-bigint = "0.7.3"
 dashmap = "6.1"
 ecdsa = "0.16.9"
 either = "1.15.0"
@@ -138,7 +140,6 @@ num-derive = "0.4"
 num-traits = "0.2"
 p384 = "0.13.1"
 phf = "0.13.1"
-pkcs8 = "=0.11.0-rc.11"
 proc-macro2 = "1.0"
 pumpkin-codecs = { path = "pumpkin-codecs" }
 pumpkin-config = { path = "pumpkin-config" }
@@ -151,7 +152,7 @@ pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
 rand = "0.10.1"
-rsa = "=0.10.0-rc.17"
+rsa = "=0.10.0-rc.18"
 cipher = "0.5.1"
 rustc-hash = "2.1.2"
 rustyline = "18.0.0"
