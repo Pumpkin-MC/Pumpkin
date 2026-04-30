@@ -607,7 +607,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:kelp" => {
             quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
-
+        
         // All TODO/empty features
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
@@ -1033,9 +1033,8 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
         }
         "minecraft:upwards_branching_trunk_placer" => {
             let extra_branch_steps = value_to_int_provider(&v["extra_branch_steps"]);
-            let place_branch_per_log_probability = v["place_branch_per_log_probability"]
-                .as_f64()
-                .unwrap_or(0.0) as f32;
+            let place_branch_per_log_probability =
+                v["place_branch_per_log_probability"].as_f64().unwrap_or(0.0) as f32;
             let extra_branch_length = value_to_int_provider(&v["extra_branch_length"]);
             let can_grow_through = value_to_block_list(&v["can_grow_through"]);
             quote! {
@@ -1053,8 +1052,7 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
             let branch_start_offset_v = &v["branch_start_offset_from_top"];
             let min = branch_start_offset_v["min_inclusive"].as_i64().unwrap_or(0) as i32;
             let max = branch_start_offset_v["max_inclusive"].as_i64().unwrap_or(0) as i32;
-            let branch_end_offset_from_top =
-                value_to_int_provider(&v["branch_end_offset_from_top"]);
+            let branch_end_offset_from_top = value_to_int_provider(&v["branch_end_offset_from_top"]);
             quote! {
                 TrunkType::Cherry(CherryTrunkPlacer {
                     branch_count: #branch_count,
