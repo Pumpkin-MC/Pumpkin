@@ -28,6 +28,7 @@ use pumpkin_protocol::{
             interaction::SInteraction,
             loading_screen::SLoadingScreen,
             login::SLogin,
+            player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput,
             raknet::{
                 connection::{
@@ -584,6 +585,10 @@ impl BedrockClient {
             }
             SCommandRequest::PACKET_ID => {
                 self.handle_chat_command(player, server, SCommandRequest::read(reader)?)
+                    .await;
+            }
+            SPlayerAction::PACKET_ID => {
+                self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
             }
             _ => {

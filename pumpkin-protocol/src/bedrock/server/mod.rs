@@ -4,6 +4,7 @@ pub mod container_close;
 pub mod interaction;
 pub mod loading_screen;
 pub mod login;
+pub mod player_action;
 pub mod player_auth_input;
 pub mod raknet;
 pub mod request_chunk_radius;

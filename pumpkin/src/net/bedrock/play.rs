@@ -11,6 +11,7 @@ use pumpkin_protocol::{
             command_request::SCommandRequest,
             container_close::SContainerClose,
             interaction::{Action, SInteraction},
+            player_action::{Action as PlayerAction, SPlayerAction},
             player_auth_input::{InputData, SPlayerAuthInput},
             request_chunk_radius::SRequestChunkRadius,
             text::SText,
@@ -19,7 +20,9 @@ use pumpkin_protocol::{
     codec::{var_int::VarInt, var_long::VarLong},
     java::client::play::CSystemChatMessage,
 };
-use pumpkin_util::{math::position::BlockPos, text::TextComponent};
+use pumpkin_util::{GameMode, math::position::BlockPos, text::TextComponent};
+
+use pumpkin_world::world::BlockFlags;
 
 use crate::{
     entity::{EntityBase, player::Player},
@@ -208,6 +211,69 @@ impl BedrockClient {
                 }
             }
         }}
+    }
+
+    pub async fn handle_player_action(
+        &self,
+        player: &Arc<Player>,
+        server: &Server,
+        packet: SPlayerAction,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+
+        match packet.action {
+            PlayerAction::StartBreak | PlayerAction::CreativePlayerDestroyBlock => {
+                let location = packet.block_pos;
+                if !player.can_interact_with_block_at(&location, 1.0) {
+                    return;
+                }
+
+                let entity = &player.living_entity.entity;
+                let world = entity.world.load_full();
+                let (block, state) = world.get_block_and_state(&location).await;
+
+                if player.gamemode.load() == GameMode::Creative {
+                    let new_state = world
+                        .break_block(
+                            &location,
+                            Some(player.clone()),
+                            BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
+                        )
+                        .await;
+                    if new_state.is_some() {
+                        server
+                            .block_registry
+                            .broken(&world, block, player, &location, server, state)
+                            .await;
+                    }
+                } else if !state.is_air() {
+                    let speed = crate::block::calc_block_breaking(player, state, block).await;
+                    if speed >= 1.0 {
+                        let broken_state = world.get_block_state(&location).await;
+                        let new_state = world
+                            .break_block(
+                                &location,
+                                Some(player.clone()),
+                                BlockFlags::NOTIFY_NEIGHBORS,
+                            )
+                            .await;
+                        if new_state.is_some() {
+                            server
+                                .block_registry
+                                .broken(&world, block, player, &location, server, broken_state)
+                                .await;
+                            player.apply_tool_damage_for_block_break(broken_state).await;
+                        }
+                    } else {
+                        // TODO: Survival progressive breaking
+                    }
+                }
+            }
+            // TODO
+            _ => {}
+        }
     }
 
     pub async fn handle_chat_command(
