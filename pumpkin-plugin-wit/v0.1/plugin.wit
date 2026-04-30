@@ -27,6 +27,7 @@ world plugin {
     import context;
     /// Provides internationalization and translation support.
     import i18n;
+    import packet;
     /// Provides task scheduling for delayed or repeating logic.
     import scheduler;
     /// Provides world information and block manipulation.

@@ -1,10 +1,7 @@
 use std::{
     collections::BTreeMap,
-    env,
-    fmt::Write,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use syn::{Attribute, Expr, Fields, Item, LitInt, Type};
@@ -15,6 +12,7 @@ struct PacketConst {
     const_name: String,
     phase: String,
     name: String,
+    variant: String,
 }
 
 #[derive(Debug, Clone)]
@@ -25,10 +23,27 @@ struct PacketSchemaField {
 
 #[derive(Debug, Clone)]
 struct PacketSchemaDef {
-    direction: &'static str,
-    phase: String,
-    name: String,
+    variant: String,
     fields: Vec<PacketSchemaField>,
+}
+
+fn to_camel(input: &str) -> String {
+    input
+        .split('_')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut out = String::new();
+                    out.push(first.to_ascii_uppercase());
+                    out.push_str(&chars.as_str().to_ascii_lowercase());
+                    out
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<String>()
 }
 
 fn parse_packet_consts(source: &str) -> Vec<PacketConst> {
@@ -55,16 +70,124 @@ fn parse_packet_consts(source: &str) -> Vec<PacketConst> {
             && let Some((const_name, _)) = rest.split_once(':')
             && let Some((phase, packet_name)) = const_name.split_once('_')
         {
+            let direction_title = to_camel(active_dir);
+            let variant = format!(
+                "{}{}{}",
+                direction_title,
+                to_camel(phase),
+                to_camel(packet_name)
+            );
+
             packets.push(PacketConst {
                 direction: active_dir,
                 const_name: const_name.to_string(),
                 phase: phase.to_ascii_lowercase(),
                 name: packet_name.to_ascii_lowercase(),
+                variant,
             });
         }
     }
 
     packets
+}
+
+fn generate_packet_keys(packets: &[PacketConst]) -> String {
+    let mut out = String::new();
+
+    out.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]\n");
+    out.push_str("pub enum JavaPacketKey {\n");
+    for packet in packets {
+        out.push_str("    ");
+        out.push_str(&packet.variant);
+        out.push_str(",\n");
+    }
+    out.push_str("}\n\n");
+
+    out.push_str("impl JavaPacketKey {\n");
+    out.push_str("    pub fn direction(&self) -> crate::packet::PacketDirection {\n");
+    out.push_str("        match self {\n");
+    for packet in packets {
+        let dir = if packet.direction == "serverbound" {
+            "crate::packet::PacketDirection::Serverbound"
+        } else {
+            "crate::packet::PacketDirection::Clientbound"
+        };
+        out.push_str(&format!(
+            "            Self::{} => {},\n",
+            packet.variant, dir
+        ));
+    }
+    out.push_str("        }\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub fn phase(&self) -> &'static str {\n");
+    out.push_str("        match self {\n");
+    for packet in packets {
+        out.push_str(&format!(
+            "            Self::{} => \"{}\",\n",
+            packet.variant, packet.phase
+        ));
+    }
+    out.push_str("        }\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub fn name(&self) -> &'static str {\n");
+    out.push_str("        match self {\n");
+    for packet in packets {
+        out.push_str(&format!(
+            "            Self::{} => \"{}\",\n",
+            packet.variant, packet.name
+        ));
+    }
+    out.push_str("        }\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub fn packet_id(&self) -> &'static crate::packet_ids_full::PacketId {\n");
+    out.push_str("        match self {\n");
+    for packet in packets {
+        out.push_str(&format!(
+            "            Self::{} => &crate::packet_ids_full::{}::{},\n",
+            packet.variant, packet.direction, packet.const_name
+        ));
+    }
+    out.push_str("        }\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub fn id_for_version(&self, version: pumpkin_util::version::MinecraftVersion) -> i32 {\n");
+    out.push_str("        self.packet_id().to_id(version)\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub fn from_parts(\n");
+    out.push_str("        direction: crate::packet::PacketDirection,\n");
+    out.push_str("        phase: &str,\n");
+    out.push_str("        name: &str,\n");
+    out.push_str("    ) -> Option<Self> {\n");
+    out.push_str("        match (direction, phase, name) {\n");
+    for packet in packets {
+        let dir = if packet.direction == "serverbound" {
+            "crate::packet::PacketDirection::Serverbound"
+        } else {
+            "crate::packet::PacketDirection::Clientbound"
+        };
+        out.push_str(&format!(
+            "            ({}, \"{}\", \"{}\") => Some(Self::{}),\n",
+            dir, packet.phase, packet.name, packet.variant
+        ));
+    }
+    out.push_str("            _ => None,\n");
+    out.push_str("        }\n");
+    out.push_str("    }\n\n");
+
+    out.push_str("    pub fn all() -> &'static [Self] {\n");
+    out.push_str("        &[\n");
+    for packet in packets {
+        out.push_str(&format!("            Self::{},\n", packet.variant));
+    }
+    out.push_str("        ]\n");
+    out.push_str("    }\n");
+    out.push_str("}\n");
+
+    out
 }
 
 fn collect_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -111,10 +234,6 @@ fn java_packet_const_name(attrs: &[Attribute]) -> Option<String> {
     })
 }
 
-fn parse_array_len(len: &LitInt) -> Option<usize> {
-    len.base10_parse().ok()
-}
-
 fn type_to_schema_kind(ty: &Type, is_last: bool) -> Option<String> {
     match ty {
         Type::Reference(reference) => type_to_schema_kind(reference.elem.as_ref(), is_last),
@@ -122,8 +241,11 @@ fn type_to_schema_kind(ty: &Type, is_last: bool) -> Option<String> {
             let Type::Path(path) = slice.elem.as_ref() else {
                 return None;
             };
-            (path.path.is_ident("u8") && is_last)
-                .then(|| "LocalFieldType::RemainingBytes".to_string())
+            if path.path.is_ident("u8") && is_last {
+                Some("FieldType::RemainingBytes".to_string())
+            } else {
+                None
+            }
         }
         Type::Array(array) => {
             let Type::Path(path) = array.elem.as_ref() else {
@@ -140,27 +262,27 @@ fn type_to_schema_kind(ty: &Type, is_last: bool) -> Option<String> {
                 return None;
             };
             let len = parse_array_len(len)?;
-            Some(format!("LocalFieldType::Bytes {{ len: {len} }}"))
+            Some(format!("FieldType::Bytes {{ len: {len} }}"))
         }
         Type::Path(path) => {
             let segment = path.path.segments.last()?;
             match segment.ident.to_string().as_str() {
-                "u8" => Some("LocalFieldType::U8".to_string()),
-                "bool" => Some("LocalFieldType::Bool".to_string()),
-                "u16" => Some("LocalFieldType::U16".to_string()),
-                "i8" => Some("LocalFieldType::I8".to_string()),
-                "i16" => Some("LocalFieldType::I16".to_string()),
-                "i32" => Some("LocalFieldType::I32".to_string()),
-                "i64" => Some("LocalFieldType::I64".to_string()),
-                "f32" => Some("LocalFieldType::F32".to_string()),
-                "f64" => Some("LocalFieldType::F64".to_string()),
+                "u8" => Some("FieldType::U8".to_string()),
+                "bool" => Some("FieldType::Bool".to_string()),
+                "u16" => Some("FieldType::U16".to_string()),
+                "i8" => Some("FieldType::I8".to_string()),
+                "i16" => Some("FieldType::I16".to_string()),
+                "i32" => Some("FieldType::I32".to_string()),
+                "i64" => Some("FieldType::I64".to_string()),
+                "f32" => Some("FieldType::F32".to_string()),
+                "f64" => Some("FieldType::F64".to_string()),
                 "str" | "String" | "ResourceLocation" => {
-                    Some("LocalFieldType::String { max_len: 32767 }".to_string())
+                    Some("FieldType::String { max_len: 32767 }".to_string())
                 }
-                "VarInt" => Some("LocalFieldType::VarInt".to_string()),
-                "VarLong" => Some("LocalFieldType::VarLong".to_string()),
-                "Uuid" => Some("LocalFieldType::UuidBytes".to_string()),
-                "BlockPos" => Some("LocalFieldType::BlockPos".to_string()),
+                "VarInt" => Some("FieldType::VarInt".to_string()),
+                "VarLong" => Some("FieldType::VarLong".to_string()),
+                "Uuid" => Some("FieldType::UuidBytes".to_string()),
+                "BlockPos" => Some("FieldType::BlockPos".to_string()),
                 "Vector3" => {
                     let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {
                         return None;
@@ -171,10 +293,10 @@ fn type_to_schema_kind(ty: &Type, is_last: bool) -> Option<String> {
                     match inner_ty {
                         Type::Path(inner) => {
                             match inner.path.segments.last()?.ident.to_string().as_str() {
-                                "f32" => Some("LocalFieldType::Vec3F32".to_string()),
-                                "f64" => Some("LocalFieldType::Vec3F64".to_string()),
-                                "i16" => Some("LocalFieldType::Vec3I16".to_string()),
-                                "i32" => Some("LocalFieldType::Vec3I32".to_string()),
+                                "f32" => Some("FieldType::Vec3F32".to_string()),
+                                "f64" => Some("FieldType::Vec3F64".to_string()),
+                                "i16" => Some("FieldType::Vec3I16".to_string()),
+                                "i32" => Some("FieldType::Vec3I32".to_string()),
                                 _ => None,
                             }
                         }
@@ -193,8 +315,11 @@ fn type_to_schema_kind(ty: &Type, is_last: bool) -> Option<String> {
                             let Type::Path(inner) = slice.elem.as_ref() else {
                                 return None;
                             };
-                            (inner.path.is_ident("u8") && is_last)
-                                .then(|| "LocalFieldType::RemainingBytes".to_string())
+                            if inner.path.is_ident("u8") && is_last {
+                                Some("FieldType::RemainingBytes".to_string())
+                            } else {
+                                None
+                            }
                         }
                         _ => None,
                     }
@@ -207,13 +332,17 @@ fn type_to_schema_kind(ty: &Type, is_last: bool) -> Option<String> {
                         return None;
                     };
                     let inner = type_to_schema_kind(inner_ty, is_last)?;
-                    Some(format!("LocalFieldType::Optional(Box::new({inner}))"))
+                    Some(format!("FieldType::Optional(Box::new({inner}))"))
                 }
                 _ => None,
             }
         }
         _ => None,
     }
+}
+
+fn parse_array_len(len: &LitInt) -> Option<usize> {
+    len.base10_parse().ok()
 }
 
 fn parse_packet_schema_file(
@@ -228,8 +357,9 @@ fn parse_packet_schema_file(
     };
 
     let mut out = Vec::new();
+
     let Some(direction) = packet_direction_from_protocol_path(path) else {
-        return out;
+        return Vec::new();
     };
 
     for item in file.items {
@@ -250,8 +380,8 @@ fn parse_packet_schema_file(
             Fields::Named(named) => {
                 let mut fields = Vec::new();
                 let mut supported = true;
-                let field_count = named.named.len();
 
+                let field_count = named.named.len();
                 for (index, field) in named.named.iter().enumerate() {
                     let Some(ident) = &field.ident else {
                         supported = false;
@@ -279,9 +409,7 @@ fn parse_packet_schema_file(
         };
 
         out.push(PacketSchemaDef {
-            direction: packet.direction,
-            phase: packet.phase.clone(),
-            name: packet.name.clone(),
+            variant: packet.variant.clone(),
             fields,
         });
     }
@@ -304,27 +432,17 @@ fn generate_packet_schemas(
     }
 
     let mut out = String::new();
-    out.push_str(
-        "#[allow(clippy::too_many_lines)]\nfn generated_java_packet_schema_registry() -> BTreeMap<String, LocalPacketSchema> {\n",
-    );
-    out.push_str("    let mut registry = BTreeMap::new();\n");
+    out.push_str("fn generated_java_packet_schema_registry() -> JavaPacketSchemaRegistry {\n");
+    out.push_str("    let mut registry = JavaPacketSchemaRegistry::default();\n");
     for schema in &schemas {
-        let direction = if schema.direction == "serverbound" {
-            "PacketDirection::Serverbound"
-        } else {
-            "PacketDirection::Clientbound"
-        };
-
-        out.push_str("    registry.insert(\n");
-        let _ = writeln!(
-            out,
-            "        schema_key({}, {:?}, {:?}),\n",
-            direction, schema.phase, schema.name
-        );
-        out.push_str("        LocalPacketSchema::new()");
+        out.push_str("    registry.register(\n");
+        out.push_str("        JavaPacketKey::");
+        out.push_str(&schema.variant);
+        out.push_str(",\n");
+        out.push_str("        PacketSchema::new()");
         for field in &schema.fields {
             out.push_str(".field(");
-            let _ = write!(out, "{:?}", field.name);
+            out.push_str(&format!("{:?}", field.name));
             out.push_str(", ");
             out.push_str(&field.kind_expr);
             out.push(')');
@@ -334,46 +452,12 @@ fn generate_packet_schemas(
     }
     out.push_str("    registry\n");
     out.push_str("}\n");
+
     out
-}
-
-fn git_output(manifest_dir: &Path, args: &[&str]) -> Option<String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(manifest_dir)
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let stdout = String::from_utf8(output.stdout).ok()?;
-    let stdout = stdout.trim();
-    (!stdout.is_empty()).then(|| stdout.to_string())
-}
-
-fn write_build_info(manifest_dir: &Path, out_dir: &Path) {
-    let git_hash = git_output(manifest_dir, &["rev-parse", "--short=10", "HEAD"])
-        .unwrap_or_else(|| "unknown".to_string());
-    let git_hash_full =
-        git_output(manifest_dir, &["rev-parse", "HEAD"]).unwrap_or_else(|| git_hash.clone());
-
-    let build_info = format!(
-        "pub const GIT_HASH: &str = {git_hash:?};\npub const GIT_HASH_FULL: &str = {git_hash_full:?};\n"
-    );
-
-    fs::write(out_dir.join("build_info.rs"), build_info).expect("write build_info.rs");
-
-    let git_head = manifest_dir.join("../.git/HEAD");
-    println!("cargo:rerun-if-changed={}", git_head.display());
 }
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
-    write_build_info(&manifest_dir, &out_dir);
-
     let packet_generated = manifest_dir
         .join("../pumpkin-data/src/generated/packet.rs")
         .canonicalize()
@@ -398,7 +482,18 @@ fn main() {
         })
         .collect::<BTreeMap<_, _>>();
 
-    let generated = generate_packet_schemas(&manifest_dir, &packet_by_const);
-    fs::write(out_dir.join("generated_java_packet_schemas.rs"), generated)
-        .expect("write generated_java_packet_schemas.rs");
+    let generated_keys = generate_packet_keys(&packets);
+    let generated_schemas = generate_packet_schemas(&manifest_dir, &packet_by_const);
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
+    fs::write(
+        out_dir.join("generated_java_packet_keys.rs"),
+        generated_keys,
+    )
+    .expect("write generated_java_packet_keys.rs");
+    fs::write(
+        out_dir.join("generated_java_packet_schemas.rs"),
+        generated_schemas,
+    )
+    .expect("write generated_java_packet_schemas.rs");
 }

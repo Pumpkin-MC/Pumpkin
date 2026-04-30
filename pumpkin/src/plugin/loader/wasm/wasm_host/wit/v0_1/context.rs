@@ -243,6 +243,23 @@ async fn register_server_event(
     }
 }
 
+async fn register_packet_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginEventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::packet::RawPacketEvent;
+
+    match event_type {
+        EventType::RawPacketEvent => {
+            register_typed_event::<RawPacketEvent>(resource, handler, priority, blocking).await;
+        }
+        _ => unreachable!("non-packet event should not be routed to register_packet_event"),
+    }
+}
+
 impl DowncastResourceExt<ContextResource> for Resource<Context> {
     fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a ContextResource {
         state
@@ -302,6 +319,9 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         let handler = Arc::new(WasmPluginEventHandler { handler_id, plugin });
 
         match event_type {
+            event_type @ EventType::RawPacketEvent => {
+                register_packet_event(resource, &handler, priority, blocking, event_type).await;
+            }
             event_type @ (EventType::ServerCommandEvent | EventType::ServerBroadcastEvent) => {
                 register_server_event(resource, &handler, priority, blocking, event_type).await;
             }

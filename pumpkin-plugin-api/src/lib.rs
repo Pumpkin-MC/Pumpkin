@@ -35,6 +35,8 @@ use crate::{
 
 pub mod commands;
 pub mod events;
+pub mod packet;
+pub mod packet_ids_full;
 /// Constants for plugin permissions.
 ///
 /// Use these in your `PluginMetadata` to request access to specific host features.
@@ -50,7 +52,7 @@ pub mod command {
 pub use wit::pumpkin::plugin::{
     block_entity, command as command_wit, common,
     context::{Context, Server},
-    entity, gui, permission, player, scoreboard, server, text, world,
+    entity, gui, packet as packet_wit, permission, player, scoreboard, server, text, world,
 };
 
 pub mod logging;

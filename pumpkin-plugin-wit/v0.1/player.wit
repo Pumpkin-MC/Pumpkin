@@ -6,6 +6,7 @@ interface player {
     use permission.{permission-level};
     use text.{text-component};
     use gui.{gui};
+    use packet.{packet, raw-packet};
 
     /// Various abilities a player can have.
     record player-abilities {
@@ -71,6 +72,8 @@ interface player {
         get-locale: func () -> string;
         /// Returns the player's current ping in milliseconds.
         get-ping: func () -> u32;
+        /// Returns the network protocol version for this player.
+        get-protocol-version: func () -> u32;
 
         // Permissions & metadata
 
@@ -114,6 +117,10 @@ interface player {
         show-actionbar: func (text: text-component);
         /// Sets the fade-in, stay, and fade-out times for titles.
         send-title-animation: func (fade-in: s32, stay: s32, fade-out: s32);
+        /// Sends a custom payload packet to this player (Java edition, Play state).
+        send-packet: func (packet: packet);
+        /// Sends a raw packet to this player.
+        send-raw-packet: func (packet: raw-packet);
 
         // Teleport & kick
 

@@ -4,12 +4,19 @@ name = "pumpkin-plugin-api"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+build = "build.rs"
 
 [dependencies]
 wit-bindgen = { workspace = true }
 tracing = { workspace = true }
 postcard = { workspace = true }
 tracing-serde-structured = { workspace = true }
+pumpkin-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [package.metadata.component]
 target = { path = "../pumpkin-plugin-wit" }
+
+[build-dependencies]
+syn = { workspace = true, features = ["full", "parsing"] }

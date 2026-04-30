@@ -5,6 +5,7 @@ description = "Empowering everyone to host fast and efficient Minecraft servers.
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+build = "build.rs"
 
 [package.metadata.tauri-winres]
 # FileDescription is handled as the Program name by Windows!
@@ -108,6 +109,9 @@ bitflags = { workspace = true }
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[build-dependencies]
+syn = { workspace = true, features = ["full", "parsing"] }
 
 [features]
 console-subscriber = ["dep:console-subscriber"]

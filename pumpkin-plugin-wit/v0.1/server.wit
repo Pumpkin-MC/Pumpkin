@@ -1,5 +1,6 @@
 interface server {
     use player.{player};
+    use packet.{packet, raw-packet};
     use common.{game-mode};
     use %world.{%world};
     use text.{text-component};
@@ -83,6 +84,11 @@ interface server {
 
         /// Broadcasts a tab list header and footer to all players.
         broadcast-tab-list-header-footer: func(header: text-component, footer: text-component);
+
+        /// Sends a custom payload packet to all online players (Java edition, Play state).
+        broadcast-packet: func(packet: packet);
+        /// Sends a raw packet to all online players.
+        broadcast-raw-packet: func(packet: raw-packet);
 
         /// Returns the maximum number of players allowed on the server.
         get-max-players: func() -> u32;

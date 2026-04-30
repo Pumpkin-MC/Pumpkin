@@ -37,6 +37,9 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 pub mod block;
+pub mod build_info {
+    include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
+}
 pub mod command;
 pub mod crash;
 pub mod data;
@@ -444,6 +447,7 @@ impl PumpkinServer {
 
                         tasks.spawn(async move {
                             let mut java_client = JavaClient::new(connection, client_addr, client_id);
+                            java_client.set_server_ref(&server_clone);
                             java_client.start_outgoing_packet_task();
                             let login_result = java_client.handle_login_sequence(&server_clone).await;
 
@@ -461,6 +465,7 @@ impl PumpkinServer {
                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
                                         .await;
                                     if let ClientPlatform::Java(client) = &player.client {
+                                        client.set_player_ref(&player);
                                         client.progress_player_packets(&player, &server_clone).await;
                                         // Close when done
                                         client.close();
@@ -506,12 +511,14 @@ impl PumpkinServer {
                                     });
                                 } else if let Some(sock) = self.udp_socket.as_ref()
                                     && let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
-                                        *master_client_id_counter += 1;
-                                        let mut platform = BedrockClient::new(sock.clone(), client_addr, be_clients);
-                                        platform.handle_connection_request(packet).await;
-                                        platform.start_outgoing_packet_task();
-                                        clients_guard.insert(client_addr, Arc::new(platform));
-                                    }
+                                    *master_client_id_counter += 1;
+                                    let mut platform =
+                                        BedrockClient::new(sock.clone(), client_addr, be_clients);
+                                    platform.set_server_ref(&self.server);
+                                    platform.handle_connection_request(packet).await;
+                                    platform.start_outgoing_packet_task();
+                                    clients_guard.insert(client_addr, Arc::new(platform));
+                                }
                             } else if let Some(sock) = self.udp_socket.as_ref() {
                                 let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, sock).await;
                             }

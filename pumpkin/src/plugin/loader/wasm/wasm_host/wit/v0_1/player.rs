@@ -25,7 +25,9 @@ use crate::{
     },
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::permission::PermissionLvl;
+use pumpkin_world::CURRENT_BEDROCK_MC_PROTOCOL;
 
 pub fn player_from_resource(
     state: &PluginHostState,
@@ -209,6 +211,15 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.ping.load(Ordering::Relaxed))
     }
 
+    async fn get_protocol_version(&mut self, player: Resource<Player>) -> wasmtime::Result<u32> {
+        let player = player_from_resource(self, &player)?;
+        let protocol = match &player.client {
+            crate::net::ClientPlatform::Java(java) => java.version.load().protocol_version() as u32,
+            crate::net::ClientPlatform::Bedrock(_) => CURRENT_BEDROCK_MC_PROTOCOL,
+        };
+        Ok(protocol)
+    }
+
     async fn get_permission_level(
         &mut self,
         player: Resource<Player>,
@@ -321,6 +332,16 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let component = text_component_from_resource(self, &text);
         let player = player_from_resource(self, &player)?;
+        if self.should_defer_effects() {
+            self.defer_effect(
+                crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerSystemMessage {
+                    player,
+                    text: component,
+                    overlay,
+                },
+            );
+            return Ok(());
+        }
         player.send_system_message_raw(&component, overlay).await;
         Ok(())
     }
@@ -410,6 +431,65 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         player.send_title_animation(fade_in, stay, fade_out).await;
+        Ok(())
+    }
+
+    async fn send_packet(
+        &mut self,
+        player: Resource<Player>,
+        packet: pumpkin::plugin::packet::Packet,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if self.should_defer_effects() {
+            self.defer_effect(
+                crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerCustomPayload {
+                    player,
+                    channel: packet.channel,
+                    data: packet.data,
+                },
+            );
+            return Ok(());
+        }
+        player
+            .send_custom_payload(&packet.channel, &packet.data)
+            .await;
+        Ok(())
+    }
+
+    async fn send_raw_packet(
+        &mut self,
+        player: Resource<Player>,
+        packet: pumpkin::plugin::packet::RawPacket,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if self.should_defer_effects() {
+            self.defer_effect(
+                crate::plugin::loader::wasm::wasm_host::state::PendingEffect::PlayerRawPacket {
+                    player,
+                    id: packet.id,
+                    payload: packet.payload,
+                },
+            );
+            return Ok(());
+        }
+
+        match &player.client {
+            crate::net::ClientPlatform::Java(java) => {
+                let mut buf = Vec::new();
+                VarInt(packet.id)
+                    .encode(&mut buf)
+                    .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                buf.extend_from_slice(&packet.payload);
+                java.enqueue_packet_data(buf.into()).await;
+            }
+            crate::net::ClientPlatform::Bedrock(bedrock) => {
+                bedrock
+                    .send_raw_game_packet(packet.id, packet.payload)
+                    .await
+                    .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+            }
+        }
+
         Ok(())
     }
 

@@ -607,7 +607,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:kelp" => {
             quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
-        
+
         // All TODO/empty features
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }

@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 use wasmtime::component::Resource;
@@ -250,6 +253,67 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         server
             .broadcast_tab_list_header_footer(&header, &footer)
             .await;
+        Ok(())
+    }
+
+    async fn broadcast_packet(
+        &mut self,
+        res: Resource<Server>,
+        packet: pumpkin::plugin::packet::Packet,
+    ) -> wasmtime::Result<()> {
+        let resource = self.get_server_res(&res)?;
+        if self.should_defer_effects() {
+            self.defer_effect(
+                crate::plugin::loader::wasm::wasm_host::state::PendingEffect::ServerBroadcastCustomPayload {
+                    server: Arc::clone(&resource.provider),
+                    channel: packet.channel,
+                    data: packet.data,
+                },
+            );
+            return Ok(());
+        }
+        for player in resource.provider.get_all_players() {
+            player
+                .send_custom_payload(&packet.channel, &packet.data)
+                .await;
+        }
+        Ok(())
+    }
+
+    async fn broadcast_raw_packet(
+        &mut self,
+        res: Resource<Server>,
+        packet: pumpkin::plugin::packet::RawPacket,
+    ) -> wasmtime::Result<()> {
+        let resource = self.get_server_res(&res)?;
+        if self.should_defer_effects() {
+            self.defer_effect(
+                crate::plugin::loader::wasm::wasm_host::state::PendingEffect::ServerBroadcastRawPacket {
+                    server: Arc::clone(&resource.provider),
+                    id: packet.id,
+                    payload: packet.payload,
+                },
+            );
+            return Ok(());
+        }
+        for player in resource.provider.get_all_players() {
+            match &player.client {
+                crate::net::ClientPlatform::Java(java) => {
+                    let mut buf = Vec::new();
+                    VarInt(packet.id)
+                        .encode(&mut buf)
+                        .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                    buf.extend_from_slice(&packet.payload);
+                    java.enqueue_packet_data(buf.clone().into()).await;
+                }
+                crate::net::ClientPlatform::Bedrock(bedrock) => {
+                    bedrock
+                        .send_raw_game_packet(packet.id, packet.payload.clone())
+                        .await
+                        .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                }
+            }
+        }
         Ok(())
     }
 

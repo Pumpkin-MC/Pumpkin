@@ -1,3 +1,4 @@
+use std::io::Cursor;
 use std::net::SocketAddr;
 use std::{io::Write, sync::Arc};
 
@@ -64,8 +65,12 @@ pub mod status;
 
 use crate::entity::player::Player;
 use crate::net::{GameProfile, PlayerConfig};
+use crate::plugin::packet::{
+    JavaConnectionState, PacketConnectionState, PacketDirection, RawPacketData, RawPacketEvent,
+};
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, net::EncryptionError, server::Server};
+use std::sync::{OnceLock, Weak};
 
 pub struct JavaClient {
     pub id: u64,
@@ -98,6 +103,10 @@ pub struct JavaClient {
     network_writer: Arc<Mutex<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
     network_reader: Mutex<TCPNetworkDecoder<BufReader<OwnedReadHalf>>>,
+    /// Weak reference to the server for packet event hooks.
+    server_ref: OnceLock<Weak<Server>>,
+    /// Weak reference to the player for packet event hooks.
+    player_ref: OnceLock<Weak<Player>>,
 }
 
 pub enum PacketHandlerResult {
@@ -128,6 +137,101 @@ impl OutgoingPacket {
 }
 
 impl JavaClient {
+    pub fn set_server_ref(&self, server: &Arc<Server>) {
+        let _ = self.server_ref.set(Arc::downgrade(server));
+    }
+
+    pub fn set_player_ref(&self, player: &Arc<Player>) {
+        let _ = self.player_ref.set(Arc::downgrade(player));
+    }
+
+    fn server_ref(&self) -> Option<Arc<Server>> {
+        self.server_ref.get().and_then(std::sync::Weak::upgrade)
+    }
+
+    fn player_ref(&self) -> Option<Arc<Player>> {
+        self.player_ref.get().and_then(std::sync::Weak::upgrade)
+    }
+
+    fn java_state_for_event(&self) -> JavaConnectionState {
+        match self.connection_state.load() {
+            ConnectionState::HandShake => JavaConnectionState::Handshake,
+            ConnectionState::Status => JavaConnectionState::Status,
+            ConnectionState::Login => JavaConnectionState::Login,
+            ConnectionState::Config => JavaConnectionState::Config,
+            ConnectionState::Play => JavaConnectionState::Play,
+            ConnectionState::Transfer => JavaConnectionState::Transfer,
+        }
+    }
+
+    async fn fire_raw_serverbound_packet_event(
+        &self,
+        server: &Arc<Server>,
+        packet: &RawPacket,
+        state: JavaConnectionState,
+        player: Option<Arc<Player>>,
+    ) -> Option<RawPacket> {
+        let event = RawPacketEvent::new(
+            player,
+            PacketDirection::Serverbound,
+            PacketConnectionState::Java(state),
+            RawPacketData {
+                id: packet.id,
+                payload: packet.payload.clone(),
+            },
+        );
+
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return None;
+        }
+
+        Some(RawPacket {
+            id: event.packet.id,
+            payload: event.packet.payload,
+        })
+    }
+
+    async fn fire_raw_clientbound_packet_event(
+        &self,
+        server: &Arc<Server>,
+        packet_data: Bytes,
+    ) -> Option<Bytes> {
+        let mut cursor = Cursor::new(packet_data.as_ref());
+        let packet_id = match VarInt::decode(&mut cursor) {
+            Ok(value) => value.0,
+            Err(err) => {
+                warn!("Failed to decode outgoing packet id: {err}");
+                return Some(packet_data);
+            }
+        };
+        let payload_offset = cursor.position() as usize;
+        let payload = packet_data.slice(payload_offset..);
+
+        let event = RawPacketEvent::new(
+            self.player_ref(),
+            PacketDirection::Clientbound,
+            PacketConnectionState::Java(self.java_state_for_event()),
+            RawPacketData {
+                id: packet_id,
+                payload,
+            },
+        );
+
+        let event = server.plugin_manager.fire(event).await;
+        if event.cancelled {
+            return None;
+        }
+
+        let mut buf = Vec::new();
+        if let Err(err) = VarInt(event.packet.id).encode(&mut buf) {
+            warn!("Failed to encode outgoing packet id: {err}");
+            return Some(packet_data);
+        }
+        buf.extend_from_slice(&event.packet.payload);
+
+        Some(buf.into())
+    }
     #[must_use]
     pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
         let (read, write) = tcp_stream.into_split();
@@ -150,6 +254,8 @@ impl JavaClient {
             network_writer: Arc::new(Mutex::new(TCPNetworkEncoder::new(BufWriter::new(write)))),
             network_reader: Mutex::new(TCPNetworkDecoder::new(BufReader::new(read))),
             brand: Mutex::new(None),
+            server_ref: OnceLock::new(),
+            player_ref: OnceLock::new(),
         }
     }
     pub async fn set_encryption(
@@ -271,6 +377,20 @@ impl JavaClient {
     ///
     /// * `packet`: A reference to a packet object implementing the `ClientPacket` trait.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Some(server) = self.server_ref() {
+            if let Some(packet_data) = self
+                .fire_raw_clientbound_packet_event(&server, packet_data)
+                .await
+            {
+                self.enqueue_packet_data_inner(packet_data).await;
+            }
+            return;
+        }
+
+        self.enqueue_packet_data_inner(packet_data).await;
+    }
+
+    async fn enqueue_packet_data_inner(&self, packet_data: Bytes) {
         if let Err(err) = self
             .outgoing_packet_queue_send
             .send(OutgoingPacket::normal(packet_data))
@@ -341,6 +461,20 @@ impl JavaClient {
     }
 
     pub async fn send_packet_now_data(&self, packet: Bytes) {
+        if let Some(server) = self.server_ref() {
+            if let Some(packet) = self
+                .fire_raw_clientbound_packet_event(&server, packet)
+                .await
+            {
+                self.send_packet_now_data_inner(packet).await;
+            }
+            return;
+        }
+
+        self.send_packet_now_data_inner(packet).await;
+    }
+
+    async fn send_packet_now_data_inner(&self, packet: Bytes) {
         let (completion_tx, completion_rx) = oneshot::channel();
 
         if let Err(err) = self
@@ -431,14 +565,22 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
+        let state = self.java_state_for_event();
+        let Some(packet) = self
+            .fire_raw_serverbound_packet_event(server, packet, state, None)
+            .await
+        else {
+            return Ok(None);
+        };
+
         match self.connection_state.load() {
-            ConnectionState::HandShake => self.handle_handshake_packet(packet).await,
-            ConnectionState::Status => self.handle_status_packet(server, packet).await,
+            ConnectionState::HandShake => self.handle_handshake_packet(&packet).await,
+            ConnectionState::Status => self.handle_status_packet(server, &packet).await,
             // TODO: Check config if transfer is enabled
             ConnectionState::Login | ConnectionState::Transfer => {
-                self.handle_login_packet(server, packet).await
+                self.handle_login_packet(server, &packet).await
             }
-            ConnectionState::Config => self.handle_config_packet(server, packet).await,
+            ConnectionState::Config => self.handle_config_packet(server, &packet).await,
             ConnectionState::Play => Ok(None),
         }
     }
@@ -689,6 +831,18 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<(), Box<dyn PumpkinError>> {
+        let Some(packet) = self
+            .fire_raw_serverbound_packet_event(
+                server,
+                packet,
+                JavaConnectionState::Play,
+                Some(player.clone()),
+            )
+            .await
+        else {
+            return Ok(());
+        };
+
         let payload = &packet.payload[..];
         let version = self.version.load();
 

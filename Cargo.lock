@@ -2823,6 +2823,7 @@ dependencies = [
  "serde_repr",
  "sha1",
  "sha2 0.11.0",
+ "syn",
  "sysinfo",
  "tempfile",
  "thiserror 2.0.18",
@@ -2927,6 +2928,10 @@ name = "pumpkin-plugin-api"
 version = "0.1.0"
 dependencies = [
  "postcard",
+ "pumpkin-util",
+ "serde",
+ "serde_json",
+ "syn",
  "tracing",
  "tracing-serde-structured",
  "wit-bindgen 0.57.1",

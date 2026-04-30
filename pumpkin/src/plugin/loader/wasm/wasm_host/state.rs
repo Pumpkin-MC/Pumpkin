@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::text::TextComponent;
 use tokio::sync::Mutex;
 use wasmtime::component::ResourceTable;
@@ -16,6 +17,7 @@ use crate::{
     },
     entity::EntityBase,
     entity::player::Player,
+    net::ClientPlatform,
     plugin::{
         Context,
         api::gui::PluginGui,
@@ -39,6 +41,12 @@ pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
 pub type BossBarResource = WasmResource<
     Arc<Mutex<crate::plugin::loader::wasm::wasm_host::wit::v0_1::boss_bar::PluginBossBar>>,
 >;
+pub type PacketHandleResource =
+    WasmResource<crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketHandle>;
+pub type PacketReaderResource =
+    WasmResource<crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketReader>;
+pub type PacketWriterResource =
+    WasmResource<crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketWriter>;
 pub type TextComponentResource = WasmResource<TextComponent>;
 pub type CommandResource = WasmResource<CommandTree>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
@@ -47,11 +55,117 @@ pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
 
 pub type OwnedConsumedArgs = HashMap<String, OwnedArg>;
 
+pub enum PendingEffect {
+    PlayerSystemMessage {
+        player: Arc<Player>,
+        text: TextComponent,
+        overlay: bool,
+    },
+    PlayerCustomPayload {
+        player: Arc<Player>,
+        channel: String,
+        data: Vec<u8>,
+    },
+    PlayerRawPacket {
+        player: Arc<Player>,
+        id: i32,
+        payload: Vec<u8>,
+    },
+    ServerBroadcastCustomPayload {
+        server: Arc<Server>,
+        channel: String,
+        data: Vec<u8>,
+    },
+    ServerBroadcastRawPacket {
+        server: Arc<Server>,
+        id: i32,
+        payload: Vec<u8>,
+    },
+}
+
+impl PendingEffect {
+    pub async fn execute(self) -> Result<(), wasmtime::Error> {
+        match self {
+            Self::PlayerSystemMessage {
+                player,
+                text,
+                overlay,
+            } => {
+                player.send_system_message_raw(&text, overlay).await;
+            }
+            Self::PlayerCustomPayload {
+                player,
+                channel,
+                data,
+            } => {
+                player.send_custom_payload(&channel, &data).await;
+            }
+            Self::PlayerRawPacket {
+                player,
+                id,
+                payload,
+            } => match &player.client {
+                ClientPlatform::Java(java) => {
+                    let mut buf = Vec::new();
+                    VarInt(id)
+                        .encode(&mut buf)
+                        .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                    buf.extend_from_slice(&payload);
+                    java.enqueue_packet_data(buf.into()).await;
+                }
+                ClientPlatform::Bedrock(bedrock) => {
+                    bedrock
+                        .send_raw_game_packet(id, payload)
+                        .await
+                        .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                }
+            },
+            Self::ServerBroadcastCustomPayload {
+                server,
+                channel,
+                data,
+            } => {
+                for player in server.get_all_players() {
+                    player.send_custom_payload(&channel, &data).await;
+                }
+            }
+            Self::ServerBroadcastRawPacket {
+                server,
+                id,
+                payload,
+            } => {
+                for player in server.get_all_players() {
+                    match &player.client {
+                        ClientPlatform::Java(java) => {
+                            let mut buf = Vec::new();
+                            VarInt(id)
+                                .encode(&mut buf)
+                                .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                            buf.extend_from_slice(&payload);
+                            java.enqueue_packet_data(buf.clone().into()).await;
+                        }
+                        ClientPlatform::Bedrock(bedrock) => {
+                            bedrock
+                                .send_raw_game_packet(id, payload.clone())
+                                .await
+                                .map_err(|err| wasmtime::Error::msg(err.to_string()))?;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 pub struct PluginHostState {
     pub wasi_ctx: WasiCtx,
     pub resource_table: ResourceTable,
     pub plugin: Option<Weak<WasmPlugin>>,
     pub server: Option<Arc<Server>>,
+    pub event_dispatch_depth: usize,
+    pub pending_effects: Vec<PendingEffect>,
     pub permissions: Vec<String>,
 }
 
@@ -70,8 +184,31 @@ impl PluginHostState {
             resource_table,
             plugin: None,
             server: None,
+            event_dispatch_depth: 0,
+            pending_effects: Vec::new(),
             permissions: Vec::new(),
         }
+    }
+
+    pub const fn begin_event_dispatch(&mut self) {
+        self.event_dispatch_depth += 1;
+    }
+
+    pub fn finish_event_dispatch(&mut self) -> Vec<PendingEffect> {
+        self.event_dispatch_depth = self.event_dispatch_depth.saturating_sub(1);
+        if self.event_dispatch_depth == 0 {
+            return std::mem::take(&mut self.pending_effects);
+        }
+        Vec::new()
+    }
+
+    #[must_use]
+    pub const fn should_defer_effects(&self) -> bool {
+        self.event_dispatch_depth > 0
+    }
+
+    pub fn defer_effect(&mut self, effect: PendingEffect) {
+        self.pending_effects.push(effect);
     }
 
     pub fn add_server<T>(
@@ -127,6 +264,36 @@ impl PluginHostState {
         provider: Arc<Mutex<PluginGui>>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(GuiResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_packet_handle<T>(
+        &mut self,
+        provider: crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketHandle,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(PacketHandleResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_packet_reader<T>(
+        &mut self,
+        provider: crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketReader,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(PacketReaderResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_packet_writer<T>(
+        &mut self,
+        provider: crate::plugin::loader::wasm::wasm_host::wit::v0_1::packet::PluginPacketWriter,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(PacketWriterResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

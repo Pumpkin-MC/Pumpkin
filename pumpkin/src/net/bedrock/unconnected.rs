@@ -44,6 +44,7 @@ impl BedrockClient {
             port_ipv6: 19133,
         };
         Self::send_offline_packet(
+            server,
             &CUnconnectedPong::new(
                 packet.time,
                 server.server_guid,

@@ -16,6 +16,7 @@ pub mod events;
 pub mod gui;
 pub mod i18n;
 pub mod logging;
+pub mod packet;
 pub mod permission;
 pub mod player;
 pub mod scheduler;
