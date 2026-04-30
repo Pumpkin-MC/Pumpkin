@@ -16,7 +16,7 @@ use pumpkin_protocol::{
             text::SText,
         },
     },
-    codec::{bedrock_block_pos::NetworkPos, var_int::VarInt, var_long::VarLong},
+    codec::{var_int::VarInt, var_long::VarLong},
     java::client::play::CSystemChatMessage,
 };
 use pumpkin_util::{math::position::BlockPos, text::TextComponent};
@@ -149,7 +149,7 @@ impl BedrockClient {
             self.send_game_packet(&CContainerOpen {
                 container_id: 0,
                 container_type: 0xff,
-                position: NetworkPos(BlockPos::ZERO),
+                position: BlockPos::ZERO,
                 target_entity_id: VarLong(-1),
             })
             .await;

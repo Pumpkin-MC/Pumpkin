@@ -525,7 +525,7 @@ impl BedrockClient {
                 // TODO
             }
             SResourcePackResponse::PACKET_ID => {
-                self.handle_resource_pack_response(SResourcePackResponse::read(payload)?)
+                self.handle_resource_pack_response(SResourcePackResponse::read(payload)?, server)
                     .await;
             }
             _ => {
