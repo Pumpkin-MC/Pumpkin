@@ -2,9 +2,11 @@ use std::{fs, path::Path, sync::Arc};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use wasmtime::{Cache, CacheConfig, Engine, Store, component::Component, component::Linker};
-use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wasi::{WasiCtxBuilder, sockets::SocketAddrUse};
 
-use crate::plugin::{Context, PluginMetadata, loader::wasm::wasm_host::state::PluginHostState};
+use crate::plugin::{
+    Context, PluginMetadata, loader::wasm::wasm_host::state::PluginHostState, permissions,
+};
 
 pub mod args;
 pub mod logging;
@@ -144,13 +146,117 @@ impl WasmPlugin {
 
         let mut builder = WasiCtxBuilder::new();
 
+        let metadata = context.get_metadata();
+        let blocked_permissions = &context.server.advanced_config.plugins.blocked_permissions;
+
+        let filtered_permissions: Vec<String> = metadata
+            .permissions
+            .iter()
+            .filter(|p| !blocked_permissions.iter().any(|blocked| blocked == *p))
+            .cloned()
+            .collect();
+
+        let has_permission = |p: &str| filtered_permissions.iter().any(|perm| perm == p);
+
+        if has_permission(permissions::NETWORK_DNS) {
+            builder.allow_ip_name_lookup(true);
+        }
+
+        let tcp_allowed = has_permission(permissions::NETWORK_TCP);
+        let udp_allowed = has_permission(permissions::NETWORK_UDP);
+        let tcp_connect = tcp_allowed || has_permission(permissions::NETWORK_TCP_CONNECT);
+        let tcp_bind = tcp_allowed || has_permission(permissions::NETWORK_TCP_BIND);
+        let udp_connect = udp_allowed || has_permission(permissions::NETWORK_UDP_CONNECT);
+        let udp_bind = udp_allowed || has_permission(permissions::NETWORK_UDP_BIND);
+        let udp_outgoing_datagram =
+            udp_allowed || has_permission(permissions::NETWORK_UDP_OUTGOING_DATAGRAM);
+
+        let loopback_only = has_permission(permissions::NETWORK_LOOPBACK);
+
+        builder.allow_tcp(tcp_connect || tcp_bind);
+        builder.allow_udp(udp_connect || udp_bind);
+
+        builder.socket_addr_check(move |addr, reason| {
+            Box::pin(async move {
+                let ok = match reason {
+                    SocketAddrUse::TcpConnect => tcp_connect,
+                    SocketAddrUse::TcpBind => tcp_bind,
+                    SocketAddrUse::UdpConnect => udp_connect,
+                    SocketAddrUse::UdpBind => udp_bind,
+                    SocketAddrUse::UdpOutgoingDatagram => udp_outgoing_datagram,
+                };
+
+                if loopback_only {
+                    ok && addr.ip().is_loopback()
+                } else {
+                    ok
+                }
+            })
+        });
+
+        if has_permission(permissions::NETWORK_OUTBOUND) {
+            builder.inherit_network();
+        }
+
+        // --- System Permissions ---
+
+        // Environment Variables
+        if has_permission(permissions::SYS_ENV) {
+            builder.inherit_env();
+        } else {
+            for (key, value) in std::env::vars() {
+                let perm = format!("{}{}", permissions::SYS_ENV_PREFIX, key);
+                if has_permission(&perm) {
+                    builder.env(key, value);
+                }
+            }
+        }
+
+        let data_folder = context.get_data_folder();
+        let preopen_path =
+            if has_permission(permissions::FS_READ) || has_permission(permissions::FS_WRITE) {
+                Path::new(".")
+            } else {
+                data_folder.as_path()
+            };
+
+        // Determine permissions for the preopened directory
+        let (dir_perms, file_perms) = if has_permission(permissions::FS_WRITE) {
+            (
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
+            )
+        } else if has_permission(permissions::FS_READ) {
+            (
+                wasmtime_wasi::DirPerms::READ,
+                wasmtime_wasi::FilePerms::READ,
+            )
+        } else {
+            // Scoped to data folder
+            let can_write = has_permission(permissions::FS_WRITE_DATA);
+            if can_write {
+                (
+                    wasmtime_wasi::DirPerms::all(),
+                    wasmtime_wasi::FilePerms::all(),
+                )
+            } else {
+                // Default to READ if no write permission is given for data folder
+                // (Plugins should at least be able to read their own config)
+                (
+                    wasmtime_wasi::DirPerms::READ,
+                    wasmtime_wasi::FilePerms::READ,
+                )
+            }
+        };
+
         builder.preopened_dir(
-            context.get_data_folder(),
-            context.get_data_folder().to_string_lossy(),
-            wasmtime_wasi::DirPerms::all(),
-            wasmtime_wasi::FilePerms::all(),
+            preopen_path,
+            preopen_path.to_string_lossy(),
+            dir_perms,
+            file_perms,
         )?;
 
+        store.data_mut().permissions = filtered_permissions;
         store.data_mut().wasi_ctx = builder.build();
 
         store.data_mut().server = Some(context.server.clone());

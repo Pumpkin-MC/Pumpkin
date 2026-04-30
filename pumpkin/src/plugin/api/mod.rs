@@ -24,6 +24,8 @@ pub struct PluginMetadata {
     pub description: String,
     /// The dependencies of the plugin.
     pub dependencies: Vec<String>,
+    /// The permissions requested by the plugin.
+    pub permissions: Vec<String>,
 }
 
 /// This type represents a future for the plugin.
