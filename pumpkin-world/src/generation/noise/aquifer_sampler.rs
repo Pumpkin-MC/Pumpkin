@@ -451,149 +451,159 @@ impl WorldAquiferSampler {
         density: f64,
     ) -> Option<&'static BlockState> {
         if density > 0f64 {
-            None
-        } else {
-            let sample_x = pos.x;
-            let sample_y = pos.y;
-            let sample_z = pos.z;
+            return None;
+        }
 
-            let fluid_level = self
-                .fluid_level_sampler
-                .get_fluid_level(sample_x, sample_y, sample_z);
-            if fluid_level.get_block(sample_y) == &LAVA_BLOCK {
-                Some(LAVA_BLOCK.default_state)
-            } else {
-                let scaled_x = local_xz!(sample_x - 5);
-                let scaled_y = local_y!(sample_y + 1);
-                let scaled_z = local_xz!(sample_z - 5);
+        let sample_x = pos.x;
+        let sample_y = pos.y;
+        let sample_z = pos.z;
 
-                let mut random_positions_and_hypot = [(0, i32::MAX); 3];
-                for packed_random in self.random_positions_for_pos(scaled_x, scaled_y, scaled_z) {
-                    let unpacked_x = block_pos::unpack_x(packed_random);
-                    let unpacked_y = block_pos::unpack_y(packed_random);
-                    let unpacked_z = block_pos::unpack_z(packed_random);
+        let fluid_level = self
+            .fluid_level_sampler
+            .get_fluid_level(sample_x, sample_y, sample_z);
+        if fluid_level.get_block(sample_y) == &LAVA_BLOCK {
+            return Some(LAVA_BLOCK.default_state);
+        }
 
-                    let local_x = unpacked_x - sample_x;
-                    let local_y = unpacked_y - sample_y;
-                    let local_z = unpacked_z - sample_z;
+        let scaled_x = local_xz!(sample_x - 5);
+        let scaled_y = local_y!(sample_y + 1);
+        let scaled_z = local_xz!(sample_z - 5);
 
-                    let hypot_squared = local_x * local_x + local_y * local_y + local_z * local_z;
+        // Inline random_positions_for_pos: read directly from packed_positions with a
+        // single bounds check instead of stack-allocating and copying a [i64; 12].
+        let sy = self.size_y;
+        let syz = sy * self.size_z;
+        let i00 = self.packed_position_index(scaled_x, scaled_y - 1, scaled_z);
+        let i01 = i00 + sy;
+        let i10 = i00 + syz;
+        let i11 = i10 + sy;
 
-                    if random_positions_and_hypot[2].1 > hypot_squared {
-                        random_positions_and_hypot[2] = (packed_random, hypot_squared);
-                    }
+        let p = &self.packed_positions;
+        // i11 + 2 is the largest index we ever access; all others are strictly smaller.
+        assert!(i11 + 2 < p.len(), "Index out of bounds");
 
-                    if random_positions_and_hypot[1].1 > hypot_squared {
-                        random_positions_and_hypot[2] = random_positions_and_hypot[1];
-                        random_positions_and_hypot[1] = (packed_random, hypot_squared);
-                    }
+        let mut nearest = [(0i64, i32::MAX); 3];
 
-                    if random_positions_and_hypot[0].1 > hypot_squared {
-                        random_positions_and_hypot[1] = random_positions_and_hypot[0];
-                        random_positions_and_hypot[0] = (packed_random, hypot_squared);
-                    }
+        // SAFETY: every index passed to this macro is <= i11 + 2, checked by the assert above.
+        macro_rules! process {
+            ($idx:expr) => {{
+                let packed = unsafe { *p.get_unchecked($idx) };
+                let dx = block_pos::unpack_x(packed) - sample_x;
+                let dy = block_pos::unpack_y(packed) - sample_y;
+                let dz = block_pos::unpack_z(packed) - sample_z;
+                let h = dx * dx + dy * dy + dz * dz;
+                if nearest[2].1 > h {
+                    nearest[2] = (packed, h);
                 }
-                let fluid_level2 = self
-                    .get_water_level(
-                        random_positions_and_hypot[0].0,
-                        router,
-                        height_estimator,
-                        sample_options,
-                    )
-                    .clone();
-                let d = Self::max_distance(
-                    random_positions_and_hypot[0].1,
-                    random_positions_and_hypot[1].1,
-                );
-                let block_state = fluid_level2.get_block(sample_y);
+                if nearest[1].1 > h {
+                    nearest[2] = nearest[1];
+                    nearest[1] = (packed, h);
+                }
+                if nearest[0].1 > h {
+                    nearest[1] = nearest[0];
+                    nearest[0] = (packed, h);
+                }
+            }};
+        }
 
-                if d <= 0f64 {
-                    // TODO: Handle fluid tick
+        // Same insertion order as the original array literal — sort behaviour is preserved.
+        process!(i11 + 2);
+        process!(i10 + 2);
+        process!(i01 + 2);
+        process!(i00 + 2);
+        process!(i11 + 1);
+        process!(i10 + 1);
+        process!(i01 + 1);
+        process!(i00 + 1);
+        process!(i11);
+        process!(i10);
+        process!(i01);
+        process!(i00);
 
-                    Some(block_state.default_state)
-                } else if block_state == &WATER_BLOCK
-                    && self
-                        .fluid_level_sampler
-                        .get_fluid_level(sample_x, sample_y - 1, sample_z)
-                        .get_block(sample_y - 1)
-                        == &LAVA_BLOCK
-                {
-                    Some(block_state.default_state)
-                } else {
-                    let mut barrier_sample = None;
-                    let fluid_level3 = self
-                        .get_water_level(
-                            random_positions_and_hypot[1].0,
-                            router,
-                            height_estimator,
-                            sample_options,
-                        )
-                        .clone();
-                    let e = d * Self::calculate_density(
+        // Precompute all three pairwise distances before fetching any water levels so we
+        // can skip the third get_water_level call entirely when neither f nor g_dist > 0.
+        let d = Self::max_distance(nearest[0].1, nearest[1].1);
+        let f = Self::max_distance(nearest[0].1, nearest[2].1);
+        let g_dist = Self::max_distance(nearest[1].1, nearest[2].1);
+
+        let fluid_level2 = self
+            .get_water_level(nearest[0].0, router, height_estimator, sample_options)
+            .clone();
+        let block_state = fluid_level2.get_block(sample_y);
+
+        if d <= 0f64 {
+            // TODO: Handle fluid tick
+            return Some(block_state.default_state);
+        }
+
+        if block_state == &WATER_BLOCK
+            && self
+                .fluid_level_sampler
+                .get_fluid_level(sample_x, sample_y - 1, sample_z)
+                .get_block(sample_y - 1)
+                == &LAVA_BLOCK
+        {
+            return Some(block_state.default_state);
+        }
+
+        let mut barrier_sample = None;
+        let fluid_level3 = self
+            .get_water_level(nearest[1].0, router, height_estimator, sample_options)
+            .clone();
+        let e = d * Self::calculate_density(
+            &mut barrier_sample,
+            pos,
+            router,
+            sample_options,
+            &fluid_level2,
+            &fluid_level3,
+        );
+
+        if density + e > 0f64 {
+            return None;
+        }
+
+        // Only pay for the cache/noise lookup when at least one distance weight is positive;
+        // when both are <= 0 the third centre cannot affect the result.
+        if f > 0f64 || g_dist > 0f64 {
+            let fluid_level4 =
+                self.get_water_level(nearest[2].0, router, height_estimator, sample_options);
+
+            if f > 0f64 {
+                let contrib = d
+                    * f
+                    * Self::calculate_density(
                         &mut barrier_sample,
                         pos,
                         router,
                         sample_options,
                         &fluid_level2,
-                        &fluid_level3,
+                        fluid_level4,
                     );
+                if density + contrib > 0f64 {
+                    return None;
+                }
+            }
 
-                    if density + e > 0f64 {
-                        None
-                    } else {
-                        let fluid_level4 = self.get_water_level(
-                            random_positions_and_hypot[2].0,
-                            router,
-                            height_estimator,
-                            sample_options,
-                        );
-                        let f = Self::max_distance(
-                            random_positions_and_hypot[0].1,
-                            random_positions_and_hypot[2].1,
-                        );
-                        if f > 0f64 {
-                            let g = d
-                                * f
-                                * Self::calculate_density(
-                                    &mut barrier_sample,
-                                    pos,
-                                    router,
-                                    sample_options,
-                                    &fluid_level2,
-                                    fluid_level4,
-                                );
-                            if density + g > 0f64 {
-                                return None;
-                            }
-                        }
-
-                        let g = Self::max_distance(
-                            random_positions_and_hypot[1].1,
-                            random_positions_and_hypot[2].1,
-                        );
-                        if g > 0f64 {
-                            let h = d
-                                * g
-                                * Self::calculate_density(
-                                    &mut barrier_sample,
-                                    pos,
-                                    router,
-                                    sample_options,
-                                    &fluid_level3,
-                                    fluid_level4,
-                                );
-                            if density + h > 0f64 {
-                                return None;
-                            }
-                        }
-
-                        //TODO Handle fluid tick
-
-                        Some(block_state.default_state)
-                    }
+            if g_dist > 0f64 {
+                let contrib = d
+                    * g_dist
+                    * Self::calculate_density(
+                        &mut barrier_sample,
+                        pos,
+                        router,
+                        sample_options,
+                        &fluid_level3,
+                        fluid_level4,
+                    );
+                if density + contrib > 0f64 {
+                    return None;
                 }
             }
         }
+
+        // TODO: Handle fluid tick
+        Some(block_state.default_state)
     }
 }
 

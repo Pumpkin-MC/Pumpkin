@@ -240,7 +240,7 @@ impl XoroshiroSplitter {
     }
 
     #[must_use]
-    pub fn split_pos(&self, x: i32, y: i32, z: i32) -> Xoroshiro {
+    pub const fn split_pos(&self, x: i32, y: i32, z: i32) -> Xoroshiro {
         let l = hash_block_pos(x, y, z) as u64;
         let m = l ^ self.lo;
 

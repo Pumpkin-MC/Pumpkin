@@ -1135,8 +1135,7 @@ impl LivingEntity {
             let yaw = f64::from(self.entity.yaw.load()).to_radians();
 
             velo.x -= yaw.sin() * 0.2;
-
-            velo.y += yaw.cos() * 0.2;
+            velo.z += yaw.cos() * 0.2;
         }
 
         self.entity.velocity.store(velo);
@@ -1147,7 +1146,9 @@ impl LivingEntity {
     async fn get_jump_velocity(&self, mut strength: f64) -> f64 {
         strength *= self.get_attribute_value(&Attributes::JUMP_STRENGTH);
         strength *= f64::from(self.entity.get_jump_velocity_multiplier().await);
-
+        if let Some(effect) = self.get_effect(&StatusEffect::JUMP_BOOST).await {
+            strength += 0.1 * f64::from(effect.amplifier + 1);
+        }
         strength
     }
 
@@ -2031,8 +2032,7 @@ impl EntityBase for LivingEntity {
     }
 
     fn get_gravity(&self) -> f64 {
-        const GRAVITY: f64 = 0.08;
-        GRAVITY
+        self.get_attribute_value(&Attributes::GRAVITY)
     }
 
     #[allow(clippy::too_many_lines)]
