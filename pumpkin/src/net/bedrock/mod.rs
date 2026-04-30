@@ -124,7 +124,13 @@ impl BedrockClient {
     }
 
     pub fn start_outgoing_packet_task(&mut self) {
-        let mut packet_receiver = self.outgoing_packet_queue_recv.take().unwrap();
+        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
+            error!(
+                "Outgoing packet receiver was already taken for {}",
+                self.address
+            );
+            return;
+        };
         let close_token = self.close_token.clone();
         let writer = self.network_writer.clone();
         let addr = self.address;
@@ -168,8 +174,10 @@ impl BedrockClient {
         if let Some(packet) = packet
             && let Err(error) = self.handle_packet_payload(server, packet).await
         {
-            let _text = format!("Error while reading incoming packet {error}");
-            error!("Failed to read incoming packet with : {error}");
+            error!(
+                "Failed to handle packet payload for {}: {}",
+                self.address, error
+            );
             self.kick(DisconnectReason::BadPacket, error.to_string())
                 .await;
         }
@@ -240,19 +248,23 @@ impl BedrockClient {
         socket: &UdpSocket,
     ) {
         let mut data = Vec::new();
-        let writer = &mut data;
-        Self::write_raw_packet(packet, writer).unwrap();
+        if let Err(err) = Self::write_raw_packet(packet, &mut data) {
+            error!("Failed to write offline packet: {err}");
+            return;
+        }
         // We dont care if it works, if not the client will try again!
         let _ = socket.send_to(&data, addr).await;
     }
 
     pub async fn send_game_packet<P: BClientPacket>(&self, packet: &P) {
         let mut packet_buf = Vec::new();
-        self.write_game_packet(packet, &mut packet_buf)
-            .await
-            .unwrap();
-        self.send_framed_packet_data(packet_buf, RakReliability::Unreliable)
-            .await;
+        match self.write_game_packet(packet, &mut packet_buf).await {
+            Ok(()) => {
+                self.send_framed_packet_data(packet_buf, RakReliability::Unreliable)
+                    .await;
+            }
+            Err(err) => error!("Failed to write game packet: {err}"),
+        }
     }
 
     pub async fn write_game_packet_to_set<P: BClientPacket>(
@@ -261,9 +273,12 @@ impl BedrockClient {
         frame_set: &mut FrameSet,
     ) {
         let mut payload = Vec::new();
-        self.write_game_packet(packet, &mut payload).await.unwrap();
-
-        frame_set.frames.push(Frame::new_unreliable(payload));
+        match self.write_game_packet(packet, &mut payload).await {
+            Ok(()) => {
+                frame_set.frames.push(Frame::new_unreliable(payload));
+            }
+            Err(err) => error!("Failed to write game packet to set: {err}"),
+        }
     }
 
     pub async fn send_framed_packet<P: BClientPacket>(
@@ -272,8 +287,10 @@ impl BedrockClient {
         reliability: RakReliability,
     ) {
         let mut packet_buf = Vec::new();
-        Self::write_raw_packet(packet, &mut packet_buf).unwrap();
-        self.send_framed_packet_data(packet_buf, reliability).await;
+        match Self::write_raw_packet(packet, &mut packet_buf) {
+            Ok(()) => self.send_framed_packet_data(packet_buf, reliability).await,
+            Err(err) => error!("Failed to write framed packet: {err}"),
+        }
     }
 
     pub async fn send_framed_packet_data(
@@ -341,23 +358,22 @@ impl BedrockClient {
     pub async fn send_frame_set(&self, mut frame_set: FrameSet, id: u8) {
         frame_set.sequence = u24(self.output_sequence_number.fetch_add(1, Ordering::Relaxed));
         let mut frame_set_buf = Vec::new();
-        frame_set.write_packet_data(&mut frame_set_buf, id).unwrap();
 
-        // I dont know if thats the right place to make encryption & decoding
+        if let Err(err) = frame_set.write_packet_data(&mut frame_set_buf, id) {
+            error!("Failed to write frame set data: {err}");
+            return;
+        }
+
         if let Err(err) = self
             .network_writer
             .lock()
             .await
             .write_packet(&frame_set_buf, self.address, &self.socket)
             .await
+            && !self.is_closed()
         {
-            // It is expected that the packet will fail if we are closed
-            if !self.is_closed() {
-                warn!("Failed to send packet to client: {err}");
-                // We now need to close the connection to the client since the stream is in an
-                // unknown state
-                self.close_token.cancel();
-            }
+            warn!("Failed to send packet to client {}: {}", self.address, err);
+            self.close_token.cancel();
         }
     }
 
@@ -376,9 +392,9 @@ impl BedrockClient {
         self.close_token.is_cancelled()
     }
 
-    pub async fn send_ack(&self, ack: &Ack) {
+    pub async fn send_ack(&self, ack: &Ack) -> Result<(), Error> {
         let mut packet_buf = Vec::new();
-        ack.write(&mut packet_buf).unwrap();
+        ack.write(&mut packet_buf)?;
 
         if let Err(err) = self
             .network_writer
@@ -387,9 +403,11 @@ impl BedrockClient {
             .write_packet(&packet_buf, self.address, &self.socket)
             .await
         {
-            warn!("Failed to send packet to client: {err}");
+            warn!("Failed to send ACK to {}: {err}", self.address);
             self.close().await;
+            return Err(err);
         }
+        Ok(())
     }
 
     pub async fn handle_packet_payload(
@@ -425,7 +443,7 @@ impl BedrockClient {
         frame_set: FrameSet,
     ) -> Result<(), Error> {
         // TODO: Send all ACKs in short intervals in batches
-        self.send_ack(&Ack::new(vec![frame_set.sequence.0])).await;
+        self.send_ack(&Ack::new(vec![frame_set.sequence.0])).await?;
         // TODO
         for frame in frame_set.frames {
             self.handle_frame(server, frame).await?;
@@ -511,9 +529,14 @@ impl BedrockClient {
                     .await;
             }
             _ => {
-                return self
-                    .handle_play_packet(self.player.lock().await.as_ref().unwrap(), server, packet)
-                    .await;
+                let player_lock = self.player.lock().await;
+                if let Some(player) = player_lock.as_ref() {
+                    return self.handle_play_packet(player, server, packet).await;
+                }
+                debug!(
+                    "Received game packet {} before player was initialized",
+                    packet.id
+                );
             }
         }
         Ok(())

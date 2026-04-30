@@ -14,7 +14,8 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
+use pumpkin_data::biome::Biome;
+use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
@@ -134,6 +135,15 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Self: Sized,
     {
         self
+    }
+
+    fn get_eye_pos(&self) -> Vector3<f64> {
+        self.get_entity().get_eye_pos()
+    }
+
+    fn get_looking_vector(&self) -> Vector3<f64> {
+        let entity = self.get_entity();
+        Vector3::from_yaw_pitch(entity.yaw.load(), entity.pitch.load())
     }
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
@@ -413,6 +423,8 @@ pub struct Entity {
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
     pub sprinting: AtomicBool,
+    /// Indicates whether the entity is swimming
+    pub swimming: AtomicBool,
     /// Indicates whether the entity is invisible
     pub invisible: AtomicBool,
     /// Indicates whether the entity is glowing
@@ -473,6 +485,9 @@ pub struct Entity {
     pub age: AtomicI32,
 
     pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
+
+    pub current_biome: ArcSwap<&'static Biome>,
+    pub last_biome_update_pos: AtomicCell<BlockPos>,
 
     pub portal_cooldown: AtomicU32,
 
@@ -568,6 +583,7 @@ impl Entity {
                 get_section_cord(floor_z),
             )),
             sneaking: AtomicBool::new(false),
+            swimming: AtomicBool::new(false),
             invisible: AtomicBool::new(false),
             glowing: AtomicBool::new(false),
             world: ArcSwap::new(world),
@@ -602,6 +618,8 @@ impl Entity {
             vehicle: Mutex::new(None),
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
+            current_biome: ArcSwap::new(Arc::new(&Biome::PLAINS)),
+            last_biome_update_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
             custom_name: ArcSwap::new(Arc::new(None)),
@@ -2021,6 +2039,13 @@ impl Entity {
         self.set_flag(Flag::Sneaking, sneaking).await;
     }
 
+    pub async fn set_swimming(&self, invisible: bool) {
+        if self.swimming.load(Ordering::Relaxed) != invisible {
+            self.swimming.store(invisible, Relaxed);
+            self.set_flag(Flag::Swimming, invisible).await;
+        }
+    }
+
     /// Sets whether the entity is invisible and sends updated metadata.
     pub async fn set_invisible(&self, invisible: bool) {
         if self.invisible.load(Ordering::Relaxed) != invisible {
@@ -2057,33 +2082,14 @@ impl Entity {
         }
     }
 
-    pub fn get_rotation_16(&self) -> Integer0To15 {
+    pub fn get_rotation_16(&self) -> u8 {
         let adjusted_yaw = self.yaw.load().rem_euclid(360.0);
 
-        let index = (adjusted_yaw / 22.5).round() as u16 % 16;
-
-        Integer0To15::from_index(index)
+        ((adjusted_yaw / 22.5).round() as u8) % 16
     }
 
-    pub fn get_flipped_rotation_16(&self) -> Integer0To15 {
-        match self.get_rotation_16() {
-            Integer0To15::L0 => Integer0To15::L8,
-            Integer0To15::L1 => Integer0To15::L9,
-            Integer0To15::L2 => Integer0To15::L10,
-            Integer0To15::L3 => Integer0To15::L11,
-            Integer0To15::L4 => Integer0To15::L12,
-            Integer0To15::L5 => Integer0To15::L13,
-            Integer0To15::L6 => Integer0To15::L14,
-            Integer0To15::L7 => Integer0To15::L15,
-            Integer0To15::L8 => Integer0To15::L0,
-            Integer0To15::L9 => Integer0To15::L1,
-            Integer0To15::L10 => Integer0To15::L2,
-            Integer0To15::L11 => Integer0To15::L3,
-            Integer0To15::L12 => Integer0To15::L4,
-            Integer0To15::L13 => Integer0To15::L5,
-            Integer0To15::L14 => Integer0To15::L6,
-            Integer0To15::L15 => Integer0To15::L7,
-        }
+    pub fn get_flipped_rotation_16(&self) -> u8 {
+        (self.get_rotation_16() + 8) % 16
     }
 
     pub fn get_facing(&self) -> Facing {
@@ -2762,6 +2768,15 @@ impl EntityBase for Entity {
             self.was_in_powder_snow
                 .store(was_in_powder_snow, Ordering::Relaxed);
             self.is_in_powder_snow.store(false, Ordering::Relaxed);
+
+            let block_pos = self.block_pos.load();
+            if self.last_biome_update_pos.load() != block_pos {
+                let world = self.world.load();
+                let biome = world.level.get_rough_biome(&block_pos).await;
+                self.current_biome.store(Arc::new(biome));
+                self.last_biome_update_pos.store(block_pos);
+            }
+
             self.update_last_pos();
             self.tick_portal(caller).await;
             self.update_fluid_state(caller).await;

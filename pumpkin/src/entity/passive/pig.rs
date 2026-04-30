@@ -1,16 +1,20 @@
 use std::sync::{Arc, Weak};
 
-use pumpkin_data::entity::EntityType;
-use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::particle::Particle;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{entity::EntityType, item::Item};
+use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage,
     ai::goal::{
-        escape_danger::EscapeDangerGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, swim::SwimGoal, tempt::TemptGoal,
-        wander_around::WanderAroundGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
+    player::Player,
 };
 
 const PIG_FOOD: &[&Item] = &[
@@ -20,6 +24,9 @@ const PIG_FOOD: &[&Item] = &[
     &Item::CARROT_ON_A_STICK,
 ];
 
+/// Represents a Pig, a common passive mob that provides porkchops.
+///
+/// Wiki: <https://minecraft.wiki/w/Pig>
 pub struct PigEntity {
     pub mob_entity: MobEntity,
 }
@@ -39,13 +46,15 @@ impl PigEntity {
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
-            goal_selector.add_goal(4, Box::new(TemptGoal::new(1.2, PIG_FOOD)));
-            goal_selector.add_goal(6, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(2, BreedGoal::new(1.0));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.2, PIG_FOOD)));
+            goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
+            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
-                7,
+                6,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
             );
-            goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
+            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc
@@ -57,5 +66,42 @@ impl NBTStorage for PigEntity {}
 impl Mob for PigEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_interact<'a>(
+        &'a self,
+        player: &'a Player,
+        item_stack: &'a mut ItemStack,
+    ) -> EntityBaseFuture<'a, bool> {
+        Box::pin(async move {
+            let is_food = PIG_FOOD.iter().any(|i| i.id == item_stack.item.id);
+            if is_food && self.is_breeding_ready() && !self.is_in_love() {
+                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+
+                self.mob_entity.set_love_ticks(600);
+                let entity = &self.mob_entity.living_entity.entity;
+                let world = entity.world.load();
+                let pos = entity.pos.load();
+
+                world
+                    .spawn_particle(
+                        pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
+                        Vector3::new(0.5, 0.5, 0.5),
+                        1.0,
+                        7,
+                        Particle::Heart,
+                    )
+                    .await;
+                world
+                    .play_sound(
+                        Sound::EntityPigAmbient,
+                        SoundCategory::Neutral,
+                        &entity.pos.load(),
+                    )
+                    .await;
+                return true;
+            }
+            false
+        })
     }
 }

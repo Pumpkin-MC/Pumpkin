@@ -147,6 +147,7 @@ impl DualNoiseBlockStateProvider {
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.base.base.seed as u64)),
             self.slow_noise.first_octave,
             &self.slow_noise.amplitudes,
+            self.slow_noise.amplitude,
             false,
         );
         let slow_noise =
@@ -208,6 +209,7 @@ impl NoiseBlockStateProviderBase {
             &mut RandomGenerator::Legacy(LegacyRand::from_seed(self.seed as u64)),
             self.noise.first_octave,
             &self.noise.amplitudes,
+            self.noise.amplitude,
             false,
         );
         sampler.sample(

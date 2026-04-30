@@ -334,14 +334,17 @@ impl EndermanEntity {
     }
 
     pub async fn is_player_staring(&self, player: &Player) -> bool {
-        let equipment = player.living_entity.entity_equipment.lock().await;
-        let head_item = equipment.get(&EquipmentSlot::HEAD);
-        let head_stack = head_item.lock().await;
-        if !head_stack.is_empty() && head_stack.item == &Item::CARVED_PUMPKIN {
-            return false;
+        let equipment = player.living_entity.entity_equipment.try_lock();
+        if let Ok(equipment) = equipment {
+            let head_item = equipment.get(&EquipmentSlot::HEAD);
+            let head_stack = head_item.try_lock();
+            if let Ok(head_stack) = head_stack
+                && !head_stack.is_empty()
+                && head_stack.item == &Item::CARVED_PUMPKIN
+            {
+                return false;
+            }
         }
-        drop(head_stack);
-        drop(equipment);
 
         let entity = &self.mob_entity.living_entity.entity;
         let enderman_pos = entity.pos.load();

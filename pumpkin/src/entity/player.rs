@@ -29,7 +29,7 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
+use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
@@ -44,7 +44,8 @@ use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
 use pumpkin_inventory::screen_handler::{
-    InventoryPlayer, PlayerFuture, ScreenHandler, ScreenHandlerFactory, ScreenHandlerListener,
+    ClickType, InventoryPlayer, PlayerFuture, ScreenHandler, ScreenHandlerFactory,
+    ScreenHandlerListener,
 };
 use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
@@ -63,7 +64,7 @@ use pumpkin_protocol::java::client::play::{
     CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata,
     PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::java::server::play::SClickSlot;
+use pumpkin_protocol::java::server::play::{SClickSlot, SlotActionType};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -87,6 +88,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
+use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
@@ -594,7 +596,7 @@ impl Player {
             display_name: Mutex::new(None),
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
-            tab_list_listed: AtomicBool::new(true),
+            tab_list_listed: AtomicBool::new(false),
         }
     }
 
@@ -1104,10 +1106,8 @@ impl Player {
 
         // Handle respawn anchor (Nether)
         if block == &Block::RESPAWN_ANCHOR {
-            use pumpkin_data::block_properties::Integer0To4;
-
             let anchor_props = AnchorProperties::from_state_id(state_id, block);
-            let charges = anchor_props.charges.to_index();
+            let charges = anchor_props.charges;
 
             // Anchor needs at least 1 charge to work
             if charges == 0 {
@@ -1119,7 +1119,7 @@ impl Player {
                 // Decrement charges after successful respawn position found
                 let new_charges = charges - 1;
                 let mut new_props = anchor_props;
-                new_props.charges = Integer0To4::from_index(new_charges);
+                new_props.charges = new_charges;
                 world
                     .set_block_state(
                         pos,
@@ -2888,13 +2888,21 @@ impl Player {
     }
 
     pub async fn on_handled_screen_closed(&self) {
-        self.current_screen_handler
-            .lock()
-            .await
-            .lock()
-            .await
-            .on_closed(self)
-            .await;
+        // let window_type = {
+        //     let handler_lock = self.current_screen_handler.lock().await;
+        //     let mut handler = handler_lock.lock().await;
+        //     let wt = handler.window_type();
+        //     handler.on_closed(self).await;
+        //     wt
+        // };
+
+        // TODO
+        // if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
+        //     server
+        //         .plugin_manager
+        //         .fire(InventoryCloseEvent::new(&self, window_type))
+        //         .await;
+        // }
 
         let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
             self.player_screen_handler.clone();
@@ -3009,14 +3017,23 @@ impl Player {
         self.open_container_pos.store(None);
     }
 
-    pub async fn on_slot_click(&self, packet: SClickSlot) {
+    #[allow(clippy::too_many_lines)]
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Server) {
         self.update_last_action_time();
-        let screen_handler = self.current_screen_handler.lock().await;
-        let mut screen_handler = screen_handler.lock().await;
-        let behaviour = screen_handler.get_behaviour();
+        let screen_handler_arc = self.current_screen_handler.lock().await.clone();
+        let mut screen_handler = screen_handler_arc.lock().await;
 
-        // behaviour is dropped here
-        if i32::from(behaviour.sync_id) != packet.sync_id.0 {
+        let (sync_id, container_slots, allow_grab_items, allow_put_items) = {
+            let b = screen_handler.get_behaviour();
+            (
+                b.sync_id,
+                b.container_slots,
+                b.allow_grab_items,
+                b.allow_put_items,
+            )
+        };
+
+        if i32::from(sync_id) != packet.sync_id.0 {
             return;
         }
 
@@ -3025,7 +3042,7 @@ impl Player {
             return;
         }
 
-        if !screen_handler.can_use(self) {
+        if !screen_handler.can_use(self.as_ref()) {
             warn!(
                 "Player {} interacted with invalid menu {:?}",
                 self.gameprofile.name,
@@ -3046,7 +3063,146 @@ impl Player {
             return;
         }
 
-        let not_in_sync = packet.revision.0 != (behaviour.revision.load(Ordering::Relaxed) as i32);
+        // Fire InventoryClickEvent
+        let clicked_item = if slot >= 0 {
+            let slot_obj = &screen_handler.get_behaviour().slots[slot as usize];
+            Some(slot_obj.get_cloned_stack().await)
+        } else {
+            None
+        };
+
+        let cursor_item = Some(
+            screen_handler
+                .get_behaviour()
+                .cursor_stack
+                .lock()
+                .await
+                .clone(),
+        );
+        let raw_slot = slot; // For now raw_slot == slot, as we don't have separate view/inventory indexing yet
+        let hotbar_button = if matches!(packet.mode, SlotActionType::Swap) {
+            packet.button
+        } else {
+            -1
+        };
+
+        let click_type = match packet.mode {
+            SlotActionType::Pickup => {
+                if packet.button == 0 {
+                    ClickType::Left
+                } else {
+                    ClickType::Right
+                }
+            }
+            SlotActionType::QuickMove => {
+                if packet.button == 0 {
+                    ClickType::ShiftLeft
+                } else {
+                    ClickType::ShiftRight
+                }
+            }
+            SlotActionType::Swap => ClickType::NumberKey(packet.button as u8),
+            SlotActionType::Clone => ClickType::Middle,
+            SlotActionType::Throw => {
+                if packet.button == 0 {
+                    ClickType::Drop
+                } else {
+                    ClickType::ControlDrop
+                }
+            }
+            SlotActionType::QuickCraft => {
+                if [0, 4, 8].contains(&packet.button) {
+                    ClickType::Left
+                } else if [1, 5, 9].contains(&packet.button) {
+                    ClickType::Right
+                } else {
+                    ClickType::Middle
+                }
+            }
+            SlotActionType::PickupAll => ClickType::DoubleClick,
+        };
+
+        send_cancellable! {{
+            server;
+            InventoryClickEvent::new(
+                self,
+                screen_handler.window_type(),
+                click_type,
+                slot,
+                raw_slot,
+                clicked_item,
+                cursor_item,
+                i32::from(hotbar_button),
+            );
+            'after: {}
+            'cancelled: {
+                screen_handler.cancel().await;
+                return;
+            }
+        }}
+
+        // Enforce flags
+        let is_container_slot = slot >= 0 && i32::from(slot) < container_slots as i32;
+
+        match packet.mode {
+            SlotActionType::Pickup => {
+                let cursor_stack = screen_handler.get_behaviour().cursor_stack.lock().await;
+                if is_container_slot {
+                    if !cursor_stack.is_empty() && !allow_put_items {
+                        drop(cursor_stack);
+                        screen_handler.cancel().await;
+                        return;
+                    }
+                    if cursor_stack.is_empty() && !allow_grab_items {
+                        drop(cursor_stack);
+                        screen_handler.cancel().await;
+                        return;
+                    }
+                }
+            }
+            SlotActionType::QuickMove => {
+                if is_container_slot && !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+                if !is_container_slot && !allow_put_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Swap => {
+                if is_container_slot && (!allow_grab_items || !allow_put_items) {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Throw => {
+                if is_container_slot && !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::QuickCraft => {
+                if !allow_put_items {
+                    // Dragging items into slots
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::PickupAll => {
+                if !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Clone => {}
+        }
+
+        let not_in_sync = packet.revision.0
+            != (screen_handler
+                .get_behaviour()
+                .revision
+                .load(Ordering::Relaxed) as i32);
 
         screen_handler.disable_sync();
         screen_handler
@@ -3054,7 +3210,7 @@ impl Player {
                 i32::from(slot),
                 i32::from(packet.button),
                 packet.mode.clone(),
-                self,
+                self.as_ref(),
             )
             .await;
 
@@ -3069,7 +3225,6 @@ impl Player {
             screen_handler.update_to_client().await;
         } else {
             screen_handler.send_content_updates().await;
-            drop(screen_handler);
         }
     }
 

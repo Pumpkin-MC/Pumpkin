@@ -1,4 +1,3 @@
-use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
@@ -465,7 +464,7 @@ pub async fn calc_block_breaking(
 #[derive(PartialEq, Eq, Debug)]
 pub enum BlockIsReplacing {
     Itself(BlockStateId),
-    Water(Integer0To15),
+    Water(u8),
     Other,
     None,
 }
@@ -473,10 +472,10 @@ pub enum BlockIsReplacing {
 impl BlockIsReplacing {
     #[must_use]
     /// Returns true if the block was a water source block.
-    pub fn water_source(&self) -> bool {
+    pub const fn water_source(&self) -> bool {
         match self {
             // Level 0 means the water is a source block
-            Self::Water(level) => *level == Integer0To15::L0,
+            Self::Water(level) => *level == 0,
             _ => false,
         }
     }

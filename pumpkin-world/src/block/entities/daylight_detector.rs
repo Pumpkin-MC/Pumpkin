@@ -1,7 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, Integer0To15};
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 
@@ -120,7 +120,7 @@ impl DaylightDetectorBlockEntity {
             power = (power as f32 * sun_angle_radians.cos()).round() as u8;
         }
 
-        let power = Integer0To15::from_index(power.clamp(0, 15).into());
+        let power = power.clamp(0, 15);
         if power != props.power {
             props.power = power;
             let state = props.to_state_id(block);

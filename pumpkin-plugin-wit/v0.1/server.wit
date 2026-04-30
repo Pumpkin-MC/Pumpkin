@@ -16,6 +16,18 @@ interface server {
         hard,
     }
 
+    /// Represents the three main Minecraft dimensions.
+    enum dimension {
+        overworld,
+        nether,
+        end,
+    }
+
+    variant command-sender {
+        console,
+        player(player),
+    }
+
     /// Represents the global server instance.
     resource server {
         /// Returns the current difficulty level of the server.
@@ -46,6 +58,12 @@ interface server {
 
         /// Gets a world by its dimension name (e.g., "minecraft:overworld").
         get-world-by-name: func(name: string) -> option<%world>;
+
+        execute-command: func(command: string, sender: command-sender);
+
+        /// Creates or loads a world by its name and dimension.
+        /// If a world with the given name already exists, it will be returned.
+        create-world: func(name: string, dimension: dimension) -> %world;
 
         /// Broadcasts a system chat message to all players.
         broadcast: func(message: string);
