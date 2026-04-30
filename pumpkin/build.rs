@@ -4,6 +4,7 @@ use std::{
     fmt::Write,
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use syn::{Attribute, Expr, Fields, Item, LitInt, Type};
@@ -304,7 +305,7 @@ fn generate_packet_schemas(
 
     let mut out = String::new();
     out.push_str(
-        "fn generated_java_packet_schema_registry() -> BTreeMap<String, LocalPacketSchema> {\n",
+        "#[allow(clippy::too_many_lines)]\nfn generated_java_packet_schema_registry() -> BTreeMap<String, LocalPacketSchema> {\n",
     );
     out.push_str("    let mut registry = BTreeMap::new();\n");
     for schema in &schemas {
@@ -336,8 +337,43 @@ fn generate_packet_schemas(
     out
 }
 
+fn git_output(manifest_dir: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(manifest_dir)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let stdout = stdout.trim();
+    (!stdout.is_empty()).then(|| stdout.to_string())
+}
+
+fn write_build_info(manifest_dir: &Path, out_dir: &Path) {
+    let git_hash = git_output(manifest_dir, &["rev-parse", "--short=10", "HEAD"])
+        .unwrap_or_else(|| "unknown".to_string());
+    let git_hash_full =
+        git_output(manifest_dir, &["rev-parse", "HEAD"]).unwrap_or_else(|| git_hash.clone());
+
+    let build_info = format!(
+        "pub const GIT_HASH: &str = {git_hash:?};\npub const GIT_HASH_FULL: &str = {git_hash_full:?};\n"
+    );
+
+    fs::write(out_dir.join("build_info.rs"), build_info).expect("write build_info.rs");
+
+    let git_head = manifest_dir.join("../.git/HEAD");
+    println!("cargo:rerun-if-changed={}", git_head.display());
+}
+
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
+    write_build_info(&manifest_dir, &out_dir);
+
     let packet_generated = manifest_dir
         .join("../pumpkin-data/src/generated/packet.rs")
         .canonicalize()
@@ -363,7 +399,6 @@ fn main() {
         .collect::<BTreeMap<_, _>>();
 
     let generated = generate_packet_schemas(&manifest_dir, &packet_by_const);
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     fs::write(out_dir.join("generated_java_packet_schemas.rs"), generated)
         .expect("write generated_java_packet_schemas.rs");
 }

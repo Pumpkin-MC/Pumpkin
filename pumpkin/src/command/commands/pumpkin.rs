@@ -6,6 +6,7 @@ use pumpkin_util::translation::get_translation_text;
 use serde::Deserialize;
 use std::borrow::Cow;
 
+use crate::build_info::{GIT_HASH, GIT_HASH_FULL};
 use crate::command::CommandResult;
 use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
 
@@ -16,8 +17,6 @@ const DESCRIPTION: &str = "Display information about Pumpkin.";
 struct Executor;
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-const GIT_HASH: &str = env!("GIT_HASH");
-const GIT_HASH_FULL: &str = env!("GIT_HASH_FULL");
 
 #[derive(Deserialize)]
 struct Contributor {

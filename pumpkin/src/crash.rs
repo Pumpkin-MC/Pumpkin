@@ -17,6 +17,8 @@ use sysinfo::{Cpu, System};
 use time::OffsetDateTime;
 use tracing::error;
 
+use crate::build_info::GIT_HASH;
+
 pub const BYTES_PER_MEBIBYTE: u64 = 1024 * 1024;
 
 /// Writes to a string which cannot fail.
@@ -287,7 +289,7 @@ impl CrashReport {
         format!(
             "{} (Commit: {}/{})",
             env!("CARGO_PKG_VERSION"),
-            env!("GIT_HASH"),
+            GIT_HASH,
             profile
         )
     }

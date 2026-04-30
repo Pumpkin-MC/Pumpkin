@@ -119,7 +119,7 @@ const fn to_wasm_state(state: crate::plugin::packet::PacketConnectionState) -> C
     }
 }
 
-fn to_wasm_key(
+const fn to_wasm_key(
     key: crate::plugin::packet::PacketDirection,
     phase: String,
     name: String,
@@ -131,7 +131,7 @@ fn to_wasm_key(
     }
 }
 
-fn protocol_to_mc_version(protocol: u32) -> MinecraftVersion {
+const fn protocol_to_mc_version(protocol: u32) -> MinecraftVersion {
     MinecraftVersion::from_protocol(protocol)
 }
 
@@ -162,117 +162,119 @@ struct JavaPacketCatalogLocal {
     versions: BTreeMap<MinecraftVersion, VersionPacketsLocal>,
 }
 
+const EMBEDDED_PACKET_ASSETS: &[(MinecraftVersion, &str)] = &[
+    (
+        MinecraftVersion::V_1_20_5,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_20_5_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_1_21,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_21_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_1_21_2,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_21_2_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_1_21_4,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_21_4_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_1_21_5,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_21_5_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_1_21_6,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_21_6_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_1_21_7,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_21_7_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_1_21_9,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_21_9_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_1_21_11,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/1_21_11_packets.json"
+        )),
+    ),
+    (
+        MinecraftVersion::V_26_1,
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/packet/26_1_packets.json"
+        )),
+    ),
+];
+
+fn build_reverse_lookup(
+    packets: &BTreeMap<String, BTreeMap<String, i32>>,
+) -> BTreeMap<i32, JavaPacketNameLocal> {
+    let mut reverse = BTreeMap::new();
+
+    for (phase, phase_packets) in packets {
+        for (name, id) in phase_packets {
+            reverse.insert(
+                *id,
+                JavaPacketNameLocal {
+                    phase: phase.clone(),
+                    name: name.clone(),
+                },
+            );
+        }
+    }
+
+    reverse
+}
+
+fn parse_version_packets(json: &str) -> VersionPacketsLocal {
+    let parsed: VersionPacketAsset =
+        serde_json::from_str(json).expect("failed to parse embedded packet asset");
+
+    VersionPacketsLocal {
+        reverse_serverbound: build_reverse_lookup(&parsed.serverbound),
+        reverse_clientbound: build_reverse_lookup(&parsed.clientbound),
+        serverbound: parsed.serverbound,
+        clientbound: parsed.clientbound,
+    }
+}
+
 impl JavaPacketCatalogLocal {
     fn load_embedded() -> Self {
         let mut catalog = Self::default();
 
-        for (version, json) in [
-            (
-                MinecraftVersion::V_1_20_5,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_20_5_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_1_21,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_21_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_1_21_2,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_21_2_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_1_21_4,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_21_4_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_1_21_5,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_21_5_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_1_21_6,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_21_6_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_1_21_7,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_21_7_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_1_21_9,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_21_9_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_1_21_11,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/1_21_11_packets.json"
-                )),
-            ),
-            (
-                MinecraftVersion::V_26_1,
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/../assets/packet/26_1_packets.json"
-                )),
-            ),
-        ] {
-            let parsed: VersionPacketAsset =
-                serde_json::from_str(json).expect("failed to parse embedded packet asset");
-
-            let mut version_packets = VersionPacketsLocal {
-                serverbound: parsed.serverbound,
-                clientbound: parsed.clientbound,
-                reverse_serverbound: BTreeMap::new(),
-                reverse_clientbound: BTreeMap::new(),
-            };
-
-            for (phase, packets) in &version_packets.serverbound {
-                for (name, id) in packets {
-                    version_packets.reverse_serverbound.insert(
-                        *id,
-                        JavaPacketNameLocal {
-                            phase: phase.clone(),
-                            name: name.clone(),
-                        },
-                    );
-                }
-            }
-
-            for (phase, packets) in &version_packets.clientbound {
-                for (name, id) in packets {
-                    version_packets.reverse_clientbound.insert(
-                        *id,
-                        JavaPacketNameLocal {
-                            phase: phase.clone(),
-                            name: name.clone(),
-                        },
-                    );
-                }
-            }
-
-            catalog.versions.insert(version, version_packets);
+        for &(version, json) in EMBEDDED_PACKET_ASSETS {
+            catalog
+                .versions
+                .insert(version, parse_version_packets(json));
         }
 
         catalog
@@ -343,7 +345,7 @@ enum LocalFieldType {
     Bytes { len: usize },
     RemainingBytes,
     UuidBytes,
-    Optional(Box<LocalFieldType>),
+    Optional(Box<Self>),
 }
 
 #[derive(Debug, Clone)]
@@ -478,10 +480,10 @@ fn decode_local_field_value(
             reader.read_exact(16).map_err(to_schema_error)?.to_vec(),
         )),
         LocalFieldType::Optional(inner) => {
-            if !reader.read_bool().map_err(to_schema_error)? {
-                None
-            } else {
+            if reader.read_bool().map_err(to_schema_error)? {
                 decode_local_field_value(inner, reader)?
+            } else {
+                None
             }
         }
     };
@@ -489,7 +491,7 @@ fn decode_local_field_value(
     Ok(value)
 }
 
-fn to_packet_read_error(err: PacketReadErrorLocal) -> PacketReadError {
+const fn to_packet_read_error(err: PacketReadErrorLocal) -> PacketReadError {
     match err {
         PacketReadErrorLocal::UnexpectedEof => PacketReadError::UnexpectedEof,
         PacketReadErrorLocal::VarIntTooLong => PacketReadError::VarintTooLong,
@@ -498,7 +500,7 @@ fn to_packet_read_error(err: PacketReadErrorLocal) -> PacketReadError {
     }
 }
 
-fn to_schema_error(err: PacketReadErrorLocal) -> PacketSchemaError {
+const fn to_schema_error(err: PacketReadErrorLocal) -> PacketSchemaError {
     match err {
         PacketReadErrorLocal::UnexpectedEof => PacketSchemaError::DecodeUnexpectedEof,
         PacketReadErrorLocal::VarIntTooLong => PacketSchemaError::DecodeVarintTooLong,
@@ -516,7 +518,7 @@ enum PacketReadErrorLocal {
 }
 
 impl PluginPacketReader {
-    fn remaining(&self) -> u32 {
+    const fn remaining(&self) -> u32 {
         self.buf.len().saturating_sub(self.pos) as u32
     }
 
@@ -664,7 +666,7 @@ impl PluginPacketReader {
         }
         let bytes = self.read_exact(len)?;
         core::str::from_utf8(bytes)
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .map_err(|_| PacketReadErrorLocal::InvalidUtf8)
     }
 }
@@ -835,7 +837,7 @@ impl pumpkin::plugin::packet::HostPacketReader for PluginHostState {
     ) -> wasmtime::Result<Result<Vec<u8>, PacketReadError>> {
         Ok(packet_reader_from_resource_mut(self, &reader)?
             .read_exact(len as usize)
-            .map(|bytes| bytes.to_vec())
+            .map(<[u8]>::to_vec)
             .map_err(to_packet_read_error))
     }
 
@@ -845,7 +847,7 @@ impl pumpkin::plugin::packet::HostPacketReader for PluginHostState {
     ) -> wasmtime::Result<Result<Vec<u8>, PacketReadError>> {
         Ok(packet_reader_from_resource_mut(self, &reader)?
             .read_exact(16)
-            .map(|bytes| bytes.to_vec())
+            .map(<[u8]>::to_vec)
             .map_err(to_packet_read_error))
     }
 
@@ -886,7 +888,7 @@ impl pumpkin::plugin::packet::HostPacketWriter for PluginHostState {
     ) -> wasmtime::Result<()> {
         packet_writer_from_resource_mut(self, &writer)?
             .buf
-            .push(if value { 1 } else { 0 });
+            .push(u8::from(value));
         Ok(())
     }
 

@@ -38,6 +38,9 @@ use tracing::{debug, info, warn};
 // Setup some tokens to allow us to identify which event is for which socket.
 
 pub mod block;
+pub mod build_info {
+    include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
+}
 pub mod command;
 pub mod crash;
 pub mod data;

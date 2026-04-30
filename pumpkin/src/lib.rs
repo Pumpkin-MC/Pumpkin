@@ -37,6 +37,9 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 pub mod block;
+pub mod build_info {
+    include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
+}
 pub mod command;
 pub mod crash;
 pub mod data;
