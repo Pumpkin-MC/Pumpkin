@@ -31,8 +31,6 @@ use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::lock::LevelLocker;
-use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
@@ -126,9 +124,6 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_writer: Arc<dyn WorldInfoWriter>,
-    // Gets unlocked when dropped
-    // TODO: Make this a trait
-    _locker: Arc<Option<AnvilLevelLocker>>,
 }
 
 impl Server {
@@ -169,19 +164,13 @@ impl Server {
                 fs::copy(dat_path, backup_path).unwrap();
             }
         }
-        let locker = match AnvilLevelLocker::lock(&world_path) {
-            Ok(l) => Some(l),
-            Err(err) => {
-                warn!(
-                    "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
-                );
-                None
-            }
-        };
-
         let level_info = level_info.unwrap_or_else(|err| {
             warn!("Failed to get level_info, using default instead: {err}");
-            LevelData::default(basic_config.seed)
+            let default_data = LevelData::default(basic_config.seed);
+            if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
+                error!("Failed to save level.dat: {err}");
+            }
+            default_data
         });
 
         let seed = level_info.world_gen_settings.seed;
@@ -253,7 +242,6 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_writer: Arc::new(AnvilLevelInfo),
             level_info,
-            _locker: Arc::new(locker),
         };
         let server = Arc::new(server);
 
@@ -443,7 +431,7 @@ impl Server {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
         let (world, nbt) =
-            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id) {
+            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id).await {
                 let _version = data.get_int().unwrap_or(0);
                 if let Ok(dimension_key) = data.get_string() {
                     if let Some(dimension) = Dimension::from_name(&dimension_key) {
@@ -819,7 +807,7 @@ impl Server {
 
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
-    pub async fn tick_players_and_network(&self) {
+    pub async fn tick_players_and_network(self: &Arc<Self>) {
         let worlds = self.worlds.load();
 
         for world in worlds.iter() {
@@ -827,12 +815,18 @@ impl Server {
             world.flush_synced_block_events().await;
         }
 
+        let mut set = JoinSet::new();
         for world in worlds.iter() {
             let players = world.players.load();
             for player in players.iter() {
-                player.tick(self).await;
+                let player_clone = player.clone();
+                let server_clone = self.clone();
+                set.spawn(async move {
+                    player_clone.tick(&server_clone).await;
+                });
             }
         }
+        set.join_all().await;
     }
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub async fn tick_worlds(self: &Arc<Self>) {
@@ -845,7 +839,7 @@ impl Server {
             let server = self.clone();
 
             set.spawn(async move {
-                world.tick(&server).await;
+                world.tick(server).await;
             });
         }
 
