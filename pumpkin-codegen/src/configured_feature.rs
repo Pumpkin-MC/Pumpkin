@@ -860,10 +860,24 @@ fn value_to_dpnp(v: &Value) -> TokenStream {
         .as_array()
         .map(|a| a.iter().filter_map(|x| x.as_f64()).collect())
         .unwrap_or_default();
+    let mut min_octave = i32::MAX;
+    let mut max_octave = i32::MIN;
+
+    for (index, amp) in amplitudes.iter().enumerate() {
+        if *amp != 0.0 {
+            min_octave = i32::min(min_octave, index as i32);
+            max_octave = i32::max(max_octave, index as i32);
+        }
+    }
+
+    let octaves = max_octave - min_octave;
+    let create_amp_val = 0.1f64 * (1.0f64 + 1.0f64 / (octaves + 1) as f64);
+    let final_amplitude = 0.16666666666666666f64 / create_amp_val;
     quote! {
         DoublePerlinNoiseParametersCodec {
             first_octave: #first_octave,
             amplitudes: vec![#(#amplitudes),*],
+            amplitude: #final_amplitude,
         }
     }
 }
