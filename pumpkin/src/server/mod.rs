@@ -435,11 +435,14 @@ impl Server {
             player.read_nbt(&mut nbt_data).await;
         }
 
-        let mut advancements= player.advancements.lock().await;
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
-        advancements.load().await;
+        let mut advancements= player.advancements.lock().await;
+        if let Err(e) = advancements.load(){
+            warn!("Error loading player {}: {e}",player.gameprofile.id);
+        }
         advancements.player = Arc::downgrade(&player);
+        drop(advancements);
 
         send_cancellable! {{
             self;
