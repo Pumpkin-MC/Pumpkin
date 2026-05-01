@@ -507,10 +507,11 @@ impl PumpkinServer {
                                 } else if let Some(sock) = self.udp_socket.as_ref()
                                     && let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
                                         *master_client_id_counter += 1;
-                                        let mut platform = BedrockClient::new(sock.clone(), client_addr, be_clients);
+                                        let platform = BedrockClient::new(sock.clone(), client_addr, be_clients);
                                         platform.handle_connection_request(packet).await;
+                                        let platform = Arc::new(platform);
                                         platform.start_outgoing_packet_task();
-                                        clients_guard.insert(client_addr, Arc::new(platform));
+                                        clients_guard.insert(client_addr, platform);
                                     }
                             } else if let Some(sock) = self.udp_socket.as_ref() {
                                 let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, sock).await;
