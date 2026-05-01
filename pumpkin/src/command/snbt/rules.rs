@@ -195,16 +195,12 @@ impl SnbtParser<'_, '_> {
                 match parser.reader.peek() {
                     Some('x' | 'X') => {
                         parser.reader.skip();
-                        return if let Some(number) = parser.hexadecimal_numeral() {
-                            Some(IntegerLiteral {
-                                sign,
-                                base: Base::Hexadecimal,
-                                suffix: IntegerSuffix::EMPTY,
-                                digits: number,
-                            })
-                        } else {
-                            None
-                        };
+                        return parser.hexadecimal_numeral().map(|number| IntegerLiteral {
+                            sign,
+                            base: Base::Hexadecimal,
+                            suffix: IntegerSuffix::EMPTY,
+                            digits: number,
+                        });
                     }
                     Some('b' | 'B') => {
                         parser.reader.skip();
@@ -215,9 +211,8 @@ impl SnbtParser<'_, '_> {
                                 suffix: IntegerSuffix::EMPTY,
                                 digits: number,
                             });
-                        } else {
-                            parser.reader.set_cursor(after_sign_cursor);
                         }
+                        parser.reader.set_cursor(after_sign_cursor);
                     }
                     _ => {
                         return if parser.decimal_numeral().is_none() {
@@ -241,9 +236,8 @@ impl SnbtParser<'_, '_> {
                     suffix: IntegerSuffix::EMPTY,
                     digits: number,
                 });
-            } else {
-                parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "0", &["0"]);
             }
+            parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "0", &["0"]);
             None
         })?;
 
@@ -422,7 +416,7 @@ impl SnbtParser<'_, '_> {
             },
             Some(TypeSuffix::Float) => match buffer.parse::<f32>() {
                 Err(error) => {
-                    self.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal")
+                    self.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal");
                 }
                 Ok(value) if value.is_finite() => {
                     return Some(NbtTag::Float(value));
@@ -733,10 +727,7 @@ impl SnbtParser<'_, '_> {
             if let Some((prefix, literals)) = parser.parse_or_revert(|parser| {
                 let prefix = parser.array_prefix()?;
                 parser.reader.skip_whitespace();
-                if parser.reader.peek() != Some(';') {
-                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ";", &[";"]);
-                    None
-                } else {
+                if parser.reader.peek() == Some(';') {
                     parser.reader.skip();
                     let entries = parser.int_array_entries()?;
 
@@ -747,6 +738,9 @@ impl SnbtParser<'_, '_> {
                     parser.reader.skip();
 
                     Some((prefix, entries))
+                } else {
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ";", &[";"]);
+                    None
                 }
             }) {
                 parser.create_prefixed_array(&literals[..], prefix)

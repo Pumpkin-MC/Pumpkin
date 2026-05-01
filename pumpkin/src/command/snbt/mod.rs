@@ -74,7 +74,7 @@ pub struct SnbtParser<'r, 's> {
 ///
 /// USAGE
 ///
-impl<'r, 's> SnbtParser<'r, 's> {
+impl SnbtParser<'_, '_> {
     /// Parses SNBT with a given [`StringReader`], giving the result or error from parsing.
     pub fn parse_for_commands(reader: &mut StringReader) -> Result<NbtTag, CommandSyntaxError> {
         let (result, errors) = {
@@ -98,7 +98,7 @@ impl<'r, 's> SnbtParser<'r, 's> {
                         error
                             .arguments
                             .into_iter()
-                            .map(|text| TextComponent::text(text))
+                            .map(TextComponent::text)
                             .collect::<Vec<_>>(),
                     ),
                     context: Some(CommandSyntaxErrorContext { input: reader.string().to_string(), cursor: errors.cursor }),
@@ -336,89 +336,90 @@ impl SnbtParser<'_, '_> {
             (false, TypeSuffix::Byte) => {
                 let integer = self.parse_int_or_error(&number, radix)?;
 
-                if let Ok(byte) = integer.try_into() {
-                    Some(Number::Byte(byte))
-                } else {
-                    self.store_dynamic_error(
-                        &NUMBER_PARSE_FAILURE,
-                        format!("Value out of range. Value:\"{number}\" Radix:{radix}"),
-                    );
-                    None
-                }
+                integer.try_into().map_or_else(
+                    |_| {
+                        self.store_dynamic_error(
+                            &NUMBER_PARSE_FAILURE,
+                            format!("Value out of range. Value:\"{number}\" Radix:{radix}"),
+                        );
+                        None
+                    },
+                    |byte| Some(Number::Byte(byte)),
+                )
             }
             (false, TypeSuffix::Short) => {
                 let integer = self.parse_int_or_error(&number, radix)?;
 
-                if let Ok(short) = integer.try_into() {
-                    Some(Number::Short(short))
-                } else {
-                    self.store_dynamic_error(
-                        &NUMBER_PARSE_FAILURE,
-                        format!("Value out of range. Value:\"{number}\" Radix:{radix}"),
-                    );
-                    None
-                }
+                integer.try_into().map_or_else(
+                    |_| {
+                        self.store_dynamic_error(
+                            &NUMBER_PARSE_FAILURE,
+                            format!("Value out of range. Value:\"{number}\" Radix:{radix}"),
+                        );
+                        None
+                    },
+                    |short| Some(Number::Short(short)),
+                )
             }
             (false, TypeSuffix::Int) => Some(Number::Int(self.parse_int_or_error(&number, radix)?)),
-            (false, TypeSuffix::Long) => {
-                if let Ok(long) = i64::from_str_radix(&number, radix) {
-                    Some(Number::Long(long))
-                } else {
+            (false, TypeSuffix::Long) => i64::from_str_radix(&number, radix).map_or_else(
+                |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
                         format!("For input string: \"{number}\""),
                     );
                     None
-                }
-            }
+                },
+                |long| Some(Number::Long(long)),
+            ),
             (true, TypeSuffix::Byte) => {
                 let integer = self.parse_int_or_error(&number, radix)?;
 
-                if let Ok(byte) = TryInto::<u8>::try_into(integer) {
-                    Some(Number::Byte(byte as i8))
-                } else {
-                    self.store_dynamic_error(
-                        &NUMBER_PARSE_FAILURE,
-                        format!("out of range: {number}"),
-                    );
-                    None
-                }
+                TryInto::<u8>::try_into(integer).map_or_else(
+                    |_| {
+                        self.store_dynamic_error(
+                            &NUMBER_PARSE_FAILURE,
+                            format!("out of range: {number}"),
+                        );
+                        None
+                    },
+                    |byte| Some(Number::Byte(byte as i8)),
+                )
             }
             (true, TypeSuffix::Short) => {
                 let integer = self.parse_int_or_error(&number, radix)?;
 
-                if let Ok(short) = TryInto::<u16>::try_into(integer) {
-                    Some(Number::Short(short as i16))
-                } else {
-                    self.store_dynamic_error(
-                        &NUMBER_PARSE_FAILURE,
-                        format!("out of range: {number}"),
-                    );
-                    None
-                }
+                TryInto::<u16>::try_into(integer).map_or_else(
+                    |_| {
+                        self.store_dynamic_error(
+                            &NUMBER_PARSE_FAILURE,
+                            format!("out of range: {number}"),
+                        );
+                        None
+                    },
+                    |short| Some(Number::Short(short as i16)),
+                )
             }
-            (true, TypeSuffix::Int) => {
-                if let Ok(int) = u32::from_str_radix(&number, radix) {
-                    Some(Number::Int(int as i32))
-                } else {
+            (true, TypeSuffix::Int) => u32::from_str_radix(&number, radix).map_or_else(
+                |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
                         format!("String value {number} exceeds range of unsigned int."),
                     );
                     None
-                }
-            }
-            (true, TypeSuffix::Long) => {
-                if let Ok(long) = u64::from_str_radix(&number, radix) {
-                    Some(Number::Long(long as i64))
-                } else {
+                },
+                |int| Some(Number::Int(int as i32)),
+            ),
+            (true, TypeSuffix::Long) => u64::from_str_radix(&number, radix).map_or_else(
+                |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
                         format!("String value {number} exceeds range of unsigned long."),
                     );
                     None
-                }
-            }
+                },
+                |long| Some(Number::Long(long as i64)),
+            ),
             _ => {
                 self.store_simple_error(&EXPECTED_INTEGER_TYPE);
                 None
@@ -427,15 +428,16 @@ impl SnbtParser<'_, '_> {
     }
 
     fn parse_int_or_error(&mut self, number: &str, radix: u32) -> Option<i32> {
-        if let Ok(int) = i32::from_str_radix(&number, radix) {
-            Some(int)
-        } else {
-            self.store_dynamic_error(
-                &NUMBER_PARSE_FAILURE,
-                format!("For input string: \"{number}\""),
-            );
-            None
-        }
+        i32::from_str_radix(number, radix).map_or_else(
+            |_| {
+                self.store_dynamic_error(
+                    &NUMBER_PARSE_FAILURE,
+                    format!("For input string: \"{number}\""),
+                );
+                None
+            },
+            Some,
+        )
     }
 
     fn create_prefixed_array(

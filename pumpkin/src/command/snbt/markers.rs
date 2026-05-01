@@ -55,11 +55,7 @@ impl TypeSuffix {
     /// Returns the `default` suffix if this suffix is [`TypeSuffix::None`], otherwise
     /// it returns itself.
     pub fn or(self, default: Self) -> Self {
-        if self == TypeSuffix::None {
-            default
-        } else {
-            self
-        }
+        if self == Self::None { default } else { self }
     }
 }
 
@@ -122,6 +118,7 @@ pub struct Signed<T> {
 }
 
 /// Represents a explicit prefix set for an array.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ArrayPrefix {
     Byte,
     Long,
