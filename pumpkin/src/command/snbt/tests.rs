@@ -44,7 +44,7 @@ macro_rules! assert_parse_ok {
                     "Expected everything to get parsed, but found trailing data: {}",
                     &reader.string()[reader.cursor()..]
                 );
-            },
+            }
         }
     };
 }
@@ -55,8 +55,15 @@ macro_rules! assert_parse_ok_but_trailing {
         if let Err(error) = SnbtParser::parse_for_commands(&mut reader) {
             panic!("Expected a successful parse, but instead got error: {error:?}")
         }
-        assert!(reader.cursor() < reader.string().len(), "Expected trailing data, but everything was parsed successfully");
-        assert_eq!(&reader.string()[reader.cursor()..], $trailing_data, "Trailing data don't match")
+        assert!(
+            reader.cursor() < reader.string().len(),
+            "Expected trailing data, but everything was parsed successfully"
+        );
+        assert_eq!(
+            &reader.string()[reader.cursor()..],
+            $trailing_data,
+            "Trailing data don't match"
+        )
     };
 }
 
@@ -168,10 +175,7 @@ fn integers() {
         9,
         ["b", "B", "i", "I", "l", "L", "s", "S"]
     );
-    assert_parse_ok_but_trailing!(
-        "0xABCDEFG",
-        "G"
-    );
+    assert_parse_ok_but_trailing!("0xABCDEFG", "G");
     assert_parse_ok!("0xABCDUS", NbtTag::Short(-21555));
 
     // Should not parse as byte of 0xAB
@@ -226,4 +230,41 @@ fn quoted_string_literals() {
     assert_parse_ok!("\"\"", NbtTag::String(String::new()));
 
     assert_parse_ok!("\"'hello'\"", NbtTag::String("'hello'".to_string()));
+    assert_parse_ok!("'\"hello\"'", NbtTag::String("\"hello\"".to_string()));
+    assert_parse_ok!("'\\\\'", NbtTag::String("\\".to_string()));
+    assert_parse_ok_but_trailing!("'\"'\"", "\"");
+
+    assert_parse_err!("'\\'", "Invalid string contents", 3, ["\"", "'", "\\"]);
+
+    assert_parse_ok!(
+        "'hello worl\\bd'",
+        NbtTag::String("hello worl\u{8}d".to_string())
+    );
+    assert_parse_ok!("'hello\\sword'", NbtTag::String("hello word".to_string()));
+    assert_parse_ok!("'hello\\tword'", NbtTag::String("hello\tword".to_string()));
+    assert_parse_ok!(
+        "'\\some or \\none'",
+        NbtTag::String(" ome or \none".to_string())
+    );
+    assert_parse_ok!("'\\f\\r'", NbtTag::String("\u{c}\r".to_string()));
+
+    assert_parse_ok!("'hello \\x65!'", NbtTag::String("hello e!".to_string()));
+    assert_parse_ok!(
+        "'\\x53\\x65\\u0063\\U00000072\\x65\\x74\\x21'",
+        NbtTag::String("Secret!".to_string())
+    );
+
+    assert_parse_err!(
+        "'\\U1234567'",
+        "Expected a character literal of length 8",
+        3,
+        []
+    );
+
+    /* TODO when \N is implemented
+    assert_parse_ok!(
+        "'\\uD83C\\uDF83 or \\U0001F383 or \\N{JACK-O-LANTERN}'",
+        NbtTag::String("🎃 🎃 🎃".to_string())
+    );
+     */
 }
