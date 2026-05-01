@@ -671,6 +671,44 @@ impl CommandDispatcher {
         commands
     }
 
+    /// Gets the description and usage of commands from a specific plugin.
+    /// Only returns commands that the source has permission to use.
+    pub async fn get_all_permitted_commands_usage_by_plugin(
+        &self,
+        source: &CommandSource,
+        plugin_name: &str,
+    ) -> BTreeMap<&str, (&str, Box<str>)> {
+        let mut commands: BTreeMap<&str, (&str, Box<str>)> = BTreeMap::new();
+
+        for fallback_command in self.fallback_dispatcher.commands.values() {
+            if let Command::Tree(command_tree) = fallback_command {
+                if let Some(source_name) = &command_tree.source {
+                    if source_name == plugin_name {
+                        if let Some(permission) = self
+                            .fallback_dispatcher
+                            .permissions
+                            .get(&command_tree.names[0])
+                            && source.has_permission(permission).await
+                        {
+                            let usage = command_tree.to_string();
+                            for name in &command_tree.names {
+                                commands.insert(
+                                    name,
+                                    (
+                                        command_tree.description.as_ref(),
+                                        usage.clone().into_boxed_str(),
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        commands
+    }
+
     /// Gets the description and usage of a given command of the given source.
     /// Returns `None` if not found or the source has insufficient permissions.
     ///

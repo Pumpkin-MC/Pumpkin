@@ -18,6 +18,8 @@ use pumpkin_util::text::color::{Color, NamedColor};
 const NO_COMMANDS_ERROR_TYPE: LiteralCommandErrorType =
     LiteralCommandErrorType::new("No commands are available to show help for");
 const FAILED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new("commands.help.failed");
+const PLUGIN_NOT_FOUND_ERROR_TYPE: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("Plugin not found or has no commands");
 
 const DESCRIPTION: &str = "Print a help message.";
 const PERMISSION: &str = "minecraft:command.help";
@@ -27,7 +29,7 @@ const ARG: &str = "commandOrPage";
 const COMMANDS_PER_PAGE: usize = 7;
 
 enum HelpArgument {
-    Command(String),
+    CommandOrPlugin(String),
     Page(usize),
 }
 
@@ -86,7 +88,7 @@ impl ArgumentType for HelpArgumentType {
                     text.remove(0);
                 }
 
-                Ok(HelpArgument::Command(text))
+                Ok(HelpArgument::CommandOrPlugin(text))
             }
         }
     }
@@ -267,6 +269,95 @@ impl HelpCommandExecutor {
             Ok(1)
         })
     }
+
+    fn plugin<'a>(context: &'a CommandContext, plugin_name: &'a str) -> CommandExecutorResult<'a> {
+        Box::pin(async move {
+            let server = context.server();
+            let dispatcher = server.command_dispatcher.read().await;
+            let commands = dispatcher
+                .get_all_permitted_commands_usage_by_plugin(&context.source, plugin_name)
+                .await;
+
+            if commands.is_empty() {
+                return Err(PLUGIN_NOT_FOUND_ERROR_TYPE.create_without_context());
+            }
+
+            let header_text = format!(" Help - Plugin: {} ", plugin_name);
+            let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
+
+            let mut message = TextComponent::empty()
+                .add_child(
+                    TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
+                )
+                .add_child(TextComponent::text(header_text.clone()))
+                .add_child(
+                    TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
+                        .color_named(NamedColor::Yellow),
+                );
+
+            let commands_len = commands.len();
+            for (command, (description, usage)) in commands {
+                let command_declaration = format!("/{}", command);
+                message = message.add_child(
+                    TextComponent::text(command_declaration.clone())
+                        .color_named(NamedColor::Gold)
+                        .add_child(TextComponent::text(" - ").color_named(NamedColor::Yellow))
+                        .add_child(
+                            TextComponent::text(description.to_owned() + "\n")
+                                .color_named(NamedColor::White),
+                        )
+                        .add_child(
+                            TextComponent::text("    Usage: ").color_named(NamedColor::Yellow),
+                        )
+                        .add_child(
+                            TextComponent::text(usage.into_string()).color_named(NamedColor::White),
+                        )
+                        .add_child(TextComponent::text("\n").color_named(NamedColor::White))
+                        .click_event(ClickEvent::SuggestCommand {
+                            command: command_declaration.into(),
+                        }),
+                );
+            }
+
+            message = message
+                .add_child(TextComponent::text("-".repeat(52)).color_named(NamedColor::Yellow));
+
+            context.source.send_message(message).await;
+            Ok(commands_len as i32)
+        })
+    }
+
+    fn command_or_plugin<'a>(
+        context: &'a CommandContext,
+        input: &'a str,
+    ) -> CommandExecutorResult<'a> {
+        Box::pin(async move {
+            // Prioritize commands ig
+            {
+                let dispatcher = context.server().command_dispatcher.read().await;
+                if dispatcher
+                    .get_permitted_command_usage(&context.source, input)
+                    .await
+                    .is_some()
+                {
+                    return Self::command(context, input).await;
+                }
+            }
+
+            {
+                let dispatcher = context.server().command_dispatcher.read().await;
+                let plugin_commands = dispatcher
+                    .get_all_permitted_commands_usage_by_plugin(&context.source, input)
+                    .await;
+
+                if !plugin_commands.is_empty() {
+                    return Self::plugin(context, input).await;
+                }
+            }
+
+            Err(FAILED_ERROR_TYPE.create_without_context())
+        })
+    }
 }
 
 struct HelpCommandExecutor;
@@ -275,8 +366,10 @@ impl CommandExecutor for HelpCommandExecutor {
         let arg = context.get_argument(ARG).unwrap_or(&HelpArgument::Page(1));
 
         match arg {
-            HelpArgument::Command(command) => Self::command(context, command),
-            HelpArgument::Page(page_number) => Self::page(context, *page_number),
+            HelpArgument::CommandOrPlugin(input) => {
+                HelpCommandExecutor::command_or_plugin(context, input)
+            }
+            HelpArgument::Page(page_number) => HelpCommandExecutor::page(context, *page_number),
         }
     }
 }

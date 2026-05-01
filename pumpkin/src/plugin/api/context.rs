@@ -158,6 +158,9 @@ impl Context {
     ) {
         let permission = permission.into();
 
+        let mut tree = tree.clone();
+        tree.source = Some(self.metadata.name.clone());
+
         let full_permission_node = if permission.contains(':') {
             permission
         } else {
