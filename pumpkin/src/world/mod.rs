@@ -1935,7 +1935,20 @@ impl World {
             }],
         ))
         .await;
+
+        // If the player has a custom tab_list_name, send an update for it
+        if let Some(tab_list_name) = player.get_tab_list_name().await {
+            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: gameprofile.id,
+                    actions: &[PlayerAction::UpdateDisplayName(Some(&tab_list_name))],
+                }],
+            ))
+            .await;
+        }
         // Here, we send all the infos of players who already joined.
+        let mut players_tab_list_names = Vec::new();
         {
             let mut current_player_data = Vec::new();
             let players = self.players.load();
@@ -1944,6 +1957,7 @@ impl World {
                 .filter(|p| p.gameprofile.id != player.gameprofile.id)
             {
                 let chat_session = player.chat_session.lock().await;
+                let tab_list_name = player.get_tab_list_name().await;
 
                 let mut player_actions = vec![
                     PlayerAction::AddPlayer {
@@ -1970,6 +1984,11 @@ impl World {
                 drop(chat_session);
 
                 current_player_data.push((&player.gameprofile.id, player_actions));
+
+                // Collect tab_list_names for sending later
+                if tab_list_name.is_some() {
+                    players_tab_list_names.push((player.gameprofile.id, tab_list_name));
+                }
             }
 
             let mut action_flags = PlayerInfoFlags::ADD_PLAYER
@@ -1992,6 +2011,21 @@ impl World {
             client
                 .enqueue_packet(&CPlayerInfoUpdate::new(action_flags.bits(), &entries))
                 .await;
+
+            // Send tab_list_names for existing players with custom names
+            for (player_id, tab_list_name) in &players_tab_list_names {
+                if let Some(name) = tab_list_name {
+                    client
+                        .enqueue_packet(&CPlayerInfoUpdate::new(
+                            PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                            &[pumpkin_protocol::java::client::play::Player {
+                                uuid: *player_id,
+                                actions: &[PlayerAction::UpdateDisplayName(Some(name))],
+                            }],
+                        ))
+                        .await;
+                }
+            }
         };
 
         let gameprofile = &player.gameprofile;
