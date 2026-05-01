@@ -146,11 +146,17 @@ impl SnbtParser<'_, '_> {
                     ))
                 }
                 Some('s' | 'S') => {
-                    parser.reader.skip();
-                    Some(IntegerSuffix(
-                        SignedPrefix::Signed,
-                        parser.integer_type_suffix()?,
-                    ))
+                    // Can mean signed or short.
+                    Some(
+                        if let Some(suffix) = parser.parse_or_revert(|parser| {
+                            parser.reader.skip();
+                            parser.integer_type_suffix()
+                        }) {
+                            IntegerSuffix(SignedPrefix::Signed, suffix)
+                        } else {
+                            IntegerSuffix(SignedPrefix::None, parser.integer_type_suffix()?)
+                        },
+                    )
                 }
                 Some('b' | 'B' | 's' | 'S' | 'i' | 'I' | 'l' | 'L') => Some(IntegerSuffix(
                     SignedPrefix::None,

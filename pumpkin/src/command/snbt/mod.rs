@@ -194,10 +194,10 @@ impl SnbtParser<'_, '_> {
                 Some(TypeSuffix::Long)
             }
             _ => {
-                // Only B|b is given as the error, being the first errored choice.
+                // Only b|B is given as the error, being the first errored choice.
                 self.store_dynamic_error_and_suggest(
                     &LITERAL_INCORRECT,
-                    "B|b",
+                    "b|B",
                     &["b", "B", "s", "S", "i", "I", "l", "L"],
                 );
                 None
