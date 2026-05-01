@@ -12,8 +12,8 @@ use pumpkin_protocol::java::server::play::{
     SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
     SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
-    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SRecipeBookSeenRecipe, SRenameItem, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
+    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -886,6 +886,11 @@ impl JavaClient {
                     SRecipeBookSeenRecipe::read(payload, &version)?,
                 )
                 .await;
+            }
+            id if id == SRenameItem::to_id(version) => {
+                player
+                    .on_rename_item(SRenameItem::read(payload, &version)?)
+                    .await;
             }
             id if id == SPlaceRecipe::to_id(version) => {
                 self.handle_place_recipe(player, SPlaceRecipe::read(payload, &version)?)

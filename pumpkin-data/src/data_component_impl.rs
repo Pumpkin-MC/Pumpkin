@@ -225,10 +225,18 @@ impl DataComponentImpl for UnbreakableImpl {
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
-    // TODO make TextComponent const
-    pub name: &'static str,
+    // TODO make TextComponent
+    pub name: String,
 }
 impl DataComponentImpl for CustomNameImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.name.clone())
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.name.as_str()) as i32
+    }
+
     default_impl!(CustomName);
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
