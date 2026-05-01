@@ -133,6 +133,15 @@ pub trait InventoryPlayer: Send + Sync {
     /// Checks if the player has infinite materials (creative mode).
     fn has_infinite_materials(&self) -> bool;
 
+    /// Checks if the player is in creative mode.
+    fn is_creative(&self) -> bool;
+
+    /// Gets the player's experience level.
+    fn experience_level(&self) -> i32;
+
+    /// Adds or removes experience levels.
+    fn add_experience_levels(&self, levels: i32) -> PlayerFuture<'_, ()>;
+
     /// Sends a full container content packet.
     fn enqueue_inventory_packet<'a>(
         &'a self,
@@ -222,6 +231,9 @@ pub trait ScreenHandler: Send + Sync {
 
     /// Returns this screen handler as an Any reference.
     fn as_any(&self) -> &dyn Any;
+
+    /// Returns this screen handler as a mutable Any reference.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 
     /// Gets the sync ID for this screen handler.
     fn sync_id(&self) -> u8 {

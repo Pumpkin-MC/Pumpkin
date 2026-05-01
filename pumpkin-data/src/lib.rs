@@ -289,3 +289,13 @@ pub use blocks::Block;
 #[rustfmt::skip]
 #[path = "generated/chunk_gen_settings.rs"]
 pub mod chunk_gen_settings;
+
+#[cfg(feature = "carver")]
+#[rustfmt::skip]
+#[path = "generated/carver.rs"]
+pub mod carver;
+
+#[cfg(feature = "villager")]
+#[rustfmt::skip]
+#[path = "generated/villager.rs"]
+pub mod villager;

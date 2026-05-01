@@ -66,6 +66,11 @@ impl Context {
         }
     }
 
+    #[must_use]
+    pub const fn get_metadata(&self) -> &PluginMetadata {
+        &self.metadata
+    }
+
     /// Retrieves the data folder path for the plugin, creating it if it does not exist.
     ///
     /// # Returns

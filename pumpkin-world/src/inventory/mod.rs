@@ -6,8 +6,10 @@ use pumpkin_data::item_stack::ItemStack;
 
 #[expect(clippy::module_inception)]
 mod inventory;
+mod simple_inventory;
 
 pub use inventory::*;
+pub use simple_inventory::*;
 
 // These are some utility functions found in Inventories.java
 pub async fn split_stack(stacks: &[Arc<Mutex<ItemStack>>], slot: usize, amount: u8) -> ItemStack {

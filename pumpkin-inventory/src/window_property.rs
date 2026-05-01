@@ -108,6 +108,14 @@ pub enum Anvil {
     RepairCost,
 }
 
+impl WindowPropertyTrait for Anvil {
+    fn to_id(self) -> i16 {
+        match self {
+            Self::RepairCost => 0,
+        }
+    }
+}
+
 /// Brewing stand window properties.
 pub enum BrewingStand {
     /// Brewing progress (0-400).

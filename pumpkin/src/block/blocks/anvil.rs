@@ -1,16 +1,44 @@
 use crate::block::blocks::falling::FallingBlock;
+use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
-    PlacedArgs,
+    BlockBehaviour, BlockFuture, GetStateForNeighborUpdateArgs, NormalUseArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PlacedArgs,
 };
+
 use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
+use pumpkin_data::translation;
+use pumpkin_inventory::anvil::AnvilScreenHandler;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::{
+    BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
+};
 use pumpkin_macros::pumpkin_block_from_tag;
+use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
+use pumpkin_world::inventory::SimpleInventory;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[pumpkin_block_from_tag("minecraft:anvil")]
 pub struct AnvilBlock;
 
 impl BlockBehaviour for AnvilBlock {
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            args.player
+                .open_handled_screen(&AnvilScreenFactory, Some(*args.position))
+                .await;
+
+            BlockActionResult::Success
+        })
+    }
+
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            FallingBlock::placed(&FallingBlock, args).await;
+        })
+    }
+
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let dir = args
@@ -27,9 +55,9 @@ impl BlockBehaviour for AnvilBlock {
         })
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            FallingBlock::placed(&FallingBlock, args).await;
+            FallingBlock::on_scheduled_tick(&FallingBlock, args).await;
         })
     }
 
@@ -41,9 +69,27 @@ impl BlockBehaviour for AnvilBlock {
             async move { FallingBlock::get_state_for_neighbor_update(&FallingBlock, args).await },
         )
     }
-    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+}
+
+struct AnvilScreenFactory;
+
+impl ScreenHandlerFactory for AnvilScreenFactory {
+    fn create_screen_handler<'a>(
+        &'a self,
+        sync_id: u8,
+        player_inventory: &'a Arc<PlayerInventory>,
+        _player: &'a dyn InventoryPlayer,
+    ) -> BoxFuture<'a, Option<SharedScreenHandler>> {
         Box::pin(async move {
-            FallingBlock::on_scheduled_tick(&FallingBlock, args).await;
+            let inventory = Arc::new(SimpleInventory::new(3));
+            let handler = AnvilScreenHandler::new(sync_id, player_inventory, inventory);
+            let concrete_arc = Arc::new(Mutex::new(handler));
+
+            Some(concrete_arc as SharedScreenHandler)
         })
+    }
+
+    fn get_display_name(&self) -> TextComponent {
+        TextComponent::translate(translation::CONTAINER_REPAIR, &[])
     }
 }

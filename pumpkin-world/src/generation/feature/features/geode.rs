@@ -18,12 +18,18 @@ use std::cmp::Ordering;
 struct NormalNoise(crate::generation::noise::perlin::DoublePerlinNoiseSampler);
 
 impl NormalNoise {
-    fn create(rand: &mut RandomGenerator, first_octave: i32, amplitudes: &[f64]) -> Self {
+    fn create(
+        rand: &mut RandomGenerator,
+        first_octave: i32,
+        amplitudes: &[f64],
+        amplitude: f64,
+    ) -> Self {
         Self(
             crate::generation::noise::perlin::DoublePerlinNoiseSampler::new(
                 rand,
                 first_octave,
                 amplitudes,
+                amplitude,
                 true,
             ),
         )
@@ -105,7 +111,7 @@ impl GeodeFeature {
     ) -> bool {
         let origin = pos;
         let num_points = self.distribution_points.get(random);
-        let noise = NormalNoise::create(random, -4, &[1.0]);
+        let noise = NormalNoise::create(random, -4, &[1.0], 0.8333333333333333f64);
 
         // Precompute sets of raw block ids for fast lookups
         let mut invalid_raw_ids: HashSet<u16> = HashSet::new();

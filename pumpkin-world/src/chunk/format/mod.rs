@@ -35,6 +35,7 @@ use super::{
 };
 pub mod anvil;
 pub mod linear;
+pub mod pump;
 
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
@@ -113,40 +114,44 @@ impl ChunkData {
                 position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
             )));
         }
-        let (block_lights, sky_lights, block_palettes, biome_palettes) = chunk_data
+        let min_y_section = chunk_data.min_y_section;
+        let max_y_section = chunk_data
             .sections
-            .into_iter()
-            .map(|section| {
-                // When loading light data, missing data should default to 0 (no light)
-                let block_light = section
-                    .block_light
-                    .map_or(LightContainer::Empty(0), LightContainer::Full);
-                let sky_light = section
-                    .sky_light
-                    .map_or(LightContainer::Empty(0), LightContainer::Full);
+            .iter()
+            .map(|s| s.y)
+            .max()
+            .unwrap_or(min_y_section as i8);
 
-                // Convert NBT to Palettes
-                let block_palette = section
-                    .block_states
-                    .map(BlockPalette::from_disk_nbt)
-                    .unwrap_or_default();
-                let biome_palette = section
-                    .biomes
-                    .map(BiomePalette::from_disk_nbt)
-                    .unwrap_or_default();
+        let section_count = (max_y_section as i32 - min_y_section + 1).max(0) as usize;
+        let mut block_lights = vec![LightContainer::Empty(0); section_count];
+        let mut sky_lights = vec![LightContainer::Empty(0); section_count];
+        let mut block_palettes = vec![BlockPalette::default(); section_count];
+        let mut biome_palettes = vec![BiomePalette::default(); section_count];
 
-                (block_light, sky_light, block_palette, biome_palette)
-            })
-            .fold(
-                (Vec::new(), Vec::new(), Vec::new(), Vec::new()),
-                |(mut bl, mut sl, mut bp, mut bip), (b_l, s_l, b_p, bi_p)| {
-                    bl.push(b_l);
-                    sl.push(s_l);
-                    bp.push(b_p);
-                    bip.push(bi_p);
-                    (bl, sl, bp, bip)
-                },
-            );
+        for section in chunk_data.sections {
+            let index = (section.y as i32 - min_y_section) as usize;
+            if index >= section_count {
+                continue;
+            }
+
+            // When loading light data, missing data should default to 0 (no light)
+            block_lights[index] = section
+                .block_light
+                .map_or(LightContainer::Empty(0), LightContainer::Full);
+            sky_lights[index] = section
+                .sky_light
+                .map_or(LightContainer::Empty(0), LightContainer::Full);
+
+            // Convert NBT to Palettes
+            block_palettes[index] = section
+                .block_states
+                .map(BlockPalette::from_disk_nbt)
+                .unwrap_or_default();
+            biome_palettes[index] = section
+                .biomes
+                .map(BiomePalette::from_disk_nbt)
+                .unwrap_or_default();
+        }
 
         // Assemble the LightEngine
         let light_engine = ChunkLight {
@@ -156,11 +161,13 @@ impl ChunkData {
 
         // Assemble the ChunkSections
         let min_y = section_coords::section_to_block(chunk_data.min_y_section);
-        let random_tick_sections = ChunkSections::build_random_tick_sections_cache(&block_palettes);
+        let (random_tick_sections, randomly_ticking_mask) =
+            ChunkSections::build_random_tick_sections_cache(&block_palettes);
         let section = ChunkSections {
             count: block_palettes.len(),
             block_sections: RwLock::new(block_palettes.into_boxed_slice()),
             random_tick_sections: RwLock::new(random_tick_sections),
+            randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
             biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
             min_y,
         };

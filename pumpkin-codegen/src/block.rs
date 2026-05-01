@@ -67,6 +67,8 @@ fn property_group_name_from_derived_name(name: &str) -> String {
 enum PropertyType {
     /// The property is a simple boolean (`true`/`false`).
     Bool,
+    /// The property is an integer with an inclusive range.
+    Int { min: u8, max: u8 },
     /// The property is an enum with a generated Rust type identified by `name`.
     Enum { name: String },
 }
@@ -211,6 +213,7 @@ impl ToTokens for BlockPropertyStruct {
             let key = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! { pub #key: bool },
+                PropertyType::Int { .. } => quote! { pub #key: u8 },
                 PropertyType::Enum { name } => {
                     let value = Ident::new(name, Span::call_site());
                     quote! { pub #key: #value }
@@ -229,6 +232,15 @@ impl ToTokens for BlockPropertyStruct {
             let field = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! { (!self.#field as u16, 2) },
+                PropertyType::Int { min, max } => {
+                    let count = (max - min + 1) as u16;
+
+                    if *min > 0 {
+                        quote! { ((self.#field - #min) as u16, #count) }
+                    } else {
+                        quote! { (self.#field as u16, #count) }
+                    }
+                }
                 PropertyType::Enum { name } => {
                     let ty = Ident::new(name, Span::call_site());
                     quote! { (self.#field.to_index(), #ty::variant_count()) }
@@ -251,6 +263,21 @@ impl ToTokens for BlockPropertyStruct {
                             value == 0
                         }
                     },
+                    PropertyType::Int { min, max } => {
+                        let count = (max - min + 1) as u16;
+                        let val = if *min > 0 {
+                            quote! { value + #min }
+                        } else {
+                            quote! {value}
+                        };
+                        quote! {
+                            #field_name: {
+                                let value = (index % #count) as u8;
+                                index /= #count;
+                                #val
+                            }
+                        }
+                    }
                     PropertyType::Enum { name } => {
                         let enum_ident = Ident::new(name, Span::call_site());
                         quote! {
@@ -272,31 +299,70 @@ impl ToTokens for BlockPropertyStruct {
                 PropertyType::Bool => quote! {
                     (#key_str, if self.#field { "true" } else { "false" })
                 },
+                PropertyType::Int { min, max } => {
+                    let mut arms = Vec::new();
+                    for i in *min..=*max {
+                        let i_str = i.to_string();
+                        arms.push(quote! { #i => #i_str });
+                    }
+                    quote! {
+                        (#key_str, match self.#field {
+                            #(#arms,)*
+                            _ => unreachable!()
+                        })
+                    }
+                }
                 PropertyType::Enum { .. } => quote! {
                     (#key_str, self.#field.to_value())
                 },
             }
         });
 
+        let from_props_keys = self
+            .data
+            .variant_mappings
+            .iter()
+            .map(|entry| &entry.original_name);
         let from_props_values = self.data.variant_mappings.iter().map(|entry| {
-            let key = &entry.original_name;
             let field_name = Ident::new_raw(&entry.original_name, Span::call_site());
             match &entry.property_type {
                 PropertyType::Bool => quote! {
-                    #key => {
-                        block_props.#field_name = matches!(*value, "true")
-                    }
+                    block_props.#field_name = matches!(*value, "true")
                 },
+                PropertyType::Int { min, max } => {
+                    let mut arms = Vec::new();
+                    for i in *min..=*max {
+                        let i_str = i.to_string();
+                        arms.push(quote! { #i_str => #i });
+                    }
+                    quote! {
+                        block_props.#field_name = match *value {
+                            #(#arms,)*
+                            _ => #min,
+                        }
+                    }
+                }
                 PropertyType::Enum { name } => {
                     let enum_ident = Ident::new(name, Span::call_site());
                     quote! {
-                        #key => {
-                            block_props.#field_name = #enum_ident::from_value(value)
-                        }
+                        block_props.#field_name = #enum_ident::from_value(value)
                     }
                 }
             }
         });
+
+        let from_props_loop_body = if self.data.variant_mappings.len() > 1 {
+            quote! {
+                match *key {
+                    #(#from_props_keys => #from_props_values),*,
+                    _ => {}, //
+                }
+            }
+        } else {
+            let key = from_props_keys.into_iter().next();
+            let val = from_props_values.into_iter().next();
+            quote! { if *key == #key { #val } }
+        };
 
         tokens.extend(quote! {
             #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -371,10 +437,7 @@ impl ToTokens for BlockPropertyStruct {
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {
-                        match *key {
-                            #(#from_props_values),*,
-                            _ => {}, //
-                        }
+                        #from_props_loop_body
                     }
                     block_props
                 }
@@ -800,15 +863,15 @@ pub fn build() -> TokenStream {
             let property = generated_property.to_property();
             let renamed_property = property.enum_name.to_upper_camel_case();
 
-            let property_type = if property.values.len() == 2
-                && property.values.contains(&"true".to_string())
-                && property.values.contains(&"false".to_string())
-            {
-                PropertyType::Bool
-            } else {
-                PropertyType::Enum {
+            let property_type = match &generated_property.property_type {
+                GeneratedPropertyType::Boolean => PropertyType::Bool,
+                GeneratedPropertyType::Int { min, max } => PropertyType::Int {
+                    min: *min,
+                    max: *max,
+                },
+                GeneratedPropertyType::Enum { .. } => PropertyType::Enum {
                     name: renamed_property.clone(),
-                }
+                },
             };
 
             if let PropertyType::Enum { name } = &property_type {
@@ -826,10 +889,32 @@ pub fn build() -> TokenStream {
             });
         }
 
+        let mut multiplier = 1;
+        let mut property_descriptors = Vec::new();
+        for hash in block.properties.iter().rev() {
+            let gen_prop = generated_prop_map.get(hash).unwrap();
+            let variant_count = match &gen_prop.property_type {
+                GeneratedPropertyType::Boolean => 2,
+                GeneratedPropertyType::Int { min, max } => (max - min + 1) as u16,
+                GeneratedPropertyType::Enum { values } => values.len() as u16,
+            };
+            property_descriptors.push(quote! {
+                PropertyDescriptor {
+                    hash_key: #hash,
+                    multiplier: #multiplier,
+                    variant_count: #variant_count,
+                }
+            });
+            multiplier *= variant_count;
+        }
+
         let const_ident = format_ident!("{}", const_block_name_from_block_name(&block.name));
         let name_str = &block.name;
         let id_lit = LitInt::new(&block.id.to_string(), Span::call_site());
         let item_id = block.item_id;
+
+        // let mut block_with_descriptors = block.clone();
+        // block_with_descriptors.property_descriptors = property_descriptors;
 
         constants_list.push(quote! {
             pub const #const_ident: Block = #block;
@@ -886,6 +971,13 @@ pub fn build() -> TokenStream {
                                 mapping.original_name.clone(),
                                 if val == 0 { "true" } else { "false" }.to_string(),
                             );
+                        }
+                        PropertyType::Int { min, max } => {
+                            let count = (*max - *min + 1) as u16;
+                            let val = (temp_index % count) as u8;
+                            temp_index /= count;
+                            java_props_for_this_state
+                                .insert(mapping.original_name.clone(), (val + *min).to_string());
                         }
                         PropertyType::Enum { name } => {
                             let enum_info = property_enums.get(name).unwrap();

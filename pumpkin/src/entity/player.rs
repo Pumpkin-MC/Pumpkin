@@ -29,7 +29,7 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
+use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
@@ -64,7 +64,7 @@ use pumpkin_protocol::java::client::play::{
     CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata,
     PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::java::server::play::{SClickSlot, SlotActionType};
+use pumpkin_protocol::java::server::play::{SClickSlot, SRenameItem, SlotActionType};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -1106,10 +1106,8 @@ impl Player {
 
         // Handle respawn anchor (Nether)
         if block == &Block::RESPAWN_ANCHOR {
-            use pumpkin_data::block_properties::Integer0To4;
-
             let anchor_props = AnchorProperties::from_state_id(state_id, block);
-            let charges = anchor_props.charges.to_index();
+            let charges = anchor_props.charges;
 
             // Anchor needs at least 1 charge to work
             if charges == 0 {
@@ -1121,7 +1119,7 @@ impl Player {
                 // Decrement charges after successful respawn position found
                 let new_charges = charges - 1;
                 let mut new_props = anchor_props;
-                new_props.charges = Integer0To4::from_index(new_charges);
+                new_props.charges = new_charges;
                 world
                     .set_block_state(
                         pos,
@@ -2935,6 +2933,19 @@ impl Player {
             .await;
     }
 
+    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem) {
+        self.update_last_action_time();
+        let screen_handler_arc = self.current_screen_handler.lock().await.clone();
+        let mut screen_handler = screen_handler_arc.lock().await;
+
+        if let Some(anvil_handler) = screen_handler
+            .as_any_mut()
+            .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
+        {
+            anvil_handler.update_item_name(packet.item_name).await;
+        }
+    }
+
     pub async fn open_handled_screen(
         &self,
         screen_handler_factory: &dyn ScreenHandlerFactory,
@@ -4060,6 +4071,21 @@ impl InventoryPlayer for Player {
     // Synchronous methods remain unchanged
     fn has_infinite_materials(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
+    }
+
+    fn is_creative(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
+    }
+
+    fn experience_level(&self) -> i32 {
+        self.experience_level
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn add_experience_levels(&self, levels: i32) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            self.add_experience_levels(levels).await;
+        })
     }
 
     fn get_inventory(&self) -> Arc<PlayerInventory> {
