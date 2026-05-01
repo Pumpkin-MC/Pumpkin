@@ -41,6 +41,7 @@ default = [
     "potion",
     "recipe_remainder",
     "chunk_gen_settings",
+    "carver",
 ]
 
 item = []
@@ -76,6 +77,7 @@ structures = []
 potion = ["potion_brewing"]
 recipe_remainder = []
 chunk_gen_settings = []
+carver = []
 
 noise_parameter = []
 biome = []

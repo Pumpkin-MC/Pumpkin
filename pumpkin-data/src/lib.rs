@@ -289,3 +289,8 @@ pub use blocks::Block;
 #[rustfmt::skip]
 #[path = "generated/chunk_gen_settings.rs"]
 pub mod chunk_gen_settings;
+
+#[cfg(feature = "carver")]
+#[rustfmt::skip]
+#[path = "generated/carver.rs"]
+pub mod carver;

@@ -13,6 +13,7 @@ mod attributes;
 mod biome;
 mod bitsets;
 mod block;
+mod carver;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
@@ -122,6 +123,7 @@ pub fn main() {
             configured_feature::build,
             "configured_features_generated.rs",
         ),
+        (carver::build, "carver.rs"),
     ];
     build_functions.extend(remap::build());
 

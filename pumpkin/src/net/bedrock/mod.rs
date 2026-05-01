@@ -94,6 +94,7 @@ pub struct BedrockClient {
     //input_sequence_number: AtomicU32,
     received_sequences: Mutex<HashSet<u32>>,
     pending_acks: Mutex<Vec<u32>>,
+    #[allow(clippy::type_complexity)]
     unacked_outgoing_frames: Mutex<HashMap<u32, (u8, Vec<u8>, std::time::Instant)>>,
     expected_order_index: Mutex<HashMap<u8, u32>>,
     highest_sequence_index: Mutex<HashMap<u8, u32>>,
@@ -191,13 +192,11 @@ impl BedrockClient {
                             .await
                             .write_packet(&packet_data, client.address, &client.socket)
                             .await
-                        {
-                            if !client.close_token.is_cancelled() {
+                            && !client.close_token.is_cancelled() {
                                 warn!("Failed to send packet to client: {err}",);
                                 client.close_token.cancel();
                                 break;
                             }
-                        }
                     }
                 }
             }
@@ -489,16 +488,15 @@ impl BedrockClient {
         debug!("Received NACK for sequences: {:?}", nack.sequences);
         let unacked = self.unacked_outgoing_frames.lock().await;
         for seq in &nack.sequences {
-            if let Some((_id, data, _timestamp)) = unacked.get(seq) {
-                if let Err(err) = self
+            if let Some((_id, data, _timestamp)) = unacked.get(seq)
+                && let Err(err) = self
                     .network_writer
                     .lock()
                     .await
                     .write_packet(data, self.address, &self.socket)
                     .await
-                {
-                    warn!("Failed to resend packet for sequence {}: {}", seq, err);
-                }
+            {
+                warn!("Failed to resend packet for sequence {}: {}", seq, err);
             }
         }
     }

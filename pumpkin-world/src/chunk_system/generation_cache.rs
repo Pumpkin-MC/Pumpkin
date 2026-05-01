@@ -367,6 +367,9 @@ impl Cache {
             StagedChunkEnum::Surface => self.chunks[mid]
                 .get_proto_chunk_mut()
                 .step_to_surface(generator),
+            StagedChunkEnum::Carvers => self.chunks[mid]
+                .get_proto_chunk_mut()
+                .step_to_carvers(generator),
             StagedChunkEnum::Features => {
                 ProtoChunk::generate_features_and_structure(
                     self,
