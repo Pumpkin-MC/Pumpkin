@@ -150,6 +150,7 @@ impl LivingEntity {
                     }
                     m.insert(attr.id, AttributeInstance::new(*base));
                 }
+
                 std::sync::RwLock::new(m)
             },
             health: AtomicCell::new(max_health), // Initial health value from attributes
@@ -356,8 +357,7 @@ impl LivingEntity {
                 .attributes
                 .iter()
                 .find(|a| a.0.id == attribute.id)
-                .unwrap()
-                .1;
+                .map_or(attribute.default_value, |a| a.1);
             AttributeInstance::new(base)
         });
 
@@ -381,14 +381,13 @@ impl LivingEntity {
             return instance.base_value;
         }
 
-        // Fall back to registry base value if no local instance exists
+        // Fall back to registry base value, or the attribute's global default
         self.entity
             .entity_type
             .attributes
             .iter()
             .find(|a| a.0.id == attribute.id)
-            .unwrap()
-            .1
+            .map_or(attribute.default_value, |a| a.1)
     }
 
     /// Update or insert the base value for an attribute on this entity.
