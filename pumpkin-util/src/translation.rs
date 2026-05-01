@@ -379,7 +379,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         for (key, value) in pumpkin_zh_tw {
             array[Locale::ZhTw as usize].insert(format!("pumpkin:{key}"), value);
         }
-        for (key,value) in pumpkin_lzh {
+        for (key, value) in pumpkin_lzh {
             array[Locale::Lzh as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_tr_tr {
