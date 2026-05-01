@@ -119,6 +119,7 @@ fn integers() {
     assert_parse_ok!("255uB", NbtTag::Byte(-1));
     assert_parse_err!("256ub", "Failed to parse number: out of range: 256", 5, []);
     assert_parse_ok!("256ss", NbtTag::Short(256));
+    assert_parse_ok!("256 s s", NbtTag::Short(256));
 
     assert_parse_err!(
         "3_000_000_000",
@@ -130,8 +131,8 @@ fn integers() {
     );
 
     assert_parse_ok!("+3_000_000_000uI", NbtTag::Int(-1_294_967_296));
-    assert_parse_ok!("+3_000_000_000sL", NbtTag::Long(3_000_000_000));
-    assert_parse_ok!("-3_000_000_000sL", NbtTag::Long(-3_000_000_000));
+    assert_parse_ok!("+3_000_000_000s L", NbtTag::Long(3_000_000_000));
+    assert_parse_ok!("-3_000_000_000 sL", NbtTag::Long(-3_000_000_000));
 
     assert_parse_err!(
         "-3_000_000_000i",
@@ -157,6 +158,8 @@ fn integers() {
     );
 
     assert_parse_ok!("0b", NbtTag::Byte(0));
+    assert_parse_ok!("0b10101", NbtTag::Int(21));
+
     assert_parse_ok!("0X111", NbtTag::Int(273));
     assert_parse_err!("0x_111", "Expected literal (", 6, BUILT_IN_LIKE_SUGGESTIONS);
     assert_parse_err!(
@@ -173,4 +176,54 @@ fn integers() {
 
     // Should not parse as byte of 0xAB
     assert_parse_ok!("0xABB", NbtTag::Int(2747));
+}
+
+#[test]
+fn floats() {
+    assert_parse_ok!("0.", NbtTag::Double(0.0));
+    assert_parse_ok!("0.f", NbtTag::Float(0.0));
+    assert_parse_ok!("0.D", NbtTag::Double(0.0));
+
+    assert_parse_ok!(".0", NbtTag::Double(0.0));
+    assert_parse_ok!(".0F", NbtTag::Float(0.0));
+    assert_parse_ok!(".0d", NbtTag::Double(0.0));
+
+    assert_parse_ok!("1.024", NbtTag::Double(1.024));
+    assert_parse_err!("1_.024", "Expected literal (", 6, BUILT_IN_LIKE_SUGGESTIONS);
+    assert_parse_ok_but_trailing!("1._024", "_024");
+    assert_parse_ok!("1.0_2_4", NbtTag::Double(1.024));
+
+    assert_parse_ok!("1e1", NbtTag::Double(10.0));
+    assert_parse_ok!("2e+2", NbtTag::Double(200.0));
+    assert_parse_ok!("4e-2", NbtTag::Double(0.04));
+
+    assert_parse_ok!("4e-2", NbtTag::Double(0.04));
+    assert_parse_ok!("0E100_000_000", NbtTag::Double(0.0));
+    assert_parse_ok_but_trailing!("0.1e100_000_000", ".1e100_000_000");
+    assert_parse_ok!("0.1e-100_000_000", NbtTag::Double(0.0));
+
+    assert_parse_ok!("1e38f", NbtTag::Float(1e38));
+    assert_parse_ok_but_trailing!("1e39f", "e39f");
+    assert_parse_ok!("1e39", NbtTag::Double(1e39));
+    assert_parse_ok!("0.001e41f", NbtTag::Float(1e38));
+    assert_parse_ok_but_trailing!("0.01E41f", ".01E41f");
+
+    assert_parse_ok!("1.28E308", NbtTag::Double(1.28E308));
+    assert_parse_ok_but_trailing!("1.8e308", ".8e308");
+
+    assert_parse_ok_but_trailing!("1.E", "E");
+
+    assert_parse_ok!("2000f", NbtTag::Float(2000.0));
+    assert_parse_ok!("70d", NbtTag::Double(70.0));
+    assert_parse_ok!("03f", NbtTag::Float(3.0));
+    assert_parse_ok!("03.70", NbtTag::Double(3.7));
+    assert_parse_ok!("+1e-1", NbtTag::Double(0.1));
+}
+
+#[test]
+fn quoted_string_literals() {
+    assert_parse_ok!("''", NbtTag::String(String::new()));
+    assert_parse_ok!("\"\"", NbtTag::String(String::new()));
+
+    assert_parse_ok!("\"'hello'\"", NbtTag::String("'hello'".to_string()));
 }
