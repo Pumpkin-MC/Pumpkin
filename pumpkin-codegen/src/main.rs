@@ -57,6 +57,7 @@ mod tag;
 mod tracked_data;
 mod translations;
 mod version;
+mod villager;
 mod world_event;
 
 /// Output directory where all generated Rust source files are written.
@@ -101,6 +102,7 @@ pub fn main() {
         (entity_status::build, "entity_status.rs"),
         (tag::build, "tag.rs"),
         (noise_router::build, "noise_router.rs"),
+        (villager::build, "villager.rs"),
         (
             flower_pot_transformations::build,
             "flower_pot_transformations.rs",

@@ -294,3 +294,8 @@ pub mod chunk_gen_settings;
 #[rustfmt::skip]
 #[path = "generated/carver.rs"]
 pub mod carver;
+
+#[cfg(feature = "villager")]
+#[rustfmt::skip]
+#[path = "generated/villager.rs"]
+pub mod villager;

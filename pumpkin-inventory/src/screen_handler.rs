@@ -223,6 +223,9 @@ pub trait ScreenHandler: Send + Sync {
     /// Returns this screen handler as an Any reference.
     fn as_any(&self) -> &dyn Any;
 
+    /// Returns this screen handler as a mutable Any reference.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
     /// Gets the sync ID for this screen handler.
     fn sync_id(&self) -> u8 {
         self.get_behaviour().sync_id

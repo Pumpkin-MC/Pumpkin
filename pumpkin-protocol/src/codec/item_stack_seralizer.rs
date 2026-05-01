@@ -13,6 +13,7 @@ use serde::{
 };
 use std::borrow::Cow;
 
+#[derive(Clone)]
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
 fn item_component_counts(stack: &ItemStack) -> (u8, u8) {
