@@ -231,14 +231,15 @@ pub trait RandomDeriverImpl {
 /// # Returns
 /// A 64-bit hash value.
 #[must_use]
-pub fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
-    let l = i64::from(x.wrapping_mul(3129871))
-        ^ (i64::from(z).wrapping_mul(116129781i64))
-        ^ i64::from(y);
+pub const fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
+    let l =
+        ((x.wrapping_mul(3129871)) as i64) ^ ((z as i64).wrapping_mul(116129781i64)) ^ (y as i64);
+
     let l = l
         .wrapping_mul(l)
         .wrapping_mul(42317861i64)
         .wrapping_add(l.wrapping_mul(11i64));
+
     l >> 16
 }
 

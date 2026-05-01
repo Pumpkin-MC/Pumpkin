@@ -1,9 +1,5 @@
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::{
-    Block, BlockDirection,
-    block_properties::{Integer1To8, SnowLikeProperties},
-    item::Item,
-};
+use pumpkin_data::{Block, BlockDirection, block_properties::SnowLikeProperties, item::Item};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
@@ -27,7 +23,7 @@ impl BlockBehaviour for LayeredSnowBlock {
                 return Block::AIR.default_state.id;
             }
             let mut props = SnowLikeProperties::default(args.block);
-            props.layers = Integer1To8::L1;
+            props.layers = 1;
             props.to_state_id(&Block::SNOW)
         })
     }
@@ -58,25 +54,17 @@ impl BlockBehaviour for LayeredSnowBlock {
                 }
 
                 let mut props = SnowLikeProperties::from_state_id(state_id, &Block::SNOW);
-                props.layers = match props.layers {
-                    Integer1To8::L1 => Integer1To8::L2,
-                    Integer1To8::L2 => Integer1To8::L3,
-                    Integer1To8::L3 => Integer1To8::L4,
-                    Integer1To8::L4 => Integer1To8::L5,
-                    Integer1To8::L5 => Integer1To8::L6,
-                    Integer1To8::L6 => Integer1To8::L7,
-                    Integer1To8::L7 => Integer1To8::L8,
-                    Integer1To8::L8 => {
-                        args.world
-                            .set_block_state(
-                                pos,
-                                Block::SNOW_BLOCK.default_state.id,
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                        return BlockActionResult::Success;
-                    }
-                };
+                if props.layers >= 8 {
+                    args.world
+                        .set_block_state(
+                            pos,
+                            Block::SNOW_BLOCK.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                    return BlockActionResult::Success;
+                }
+                props.layers += 1;
 
                 let state_id = props.to_state_id(&Block::SNOW);
                 args.world

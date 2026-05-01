@@ -1,13 +1,13 @@
 use std::net::SocketAddr;
 
 use pumpkin_protocol::bedrock::{
+    RAKNET_PROTOCOL_VERSION,
     client::raknet::{
         incompatible_protocol::CIncompatibleProtocolVersion,
         open_connection::{COpenConnectionReply1, COpenConnectionReply2},
     },
     server::raknet::open_connection::{SOpenConnectionRequest1, SOpenConnectionRequest2},
 };
-use pumpkin_world::CURRENT_BEDROCK_MC_PROTOCOL;
 use tokio::net::UdpSocket;
 
 use crate::{net::bedrock::BedrockClient, server::Server};
@@ -19,12 +19,9 @@ impl BedrockClient {
         addr: SocketAddr,
         socket: &UdpSocket,
     ) {
-        if packet.protocol_version != CURRENT_BEDROCK_MC_PROTOCOL as u8 {
+        if packet.protocol_version != RAKNET_PROTOCOL_VERSION {
             Self::send_offline_packet(
-                &CIncompatibleProtocolVersion::new(
-                    CURRENT_BEDROCK_MC_PROTOCOL as u8,
-                    server.server_guid,
-                ),
+                &CIncompatibleProtocolVersion::new(RAKNET_PROTOCOL_VERSION, server.server_guid),
                 addr,
                 socket,
             )

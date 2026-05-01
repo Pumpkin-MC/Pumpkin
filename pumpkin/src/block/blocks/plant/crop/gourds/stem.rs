@@ -5,9 +5,7 @@ use crate::block::{
 };
 use pumpkin_data::{
     Block, BlockDirection,
-    block_properties::{
-        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties, WheatLikeProperties,
-    },
+    block_properties::{BlockProperties, WallTorchLikeProperties, WheatLikeProperties},
     tag,
     tag::Taggable,
 };
@@ -35,7 +33,7 @@ impl BlockMetadata for StemBlock {
 impl StemBlock {
     fn state_with_age(block: &Block, state: u16, age: i32) -> BlockStateId {
         let mut props = StemProperties::from_state_id(state, block);
-        props.age = Integer0To7::from_index(age as u16);
+        props.age = age as u8;
         props.to_state_id(block)
     }
 
@@ -88,7 +86,7 @@ impl BlockBehaviour for StemBlock {
             if rand::rng().random_range(0..=(25.0 / f).floor() as i32) == 0 {
                 let (block, state) = args.world.get_block_and_state_id(args.position).await;
                 let props = StemProperties::from_state_id(state, block);
-                let age = i32::from(props.age.to_index());
+                let age = i32::from(props.age);
                 if age < 7 {
                     args.world
                         .set_block_state(

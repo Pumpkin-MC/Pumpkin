@@ -1,6 +1,6 @@
 use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
-    Block, BlockDirection, BlockState,
+    Block, BlockState,
     block_properties::{BlockProperties, VineLikeProperties},
 };
 use pumpkin_util::{
@@ -18,46 +18,38 @@ impl TrunkVineTreeDecorator {
         log_positions: &[BlockPos],
     ) {
         for pos in log_positions {
-            if random.next_bounded_i32(3) > 0
-                && chunk.is_air(&pos.offset(BlockDirection::West.to_offset()).0)
-            {
+            if random.next_bounded_i32(3) > 0 && chunk.is_air(&pos.west().0) {
                 let mut vine = VineLikeProperties::default(&Block::VINE);
                 vine.east = true;
                 chunk.set_block_state(
-                    &pos.offset(BlockDirection::West.to_offset()).0,
+                    &pos.west().0,
                     BlockState::from_id(vine.to_state_id(&Block::VINE)),
                 );
             }
 
-            if random.next_bounded_i32(3) > 0
-                && chunk.is_air(&pos.offset(BlockDirection::East.to_offset()).0)
-            {
+            if random.next_bounded_i32(3) > 0 && chunk.is_air(&pos.east().0) {
                 let mut vine = VineLikeProperties::default(&Block::VINE);
                 vine.west = true;
                 chunk.set_block_state(
-                    &pos.offset(BlockDirection::West.to_offset()).0,
+                    &pos.east().0,
                     BlockState::from_id(vine.to_state_id(&Block::VINE)),
                 );
             }
 
-            if random.next_bounded_i32(3) > 0
-                && chunk.is_air(&pos.offset(BlockDirection::North.to_offset()).0)
-            {
+            if random.next_bounded_i32(3) > 0 && chunk.is_air(&pos.north().0) {
                 let mut vine = VineLikeProperties::default(&Block::VINE);
                 vine.south = true;
                 chunk.set_block_state(
-                    &pos.offset(BlockDirection::West.to_offset()).0,
+                    &pos.north().0,
                     BlockState::from_id(vine.to_state_id(&Block::VINE)),
                 );
             }
 
-            if random.next_bounded_i32(3) > 0
-                && chunk.is_air(&pos.offset(BlockDirection::South.to_offset()).0)
-            {
+            if random.next_bounded_i32(3) > 0 && chunk.is_air(&pos.south().0) {
                 let mut vine = VineLikeProperties::default(&Block::VINE);
                 vine.north = true;
                 chunk.set_block_state(
-                    &pos.offset(BlockDirection::West.to_offset()).0,
+                    &pos.south().0,
                     BlockState::from_id(vine.to_state_id(&Block::VINE)),
                 );
             }

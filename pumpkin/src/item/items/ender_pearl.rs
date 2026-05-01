@@ -52,10 +52,17 @@ impl ItemBehaviour for EnderPearlItem {
 
             // Consume item
             let held_item = player.inventory.held_item();
-            let mut main_hand = held_item.lock().await;
-            if !main_hand.is_empty() && main_hand.item.id == Item::ENDER_PEARL.id {
-                main_hand.decrement_unless_creative(player.gamemode.load(), 1);
-            } else {
+            let consumed = {
+                let mut main_hand = held_item.lock().await;
+                if !main_hand.is_empty() && main_hand.item.id == Item::ENDER_PEARL.id {
+                    main_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if !consumed {
                 let off_hand_item = player.inventory.off_hand_item().await;
                 let mut off_hand = off_hand_item.lock().await;
                 if !off_hand.is_empty() && off_hand.item.id == Item::ENDER_PEARL.id {

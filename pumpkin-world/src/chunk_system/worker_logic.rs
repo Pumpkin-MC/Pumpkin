@@ -59,28 +59,32 @@ pub async fn io_read_work(
     level: Arc<Level>,
     lock: IOLock,
 ) {
-    use crate::biome::hash_seed;
     debug!("io read thread start");
-    let biome_mixer_seed = hash_seed(level.world_gen.random_config.seed);
-    let dimension = &level.world_gen.dimension;
-    let (t_send, mut t_recv) = tokio::sync::mpsc::channel(16);
 
     // Cleaner loop and async recv
     while let Ok(batch) = recv.recv().await {
         for pos in &batch {
             // Lock handling
-            tokio::task::block_in_place(|| {
-                let mut data = lock.0.lock().unwrap();
-                while data.contains_key(pos) {
-                    data = lock.1.wait(data).unwrap();
+            loop {
+                let notified = lock.1.notified();
+                if !lock.0.lock().unwrap().contains_key(pos) {
+                    break;
                 }
-            });
+                notified.await;
+            }
         }
 
-        level
-            .chunk_saver
-            .fetch_chunks(&level.level_folder, &batch, t_send.clone())
-            .await;
+        let (t_send, mut t_recv) = tokio::sync::mpsc::channel(1000);
+
+        let level_clone = level.clone();
+        let batch_clone = batch.clone();
+
+        let fetch_task = tokio::spawn(async move {
+            level_clone
+                .chunk_saver
+                .fetch_chunks(&level_clone.level_folder, &batch_clone, t_send)
+                .await;
+        });
 
         for _ in 0..batch.len() {
             let data = match t_recv.recv().await {
@@ -101,12 +105,7 @@ pub async fn io_read_work(
                             );
 
                             // Create ProtoChunk using the async method
-                            let mut proto = ProtoChunk::from_chunk_data(
-                                &chunk,
-                                dimension,
-                                level.world_gen.default_block,
-                                biome_mixer_seed,
-                            );
+                            let mut proto = ProtoChunk::from_chunk_data(&chunk, &level.world_gen);
 
                             // Clear all lighting data
                             let section_count = proto.light.sky_light.len();
@@ -137,13 +136,9 @@ pub async fn io_read_work(
                         }
                     } else {
                         // Standard ProtoChunk handling for non-full chunks
-                        let val =
-                            RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::from_chunk_data(
-                                &chunk,
-                                dimension,
-                                level.world_gen.default_block,
-                                biome_mixer_seed,
-                            ))));
+                        let val = RecvChunk::IO(Chunk::Proto(Box::new(
+                            ProtoChunk::from_chunk_data(&chunk, &level.world_gen),
+                        )));
                         if send.send((pos, val)).is_err() {
                             break;
                         }
@@ -156,9 +151,7 @@ pub async fn io_read_work(
                             RecvChunk::IO(Chunk::Proto(Box::new(ProtoChunk::new(
                                 pos.x,
                                 pos.y,
-                                dimension,
-                                level.world_gen.default_block,
-                                biome_mixer_seed,
+                                &level.world_gen,
                             )))),
                         ))
                         .is_err()
@@ -168,6 +161,7 @@ pub async fn io_read_work(
                 }
             }
         }
+        let _ = fetch_task.await;
     }
     debug!("io read thread stop");
 }
@@ -211,7 +205,7 @@ pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Lev
                     if *rc == 1 {
                         entry.remove();
                         drop(data);
-                        lock.1.notify_all();
+                        lock.1.notify_waiters();
                     } else {
                         *rc -= 1;
                     }
@@ -233,20 +227,15 @@ pub fn run_generation(
     mut cache: Cache,
     stage: StagedChunkEnum,
     level: &Level,
-    settings: &GenerationSettings,
+    _settings: &GenerationSettings,
 ) -> RecvChunk {
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         cache.advance(
             stage,
-            &level.lighting_config,
+            &level.world_gen,
             level.block_registry.as_ref(),
-            settings,
-            &level.world_gen.random_config,
-            &level.world_gen.terrain_cache,
-            &level.world_gen.base_router,
-            level.world_gen.dimension,
-            &level.world_gen.global_structure_cache,
+            &level.lighting_config,
         );
         cache // Return cache on success
     }));

@@ -16,8 +16,33 @@ interface server {
         hard,
     }
 
+    /// Represents the three main Minecraft dimensions.
+    enum dimension {
+        overworld,
+        nether,
+        end,
+    }
+
+    record sys-info {
+        cpu-count: option<u32>,
+        total-memory: option<u64>,
+        used-memory: option<u64>,
+        os-name: option<string>,
+        os-version: option<string>,
+        pumpkin-version: string,
+    }
+
+    variant command-sender {
+        console,
+        player(player),
+    }
+
     /// Represents the global server instance.
     resource server {
+        /// Returns system information (CPU, Memory, OS).
+        /// Fields are returned only if the plugin has the corresponding permissions.
+        get-sys-info: func() -> sys-info;
+
         /// Returns the current difficulty level of the server.
         get-difficulty: func() -> difficulty;
 
@@ -46,6 +71,12 @@ interface server {
 
         /// Gets a world by its dimension name (e.g., "minecraft:overworld").
         get-world-by-name: func(name: string) -> option<%world>;
+
+        execute-command: func(command: string, sender: command-sender);
+
+        /// Creates or loads a world by its name and dimension.
+        /// If a world with the given name already exists, it will be returned.
+        create-world: func(name: string, dimension: dimension) -> %world;
 
         /// Broadcasts a system chat message to all players.
         broadcast: func(message: string);

@@ -27,13 +27,37 @@ use uuid::Uuid;
 
 pub mod bat;
 pub mod blaze;
+pub mod breeze;
+pub mod cave_spider;
+pub mod creaking;
 pub mod creeper;
+pub mod elder_guardian;
 pub mod enderman;
+pub mod endermite;
+pub mod evoker;
+pub mod ghast;
+pub mod giant;
+pub mod guardian;
+pub mod hoglin;
+pub mod illusioner;
+pub mod magma_cube;
+pub mod phantom;
+pub mod piglin;
+pub mod piglin_brute;
+pub mod pillager;
+pub mod ravager;
 pub mod shulker;
 pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
+pub mod spider;
+pub mod vex;
+pub mod vindicator;
+pub mod warden;
+pub mod witch;
+pub mod zoglin;
 pub mod zombie;
+pub mod zombified_piglin;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
@@ -78,6 +102,7 @@ impl MobEntity {
             last_sent_head_yaw: AtomicU8::new(0),
         }
     }
+
     pub fn is_in_position_target_range(&self) -> bool {
         self.is_in_position_target_range_pos(&self.living_entity.entity.block_pos.load())
     }
@@ -355,7 +380,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             drop(navigator);
 
             let mut look_control = mob_entity.look_control.lock().await;
-            look_control.tick(self).await;
+            look_control.tick(self);
             drop(look_control);
 
             mob_entity.living_entity.tick(caller, server).await;

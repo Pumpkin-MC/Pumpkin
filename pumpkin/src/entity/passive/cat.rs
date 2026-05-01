@@ -5,7 +5,8 @@ use pumpkin_data::{entity::EntityType, item::Item};
 use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
-        escape_danger::EscapeDangerGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
+        breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         tempt::TemptGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
@@ -13,6 +14,9 @@ use crate::entity::{
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::COD, &Item::SALMON];
 
+/// Represents a Cat, a passive mob that can be tamed and scares away creepers.
+///
+/// Wiki: <https://minecraft.wiki/w/Cat>
 pub struct CatEntity {
     pub mob_entity: MobEntity,
 }
@@ -32,12 +36,17 @@ impl CatEntity {
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
+            // goal_selector.add_goal(2, SitGoal::new(mob_arc.clone()));
             goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS)));
+            goal_selector.add_goal(5, BreedGoal::new(0.8));
+            // goal_selector.add_goal(7, FollowOwnerGoal::new(1.0, 10.0, 5.0, false));
+            goal_selector.add_goal(9, Box::new(FollowParentGoal::new(0.8)));
             goal_selector.add_goal(11, Box::new(WanderAroundGoal::new(0.8)));
             goal_selector.add_goal(
                 12,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 10.0),
             );
+            goal_selector.add_goal(12, Box::new(RandomLookAroundGoal::default()));
         };
 
         mob_arc

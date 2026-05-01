@@ -13,7 +13,7 @@ use crate::entity::ai::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_util::math::wrap_degrees;
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub mod binary_heap;
 pub mod node;
@@ -61,6 +61,9 @@ pub struct Navigator {
     // Reusable allocations to avoid per-pathfind heap allocations
     open_set: BinaryHeap,
     neighbors_buf: Vec<Node>,
+    /// Thread-safe status check to avoid deadlocks when components (like `LookControl`) need to
+    /// check navigation status.
+    pub is_idle: AtomicBool,
 }
 
 impl Default for Navigator {
@@ -79,6 +82,7 @@ impl Default for Navigator {
             repath_cooldown: 0,
             open_set: BinaryHeap::new(),
             neighbors_buf: Vec::new(),
+            is_idle: AtomicBool::new(true),
         }
     }
 }
@@ -95,6 +99,7 @@ const MAX_YAW_TURN_PER_TICK: f32 = 90.0;
 
 impl Navigator {
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
+        self.is_idle.store(false, Ordering::Relaxed);
         self.current_goal = Some(goal);
         self.current_path = None;
     }
@@ -106,6 +111,7 @@ impl Navigator {
     }
 
     pub fn stop(&mut self) {
+        self.is_idle.store(true, Ordering::Relaxed);
         self.current_goal = None;
         self.current_path = None;
         self.ticks_on_current_node = 0;
@@ -300,11 +306,13 @@ impl Navigator {
     pub async fn tick(&mut self, entity: &LivingEntity) {
         let Some(goal) = self.current_goal.take() else {
             // Idle: stop the mob
+            self.is_idle.store(true, Ordering::Relaxed);
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             return;
         };
 
         if goal.current_progress == goal.destination {
+            self.is_idle.store(true, Ordering::Relaxed);
             self.current_path = None;
             entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             return;
@@ -437,6 +445,7 @@ impl Navigator {
                         .store(false, std::sync::atomic::Ordering::SeqCst);
                 }
             } else {
+                self.is_idle.store(true, Ordering::Relaxed);
                 self.current_path = None;
                 entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
             }
@@ -446,7 +455,7 @@ impl Navigator {
     }
 
     #[must_use]
-    pub const fn is_idle(&self) -> bool {
-        self.current_goal.is_none()
+    pub fn is_idle(&self) -> bool {
+        self.is_idle.load(Ordering::Relaxed)
     }
 }

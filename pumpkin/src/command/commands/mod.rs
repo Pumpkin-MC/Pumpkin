@@ -136,7 +136,6 @@ pub async fn default_dispatcher(
     dispatcher.register(plugins::init_command_tree(), "pumpkin:command.plugins");
     dispatcher.register(ban::init_command_tree(), "minecraft:command.ban");
     dispatcher.register(banip::init_command_tree(), "minecraft:command.banip");
-    dispatcher.register(banlist::init_command_tree(), "minecraft:command.banlist");
     dispatcher.register(pardon::init_command_tree(), "minecraft:command.pardon");
     dispatcher.register(pardonip::init_command_tree(), "minecraft:command.pardonip");
     dispatcher.register(
@@ -151,6 +150,7 @@ pub async fn default_dispatcher(
         wrapper_dispatcher
     };
 
+    banlist::register(&mut dispatcher, registry);
     difficulty::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
@@ -456,13 +456,6 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.banip",
             "Adds IP addresses to banlist",
-            PermissionDefault::Op(PermissionLvl::Three),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.banlist",
-            "Displays banned players or IP addresses",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();

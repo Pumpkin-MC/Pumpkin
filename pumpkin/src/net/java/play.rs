@@ -46,6 +46,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState, translation};
 use pumpkin_inventory::InventoryError;
+use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
@@ -62,8 +63,8 @@ use pumpkin_protocol::java::server::play::{
     SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest,
     SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-    SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
+    SRecipeBookSeenRecipe, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -215,9 +216,11 @@ impl JavaClient {
                 *awaiting_teleport = None;
                 drop(awaiting_teleport);
             } else {
+                drop(awaiting_teleport);
                 self.kick(TextComponent::text("Wrong teleport id")).await;
             }
         } else {
+            drop(awaiting_teleport);
             self.kick(TextComponent::text(
                 "Send Teleport confirm, but we did not teleport",
             ))
@@ -1005,8 +1008,16 @@ impl JavaClient {
             })
             .count();
 
-        let screen_handler_arc = player.current_screen_handler.lock().await.clone();
-        let mut handler = screen_handler_arc.lock().await;
+        let (grid_width, crafting_inv) = {
+            let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+            let handler = screen_handler_arc.lock().await;
+            let grid_width: usize = match handler.window_type() {
+                Some(WindowType::Crafting) => 3,
+                None => 2, // player inventory 2x2
+                _ => return,
+            };
+            (grid_width, handler.get_behaviour().slots[1].get_inventory())
+        };
 
         if target_id < crafting_display_count {
             // Crafting recipe
@@ -1025,11 +1036,6 @@ impl JavaClient {
             });
             let Some(recipe) = recipe else { return };
 
-            let grid_width: usize = match handler.window_type() {
-                Some(WindowType::Crafting) => 3,
-                None => 2, // player inventory 2x2
-                _ => return,
-            };
             let grid_size = grid_width * grid_width;
 
             // Map each grid position to its required ingredient (None = empty/unused).
@@ -1060,8 +1066,6 @@ impl JavaClient {
                 }
                 _ => return,
             }
-
-            let crafting_inv = handler.get_behaviour().slots[1].get_inventory();
 
             // Check if this exact recipe is already placed (determines stacking vs fresh fill).
             let recipe_matches = {
@@ -1124,7 +1128,8 @@ impl JavaClient {
             };
 
             if amount_to_craft == 0 {
-                handler.send_content_updates().await;
+                let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+                screen_handler_arc.lock().await.send_content_updates().await;
                 return;
             }
 
@@ -1143,10 +1148,16 @@ impl JavaClient {
                 return;
             };
 
-            match handler.window_type() {
-                Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker) => {}
-                _ => return,
-            }
+            let furnace_inv = {
+                let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+                let handler = screen_handler_arc.lock().await;
+                match handler.window_type() {
+                    Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker) => {
+                        handler.get_behaviour().slots[0].get_inventory()
+                    }
+                    _ => return,
+                }
+            };
 
             let ingredient = match recipe {
                 CookingRecipeType::Smelting(r)
@@ -1154,8 +1165,6 @@ impl JavaClient {
                 | CookingRecipeType::Smoking(r)
                 | CookingRecipeType::CampfireCooking(r) => &r.ingredient,
             };
-
-            let furnace_inv = handler.get_behaviour().slots[0].get_inventory();
 
             // Check if ingredient already matches (for stacking).
             let (recipe_matches, current_count) = {
@@ -1188,7 +1197,8 @@ impl JavaClient {
             }
         }
 
-        handler.send_content_updates().await;
+        let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+        screen_handler_arc.lock().await.send_content_updates().await;
     }
     pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
         player.update_last_action_time();
@@ -1546,15 +1556,17 @@ impl JavaClient {
                 }
                 player.world().clone().respawn_player(player, false).await;
 
-                let screen_handler = player.current_screen_handler.lock().await;
-                let mut screen_handler = screen_handler.lock().await;
-                screen_handler.sync_state().await;
-                drop(screen_handler);
+                {
+                    let screen_handler = player.current_screen_handler.lock().await;
+                    let mut screen_handler = screen_handler.lock().await;
+                    screen_handler.sync_state().await;
+                };
 
                 // Restore abilities based on gamemode after respawn
-                let mut abilities = player.abilities.lock().await;
-                abilities.set_for_gamemode(player.gamemode.load());
-                drop(abilities);
+                {
+                    let mut abilities = player.abilities.lock().await;
+                    abilities.set_for_gamemode(player.gamemode.load());
+                };
                 player.send_abilities_update().await;
             }
             1 => {
@@ -1967,19 +1979,22 @@ impl JavaClient {
         player_abilities: SPlayerAbilities,
         server: &Server,
     ) {
-        let mut abilities = player.abilities.lock().await;
+        let (flying, allow_flying) = {
+            let abilities = player.abilities.lock().await;
+            (abilities.flying, abilities.allow_flying)
+        };
 
         // Set the flying ability
-        let flying = player_abilities.flags & 0x02 != 0 && abilities.allow_flying;
-        if abilities.flying != flying {
+        let new_flying = player_abilities.flags & 0x02 != 0 && allow_flying;
+        if flying != new_flying {
             send_cancellable! {{
                 server;
-                PlayerToggleFlightEvent::new(player.clone(), flying);
+                PlayerToggleFlightEvent::new(player.clone(), new_flying);
                 'after: {
                     if event.is_flying {
                         player.living_entity.fall_distance.store(0.0);
                     }
-                    abilities.flying = event.is_flying;
+                    player.abilities.lock().await.flying = event.is_flying;
                 }
                 'cancelled: {
                     player.send_abilities_update().await;
@@ -2750,5 +2765,18 @@ impl JavaClient {
     pub async fn send_sign_packet(&self, block_position: BlockPos, is_front_text: bool) {
         self.enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
             .await;
+    }
+
+    pub async fn handle_select_trade(&self, player: &Arc<Player>, packet: SSelectTrade) {
+        let screen_handler = player.current_screen_handler.lock().await;
+        let mut screen_handler = screen_handler.lock().await;
+        if let Some(merchant) = screen_handler
+            .as_any_mut()
+            .downcast_mut::<MerchantScreenHandler>()
+        {
+            merchant
+                .set_selected_offer(packet.selected_slot.0 as usize)
+                .await;
+        }
     }
 }

@@ -97,7 +97,7 @@ impl RCONClient {
     }
 
     async fn poll(&mut self, server: &Arc<Server>, password: &str) -> Result<(), PacketError> {
-        let Some(packet) = self.receive_packet().await? else {
+        let Some(packet) = self.receive_packet()? else {
             return Ok(());
         };
         let config = &server.advanced_config.networking.rcon;
@@ -178,7 +178,7 @@ impl RCONClient {
         Ok(())
     }
 
-    async fn receive_packet(&mut self) -> Result<Option<Packet>, PacketError> {
-        Packet::deserialize(&mut self.incoming).await
+    fn receive_packet(&mut self) -> Result<Option<Packet>, PacketError> {
+        Packet::deserialize(&mut self.incoming)
     }
 }

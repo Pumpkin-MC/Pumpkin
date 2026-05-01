@@ -1,6 +1,4 @@
-use pumpkin_data::block_properties::{
-    BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15,
-};
+use pumpkin_data::block_properties::{BlockProperties, CactusLikeProperties};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, tag};
@@ -40,12 +38,12 @@ impl BlockBehaviour for CactusBlock {
                 let mut i = 1;
                 while args.world.get_block(&args.position.down_height(i)).await == &Block::CACTUS {
                     i += 1;
-                    if 1 == 3 && age == Integer0To15::L15 {
+                    if 1 == 3 && age == 15 {
                         return;
                     }
                 }
 
-                if age == Integer0To15::L8 && can_place_at(args.world.as_ref(), &block_up).await {
+                if age == 8 && can_place_at(args.world.as_ref(), &block_up).await {
                     let d = if i >= 3 { 0.25 } else { 0.1 };
                     if rand::rng().random_range(0.0..1.0) <= d {
                         args.world
@@ -56,7 +54,7 @@ impl BlockBehaviour for CactusBlock {
                             )
                             .await;
                     }
-                } else if age == Integer0To15::L15 && i < 3 {
+                } else if age == 15 && i < 3 {
                     args.world
                         .set_block_state(
                             &block_up,
@@ -65,7 +63,7 @@ impl BlockBehaviour for CactusBlock {
                         )
                         .await;
                     let mut new_props = CactusLikeProperties::default(&Block::CACTUS);
-                    new_props.age = Integer0To15::L0;
+                    new_props.age = 0;
                     args.world
                         .set_block_state(
                             args.position,
@@ -77,8 +75,8 @@ impl BlockBehaviour for CactusBlock {
                         .update_neighbor(args.position, &Block::CACTUS)
                         .await;
                 }
-                if age.to_index() < 15 {
-                    props.age = Integer0To15::from_index(age.to_index() + 1);
+                if age < 15 {
+                    props.age = age + 1;
                     args.world
                         .set_block_state(
                             args.position,

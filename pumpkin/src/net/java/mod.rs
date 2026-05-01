@@ -12,8 +12,8 @@ use pumpkin_protocol::java::server::play::{
     SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
     SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-    SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SRecipeBookSeenRecipe, SRenameItem, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
+    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -533,26 +533,28 @@ impl JavaClient {
                     }
                 }
 
-                let mut writer = writer.lock().await;
-                let mut send_failed = false;
-                for packet in &packet_batch {
-                    if let Err(err) = writer.write_packet(packet.data.clone()).await {
-                        send_failed = true;
-                        // It is expected that the packet will fail if we are closed
-                        if !close_token.is_cancelled() {
-                            warn!("Failed to send packet to client {id}: {err}");
+                let send_failed = {
+                    let mut writer = writer.lock().await;
+                    let mut failed = false;
+                    for packet in &packet_batch {
+                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
+                            failed = true;
+                            // It is expected that the packet will fail if we are closed
+                            if !close_token.is_cancelled() {
+                                warn!("Failed to send packet to client {id}: {err}");
+                            }
+                            break;
                         }
-                        break;
                     }
-                }
 
-                if !send_failed && let Err(err) = writer.flush().await {
-                    send_failed = true;
-                    if !close_token.is_cancelled() {
-                        warn!("Failed to flush packet batch for client {id}: {err}");
+                    if !failed && let Err(err) = writer.flush().await {
+                        failed = true;
+                        if !close_token.is_cancelled() {
+                            warn!("Failed to flush packet batch for client {id}: {err}");
+                        }
                     }
-                }
-                drop(writer);
+                    failed
+                };
 
                 if send_failed {
                     // We now need to close the connection to the client since the stream is in an unknown state.
@@ -804,7 +806,7 @@ impl JavaClient {
             }
             id if id == SClickSlot::to_id(version) => {
                 player
-                    .on_slot_click(SClickSlot::read(payload, &version)?)
+                    .on_slot_click(SClickSlot::read(payload, &version)?, server)
                     .await;
             }
             id if id == SSetHeldItem::to_id(version) => {
@@ -885,8 +887,17 @@ impl JavaClient {
                 )
                 .await;
             }
+            id if id == SRenameItem::to_id(version) => {
+                player
+                    .on_rename_item(SRenameItem::read(payload, &version)?)
+                    .await;
+            }
             id if id == SPlaceRecipe::to_id(version) => {
                 self.handle_place_recipe(player, SPlaceRecipe::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SSelectTrade::to_id(version) => {
+                self.handle_select_trade(player, SSelectTrade::read(payload, &version)?)
                     .await;
             }
             _ => {

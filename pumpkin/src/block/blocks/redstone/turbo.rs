@@ -4,7 +4,7 @@
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{BlockProperties, EnumVariants, Integer0To15, RedstoneWireLikeProperties},
+    block_properties::{BlockProperties, RedstoneWireLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
@@ -402,8 +402,8 @@ impl RedstoneWireTurbo {
         if wire_power > j {
             j = wire_power;
         }
-        if i.to_index() as u8 != j {
-            wire.power = Integer0To15::from_index(j.into());
+        if i != j {
+            wire.power = j;
             world
                 .set_block_state(
                     &pos,
@@ -419,7 +419,7 @@ impl RedstoneWireTurbo {
         let node = &self.nodes[upd.index];
         let block = Block::from_state_id(node.state.id);
         if block == &Block::REDSTONE_WIRE {
-            (unwrap_wire(node.state).power.to_index() as u8).max(strength)
+            unwrap_wire(node.state).power.max(strength)
         } else {
             strength
         }
