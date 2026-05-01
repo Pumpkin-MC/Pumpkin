@@ -51,19 +51,15 @@ pub fn hash_seed(seed: u64) -> i64 {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::{
-        chunk::Biome, chunk_gen_settings::GenerationSettings, dimension::Dimension,
-        noise_router::OVERWORLD_BASE_NOISE_ROUTER,
-    };
+    use pumpkin_data::{chunk::Biome, dimension::Dimension};
     use pumpkin_util::read_data_from_file;
     use serde::Deserialize;
 
     use crate::{
-        GlobalRandomConfig, ProtoChunk,
+        ProtoChunk,
         chunk::palette::BIOME_NETWORK_MAX_BITS,
-        generation::noise::router::{
-            multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-            proto_noise_router::ProtoNoiseRouters,
+        generation::noise::router::multi_noise_sampler::{
+            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         },
     };
 
@@ -71,20 +67,19 @@ mod test {
 
     #[test]
     fn biome_desert() {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use pumpkin_util::world_seed::Seed;
         let seed = 13579;
-        let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_router =
-            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
+        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
         let mut sampler =
-            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
+            MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
         let biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(-24, 1, 8, &mut sampler);
         assert_eq!(biome, &Biome::DESERT);
     }
 
     #[test]
     fn wide_area_surface() {
-        use crate::biome::hash_seed;
         use crate::generation::noise::router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         };
@@ -100,28 +95,15 @@ mod test {
             read_data_from_file!("../../assets/biome_no_blend_no_beard_0.json");
 
         let seed = 0;
-        let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_router =
-            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
-        let surface_settings = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
-
-        //let _terrain_cache = TerrainCache::from_random(&random_config);
-        let default_block = surface_settings.default_block;
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use pumpkin_util::world_seed::Seed;
+        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
 
         for data in expected_data {
             let chunk_x = data.x;
             let chunk_z = data.z;
 
-            // Calculate biome mixer seed
-            let biome_mixer_seed = hash_seed(random_config.seed);
-
-            let mut chunk = ProtoChunk::new(
-                chunk_x,
-                chunk_z,
-                &Dimension::OVERWORLD,
-                default_block,
-                biome_mixer_seed,
-            );
+            let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
 
             // Create MultiNoiseSampler for populate_biomes
 
@@ -134,10 +116,12 @@ mod test {
                 biome_coords::from_block(start_z),
                 horizontal_biome_end as usize,
             );
-            let mut multi_noise_sampler =
-                MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
+            let mut multi_noise_sampler = MultiNoiseSampler::generate(
+                &generator.base_router.multi_noise,
+                &multi_noise_config,
+            );
 
-            chunk.populate_biomes(Dimension::OVERWORLD, &mut multi_noise_sampler);
+            chunk.populate_biomes(&generator, &mut multi_noise_sampler);
 
             for (biome_x, biome_y, biome_z, biome_id) in data.data {
                 let calculated_biome = chunk.get_biome(biome_x, biome_y, biome_z);

@@ -42,6 +42,8 @@ default = [
     "recipe_remainder",
     "chunk_gen_settings",
     "advancement",
+    "carver",
+    "villager",
 ]
 
 advancement = []
@@ -78,6 +80,8 @@ structures = []
 potion = ["potion_brewing"]
 recipe_remainder = []
 chunk_gen_settings = []
+carver = []
+villager = ["item", "sound"]
 
 noise_parameter = []
 biome = []

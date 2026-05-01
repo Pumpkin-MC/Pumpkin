@@ -1,6 +1,6 @@
 interface gui {
     use text.{text-component};
-    use common.{item-stack};
+    use common.{item-stack, click-type};
 
     enum gui-type {
         generic-9x1,
@@ -46,5 +46,17 @@ interface gui {
         
         /// Clears all items from the GUI.
         clear-items: func();
+
+        /// Sets whether players can grab items out of the inventory.
+        set-allow-grab-items: func(allow: bool);
+
+        /// Returns whether players can grab items out of the inventory.
+        get-allow-grab-items: func() -> bool;
+
+        /// Sets whether players can put items into the inventory from their own.
+        set-allow-put-items: func(allow: bool);
+
+        /// Returns whether players can put items into the inventory from their own.
+        get-allow-put-items: func() -> bool;
     }
 }

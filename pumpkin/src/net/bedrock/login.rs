@@ -1,4 +1,3 @@
-use crate::net::authentication::MOJANG_BEDROCK_PUBLIC_KEY_BASE64;
 use crate::{
     net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
     server::Server,
@@ -17,9 +16,10 @@ use pumpkin_protocol::{
     },
     codec::var_uint::VarUInt,
 };
-use pumpkin_util::jwt::{AuthError, verify_chain};
-use pumpkin_world::CURRENT_BEDROCK_MC_VERSION;
+use pumpkin_util::jwt::AuthError;
+use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use serde::Deserialize;
+use serde_repr::Deserialize_repr;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, warn};
@@ -27,7 +27,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum LoginError {
-    #[error("Login packet data is not a valid JSON array of tokens")]
+    #[error("Login packet data is not valid JSON")]
     InvalidTokenFormat(#[from] serde_json::Error),
     #[error("JWT chain validation failed: {0}")]
     ChainValidationFailed(#[from] AuthError),
@@ -35,21 +35,59 @@ pub enum LoginError {
     InvalidUsername,
     #[error("Could not parse UUID from validated token")]
     InvalidUuid,
+    #[error("Cannot accept self-signed token. Authentication is enforced by server config.")]
+    SelfSignedNotAllowed,
+    #[error("Got a guest/splitscreen login request. Currently unimplemented.")]
+    GuestUnimplemented,
+}
+
+#[derive(Deserialize_repr)]
+#[repr(u8)]
+enum AuthenticationType {
+    Full,
+    Guest,
+    SelfSigned,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct FullLoginPayload {
-    certificate: String,
+struct AuthPayload {
+    authentication_type: AuthenticationType,
+    token: String,
 }
 
-#[derive(Deserialize, Debug)]
-struct CertificateChainPayload {
-    chain: Vec<String>,
+/// Verifies OIDC tokens for Bedrock 1.26.10+ clients.
+fn verify_oidc_token_path(
+    server: &Server,
+    token: &str,
+    self_signed: bool,
+) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
+    if self_signed {
+        pumpkin_util::jwt::verify_oidc_token_self_signed(token)
+            .map_err(LoginError::ChainValidationFailed)
+    } else {
+        let (issuer, jwks) =
+            server
+                .bedrock_oidc_keys
+                .get()
+                .ok_or(LoginError::ChainValidationFailed(
+                    AuthError::PublicKeyBuild("OIDC keys not initialized".into()),
+                ))?;
+
+        pumpkin_util::jwt::verify_oidc_token(token, issuer, jwks)
+            .map_err(LoginError::ChainValidationFailed)
+    }
 }
 
 impl BedrockClient {
-    pub async fn handle_request_network_settings(&self, _packet: SRequestNetworkSettings) {
+    pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
+        if packet.protocol_version < CURRENT_BEDROCK_MC_PROTOCOL as i32 {
+            self.send_game_packet(&CPlayStatus::OutdatedClient).await;
+            return;
+        } else if packet.protocol_version > CURRENT_BEDROCK_MC_PROTOCOL as i32 {
+            self.send_game_packet(&CPlayStatus::OutdatedServer).await;
+            return;
+        }
         self.send_game_packet(&CNetworkSettings::new(0, 0, false, 0, 0.0))
             .await;
         self.set_compression(CompressionInfo::default()).await;
@@ -76,12 +114,26 @@ impl BedrockClient {
         packet: SLogin,
         server: &Server,
     ) -> Result<(), LoginError> {
-        let outer_payload: FullLoginPayload = serde_json::from_slice(&packet.jwt)?;
-        let inner_payload: CertificateChainPayload =
-            serde_json::from_str(&outer_payload.certificate)?;
+        let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
+        let player_data = if server.basic_config.online_mode {
+            match auth_payload.authentication_type {
+                AuthenticationType::Full => {
+                    verify_oidc_token_path(server, &auth_payload.token, false)?
+                }
+                AuthenticationType::SelfSigned => {
+                    if server.advanced_config.networking.authentication.enabled {
+                        return Err(LoginError::SelfSignedNotAllowed);
+                    }
 
-        let chain_vec: Vec<&str> = inner_payload.chain.iter().map(String::as_str).collect();
-        let player_data = verify_chain(&chain_vec, MOJANG_BEDROCK_PUBLIC_KEY_BASE64)?;
+                    verify_oidc_token_path(server, &auth_payload.token, true)?
+                }
+                AuthenticationType::Guest => {
+                    return Err(LoginError::GuestUnimplemented);
+                }
+            }
+        } else {
+            pumpkin_util::jwt::extract_oidc_token_player_claims(&auth_payload.token)?
+        };
 
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
@@ -89,13 +141,6 @@ impl BedrockClient {
             properties: Vec::new(),
             profile_actions: None,
         };
-
-        //let raw_token = unsafe { String::from_utf8_unchecked(packet.raw_token) };
-        //let raw_token: Vec<&str> = raw_token.split('.').collect();
-        // We dont care about the validation, we just want to get the data
-        //let _raw_token = unsafe {
-        //    String::from_utf8_unchecked(general_purpose::URL_SAFE_NO_PAD.decode(raw_token[1]).unwrap())
-        //};
 
         let mut frame_set = FrameSet::default();
 
@@ -109,40 +154,77 @@ impl BedrockClient {
 
         self.send_frame_set(frame_set, 0x84).await;
 
-        if let Some((player, world)) = server
+        if let Some((player, _world)) = server
             .add_player(ClientPlatform::Bedrock(self.clone()), profile, None)
             .await
         {
-            world
-                .spawn_bedrock_player(&server.basic_config, player.clone(), server)
-                .await;
+            // player spawn happens after resource packs are resolved
             *self.player.lock().await = Some(player);
         }
 
         Ok(())
     }
 
-    pub async fn handle_resource_pack_response(&self, packet: SResourcePackResponse) {
-        // TODO: Add all
-        if packet.response == SResourcePackResponse::STATUS_HAVE_ALL_PACKS {
-            debug!("Bedrock: STATUS_HAVE_ALL_PACKS");
-            let mut frame_set = FrameSet::default();
+    pub async fn handle_resource_pack_response(
+        &self,
+        packet: SResourcePackResponse,
+        server: &Server,
+    ) {
+        // TODO: warn & ignore if the player is already spawned in
 
-            self.write_game_packet_to_set(
-                &CResourcePackStackPacket::new(
-                    false,
-                    VarUInt(0),
-                    CURRENT_BEDROCK_MC_VERSION.to_string(),
-                    Experiments {
-                        names_size: 0,
-                        experiments_ever_toggled: false,
-                    },
-                    false,
-                ),
-                &mut frame_set,
-            )
-            .await;
-            self.send_frame_set(frame_set, 0x84).await;
+        match packet.response {
+            SResourcePackResponse::STATUS_REFUSED => {
+                debug!("Bedrock: SResourcePackResponse::STATUS_REFUSED");
+                self.kick(
+                    DisconnectReason::ResourcePackProblem,
+                    "You must accept resource packs to join this server.".into(),
+                )
+                .await;
+            }
+            SResourcePackResponse::STATUS_SEND_PACKS => {
+                debug!("Bedrock: SResourcePackResponse::STATUS_SEND_PACKS");
+                // TODO: send packs
+            }
+            SResourcePackResponse::STATUS_HAVE_ALL_PACKS => {
+                debug!("Bedrock: SResourcePackResponse::STATUS_HAVE_ALL_PACKS");
+                let mut frame_set = FrameSet::default();
+
+                self.write_game_packet_to_set(
+                    &CResourcePackStackPacket::new(
+                        false,
+                        VarUInt(0),
+                        CURRENT_BEDROCK_MC_VERSION.to_string(),
+                        Experiments {
+                            names_size: 0,
+                            experiments_ever_toggled: false,
+                        },
+                        false,
+                    ),
+                    &mut frame_set,
+                )
+                .await;
+                self.send_frame_set(frame_set, 0x84).await;
+            }
+            SResourcePackResponse::STATUS_COMPLETED => {
+                debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");
+                if let Some(player) = &*self.player.lock().await {
+                    player
+                        .world()
+                        .spawn_bedrock_player(&server.basic_config, player.clone(), server)
+                        .await;
+                } else {
+                    tracing::error!(
+                        "Got SResourcePackResponse::STATUS_COMPLETED before authentication was completed."
+                    );
+                    self.kick(DisconnectReason::Disconnected, String::new())
+                        .await;
+                }
+            }
+            _ => {
+                tracing::error!("Bedrock: SResourcePackResponse bad response type");
+                self.kick(DisconnectReason::Disconnected, String::new())
+                    .await;
+            }
         }
     }
 }

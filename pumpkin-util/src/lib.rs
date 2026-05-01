@@ -204,6 +204,8 @@ pub struct DoublePerlinNoiseParametersCodec {
     pub first_octave: i32,
     /// Amplitude values for each octave, determining the weight of each frequency layer.
     pub amplitudes: Vec<f64>,
+    #[serde(skip)]
+    pub amplitude: f64,
 }
 
 impl<T> IndexMut<usize> for MutableSplitSlice<'_, T> {

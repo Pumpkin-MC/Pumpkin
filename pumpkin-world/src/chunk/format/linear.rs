@@ -8,7 +8,6 @@ use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
-use pumpkin_config::chunk::LinearChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
@@ -368,7 +367,7 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
 impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
     type Data = S;
     type WriteBackend = PathBuf;
-    type ChunkConfig = LinearChunkConfig;
+    type ChunkConfig = ();
 
     fn should_write(&self, is_watched: bool) -> bool {
         !is_watched

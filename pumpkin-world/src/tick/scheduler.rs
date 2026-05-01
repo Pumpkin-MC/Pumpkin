@@ -22,12 +22,12 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         self.offset.store(next_offset, Ordering::SeqCst);
 
         let res = {
-            let mut queue = self.tick_queue.lock().unwrap();
+            let mut queue = self.tick_queue.lock().unwrap_or_else(|e| e.into_inner());
             std::mem::take(&mut queue[current_offset])
         };
 
         if !res.is_empty() {
-            let mut set = self.queued_ticks.lock().unwrap();
+            let mut set = self.queued_ticks.lock().unwrap_or_else(|e| e.into_inner());
             for next_tick in &res {
                 set.remove(&(next_tick.position, next_tick.value));
             }
@@ -36,10 +36,10 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
     }
 
     pub fn schedule_tick(&self, tick: &ScheduledTick<&'a T>, sub_tick_order: u64) {
-        let mut set = self.queued_ticks.lock().unwrap();
+        let mut set = self.queued_ticks.lock().unwrap_or_else(|e| e.into_inner());
 
         if set.insert((tick.position, tick.value)) {
-            let mut queue = self.tick_queue.lock().unwrap();
+            let mut queue = self.tick_queue.lock().unwrap_or_else(|e| e.into_inner());
             let offset = self.offset.load(Ordering::SeqCst);
             let index = (offset + tick.delay as usize) % MAX_TICK_DELAY;
 
@@ -53,13 +53,24 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
     }
 
     pub fn is_scheduled(&self, pos: BlockPos, value: &T) -> bool {
-        self.queued_ticks.lock().unwrap().contains(&(pos, value))
+        self.queued_ticks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(&(pos, value))
+    }
+
+    pub fn has_ticks(&self) -> bool {
+        !self
+            .queued_ticks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty()
     }
 
     #[must_use]
     pub fn to_vec(&self) -> Vec<ScheduledTick<&'a T>> {
         let offset = self.offset.load(Ordering::SeqCst);
-        let queue = self.tick_queue.lock().unwrap();
+        let queue = self.tick_queue.lock().unwrap_or_else(|e| e.into_inner());
         let mut res = Vec::new();
 
         for i in 0..MAX_TICK_DELAY {
@@ -84,7 +95,11 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
 
         let (lower, _) = iter.size_hint();
         if lower > 0 {
-            scheduler.queued_ticks.lock().unwrap().reserve(lower);
+            scheduler
+                .queued_ticks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .reserve(lower);
         }
 
         for tick in iter {

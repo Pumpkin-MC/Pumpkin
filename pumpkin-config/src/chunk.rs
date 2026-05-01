@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Configuration for chunk storage format.
 ///
 /// Supports multiple chunk formats, currently `Anvil` and `Linear`.
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Default, Serialize, Clone)]
 #[serde(tag = "type")]
 pub enum ChunkConfig {
     /// Standard Anvil chunk storage.
@@ -13,13 +13,11 @@ pub enum ChunkConfig {
     Anvil(AnvilChunkConfig),
     /// Linear chunk storage format.
     #[serde(rename = "linear")]
-    Linear(LinearChunkConfig),
-}
-
-impl Default for ChunkConfig {
-    fn default() -> Self {
-        Self::Linear(LinearChunkConfig::default())
-    }
+    Linear,
+    /// Pumpkin's own optimized world format.
+    #[serde(rename = "pump")]
+    #[default]
+    Pump,
 }
 
 /// Configuration for Anvil chunk storage.
@@ -60,20 +58,4 @@ pub enum Compression {
     LZ4,
     /// Custom compression algorithm (since 24w05a).
     Custom,
-}
-
-/// Configuration for Linear chunk storage.
-#[derive(Deserialize, Serialize, Default, Clone)]
-pub struct LinearChunkConfig {
-    /// Version of the Linear format to use.
-    pub linear_version: LinearVersion,
-}
-
-/// Versions of the Linear chunk format.
-#[derive(Deserialize, Serialize, Default, Clone)]
-pub enum LinearVersion {
-    /// Version 1 (default).
-    #[default]
-    V1,
-    // TODO: V2,
 }

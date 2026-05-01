@@ -14,10 +14,15 @@ use tokio::{
     sync::{Notify, RwLock},
     task::JoinHandle,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub mod api;
 pub mod loader;
+/// Constants for plugin permissions.
+///
+/// Plugins can request these permissions in their metadata to access specific
+/// host features.
+pub mod permissions;
 
 use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
 pub use api::*;
@@ -462,6 +467,7 @@ impl PluginManager {
     }
 
     /// Spawn initialization for a single plugin
+    #[expect(clippy::too_many_lines)]
     async fn spawn_plugin_initialization(
         &self,
         mut instance: Box<dyn Plugin>,
@@ -541,6 +547,13 @@ impl PluginManager {
                     state_notify.notify_waiters();
 
                     info!("Loaded {} ({})", metadata.name, metadata.version);
+
+                    if !metadata.permissions.is_empty() {
+                        warn!(
+                            "Plugin \"{}\" uses the following permissions: {:?}",
+                            metadata.name, metadata.permissions
+                        );
+                    }
                 }
                 Err(e) => {
                     // Handle initialization failure

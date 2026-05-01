@@ -1,11 +1,10 @@
-use bytes::{Buf, Bytes};
+use bytes::{Buf, BufMut, Bytes};
 use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use itertools::Itertools;
 use lz4_java_wrc::Context;
 use pumpkin_config::chunk::AnvilChunkConfig;
 use pumpkin_util::math::vector2::Vector2;
 use std::{
-    collections::HashSet,
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
@@ -82,7 +81,7 @@ enum WriteAction {
     // Write the entire file
     All,
     // Only write certain indices
-    Parts(HashSet<usize>),
+    Parts(Vec<usize>),
 }
 
 impl WriteAction {
@@ -91,9 +90,11 @@ impl WriteAction {
     /// If we have All enum, do nothing
     fn maybe_update_chunk_index(&mut self, index: usize) {
         match self {
-            Self::Pass => *self = Self::Parts(HashSet::from_iter([index])),
+            Self::Pass => *self = Self::Parts(vec![index]),
             Self::Parts(parts) => {
-                let _ = parts.insert(index);
+                if !parts.contains(&index) {
+                    parts.push(index);
+                }
             }
             Self::All => {}
         }
@@ -142,7 +143,7 @@ impl Compression {
                 initial_capacity,
             )
             .map_err(CompressionError::LZ4Error),
-            Self::Custom => todo!(),
+            Self::Custom => Err(CompressionError::UnknownCompression),
         }
     }
 
@@ -281,8 +282,11 @@ impl AnvilChunkData {
         .await?;
 
         w.write_all(&self.compressed_data).await?;
-        for _ in 0..(padded_size - self.raw_write_size()) {
-            w.write_u8(0).await?;
+
+        let padding_len = padded_size - self.raw_write_size();
+        if padding_len > 0 {
+            static PADDING: [u8; SECTOR_BYTES] = [0; SECTOR_BYTES];
+            w.write_all(&PADDING[..padding_len]).await?;
         }
 
         Ok(())
@@ -361,31 +365,29 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
 
         let mut write = BufWriter::new(file);
         // The first two sectors are reserved for the location table
-        for (index, metadata) in self.chunks_data.iter().enumerate() {
+        let mut header = Vec::with_capacity(SECTOR_BYTES * 2);
+
+        // Location Table
+        for metadata in &self.chunks_data {
             if let Some(chunk) = metadata {
-                let chunk_data = &chunk.serialized_data;
-                let sector_count = chunk_data.sector_count();
-                trace!(
-                    "Writing position for chunk {} - {}:{}",
-                    index, chunk.file_sector_offset, sector_count
-                );
-                write
-                    .write_u32((chunk.file_sector_offset << 8) | sector_count)
-                    .await?;
+                let sector_count = chunk.serialized_data.sector_count();
+                header.put_u32((chunk.file_sector_offset << 8) | sector_count);
             } else {
-                // If the chunk is not present, we write 0 to the location and timestamp tables
-                write.write_u32(0).await?;
+                header.put_u32(0);
             }
         }
 
+        // Timestamp Table
         for metadata in &self.chunks_data {
             if let Some(chunk) = metadata {
-                write.write_u32(chunk.timestamp).await?;
+                header.put_u32(chunk.timestamp);
             } else {
-                // If the chunk is not present, we write 0 to the location and timestamp tables
-                write.write_u32(0).await?;
+                header.put_u32(0);
             }
         }
+
+        // Write all 8 KiB in a single async call
+        write.write_all(&header).await?;
 
         let mut chunks = indices
             .into_iter()
@@ -449,44 +451,42 @@ impl<S: SingleChunkDataSerializer> AnvilChunkFile<S> {
         trace!("Writing tmp file to disk: {temp_path:?}");
 
         let file = tokio::fs::File::create(&temp_path).await?;
-
         let mut write = BufWriter::new(file);
 
-        // The first two sectors are reserved for the location table
+        // Build the 8 KiB header in memory
+        let mut header = Vec::with_capacity(SECTOR_BYTES * 2);
         let mut current_sector: u32 = 2;
+
+        // Location Table
         for metadata in &self.chunks_data {
             if let Some(chunk) = metadata {
-                let chunk = &chunk.serialized_data;
-                let sector_count = chunk.sector_count();
-                write
-                    .write_u32((current_sector << 8) | sector_count)
-                    .await?;
+                let sector_count = chunk.serialized_data.sector_count();
+                header.put_u32((current_sector << 8) | sector_count);
                 current_sector += sector_count;
             } else {
-                // If the chunk is not present, we write 0 to the location and timestamp tables
-                write.write_u32(0).await?;
+                header.put_u32(0);
             }
         }
 
+        // Timestamp Table
         for metadata in &self.chunks_data {
             if let Some(chunk) = metadata {
-                write.write_u32(chunk.timestamp).await?;
+                header.put_u32(chunk.timestamp);
             } else {
-                // If the chunk is not present, we write 0 to the location and timestamp tables
-                write.write_u32(0).await?;
+                header.put_u32(0);
             }
         }
 
+        // Write all 8 KiB in a single async call
+        write.write_all(&header).await?;
+
+        // Write chunk data
         for chunk in self.chunks_data.iter().flatten() {
             chunk.serialized_data.write(&mut write).await?;
         }
 
         write.flush().await?;
-        // The rename of the file works like an atomic operation ensuring
-        // that the data is not corrupted before the rename is completed
         tokio::fs::rename(temp_path, path).await?;
-
-        trace!("Wrote file to Disk: {}", path.display());
         Ok(())
     }
 }

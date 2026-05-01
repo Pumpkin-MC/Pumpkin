@@ -104,12 +104,13 @@ crossbeam = "0.8"
 
 uuid = { version = "1.23", features = ["serde", "v3", "v4"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_repr = { version = "0.1" }
 serde_json = "1.0"
 
 tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = "2"
 aes = "0.9"
-async-compression = "0.4.41"
+async-compression = "0.4.42"
 base64 = "0.22.1"
 bitflags = "2.11.1"
 cesu8 = "1.1"
@@ -120,6 +121,7 @@ crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
 crossfire = { version = "3.1.7", features = ["compat"] }
+crypto-bigint = "0.7.3"
 dashmap = "6.1"
 ecdsa = "0.16.9"
 either = "1.15.0"
@@ -130,16 +132,14 @@ hmac = "=0.13.0"
 indexmap = "2.14"
 itertools = "0.14.0"
 libloading = "0.9"
-lru = "0.17.0"
+lru = "0.18.0"
 lz4-java-wrc = "0.2.0"
 md5 = "0.8"
 num-bigint = "0.4"
 num-derive = "0.4"
 num-traits = "0.2"
-num_cpus = "1.17.0"
 p384 = "0.13.1"
 phf = "0.13.1"
-pkcs8 = "=0.11.0-rc.11"
 proc-macro2 = "1.0"
 pumpkin-codecs = { path = "pumpkin-codecs" }
 pumpkin-config = { path = "pumpkin-config" }
@@ -152,7 +152,7 @@ pumpkin-util = { path = "pumpkin-util" }
 pumpkin-world = { path = "pumpkin-world" }
 quote = "1.0"
 rand = "0.10.1"
-rsa = "=0.10.0-rc.17"
+rsa = "=0.10.0-rc.18"
 cipher = "0.5.1"
 rustc-hash = "2.1.2"
 rustyline = "18.0.0"
@@ -178,8 +178,8 @@ toml = "1.1"
 ureq = "3.3.0"
 notify = "8.2.0"
 
-wasmtime = "43.0"
-wasmtime-wasi = "43.0"
+wasmtime = "44.0"
+wasmtime-wasi = "44.0"
 wit-bindgen = "0.57"
 wasmparser = "0.247"
 
