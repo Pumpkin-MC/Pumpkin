@@ -1,9 +1,9 @@
 use crate::command::context::string_range::StringRange;
 use crate::command::suggestion::{Suggestion, SuggestionText};
+use indexmap::IndexSet;
 use pumpkin_util::text::TextComponent;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
-use std::collections::HashSet;
 
 /// Represents a builder of [`Suggestion`]s.
 pub struct SuggestionsBuilder {
@@ -148,7 +148,7 @@ impl Suggestions {
             return input[0].borrow().clone();
         }
 
-        let mut texts = HashSet::new();
+        let mut texts = IndexSet::new();
 
         for suggestions in &input {
             for suggestion in &suggestions.borrow().suggestions {
@@ -180,7 +180,7 @@ impl Suggestions {
             .reduce(StringRange::encompass)
             .unwrap();
 
-        let mut texts: HashSet<Suggestion> = HashSet::new();
+        let mut texts: IndexSet<Suggestion> = IndexSet::new();
         for suggestion in &suggestions {
             texts.insert(suggestion.borrow().expand(command, range));
         }
@@ -192,7 +192,7 @@ impl Suggestions {
     ///
     /// 1. If both suggestions are integers, their integral value is compared.
     /// 2. Otherwise, compare their text lexicographically.
-    fn sort(suggestions: HashSet<Suggestion>) -> Vec<Suggestion> {
+    fn sort(suggestions: IndexSet<Suggestion>) -> Vec<Suggestion> {
         enum PushSide {
             Text,
             Integer,
@@ -207,7 +207,13 @@ impl Suggestions {
         for suggestion in suggestions {
             match suggestion.text {
                 SuggestionText::Text(text) => {
-                    text_suggestions.push((text, suggestion.tooltip, suggestion.range));
+                    let text_lowercase = text.to_lowercase();
+                    text_suggestions.push((
+                        text,
+                        suggestion.tooltip,
+                        suggestion.range,
+                        text_lowercase,
+                    ));
                 }
                 SuggestionText::Integer { cached_text, value } => integer_suggestions.push((
                     cached_text,
@@ -218,9 +224,7 @@ impl Suggestions {
             }
         }
 
-        // We need not preserve the original order as
-        // there cannot be two or more equivalent suggestions in a set.
-        text_suggestions.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        text_suggestions.sort_by(|a, b| a.3.cmp(&b.3));
         integer_suggestions.sort_unstable_by_key(|x| x.1);
 
         let mut text_iter = text_suggestions.into_iter().peekable();

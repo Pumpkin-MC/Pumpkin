@@ -21,9 +21,9 @@ pub struct DelayedCommandSyntaxError {
 
 #[derive(Debug, Default)]
 pub struct SnbtErrors {
-    cursor: usize,
-    command_error: Option<DelayedCommandSyntaxError>,
-    suggestions: Vec<Cow<'static, str>>,
+    pub cursor: usize,
+    pub command_error: Option<DelayedCommandSyntaxError>,
+    pub suggestions: Vec<Cow<'static, str>>,
 }
 
 /// A trait so that a parser specializing
@@ -126,31 +126,18 @@ impl SnbtErrors {
         let current = self.cursor;
         let new = reader.cursor();
 
+        let error = error();
+        println!("E error {new}: {:?}", error.error_type);
+        println!("| {}", reader.string());
+        println!("| {}^", " ".repeat(reader.cursor()));
+
         if self.command_error.is_none() || new > current {
-            self.command_error = Some(error());
+            self.command_error = Some(error); //error()
+            self.cursor = new;
             self.suggestions.clear();
             suggestions(&mut self.suggestions);
-        } else if new >= current {
+        } else if new == current {
             suggestions(&mut self.suggestions);
         }
     }
-
-    // to be removed later
-    /*
-     * fn into_command_syntax_error(self, read) -> Option<CommandSyntaxError> {
-        let delayed_error = self.command_error?;
-        Some(CommandSyntaxError {
-            error_type: delayed_error.error_type,
-            message: TextComponent::translate(
-                delayed_error.translation_key,
-                delayed_error
-                    .arguments
-                    .into_iter()
-                    .map(|text| TextComponent::text(text))
-                    .collect::<Vec<_>>(),
-            ),
-            context: Some(CommandSyntaxErrorContext { input: self., cursor: () }),
-        })
-    }
-     */
 }

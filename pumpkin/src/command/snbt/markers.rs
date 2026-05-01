@@ -1,6 +1,6 @@
 use crate::command::{
     errors::error_types::CommandErrorType,
-    snbt::{EXPECTED_BINARY_NUMERAL, EXPECTED_DECIMAL_NUMERAL, EXPECTED_HEX_NUMERAL},
+    snbt::rules::{EXPECTED_BINARY_NUMERAL, EXPECTED_DECIMAL_NUMERAL, EXPECTED_HEX_NUMERAL},
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

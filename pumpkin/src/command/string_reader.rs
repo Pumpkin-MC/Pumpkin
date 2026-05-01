@@ -11,7 +11,7 @@ use std::str::FromStr;
 /// It internally uses a cursor to read them, which is
 /// very important to determine the location of the cause
 /// of a syntax error arising from this parser.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct StringReader<'a> {
     string: Cow<'a, str>,
     byte_cursor: usize,
