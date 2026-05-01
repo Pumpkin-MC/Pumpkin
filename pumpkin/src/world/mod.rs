@@ -85,9 +85,7 @@ use pumpkin_protocol::{
         network_item::NetworkItemDescriptor,
         server::text::SText,
     },
-    codec::{
-        bedrock_block_pos::NetworkPos, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
-    },
+    codec::{var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     java::{
         self,
         client::play::{
@@ -1587,11 +1585,11 @@ impl World {
             world_gamemode: server.defaultgamemode.lock().await.gamemode,
             hardcore: base_config.hardcore,
             difficulty: VarInt(level_info.difficulty as i32),
-            spawn_position: NetworkPos(BlockPos::new(
+            spawn_position: BlockPos::new(
                 level_info.spawn_x,
                 level_info.spawn_y,
                 level_info.spawn_z,
-            )),
+            ),
             has_achievements_disabled: false,
             editor_world_type: VarInt(0),
             is_created_in_editor: false,

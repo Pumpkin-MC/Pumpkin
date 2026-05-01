@@ -28,6 +28,7 @@ use pumpkin_protocol::{
             interaction::SInteraction,
             loading_screen::SLoadingScreen,
             login::SLogin,
+            player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput,
             raknet::{
                 connection::{
@@ -512,34 +513,41 @@ impl BedrockClient {
         server: &Arc<Server>,
         packet: RawPacket,
     ) -> Result<(), Error> {
+        let packet_id = packet.id;
         let payload = &mut Cursor::new(&packet.payload);
-        match packet.id {
+        let result = match packet.id {
             SRequestNetworkSettings::PACKET_ID => {
                 self.handle_request_network_settings(SRequestNetworkSettings::read(payload)?)
                     .await;
+                Ok(())
             }
             SLogin::PACKET_ID => {
                 self.handle_login(SLogin::read(payload)?, server).await;
+                Ok(())
             }
             SClientCacheStatus::PACKET_ID => {
                 // TODO
+                Ok(())
             }
             SResourcePackResponse::PACKET_ID => {
-                self.handle_resource_pack_response(SResourcePackResponse::read(payload)?)
+                self.handle_resource_pack_response(SResourcePackResponse::read(payload)?, server)
                     .await;
+                Ok(())
             }
             _ => {
                 let player_lock = self.player.lock().await;
                 if let Some(player) = player_lock.as_ref() {
-                    return self.handle_play_packet(player, server, packet).await;
+                    self.handle_play_packet(player, server, packet).await
+                } else {
+                    debug!(
+                        "Received game packet {} before player was initialized",
+                        packet.id
+                    );
+                    Ok(())
                 }
-                debug!(
-                    "Received game packet {} before player was initialized",
-                    packet.id
-                );
             }
-        }
-        Ok(())
+        };
+        result.map_err(|e| Error::new(e.kind(), format!("Game packet {packet_id}: {e}")))
     }
 
     pub async fn handle_play_packet(
@@ -577,6 +585,10 @@ impl BedrockClient {
             }
             SCommandRequest::PACKET_ID => {
                 self.handle_chat_command(player, server, SCommandRequest::read(reader)?)
+                    .await;
+            }
+            SPlayerAction::PACKET_ID => {
+                self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
             }
             _ => {

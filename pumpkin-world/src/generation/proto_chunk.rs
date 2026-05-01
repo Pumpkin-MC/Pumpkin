@@ -48,7 +48,7 @@ use crate::generation::structure::structures::{
     StructureGeneratorContext, StructureInstance, create_chunk_random,
 };
 use crate::generation::structure::try_generate_structure;
-use crate::generation::surface::evaluate_surface_rule;
+use crate::generation::surface::rule::try_apply_material_rule;
 use crate::{
     BlockStateId,
     block::RawBlockState,
@@ -879,7 +879,7 @@ impl ProtoChunk {
                             context.block_pos_y,
                             context.block_pos_z,
                         );
-                        let new_state = evaluate_surface_rule(
+                        let new_state = try_apply_material_rule(
                             &settings.surface_rule,
                             self,
                             &mut context,
