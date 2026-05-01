@@ -282,7 +282,7 @@ impl HelpCommandExecutor {
                 return Err(PLUGIN_NOT_FOUND_ERROR_TYPE.create_without_context());
             }
 
-            let header_text = format!(" Help - Plugin: {} ", plugin_name);
+            let header_text = format!(" Help - Plugin: {plugin_name} ");
             let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
 
             let mut message = TextComponent::empty()
@@ -297,7 +297,7 @@ impl HelpCommandExecutor {
 
             let commands_len = commands.len();
             for (command, (description, usage)) in commands {
-                let command_declaration = format!("/{}", command);
+                let command_declaration = format!("/{command}");
                 message = message.add_child(
                     TextComponent::text(command_declaration.clone())
                         .color_named(NamedColor::Gold)
@@ -366,10 +366,8 @@ impl CommandExecutor for HelpCommandExecutor {
         let arg = context.get_argument(ARG).unwrap_or(&HelpArgument::Page(1));
 
         match arg {
-            HelpArgument::CommandOrPlugin(input) => {
-                HelpCommandExecutor::command_or_plugin(context, input)
-            }
-            HelpArgument::Page(page_number) => HelpCommandExecutor::page(context, *page_number),
+            HelpArgument::CommandOrPlugin(input) => Self::command_or_plugin(context, input),
+            HelpArgument::Page(page_number) => Self::page(context, *page_number),
         }
     }
 }

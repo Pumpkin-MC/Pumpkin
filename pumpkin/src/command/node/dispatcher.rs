@@ -681,27 +681,24 @@ impl CommandDispatcher {
         let mut commands: BTreeMap<&str, (&str, Box<str>)> = BTreeMap::new();
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command {
-                if let Some(source_name) = &command_tree.source {
-                    if source_name == plugin_name {
-                        if let Some(permission) = self
-                            .fallback_dispatcher
-                            .permissions
-                            .get(&command_tree.names[0])
-                            && source.has_permission(permission).await
-                        {
-                            let usage = command_tree.to_string();
-                            for name in &command_tree.names {
-                                commands.insert(
-                                    name,
-                                    (
-                                        command_tree.description.as_ref(),
-                                        usage.clone().into_boxed_str(),
-                                    ),
-                                );
-                            }
-                        }
-                    }
+            if let Command::Tree(command_tree) = fallback_command
+                && let Some(source_name) = &command_tree.source
+                && source_name == plugin_name
+                && let Some(permission) = self
+                    .fallback_dispatcher
+                    .permissions
+                    .get(&command_tree.names[0])
+                && source.has_permission(permission).await
+            {
+                let usage = command_tree.to_string();
+                for name in &command_tree.names {
+                    commands.insert(
+                        name,
+                        (
+                            command_tree.description.as_ref(),
+                            usage.clone().into_boxed_str(),
+                        ),
+                    );
                 }
             }
         }
