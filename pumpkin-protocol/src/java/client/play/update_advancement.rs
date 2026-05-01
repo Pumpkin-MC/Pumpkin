@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::PLAY_UPDATE_ADVANCEMENTS;
+use crate::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_data::Advancement;
+use pumpkin_data::advancement_data::AdvancementDisplay;
+use pumpkin_data::packet::clientbound::PLAY_UPDATE_ADVANCEMENTS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
-use pumpkin_data::advancement_data::AdvancementDisplay;
-use crate::codec::item_stack_seralizer::ItemStackSerializer;
 
 #[derive(Serialize)]
 pub struct AdvancementProgress {
@@ -115,4 +115,3 @@ impl CUpdateAdvancements {
         }
     }
 }
-

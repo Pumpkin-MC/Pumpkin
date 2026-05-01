@@ -1,7 +1,7 @@
 use colored::{ColoredString, Colorize};
-use serde::{Deserialize, Deserializer, Serialize};
-use quote::{ToTokens, quote};
 use proc_macro2::TokenStream;
+use quote::{ToTokens, quote};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// Text color for chat components.
 ///

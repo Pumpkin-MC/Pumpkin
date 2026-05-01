@@ -46,7 +46,7 @@ impl ClientPacket for CCommands<'_> {
     }
 }
 
-pub struct ProtoNode <'a>{
+pub struct ProtoNode<'a> {
     pub children: Box<[VarInt]>,
     pub node_type: ProtoNodeType<'a>,
 }

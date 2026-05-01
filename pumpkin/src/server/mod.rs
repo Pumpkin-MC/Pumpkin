@@ -491,9 +491,9 @@ impl Server {
 
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
-        let mut advancements= player.advancements.lock().await;
-        if let Err(e) = advancements.load(){
-            warn!("Error loading player {}: {e}",player.gameprofile.id);
+        let mut advancements = player.advancements.lock().await;
+        if let Err(e) = advancements.load() {
+            warn!("Error loading player {}: {e}", player.gameprofile.id);
         }
         advancements.player = Arc::downgrade(&player);
         drop(advancements);

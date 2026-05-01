@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use crate::Advancement;
 use crate::item_stack::ItemStack;
 use crate::potion_brewing::ItemRecipe;
 use pumpkin_util::resource_location::ResourceLocation;
@@ -6,7 +6,7 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
-use crate::Advancement;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AdvancementDisplay {
@@ -65,7 +65,7 @@ impl AdvancementDisplay {
     }
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize, Default,Debug)]
+#[derive(Clone, Copy, Deserialize, Serialize, Default, Debug)]
 #[repr(i32)]
 #[serde(rename_all = "lowercase")]
 pub enum FrameType {

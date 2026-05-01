@@ -518,7 +518,12 @@ impl Player {
         Self {
             living_entity,
             config: ArcSwap::new(Arc::new(config)),
-            advancements: Arc::new(Mutex::new(server.advancement_manager.clone().new_advancement(gameprofile.id))),
+            advancements: Arc::new(Mutex::new(
+                server
+                    .advancement_manager
+                    .clone()
+                    .new_advancement(gameprofile.id),
+            )),
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),

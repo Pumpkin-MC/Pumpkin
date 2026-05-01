@@ -1,3 +1,4 @@
+use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use indexmap::IndexMap;
@@ -6,13 +7,12 @@ use pumpkin_data::advancement_data::AdvancementReward;
 use pumpkin_util::text::TextComponent;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize, Serializer};
-use std::collections::{ HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 use tracing::error;
 use uuid::Uuid;
-use crate::data::advancement_data::AdvancementManager;
 
 /// Represents the progress of a given advancement for a player.
 ///
@@ -45,7 +45,7 @@ pub struct PlayerAdvancement {
     to_update: HashSet<&'static Advancement>,
     manager: Arc<AdvancementManager>,
     path: PathBuf,
-    owner:Uuid,
+    owner: Uuid,
     /// A weak reference to the player who owns these advancements.
     pub player: Weak<Player>,
 }
@@ -61,14 +61,14 @@ pub enum AdvancementDataError {
 
 impl PlayerAdvancement {
     /// Creates a new instance of `PlayerAdvancement`.
-    pub(crate) fn new(manager: Arc<AdvancementManager>,uuid : Uuid) -> Self {
+    pub(crate) fn new(manager: Arc<AdvancementManager>, uuid: Uuid) -> Self {
         PlayerAdvancement {
             advancements: IndexMap::new(),
-            path: manager.advancement_path.join(format!("{}.json",&uuid)),
+            path: manager.advancement_path.join(format!("{}.json", &uuid)),
             manager,
             player: Weak::new(),
             is_first_packet: true,
-            owner:uuid,
+            owner: uuid,
             to_update: Default::default(),
         }
     }
@@ -104,8 +104,7 @@ impl PlayerAdvancement {
             );
             return Err(AdvancementDataError::Io(e));
         }
-        let file =
-            std::fs::File::create(&self.path).map_err(AdvancementDataError::Io)?;
+        let file = std::fs::File::create(&self.path).map_err(AdvancementDataError::Io)?;
 
         serde_json::to_writer_pretty(file, &self).map_err(AdvancementDataError::Json)?;
         Ok(())
@@ -134,7 +133,7 @@ impl PlayerAdvancement {
     }
 
     /// Flushes any pending (dirty) advancement state down to the client.
-    pub fn flush_dirty(&mut self, _flag:bool) {
+    pub fn flush_dirty(&mut self, _flag: bool) {
         if self.is_first_packet || !self.to_update.is_empty() {
             todo!("send advancement tree with the complete ones");
         }
@@ -196,7 +195,7 @@ impl PlayerAdvancement {
             }
         }
         if !is_done && progress.is_done() {
-           //TODO update to_update with the advancement
+            //TODO update to_update with the advancement
         }
     }
 
@@ -226,9 +225,9 @@ impl Serialize for PlayerAdvancement {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::advancement_data::AdvancementManager;
     use pumpkin_data::Advancement;
     use tempfile::tempdir;
-    use crate::data::advancement_data::AdvancementManager;
 
     #[test]
     fn test_advancement_progress() {
@@ -246,7 +245,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
-        let pa = PlayerAdvancement::new(manager,id);
+        let pa = PlayerAdvancement::new(manager, id);
         assert!(pa.is_save_enabled());
         assert!(pa.is_first_packet);
         assert!(pa.to_update.is_empty());
@@ -258,10 +257,13 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager,id);
+        let mut pa = PlayerAdvancement::new(manager, id);
         let adv = Advancement::STORY_ROOT;
         let progress = pa.get_or_start_progress(adv);
-        assert!(!progress.is_done(), "New progress should not be marked done by default");
+        assert!(
+            !progress.is_done(),
+            "New progress should not be marked done by default"
+        );
     }
 
     #[test]
@@ -269,7 +271,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager,id);
+        let mut pa = PlayerAdvancement::new(manager, id);
         let adv = Advancement::STORY_ROOT;
         {
             let progress_mut = pa.get_mut_or_start_progress(adv);
@@ -285,7 +287,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager,id);
+        let mut pa = PlayerAdvancement::new(manager, id);
 
         // Add some advancement progress
         let adv = Advancement::STORY_ROOT;
@@ -303,8 +305,8 @@ mod tests {
         // Content should be valid JSON
         let content = std::fs::read_to_string(&pa.path).unwrap();
         assert!(!content.is_empty(), "Saved file should not be empty");
-        let _: HashMap<String, AdvancementProgress> = serde_json::from_str(&content)
-            .expect("Saved content should be valid JSON");
+        let _: HashMap<String, AdvancementProgress> =
+            serde_json::from_str(&content).expect("Saved content should be valid JSON");
     }
 
     #[test]
@@ -312,7 +314,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), false));
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager,id);
+        let mut pa = PlayerAdvancement::new(manager, id);
 
         // Add some advancement progress
         let adv = Advancement::STORY_ROOT;
@@ -322,8 +324,14 @@ mod tests {
         }
 
         // Save should return Ok but not actually save
-        assert!(pa.save().is_ok(), "Save with disabled saving should return Ok");
-        assert!(!pa.path.exists(), "File should not be created when saving is disabled");
+        assert!(
+            pa.save().is_ok(),
+            "Save with disabled saving should return Ok"
+        );
+        assert!(
+            !pa.path.exists(),
+            "File should not be created when saving is disabled"
+        );
     }
 
     #[test]
@@ -331,11 +339,17 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager,id);
+        let mut pa = PlayerAdvancement::new(manager, id);
 
         // Load from nonexistent file should return Ok (not error)
-        assert!(pa.load().is_ok(), "Loading from nonexistent file should return Ok");
-        assert!(pa.advancements.is_empty(), "Advancements should remain empty");
+        assert!(
+            pa.load().is_ok(),
+            "Loading from nonexistent file should return Ok"
+        );
+        assert!(
+            pa.advancements.is_empty(),
+            "Advancements should remain empty"
+        );
     }
 
     #[test]
@@ -344,7 +358,7 @@ mod tests {
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
 
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager,id);
+        let mut pa = PlayerAdvancement::new(manager, id);
         // Create a JSON file with advancement data
         let adv = Advancement::STORY_ROOT;
         let data = serde_json::json!({ adv.id: { "complete": true } });
@@ -355,7 +369,10 @@ mod tests {
 
         // Verify the advancement was loaded
         let progress = pa.get_or_start_progress(adv);
-        assert!(progress.is_done(), "Loaded advancement should be marked complete");
+        assert!(
+            progress.is_done(),
+            "Loaded advancement should be marked complete"
+        );
     }
 
     #[test]
@@ -365,7 +382,7 @@ mod tests {
         // Create and save advancements
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager.clone(),id);
+        let mut pa = PlayerAdvancement::new(manager.clone(), id);
 
         let adv = Advancement::STORY_ROOT;
         {
@@ -376,12 +393,15 @@ mod tests {
         assert!(pa.save().is_ok(), "Save should succeed");
 
         // Load the saved advancements into a new instance
-        let mut pa_loaded = PlayerAdvancement::new(manager,id);
+        let mut pa_loaded = PlayerAdvancement::new(manager, id);
         assert!(pa_loaded.load().is_ok(), "Load should succeed");
 
         // Verify the loaded data matches the saved data
         let loaded_progress = pa_loaded.get_or_start_progress(adv);
-        assert!(loaded_progress.is_done(), "Loaded progress should match saved progress");
+        assert!(
+            loaded_progress.is_done(),
+            "Loaded progress should match saved progress"
+        );
         assert_eq!(
             pa_loaded.advancements.len(),
             pa.advancements.len(),
@@ -399,13 +419,19 @@ mod tests {
             "invalid_advancement_id_12345": { "complete": true }
         });
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager,id);
+        let mut pa = PlayerAdvancement::new(manager, id);
         std::fs::write(&pa.path, data.to_string()).unwrap();
 
         // Load should still succeed but skip the invalid entry
 
-        assert!(pa.load().is_ok(), "Load should succeed even with invalid IDs");
-        assert!(pa.advancements.is_empty(), "Invalid advancements should be skipped");
+        assert!(
+            pa.load().is_ok(),
+            "Load should succeed even with invalid IDs"
+        );
+        assert!(
+            pa.advancements.is_empty(),
+            "Invalid advancements should be skipped"
+        );
     }
 
     #[test]
@@ -413,7 +439,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
-        let mut pa = PlayerAdvancement::new(manager,id);
+        let mut pa = PlayerAdvancement::new(manager, id);
 
         // Add multiple advancements
         let adv1 = Advancement::STORY_ROOT;
@@ -432,7 +458,8 @@ mod tests {
 
         // Verify both were saved
         let content = std::fs::read_to_string(&pa.path).unwrap();
-        let saved_data: HashMap<String, AdvancementProgress> = serde_json::from_str(&content).unwrap();
+        let saved_data: HashMap<String, AdvancementProgress> =
+            serde_json::from_str(&content).unwrap();
         assert_eq!(saved_data.len(), 2, "Should have saved both advancements");
     }
 }

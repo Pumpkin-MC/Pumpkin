@@ -1,3 +1,4 @@
+use crate::data::advancement_data::AdvancementManager;
 use crate::{
     entity::{NBTStorage, player::Player},
     server::Server,
@@ -12,7 +13,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
-use crate::data::advancement_data::AdvancementManager;
 
 /// Helper for managing player data in the server context.
 ///

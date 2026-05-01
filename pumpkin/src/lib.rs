@@ -3,6 +3,7 @@
 
 use crate::crash::CrashReport;
 use crate::data::VanillaData;
+use crate::data::advancement_data::AdvancementManager;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::{JavaClient, PacketHandlerResult};
@@ -35,7 +36,6 @@ use tracing::{debug, error, info, warn};
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use crate::data::advancement_data::AdvancementManager;
 
 pub mod block;
 pub mod command;
@@ -388,7 +388,7 @@ impl PumpkinServer {
             error!("Error saving all players during shutdown: {e}");
         }
 
-        if let Err(e) = AdvancementManager::save_all_players(self.server.get_all_players()).await{
+        if let Err(e) = AdvancementManager::save_all_players(self.server.get_all_players()).await {
             error!("Error saving all players advancements during shutdown: {e}");
         }
 

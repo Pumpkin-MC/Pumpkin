@@ -1,5 +1,5 @@
 use crate::command::argument_types::FromStringReader;
-use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType,};
+use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
