@@ -1,4 +1,6 @@
-use pumpkin_nbt::tag::NbtTag;
+use std::collections::HashMap;
+
+use pumpkin_nbt::{compound::NbtCompound, nbt_compound_tag, tag::NbtTag};
 use pumpkin_util::text::TextComponent;
 
 const BUILT_IN_LIKE_SUGGESTIONS: &[&str] = &["(", "bool", "false", "true", "uuid"];
@@ -308,4 +310,98 @@ fn operation() {
             "u", "U"
         ]
     );
+
+    assert_parse_ok!(
+        "uuid('3d569d3a-93ef-44a0-9f1c-f69db9d37a56')",
+        NbtTag::IntArray(vec![1029086522, -1813035872, -1625491811, -1177322922])
+    );
+    assert_parse_ok!(
+        "uuid(ad569d3a-93ef-44a0-9f1c-f69db9d37a56)",
+        NbtTag::IntArray(vec![-1386832582, -1813035872, -1625491811, -1177322922])
+    );
+    assert_parse_err!(
+        "uuid(3d53a-f40-c-f69db9d37a56)",
+        "Expected literal ,",
+        7,
+        [")", ","]
+    );
+    assert_parse_ok!(
+        "uuid(fffffffffffffff-0-0-0-0)",
+        NbtTag::IntArray(vec![-1, 0, 0, 0])
+    );
+    assert_parse_ok!(
+        "uuid(AaaAaaAaaAaaAaA-BBbBbbBbBbbbBB-c-D-e)",
+        NbtTag::IntArray(vec![-1431655766, -1145372660, 851968, 14])
+    );
+    assert_parse_ok!(
+        "uuid(a1-+2-+3-+4-+5)",
+        NbtTag::IntArray(vec![161, 131075, 262144, 5])
+    );
+    assert_parse_err!(
+        "uuid(x)",
+        "Expected a string representing a valid UUID",
+        7,
+        []
+    );
+}
+
+#[test]
+fn map() {
+    assert_parse_ok!(
+        "{x:5}",
+        NbtTag::Compound(NbtCompound {
+            child_tags: HashMap::from([("x".to_string(), NbtTag::Int(5))])
+        })
+    );
+    assert_parse_ok!(
+        "{ a:1b,B :2uS , c:3L  }",
+        NbtTag::Compound(NbtCompound {
+            child_tags: HashMap::from([
+                ("a".to_string(), NbtTag::Byte(1)),
+                ("B".to_string(), NbtTag::Short(2)),
+                ("c".to_string(), NbtTag::Long(3))
+            ])
+        })
+    );
+    assert_parse_ok!(
+        "{ a:1b, \"a\":2b, 'a':\"hi\" }",
+        nbt_compound_tag! {
+            "a": NbtTag::String("hi".to_string())
+        }
+    );
+    assert_parse_ok!(
+        "{ elem: 'this', next: { elem: 'is', next: { elem: 'a', next: { elem: 'linked', next: 'list' } } } }",
+        nbt_compound_tag! {
+            "elem": NbtTag::String("this".to_string()),
+            "next": nbt_compound_tag! {
+                "elem": NbtTag::String("is".to_string()),
+                "next": nbt_compound_tag! {
+                    "elem": NbtTag::String("a".to_string()),
+                    "next": nbt_compound_tag! {
+                        "elem": NbtTag::String("linked".to_string()),
+                        "next": NbtTag::String("list".to_string()),
+                    }
+                }
+            }
+        }
+    );
+
+    assert_parse_err!("{'x': 5f", "Expected literal ,", 8, [",", "}"]);
+    assert_parse_err!(
+        "{text:\"cool\",\"color:dark_red}",
+        "Invalid string contents",
+        29,
+        ["\"", "'", "\\"]
+    );
+    assert_parse_ok!(
+        "{9._+._+foo:1}",
+        nbt_compound_tag! {
+            "9._+._+foo": NbtTag::Int(1)
+        }
+    );
+    assert_parse_err!("{9._+._+=foo:1}", "Expected literal :", 8, [":"]);
+
+    assert_parse_err!("{\"a\":b", "Expected literal (", 6, ["(", ",", "}"]);
+    assert_parse_err!("{\"a\":25", "Expected literal .", 7, [",", ".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S", "u", "U", "}"]);
+    assert_parse_err!("{\"a\":25,", "Expected literal \"", 8, ["\"", "'", "}"]);
 }

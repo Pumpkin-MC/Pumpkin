@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
 use crate::command::snbt::errors::SnbtErrors;
@@ -565,7 +567,7 @@ impl SnbtParser<'_, '_> {
                     parse_string_literal!(parser, '"')
                 }
                 _ => {
-                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "'", &["'", "\""]);
+                    parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "\"", &["'", "\""]);
                     None
                 }
             }
@@ -586,7 +588,7 @@ impl SnbtParser<'_, '_> {
     }
 
     fn arguments(&mut self) -> Option<Vec<NbtTag>> {
-        self.repeated_with_trailing_comma(Self::literal)
+        self.repeated_with_trailing_comma_vec(Self::literal)
     }
 
     fn unquoted_string_or_built_in(&mut self) -> Option<NbtTag> {
@@ -640,7 +642,7 @@ impl SnbtParser<'_, '_> {
     }
 
     fn map_key(&mut self) -> Option<String> {
-        self.quoted_string_literal()
+        self.parse_or_revert(Self::quoted_string_literal)
             .map_or_else(|| self.unquoted_string_literal(), Some)
     }
 
@@ -665,8 +667,10 @@ impl SnbtParser<'_, '_> {
         }
     }
 
-    fn map_entries(&mut self) -> Option<Vec<(String, NbtTag)>> {
-        self.repeated_with_trailing_comma(Self::map_entry)
+    fn map_entries(&mut self) -> Option<HashMap<String, NbtTag>> {
+        self.repeated_with_trailing_comma(Self::map_entry, HashMap::new(), |map, element| {
+            map.insert(element.0, element.1);
+        })
     }
 
     fn map_literal(&mut self) -> Option<NbtTag> {
@@ -693,7 +697,7 @@ impl SnbtParser<'_, '_> {
     }
 
     fn list_entries(&mut self) -> Option<Vec<NbtTag>> {
-        self.repeated_with_trailing_comma(Self::literal)
+        self.repeated_with_trailing_comma_vec(Self::literal)
     }
 
     fn array_prefix(&mut self) -> Option<ArrayPrefix> {
@@ -725,7 +729,7 @@ impl SnbtParser<'_, '_> {
     }
 
     fn int_array_entries(&mut self) -> Option<Vec<IntegerLiteral>> {
-        self.repeated_with_trailing_comma(Self::integer_literal)
+        self.repeated_with_trailing_comma_vec(Self::integer_literal)
     }
 
     fn list_literal(&mut self) -> Option<NbtTag> {

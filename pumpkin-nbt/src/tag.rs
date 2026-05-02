@@ -10,7 +10,7 @@ use crate::{
     get_nbt_string, io, nbt_byte_array, nbt_int_array, nbt_long_array, serializer,
 };
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum NbtTag {
     End = END_ID,
@@ -80,7 +80,7 @@ impl NbtTag {
         if let Self::Compound(mut compound) = tag {
             // Try to get the wrapped tag, stored by "".
             if Self::is_wrapper_compound(&compound) {
-                compound.child_tags.remove(0).1
+                compound.child_tags.remove("").unwrap()
             } else {
                 Self::Compound(compound)
             }
@@ -94,7 +94,7 @@ impl NbtTag {
     /// A *wrapper compound* is a compound that stores exactly one
     /// key-value pair, an empty string key (`""`) and an `NbtTag`.
     fn is_wrapper_compound(compound: &NbtCompound) -> bool {
-        compound.child_tags.len() == 1 && compound.child_tags[0].0.is_empty()
+        compound.child_tags.len() == 1 && compound.child_tags.contains_key("")
     }
 
     /// Wraps the provided tag if needed with the provided element type of list

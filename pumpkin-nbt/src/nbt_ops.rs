@@ -326,11 +326,9 @@ impl NbtOps {
     /// If `compound` only has one element with an empty key (`""`), it returns that element.
     /// Otherwise, this simply returns a new [`NbtTag::Compound`] with `compound`.
     fn try_unwrap(mut compound: NbtCompound) -> NbtTag {
-        if compound.child_tags.len() == 1
-            && let Some(_) = compound.get("")
-        {
+        if compound.child_tags.len() == 1 && compound.has("") {
             // Remove the element to own the contained tag.
-            compound.child_tags.remove(0).1
+            compound.child_tags.remove("").unwrap()
         } else {
             NbtTag::from(compound)
         }

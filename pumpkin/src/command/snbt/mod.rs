@@ -9,6 +9,7 @@ mod rules;
 mod tests;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
@@ -284,12 +285,14 @@ impl SnbtParser<'_, '_> {
         })
     }
 
-    fn repeated_with_trailing_comma<T>(
+    fn repeated_with_trailing_comma<T, S>(
         &mut self,
         rule: impl Fn(&mut Self) -> Option<T>,
-    ) -> Option<Vec<T>> {
+        new: S,
+        insert: impl Fn(&mut S, T),
+    ) -> Option<S> {
         let list_cursor = self.reader.cursor();
-        let mut elements = Vec::new();
+        let mut elements = new;
         let mut first = true;
 
         loop {
@@ -310,7 +313,7 @@ impl SnbtParser<'_, '_> {
             }
 
             if let Some(parsed) = self.parse_or_revert(&rule) {
-                elements.push(parsed);
+                insert(&mut elements, parsed)
             } else {
                 break;
             }
@@ -319,6 +322,13 @@ impl SnbtParser<'_, '_> {
         }
 
         Some(elements)
+    }
+
+    fn repeated_with_trailing_comma_vec<T>(
+        &mut self,
+        rule: impl Fn(&mut Self) -> Option<T>,
+    ) -> Option<Vec<T>> {
+        self.repeated_with_trailing_comma(rule, Vec::new(), Vec::push)
     }
 
     fn parse_integer_literal(

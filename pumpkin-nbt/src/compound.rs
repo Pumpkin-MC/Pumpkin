@@ -1,29 +1,44 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use crate::deserializer::NbtReadHelper;
 use crate::serializer::WriteAdaptor;
 use crate::tag::NbtTag;
 use crate::{END_ID, Error, Nbt, get_nbt_string};
+use std::collections::hash_map::IntoIter;
 use std::io::{ErrorKind, Read, Seek, Write};
-use std::vec::IntoIter;
 
-/// Represents a Compound NBT tag, effectively a Key-Value map.
+#[macro_export]
+macro_rules! nbt_compound_tag {
+    { $($key:literal : $tag:expr),+ $(,)* } => {
+        {
+            let mut compound = NbtCompound::new();
+            $( compound.put($key, $tag); )+
+            NbtTag::Compound(compound)
+        }
+    };
+    // For empty compounds
+    {} => {
+        NbtTag::Compound(NbtCompound::new())
+    };
+}
+
+/// Represents a Compound NBT tag, effectively a hash map.
 ///
-/// Internally, this uses a `Vec<(String, NbtTag)>` to preserve insertion order,
-/// which is often preferred in NBT serialization, though lookups are O(n).
+/// Internally, this uses a `HashMap<String, NbtTag>`, which does not preserve insertion order,
+/// just like Minecraft: Java Edition, but it does mean lookups are O(1).
 ///
-///
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct NbtCompound {
-    pub child_tags: Vec<(String, NbtTag)>,
+    pub child_tags: HashMap<String, NbtTag>,
 }
 
 impl NbtCompound {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            child_tags: Vec::new(),
+            child_tags: HashMap::new(),
         }
     }
 
@@ -68,7 +83,7 @@ impl NbtCompound {
             let name = get_nbt_string(reader)?;
             let tag = NbtTag::deserialize_data(reader, tag_id)?;
 
-            compound.child_tags.push((name, tag));
+            compound.child_tags.insert(name, tag);
         }
 
         Ok(compound)
@@ -85,13 +100,13 @@ impl NbtCompound {
     }
 
     #[must_use]
-    pub const fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.child_tags.is_empty()
     }
 
     pub fn put(&mut self, name: &str, value: impl Into<NbtTag>) {
         if !self.child_tags.iter().any(|(key, _)| key == name) {
-            self.child_tags.push((name.to_string(), value.into()));
+            self.child_tags.insert(name.to_string(), value.into());
         }
     }
 
@@ -142,10 +157,13 @@ impl NbtCompound {
     #[inline]
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&NbtTag> {
-        self.child_tags
-            .iter()
-            .find(|k| k.0.as_str() == name)
-            .map(|r| &r.1)
+        self.child_tags.get(name)
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn has(&self, name: &str) -> bool {
+        self.child_tags.contains_key(name)
     }
 
     #[must_use]
@@ -222,7 +240,7 @@ impl FromIterator<(String, NbtTag)> for NbtCompound {
 
 impl IntoIterator for NbtCompound {
     type Item = (String, NbtTag);
-    type IntoIter = IntoIter<(String, NbtTag)>;
+    type IntoIter = IntoIter<String, NbtTag>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.child_tags.into_iter()

@@ -1,6 +1,5 @@
 use crate::command::context::string_range::StringRange;
 use crate::command::suggestion::{Suggestion, SuggestionText};
-use indexmap::IndexSet;
 use pumpkin_util::text::TextComponent;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -148,11 +147,13 @@ impl Suggestions {
             return input[0].borrow().clone();
         }
 
-        let mut texts = IndexSet::new();
+        let mut texts = Vec::new();
 
         for suggestions in &input {
             for suggestion in &suggestions.borrow().suggestions {
-                texts.insert(suggestion);
+                if !texts.contains(&suggestion) {
+                    texts.push(suggestion);
+                }
             }
         }
 
@@ -180,9 +181,12 @@ impl Suggestions {
             .reduce(StringRange::encompass)
             .unwrap();
 
-        let mut texts: IndexSet<Suggestion> = IndexSet::new();
+        let mut texts = Vec::new();
         for suggestion in &suggestions {
-            texts.insert(suggestion.borrow().expand(command, range));
+            let suggestion = suggestion.borrow().expand(command, range);
+            if !texts.contains(&suggestion) {
+                texts.push(suggestion);
+            }
         }
 
         Self::new(range, Self::sort(texts))
@@ -192,7 +196,7 @@ impl Suggestions {
     ///
     /// 1. If both suggestions are integers, their integral value is compared.
     /// 2. Otherwise, compare their text lexicographically.
-    fn sort(suggestions: IndexSet<Suggestion>) -> Vec<Suggestion> {
+    fn sort(suggestions: Vec<Suggestion>) -> Vec<Suggestion> {
         enum PushSide {
             Text,
             Integer,

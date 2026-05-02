@@ -72,7 +72,7 @@ impl de::Error for Error {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Nbt {
     pub name: String,
     pub root_tag: NbtCompound,
