@@ -3842,6 +3842,12 @@ impl EntityBase for Player {
         self
     }
 
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        // vanilla: min(level * 7, 100)
+        let level = self.experience_level.load(Ordering::Relaxed);
+        (level * 7).min(100) as u32
+    }
+
     fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.living_entity.tick_in_void(dyn_self).await;

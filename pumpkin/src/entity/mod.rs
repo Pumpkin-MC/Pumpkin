@@ -363,6 +363,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     /// Returns itself as the nbt storage for saving and loading data.
     fn as_nbt_storage(&self) -> &dyn NBTStorage;
+
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        0
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        0
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
