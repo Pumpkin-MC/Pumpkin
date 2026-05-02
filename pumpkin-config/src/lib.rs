@@ -12,6 +12,7 @@ use tracing::{debug, warn};
 pub mod fun;
 pub mod logging;
 pub mod networking;
+pub mod plugins;
 pub mod recipe;
 
 pub mod resource_pack;
@@ -22,6 +23,7 @@ pub use networking::auth::AuthenticationConfig;
 pub use networking::compression::CompressionConfig;
 pub use networking::lan_broadcast::LANBroadcastConfig;
 pub use networking::rcon::RCONConfig;
+pub use plugins::PluginsConfig;
 pub use pvp::PVPConfig;
 pub use server_links::ServerLinksConfig;
 
@@ -74,6 +76,8 @@ pub struct AdvancedConfiguration {
     pub fun: FunConfig,
     /// Recipe-related configuration.
     pub recipe: RecipeConfig,
+    /// Plugin-related configuration.
+    pub plugins: PluginsConfig,
 }
 
 /// Basic configuration for core server settings.

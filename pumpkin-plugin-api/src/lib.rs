@@ -7,7 +7,7 @@
 //! # Quick start
 //!
 //! ```rust,ignore
-//! use pumpkin_plugin_api::{Plugin, PluginMetadata, Context, register_plugin};
+//! use pumpkin_plugin_api::{Plugin, PluginMetadata, Context, register_plugin, permissions::permissions};
 //!
 //! struct MyPlugin;
 //!
@@ -20,6 +20,7 @@
 //!             authors: vec!["you".into()],
 //!             description: "An example plugin.".into(),
 //!             dependencies: vec![],
+//!             permissions: vec![permissions::NETWORK_DNS.into()],
 //!         }
 //!     }
 //! }
@@ -34,6 +35,10 @@ use crate::{
 
 pub mod commands;
 pub mod events;
+/// Constants for plugin permissions.
+///
+/// Use these in your `PluginMetadata` to request access to specific host features.
+pub mod permissions;
 pub mod scheduler;
 
 pub mod command {
@@ -77,6 +82,8 @@ pub struct PluginMetadata {
     pub description: String,
     /// The list of plugin dependencies.
     pub dependencies: Vec<String>,
+    /// The list of permissions requested by the plugin.
+    pub permissions: Vec<String>,
 }
 
 impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
@@ -89,6 +96,7 @@ impl wit::exports::pumpkin::plugin::metadata::Guest for Component {
             authors: metadata.authors,
             description: metadata.description,
             dependencies: metadata.dependencies,
+            permissions: metadata.permissions,
         }
     }
 }

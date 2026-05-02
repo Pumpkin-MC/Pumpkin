@@ -1,7 +1,5 @@
 use std::io::{Error, ErrorKind, Read, Write};
 
-use pumpkin_macros::packet;
-
 const MAX_ACK_RECORDS: u16 = 4096;
 
 use crate::{
@@ -9,12 +7,11 @@ use crate::{
     serial::{PacketRead, PacketWrite},
 };
 
-#[packet(0xC0)]
-pub struct Ack {
-    sequences: Vec<u32>,
+pub struct Acknowledge {
+    pub sequences: Vec<u32>,
 }
 
-impl Ack {
+impl Acknowledge {
     #[must_use]
     pub const fn new(sequences: Vec<u32>) -> Self {
         Self { sequences }
@@ -37,7 +34,7 @@ impl Ack {
         if size > MAX_ACK_RECORDS {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                "ACK packet range is too large.",
+                "Acknowledge packet range is too large.",
             ));
         }
 
@@ -49,7 +46,7 @@ impl Ack {
             } else {
                 let start = u24::read(reader)?.0;
                 let end = u24::read(reader)?.0;
-                for i in start..end {
+                for i in start..=end {
                     sequences.push(i);
                 }
             }
@@ -57,15 +54,22 @@ impl Ack {
         Ok(Self { sequences })
     }
 
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        0xC0u8.write(writer)?;
+    pub fn write<W: Write>(&self, writer: &mut W, id: u8) -> Result<(), Error> {
+        id.write(writer)?;
+        if self.sequences.is_empty() {
+            0u16.write_be(writer)?;
+            return Ok(());
+        }
         let mut count: u16 = 0;
 
         let mut buf = Vec::new();
 
-        let mut start = self.sequences[0];
+        let mut sequences = self.sequences.clone();
+        sequences.sort_unstable();
+
+        let mut start = sequences[0];
         let mut end = start;
-        for seq in self.sequences.iter().copied() {
+        for seq in sequences.iter().copied().skip(1) {
             if seq != end + 1 {
                 Self::write_range(start, end, &mut buf)?;
                 count += 1;

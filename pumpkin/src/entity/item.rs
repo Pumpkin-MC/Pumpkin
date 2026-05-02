@@ -127,9 +127,22 @@ impl ItemEntity {
     }
 
     async fn try_merge_with(&self, other: &Self) {
-        let self_stack = self.item_stack.lock().await;
+        // Always lock in entity_id order to prevent deadlock when two
+        // items try to merge with each other concurrently.
+        let (low, high) = if self.entity.entity_id < other.entity.entity_id {
+            (self, other)
+        } else {
+            (other, self)
+        };
 
-        let other_stack = other.item_stack.lock().await;
+        let low_stack = low.item_stack.lock().await;
+        let high_stack = high.item_stack.lock().await;
+
+        let (self_stack, other_stack) = if self.entity.entity_id < other.entity.entity_id {
+            (low_stack, high_stack)
+        } else {
+            (high_stack, low_stack)
+        };
 
         if !self_stack.are_equal(&other_stack)
             || self_stack.item_count + other_stack.item_count > self_stack.get_max_stack_size()
@@ -419,7 +432,6 @@ impl EntityBase for ItemEntity {
                 return false;
             }
 
-            // Thread safe damage application
             loop {
                 let current = self.health.load(Relaxed);
                 let new = current - amount;
@@ -446,20 +458,26 @@ impl EntityBase for ItemEntity {
                 return;
             }
 
-            if player
-                .inventory
-                .insert_stack_anywhere(&mut *self.item_stack.lock().await)
-                .await
-                || player.is_creative()
-            {
+            let inserted = {
+                let mut stack = self.item_stack.lock().await;
+                player.inventory.insert_stack_anywhere(&mut stack).await
+            };
+
+            if inserted || player.is_creative() {
+                let (item_count, is_empty) = {
+                    let stack = self.item_stack.lock().await;
+                    (stack.item_count, stack.is_empty())
+                };
+
                 player
                     .client
                     .enqueue_packet(&CTakeItemEntity::new(
                         self.entity.entity_id.into(),
                         player.entity_id().into(),
-                        self.item_stack.lock().await.item_count.into(),
+                        item_count.into(),
                     ))
                     .await;
+
                 player
                     .current_screen_handler
                     .lock()
@@ -468,10 +486,10 @@ impl EntityBase for ItemEntity {
                     .await
                     .send_content_updates()
                     .await;
-                if self.item_stack.lock().await.is_empty() {
+
+                if is_empty {
                     self.entity.remove().await;
                 } else {
-                    // Update entity
                     self.init_data_tracker().await;
                 }
             }

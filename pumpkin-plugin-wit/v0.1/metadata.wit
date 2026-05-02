@@ -11,6 +11,8 @@ interface metadata {
         description: string,
         /// Plugin dependencies.
         dependencies: list<string>,
+        /// Permissions requested by the plugin.
+        permissions: list<string>,
     }
 
     get-metadata: func() -> plugin-metadata;

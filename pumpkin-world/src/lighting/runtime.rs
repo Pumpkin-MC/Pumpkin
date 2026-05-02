@@ -183,13 +183,13 @@ impl DynamicLightEngine {
                             // No self-emission, darken it completely and continue propagation
                             self.set_block_light_level(level, &neighbor_pos, 0)
                                 .await
-                                .unwrap();
+                                .ok();
                             self.queue_block_light_decrease(neighbor_pos, neighbor_light);
                         } else {
                             // Has self-emission, set to its own light and re-propagate from it
                             self.set_block_light_level(level, &neighbor_pos, neighbor_luminance)
                                 .await
-                                .unwrap();
+                                .ok();
                             self.queue_block_light_increase(neighbor_pos, neighbor_luminance);
                         }
                     } else {
@@ -204,11 +204,11 @@ impl DynamicLightEngine {
     pub async fn check_block_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
         match level.lighting_config {
             LightingEngineConfig::Full => {
-                self.set_block_light_level(level, &pos, 15).await.unwrap();
+                self.set_block_light_level(level, &pos, 15).await.ok();
                 return;
             }
             LightingEngineConfig::Dark => {
-                self.set_block_light_level(level, &pos, 0).await.unwrap();
+                self.set_block_light_level(level, &pos, 0).await.ok();
                 return;
             }
             LightingEngineConfig::Default => {}
@@ -223,13 +223,13 @@ impl DynamicLightEngine {
             // Set to expected value immediately, then queue decrease to darken neighbors
             self.set_block_light_level(level, &pos, expected_light)
                 .await
-                .unwrap();
+                .ok();
             self.queue_block_light_decrease(pos, current_light);
         } else if expected_light > current_light {
             // Handle light increase (placing light source)
             self.set_block_light_level(level, &pos, expected_light)
                 .await
-                .unwrap();
+                .ok();
             self.queue_block_light_increase(pos, expected_light);
         }
 
@@ -318,7 +318,7 @@ impl DynamicLightEngine {
             if new_light > neighbor_light {
                 self.set_sky_light_level(level, &neighbor_pos, new_light)
                     .await
-                    .unwrap();
+                    .ok();
 
                 if new_light > 0 {
                     self.queue_sky_light_increase(neighbor_pos, new_light);
@@ -353,9 +353,7 @@ impl DynamicLightEngine {
 
             if neighbor_light == expected || neighbor_light < removed_light {
                 // This neighbor was lit by us, darken it
-                self.set_sky_light_level(level, &neighbor_pos, 0)
-                    .await
-                    .unwrap();
+                self.set_sky_light_level(level, &neighbor_pos, 0).await.ok();
                 self.queue_sky_light_decrease(neighbor_pos, neighbor_light);
             } else if neighbor_light > removed_light {
                 // Neighbor has brighter light from another source
@@ -368,11 +366,11 @@ impl DynamicLightEngine {
     pub async fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
         match level.lighting_config {
             LightingEngineConfig::Full => {
-                self.set_sky_light_level(level, &pos, 15).await.unwrap();
+                self.set_sky_light_level(level, &pos, 15).await.ok();
                 return;
             }
             LightingEngineConfig::Dark => {
-                self.set_sky_light_level(level, &pos, 0).await.unwrap();
+                self.set_sky_light_level(level, &pos, 0).await.ok();
                 return;
             }
             LightingEngineConfig::Default => {}
@@ -423,13 +421,13 @@ impl DynamicLightEngine {
             // Light decreased
             self.set_sky_light_level(level, &pos, expected_light)
                 .await
-                .unwrap();
+                .ok();
             self.queue_sky_light_decrease(pos, current_light);
         } else if expected_light > current_light {
             // Light increased
             self.set_sky_light_level(level, &pos, expected_light)
                 .await
-                .unwrap();
+                .ok();
             self.queue_sky_light_increase(pos, expected_light);
         }
 
@@ -484,7 +482,7 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
                 // Bounds check for section index
-                let mut light_engine = chunk.light_engine.lock().unwrap();
+                let mut light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
                 if section_index >= light_engine.block_light.len() {
                     return Err("Invalid section index".to_string());
                 }
@@ -511,7 +509,7 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
 
-                let light_engine = chunk.light_engine.lock().unwrap();
+                let light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
                 // Bounds check for section index (lock the light engine)
                 if section_index >= light_engine.sky_light.len() {
                     return 15;
@@ -538,7 +536,7 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
                 // Bounds check for section index
-                let mut light_engine = chunk.light_engine.lock().unwrap();
+                let mut light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
                 if section_index >= light_engine.sky_light.len() {
                     return Err("Invalid section index".to_string());
                 }

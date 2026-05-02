@@ -628,8 +628,78 @@ macro_rules! assert_success {
     }};
 }
 
+/// Asserts that encoding the left expression will lead to a complete result (success) whose stored result is `$right`.
+#[macro_export]
+macro_rules! assert_encode_success {
+    ($left:expr, $ops:expr, $right:expr $(,)?) => {{
+        let result = $crate::codec::Encode::encode_start(&$left, &$ops);
+        assert!(
+            result.is_success(),
+            "Expected a `DataResult` success, got: {:?}",
+            result
+        );
+        assert_eq!(
+            result.unwrap(),
+            $right,
+            "`DataResult` was successful but the value doesn't match"
+        );
+    }};
+}
+
+/// Asserts that decoding the left expression will lead to a `DataResult` whose provided method returns `true`.
+#[macro_export]
+macro_rules! assert_decode {
+    ($ty:ty, $input:expr, $ops:expr, $func:ident $(,)?) => {{
+        let result = <$ty as $crate::codec::Decode>::parse($input, &$ops);
+        assert!(
+            result.$func(),
+            concat!(
+                "Expected a `DataResult` that returns `true` for ",
+                stringify!($func),
+                ", got: {:?}"
+            ),
+            result
+        );
+    }};
+}
+
 impl<T> Default for DataResult<T> {
     fn default() -> Self {
         Self::new_error("Default DataResult")
     }
+}
+
+/// A type conversion from one type to this type that may fail, resulting in a [`DataResult`].
+///
+/// Always prefer using [`FlatTryFrom`] over [`FlatTryInto`] for implementing the conversion,
+/// as an implementation of [`FlatTryInto`] will automatically work as well.
+pub trait FlatTryFrom<T>: Sized {
+    /// Performs the conversion.
+    fn flat_try_from(value: T) -> DataResult<Self>;
+}
+
+impl<T> FlatTryFrom<T> for T {
+    fn flat_try_from(value: T) -> DataResult<Self> {
+        DataResult::new_success(value)
+    }
+}
+
+impl<T, U> FlatTryInto<U> for T
+where
+    U: FlatTryFrom<T>,
+{
+    #[inline]
+    /// Calls `U::flat_try_from()`, which performs the conversion.
+    fn flat_try_into(self) -> DataResult<U> {
+        U::flat_try_from(self)
+    }
+}
+
+/// A type conversion from this type to another that may fail, resulting in a [`DataResult`].
+///
+/// Always prefer using [`FlatTryFrom`] over [`FlatTryInto`] for implementing the conversion,
+/// as an implementation of [`FlatTryInto`] will automatically work as well.
+pub trait FlatTryInto<T>: Sized {
+    /// Performs the conversion.
+    fn flat_try_into(self) -> DataResult<T>;
 }

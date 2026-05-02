@@ -1,4 +1,5 @@
 use crate::command::CommandSender;
+use crate::command::argument_types::entity_anchor::EntityAnchor;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::entity::EntityBase;
@@ -326,7 +327,7 @@ impl CommandSource {
         entity: &Arc<dyn EntityBase>,
         anchor: EntityAnchor,
     ) -> Self {
-        self.with_looking_at_pos(anchor.position_at_entity(entity))
+        self.with_looking_at_pos(anchor.position_at_entity(entity.get_entity()))
     }
 
     /// Returns a new [`CommandSource`] with the rotation changed in such
@@ -489,60 +490,6 @@ impl CommandSource {
             None => true,
             Some(permission) => self.has_permission(permission).await,
         }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum EntityAnchor {
-    Feet,
-    Eyes,
-}
-
-// TODO: Move this to the /execute command when implemented.
-impl EntityAnchor {
-    /// Gets the [`EntityAnchor`] whose identity is the ID provided.
-    #[must_use]
-    pub fn from_id(id: &str) -> Option<Self> {
-        match id {
-            "feet" => Some(Self::Feet),
-            "eyes" => Some(Self::Eyes),
-            _ => None,
-        }
-    }
-
-    /// Gets the ID of this [`EntityAnchor`]
-    #[must_use]
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Feet => "feet",
-            Self::Eyes => "eyes",
-        }
-    }
-
-    fn transform_position(self, position: Vector3<f64>, entity: &dyn EntityBase) -> Vector3<f64> {
-        match self {
-            Self::Feet => position,
-            Self::Eyes => position.add(&Vector3::new(
-                0.0,
-                entity.get_entity().get_eye_height(),
-                0.0,
-            )),
-        }
-    }
-
-    /// Gets the position of an entity with respect to this anchor.
-    pub fn position_at_entity(self, entity: &Arc<dyn EntityBase>) -> Vector3<f64> {
-        self.transform_position(entity.get_entity().pos.load(), entity.as_ref())
-    }
-
-    /// Gets the position of a source with respect to this anchor.
-    #[must_use]
-    pub fn position_at_source(self, command_source: &CommandSource) -> Vector3<f64> {
-        let pos = command_source.position;
-        command_source
-            .entity
-            .as_ref()
-            .map_or_else(|| pos, |e| self.position_at_entity(e))
     }
 }
 

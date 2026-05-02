@@ -61,9 +61,11 @@ pub async fn start_query_handler(server: Arc<Server>, query_addr: SocketAddr) {
             () = STOP_INTERRUPT.cancelled() => None,
         };
 
-        let Some(Ok((_, addr))) = recv_result else {
+        let Some(Ok((length, addr))) = recv_result else {
             break;
         };
+
+        buf.truncate(length);
 
         tokio::spawn(async move {
             if let Err(err) = handle_packet(

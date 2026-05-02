@@ -3,10 +3,10 @@
 use crate::attributes::Attributes;
 use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
-    AttackRange, AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage,
-    DamageResistant, DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food,
-    ItemModel, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, MinimumAttackCharge,
-    PiercingWeapon, PotionContents, StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
+    AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
+    DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
+    ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PiercingWeapon, PotionContents,
+    StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -57,13 +57,10 @@ pub trait DataComponentImpl: Send + Sync {
 pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataComponentImpl>> {
     match id {
         MaxStackSize => Some(MaxStackSizeImpl::read_data(data)?.to_dyn()),
-        MinimumAttackCharge => Some(MinimumAttackChargeImpl::read_data(data)?.to_dyn()),
         Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
         DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
-        AttackRange => Some(AttackRangeImpl::read_data(data)?.to_dyn()),
-        PiercingWeapon => Some(PiercingWeaponImpl::read_data(data)?.to_dyn()),
         PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
@@ -71,6 +68,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
         StoredEnchantments => Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn()),
+        UseCooldown => Some(UseCooldownImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -228,10 +226,18 @@ impl DataComponentImpl for UnbreakableImpl {
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CustomNameImpl {
-    // TODO make TextComponent const
-    pub name: &'static str,
+    // TODO make TextComponent
+    pub name: String,
 }
 impl DataComponentImpl for CustomNameImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.name.clone())
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_str_hash(self.name.as_str()) as i32
+    }
+
     default_impl!(CustomName);
 }
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -715,107 +721,64 @@ impl Hash for ConsumableImpl {
 }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseRemainderImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct UseCooldownImpl;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct MinimumAttackChargeImpl {
-    pub value: f32,
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UseCooldownImpl {
+    pub seconds: f32,
+    pub cooldown_group: Option<String>,
 }
 
-impl MinimumAttackChargeImpl {
-    fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_float().map(|value| Self { value })
-    }
-}
-
-impl DataComponentImpl for MinimumAttackChargeImpl {
-    fn write_data(&self) -> NbtTag {
-        NbtTag::Float(self.value)
+impl UseCooldownImpl {
+    pub fn new(seconds: f32, cooldown_group: Option<String>) -> Self {
+        Self {
+            seconds,
+            cooldown_group,
+        }
     }
 
-    fn get_hash(&self) -> i32 {
-        get_f32_hash(self.value) as i32
-    }
-
-    default_impl!(MinimumAttackCharge);
-}
-
-impl Hash for MinimumAttackChargeImpl {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        unsafe { (*(&raw const self.value).cast::<u32>()).hash(state) };
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct AttackRangeImpl {
-    pub min_range: f32,
-    pub max_range: f32,
-    pub min_creative_range: f32,
-    pub max_creative_range: f32,
-    pub hitbox_margin: f32,
-    pub mob_factor: f32,
-}
-
-impl AttackRangeImpl {
-    fn read_data(data: &NbtTag) -> Option<Self> {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
+        let seconds = compound.get_float("seconds")?;
+        let cooldown_group = compound.get_string("cooldown_group").map(|s| s.to_string());
         Some(Self {
-            min_range: compound.get_float("min_reach").unwrap_or(0.0),
-            max_range: compound.get_float("max_reach").unwrap_or(3.0),
-            min_creative_range: compound.get_float("min_creative_reach").unwrap_or(0.0),
-            max_creative_range: compound.get_float("max_creative_reach").unwrap_or(5.0),
-            hitbox_margin: compound.get_float("hitbox_margin").unwrap_or(0.3),
-            mob_factor: compound.get_float("mob_factor").unwrap_or(1.0),
+            seconds,
+            cooldown_group,
         })
     }
 }
 
-impl DataComponentImpl for AttackRangeImpl {
+impl DataComponentImpl for UseCooldownImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
-        compound.put_float("min_reach", self.min_range);
-        compound.put_float("max_reach", self.max_range);
-        compound.put_float("min_creative_reach", self.min_creative_range);
-        compound.put_float("max_creative_reach", self.max_creative_range);
-        compound.put_float("hitbox_margin", self.hitbox_margin);
-        compound.put_float("mob_factor", self.mob_factor);
+        compound.put_float("seconds", self.seconds);
+        if let Some(group) = &self.cooldown_group {
+            compound.put_string("cooldown_group", group.clone());
+        }
         NbtTag::Compound(compound)
     }
 
     fn get_hash(&self) -> i32 {
         let mut digest = Digest::new(Crc32Iscsi);
-        digest.update(&get_f32_hash(self.min_range).to_le_bytes());
-        digest.update(&get_f32_hash(self.max_range).to_le_bytes());
-        digest.update(&get_f32_hash(self.min_creative_range).to_le_bytes());
-        digest.update(&get_f32_hash(self.max_creative_range).to_le_bytes());
-        digest.update(&get_f32_hash(self.hitbox_margin).to_le_bytes());
-        digest.update(&get_f32_hash(self.mob_factor).to_le_bytes());
+        digest.update(&get_f32_hash(self.seconds).to_le_bytes());
+        if let Some(group) = &self.cooldown_group {
+            digest.update(&get_str_hash(group).to_le_bytes());
+        }
         digest.finalize() as i32
     }
 
-    default_impl!(AttackRange);
+    default_impl!(UseCooldown);
 }
 
-impl Hash for AttackRangeImpl {
+impl Eq for UseCooldownImpl {}
+
+impl Hash for UseCooldownImpl {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        unsafe { (*(&raw const self.min_range).cast::<u32>()).hash(state) };
-        unsafe { (*(&raw const self.max_range).cast::<u32>()).hash(state) };
-        unsafe { (*(&raw const self.min_creative_range).cast::<u32>()).hash(state) };
-        unsafe { (*(&raw const self.max_creative_range).cast::<u32>()).hash(state) };
-        unsafe { (*(&raw const self.hitbox_margin).cast::<u32>()).hash(state) };
-        unsafe { (*(&raw const self.mob_factor).cast::<u32>()).hash(state) };
+        self.seconds.to_bits().hash(state);
+        self.cooldown_group.hash(state);
     }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PiercingWeaponImpl;
-
-impl PiercingWeaponImpl {
-    fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
-    }
-}
 
 impl DataComponentImpl for PiercingWeaponImpl {
     fn write_data(&self) -> NbtTag {

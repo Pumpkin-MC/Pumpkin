@@ -59,10 +59,10 @@ impl NbtTag {
     /// represents. If any elements in the `Vec` are found to be of
     /// different types, this returns [`COMPOUND_ID`].
     #[must_use]
-    fn get_list_element_type_id(vec: &Vec<Self>) -> u8 {
+    fn get_list_element_type_id(list: &[Self]) -> u8 {
         let mut element_id = END_ID;
 
-        for tag in vec {
+        for tag in list {
             let id = tag.get_type_id();
             if element_id == END_ID {
                 element_id = id;
@@ -449,9 +449,7 @@ impl From<&str> for NbtTag {
 
 impl From<&[u8]> for NbtTag {
     fn from(value: &[u8]) -> Self {
-        let mut cloned = Vec::with_capacity(value.len());
-        cloned.copy_from_slice(value);
-        Self::ByteArray(cloned.into_boxed_slice())
+        Self::ByteArray(value.into())
     }
 }
 

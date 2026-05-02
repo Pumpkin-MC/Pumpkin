@@ -4,7 +4,6 @@ use std::sync::atomic::Ordering;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::EnumVariants;
-use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::tag::Taggable;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -47,7 +46,7 @@ struct SupportInfo {
 struct SignPlacement {
     block_id: u16,
     facing: Option<String>,
-    rotation: Option<Integer0To15>,
+    rotation: Option<u8>,
     attached: bool,
 }
 
@@ -113,30 +112,21 @@ impl SignBlock {
     /// Calculates rotation for wall-hanging signs.
     fn calculate_wall_hanging_rotation(
         wall_dir: BlockDirection,
-        player_rot: Integer0To15,
+        player_rot: u8,
         is_sneaking: bool,
-    ) -> Integer0To15 {
+    ) -> u8 {
         if is_sneaking {
             return player_rot;
         }
 
-        let idx = player_rot.to_index();
         match wall_dir {
             BlockDirection::North | BlockDirection::South => {
                 // Snap to North-South axis (0 or 8)
-                if (4..12).contains(&idx) {
-                    Integer0To15::from_index(8)
-                } else {
-                    Integer0To15::from_index(0)
-                }
+                if (4..12).contains(&player_rot) { 8 } else { 0 }
             }
             BlockDirection::East | BlockDirection::West => {
                 // Snap to East-West axis (4 or 12)
-                if (2..10).contains(&idx) {
-                    Integer0To15::from_index(4)
-                } else {
-                    Integer0To15::from_index(12)
-                }
+                if (2..10).contains(&player_rot) { 4 } else { 12 }
             }
             _ => player_rot,
         }
@@ -205,7 +195,7 @@ impl SignBlock {
         args: &OnPlaceArgs,
         support: &SupportInfo,
         is_sneaking: bool,
-    ) -> (Option<String>, Option<Integer0To15>, bool) {
+    ) -> (Option<String>, Option<u8>, bool) {
         let wall_dir = if args.direction.is_horizontal() {
             args.direction
         } else {
@@ -218,7 +208,7 @@ impl SignBlock {
         let player_rot = args.player.get_entity().get_flipped_rotation_16();
         let rotation = Self::calculate_wall_hanging_rotation(wall_dir, player_rot, is_sneaking);
 
-        let is_angled = rotation.to_index() % 4 != 0;
+        let is_angled = rotation % 4 != 0;
         let attached = is_angled || is_sneaking;
 
         (Some(facing.to_string()), Some(rotation), attached)
@@ -228,37 +218,29 @@ impl SignBlock {
     fn calculate_ceiling_orientation(
         args: &OnPlaceArgs,
         is_sneaking: bool,
-    ) -> (Option<String>, Option<Integer0To15>, bool) {
+    ) -> (Option<String>, Option<u8>, bool) {
         let rotation = if is_sneaking {
             args.player.get_entity().get_flipped_rotation_16()
         } else {
             // Snap to nearest cardinal
-            let index = args
-                .player
-                .get_entity()
-                .get_flipped_rotation_16()
-                .to_index();
-            Integer0To15::from_index(((index + 2) / 4 * 4) % 16)
+            let index = args.player.get_entity().get_flipped_rotation_16();
+            ((index + 2) / 4 * 4) % 16
         };
 
-        let is_angled = rotation.to_index() % 4 != 0;
+        let is_angled = rotation % 4 != 0;
         let attached = is_angled || is_sneaking;
 
         (None, Some(rotation), attached)
     }
 
     /// Calculates orientation for wall signs.
-    fn calculate_wall_orientation(
-        args: &OnPlaceArgs,
-    ) -> (Option<String>, Option<Integer0To15>, bool) {
+    fn calculate_wall_orientation(args: &OnPlaceArgs) -> (Option<String>, Option<u8>, bool) {
         let facing = args.direction.opposite().to_cardinal_direction().to_value();
         (Some(facing.to_string()), None, false)
     }
 
     /// Calculates orientation for standing signs.
-    fn calculate_standing_orientation(
-        args: &OnPlaceArgs,
-    ) -> (Option<String>, Option<Integer0To15>, bool) {
+    fn calculate_standing_orientation(args: &OnPlaceArgs) -> (Option<String>, Option<u8>, bool) {
         let rotation = args.player.get_entity().get_flipped_rotation_16();
         (None, Some(rotation), false)
     }
@@ -279,7 +261,24 @@ impl SignBlock {
         if let Some(rotation) = placement.rotation
             && let Some(prop) = props.iter_mut().find(|(k, _)| *k == "rotation")
         {
-            prop.1 = rotation.to_value();
+            prop.1 = match rotation {
+                1 => "1",
+                2 => "2",
+                3 => "3",
+                4 => "4",
+                5 => "5",
+                6 => "6",
+                7 => "7",
+                8 => "8",
+                9 => "9",
+                10 => "10",
+                11 => "11",
+                12 => "12",
+                13 => "13",
+                14 => "14",
+                15 => "15",
+                _ => "0",
+            };
         }
 
         if let Some(prop) = props.iter_mut().find(|(k, _)| *k == "attached") {
@@ -596,7 +595,7 @@ async fn is_facing_front_text(
     if let Some(props) = block.properties(state_id) {
         let prop_map = props.to_props();
         if let Some((_, val)) = prop_map.iter().find(|(k, _)| k == &"rotation") {
-            let r = Integer0To15::from_value(val);
+            let r = val.parse().unwrap_or(0);
             rotation = get_yaw_from_rotation_16(r);
         } else if let Some((_, val)) = prop_map.iter().find(|(k, _)| k == &"facing") {
             rotation = match &val[..] {
@@ -618,10 +617,8 @@ async fn is_facing_front_text(
     diff.abs() <= 90.0
 }
 
-fn get_yaw_from_rotation_16(rotation: Integer0To15) -> f32 {
-    let index = rotation.to_index();
-
-    f32::from(index) * 22.5
+fn get_yaw_from_rotation_16(rotation: u8) -> f32 {
+    f32::from(rotation) * 22.5
 }
 
 fn try_claim_sign(

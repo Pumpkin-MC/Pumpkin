@@ -4,6 +4,8 @@ use pumpkin_world::{BlockStateId, world::BlockAccessor};
 
 pub mod bamboo;
 pub mod bamboo_sapling;
+pub mod big_dripleaf;
+pub mod big_dripleaf_stem;
 pub mod bush;
 pub mod cactus;
 pub mod cactus_flower;
@@ -25,6 +27,7 @@ pub mod sea_pickles;
 pub mod seagrass;
 pub mod segmented;
 pub mod short_plant;
+pub mod small_dripleaf;
 pub mod spore_blossom;
 pub mod sugar_cane;
 pub mod tall_plant;

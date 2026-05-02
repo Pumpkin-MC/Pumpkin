@@ -12,12 +12,12 @@ use tracing::{debug, error, info};
 use crate::command::CommandSender;
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
-mod packet;
+pub mod packet;
 
 pub struct RCONServer;
 
 impl RCONServer {
-    pub async fn run(config: &RCONConfig, server: Arc<Server>) -> Result<(), std::io::Error> {
+    pub async fn run(config: &RCONConfig, server: Arc<Server>) {
         let listener = tokio::net::TcpListener::bind(config.address).await.unwrap();
 
         let password = Arc::new(config.password.clone());
@@ -35,10 +35,9 @@ impl RCONServer {
             };
             // Asynchronously wait for an inbound socket.
 
-            let Some(result) = await_new_client().await else {
+            let Some(Ok((connection, address))) = await_new_client().await else {
                 break;
             };
-            let (connection, address) = result?;
 
             if config.max_connections != 0 && connections >= config.max_connections {
                 continue;
@@ -53,7 +52,6 @@ impl RCONServer {
             debug!("closed RCON connection");
             connections -= 1;
         }
-        Ok(())
     }
 }
 
@@ -99,7 +97,7 @@ impl RCONClient {
     }
 
     async fn poll(&mut self, server: &Arc<Server>, password: &str) -> Result<(), PacketError> {
-        let Some(packet) = self.receive_packet().await? else {
+        let Some(packet) = self.receive_packet()? else {
             return Ok(());
         };
         let config = &server.advanced_config.networking.rcon;
@@ -180,7 +178,7 @@ impl RCONClient {
         Ok(())
     }
 
-    async fn receive_packet(&mut self) -> Result<Option<Packet>, PacketError> {
-        Packet::deserialize(&mut self.incoming).await
+    fn receive_packet(&mut self) -> Result<Option<Packet>, PacketError> {
+        Packet::deserialize(&mut self.incoming)
     }
 }

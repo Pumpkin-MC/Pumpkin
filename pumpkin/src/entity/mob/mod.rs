@@ -27,12 +27,37 @@ use uuid::Uuid;
 
 pub mod bat;
 pub mod blaze;
+pub mod breeze;
+pub mod cave_spider;
+pub mod creaking;
 pub mod creeper;
+pub mod elder_guardian;
 pub mod enderman;
+pub mod endermite;
+pub mod evoker;
+pub mod ghast;
+pub mod giant;
+pub mod guardian;
+pub mod hoglin;
+pub mod illusioner;
+pub mod magma_cube;
+pub mod phantom;
+pub mod piglin;
+pub mod piglin_brute;
+pub mod pillager;
+pub mod ravager;
+pub mod shulker;
 pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
+pub mod spider;
+pub mod vex;
+pub mod vindicator;
+pub mod warden;
+pub mod witch;
+pub mod zoglin;
 pub mod zombie;
+pub mod zombified_piglin;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
@@ -77,6 +102,7 @@ impl MobEntity {
             last_sent_head_yaw: AtomicU8::new(0),
         }
     }
+
     pub fn is_in_position_target_range(&self) -> bool {
         self.is_in_position_target_range_pos(&self.living_entity.entity.block_pos.load())
     }
@@ -270,6 +296,10 @@ pub trait Mob: EntityBase + Send + Sync {
         Box::pin(async {})
     }
 
+    fn modify_incoming_damage(&self, amount: f32, _damage_type: DamageType) -> f32 {
+        amount
+    }
+
     fn can_attack_with_owner(&self, _target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
         true
     }
@@ -304,6 +334,10 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn is_sitting(&self) -> bool {
         false
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        self.get_entity().entity_type.experience_reward
     }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
@@ -350,7 +384,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             drop(navigator);
 
             let mut look_control = mob_entity.look_control.lock().await;
-            look_control.tick(self).await;
+            look_control.tick(self);
             drop(look_control);
 
             mob_entity.living_entity.tick(caller, server).await;
@@ -413,6 +447,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
             if !self.pre_damage(damage_type, source).await {
                 return false;
             }
+            // Mob-specific damage modifier (e.g. shulker armor when closed).
+            let amount = self.modify_incoming_damage(amount, damage_type);
             let damaged = self
                 .get_mob_entity()
                 .living_entity
@@ -478,6 +514,23 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_y_velocity_drag(&self) -> Option<f64> {
         self.get_mob_y_velocity_drag()
+    }
+
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        if self
+            .get_entity()
+            .age
+            .load(std::sync::atomic::Ordering::Relaxed)
+            < 0
+        {
+            return 0;
+        }
+        // TODO: apply enchantment processing like in vanilla
+        Mob::get_base_experience_reward(self)
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        Mob::get_base_experience_reward(self)
     }
 }
 

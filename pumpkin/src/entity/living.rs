@@ -19,6 +19,7 @@ use std::sync::atomic::{
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 use tracing::warn;
 
+use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
@@ -1135,8 +1136,7 @@ impl LivingEntity {
             let yaw = f64::from(self.entity.yaw.load()).to_radians();
 
             velo.x -= yaw.sin() * 0.2;
-
-            velo.y += yaw.cos() * 0.2;
+            velo.z += yaw.cos() * 0.2;
         }
 
         self.entity.velocity.store(velo);
@@ -1147,7 +1147,9 @@ impl LivingEntity {
     async fn get_jump_velocity(&self, mut strength: f64) -> f64 {
         strength *= self.get_attribute_value(&Attributes::JUMP_STRENGTH);
         strength *= f64::from(self.entity.get_jump_velocity_multiplier().await);
-
+        if let Some(effect) = self.get_effect(&StatusEffect::JUMP_BOOST).await {
+            strength += 0.1 * f64::from(effect.amplifier + 1);
+        }
         strength
     }
 
@@ -1300,14 +1302,30 @@ impl LivingEntity {
 
             // Drop loot
             self.drop_loot(params).await;
+
+            // Award experience
+            if params.killed_by_player.unwrap_or(false)
+                && world.level_info.load().game_rules.mob_drops
+            {
+                let amount = dyn_self.get_experience_reward(cause);
+                if amount > 0 {
+                    ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
+                }
+            }
             self.entity.pose.store(EntityPose::Dying);
 
             let block_pos = self.entity.block_pos.load();
 
-            for slot in self.equipment_slots.values() {
+            let armor_slots: Vec<Arc<Mutex<ItemStack>>> = {
+                let equipment_lock = self.entity_equipment.lock().await;
+                self.equipment_slots
+                    .values()
+                    .map(|slot| equipment_lock.get(slot))
+                    .collect()
+            };
+
+            for equipment in armor_slots {
                 let item = {
-                    let lock = self.entity_equipment.lock().await;
-                    let equipment = lock.get(slot);
                     let mut item_lock = equipment.lock().await;
                     mem::replace(&mut *item_lock, ItemStack::EMPTY.clone())
                 };
@@ -1532,12 +1550,16 @@ impl LivingEntity {
         // TODO: Falling anvil/stalactite should only damage the helmet slot.
         // TODO: Implement DAMAGE_RESISTANT component checks (e.g. netherite vs fire).
 
-        for (slot_index, slot) in self.equipment_slots.iter() {
-            if !slot.is_armor_slot() {
-                continue;
-            }
+        let armor_slots: Vec<(usize, Arc<Mutex<ItemStack>>, EquipmentSlot)> = {
+            let equipment_lock = self.entity_equipment.lock().await;
+            self.equipment_slots
+                .iter()
+                .filter(|(_, slot)| slot.is_armor_slot())
+                .map(|(index, slot)| (*index, equipment_lock.get(slot), slot.clone()))
+                .collect()
+        };
 
-            let equipment = self.entity_equipment.lock().await.get(slot);
+        for (slot_index, equipment, slot) in armor_slots {
             let (slot_result, updated_stack_opt) = {
                 let mut stack = equipment.lock().await;
                 if stack.is_empty() {
@@ -1568,14 +1590,14 @@ impl LivingEntity {
                 if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                     let world = self.entity.world.load();
                     world
-                        .send_entity_status(&self.entity, super::equipment_break_status(slot))
+                        .send_entity_status(&self.entity, super::equipment_break_status(&slot))
                         .await;
                 }
                 equipment_updates.push((slot.clone(), updated_stack.clone()));
                 if let Some(player) = caller.get_player() {
                     player
                         .enqueue_slot_set_packet(&CSetPlayerInventory::new(
-                            (*slot_index as i32).into(),
+                            (slot_index as i32).into(),
                             &ItemStackSerializer::from(updated_stack),
                         ))
                         .await;
@@ -2021,8 +2043,7 @@ impl EntityBase for LivingEntity {
     }
 
     fn get_gravity(&self) -> f64 {
-        const GRAVITY: f64 = 0.08;
-        GRAVITY
+        self.get_attribute_value(&Attributes::GRAVITY)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2192,6 +2213,16 @@ impl EntityBase for LivingEntity {
                             } else {
                                 item_lock.decrement_unless_creative(player.gamemode.load(), 1);
                             }
+                        }
+
+                        if let Some(cooldown) = item.get_use_cooldown() {
+                            let group = cooldown
+                                .cooldown_group
+                                .clone()
+                                .unwrap_or_else(|| item.item.registry_key.to_string());
+                            player
+                                .start_cooldown(group, (cooldown.seconds * 20.0) as i32)
+                                .await;
                         }
                     }
 

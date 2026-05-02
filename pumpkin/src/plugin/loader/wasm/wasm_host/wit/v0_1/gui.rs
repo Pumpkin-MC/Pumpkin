@@ -74,6 +74,8 @@ impl gui::HostGui for PluginHostState {
             window_type,
             title,
             inventory: Arc::new(PluginInventory::new(size)),
+            allow_grab_items: true,
+            allow_put_items: true,
         }));
 
         self.add_gui(gui)
@@ -175,6 +177,36 @@ impl gui::HostGui for PluginHostState {
         let gui = self.get_gui_res(&res)?.provider.lock().await;
         gui.inventory.clear().await;
         Ok(())
+    }
+
+    async fn set_allow_grab_items(
+        &mut self,
+        res: Resource<Gui>,
+        allow: bool,
+    ) -> wasmtime::Result<()> {
+        let mut gui = self.get_gui_res(&res)?.provider.lock().await;
+        gui.allow_grab_items = allow;
+        Ok(())
+    }
+
+    async fn get_allow_grab_items(&mut self, res: Resource<Gui>) -> wasmtime::Result<bool> {
+        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        Ok(gui.allow_grab_items)
+    }
+
+    async fn set_allow_put_items(
+        &mut self,
+        res: Resource<Gui>,
+        allow: bool,
+    ) -> wasmtime::Result<()> {
+        let mut gui = self.get_gui_res(&res)?.provider.lock().await;
+        gui.allow_put_items = allow;
+        Ok(())
+    }
+
+    async fn get_allow_put_items(&mut self, res: Resource<Gui>) -> wasmtime::Result<bool> {
+        let gui = self.get_gui_res(&res)?.provider.lock().await;
+        Ok(gui.allow_put_items)
     }
 
     async fn drop(&mut self, rep: Resource<Gui>) -> wasmtime::Result<()> {

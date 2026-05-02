@@ -4,13 +4,15 @@ use crate::plugin::{
         wit::v0_1::{
             events::{
                 ToFromWasmEvent, consume_player, consume_text_component, consume_world,
-                from_wasm_entity_interaction_action, from_wasm_entity_type, from_wasm_game_mode,
-                from_wasm_hand, from_wasm_position, to_wasm_block_position,
-                to_wasm_entity_interaction_action, to_wasm_entity_type, to_wasm_game_mode,
-                to_wasm_hand, to_wasm_position,
+                from_wasm_click_type, from_wasm_entity_interaction_action, from_wasm_entity_type,
+                from_wasm_game_mode, from_wasm_hand, from_wasm_position, to_wasm_block_position,
+                to_wasm_click_type, to_wasm_entity_interaction_action, to_wasm_entity_type,
+                to_wasm_game_mode, to_wasm_hand, to_wasm_position,
             },
+            player::to_wit_item_stack,
             pumpkin::plugin::event::{
-                Event, InteractAction as WasmInteractAction, PlayerChangeWorldEventData,
+                Event, InteractAction as WasmInteractAction, InventoryClickEventData,
+                InventoryCloseEventData, PlayerChangeWorldEventData,
                 PlayerChangedMainHandEventData, PlayerChatEventData, PlayerCommandSendEventData,
                 PlayerCustomPayloadEventData, PlayerEggThrowEventData, PlayerExpChangeEventData,
                 PlayerFishEventData, PlayerFishState as WasmPlayerFishState,
@@ -28,6 +30,8 @@ use crate::plugin::{
         egg_throw::PlayerEggThrowEvent,
         exp_change::PlayerExpChangeEvent,
         fish::{PlayerFishEvent, PlayerFishState},
+        inventory_close::InventoryCloseEvent,
+        inventory_interact::InventoryClickEvent,
         item_held::PlayerItemHeldEvent,
         player_change_world::PlayerChangeWorldEvent,
         player_chat::PlayerChatEvent,
@@ -70,6 +74,66 @@ const fn from_wasm_fish_state(state: WasmPlayerFishState) -> PlayerFishState {
         WasmPlayerFishState::FailedAttempt => PlayerFishState::FailedAttempt,
         WasmPlayerFishState::ReelIn => PlayerFishState::ReelIn,
         WasmPlayerFishState::Bite => PlayerFishState::Bite,
+    }
+}
+
+impl ToFromWasmEvent for InventoryCloseEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::InventoryCloseEvent(InventoryCloseEventData {
+            player,
+            window_type: self.window_type.map(|wt| format!("{wt:?}")),
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::InventoryCloseEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                window_type: None, // We don't change window_type from WASM
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for InventoryClickEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add_player(self.player.clone())
+            .expect("failed to add player resource");
+
+        Event::InventoryClickEvent(InventoryClickEventData {
+            player,
+            window_type: self.window_type.map(|wt| format!("{wt:?}")),
+            click_type: to_wasm_click_type(self.click_type),
+            slot: self.slot,
+            raw_slot: self.raw_slot,
+            clicked_item: self.clicked_item.as_ref().and_then(to_wit_item_stack),
+            cursor: self.cursor.as_ref().and_then(to_wit_item_stack),
+            hotbar_button: self.hotbar_button,
+            cancelled: self.cancelled,
+        })
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::InventoryClickEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                window_type: None, // We don't change window_type from WASM
+                click_type: from_wasm_click_type(data.click_type),
+                slot: data.slot,
+                raw_slot: data.raw_slot,
+                clicked_item: None, // We don't change clicked_item from WASM
+                cursor: None,       // We don't change cursor from WASM
+                hotbar_button: data.hotbar_button,
+                cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
     }
 }
 

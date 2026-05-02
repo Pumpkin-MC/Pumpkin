@@ -78,6 +78,7 @@ pub mod vine;
 // Terrain / environment / physics
 pub mod cobweb;
 pub mod dirt_path;
+pub mod dragon_egg;
 pub mod falling;
 pub mod infested;
 pub mod powder_snow;

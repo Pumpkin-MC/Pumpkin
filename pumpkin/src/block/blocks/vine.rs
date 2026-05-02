@@ -5,10 +5,10 @@ use crate::{
         BlockBehaviour, BlockFuture, BlockIsReplacing, CanPlaceAtArgs, CanUpdateAtArgs,
         GetStateForNeighborUpdateArgs, OnPlaceArgs, UseWithItemArgs, registry::BlockActionResult,
     },
-    entity::player::Player,
+    entity::{EntityBase, player::Player},
 };
 use pumpkin_data::{
-    Block, BlockDirection,
+    Block, BlockDirection, FacingExt,
     block_properties::{BlockProperties, VineLikeProperties},
     item::Item,
 };
@@ -158,7 +158,17 @@ pub fn get_nearest_looking_directions(
     replace_clicked: bool,
     clicked_face: BlockDirection,
 ) -> [BlockDirection; 6] {
-    let mut directions = ordered_by_nearest(player);
+    let mut directions: [BlockDirection; 6] = {
+        let fs = player.get_entity().get_entity_facing_order();
+        [
+            fs[0].to_block_direction(),
+            fs[1].to_block_direction(),
+            fs[2].to_block_direction(),
+            fs[3].to_block_direction(),
+            fs[4].to_block_direction(),
+            fs[5].to_block_direction(),
+        ]
+    };
 
     if !replace_clicked {
         let target = clicked_face.opposite();
@@ -175,72 +185,6 @@ pub fn get_nearest_looking_directions(
         }
     }
     directions
-}
-pub fn ordered_by_nearest(player: &Player) -> [BlockDirection; 6] {
-    let (yaw_degrees, pitch_degrees) = player.rotation();
-    let yaw = -yaw_degrees.to_radians();
-    let pitch = pitch_degrees.to_radians();
-    let pitch_sin = pitch.sin();
-    let pitch_cos = pitch.cos();
-    let yaw_sin = yaw.sin();
-    let yaw_cos = yaw.cos();
-
-    let x_pos = yaw_sin > 0.0;
-    let y_pos = pitch_sin < 0.0;
-    let z_pos = yaw_cos > 0.0;
-
-    let x_yaw = if x_pos { yaw_sin } else { -yaw_sin };
-    let y_mag = if y_pos { -pitch_sin } else { pitch_sin };
-    let z_yaw = if z_pos { yaw_cos } else { -yaw_cos };
-
-    let x_mag = x_yaw * pitch_cos;
-    let z_mag = z_yaw * pitch_cos;
-
-    let axis_x = if x_pos {
-        BlockDirection::East
-    } else {
-        BlockDirection::West
-    };
-    let axis_y = if y_pos {
-        BlockDirection::Up
-    } else {
-        BlockDirection::Down
-    };
-    let axis_z = if z_pos {
-        BlockDirection::South
-    } else {
-        BlockDirection::North
-    };
-
-    if x_yaw > z_yaw {
-        if y_mag > x_mag {
-            make_direction_array(axis_y, axis_x, axis_z)
-        } else if z_mag > y_mag {
-            make_direction_array(axis_x, axis_z, axis_y)
-        } else {
-            make_direction_array(axis_x, axis_y, axis_z)
-        }
-    } else if y_mag > z_mag {
-        make_direction_array(axis_y, axis_z, axis_x)
-    } else if x_mag > y_mag {
-        make_direction_array(axis_z, axis_x, axis_y)
-    } else {
-        make_direction_array(axis_z, axis_y, axis_x)
-    }
-}
-const fn make_direction_array(
-    axis1: BlockDirection,
-    axis2: BlockDirection,
-    axis3: BlockDirection,
-) -> [BlockDirection; 6] {
-    [
-        axis1,
-        axis2,
-        axis3,
-        axis3.opposite(),
-        axis2.opposite(),
-        axis1.opposite(),
-    ]
 }
 async fn can_place_vine_at(
     block_accessor: &dyn BlockAccessor,
@@ -278,7 +222,7 @@ const fn supports_vine(support_block: &Block) -> bool {
     false
 }
 //returns (accurate direction, boolean)
-// true if this direction is for hanging leaf
+// true if this direction is for hanging vine
 // false if it is not
 async fn get_accurate_direction(
     block_accessor: &dyn BlockAccessor,

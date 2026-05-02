@@ -1,8 +1,5 @@
-use pumpkin_data::{BlockDirection, BlockState};
-use pumpkin_util::{
-    math::{position::BlockPos, vector3::Vector3},
-    random::RandomGenerator,
-};
+use pumpkin_data::BlockState;
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
@@ -33,57 +30,41 @@ impl GiantTrunkPlacer {
             block_registry,
             chunk,
             random,
-            &pos.offset(BlockDirection::East.to_offset()),
+            &pos.east(),
             below_trunk_provider,
         );
         placer.set_dirt(
             block_registry,
             chunk,
             random,
-            &pos.offset(BlockDirection::South.to_offset()),
+            &pos.south(),
             below_trunk_provider,
         );
         placer.set_dirt(
             block_registry,
             chunk,
             random,
-            &pos.offset(BlockDirection::South.to_offset())
-                .offset(BlockDirection::South.to_offset()),
+            &pos.south().east(),
             below_trunk_provider,
         );
 
         let mut trunk_poses = Vec::new();
         for y in 0..height {
-            if placer.try_place(
-                chunk,
-                &pos.offset(Vector3::new(0, y as i32, 0)),
-                trunk_block,
-            ) {
-                trunk_poses.push(pos.offset(Vector3::new(0, y as i32, 0)));
+            if placer.try_place(chunk, &pos.up_height(y as i32), trunk_block) {
+                trunk_poses.push(pos.up_height(y as i32));
             }
             if y >= height - 1 {
                 continue;
             }
-            if placer.try_place(
-                chunk,
-                &pos.offset(Vector3::new(1, y as i32, 0)),
-                trunk_block,
-            ) {
-                trunk_poses.push(pos.offset(Vector3::new(1, y as i32, 0)));
+
+            if placer.try_place(chunk, &pos.east().up_height(y as i32), trunk_block) {
+                trunk_poses.push(pos.east().up_height(y as i32));
             }
-            if placer.try_place(
-                chunk,
-                &pos.offset(Vector3::new(1, y as i32, 1)),
-                trunk_block,
-            ) {
-                trunk_poses.push(pos.offset(Vector3::new(1, y as i32, 1)));
+            if placer.try_place(chunk, &pos.east().south().up_height(y as i32), trunk_block) {
+                trunk_poses.push(pos.east().south().up_height(y as i32));
             }
-            if placer.try_place(
-                chunk,
-                &pos.offset(Vector3::new(0, y as i32, 1)),
-                trunk_block,
-            ) {
-                trunk_poses.push(pos.offset(Vector3::new(0, y as i32, 1)));
+            if placer.try_place(chunk, &pos.south().up_height(y as i32), trunk_block) {
+                trunk_poses.push(pos.south().up_height(y as i32));
             }
         }
         (
