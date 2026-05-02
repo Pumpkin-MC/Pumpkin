@@ -1,7 +1,5 @@
 use crate::{
-    STOP_INTERRUPT,
-    plugin::server::server_tick_start::ServerTickStartEvent,
-    server::Server,
+    STOP_INTERRUPT, plugin::server::server_tick_start::ServerTickStartEvent, server::Server,
 };
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
