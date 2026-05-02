@@ -267,6 +267,10 @@ interface event {
         cancelled: bool
     }
 
+    record server-tick-start-event-data {
+        tick: s32
+    }
+
     enum event-type {
         player-join-event,
         player-leave-event,
@@ -300,6 +304,7 @@ interface event {
         server-command-event,
         spawn-change-event,
         server-broadcast-event,
+        server-tick-start-event,
     }
 
     variant event {
@@ -335,5 +340,6 @@ interface event {
         server-command-event(server-command-event-data),
         spawn-change-event(spawn-change-event-data),
         server-broadcast-event(server-broadcast-event-data),
+        server-tick-start-event(server-tick-start-event-data),
     }
 }
