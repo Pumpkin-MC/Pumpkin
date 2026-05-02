@@ -220,21 +220,6 @@ impl PumpkinServer {
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
-        if server.advanced_config.commands.use_console
-            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
-        {
-            if let Some(rl) = wrapper.take_readline() {
-                setup_console(rl, server.clone());
-            } else {
-                if server.advanced_config.commands.use_tty {
-                    warn!(
-                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
-                    );
-                }
-                setup_stdin_console(server.clone());
-            }
-        }
-
         if rcon.enabled {
             warn!(
                 "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
@@ -324,7 +309,7 @@ impl PumpkinServer {
         }
     }
 
-    pub async fn init_plugins(&self) {
+    pub async fn init_plugins(&self) -> std::time::Duration {
         self.server
             .plugin_manager
             .set_self_ref(self.server.plugin_manager.clone())
@@ -333,8 +318,12 @@ impl PumpkinServer {
             .plugin_manager
             .set_server(self.server.clone())
             .await;
-        if let Err(err) = self.server.plugin_manager.load_plugins().await {
-            error!("{err}");
+        match self.server.plugin_manager.load_plugins().await {
+            Ok(duration) => duration,
+            Err(err) => {
+                error!("{err}");
+                std::time::Duration::ZERO
+            }
         }
     }
 
@@ -347,6 +336,21 @@ impl PumpkinServer {
     }
 
     pub async fn start(&self) {
+        if self.server.advanced_config.commands.use_console
+            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
+        {
+            if let Some(rl) = wrapper.take_readline() {
+                setup_console(rl, self.server.clone());
+            } else {
+                if self.server.advanced_config.commands.use_tty {
+                    warn!(
+                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                    );
+                }
+                setup_stdin_console(self.server.clone());
+            }
+        }
+
         let tasks = Arc::new(TaskTracker::new());
         let mut master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
