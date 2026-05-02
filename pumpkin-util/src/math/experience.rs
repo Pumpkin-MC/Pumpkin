@@ -95,3 +95,46 @@ pub fn progress_in_level(points: i32, level: i32) -> f32 {
 
     progress.clamp(0.0, 1.0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn points_to_level_handles_extremes_without_panic() {
+        let _ = points_to_level(i32::MAX);
+        let _ = points_to_level(i32::MIN);
+        assert_eq!(points_to_level(-1), 0);
+        assert_eq!(points_to_level(0), 0);
+        assert_eq!(points_to_level(16), 16 * 16 + 6 * 16);
+        // Vanilla: cumulative XP at level 30 is 1395, level 31 is 1507.
+        assert_eq!(points_to_level(30), 1395);
+        assert_eq!(points_to_level(31), 1507);
+    }
+
+    #[test]
+    fn total_to_level_and_points_extremes() {
+        assert_eq!(total_to_level_and_points(0), (0, 0));
+        let (lvl_max, pts_max) = total_to_level_and_points(i32::MAX);
+        assert!(lvl_max >= 0 && pts_max >= 0);
+        let (lvl_neg, _) = total_to_level_and_points(-1);
+        assert_eq!(lvl_neg, 0);
+    }
+
+    #[test]
+    fn progress_in_level_is_clamped() {
+        let p = progress_in_level(i32::MAX, 5);
+        assert!((0.0..=1.0).contains(&p));
+        let z = progress_in_level(0, 0);
+        assert!((0.0..=1.0).contains(&z));
+    }
+
+    #[test]
+    fn round_trip_total_to_level_and_back() {
+        for total in [0i32, 100, 1000, 10_000, 100_000, 1_000_000] {
+            let (lvl, pts) = total_to_level_and_points(total);
+            let recomputed = points_to_level(lvl) + pts;
+            assert_eq!(recomputed, total, "round-trip failed for total={total}");
+        }
+    }
+}
