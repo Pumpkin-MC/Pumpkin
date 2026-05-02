@@ -2278,9 +2278,9 @@ impl JavaClient {
         self.prepare_hand_item_for_use(player, hand, &item_in_hand)
             .await;
 
-        let item_for_use = {
+        let (item_for_use, stack_for_use) = {
             let held = item_in_hand.lock().await;
-            held.item
+            (held.item, held.clone())
         };
 
         if !self
@@ -2294,7 +2294,7 @@ impl JavaClient {
             server;
             event;
             'after: {
-                server.item_registry.on_use(item_for_use, player).await;
+                server.item_registry.on_use(&stack_for_use, player).await;
             }
         }}
     }
@@ -2307,6 +2307,17 @@ impl JavaClient {
     ) {
         let inventory = player.inventory();
         let mut held = item_in_hand.lock().await;
+
+        if let Some(cooldown) = held.get_use_cooldown() {
+            let group = cooldown
+                .cooldown_group
+                .clone()
+                .unwrap_or_else(|| held.item.registry_key.to_string());
+            if player.is_on_cooldown(&group).await {
+                return;
+            }
+        }
+
         if held.get_data_component::<ConsumableImpl>().is_some() {
             // If its food we want to make sure we can actually consume it
             if let Some(food) = held.get_data_component::<FoodImpl>() {

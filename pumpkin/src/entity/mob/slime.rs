@@ -1,4 +1,3 @@
-use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
@@ -64,19 +63,13 @@ use pumpkin_nbt::pnbt::PNbtCompound;
 impl NBTStorage for SlimeEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.living_entity.entity.write_nbt(nbt).await;
-            nbt.put_int(self.entity.living_entity.entity.data.load(Relaxed));
+            self.entity.living_entity.write_nbt(nbt).await;
         })
     }
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.entity.living_entity.entity.read_nbt_non_mut(nbt).await;
-            self.entity
-                .living_entity
-                .entity
-                .data
-                .store(nbt.get_int().unwrap_or(0), Relaxed);
+            self.entity.living_entity.read_nbt_non_mut(nbt).await;
         })
     }
 }

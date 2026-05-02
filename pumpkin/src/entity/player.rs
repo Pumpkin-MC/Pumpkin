@@ -15,10 +15,12 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{
     Ability, AbilityLayer, CUpdateAbilities,
 };
+use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
@@ -56,8 +58,8 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
-    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive,
-    COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CItemCooldown,
+    CKeepAlive, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
     CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
     CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
     CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
@@ -365,6 +367,12 @@ impl ChunkManager {
 /// Represents a Minecraft player entity.
 ///
 /// A `Player` is a special type of entity that represents a human player connected to the server.
+#[derive(Clone, Copy, Debug)]
+pub struct ItemCooldown {
+    pub start_tick: i32,
+    pub duration: i32,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -437,6 +445,7 @@ pub struct Player {
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
+    pub bedrock_spawned: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
     /// Item usage tracking for bows, crossbows, etc.
@@ -449,6 +458,7 @@ pub struct Player {
     pub experience_progress: AtomicCell<f32>,
     /// The player's total experience points.
     pub experience_points: AtomicI32,
+    pub item_cooldowns: Mutex<HashMap<String, ItemCooldown>>,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
@@ -462,6 +472,7 @@ pub struct Player {
     pub tab_list_header: Mutex<TextComponent>,
     pub tab_list_footer: Mutex<TextComponent>,
     pub display_name: Mutex<Option<TextComponent>>,
+    pub tab_list_name: Mutex<Option<TextComponent>>,
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
@@ -551,6 +562,7 @@ impl Player {
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
+            bedrock_spawned: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
             // Item usage tracking
             using_item: AtomicBool::new(false),
@@ -573,6 +585,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            item_cooldowns: Mutex::new(HashMap::new()),
             // Default to sending 16 chunks per tick.
             chunk_manager: Mutex::new(ChunkManager::new(
                 16,
@@ -594,6 +607,7 @@ impl Player {
             tab_list_header: Mutex::new(TextComponent::text("")),
             tab_list_footer: Mutex::new(TextComponent::text("")),
             display_name: Mutex::new(None),
+            tab_list_name: Mutex::new(None),
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(false),
@@ -608,6 +622,44 @@ impl Player {
             .await;
     }
 
+    pub async fn start_cooldown(&self, group: String, duration: i32) {
+        let mut cooldowns = self.item_cooldowns.lock().await;
+        cooldowns.insert(
+            group.clone(),
+            ItemCooldown {
+                start_tick: self.tick_counter.load(Ordering::Relaxed),
+                duration,
+            },
+        );
+        self.client
+            .send_packet_now(&CItemCooldown::new(group, VarInt(duration)))
+            .await;
+    }
+
+    pub async fn get_cooldown(&self, group: &str) -> f32 {
+        let cooldowns = self.item_cooldowns.lock().await;
+        if let Some(cooldown) = cooldowns.get(group) {
+            let current_tick = self.tick_counter.load(Ordering::Relaxed);
+            let elapsed = current_tick - cooldown.start_tick;
+            if elapsed < cooldown.duration {
+                return 1.0 - (elapsed as f32 / cooldown.duration as f32);
+            }
+        }
+        0.0
+    }
+
+    pub async fn is_on_cooldown(&self, group: &str) -> bool {
+        let mut cooldowns = self.item_cooldowns.lock().await;
+        if let Some(cooldown) = cooldowns.get(group) {
+            let current_tick = self.tick_counter.load(Ordering::Relaxed);
+            if current_tick - cooldown.start_tick < cooldown.duration {
+                return true;
+            }
+            cooldowns.remove(group);
+        }
+        false
+    }
+
     pub async fn set_display_name(&self, display_name: Option<TextComponent>) {
         *self.display_name.lock().await = display_name.clone();
         // Update the tab list for everyone
@@ -618,6 +670,24 @@ impl Player {
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: self.gameprofile.id,
                     actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
+                }],
+            ))
+            .await;
+    }
+
+    pub async fn get_tab_list_name(&self) -> Option<TextComponent> {
+        self.tab_list_name.lock().await.clone()
+    }
+
+    pub async fn set_tab_list_name(&self, name: Option<TextComponent>) {
+        *self.tab_list_name.lock().await = name.clone();
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::UpdateDisplayName(name.as_ref())],
                 }],
             ))
             .await;
@@ -1611,6 +1681,16 @@ impl Player {
                                 chunk: &chunk,
                             })
                             .await;
+                    }
+
+                    if !self.bedrock_spawned.load(Ordering::Relaxed) && chunk_count > 4 {
+                        let mut frame_set = FrameSet::default();
+
+                        bedrock_client
+                            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
+                            .await;
+                        bedrock_client.send_frame_set(frame_set, 0x84).await;
+                        self.bedrock_spawned.store(true, Ordering::Relaxed);
                     }
                 }
             }
@@ -3782,6 +3862,12 @@ impl EntityBase for Player {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        // vanilla: min(level * 7, 100)
+        let level = self.experience_level.load(Ordering::Relaxed);
+        (level * 7).min(100) as u32
     }
 
     fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {

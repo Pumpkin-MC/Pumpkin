@@ -363,6 +363,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     /// Returns itself as the nbt storage for saving and loading data.
     fn as_nbt_storage(&self) -> &dyn NBTStorage;
+
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        0
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        0
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -2694,7 +2702,7 @@ impl NBTStorage for Entity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             let position = self.pos.load();
-            nbt.put_string(&format!("minecraft:{}", self.entity_type.resource_name));
+            nbt.put_string(self.entity_type.resource_name);
             nbt.put_uuid(&self.entity_uuid);
 
             // Pos

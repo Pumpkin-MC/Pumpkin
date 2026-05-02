@@ -26,7 +26,6 @@ use pumpkin_protocol::{
             command_request::SCommandRequest,
             container_close::SContainerClose,
             interaction::SInteraction,
-            loading_screen::SLoadingScreen,
             login::SLogin,
             player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput,
@@ -40,6 +39,7 @@ use pumpkin_protocol::{
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_response::SResourcePackResponse,
+            set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             text::SText,
         },
     },
@@ -294,7 +294,7 @@ impl BedrockClient {
         let mut packet_buf = Vec::new();
         match self.write_game_packet(packet, &mut packet_buf).await {
             Ok(()) => {
-                self.send_framed_packet_data(packet_buf, RakReliability::Unreliable)
+                self.send_framed_packet_data(packet_buf, RakReliability::ReliableOrdered)
                     .await;
             }
             Err(err) => error!("Failed to write game packet: {err}"),
@@ -688,11 +688,6 @@ impl BedrockClient {
                 self.player_pos_update(player, SPlayerAuthInput::read(reader)?, server)
                     .await;
             }
-            SLoadingScreen::PACKET_ID => {
-                if SLoadingScreen::read(reader)?.is_loading_done() {
-                    player.set_client_loaded(true);
-                }
-            }
             SRequestChunkRadius::PACKET_ID => {
                 self.handle_request_chunk_radius(player, SRequestChunkRadius::read(reader)?)
                     .await;
@@ -712,6 +707,12 @@ impl BedrockClient {
             SCommandRequest::PACKET_ID => {
                 self.handle_chat_command(player, server, SCommandRequest::read(reader)?)
                     .await;
+            }
+            SSetLocalPlayerAsInitialized::PACKET_ID => {
+                self.handle_set_local_player_as_initialized(
+                    player,
+                    &SSetLocalPlayerAsInitialized::read(reader)?,
+                );
             }
             SPlayerAction::PACKET_ID => {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
