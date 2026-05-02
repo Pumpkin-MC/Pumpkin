@@ -23,6 +23,7 @@ use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::ender_chest::EnderChestBlockEntity;
 use crate::block::entities::hopper::HopperBlockEntity;
 use crate::block::entities::jukebox::JukeboxBlockEntity;
+use crate::block::entities::lectern::LecternBlockEntity;
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use crate::block::entities::smoker::SmokerBlockEntity;
@@ -49,6 +50,7 @@ pub mod furnace;
 pub mod furnace_like_block_entity;
 pub mod hopper;
 pub mod jukebox;
+pub mod lectern;
 pub mod mob_spawner;
 pub mod piston;
 pub mod shulker_box;
@@ -206,6 +208,7 @@ pub fn block_entity_from_nbt(nbt: &NbtCompound) -> Option<Arc<dyn BlockEntity>> 
             Arc::new(block_entity_from_generic::<BrewingStandBlockEntity>(nbt))
         }
         BellBlockEntity::ID => Arc::new(block_entity_from_generic::<BellBlockEntity>(nbt)),
+        LecternBlockEntity::ID => Arc::new(block_entity_from_generic::<LecternBlockEntity>(nbt)),
         _ => return None,
     })
 }

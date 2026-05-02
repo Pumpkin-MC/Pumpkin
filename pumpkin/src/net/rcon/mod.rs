@@ -12,7 +12,7 @@ use tracing::{debug, error, info};
 use crate::command::CommandSender;
 use crate::{SHOULD_STOP, STOP_INTERRUPT, server::Server};
 
-mod packet;
+pub mod packet;
 
 pub struct RCONServer;
 

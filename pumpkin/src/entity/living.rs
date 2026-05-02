@@ -19,6 +19,7 @@ use std::sync::atomic::{
 use std::{collections::HashMap, sync::atomic::AtomicI32};
 use tracing::warn;
 
+use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, NBTStorage};
 use super::{EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
@@ -1301,6 +1302,16 @@ impl LivingEntity {
 
             // Drop loot
             self.drop_loot(params).await;
+
+            // Award experience
+            if params.killed_by_player.unwrap_or(false)
+                && world.level_info.load().game_rules.mob_drops
+            {
+                let amount = dyn_self.get_experience_reward(cause);
+                if amount > 0 {
+                    ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount).await;
+                }
+            }
             self.entity.pose.store(EntityPose::Dying);
 
             let block_pos = self.entity.block_pos.load();
@@ -2202,6 +2213,16 @@ impl EntityBase for LivingEntity {
                             } else {
                                 item_lock.decrement_unless_creative(player.gamemode.load(), 1);
                             }
+                        }
+
+                        if let Some(cooldown) = item.get_use_cooldown() {
+                            let group = cooldown
+                                .cooldown_group
+                                .clone()
+                                .unwrap_or_else(|| item.item.registry_key.to_string());
+                            player
+                                .start_cooldown(group, (cooldown.seconds * 20.0) as i32)
+                                .await;
                         }
                     }
 

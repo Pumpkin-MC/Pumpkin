@@ -2,8 +2,8 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DamageImpl, DataComponentImpl, EnchantmentsImpl, IDSet,
-    MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, get, get_mut, read_data,
-    read_data_pnbt,
+    MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut,
+    read_data, read_data_pnbt,
 };
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
@@ -129,6 +129,11 @@ impl ItemStack {
     pub fn get_max_damage(&self) -> Option<i32> {
         self.get_data_component::<MaxDamageImpl>()
             .map(|value| value.max_damage)
+    }
+
+    #[must_use]
+    pub fn get_use_cooldown(&self) -> Option<&UseCooldownImpl> {
+        self.get_data_component::<UseCooldownImpl>()
     }
 
     #[must_use]

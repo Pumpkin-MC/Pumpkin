@@ -7,7 +7,8 @@ use pumpkin_data::data_component_impl::{
     ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomNameImpl, DamageImpl, DataComponentImpl,
     EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape,
     FireworksImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl,
-    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, get,
+    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, UseCooldownImpl,
+    get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -837,6 +838,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
         _ => Err(serde::de::Error::custom(format!("{id:?} (TODO)"))),
     }
 }
@@ -858,6 +860,29 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
+        DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
         _ => todo!("{} not yet implemented", id.to_name()),
+    }
+}
+
+impl DataComponentCodec<Self> for UseCooldownImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<f32>("", &self.seconds)?;
+        seq.serialize_field::<Option<String>>("", &self.cooldown_group)
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let seconds = seq
+            .next_element::<f32>()?
+            .ok_or(de::Error::custom("No UseCooldownImpl seconds float!"))?;
+        let cooldown_group = seq
+            .next_element::<Option<String>>()?
+            .ok_or(de::Error::custom(
+                "No UseCooldownImpl cooldown_group optional string!",
+            ))?;
+        Ok(Self {
+            seconds,
+            cooldown_group,
+        })
     }
 }
