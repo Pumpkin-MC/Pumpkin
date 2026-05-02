@@ -9,7 +9,6 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use rand::RngExt;
-
 #[derive(Default)]
 pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
@@ -299,5 +298,88 @@ impl LootFunctionNumberProviderExt for LootFunctionNumberProvider {
                 }
             }),
         }
+    }
+}
+
+/// Fills a chest inventory with items generated from a static `ChestLootTable`, using a
+/// deterministic seed for deferred loot chests.
+///
+/// Items are scattered randomly across the 27 chest slots.
+pub async fn fill_chest_inventory(
+    inventory: &std::sync::Arc<dyn pumpkin_world::inventory::Inventory>,
+    table: &pumpkin_util::chest_loot_table::ChestLootTable,
+    seed: i64,
+) {
+    use pumpkin_util::random::RandomImpl;
+
+    let mut rng = Xoroshiro::from_seed(seed as u64);
+    let inv_size = inventory.size(); // 27 for a normal chest
+
+    let mut items_to_place: Vec<ItemStack> = Vec::new();
+
+    for pool in table.pools {
+        let range = pool.max_rolls - pool.min_rolls;
+        let rolls = pool.min_rolls
+            + if range > 0 {
+                rng.next_bounded_i32(range + 1)
+            } else {
+                0
+            };
+
+        for _ in 0..rolls {
+            let entry_weight: i32 = pool.entries.iter().map(|e| e.weight).sum();
+            let total_weight = entry_weight + pool.empty_weight;
+            if total_weight == 0 {
+                continue;
+            }
+
+            let mut pick = rng.next_bounded_i32(total_weight);
+
+            // Subtract empty weight first (if the pick lands here, it yields nothing).
+            pick -= pool.empty_weight;
+            if pick < 0 {
+                continue;
+            }
+
+            for entry in pool.entries {
+                pick -= entry.weight;
+                if pick < 0 {
+                    let count_range = entry.max_count - entry.min_count;
+                    let count = entry.min_count
+                        + if count_range > 0 {
+                            rng.next_bounded_i32(count_range + 1)
+                        } else {
+                            0
+                        };
+
+                    // Strip "minecraft:" prefix because from_registry_key uses short keys.
+                    let item_key = entry
+                        .item
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(entry.item);
+
+                    if let Some(item) = Item::from_registry_key(item_key) {
+                        items_to_place.push(ItemStack::new(count as u8, item));
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    if items_to_place.is_empty() {
+        return;
+    }
+
+    // Shuffle items into random free slots.
+    let mut available_slots: Vec<usize> = (0..inv_size).collect();
+
+    for item in items_to_place {
+        if available_slots.is_empty() {
+            break;
+        }
+        let idx = rng.next_bounded_i32(available_slots.len() as i32) as usize;
+        let slot = available_slots.swap_remove(idx);
+        inventory.set_stack(slot, item).await;
     }
 }
