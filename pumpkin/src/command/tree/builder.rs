@@ -29,6 +29,7 @@ impl CommandTree {
             children: Vec::new(),
             names: names_vec,
             description: description.into(),
+            source: None,
         }
     }
 

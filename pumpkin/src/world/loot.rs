@@ -10,7 +10,7 @@ use pumpkin_util::{
 };
 use rand::RngExt;
 
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
     pub block_state: Option<&'static BlockState>,

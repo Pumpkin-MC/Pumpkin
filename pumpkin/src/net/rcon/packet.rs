@@ -14,6 +14,7 @@ pub enum ServerboundPacket {
 }
 
 impl ServerboundPacket {
+    #[must_use]
     pub const fn from_i32(n: i32) -> Self {
         match n {
             //  3 => Self::Auth,
@@ -34,6 +35,7 @@ pub enum ClientboundPacket {
 }
 
 impl ClientboundPacket {
+    #[must_use]
     pub fn write_buf(self, id: i32, body: &str) -> BytesMut {
         // let len = outgoing.len() as u64;
         let mut buf = BytesMut::new();
@@ -119,14 +121,17 @@ impl Packet {
         }))
     }
 
+    #[must_use]
     pub fn get_body(&self) -> &str {
         &self.body
     }
 
+    #[must_use]
     pub const fn get_type(&self) -> ServerboundPacket {
         self.ptype
     }
 
+    #[must_use]
     pub const fn get_id(&self) -> i32 {
         self.id
     }

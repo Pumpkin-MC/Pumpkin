@@ -325,7 +325,7 @@ impl ReadlineLogWrapper {
     // This isn't really dead code. It is just only used by the lib and not the bin for this
     // crate, and as such creates a compiler warning.
     #[allow(dead_code)]
-    pub(crate) fn return_readline(&self, rl: Editor<PumpkinCommandCompleter, FileHistory>) {
+    pub fn return_readline(&self, rl: Editor<PumpkinCommandCompleter, FileHistory>) {
         if let Ok(mut result) = self.readline.lock() {
             let _ = result.insert(rl);
         }
@@ -358,6 +358,10 @@ impl Highlighter for PumpkinCommandCompleter {
                 Cow::Owned(format!("\x1b[1;36m{cmd}\x1b[0m{args}"))
             },
         )
+    }
+
+    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
+        Cow::Owned(format!("\x1b[90m{hint}\x1b[0m"))
     }
 }
 impl Hinter for PumpkinCommandCompleter {

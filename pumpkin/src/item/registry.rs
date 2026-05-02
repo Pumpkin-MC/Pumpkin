@@ -26,10 +26,26 @@ impl ItemRegistry {
         }
     }
 
-    pub async fn on_use(&self, item: &Item, player: &Player) {
+    pub async fn on_use(&self, stack: &ItemStack, player: &Player) {
+        let item = stack.item;
+        let cooldown = stack.get_use_cooldown();
+        let cooldown_group = cooldown
+            .and_then(|c| c.cooldown_group.clone())
+            .unwrap_or_else(|| item.registry_key.to_string());
+
+        if player.is_on_cooldown(&cooldown_group).await {
+            return;
+        }
+
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item.normal_use(item, player).await;
+        }
+
+        if let Some(cooldown) = cooldown {
+            player
+                .start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32)
+                .await;
         }
     }
 
@@ -59,10 +75,26 @@ impl ItemRegistry {
         block: &Block,
         server: &Server,
     ) {
+        let cooldown = stack.get_use_cooldown().cloned();
+        let cooldown_group = cooldown
+            .as_ref()
+            .and_then(|c| c.cooldown_group.clone())
+            .unwrap_or_else(|| stack.item.registry_key.to_string());
+
+        if player.is_on_cooldown(&cooldown_group).await {
+            return;
+        }
+
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item
                 .use_on_block(stack, player, location, face, cursor_pos, block, server)
+                .await;
+        }
+
+        if let Some(cooldown) = cooldown {
+            player
+                .start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32)
                 .await;
         }
     }
@@ -73,9 +105,25 @@ impl ItemRegistry {
         player: &Player,
         entity: Arc<dyn EntityBase>,
     ) {
+        let cooldown = stack.get_use_cooldown().cloned();
+        let cooldown_group = cooldown
+            .as_ref()
+            .and_then(|c| c.cooldown_group.clone())
+            .unwrap_or_else(|| stack.item.registry_key.to_string());
+
+        if player.is_on_cooldown(&cooldown_group).await {
+            return;
+        }
+
         let pumpkin_item = self.get_pumpkin_item(stack.item.id);
         if let Some(pumpkin_item) = pumpkin_item {
             pumpkin_item.use_on_entity(stack, player, entity).await;
+        }
+
+        if let Some(cooldown) = cooldown {
+            player
+                .start_cooldown(cooldown_group, (cooldown.seconds * 20.0) as i32)
+                .await;
         }
     }
 

@@ -52,6 +52,8 @@ serde.workspace = true
 serde_repr.workspace = true
 serde_json.workspace = true
 
+colored.workspace = true
+
 bytes.workspace = true
 
 rand.workspace = true
