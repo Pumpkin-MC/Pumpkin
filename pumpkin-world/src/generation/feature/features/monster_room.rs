@@ -166,10 +166,8 @@ impl DungeonFeature {
                     chest_nbt.put_int("x", chest_pos.x);
                     chest_nbt.put_int("y", chest_pos.y);
                     chest_nbt.put_int("z", chest_pos.z);
-                    chest_nbt.put_string(
-                        "LootTable",
-                        "minecraft:chests/simple_dungeon".to_string(),
-                    );
+                    chest_nbt
+                        .put_string("LootTable", "minecraft:chests/simple_dungeon".to_string());
                     chest_nbt.put_long("LootTableSeed", loot_seed);
                     chunk.add_block_entity(&chest_pos, chest_nbt);
 

@@ -353,10 +353,7 @@ pub async fn fill_chest_inventory(
                         };
 
                     // Strip "minecraft:" prefix because from_registry_key uses short keys.
-                    let item_key = entry
-                        .item
-                        .strip_prefix("minecraft:")
-                        .unwrap_or(entry.item);
+                    let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
 
                     if let Some(item) = Item::from_registry_key(item_key) {
                         items_to_place.push(ItemStack::new(count as u8, item));
@@ -371,15 +368,80 @@ pub async fn fill_chest_inventory(
         return;
     }
 
-    // Shuffle items into random free slots.
+    // Count free slots in the inventory.
+    let free_slots = inv_size;
+
+    // Split large stacks across extra slots then shuffle.
+    shuffle_and_split_items(&mut items_to_place, free_slots, &mut rng);
+
+    // Pick random distinct slots and place each item.
     let mut available_slots: Vec<usize> = (0..inv_size).collect();
+    // Shuffle available slots using Fisher-Yates so item order from above maps to random slots.
+    for i in (1..available_slots.len()).rev() {
+        let j = rng.next_bounded_i32((i + 1) as i32) as usize;
+        available_slots.swap(i, j);
+    }
 
     for item in items_to_place {
         if available_slots.is_empty() {
             break;
         }
-        let idx = rng.next_bounded_i32(available_slots.len() as i32) as usize;
-        let slot = available_slots.swap_remove(idx);
+        let slot = available_slots.pop().unwrap();
         inventory.set_stack(slot, item).await;
+    }
+}
+
+/// Stacks with count > 1 are split at a random midpoint and redistributed while
+/// there are more free slots than total items. Then everything is shuffled.
+fn shuffle_and_split_items(
+    result: &mut Vec<ItemStack>,
+    available_slots: usize,
+    rng: &mut Xoroshiro,
+) {
+    use pumpkin_util::random::RandomImpl;
+
+    // Drain all items with count > 1 into a splittable list.
+    let mut splittable: Vec<ItemStack> = Vec::new();
+    let mut i = 0;
+    while i < result.len() {
+        if result[i].item_count > 1 {
+            splittable.push(result.swap_remove(i));
+        } else {
+            i += 1;
+        }
+    }
+
+    // While there are more free slots than total items, split a random stack.
+    while available_slots > result.len() + splittable.len() && !splittable.is_empty() {
+        let idx = rng.next_bounded_i32(splittable.len() as i32) as usize;
+        let mut stack = splittable.swap_remove(idx);
+
+        let count = stack.item_count as i32;
+        // Split off [1, count/2] items.
+        let split_off = 1 + rng.next_bounded_i32(count / 2);
+        stack.item_count = (count - split_off) as u8;
+        let mut copy = stack.clone();
+        copy.item_count = split_off as u8;
+
+        if stack.item_count > 1 {
+            splittable.push(stack);
+        } else {
+            result.push(stack);
+        }
+        if copy.item_count > 1 {
+            splittable.push(copy);
+        } else {
+            result.push(copy);
+        }
+    }
+
+    // Remaining unsplit multis go straight into result.
+    result.extend(splittable);
+
+    // Fisher-Yates shuffle with our RNG.
+    let n = result.len();
+    for i in (1..n).rev() {
+        let j = rng.next_bounded_i32((i + 1) as i32) as usize;
+        result.swap(i, j);
     }
 }

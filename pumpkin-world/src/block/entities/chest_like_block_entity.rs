@@ -293,8 +293,8 @@ macro_rules! impl_chest_helper_methods {
             #[must_use]
             pub fn new(position: pumpkin_util::math::position::BlockPos) -> Self {
                 use std::array::from_fn;
-                use std::sync::atomic::AtomicBool;
                 use std::sync::Mutex as StdMutex;
+                use std::sync::atomic::AtomicBool;
 
                 Self {
                     position,

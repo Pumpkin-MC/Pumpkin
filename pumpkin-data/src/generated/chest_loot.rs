@@ -1,5 +1,5 @@
 /* This file is generated. Do not edit manually. */
-use pumpkin_util::chest_loot_table::*;
+pub use pumpkin_util::chest_loot_table::*;
 static ABANDONED_MINESHAFT_POOL0_ENTRIES: &[ChestLootEntry] = &[
     ChestLootEntry {
         item: "minecraft:golden_apple",

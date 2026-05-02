@@ -133,7 +133,15 @@ impl StructurePieceBase for CorridorLeftTurnPiece {
             let chest_pos = p.offset_pos(3, 2, 3);
             if bb.contains_pos(&chest_pos) {
                 self.contains_chest = false;
-                p.add_chest(chunk, &bb, random, 3, 2, 3, "minecraft:chests/nether_bridge");
+                p.add_chest(
+                    chunk,
+                    &bb,
+                    random,
+                    3,
+                    2,
+                    3,
+                    "minecraft:chests/nether_bridge",
+                );
             }
         }
 

@@ -161,7 +161,7 @@ pub fn build() -> TokenStream {
     });
 
     quote! {
-        use pumpkin_util::chest_loot_table::*;
+        pub use pumpkin_util::chest_loot_table::*;
         #all_tokens
     }
 }

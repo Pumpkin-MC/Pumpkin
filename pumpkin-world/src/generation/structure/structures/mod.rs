@@ -410,6 +410,7 @@ impl StructurePiece {
     ///
     /// Returns `true` if the chest was placed (i.e., the position is within the bounding box),
     /// `false` otherwise.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_chest(
         &self,
         chunk: &mut ProtoChunk,
@@ -427,7 +428,12 @@ impl StructurePiece {
             return false;
         }
 
-        chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, Block::CHEST.default_state);
+        chunk.set_block_state(
+            world_pos.x,
+            world_pos.y,
+            world_pos.z,
+            Block::CHEST.default_state,
+        );
 
         let mut nbt = NbtCompound::new();
         nbt.put_string("id", "minecraft:chest".to_string());
