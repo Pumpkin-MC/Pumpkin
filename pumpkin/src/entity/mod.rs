@@ -2694,7 +2694,7 @@ impl NBTStorage for Entity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             let position = self.pos.load();
-            nbt.put_string(&format!("minecraft:{}", self.entity_type.resource_name));
+            nbt.put_string(self.entity_type.resource_name);
             nbt.put_uuid(&self.entity_uuid);
 
             // Pos

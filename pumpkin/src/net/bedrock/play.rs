@@ -14,6 +14,7 @@ use pumpkin_protocol::{
             player_action::{Action as PlayerAction, SPlayerAction},
             player_auth_input::{InputData, SPlayerAuthInput},
             request_chunk_radius::SRequestChunkRadius,
+            set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             text::SText,
         },
     },
@@ -73,13 +74,24 @@ impl BedrockClient {
             old_vd
         };
 
-        if old_view_distance.get() != view_distance as u8 {
-            debug!(
-                "Player {} updated their render distance: {} -> {}.",
-                player.gameprofile.name, old_view_distance, view_distance
-            );
-            chunker::update_position(player).await;
-        }
+        debug!(
+            "Player {} updated their render distance: {} -> {}.",
+            player.gameprofile.name, old_view_distance, view_distance
+        );
+        chunker::update_position(player).await;
+    }
+
+    pub fn handle_set_local_player_as_initialized(
+        &self,
+        player: &Arc<Player>,
+        packet: &SSetLocalPlayerAsInitialized,
+    ) {
+        debug!(
+            "Player {} initialized (Runtime ID: {})",
+            player.gameprofile.name, packet.runtime_entity_id.0
+        );
+        // This is sent when the client has finished loading and rendering the world.
+        player.set_client_loaded(true);
     }
 
     pub async fn player_pos_update(

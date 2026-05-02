@@ -2203,6 +2203,16 @@ impl EntityBase for LivingEntity {
                                 item_lock.decrement_unless_creative(player.gamemode.load(), 1);
                             }
                         }
+
+                        if let Some(cooldown) = item.get_use_cooldown() {
+                            let group = cooldown
+                                .cooldown_group
+                                .clone()
+                                .unwrap_or_else(|| item.item.registry_key.to_string());
+                            player
+                                .start_cooldown(group, (cooldown.seconds * 20.0) as i32)
+                                .await;
+                        }
                     }
 
                     self.clear_active_hand().await;
