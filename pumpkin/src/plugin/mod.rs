@@ -466,6 +466,41 @@ impl PluginManager {
         Ok(sorted)
     }
 
+    /// Drain commands and event handlers queued by the plugin during `on_load`.
+    ///
+    /// All `HashMap` work is done here, inside the server binary, so that hashbrown
+    /// uses the correct `Group::static_empty()` sentinel (see [`Context`] for details).
+    async fn flush_pending_registrations(
+        context: &Arc<Context>,
+        handlers: &Arc<RwLock<HandlerMap>>,
+    ) {
+        let pending_cmds = std::mem::take(
+            &mut *context
+                .pending_commands
+                .lock()
+                .expect("pending_commands poisoned"),
+        );
+        if !pending_cmds.is_empty() {
+            let mut dispatcher = context.server.command_dispatcher.write().await;
+            for (tree, perm) in pending_cmds {
+                dispatcher.fallback_dispatcher.register(tree, perm);
+            }
+        }
+
+        let pending_hdls = std::mem::take(
+            &mut *context
+                .pending_handlers
+                .lock()
+                .expect("pending_handlers poisoned"),
+        );
+        if !pending_hdls.is_empty() {
+            let mut map = handlers.write().await;
+            for (name, boxed) in pending_hdls {
+                map.entry(name).or_default().push(boxed);
+            }
+        }
+    }
+
     /// Spawn initialization for a single plugin
     #[expect(clippy::too_many_lines)]
     async fn spawn_plugin_initialization(
@@ -531,6 +566,8 @@ impl PluginManager {
             // Initialize the plugin
             match instance.on_load(context.clone()).await {
                 Ok(()) => {
+                    Self::flush_pending_registrations(&context, &self_ref_clone.handlers).await;
+
                     // Update plugin state to loaded
                     {
                         let mut plugins = self_ref_clone.plugins.write().await;
