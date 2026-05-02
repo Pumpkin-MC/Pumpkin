@@ -1,6 +1,6 @@
 use crate::entity::mob::zombie::ZombieEntityBase;
-use crate::entity::mob::{Mob, MobEntity, SunSensitive};
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage};
+use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::{Entity, NBTStorage};
 use std::sync::Arc;
 
 pub struct ZombieVillagerEntity {
@@ -21,10 +21,4 @@ impl Mob for ZombieVillagerEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity.mob_entity
     }
-
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        self.sun_sensitive_tick()
-    }
 }
-
-impl SunSensitive for ZombieVillagerEntity {}
