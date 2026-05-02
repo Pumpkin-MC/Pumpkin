@@ -90,6 +90,10 @@ interface player {
         get-display-name: func () -> text-component;
         /// Sets the player's display name.
         set-display-name: func (display-name: text-component);
+        /// Gets the player's custom tab list name.
+        get-tab-list-name: func () -> option<text-component>;
+        /// Sets the player's custom tab list name.
+        set-tab-list-name: func (name: option<text-component>);
 
         // Messaging & titles
 

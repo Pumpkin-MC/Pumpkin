@@ -472,6 +472,7 @@ pub struct Player {
     pub tab_list_header: Mutex<TextComponent>,
     pub tab_list_footer: Mutex<TextComponent>,
     pub display_name: Mutex<Option<TextComponent>>,
+    pub tab_list_name: Mutex<Option<TextComponent>>,
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
@@ -606,6 +607,7 @@ impl Player {
             tab_list_header: Mutex::new(TextComponent::text("")),
             tab_list_footer: Mutex::new(TextComponent::text("")),
             display_name: Mutex::new(None),
+            tab_list_name: Mutex::new(None),
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(false),
@@ -668,6 +670,24 @@ impl Player {
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: self.gameprofile.id,
                     actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
+                }],
+            ))
+            .await;
+    }
+
+    pub async fn get_tab_list_name(&self) -> Option<TextComponent> {
+        self.tab_list_name.lock().await.clone()
+    }
+
+    pub async fn set_tab_list_name(&self, name: Option<TextComponent>) {
+        *self.tab_list_name.lock().await = name.clone();
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::UpdateDisplayName(name.as_ref())],
                 }],
             ))
             .await;
