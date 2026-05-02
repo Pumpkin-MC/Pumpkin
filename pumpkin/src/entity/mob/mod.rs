@@ -335,6 +335,10 @@ pub trait Mob: EntityBase + Send + Sync {
     fn is_sitting(&self) -> bool {
         false
     }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        self.get_entity().entity_type.experience_reward
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn tick<'a>(
@@ -510,6 +514,23 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_y_velocity_drag(&self) -> Option<f64> {
         self.get_mob_y_velocity_drag()
+    }
+
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        if self
+            .get_entity()
+            .age
+            .load(std::sync::atomic::Ordering::Relaxed)
+            < 0
+        {
+            return 0;
+        }
+        // TODO: apply enchantment processing like in vanilla
+        Mob::get_base_experience_reward(self)
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        Mob::get_base_experience_reward(self)
     }
 }
 

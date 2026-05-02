@@ -6,7 +6,7 @@ use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
     DeathProtection, Enchantments, Equippable, FireworkExplosion, Fireworks, Food, ItemModel,
     ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents, StoredEnchantments, Tool,
-    Unbreakable, Weapon,
+    Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
 use crate::entity_type::EntityType;
@@ -68,6 +68,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
         StoredEnchantments => Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn()),
+        UseCooldown => Some(UseCooldownImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -720,8 +721,61 @@ impl Hash for ConsumableImpl {
 }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct UseRemainderImpl;
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct UseCooldownImpl;
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UseCooldownImpl {
+    pub seconds: f32,
+    pub cooldown_group: Option<String>,
+}
+
+impl UseCooldownImpl {
+    pub fn new(seconds: f32, cooldown_group: Option<String>) -> Self {
+        Self {
+            seconds,
+            cooldown_group,
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let seconds = compound.get_float("seconds")?;
+        let cooldown_group = compound.get_string("cooldown_group").map(|s| s.to_string());
+        Some(Self {
+            seconds,
+            cooldown_group,
+        })
+    }
+}
+
+impl DataComponentImpl for UseCooldownImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_float("seconds", self.seconds);
+        if let Some(group) = &self.cooldown_group {
+            compound.put_string("cooldown_group", group.clone());
+        }
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&get_f32_hash(self.seconds).to_le_bytes());
+        if let Some(group) = &self.cooldown_group {
+            digest.update(&get_str_hash(group).to_le_bytes());
+        }
+        digest.finalize() as i32
+    }
+
+    default_impl!(UseCooldown);
+}
+
+impl Eq for UseCooldownImpl {}
+
+impl Hash for UseCooldownImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.seconds.to_bits().hash(state);
+        self.cooldown_group.hash(state);
+    }
+}
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum DamageResistantType {
     /// Damage always dealt to ender dragons
