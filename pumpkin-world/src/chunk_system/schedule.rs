@@ -965,7 +965,7 @@ impl GenerationSchedule {
                 break;
             }
 
-            // 1. Get latest world state (player moves, etc)
+            // 1. Get latest world state (player moves, etc.)
             self.resort_work(self.send_level.get());
 
             // 2. Process all pending chunk results from workers
@@ -1309,7 +1309,8 @@ impl GenerationSchedule {
 mod tests {
     use super::*;
     use crate::chunk_system::dag::{Edge, Node};
-    use std::sync::{Arc, Condvar, Mutex};
+    use std::sync::{Arc, Mutex};
+    use tokio::sync::Notify;
 
     fn test_schedule() -> GenerationSchedule {
         let (send_chunk, recv_chunk) = crossfire::compat::mpmc::unbounded_blocking();
@@ -1327,7 +1328,7 @@ mod tests {
             chunk_map: HashMap::new(),
             unload_chunks: HashSetType::default(),
             waiting_for_chunks: HashSetType::default(),
-            io_lock: Arc::new((Mutex::new(HashMapType::default()), Condvar::new())),
+            io_lock: Arc::new((Mutex::new(HashMapType::default()), Notify::new())),
             running_task_count: 0,
             max_in_flight: 1,
             queue_dirty: false,

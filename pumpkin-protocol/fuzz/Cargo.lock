@@ -2297,6 +2297,7 @@ dependencies = [
  "base64",
  "bitflags 2.11.1",
  "bytes",
+ "colored",
  "crossbeam",
  "dashmap",
  "flate2",
