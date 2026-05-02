@@ -46,6 +46,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockDirection, BlockState, translation};
 use pumpkin_inventory::InventoryError;
+use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
 use pumpkin_macros::send_cancellable;
@@ -62,8 +63,8 @@ use pumpkin_protocol::java::server::play::{
     SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest,
     SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-    SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
+    SRecipeBookSeenRecipe, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
@@ -2764,5 +2765,18 @@ impl JavaClient {
     pub async fn send_sign_packet(&self, block_position: BlockPos, is_front_text: bool) {
         self.enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
             .await;
+    }
+
+    pub async fn handle_select_trade(&self, player: &Arc<Player>, packet: SSelectTrade) {
+        let screen_handler = player.current_screen_handler.lock().await;
+        let mut screen_handler = screen_handler.lock().await;
+        if let Some(merchant) = screen_handler
+            .as_any_mut()
+            .downcast_mut::<MerchantScreenHandler>()
+        {
+            merchant
+                .set_selected_offer(packet.selected_slot.0 as usize)
+                .await;
+        }
     }
 }

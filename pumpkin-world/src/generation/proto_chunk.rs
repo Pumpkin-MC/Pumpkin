@@ -168,6 +168,7 @@ pub struct ProtoChunk {
     bottom_y: i8,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
+    pub carving_mask: crate::generation::carver::mask::CarvingMask,
     /// Block entities pending creation when the chunk is finalized.
     /// These are created from structure templates during world generation.
     pub pending_block_entities: Vec<NbtCompound>,
@@ -246,6 +247,10 @@ impl ProtoChunk {
                     .map(|_| LightContainer::new_empty(0))
                     .collect(),
             },
+            carving_mask: crate::generation::carver::mask::CarvingMask::new(
+                height as i32,
+                dimension.min_y,
+            ),
             pending_block_entities: Vec::new(),
         }
     }
@@ -628,6 +633,14 @@ impl ProtoChunk {
 
         self.build_surface(generator, &mut surface_height_estimate_sampler);
         self.stage = StagedChunkEnum::Surface;
+    }
+
+    pub fn step_to_carvers(&mut self, generator: &super::generator::VanillaGenerator) {
+        debug_assert_eq!(self.stage, StagedChunkEnum::Surface);
+
+        super::carver::carve(self, generator);
+
+        self.stage = StagedChunkEnum::Carvers;
     }
 
     pub fn populate_biomes(

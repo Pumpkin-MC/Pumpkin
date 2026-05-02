@@ -4,7 +4,7 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    ConsumableImpl, ConsumeAnimation, ConsumeEffect, DamageImpl, DataComponentImpl,
+    ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomNameImpl, DamageImpl, DataComponentImpl,
     EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape,
     FireworksImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl,
     SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, get,
@@ -343,6 +343,19 @@ impl DataComponentCodec<Self> for ItemModelImpl {
             .next_element::<String>()?
             .ok_or(de::Error::custom("No ItemModelImpl id string!"))?;
         Ok(Self { id })
+    }
+}
+
+impl DataComponentCodec<Self> for CustomNameImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<String>("", &self.name)
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let name = seq
+            .next_element::<String>()?
+            .ok_or(de::Error::custom("No CustomNameImpl name string!"))?;
+        Ok(Self { name })
     }
 }
 
@@ -820,6 +833,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::CustomName => Ok(CustomNameImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
@@ -840,6 +854,7 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
         DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
         DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
+        DataComponent::CustomName => get::<CustomNameImpl>(value).serialize(seq),
         DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),

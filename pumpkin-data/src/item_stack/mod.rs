@@ -288,6 +288,20 @@ impl ItemStack {
         self.item_count == 0 || self.item.id == Item::AIR.id
     }
 
+    pub fn set_custom_name(&mut self, name: String) {
+        use crate::data_component_impl::CustomNameImpl;
+        let component = Some(CustomNameImpl { name }.to_dyn());
+        if let Some(pos) = self
+            .patch
+            .iter()
+            .position(|(id, _)| *id == DataComponent::CustomName)
+        {
+            self.patch[pos].1 = component;
+        } else {
+            self.patch.push((DataComponent::CustomName, component));
+        }
+    }
+
     #[must_use]
     pub fn split(&mut self, amount: u8) -> Self {
         let min = amount.min(self.item_count);

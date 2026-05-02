@@ -30,6 +30,7 @@
 //! [`PlayerInventory`]: PlayerInventory
 //! [`SyncHandler`]: sync_handler::SyncHandler
 
+pub mod anvil;
 pub mod brewing;
 pub mod container_click;
 pub mod crafting;
@@ -40,6 +41,7 @@ mod error;
 pub mod furnace_like;
 pub mod generic_container_screen_handler;
 pub mod gui_builder;
+pub mod merchant;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;

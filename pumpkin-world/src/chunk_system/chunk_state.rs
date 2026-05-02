@@ -25,8 +25,10 @@ pub enum StagedChunkEnum {
     StructureReferences,
     /// Chunk with terrain noise generated, ready for surface building
     Noise,
-    /// Chunk with surface built, ready for features and structures
-    Surface, // SURFACE CARVERS
+    /// Chunk with surface built, ready for carvers
+    Surface,
+    /// Chunk with carvers applied, ready for features and structures
+    Carvers,
     /// Chunk with features and structures, ready for lighting
     Features, // FEATURES SPAWN
     /// Chunk with lighting calculated, ready for finalization
@@ -44,9 +46,10 @@ impl From<u8> for StagedChunkEnum {
             4 => Self::StructureReferences,
             5 => Self::Noise,
             6 => Self::Surface,
-            7 => Self::Features,
-            8 => Self::Lighting,
-            9 => Self::Full,
+            7 => Self::Carvers,
+            8 => Self::Features,
+            9 => Self::Lighting,
+            10 => Self::Full,
             _ => panic!(),
         }
     }
@@ -61,7 +64,7 @@ impl From<ChunkStatus> for StagedChunkEnum {
             ChunkStatus::Biomes => Self::Biomes,
             ChunkStatus::Noise => Self::Noise,
             ChunkStatus::Surface => Self::Surface,
-            ChunkStatus::Carvers => Self::Surface,
+            ChunkStatus::Carvers => Self::Carvers,
             ChunkStatus::Features => Self::Features,
             ChunkStatus::Spawn => Self::Features,
             ChunkStatus::InitializeLight => Self::Lighting,
@@ -80,6 +83,7 @@ impl From<StagedChunkEnum> for ChunkStatus {
             StagedChunkEnum::Biomes => Self::Biomes,
             StagedChunkEnum::Noise => Self::Noise,
             StagedChunkEnum::Surface => Self::Surface,
+            StagedChunkEnum::Carvers => Self::Carvers,
             StagedChunkEnum::Features => Self::Features,
             StagedChunkEnum::Lighting => Self::Light,
             StagedChunkEnum::Full => Self::Full,
@@ -98,17 +102,24 @@ impl StagedChunkEnum {
         } else if level <= 45 {
             Self::Features
         } else if level <= 46 {
+            Self::Carvers
+        } else if level <= 47 {
             Self::Surface
         } else {
             Self::None
         }
     }
 
-    /// Total number of state values (0 = None … 9 = Full).
+    /// Total number of state values (0 = None … 10 = Full).
     pub const COUNT: usize = Self::Full as usize + 1;
-    pub const FULL_DEPENDENCIES: &'static [Self] =
-        &[Self::Full, Self::Lighting, Self::Features, Self::Surface];
-    pub const FULL_RADIUS: i32 = 3;
+    pub const FULL_DEPENDENCIES: &'static [Self] = &[
+        Self::Full,
+        Self::Lighting,
+        Self::Features,
+        Self::Carvers,
+        Self::Surface,
+    ];
+    pub const FULL_RADIUS: i32 = 4;
     #[must_use]
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
@@ -119,6 +130,7 @@ impl StagedChunkEnum {
             Self::Biomes => 0,
             Self::Noise => 0,
             Self::Surface => 0,
+            Self::Carvers => 0,
             Self::Features => 1,
             Self::Lighting => 1,
             Self::Full => 1,
@@ -135,6 +147,7 @@ impl StagedChunkEnum {
             Self::Biomes => 0,
             Self::Noise => 0,
             Self::Surface => 0,
+            Self::Carvers => 0,
             Self::Features => 1,
             Self::Lighting => 1,
             Self::Full => 0,
@@ -161,7 +174,8 @@ impl StagedChunkEnum {
             ],
             Self::Noise => &[Self::StructureReferences],
             Self::Surface => &[Self::Noise],
-            Self::Features => &[Self::Surface, Self::Surface],
+            Self::Carvers => &[Self::Surface],
+            Self::Features => &[Self::Carvers, Self::Carvers],
             Self::Lighting => &[Self::Features, Self::Features],
             Self::Full => &[Self::Lighting, Self::Lighting],
             _ => panic!(),
@@ -179,7 +193,7 @@ impl Chunk {
     pub fn get_stage_id(&self) -> u8 {
         match self {
             Self::Proto(data) => data.stage_id(),
-            Self::Level(_) => 9,
+            Self::Level(_) => StagedChunkEnum::Full as u8,
         }
     }
     pub fn get_proto_chunk_mut(&mut self) -> &mut ProtoChunk {
