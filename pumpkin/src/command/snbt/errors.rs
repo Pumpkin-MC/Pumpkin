@@ -125,9 +125,14 @@ impl SnbtErrors {
     ) {
         let current = self.cursor;
         let new = reader.cursor();
+        let error = error();
+
+        println!("{}", reader.string());
+        println!("{}^", " ".repeat(new));
+        println!("ERROR {} {:?}", error.translation_key, error.arguments);
 
         if self.command_error.is_none() || new > current {
-            self.command_error = Some(error());
+            self.command_error = Some(error);
             self.cursor = new;
             self.suggestions.clear();
             suggestions(&mut self.suggestions);

@@ -261,10 +261,51 @@ fn quoted_string_literals() {
         []
     );
 
-    /* TODO when \N is implemented
     assert_parse_ok!(
-        "'\\uD83C\\uDF83 or \\U0001F383 or \\N{JACK-O-LANTERN}'",
-        NbtTag::String("🎃 🎃 🎃".to_string())
+        "'\\uD83C\\uDF83 or \\U0001F383'",
+        NbtTag::String("🎃 or 🎃".to_string())
     );
-     */
+
+    // TODO: make tests for when \N is implemented
+}
+
+#[test]
+fn unquoted_string_literals() {
+    assert_parse_ok!("abc", NbtTag::String("abc".to_string()));
+    assert_parse_ok!(
+        "abc-def_ghi+jkl.mno",
+        NbtTag::String("abc-def_ghi+jkl.mno".to_string())
+    );
+    assert_parse_ok!("_1234", NbtTag::String("_1234".to_string()));
+    assert_parse_ok!("x+1", NbtTag::String("x+1".to_string()));
+    assert_parse_ok_but_trailing!("x*1", "*1");
+
+    assert_parse_ok!("true", NbtTag::Byte(1));
+    assert_parse_ok!("false", NbtTag::Byte(0));
+    assert_parse_ok!("maybe", NbtTag::String("maybe".to_string()));
+    assert_parse_ok!("bool", NbtTag::String("bool".to_string()));
+}
+
+#[test]
+fn operation() {
+    assert_parse_ok!("bool( true)", NbtTag::Byte(1));
+    assert_parse_ok!("bool (false )", NbtTag::Byte(0));
+
+    assert_parse_ok!("bool(0)", NbtTag::Byte(0));
+    assert_parse_ok!("bool( 1 )", NbtTag::Byte(1));
+    assert_parse_ok!("bool (2.5  )", NbtTag::Byte(1));
+    assert_parse_ok!("bool ( -4.3412e+12  )", NbtTag::Byte(0));
+
+    assert_parse_err!("bool(", "Expected a valid unquoted string", 5, [")"]);
+    assert_parse_err!("bool()", "No such operation: bool/0", 6, []);
+    assert_parse_err!("bool(1, 2)", "No such operation: bool/2", 10, []);
+    assert_parse_err!(
+        "bool (1,2,3",
+        "Expected literal .",
+        11,
+        [
+            ")", ",", ".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S",
+            "u", "U"
+        ]
+    );
 }

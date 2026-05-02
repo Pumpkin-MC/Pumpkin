@@ -294,18 +294,27 @@ impl SnbtParser<'_, '_> {
 
         loop {
             if !first {
-                self.parse_or_revert(|parser| {
+                let parse_comma = self.parse_or_revert(|parser| {
                     parser.reader.skip_whitespace();
-                    if parser.reader.read() == Some(',') {
+                    if parser.reader.peek() == Some(',') {
+                        parser.reader.skip();
                         Some(())
                     } else {
                         parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ",", &[","]);
                         None
                     }
-                })?;
+                });
+                if parse_comma.is_none() {
+                    break;
+                }
             }
 
-            elements.push(self.parse_or_revert(&rule)?);
+            if let Some(parsed) = self.parse_or_revert(&rule) {
+                elements.push(parsed);
+            } else {
+                break;
+            }
+
             first = false;
         }
 

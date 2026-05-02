@@ -591,17 +591,22 @@ impl SnbtParser<'_, '_> {
 
     fn unquoted_string_or_built_in(&mut self) -> Option<NbtTag> {
         let literal = self.unquoted_string_literal()?;
-        let arguments = self.parse_or_revert(|parser| {
+        // Trying to match the same behaviour of storing arguments
+        // in the scope even if the right bracket failed to parse:
+        let mut arguments = None;
+
+        let _ = self.parse_or_revert(|parser| {
             parser.reader.skip_whitespace();
             if parser.reader.peek() != Some('(') {
                 parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "(", &["("]);
                 return None;
             }
             parser.reader.skip();
-            let arguments = parser.arguments()?;
+            arguments = Some(parser.arguments()?);
+            parser.reader.skip_whitespace();
             if parser.reader.peek() == Some(')') {
                 parser.reader.skip();
-                Some(arguments)
+                Some(())
             } else {
                 parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, ")", &[")"]);
                 None
@@ -618,10 +623,11 @@ impl SnbtParser<'_, '_> {
         }
 
         if let Some(arguments) = arguments {
-            if let Some(operation) = SnbtOperations::search(&literal, arguments.len()) {
+            let count = arguments.len();
+            if let Some(operation) = SnbtOperations::search(&literal, count) {
                 operation(self, &arguments[..])
             } else {
-                self.store_dynamic_error(&NO_SUCH_OPERATION, literal);
+                self.store_dynamic_error(&NO_SUCH_OPERATION, format!("{literal}/{count}"));
                 None
             }
         } else if literal.eq_ignore_ascii_case("true") {
@@ -672,6 +678,7 @@ impl SnbtParser<'_, '_> {
             }
             parser.reader.skip();
             let entries = parser.map_entries()?;
+            parser.reader.skip_whitespace();
             if parser.reader.peek() != Some('}') {
                 parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "}", &["}"]);
                 return None;
@@ -736,7 +743,7 @@ impl SnbtParser<'_, '_> {
                 if parser.reader.peek() == Some(';') {
                     parser.reader.skip();
                     let entries = parser.int_array_entries()?;
-
+                    parser.reader.skip_whitespace();
                     if parser.reader.peek() != Some(']') {
                         parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "]", &["]"]);
                         return None;
@@ -753,6 +760,7 @@ impl SnbtParser<'_, '_> {
             } else {
                 let entries = parser.list_entries()?;
 
+                parser.reader.skip_whitespace();
                 if parser.reader.peek() != Some(']') {
                     parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "]", &["]"]);
                     return None;
