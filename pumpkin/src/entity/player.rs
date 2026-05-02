@@ -2663,9 +2663,11 @@ impl Player {
         if keep_progress {
             // Get our current level
             let current_level = self.experience_level.load(Ordering::Relaxed);
-            let current_max_points = experience::points_in_level(current_level);
+            // Negative levels can produce non-positive points_in_level results; clamp inputs to keep
+            // the scale finite and positive.
+            let current_max_points = experience::points_in_level(current_level.max(0)).max(1);
             // Calculate the max value for the new level
-            let new_max_points = experience::points_in_level(new_level);
+            let new_max_points = experience::points_in_level(new_level.max(0)).max(1);
             // Calculate the scaling factor
             let scale = new_max_points as f32 / current_max_points as f32;
             // Scale the points (Vanilla doesn't seem to recalculate progress so we won't)
@@ -2762,7 +2764,7 @@ impl Player {
     /// Add experience levels to the player.
     pub async fn add_experience_levels(&self, added_levels: i32) {
         let current_level = self.experience_level.load(Ordering::Relaxed);
-        let new_level = current_level + added_levels;
+        let new_level = current_level.saturating_add(added_levels);
         self.set_experience_level(new_level, true).await;
     }
 
@@ -2797,9 +2799,9 @@ impl Player {
 
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
-        let total_exp = experience::points_to_level(current_level) + current_points;
-        let new_total_exp = total_exp + added_points;
-        let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
+        let total_exp = experience::points_to_level(current_level).saturating_add(current_points);
+        let new_total_exp = total_exp.saturating_add(added_points);
+        let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp.max(0));
         let progress = experience::progress_in_level(new_points, new_level);
         self.set_experience(new_level, progress, new_points).await;
     }

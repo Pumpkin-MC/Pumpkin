@@ -40,12 +40,21 @@ pub const fn points_in_level(level: i32) -> i32 {
 #[must_use]
 pub fn points_to_level(level: i32) -> i32 {
     match level {
-        0..=16 => level * level + 6 * level,
+        ..=-1 => 0,
+        0..=16 => level
+            .saturating_mul(level)
+            .saturating_add(level.saturating_mul(6)),
         17..=31 => {
-            (2.5f64.mul_add(f64::from(level * level), -(40.5 * f64::from(level))) + 360.0) as i32
+            (2.5f64.mul_add(
+                f64::from(level) * f64::from(level),
+                -(40.5 * f64::from(level)),
+            ) + 360.0) as i32
         }
         _ => {
-            (4.5f64.mul_add(f64::from(level * level), -(162.5 * f64::from(level))) + 2220.0) as i32
+            (4.5f64.mul_add(
+                f64::from(level) * f64::from(level),
+                -(162.5 * f64::from(level)),
+            ) + 2220.0) as i32
         }
     }
 }
@@ -69,7 +78,7 @@ pub fn total_to_level_and_points(total_points: i32) -> (i32, i32) {
         }
     };
     let level_start = points_to_level(level);
-    let points_into_level = total_points - level_start;
+    let points_into_level = total_points.saturating_sub(level_start);
 
     (level, points_into_level)
 }
