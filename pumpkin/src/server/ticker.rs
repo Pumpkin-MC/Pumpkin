@@ -1,6 +1,4 @@
-use crate::{
-    STOP_INTERRUPT, plugin::server::server_tick_end::ServerTickEndEvent, server::Server,
-};
+use crate::{STOP_INTERRUPT, plugin::server::server_tick_end::ServerTickEndEvent, server::Server};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
