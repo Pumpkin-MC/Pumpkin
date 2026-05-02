@@ -3,10 +3,15 @@ use crate::plugin::{
         state::PluginHostState,
         wit::v0_1::{
             events::{ToFromWasmEvent, consume_text_component},
-            pumpkin::plugin::event::{Event, ServerBroadcastEventData, ServerCommandEventData},
+            pumpkin::plugin::event::{
+                Event, ServerBroadcastEventData, ServerCommandEventData, ServerTickEndEventData,
+            },
         },
     },
-    server::{server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent},
+    server::{
+        server_broadcast::ServerBroadcastEvent, server_command::ServerCommandEvent,
+        server_tick_end::ServerTickEndEvent,
+    },
 };
 
 impl ToFromWasmEvent for ServerCommandEvent {
@@ -50,6 +55,25 @@ impl ToFromWasmEvent for ServerBroadcastEvent {
                 message: consume_text_component(state, &data.message),
                 sender: consume_text_component(state, &data.sender),
                 cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for ServerTickEndEvent {
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Event {
+        Event::ServerTickEndEvent(ServerTickEndEventData {
+            tick: self.tick,
+            duration_nanos: self.duration_nanos,
+        })
+    }
+
+    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
+        match event {
+            Event::ServerTickEndEvent(data) => Self {
+                tick: data.tick,
+                duration_nanos: data.duration_nanos,
             },
             _ => panic!("unexpected event type"),
         }
