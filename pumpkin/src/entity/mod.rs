@@ -848,13 +848,13 @@ impl Entity {
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
-        self.on_ground.store(false, Ordering::SeqCst);
-        self.supporting_block_pos.store(None);
-        self.horizontal_collision.store(false, Ordering::SeqCst);
-
         if movement.length_squared() == 0.0 {
             return movement;
         }
+
+        self.on_ground.store(false, Ordering::SeqCst);
+        self.supporting_block_pos.store(None);
+        self.horizontal_collision.store(false, Ordering::SeqCst);
 
         let bounding_box = self.bounding_box.load();
 
@@ -2740,6 +2740,7 @@ impl NBTStorage for Entity {
             let z = nbt.get_f64().unwrap_or(0.0);
             let pos = Vector3::new(x, y, z);
             self.set_pos(pos);
+            self.last_sent_pos.store(pos);
             self.first_loaded_chunk_position.store(Some(pos.to_i32()));
             let vx = nbt.get_f64().unwrap_or(0.0);
             let vy = nbt.get_f64().unwrap_or(0.0);
@@ -2748,7 +2749,12 @@ impl NBTStorage for Entity {
             let yaw = nbt.get_f32().unwrap_or(0.0);
             let pitch = nbt.get_f32().unwrap_or(0.0);
             self.set_rotation(yaw, pitch);
+            let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            self.last_sent_yaw.store(yaw_byte, Relaxed);
+            self.last_sent_pitch.store(pitch_byte, Relaxed);
             self.head_yaw.store(yaw);
+            self.last_sent_head_yaw.store(yaw_byte, Relaxed);
             self.fire_ticks
                 .store(i32::from(nbt.get_short().unwrap_or(0)), Relaxed);
             self.on_ground

@@ -3188,6 +3188,31 @@ impl World {
         self.remove_entity_data(base_entity).await;
     }
 
+    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
+        let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
+        let mut entities_to_remove = Vec::new();
+
+        self.entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.retain(|entity| {
+                let base_entity = entity.get_entity();
+                let pos = base_entity.chunk_pos.load();
+                if chunks_set.contains(&pos) {
+                    entities_to_remove.push(entity.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+            new_entities
+        });
+
+        for entity in entities_to_remove {
+            self.spawn_state.load().remove_entity(self, entity.as_ref());
+            self.remove_entity_data(entity.get_entity()).await;
+        }
+    }
+
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {
         let chunk_pos = location.chunk_position(); // pumpkin's BlockPos already has this method
         self.broadcast_to_chunk_except(

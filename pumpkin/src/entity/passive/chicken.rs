@@ -11,7 +11,7 @@ use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -20,6 +20,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+use pumpkin_nbt::pnbt::PNbtCompound;
 
 const TEMPT_ITEMS: &[&Item] = &[
     &Item::WHEAT_SEEDS,
@@ -72,7 +73,22 @@ impl ChickenEntity {
     }
 }
 
-impl NBTStorage for ChickenEntity {}
+impl NBTStorage for ChickenEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_int(self.egg_lay_time.load(Ordering::Relaxed));
+        })
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            self.egg_lay_time
+                .store(nbt.get_int().unwrap_or(6000), Ordering::Relaxed);
+        })
+    }
+}
 
 impl Mob for ChickenEntity {
     fn get_mob_entity(&self) -> &MobEntity {

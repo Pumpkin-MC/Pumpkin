@@ -108,10 +108,15 @@ pub async fn update_position(player: &Arc<Player>) {
         .level
         .mark_chunks_as_newly_watched(&loading_chunks)
         .await;
-    world
+    let chunks_to_clean = world
         .level
         .mark_chunks_as_not_watched(&unloading_chunks)
         .await;
+
+    if !chunks_to_clean.is_empty() {
+        world.level.clean_entity_chunks(&chunks_to_clean);
+        world.remove_entities_in_chunks(&chunks_to_clean).await;
+    }
 
     if !loading_chunks.is_empty() {
         world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
