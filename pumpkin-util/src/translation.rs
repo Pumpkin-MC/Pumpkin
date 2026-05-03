@@ -32,6 +32,7 @@ static PUMPKIN_SQ_AL_JSON: &str = include_str!("../../assets/translations/sq_al.
 static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../assets/translations/zh_cn.json");
 static PUMPKIN_ZH_HK_JSON: &str = include_str!("../../assets/translations/zh_hk.json");
 static PUMPKIN_ZH_TW_JSON: &str = include_str!("../../assets/translations/zh_tw.json");
+static PUMPKIN_LZH_JSON: &str = include_str!("../../assets/translations/lzh.json");
 static PUMPKIN_TR_TR_JSON: &str = include_str!("../../assets/translations/tr_tr.json");
 static PUMPKIN_UK_UA_JSON: &str = include_str!("../../assets/translations/uk_ua.json");
 static PUMPKIN_VI_VN_JSON: &str = include_str!("../../assets/translations/vi_vn.json");
@@ -305,6 +306,8 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
             serde_json::from_str(PUMPKIN_ZH_HK_JSON).expect("Could not parse zh_hk.json.");
         let pumpkin_zh_tw: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_ZH_TW_JSON).expect("Could not parse zh_tw.json.");
+        let pumpkin_lzh: HashMap<String, String> =
+            serde_json::from_str(PUMPKIN_LZH_JSON).expect("Could not parse lzh.json.");
         let pumpkin_tr_tr: HashMap<String, String> =
             serde_json::from_str(PUMPKIN_TR_TR_JSON).expect("Could not parse tr_tr.json.");
         let pumpkin_uk_ua: HashMap<String, String> =
@@ -369,6 +372,9 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         }
         for (key, value) in pumpkin_zh_tw {
             array[Locale::ZhTw as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_lzh {
+            array[Locale::Lzh as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_tr_tr {
             array[Locale::TrTr as usize].insert(format!("pumpkin:{key}"), value);
