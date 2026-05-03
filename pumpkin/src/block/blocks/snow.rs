@@ -1,4 +1,5 @@
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::tag::Item::MINECRAFT_LEAVES;
 use pumpkin_data::{Block, BlockDirection, block_properties::SnowLikeProperties, item::Item};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -102,6 +103,11 @@ impl BlockBehaviour for LayeredSnowBlock {
 }
 
 async fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool {
-    let state = block_accessor.get_block_state(&position.down()).await;
+    let (block, state) = block_accessor.get_block_and_state(&position.down()).await;
+
+    if MINECRAFT_LEAVES.0.contains(&block.name) {
+        return true;
+    }
+
     state.is_side_solid(BlockDirection::Up)
 }
