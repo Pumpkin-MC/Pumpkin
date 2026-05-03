@@ -4,6 +4,7 @@ use futures::future::join;
 use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
+use pumpkin_data::chest_loot_table::get_chest_loot_table;
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::double::DoubleInventory;
@@ -13,6 +14,7 @@ use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
@@ -28,6 +30,7 @@ use crate::block::{
 };
 use crate::entity::EntityBase;
 use crate::world::World;
+use crate::world::loot::fill_chest_inventory;
 use crate::{
     block::{BlockBehaviour, registry::BlockActionResult},
     entity::player::Player,
@@ -135,6 +138,27 @@ async fn normal_use_chest_impl(args: NormalUseArgs<'_>) -> BlockActionResult {
         args.world.get_block_entity(args.position),
     )
     .await;
+
+    // Spectators cannot open chests with a pending loot table.
+    // The loot is only generated on first open by a non-spectator.
+    let player_is_spectator = args.player.gamemode.load() == GameMode::Spectator;
+    if player_is_spectator
+        && let Some(ref entity) = first_chest
+        && entity.has_loot_table()
+    {
+        return BlockActionResult::Success;
+    }
+
+    // Unpack deferred loot table on first open (non-spectator only).
+    if let Some(ref entity) = first_chest
+        && let Some((loot_key, seed)) = entity.take_loot_table()
+        && let Some(table) = get_chest_loot_table(&loot_key)
+        && let Some(inv) = entity.clone().get_inventory()
+    {
+        fill_chest_inventory(&inv, table, seed).await;
+        // Mark the block entity dirty so the generated items persist.
+        inv.mark_dirty();
+    }
 
     let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
         return BlockActionResult::Fail;

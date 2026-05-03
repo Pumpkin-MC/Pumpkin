@@ -75,6 +75,22 @@ pub trait BlockEntity: Any + Send + Sync {
     }
     fn resource_location(&self) -> &'static str;
     fn get_position(&self) -> BlockPos;
+
+    /// Atomically takes the pending loot-table key and seed from this block entity.
+    ///
+    /// Returns `Some((key, seed))` if a deferred loot table was set, clearing it in the
+    /// process. Returns `None` for entities that do not support loot tables, or if the
+    /// loot has already been generated.
+    fn take_loot_table(&self) -> Option<(String, i64)> {
+        None
+    }
+
+    /// Returns `true` if this block entity has a pending deferred loot table that has
+    /// not yet been unpacked. Does not consume the loot table.
+    fn has_loot_table(&self) -> bool {
+        false
+    }
+
     fn write_internal<'a>(
         &'a self,
         nbt: &'a mut NbtCompound,
