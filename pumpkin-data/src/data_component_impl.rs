@@ -1134,9 +1134,7 @@ pub struct WeaponImpl {
 impl WeaponImpl {
     fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
-        let item_damage_per_attack = compound
-            .get_int("item_damage_per_attack")
-            .unwrap_or(1) as u32;
+        let item_damage_per_attack = compound.get_int("item_damage_per_attack").unwrap_or(1) as u32;
         let disable_blocking_for_seconds = compound
             .get_float("disable_blocking_for_seconds")
             .unwrap_or(0.0);
@@ -1157,7 +1155,10 @@ impl DataComponentImpl for WeaponImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
         compound.put_int("item_damage_per_attack", self.item_damage_per_attack as i32);
-        compound.put_float("disable_blocking_for_seconds", self.disable_blocking_for_seconds);
+        compound.put_float(
+            "disable_blocking_for_seconds",
+            self.disable_blocking_for_seconds,
+        );
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
