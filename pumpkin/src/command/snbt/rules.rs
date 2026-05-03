@@ -587,7 +587,7 @@ impl SnbtParser<'_, '_> {
         })
     }
 
-    fn arguments(&mut self) -> Option<Vec<NbtTag>> {
+    fn arguments(&mut self) -> Vec<NbtTag> {
         self.repeated_with_trailing_comma_vec(Self::literal)
     }
 
@@ -604,7 +604,7 @@ impl SnbtParser<'_, '_> {
                 return None;
             }
             parser.reader.skip();
-            arguments = Some(parser.arguments()?);
+            arguments = Some(parser.arguments());
             parser.reader.skip_whitespace();
             if parser.reader.peek() == Some(')') {
                 parser.reader.skip();
@@ -667,7 +667,7 @@ impl SnbtParser<'_, '_> {
         }
     }
 
-    fn map_entries(&mut self) -> Option<HashMap<String, NbtTag>> {
+    fn map_entries(&mut self) -> HashMap<String, NbtTag> {
         self.repeated_with_trailing_comma(Self::map_entry, HashMap::new(), |map, element| {
             map.insert(element.0, element.1);
         })
@@ -681,7 +681,7 @@ impl SnbtParser<'_, '_> {
                 return None;
             }
             parser.reader.skip();
-            let entries = parser.map_entries()?;
+            let entries = parser.map_entries();
             parser.reader.skip_whitespace();
             if parser.reader.peek() != Some('}') {
                 parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "}", &["}"]);
@@ -696,7 +696,7 @@ impl SnbtParser<'_, '_> {
         }))
     }
 
-    fn list_entries(&mut self) -> Option<Vec<NbtTag>> {
+    fn list_entries(&mut self) -> Vec<NbtTag> {
         self.repeated_with_trailing_comma_vec(Self::literal)
     }
 
@@ -728,7 +728,7 @@ impl SnbtParser<'_, '_> {
         })
     }
 
-    fn int_array_entries(&mut self) -> Option<Vec<IntegerLiteral>> {
+    fn int_array_entries(&mut self) -> Vec<IntegerLiteral> {
         self.repeated_with_trailing_comma_vec(Self::integer_literal)
     }
 
@@ -746,7 +746,7 @@ impl SnbtParser<'_, '_> {
                 parser.reader.skip_whitespace();
                 if parser.reader.peek() == Some(';') {
                     parser.reader.skip();
-                    let entries = parser.int_array_entries()?;
+                    let entries = parser.int_array_entries();
                     parser.reader.skip_whitespace();
                     if parser.reader.peek() != Some(']') {
                         parser.store_dynamic_error_and_suggest(&LITERAL_INCORRECT, "]", &["]"]);
@@ -762,7 +762,7 @@ impl SnbtParser<'_, '_> {
             }) {
                 parser.create_prefixed_array(&literals[..], prefix)
             } else {
-                let entries = parser.list_entries()?;
+                let entries = parser.list_entries();
 
                 parser.reader.skip_whitespace();
                 if parser.reader.peek() != Some(']') {

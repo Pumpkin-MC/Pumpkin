@@ -293,7 +293,7 @@ impl SnbtParser<'_, '_> {
         rule: impl Fn(&mut Self) -> Option<T>,
         new: S,
         insert: impl Fn(&mut S, T),
-    ) -> Option<S> {
+    ) -> S {
         let list_cursor = self.reader.cursor();
         let mut elements = new;
         let mut first = true;
@@ -316,7 +316,7 @@ impl SnbtParser<'_, '_> {
             }
 
             if let Some(parsed) = self.parse_or_revert(&rule) {
-                insert(&mut elements, parsed)
+                insert(&mut elements, parsed);
             } else {
                 break;
             }
@@ -324,13 +324,13 @@ impl SnbtParser<'_, '_> {
             first = false;
         }
 
-        Some(elements)
+        elements
     }
 
     fn repeated_with_trailing_comma_vec<T>(
         &mut self,
         rule: impl Fn(&mut Self) -> Option<T>,
-    ) -> Option<Vec<T>> {
+    ) -> Vec<T> {
         self.repeated_with_trailing_comma(rule, Vec::new(), Vec::push)
     }
 

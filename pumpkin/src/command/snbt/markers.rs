@@ -113,7 +113,7 @@ pub struct IntegerLiteral {
 }
 
 impl IntegerLiteral {
-    pub fn get_signed_prefix_or_default(&self) -> SignedPrefix {
+    pub const fn get_signed_prefix_or_default(&self) -> SignedPrefix {
         match (self.suffix.0, self.base) {
             (SignedPrefix::None, Base::Binary | Base::Hexadecimal) => SignedPrefix::Unsigned,
             (SignedPrefix::None, Base::Decimal) => SignedPrefix::Signed,

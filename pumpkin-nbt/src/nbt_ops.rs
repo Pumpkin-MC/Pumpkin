@@ -593,17 +593,13 @@ impl InnerListCollector for InnerByteListCollector {
     }
 
     fn result(self) -> NbtTag {
-        NbtTag::ByteArray(
-            self.list
-        )
+        NbtTag::ByteArray(self.list)
     }
 }
 
 impl InnerByteListCollector {
-    fn new(list: Vec<i8>) -> Self {
-        Self {
-            list
-        }
+    const fn new(list: Vec<i8>) -> Self {
+        Self { list }
     }
 }
 
