@@ -3,6 +3,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
@@ -23,6 +24,7 @@ use pumpkin_protocol::bedrock::client::update_abilities::{
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_util::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
@@ -2704,7 +2706,9 @@ impl Player {
             }
             ClientPlatform::Bedrock(client) => {
                 client
-                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .send_game_packet(&SText::system_message(text.clone().0.to_bedrock_legacy(
+                        Locale::from_str(&self.config.load().locale).unwrap_or(Locale::EnUs),
+                    )))
                     .await;
             }
         }

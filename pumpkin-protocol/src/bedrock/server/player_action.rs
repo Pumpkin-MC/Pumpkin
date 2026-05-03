@@ -57,10 +57,11 @@ pub enum Action {
     ClientAckServerData = 36,
 }
 
-impl PacketRead for Action {
-    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let action = VarInt::read(reader)?;
-        match action.0 {
+impl TryFrom<i32> for Action {
+    type Error = String;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::StartBreak),
             1 => Ok(Self::AbortBreak),
             2 => Ok(Self::StopBreak),
@@ -98,7 +99,15 @@ impl PacketRead for Action {
             34 => Ok(Self::StartFlying),
             35 => Ok(Self::StopFlying),
             36 => Ok(Self::ClientAckServerData),
-            _ => Err(Error::other(format!("Invalid action ID: {}", action.0))),
+            _ => Err(format!("Invalid action ID: {}", value)),
         }
+    }
+}
+
+impl PacketRead for Action {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let action = VarInt::read(reader)?;
+
+        Action::try_from(action.0).map_err(Error::other)
     }
 }

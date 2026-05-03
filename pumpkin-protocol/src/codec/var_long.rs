@@ -12,7 +12,7 @@ use serde::{
 use crate::{
     WritingError,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
-    serial::PacketWrite,
+    serial::{PacketRead, PacketWrite},
 };
 
 pub type VarLongType = i64;
@@ -141,6 +141,34 @@ impl<'de> Deserialize<'de> for VarLong {
         }
 
         deserializer.deserialize_seq(VarLongVisitor)
+    }
+}
+
+impl PacketRead for VarLong {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let mut val: u64 = 0;
+        let mut shift = 0;
+
+        loop {
+            let byte = u8::read(reader)?;
+            val |= ((byte & 0x7F) as u64) << shift;
+
+            if (byte & 0x80) == 0 {
+                break;
+            }
+
+            shift += 7;
+            if shift >= 64 {
+                return Err(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "VarLong is too big (overflow)",
+                ));
+            }
+        }
+
+        let decoded = ((val >> 1) as i64) ^ -((val & 1) as i64);
+
+        Ok(VarLong(decoded))
     }
 }
 

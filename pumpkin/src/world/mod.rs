@@ -1,3 +1,4 @@
+use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
@@ -1708,16 +1709,24 @@ impl World {
         metadata.set(entity_data_key::HEIGHT, MetadataValue::Float(1.8));
 
         // This is super important, otherwise the client will float by default
-        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::HAS_GRAVITY as u8);
-        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::CLIMB as u8);
-        // Player-specific: survival has collision
-        metadata.set_flag(
-            entity_data_key::FLAGS,
-            entity_data_flag::HAS_COLLISION as u8,
+        let entity = &player.living_entity.entity;
+        entity.bedrock_flags.fetch_or(
+            (1i64 << entity_data_flag::HAS_GRAVITY)
+                | (1i64 << entity_data_flag::CLIMB)
+                | (1i64 << entity_data_flag::HAS_COLLISION)
+                | (1i64 << entity_data_flag::BREATHING),
+            Ordering::Relaxed,
         );
 
-        // Prevents the client from showing air buddles on hud even when not in water
-        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::BREATHING as u8);
+        metadata.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Long(entity.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        metadata.set(
+            entity_data_key::FLAGS_TWO,
+            MetadataValue::Long(entity.bedrock_flags_two.load(Ordering::Relaxed)),
+        );
+
         let actor_data = CSetActorData {
             actor_runtime_id: VarULong(runtime_id),
             metadata,
@@ -3215,10 +3224,29 @@ impl World {
 
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {
         let chunk_pos = location.chunk_position(); // pumpkin's BlockPos already has this method
-        self.broadcast_to_chunk_except(
+        let je_packet = CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8);
+
+        let (event_id, data) = match progress {
+            -1 => (LevelEvent::BlockStopBreak, 0),
+            0 => (LevelEvent::BlockStartBreak, 0),
+            _ => (LevelEvent::BlockUpdateBreak, progress),
+        };
+
+        let be_packet = CLevelEvent {
+            event_id: VarInt(event_id as i32),
+            position: Vector3::new(
+                location.0.x as f32,
+                location.0.y as f32,
+                location.0.z as f32,
+            ),
+            data: VarInt(data),
+        };
+
+        self.broadcast_to_chunk_except_editioned(
             chunk_pos,
             &[from.entity_uuid],
-            &CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8),
+            &je_packet,
+            &be_packet,
         )
         .await;
     }
@@ -4161,6 +4189,43 @@ impl World {
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
         Self::broadcast_java_grouped(packet, recipients_by_version).await;
+    }
+
+    pub async fn broadcast_to_chunk_except_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        chunk_pos: Vector2<i32>,
+        except: &[uuid::Uuid],
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        let players = self.players.load();
+        let recipients = players.iter().filter(|p| {
+            if except.contains(&p.living_entity.entity.entity_uuid) {
+                return false;
+            }
+            let center = p.living_entity.entity.chunk_pos.load();
+            let view_distance = get_view_distance(p).get() as i32;
+
+            is_within_view_distance(chunk_pos, center, view_distance)
+        });
+
+        let mut java_recipients = Vec::new();
+        let mut bedrock_recipients = Vec::new();
+
+        for p in recipients {
+            match &p.client {
+                ClientPlatform::Java(_) => java_recipients.push(p),
+                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client.clone()),
+            }
+        }
+
+        let je_recipients_by_version =
+            Self::collect_java_recipients_by_version(java_recipients.into_iter());
+        Self::broadcast_java_grouped(je_packet, je_recipients_by_version).await;
+
+        for recipient in bedrock_recipients {
+            recipient.send_game_packet(be_packet).await;
+        }
     }
 }
 

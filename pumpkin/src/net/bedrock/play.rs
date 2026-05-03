@@ -1,13 +1,18 @@
 use std::{
     num::{NonZero, NonZeroI32},
-    sync::Arc,
+    sync::{Arc, atomic::Ordering},
 };
 
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     bedrock::{
-        client::{chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen},
+        client::{
+            chunk_radius_update::CChunkRadiusUpdate,
+            container_open::CContainerOpen,
+            level_event::{CLevelEvent, LevelEvent},
+        },
         server::{
+            animate::{AnimateAction, SAnimate},
             command_request::SCommandRequest,
             container_close::SContainerClose,
             interaction::{Action, SInteraction},
@@ -18,10 +23,14 @@ use pumpkin_protocol::{
             text::SText,
         },
     },
-    codec::{var_int::VarInt, var_long::VarLong},
-    java::client::play::CSystemChatMessage,
+    codec::{var_int::VarInt, var_long::VarLong, var_ulong::VarULong},
+    java::client::play::{Animation, CEntityAnimation, CSetBlockDestroyStage, CSystemChatMessage},
 };
-use pumpkin_util::{GameMode, math::position::BlockPos, text::TextComponent};
+use pumpkin_util::{
+    GameMode,
+    math::{position::BlockPos, vector3::Vector3},
+    text::TextComponent,
+};
 
 use pumpkin_world::world::BlockFlags;
 
@@ -94,7 +103,7 @@ impl BedrockClient {
         player.set_client_loaded(true);
     }
 
-    pub async fn player_pos_update(
+    pub async fn handle_player_auth_input(
         &self,
         player: &Arc<Player>,
         packet: SPlayerAuthInput,
@@ -114,13 +123,19 @@ impl BedrockClient {
         let input_data = packet.input_data;
         let entity = player.get_entity();
 
-        if input_data.get(InputData::StartSprinting) {
+        if input_data.get(InputData::StartSprinting as usize) {
             entity.set_sprinting(true).await;
-        } else if input_data.get(InputData::StopSprinting) {
+        } else if input_data.get(InputData::StopSprinting as usize) {
             entity.set_sprinting(false).await;
         }
 
-        if input_data.get(InputData::StartFlying) {
+        if input_data.get(InputData::StartSneaking as usize) {
+            entity.set_sneaking(true).await;
+        } else if input_data.get(InputData::StopSneaking as usize) {
+            entity.set_sneaking(false).await;
+        }
+
+        if input_data.get(InputData::StartFlying as usize) {
             let mut abilities = player.abilities.lock().await;
             if !abilities.flying {
                 send_cancellable! {{
@@ -135,7 +150,7 @@ impl BedrockClient {
                     }
                 }}
             }
-        } else if input_data.get(InputData::StopFlying) {
+        } else if input_data.get(InputData::StopFlying as usize) {
             let mut abilities = player.abilities.lock().await;
             if abilities.flying {
                 send_cancellable! {{
@@ -152,11 +167,62 @@ impl BedrockClient {
             }
         }
 
-        if input_data.get(InputData::StartSneaking) {
-            entity.set_sneaking(true).await;
-        } else if input_data.get(InputData::StopSneaking) {
-            entity.set_sneaking(false).await;
+        if let Some(block_actions) = packet.block_actions {
+            for action in block_actions {
+                self.handle_player_block_action(player, server, action)
+                    .await;
+            }
         }
+    }
+
+    pub async fn handle_player_block_action(
+        &self,
+        player: &Arc<Player>,
+        server: &Server,
+        packet: pumpkin_protocol::bedrock::server::player_auth_input::PlayerBlockAction,
+    ) {
+        use pumpkin_protocol::bedrock::server::player_action::Action as PlayerAction;
+        let action = PlayerAction::try_from(packet.action.0).unwrap();
+        self.handle_player_action(
+            player,
+            server,
+            SPlayerAction {
+                runtime_id: VarInt(0), // Unused
+                action,
+                block_pos: packet.block_pos,
+                result_pos: BlockPos::ZERO,
+                face: packet.face,
+            },
+        )
+        .await;
+    }
+
+    pub async fn handle_animate(&self, player: &Arc<Player>, _server: &Server, packet: SAnimate) {
+        if !player.has_client_loaded() {
+            return;
+        }
+
+        let entity = &player.living_entity.entity;
+        let world = entity.world.load();
+
+        // Broadcast the animation to other players
+        let java_animation = match packet.action {
+            AnimateAction::SwingArm => Some(Animation::SwingMainArm),
+            AnimateAction::WakeUp => Some(Animation::LeaveBed),
+            AnimateAction::CriticalHit => Some(Animation::CriticalEffect),
+            AnimateAction::MagicCriticalHit => Some(Animation::MagicCriticaleffect),
+            _ => None,
+        };
+
+        // if let Some(animation) = java_animation {
+        //     let je_packet = CEntityAnimation::new(VarInt(entity.entity_id), animation);
+        //     let be_packet = SAnimate {
+        //         action: packet.action,
+        //         runtime_entity_id: VarULong(entity.entity_id as u64),
+        //         boat_rowing_time: packet.boat_rowing_time,
+        //     };
+        //     world.broadcast_editioned(&je_packet, &be_packet).await;
+        // }
     }
 
     pub async fn handle_interaction(&self, _player: &Arc<Player>, packet: SInteraction) {
@@ -234,6 +300,7 @@ impl BedrockClient {
         if !player.has_client_loaded() {
             return;
         }
+        player.update_last_action_time();
 
         match packet.action {
             PlayerAction::StartBreak | PlayerAction::CreativePlayerDestroyBlock => {
@@ -261,6 +328,9 @@ impl BedrockClient {
                             .await;
                     }
                 } else if !state.is_air() {
+                    // Broadcast that breaking started
+                    world.set_block_breaking(entity, location, 0).await;
+
                     let speed = crate::block::calc_block_breaking(player, state, block).await;
                     if speed >= 1.0 {
                         let broken_state = world.get_block_state(&location).await;
@@ -279,9 +349,27 @@ impl BedrockClient {
                             player.apply_tool_damage_for_block_break(broken_state).await;
                         }
                     } else {
-                        // TODO: Survival progressive breaking
+                        player.mining.store(true, Ordering::Relaxed);
+                        *player.mining_pos.lock().await = location;
+                        let progress = (speed * 10.0) as i32;
+                        world.set_block_breaking(entity, location, progress).await;
+                        player
+                            .current_block_destroy_stage
+                            .store(progress, Ordering::Relaxed);
                     }
                 }
+            }
+            PlayerAction::CrackBreak => {
+                // Don't do anything for this action. It is no longer used. Block
+                // cracking is done fully server-side.
+            }
+            PlayerAction::AbortBreak | PlayerAction::StopBreak => {
+                let location = packet.block_pos;
+                let entity = &player.living_entity.entity;
+                let world = entity.world.load();
+
+                player.mining.store(false, Ordering::Relaxed);
+                world.set_block_breaking(entity, location, -1).await;
             }
             // TODO
             _ => {}
@@ -292,16 +380,17 @@ impl BedrockClient {
         &self,
         player: &Arc<Player>,
         server: &Arc<Server>,
-        command: SCommandRequest,
+        packet: SCommandRequest,
     ) {
         let player_clone = player.clone();
         let server_clone = server.clone();
+        let command = packet.command.strip_prefix("/").unwrap_or(&packet.command);
 
         send_cancellable! {{
             server;
             PlayerCommandSendEvent {
                 player: player.clone(),
-                command: command.command.clone(),
+                command: command.to_string(),
                 cancelled: false
             };
 

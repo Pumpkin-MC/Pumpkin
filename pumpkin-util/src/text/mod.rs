@@ -136,6 +136,70 @@ impl TextComponentBase {
         text
     }
 
+    #[must_use]
+    pub fn to_bedrock_legacy(&self, locale: Locale) -> String {
+        let mut text = String::new();
+
+        // 1. Inject Bedrock formatting codes
+        if let Some(color) = &self.style.color {
+            match color {
+                Color::Named(named) => {
+                    text.push_str(&format!("§{}", named.to_legacy_char()));
+                }
+                Color::Rgb(_rgb) => {
+                    // Bedrock doesn't strictly support Java's §x hex format.
+                    // Most Bedrock implementations fallback to Gray or ignore it.
+                }
+                Color::Reset => {
+                    // Explicitly handle the Reset variant
+                    text.push_str("§r");
+                }
+            }
+        }
+
+        if self.style.bold == Some(true) {
+            text.push_str("§l");
+        }
+        if self.style.italic == Some(true) {
+            text.push_str("§o");
+        }
+        if self.style.underlined == Some(true) {
+            text.push_str("§n");
+        }
+        if self.style.obfuscated == Some(true) {
+            text.push_str("§k");
+        }
+        // Note: Bedrock does not support strikethrough natively without resource packs.
+
+        // 2. Resolve Content
+        match &*self.content {
+            TextContent::Text { text: t } => text.push_str(t),
+            TextContent::Translate { translate, with } => {
+                // TODO
+                text.push_str(&get_translation_text(
+                    translate.to_string(),
+                    locale,
+                    with.clone(),
+                ));
+            }
+            TextContent::EntityNames { selector, .. } => text.push_str(selector),
+            TextContent::Keybind { keybind } => text.push_str(keybind),
+            TextContent::Custom { key, with, .. } => {
+                text.push_str(&get_translation_text(key.clone(), locale, with.clone()));
+            }
+        }
+
+        // 3. Recursively append extra components
+        for child in &self.extra {
+            text.push_str(&child.to_bedrock_legacy(locale));
+            // Bedrock styles bleed into subsequent text. We append a reset code
+            // to ensure child styles are properly isolated from one another.
+            text.push_str("§r");
+        }
+
+        text
+    }
+
     /// Extracts the raw text content of this component for the given locale.
     ///
     /// # Arguments
@@ -145,7 +209,7 @@ impl TextComponentBase {
     /// The plain text content of the component.
     #[must_use]
     pub fn get_text(self, locale: Locale) -> String {
-        match *self.content {
+        let mut text = match *self.content {
             TextContent::Text { text } => text.into_owned(),
             TextContent::Translate { translate, with } => {
                 get_translation_text(format!("minecraft:{translate}"), locale, with)
@@ -156,7 +220,14 @@ impl TextComponentBase {
             } => selector.into_owned(),
             TextContent::Keybind { keybind } => keybind.into_owned(),
             TextContent::Custom { key, with, .. } => get_translation_text(key, locale, with),
+        };
+
+        // Recursively append the text of all child components
+        for child in self.extra {
+            text += &child.get_text(locale);
         }
+
+        text
     }
 
     /// Converts this component by resolving all translations.
