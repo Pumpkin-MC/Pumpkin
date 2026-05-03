@@ -1126,41 +1126,45 @@ impl Hash for ToolImpl {
         self.can_destroy_blocks_in_creative.hash(state);
     }
 }
-/// Weapon component: specifies durability cost per attack.
-/// NOTE: If additional fields are added, update `get_hash()` to include them.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct WeaponImpl {
     pub item_damage_per_attack: u32,
+    pub disable_blocking_for_seconds: f32,
 }
 impl WeaponImpl {
     fn read_data(data: &NbtTag) -> Option<Self> {
         let compound = data.extract_compound()?;
-        // NOTE: Error handling for item_damage_per_attack:
-        // - Missing key: defaults to 1 (vanilla behavior for unmodified items).
-        // - Wrong NBT type (e.g. float instead of int): silently defaults to 1.
-        // - Negative value: clamped to 0 then cast to u32 (protects against direct NBT manipulation).
-        // This conservative approach prioritizes safety over strict validation.
-        // TODO: Add tracing::warn! at the call site (in pumpkin crate where tracing is available)
-        // to help datapack authors debug negative values or type mismatches.
         let item_damage_per_attack = compound
             .get_int("item_damage_per_attack")
-            .unwrap_or(1)
-            .max(0) as u32;
-        // TODO: Deserialize disable_blocking_for_seconds once NBT float API is clarified.
-        // For now, preserve it by storing the raw compound for round-trip fidelity.
+            .unwrap_or(1) as u32;
+        let disable_blocking_for_seconds = compound
+            .get_float("disable_blocking_for_seconds")
+            .unwrap_or(0.0);
         Some(Self {
             item_damage_per_attack,
+            disable_blocking_for_seconds,
         })
     }
 }
+impl Hash for WeaponImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.item_damage_per_attack.hash(state);
+        unsafe { (*(&raw const self.disable_blocking_for_seconds).cast::<u32>()).hash(state) };
+    }
+}
+impl Eq for WeaponImpl {}
 impl DataComponentImpl for WeaponImpl {
     fn write_data(&self) -> NbtTag {
         let mut compound = NbtCompound::new();
         compound.put_int("item_damage_per_attack", self.item_damage_per_attack as i32);
+        compound.put_float("disable_blocking_for_seconds", self.disable_blocking_for_seconds);
         NbtTag::Compound(compound)
     }
     fn get_hash(&self) -> i32 {
-        self.item_damage_per_attack as i32
+        let mut digest = Digest::new(Crc32Iscsi);
+        digest.update(&get_i32_hash(self.item_damage_per_attack as i32).to_le_bytes());
+        digest.update(&get_f32_hash(self.disable_blocking_for_seconds).to_le_bytes());
+        digest.finalize() as i32
     }
     default_impl!(Weapon);
 }

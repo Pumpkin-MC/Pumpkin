@@ -6114,9 +6114,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -6503,9 +6501,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -6793,9 +6789,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -6855,9 +6849,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -6897,9 +6889,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -6964,9 +6954,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -9346,9 +9334,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -9583,9 +9569,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -9816,9 +9800,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -9878,9 +9860,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -9920,9 +9900,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -9987,9 +9965,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -12406,9 +12382,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -12680,9 +12654,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -12894,9 +12866,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -12956,9 +12926,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -12998,9 +12966,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -13065,9 +13031,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -14585,9 +14549,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -14898,9 +14860,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -15169,9 +15129,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -15231,9 +15189,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -15273,9 +15229,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -15340,9 +15294,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -17521,9 +17473,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -19809,9 +19759,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
             (
                 DamageResistant,
@@ -20097,9 +20045,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
             (
                 DamageResistant,
@@ -20381,9 +20327,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
             (
                 DamageResistant,
@@ -20474,9 +20418,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
             (
                 DamageResistant,
@@ -20522,9 +20464,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
             (
                 DamageResistant,
@@ -20595,9 +20535,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
             (
                 DamageResistant,
@@ -28147,9 +28085,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -28304,9 +28240,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -28366,9 +28300,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -28447,9 +28379,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -28508,9 +28438,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -28594,9 +28522,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -29765,9 +29691,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -32944,9 +32868,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -33006,9 +32928,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -33068,9 +32988,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -33130,9 +33048,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 2,
-                },
+                &WeaponImpl { item_damage_per_attack: 2, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -33172,9 +33088,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
@@ -33239,9 +33153,7 @@ impl Item {
             ),
             (
                 Weapon,
-                &WeaponImpl {
-                    item_damage_per_attack: 1,
-                },
+                &WeaponImpl { item_damage_per_attack: 1, disable_blocking_for_seconds: 0.0 },
             ),
         ],
     };
