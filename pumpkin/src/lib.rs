@@ -220,28 +220,13 @@ impl PumpkinServer {
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
-        if server.advanced_config.commands.use_console
-            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
-        {
-            if let Some(rl) = wrapper.take_readline() {
-                setup_console(rl, server.clone());
-            } else {
-                if server.advanced_config.commands.use_tty {
-                    warn!(
-                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
-                    );
-                }
-                setup_stdin_console(server.clone());
-            }
-        }
-
         if rcon.enabled {
             warn!(
                 "RCON is enabled, but it's highly insecure as it transmits passwords and commands in plain text. This makes it vulnerable to interception and exploitation by anyone on the network"
             );
             let rcon_server = server.clone();
             server.spawn_task(async move {
-                RCONServer::run(&rcon, rcon_server).await.unwrap();
+                RCONServer::run(&rcon, rcon_server).await;
             });
         }
 
@@ -324,7 +309,7 @@ impl PumpkinServer {
         }
     }
 
-    pub async fn init_plugins(&self) {
+    pub async fn init_plugins(&self) -> std::time::Duration {
         self.server
             .plugin_manager
             .set_self_ref(self.server.plugin_manager.clone())
@@ -333,8 +318,12 @@ impl PumpkinServer {
             .plugin_manager
             .set_server(self.server.clone())
             .await;
-        if let Err(err) = self.server.plugin_manager.load_plugins().await {
-            error!("{err}");
+        match self.server.plugin_manager.load_plugins().await {
+            Ok(duration) => duration,
+            Err(err) => {
+                error!("{err}");
+                std::time::Duration::ZERO
+            }
         }
     }
 
@@ -347,6 +336,21 @@ impl PumpkinServer {
     }
 
     pub async fn start(&self) {
+        if self.server.advanced_config.commands.use_console
+            && let Some((wrapper, _, _)) = LOGGER_IMPL.wait()
+        {
+            if let Some(rl) = wrapper.take_readline() {
+                setup_console(rl, self.server.clone());
+            } else {
+                if self.server.advanced_config.commands.use_tty {
+                    warn!(
+                        "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
+                    );
+                }
+                setup_stdin_console(self.server.clone());
+            }
+        }
+
         let tasks = Arc::new(TaskTracker::new());
         let mut master_client_id: u64 = 0;
         let bedrock_clients = Arc::new(Mutex::new(HashMap::new()));
@@ -414,7 +418,6 @@ impl PumpkinServer {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn unified_listener_task(
         &self,
         master_client_id_counter: &mut u64,
@@ -490,9 +493,7 @@ impl PumpkinServer {
             udp_result = resolve_some(self.udp_socket.as_ref(), |sock: &Arc<UdpSocket>| sock.recv_from(&mut udp_buf)) => {
                 match udp_result {
                     Ok((len, client_addr)) => {
-                        if len == 0 {
-                            warn!("Received empty UDP packet from {client_addr}");
-                        } else {
+                        if len > 0 {
                             let id = udp_buf[0];
                             let is_online = id & 128 != 0;
 
@@ -504,35 +505,24 @@ impl PumpkinServer {
                                     let client = client.clone();
                                     let reader = Cursor::new(udp_buf[..len].to_vec());
                                     let server = self.server.clone();
-
                                     tasks.spawn(async move {
                                         client.process_packet(&server, reader).await;
                                     });
-                                } else if let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
-                                    *master_client_id_counter += 1;
-
-                                    let mut platform = BedrockClient::new(self.udp_socket.clone().unwrap(), client_addr, be_clients);
-                                    platform.handle_connection_request(packet).await;
-                                    platform.start_outgoing_packet_task();
-
-                                    clients_guard.insert(client_addr,
-                                    Arc::new(
-                                        platform
-                                    ));
-                                }
-                            } else {
-                                // Please keep the function as simple as possible!
-                                // We dont care about the result, the client just resends the packet
-                                // Since offline packets are very small we dont need to move and clone the data
-                                let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, self.udp_socket.as_ref().unwrap()).await;
+                                } else if let Some(sock) = self.udp_socket.as_ref()
+                                    && let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
+                                        *master_client_id_counter += 1;
+                                        let platform = BedrockClient::new(sock.clone(), client_addr, be_clients);
+                                        platform.handle_connection_request(packet).await;
+                                        let platform = Arc::new(platform);
+                                        platform.start_outgoing_packet_task();
+                                        clients_guard.insert(client_addr, platform);
+                                    }
+                            } else if let Some(sock) = self.udp_socket.as_ref() {
+                                let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, sock).await;
                             }
-
                         }
                     }
-                    // Since all packets go over this match statement, there should be not waiting
-                    Err(e) => {
-                        error!("{e}");
-                    }
+                    Err(e) => error!("UDP socket error: {e}"),
                 }
             },
 

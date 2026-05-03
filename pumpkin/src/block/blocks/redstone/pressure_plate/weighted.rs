@@ -1,7 +1,4 @@
-use pumpkin_data::{
-    Block, BlockDirection, BlockState,
-    block_properties::{BlockProperties, EnumVariants, Integer0To15},
-};
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockProperties};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{BlockStateId, world::BlockFlags};
 
@@ -98,7 +95,7 @@ impl BlockBehaviour for WeightedPressurePlateBlock {
 impl PressurePlate for WeightedPressurePlateBlock {
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8 {
         let props = PressurePlateProps::from_state_id(state, block);
-        props.power.to_index() as u8
+        props.power
     }
 
     async fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8 {
@@ -129,7 +126,7 @@ impl PressurePlate for WeightedPressurePlateBlock {
         output: u8,
     ) -> pumpkin_world::BlockStateId {
         let mut props = PressurePlateProps::from_state_id(state.id, block);
-        props.power = Integer0To15::from_index(u16::from(output));
+        props.power = output;
         props.to_state_id(block)
     }
 

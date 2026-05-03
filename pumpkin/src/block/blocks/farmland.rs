@@ -11,9 +11,7 @@ use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_data::block_properties::EnumVariants;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
-use pumpkin_data::block_properties::Integer0To7;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_macros::pumpkin_block;
@@ -77,7 +75,7 @@ impl BlockBehaviour for FarmlandBlock {
             // TODO: add rain check. Remember to check which one is most optimized.
             if is_water_nearby(args.world, args.position).await {
                 let mut props = FarmlandProperties::default(args.block);
-                props.moisture = Integer0To7::L7;
+                props.moisture = 7;
                 args.world
                     .set_block_state(
                         args.position,
@@ -88,7 +86,7 @@ impl BlockBehaviour for FarmlandBlock {
             } else {
                 let state_id = args.world.get_block_state_id(args.position).await;
                 let mut props = FarmlandProperties::from_state_id(state_id, args.block);
-                if props.moisture == Integer0To7::L0 {
+                if props.moisture == 0 {
                     if !args
                         .world
                         .get_block(&args.position.up())
@@ -105,7 +103,7 @@ impl BlockBehaviour for FarmlandBlock {
                             .await;
                     }
                 } else {
-                    props.moisture = Integer0To7::from_index(props.moisture.to_index() - 1);
+                    props.moisture -= 1;
                     args.world
                         .set_block_state(
                             args.position,

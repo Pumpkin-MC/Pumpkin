@@ -114,10 +114,27 @@ interface %world {
         get-head-yaw: func() -> f32;
 
         is-on-ground: func() -> bool;
+        
         is-sneaking: func() -> bool;
+        set-sneaking: func(sneaking: bool);
+        
         is-sprinting: func() -> bool;
+        set-sprinting: func(sprinting: bool);
+        
+        is-swimming: func() -> bool;
+        set-swimming: func(swimming: bool);
+        
         is-invisible: func() -> bool;
+        set-invisible: func(invisible: bool);
+        
         is-glowing: func() -> bool;
+        set-glowing: func(glowing: bool);
+        
+        is-fall-flying: func() -> bool;
+        set-fall-flying: func(fall-flying: bool);
+        
+        is-on-fire: func() -> bool;
+        set-on-fire: func(on-fire: bool);
 
         teleport: func(pos: position, world-ref: %world);
         set-velocity: func(velocity: position);
@@ -137,6 +154,27 @@ interface %world {
         set-fire-ticks: func(ticks: s32);
 
         remove: func();
+
+        /// Performs a raycast from the entity's eye position in its looking direction.
+        raycast: func(max-distance: f64, fluid-handling: bool) -> option<raycast-result>;
+    }
+
+    /// Result of a raycast operation.
+    record raycast-result {
+        /// The block position that was hit.
+        pos: block-pos,
+        /// The face of the block that was hit.
+        face: block-direction,
+    }
+
+    /// Represents a cardinal direction or block face.
+    enum block-direction {
+        down,
+        up,
+        north,
+        south,
+        west,
+        east,
     }
 
     /// Represents a Minecraft world (dimension).

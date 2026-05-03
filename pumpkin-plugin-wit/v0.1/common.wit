@@ -67,6 +67,20 @@ interface common {
         count: u8,
     }
 
+    /// Represents the type of click interaction in a GUI.
+    enum click-type {
+        left,
+        right,
+        shift-left,
+        shift-right,
+        middle,
+        drop,
+        control-drop,
+        double-click,
+        number-key,
+        unknown,
+    }
+
     /// Represents the various poses an entity can be in.
     enum entity-pose {
         standing,

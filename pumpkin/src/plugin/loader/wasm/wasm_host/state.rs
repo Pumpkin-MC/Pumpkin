@@ -52,6 +52,7 @@ pub struct PluginHostState {
     pub resource_table: ResourceTable,
     pub plugin: Option<Weak<WasmPlugin>>,
     pub server: Option<Arc<Server>>,
+    pub permissions: Vec<String>,
 }
 
 impl Default for PluginHostState {
@@ -69,6 +70,7 @@ impl PluginHostState {
             resource_table,
             plugin: None,
             server: None,
+            permissions: Vec::new(),
         }
     }
 

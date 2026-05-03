@@ -14,10 +14,15 @@ use tokio::{
     sync::{Notify, RwLock},
     task::JoinHandle,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub mod api;
 pub mod loader;
+/// Constants for plugin permissions.
+///
+/// Plugins can request these permissions in their metadata to access specific
+/// host features.
+pub mod permissions;
 
 use crate::{LOGGER_IMPL, plugin::loader::wasm::WasmPluginLoader, server::Server};
 pub use api::*;
@@ -461,7 +466,72 @@ impl PluginManager {
         Ok(sorted)
     }
 
+    /// Ask the server owner if they allow the permissions requested by a plugin
+    #[expect(clippy::print_stdout)]
+    fn ask_permission_confirmation(metadata: &PluginMetadata) -> (bool, std::time::Duration) {
+        use colored::Colorize;
+        use rustyline::DefaultEditor;
+
+        if metadata.permissions.is_empty() {
+            return (true, std::time::Duration::ZERO);
+        }
+
+        let start_time = std::time::Instant::now();
+
+        println!(
+            "\n{} \"{}\" ({}) requests the following permissions:",
+            "Plugin".bold(),
+            metadata.name.cyan(),
+            metadata.version.green()
+        );
+        for permission in &metadata.permissions {
+            if let Some(description) = permissions::get_permission_description(permission) {
+                println!(
+                    "  - {}: {}",
+                    permission.yellow().bold(),
+                    description.italic()
+                );
+            } else {
+                println!("  - {}", permission.yellow().bold());
+            }
+        }
+
+        let prompt = format!(
+            "\n{} [Y/n]: ",
+            "Do you want to allow these permissions and load the plugin?".bold()
+        );
+
+        let mut rl_taken = if let Some(logger_option) = crate::LOGGER_IMPL.get()
+            && let Some((wrapper, _, _)) = logger_option
+            && let Some(rl) = wrapper.take_readline()
+        {
+            Some((wrapper, rl))
+        } else {
+            None
+        };
+
+        let result = if let Some((_, ref mut rl)) = rl_taken {
+            rl.readline(&prompt).is_ok_and(|line| {
+                let input = line.trim().to_lowercase();
+                input == "y" || input == "yes"
+            })
+        } else {
+            let mut rl = DefaultEditor::new().expect("Failed to create rustyline editor");
+            rl.readline(&prompt).is_ok_and(|line| {
+                let input = line.trim().to_lowercase();
+                input == "y" || input == "yes"
+            })
+        };
+
+        if let Some((wrapper, rl)) = rl_taken {
+            wrapper.return_readline(rl);
+        }
+
+        (result, start_time.elapsed())
+    }
+
     /// Spawn initialization for a single plugin
+    #[expect(clippy::too_many_lines)]
     async fn spawn_plugin_initialization(
         &self,
         mut instance: Box<dyn Plugin>,
@@ -541,6 +611,13 @@ impl PluginManager {
                     state_notify.notify_waiters();
 
                     info!("Loaded {} ({})", metadata.name, metadata.version);
+
+                    if !metadata.permissions.is_empty() {
+                        warn!(
+                            "Plugin \"{}\" uses the following permissions: {:?}",
+                            metadata.name, metadata.permissions
+                        );
+                    }
                 }
                 Err(e) => {
                     // Handle initialization failure
@@ -586,12 +663,12 @@ impl PluginManager {
     }
 
     /// Load all plugins from the plugin directory
-    pub async fn load_plugins(&self) -> Result<(), ManagerError> {
+    pub async fn load_plugins(&self) -> Result<std::time::Duration, ManagerError> {
         let path = Path::new(PLUGIN_DIR);
 
         if !path.exists() {
             std::fs::create_dir(path)?;
-            return Ok(());
+            return Ok(std::time::Duration::ZERO);
         }
 
         let mut prepared_plugins = Vec::new();
@@ -664,9 +741,22 @@ impl PluginManager {
             .map(|(i, m, d, l, p)| (m.name.clone(), (i, m, d, l, p)))
             .collect();
 
+        let mut total_wait_time = std::time::Duration::ZERO;
+
         for name in sorted_names {
             if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
             {
+                let (allowed, wait_time) = Self::ask_permission_confirmation(&metadata);
+                total_wait_time += wait_time;
+
+                if !allowed {
+                    warn!(
+                        "Permission denied for plugin \"{}\", skipping loading.",
+                        metadata.name
+                    );
+                    continue;
+                }
+
                 match self
                     .spawn_plugin_initialization(instance, metadata, loader_data, loader, path)
                     .await
@@ -682,7 +772,7 @@ impl PluginManager {
             }
         }
 
-        Ok(())
+        Ok(total_wait_time)
     }
 
     /// Start loading a plugin asynchronously
@@ -693,6 +783,18 @@ impl PluginManager {
         for loader in self.loaders.read().await.iter() {
             if loader.can_load(path) {
                 let (instance, metadata, loader_data) = loader.load(path).await?;
+
+                let (allowed, _wait_time) = Self::ask_permission_confirmation(&metadata);
+                if !allowed {
+                    warn!(
+                        "Permission denied for plugin \"{}\", skipping loading.",
+                        metadata.name
+                    );
+                    return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                        "Permission denied".to_string(),
+                    )));
+                }
+
                 return self
                     .spawn_plugin_initialization(
                         instance,

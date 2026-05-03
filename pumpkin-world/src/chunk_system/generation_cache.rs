@@ -1,16 +1,14 @@
 use super::chunk_state::{Chunk, StagedChunkEnum};
 use crate::block::RawBlockState;
 use crate::chunk::ChunkHeightmapType;
+use crate::generation::generator;
 use crate::generation::height_limit::HeightLimitView;
-use crate::generation::proto_chunk::{GenerationCache, TerrainCache};
-use crate::generation::structure::placement::GlobalStructureCache;
+use crate::generation::proto_chunk::GenerationCache;
 use crate::world::{BlockAccessor, BlockRegistryExt};
-use crate::{BlockStateId, GlobalRandomConfig, ProtoChunk, ProtoNoiseRouters};
+use crate::{BlockStateId, ProtoChunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::block_properties::is_air;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
@@ -194,7 +192,7 @@ impl GenerationCache for Cache {
         }
         match &mut self.chunks[(dx * self.size + dz) as usize] {
             Chunk::Level(data) => {
-                data.section.set_block_absolute_y(
+                data.set_block_absolute_y(
                     (pos.x & 15) as usize,
                     pos.y,
                     (pos.z & 15) as usize,
@@ -340,56 +338,44 @@ impl Cache {
             chunks: Vec::with_capacity((size * size) as usize),
         }
     }
-    #[expect(clippy::too_many_arguments)]
     pub fn advance(
         &mut self,
         stage: StagedChunkEnum,
-        lighting_config: &LightingEngineConfig,
+        generator: &generator::VanillaGenerator,
         block_registry: &dyn BlockRegistryExt,
-        settings: &GenerationSettings,
-        random_config: &GlobalRandomConfig,
-        terrain_cache: &TerrainCache,
-        noise_router: &ProtoNoiseRouters,
-        dimension: Dimension,
-        global_structure_cache: &GlobalStructureCache, // <--- NEW PARAMETER HERE
+        lighting_config: &LightingEngineConfig,
     ) {
         let mid = ((self.size * self.size) >> 1) as usize;
         match stage {
             StagedChunkEnum::Empty => panic!("empty stage"),
             StagedChunkEnum::StructureStart => {
-                self.chunks[mid].get_proto_chunk_mut().set_structure_starts(
-                    random_config,
-                    settings,
-                    &dimension,
-                    noise_router,
-                    global_structure_cache,
-                );
+                self.chunks[mid]
+                    .get_proto_chunk_mut()
+                    .set_structure_starts(generator);
             }
-            StagedChunkEnum::StructureReferences => self.chunks[mid]
-                .get_proto_chunk_mut()
-                .set_structure_references(
-                    random_config,
-                    settings,
-                    &dimension,
-                    noise_router,
-                    global_structure_cache,
-                ), // <--- PASSED HERE
+            StagedChunkEnum::StructureReferences => {
+                self.chunks[mid]
+                    .get_proto_chunk_mut()
+                    .set_structure_references(generator);
+            }
             StagedChunkEnum::Biomes => self.chunks[mid]
                 .get_proto_chunk_mut()
-                .step_to_biomes(dimension, noise_router),
-            StagedChunkEnum::Noise => self.chunks[mid].get_proto_chunk_mut().step_to_noise(
-                settings,
-                random_config,
-                noise_router,
-            ),
-            StagedChunkEnum::Surface => self.chunks[mid].get_proto_chunk_mut().step_to_surface(
-                settings,
-                random_config,
-                terrain_cache,
-                noise_router,
-            ),
+                .step_to_biomes(generator),
+            StagedChunkEnum::Noise => self.chunks[mid]
+                .get_proto_chunk_mut()
+                .step_to_noise(generator),
+            StagedChunkEnum::Surface => self.chunks[mid]
+                .get_proto_chunk_mut()
+                .step_to_surface(generator),
+            StagedChunkEnum::Carvers => self.chunks[mid]
+                .get_proto_chunk_mut()
+                .step_to_carvers(generator),
             StagedChunkEnum::Features => {
-                ProtoChunk::generate_features_and_structure(self, block_registry, random_config);
+                ProtoChunk::generate_features_and_structure(
+                    self,
+                    block_registry,
+                    &generator.random_config,
+                );
             }
             StagedChunkEnum::Lighting => {
                 let mut engine = crate::lighting::LightEngine::new();
@@ -407,7 +393,7 @@ impl Cache {
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
                 debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
                 chunk.stage = StagedChunkEnum::Full;
-                self.chunks[mid].upgrade_to_level_chunk(&dimension, lighting_config);
+                self.chunks[mid].upgrade_to_level_chunk(&generator.dimension, lighting_config);
             }
             StagedChunkEnum::None => {}
         }

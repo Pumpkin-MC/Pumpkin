@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
@@ -7,8 +8,11 @@ use crate::plugin::loader::wasm::wasm_host::{
         common::{EntityPose, Position},
         entity::Host,
         text::TextComponent,
-        world::{Entity, HostEntity, World},
+        world::{
+            BlockPos as WitBlockPos, Entity, HostEntity, RaycastResult as WitRaycastResult, World,
+        },
     },
+    wit::v0_1::world::to_wasm_block_direction,
 };
 use pumpkin_data::entity::EntityPose as InternalEntityPose;
 
@@ -176,6 +180,100 @@ impl HostEntity for PluginHostState {
         Ok(to_wasm_position(entity.get_entity().velocity.load()))
     }
 
+    async fn set_sneaking(
+        &mut self,
+        entity: Resource<Entity>,
+        sneaking: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_sneaking(sneaking).await;
+        Ok(())
+    }
+
+    async fn set_sprinting(
+        &mut self,
+        entity: Resource<Entity>,
+        sprinting: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_sprinting(sprinting).await;
+        Ok(())
+    }
+
+    async fn is_swimming(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .swimming
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn set_swimming(
+        &mut self,
+        entity: Resource<Entity>,
+        swimming: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_swimming(swimming).await;
+        Ok(())
+    }
+
+    async fn set_invisible(
+        &mut self,
+        entity: Resource<Entity>,
+        invisible: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_invisible(invisible).await;
+        Ok(())
+    }
+
+    async fn set_glowing(
+        &mut self,
+        entity: Resource<Entity>,
+        glowing: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_glowing(glowing).await;
+        Ok(())
+    }
+
+    async fn is_fall_flying(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .fall_flying
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn set_fall_flying(
+        &mut self,
+        entity: Resource<Entity>,
+        fall_flying: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_fall_flying(fall_flying).await;
+        Ok(())
+    }
+
+    async fn is_on_fire(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(entity
+            .get_entity()
+            .has_visual_fire
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    async fn set_on_fire(
+        &mut self,
+        entity: Resource<Entity>,
+        on_fire: bool,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &entity)?;
+        entity.get_entity().set_on_fire(on_fire).await;
+        Ok(())
+    }
+
     async fn get_pose(&mut self, entity: Resource<Entity>) -> wasmtime::Result<EntityPose> {
         let entity = entity_from_resource(self, &entity)?;
         Ok(map_entity_pose(entity.get_entity().pose.load()))
@@ -293,6 +391,43 @@ impl HostEntity for PluginHostState {
         let entity = entity_from_resource(self, &entity)?;
         entity.get_entity().remove().await;
         Ok(())
+    }
+
+    async fn raycast(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+        _fluid_handling: bool,
+    ) -> wasmtime::Result<Option<WitRaycastResult>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let start = entity.get_eye_pos();
+        let direction = entity.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = entity.get_entity().world.load_full();
+
+        let hit = world
+            .raycast(
+                start,
+                end,
+                |pos: &pumpkin_util::math::position::BlockPos, w: &Arc<crate::world::World>| {
+                    let pos = *pos;
+                    let world = w.clone();
+                    async move {
+                        let block = world.get_block_state(&pos).await;
+                        !block.is_air()
+                    }
+                },
+            )
+            .await;
+
+        Ok(hit.map(|(pos, face)| WitRaycastResult {
+            pos: WitBlockPos {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            },
+            face: to_wasm_block_direction(face),
+        }))
     }
 
     async fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {

@@ -59,8 +59,12 @@ impl DAG {
         if !self.nodes.contains_key(to) || !self.nodes.contains_key(from) {
             return;
         }
-        self.nodes.get_mut(to).unwrap().in_degree += 1;
-        let edge = &mut self.nodes.get_mut(from).unwrap().edge;
-        *edge = self.edges.insert(Edge::new(to, *edge));
+        if let Some(node) = self.nodes.get_mut(to) {
+            node.in_degree += 1;
+        }
+        if let Some(node) = self.nodes.get_mut(from) {
+            let edge = &mut node.edge;
+            *edge = self.edges.insert(Edge::new(to, *edge));
+        }
     }
 }

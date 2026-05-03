@@ -12,7 +12,7 @@ use crate::{
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, CakeLikeProperties, EnumVariants, Integer0To6},
+    block_properties::{BlockProperties, CakeLikeProperties},
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
@@ -52,9 +52,9 @@ impl CakeBlock {
         }
 
         let mut properties = CakeLikeProperties::from_state_id(state_id, block);
-        match properties.bites.to_index() {
+        match properties.bites {
             0..=5 => {
-                properties.bites = Integer0To6::from_index(properties.bites.to_index() + 1);
+                properties.bites += 1;
                 world
                     .set_block_state(
                         location,
@@ -107,7 +107,7 @@ impl BlockBehaviour for CakeBlock {
             drop(item_lock);
             match item.id {
                 id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
-                    if properties.bites.to_index() != 0 {
+                    if properties.bites != 0 {
                         return Self::consume_if_hungry(
                             args.world,
                             args.player,

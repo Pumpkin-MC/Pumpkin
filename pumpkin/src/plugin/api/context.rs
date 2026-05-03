@@ -66,6 +66,11 @@ impl Context {
         }
     }
 
+    #[must_use]
+    pub const fn get_metadata(&self) -> &PluginMetadata {
+        &self.metadata
+    }
+
     /// Retrieves the data folder path for the plugin, creating it if it does not exist.
     ///
     /// # Returns
@@ -157,6 +162,9 @@ impl Context {
         permission: P,
     ) {
         let permission = permission.into();
+
+        let mut tree = tree.clone();
+        tree.source = Some(self.metadata.name.clone());
 
         let full_permission_node = if permission.contains(':') {
             permission

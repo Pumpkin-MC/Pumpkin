@@ -1,11 +1,7 @@
-use std::{
-    io::{BufRead, Cursor},
-    string::FromUtf8Error,
-};
+use std::string::FromUtf8Error;
 
 use bytes::{BufMut, BytesMut};
 use thiserror::Error;
-use tokio::io::AsyncReadExt;
 
 /// Client -> Server
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +14,7 @@ pub enum ServerboundPacket {
 }
 
 impl ServerboundPacket {
+    #[must_use]
     pub const fn from_i32(n: i32) -> Self {
         match n {
             //  3 => Self::Auth,
@@ -38,6 +35,7 @@ pub enum ClientboundPacket {
 }
 
 impl ClientboundPacket {
+    #[must_use]
     pub fn write_buf(self, id: i32, body: &str) -> BytesMut {
         // let len = outgoing.len() as u64;
         let mut buf = BytesMut::new();
@@ -57,10 +55,10 @@ impl ClientboundPacket {
 pub enum PacketError {
     #[error("Invalid length")]
     InvalidLength,
-    #[error("Failed to read packet")]
-    FailedRead(std::io::Error),
     #[error("Dailed to send packet")]
     FailedSend(std::io::Error),
+    #[error("Missing packet lull terminator")]
+    MissingNullTerminator,
     #[error("Invalid packet string body")]
     InvalidBody(FromUtf8Error),
 }
@@ -74,44 +72,66 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub async fn deserialize(incoming: &mut Vec<u8>) -> Result<Option<Self>, PacketError> {
+    pub fn deserialize(incoming: &mut Vec<u8>) -> Result<Option<Self>, PacketError> {
+        // We need at least 4 bytes to read the packet length header
         if incoming.len() < 4 {
             return Ok(None);
         }
-        let mut buf = Cursor::new(&incoming);
-        let len = buf.read_i32_le().await.map_err(PacketError::FailedRead)? + 4;
-        if !(0..=1460).contains(&len) {
-            return Err(PacketError::InvalidLength);
-        }
-        let id = buf.read_i32_le().await.map_err(PacketError::FailedRead)?;
-        let ty = buf.read_i32_le().await.map_err(PacketError::FailedRead)?;
-        let mut payload = vec![];
-        let _ = buf
-            .read_until(b'\0', &mut payload)
-            .map_err(PacketError::FailedRead)?;
-        payload.pop();
-        buf.read_u8().await.map_err(PacketError::FailedRead)?;
-        if buf.position() != len as u64 {
-            return Err(PacketError::InvalidLength);
-        }
-        incoming.drain(0..len as usize);
 
-        let packet = Self {
+        // Read the 4-byte length header (little-endian)
+        let len_bytes: [u8; 4] = incoming[0..4].try_into().unwrap();
+        let size = i32::from_le_bytes(len_bytes);
+
+        // An RCON packet size includes: ID(4) + Type(4) + Body(n) + Null(1) + EmptyStringNull(1).
+        // Minimum size for an empty body is 10. Maximum MTU size is typically 1460.
+        if !(10..=1460).contains(&size) {
+            return Err(PacketError::InvalidLength);
+        }
+
+        // Total bytes we need in the buffer (length header + the payload size)
+        let total_packet_len = (size as usize) + 4;
+
+        // If the network hasn't delivered the full packet yet, return Ok(None)
+        if incoming.len() < total_packet_len {
+            return Ok(None);
+        }
+
+        // We have the full packet. Parse it synchronously using fixed slices.
+        let id = i32::from_le_bytes(incoming[4..8].try_into().unwrap());
+        let ty = i32::from_le_bytes(incoming[8..12].try_into().unwrap());
+
+        // Calculate body boundaries (starts after len, id, and ty -> 4+4+4 = 12)
+        // Ends 2 bytes before the total length (excluding the two trailing null bytes)
+        let body_start = 12;
+        let body_end = total_packet_len - 2;
+
+        if incoming[body_end] != 0 || incoming[body_end + 1] != 0 {
+            return Err(PacketError::MissingNullTerminator);
+        }
+
+        let payload = &incoming[body_start..body_end];
+        let body = String::from_utf8(payload.to_vec()).map_err(PacketError::InvalidBody)?;
+
+        incoming.drain(0..total_packet_len);
+
+        Ok(Some(Self {
             id,
             ptype: ServerboundPacket::from_i32(ty),
-            body: String::from_utf8(payload).map_err(PacketError::InvalidBody)?,
-        };
-
-        Ok(Some(packet))
+            body,
+        }))
     }
+
+    #[must_use]
     pub fn get_body(&self) -> &str {
         &self.body
     }
 
+    #[must_use]
     pub const fn get_type(&self) -> ServerboundPacket {
         self.ptype
     }
 
+    #[must_use]
     pub const fn get_id(&self) -> i32 {
         self.id
     }

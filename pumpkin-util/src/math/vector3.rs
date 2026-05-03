@@ -106,6 +106,21 @@ impl<T> Vector3<T> {
     }
 }
 
+impl Vector3<f64> {
+    #[must_use]
+    pub fn from_yaw_pitch(yaw: f32, pitch: f32) -> Self {
+        let yaw_rad = f64::from(yaw).to_radians();
+        let pitch_rad = f64::from(pitch).to_radians();
+
+        let cos_pitch = pitch_rad.cos();
+        let sin_pitch = pitch_rad.sin();
+        let cos_yaw = yaw_rad.cos();
+        let sin_yaw = yaw_rad.sin();
+
+        Self::new(-cos_pitch * sin_yaw, -sin_pitch, cos_pitch * cos_yaw)
+    }
+}
+
 impl<T: Math + PartialOrd + Copy> Vector3<T> {
     /// Calculates the squared length (magnitude) of the vector.
     ///

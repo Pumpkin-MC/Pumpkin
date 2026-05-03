@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{
-    Block,
-    block_properties::{BlockProperties, EnumVariants},
-};
+use pumpkin_data::{Block, block_properties::BlockProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::block::entities::daylight_detector::DaylightDetectorBlockEntity;
@@ -61,7 +58,7 @@ impl BlockBehaviour for DaylightDetectorBlock {
         Box::pin(async move {
             let props = DaylightDetectorProperties::from_state_id(args.state.id, args.block);
 
-            props.power.to_index() as u8
+            props.power
         })
     }
 

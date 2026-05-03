@@ -25,6 +25,25 @@ interface player {
         walk-speed:         f32,
     }
 
+    /// Represents a player's skin textures and metadata.
+    record player-skin {
+        /// The base64-encoded texture data (usually JSON containing skin/cape URLs).
+        value: string,
+        /// The optional signature for the texture data.
+        signature: option<string>,
+    }
+
+    /// Flags representing visible skin parts.
+    flags skin-parts {
+        cape,
+        jacket,
+        left-sleeve,
+        right-sleeve,
+        left-pants-leg,
+        right-pants-leg,
+        hat,
+    }
+
     /// A handle to a player on the server.
     resource player {
         /// Returns the player as an entity.
@@ -59,12 +78,22 @@ interface player {
         get-permission-level: func () -> permission-level;
         /// Sets the player's permission level.
         set-permission-level: func (level: permission-level);
+        /// Grants or denies a specific permission node for the player.
+	    set-permission: func(node: string, value: bool);
+	    /// Removes an explicitly set permission node from the player.
+	    unset-permission: func(node: string);
+        /// Returns `Some(true)` if granted, `Some(false)` if denied, or `None` if not set.
+        has-permission-set: func (node: string) -> option<bool>;
         /// Checks if the player has a specific permission node.
         has-permission: func (node: string) -> bool;
         /// Returns the player's display name, which may include formatting.
         get-display-name: func () -> text-component;
         /// Sets the player's display name.
         set-display-name: func (display-name: text-component);
+        /// Gets the player's custom tab list name.
+        get-tab-list-name: func () -> option<text-component>;
+        /// Sets the player's custom tab list name.
+        set-tab-list-name: func (name: option<text-component>);
 
         // Messaging & titles
 
@@ -162,16 +191,6 @@ interface player {
         /// Adds experience points to the player.
         add-experience-points:   func(points: s32);
 
-        /// Returns whether the player is currently sneaking.
-        is-sneaking:  func() -> bool;
-        /// Sets whether the player is currently sneaking.
-        set-sneaking: func(sneaking: bool);
-        /// Returns whether the player is currently sprinting.
-        is-sprinting: func() -> bool;
-        /// Sets whether the player is currently sprinting.
-        set-sprinting: func(sprinting: bool);
-        /// Returns whether the player is currently on the ground.
-        is-on-ground: func() -> bool;
         /// Returns whether the player is currently flying.
         is-flying:    func() -> bool;
         /// Sets whether the player should be flying.
@@ -184,5 +203,13 @@ interface player {
 
         /// Returns the player's IP address.
         get-ip: func() -> string;
+
+        /// Returns the player's current skin textures.
+        get-skin: func() -> option<player-skin>;
+
+        /// Returns the currently visible skin parts.
+        get-skin-parts: func() -> skin-parts;
+        /// Sets which skin parts are visible.
+        set-skin-parts: func(parts: skin-parts);
     }
 }

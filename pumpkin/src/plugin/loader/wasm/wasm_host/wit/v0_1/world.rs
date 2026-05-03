@@ -1,3 +1,4 @@
+use pumpkin_data::BlockDirection as InternalBlockDirection;
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockFlags, SimpleWorld};
@@ -5,14 +6,25 @@ use std::sync::Arc;
 use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::{
-    BlockFlags as WitBlockFlags, BlockPos as WitBlockPos, BlockState as WitBlockState,
-    PistonBehavior as WitPistonBehavior,
+    BlockDirection as WitBlockDirection, BlockFlags as WitBlockFlags, BlockPos as WitBlockPos,
+    BlockState as WitBlockState, PistonBehavior as WitPistonBehavior,
 };
 use crate::plugin::loader::wasm::wasm_host::{
     state::{PluginHostState, TextComponentResource, WorldResource},
     wit::v0_1::pumpkin::{self, plugin::world::World},
 };
 use crate::world::explosion::Explosion;
+
+pub(crate) const fn to_wasm_block_direction(dir: InternalBlockDirection) -> WitBlockDirection {
+    match dir {
+        InternalBlockDirection::Down => WitBlockDirection::Down,
+        InternalBlockDirection::Up => WitBlockDirection::Up,
+        InternalBlockDirection::North => WitBlockDirection::North,
+        InternalBlockDirection::South => WitBlockDirection::South,
+        InternalBlockDirection::West => WitBlockDirection::West,
+        InternalBlockDirection::East => WitBlockDirection::East,
+    }
+}
 
 // --- Trapping Helpers ---
 impl PluginHostState {

@@ -15,10 +15,12 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{
     Ability, AbilityLayer, CUpdateAbilities,
 };
+use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
@@ -29,7 +31,7 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{BlockProperties, EnumVariants, HorizontalFacing};
+use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::{AttributeModifiersImpl, Operation};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
@@ -44,7 +46,8 @@ use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
 use pumpkin_inventory::screen_handler::{
-    InventoryPlayer, PlayerFuture, ScreenHandler, ScreenHandlerFactory, ScreenHandlerListener,
+    ClickType, InventoryPlayer, PlayerFuture, ScreenHandler, ScreenHandlerFactory,
+    ScreenHandlerListener,
 };
 use pumpkin_inventory::sync_handler::SyncHandler;
 use pumpkin_macros::send_cancellable;
@@ -55,15 +58,15 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
-    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive,
-    COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CItemCooldown,
+    CKeepAlive, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
     CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
     CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
     CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
     CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata,
     PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
-use pumpkin_protocol::java::server::play::SClickSlot;
+use pumpkin_protocol::java::server::play::{SClickSlot, SRenameItem, SlotActionType};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, experience, position::BlockPos, vector2::Vector2, vector3::Vector3,
 };
@@ -87,6 +90,7 @@ use crate::entity::{EntityBaseFuture, NbtFuture, TeleportFuture};
 use crate::net::{ClientPlatform, GameProfile};
 use crate::net::{DisconnectReason, PlayerConfig};
 use crate::plugin::player::exp_change::PlayerExpChangeEvent;
+use crate::plugin::player::inventory_interact::InventoryClickEvent;
 use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
@@ -363,6 +367,12 @@ impl ChunkManager {
 /// Represents a Minecraft player entity.
 ///
 /// A `Player` is a special type of entity that represents a human player connected to the server.
+#[derive(Clone, Copy, Debug)]
+pub struct ItemCooldown {
+    pub start_tick: i32,
+    pub duration: i32,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -435,6 +445,7 @@ pub struct Player {
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
+    pub bedrock_spawned: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
     /// Item usage tracking for bows, crossbows, etc.
@@ -447,6 +458,7 @@ pub struct Player {
     pub experience_progress: AtomicCell<f32>,
     /// The player's total experience points.
     pub experience_points: AtomicI32,
+    pub item_cooldowns: Mutex<HashMap<String, ItemCooldown>>,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
@@ -460,6 +472,7 @@ pub struct Player {
     pub tab_list_header: Mutex<TextComponent>,
     pub tab_list_footer: Mutex<TextComponent>,
     pub display_name: Mutex<Option<TextComponent>>,
+    pub tab_list_name: Mutex<Option<TextComponent>>,
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
@@ -549,6 +562,7 @@ impl Player {
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
+            bedrock_spawned: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
             // Item usage tracking
             using_item: AtomicBool::new(false),
@@ -571,6 +585,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            item_cooldowns: Mutex::new(HashMap::new()),
             // Default to sending 16 chunks per tick.
             chunk_manager: Mutex::new(ChunkManager::new(
                 16,
@@ -592,9 +607,10 @@ impl Player {
             tab_list_header: Mutex::new(TextComponent::text("")),
             tab_list_footer: Mutex::new(TextComponent::text("")),
             display_name: Mutex::new(None),
+            tab_list_name: Mutex::new(None),
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
-            tab_list_listed: AtomicBool::new(true),
+            tab_list_listed: AtomicBool::new(false),
         }
     }
 
@@ -604,6 +620,44 @@ impl Player {
         self.client
             .enqueue_packet(&CTabList::new(&header, &footer))
             .await;
+    }
+
+    pub async fn start_cooldown(&self, group: String, duration: i32) {
+        let mut cooldowns = self.item_cooldowns.lock().await;
+        cooldowns.insert(
+            group.clone(),
+            ItemCooldown {
+                start_tick: self.tick_counter.load(Ordering::Relaxed),
+                duration,
+            },
+        );
+        self.client
+            .send_packet_now(&CItemCooldown::new(group, VarInt(duration)))
+            .await;
+    }
+
+    pub async fn get_cooldown(&self, group: &str) -> f32 {
+        let cooldowns = self.item_cooldowns.lock().await;
+        if let Some(cooldown) = cooldowns.get(group) {
+            let current_tick = self.tick_counter.load(Ordering::Relaxed);
+            let elapsed = current_tick - cooldown.start_tick;
+            if elapsed < cooldown.duration {
+                return 1.0 - (elapsed as f32 / cooldown.duration as f32);
+            }
+        }
+        0.0
+    }
+
+    pub async fn is_on_cooldown(&self, group: &str) -> bool {
+        let mut cooldowns = self.item_cooldowns.lock().await;
+        if let Some(cooldown) = cooldowns.get(group) {
+            let current_tick = self.tick_counter.load(Ordering::Relaxed);
+            if current_tick - cooldown.start_tick < cooldown.duration {
+                return true;
+            }
+            cooldowns.remove(group);
+        }
+        false
     }
 
     pub async fn set_display_name(&self, display_name: Option<TextComponent>) {
@@ -616,6 +670,24 @@ impl Player {
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: self.gameprofile.id,
                     actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
+                }],
+            ))
+            .await;
+    }
+
+    pub async fn get_tab_list_name(&self) -> Option<TextComponent> {
+        self.tab_list_name.lock().await.clone()
+    }
+
+    pub async fn set_tab_list_name(&self, name: Option<TextComponent>) {
+        *self.tab_list_name.lock().await = name.clone();
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::UpdateDisplayName(name.as_ref())],
                 }],
             ))
             .await;
@@ -1104,10 +1176,8 @@ impl Player {
 
         // Handle respawn anchor (Nether)
         if block == &Block::RESPAWN_ANCHOR {
-            use pumpkin_data::block_properties::Integer0To4;
-
             let anchor_props = AnchorProperties::from_state_id(state_id, block);
-            let charges = anchor_props.charges.to_index();
+            let charges = anchor_props.charges;
 
             // Anchor needs at least 1 charge to work
             if charges == 0 {
@@ -1119,7 +1189,7 @@ impl Player {
                 // Decrement charges after successful respawn position found
                 let new_charges = charges - 1;
                 let mut new_props = anchor_props;
-                new_props.charges = Integer0To4::from_index(new_charges);
+                new_props.charges = new_charges;
                 world
                     .set_block_state(
                         pos,
@@ -1611,6 +1681,16 @@ impl Player {
                                 chunk: &chunk,
                             })
                             .await;
+                    }
+
+                    if !self.bedrock_spawned.load(Ordering::Relaxed) && chunk_count > 4 {
+                        let mut frame_set = FrameSet::default();
+
+                        bedrock_client
+                            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
+                            .await;
+                        bedrock_client.send_frame_set(frame_set, 0x84).await;
+                        self.bedrock_spawned.store(true, Ordering::Relaxed);
                     }
                 }
             }
@@ -2797,10 +2877,14 @@ impl Player {
 
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
-        let total_exp = experience::points_to_level(current_level) + current_points;
-        let new_total_exp = total_exp + added_points;
-        let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
+
+        let total_exp = experience::points_to_level(current_level) as i64 + current_points as i64;
+        let new_total_exp = total_exp + added_points as i64;
+        let safe_new_total = new_total_exp.clamp(0, i32::MAX as i64) as i32;
+
+        let (new_level, new_points) = experience::total_to_level_and_points(safe_new_total);
         let progress = experience::progress_in_level(new_points, new_level);
+
         self.set_experience(new_level, progress, new_points).await;
     }
 
@@ -2888,13 +2972,21 @@ impl Player {
     }
 
     pub async fn on_handled_screen_closed(&self) {
-        self.current_screen_handler
-            .lock()
-            .await
-            .lock()
-            .await
-            .on_closed(self)
-            .await;
+        // let window_type = {
+        //     let handler_lock = self.current_screen_handler.lock().await;
+        //     let mut handler = handler_lock.lock().await;
+        //     let wt = handler.window_type();
+        //     handler.on_closed(self).await;
+        //     wt
+        // };
+
+        // TODO
+        // if let Some(server) = self.living_entity.entity.world.load().server.upgrade() {
+        //     server
+        //         .plugin_manager
+        //         .fire(InventoryCloseEvent::new(&self, window_type))
+        //         .await;
+        // }
 
         let player_screen_handler: Arc<Mutex<dyn ScreenHandler>> =
             self.player_screen_handler.clone();
@@ -2923,6 +3015,19 @@ impl Player {
         screen_handler
             .update_sync_handler(self.screen_handler_sync_handler.clone())
             .await;
+    }
+
+    pub async fn on_rename_item(self: &Arc<Self>, packet: SRenameItem) {
+        self.update_last_action_time();
+        let screen_handler_arc = self.current_screen_handler.lock().await.clone();
+        let mut screen_handler = screen_handler_arc.lock().await;
+
+        if let Some(anvil_handler) = screen_handler
+            .as_any_mut()
+            .downcast_mut::<pumpkin_inventory::anvil::AnvilScreenHandler>()
+        {
+            anvil_handler.update_item_name(packet.item_name).await;
+        }
     }
 
     pub async fn open_handled_screen(
@@ -3009,14 +3114,23 @@ impl Player {
         self.open_container_pos.store(None);
     }
 
-    pub async fn on_slot_click(&self, packet: SClickSlot) {
+    #[allow(clippy::too_many_lines)]
+    pub async fn on_slot_click(self: &Arc<Self>, packet: SClickSlot, server: &Server) {
         self.update_last_action_time();
-        let screen_handler = self.current_screen_handler.lock().await;
-        let mut screen_handler = screen_handler.lock().await;
-        let behaviour = screen_handler.get_behaviour();
+        let screen_handler_arc = self.current_screen_handler.lock().await.clone();
+        let mut screen_handler = screen_handler_arc.lock().await;
 
-        // behaviour is dropped here
-        if i32::from(behaviour.sync_id) != packet.sync_id.0 {
+        let (sync_id, container_slots, allow_grab_items, allow_put_items) = {
+            let b = screen_handler.get_behaviour();
+            (
+                b.sync_id,
+                b.container_slots,
+                b.allow_grab_items,
+                b.allow_put_items,
+            )
+        };
+
+        if i32::from(sync_id) != packet.sync_id.0 {
             return;
         }
 
@@ -3025,7 +3139,7 @@ impl Player {
             return;
         }
 
-        if !screen_handler.can_use(self) {
+        if !screen_handler.can_use(self.as_ref()) {
             warn!(
                 "Player {} interacted with invalid menu {:?}",
                 self.gameprofile.name,
@@ -3046,7 +3160,146 @@ impl Player {
             return;
         }
 
-        let not_in_sync = packet.revision.0 != (behaviour.revision.load(Ordering::Relaxed) as i32);
+        // Fire InventoryClickEvent
+        let clicked_item = if slot >= 0 {
+            let slot_obj = &screen_handler.get_behaviour().slots[slot as usize];
+            Some(slot_obj.get_cloned_stack().await)
+        } else {
+            None
+        };
+
+        let cursor_item = Some(
+            screen_handler
+                .get_behaviour()
+                .cursor_stack
+                .lock()
+                .await
+                .clone(),
+        );
+        let raw_slot = slot; // For now raw_slot == slot, as we don't have separate view/inventory indexing yet
+        let hotbar_button = if matches!(packet.mode, SlotActionType::Swap) {
+            packet.button
+        } else {
+            -1
+        };
+
+        let click_type = match packet.mode {
+            SlotActionType::Pickup => {
+                if packet.button == 0 {
+                    ClickType::Left
+                } else {
+                    ClickType::Right
+                }
+            }
+            SlotActionType::QuickMove => {
+                if packet.button == 0 {
+                    ClickType::ShiftLeft
+                } else {
+                    ClickType::ShiftRight
+                }
+            }
+            SlotActionType::Swap => ClickType::NumberKey(packet.button as u8),
+            SlotActionType::Clone => ClickType::Middle,
+            SlotActionType::Throw => {
+                if packet.button == 0 {
+                    ClickType::Drop
+                } else {
+                    ClickType::ControlDrop
+                }
+            }
+            SlotActionType::QuickCraft => {
+                if [0, 4, 8].contains(&packet.button) {
+                    ClickType::Left
+                } else if [1, 5, 9].contains(&packet.button) {
+                    ClickType::Right
+                } else {
+                    ClickType::Middle
+                }
+            }
+            SlotActionType::PickupAll => ClickType::DoubleClick,
+        };
+
+        send_cancellable! {{
+            server;
+            InventoryClickEvent::new(
+                self,
+                screen_handler.window_type(),
+                click_type,
+                slot,
+                raw_slot,
+                clicked_item,
+                cursor_item,
+                i32::from(hotbar_button),
+            );
+            'after: {}
+            'cancelled: {
+                screen_handler.cancel().await;
+                return;
+            }
+        }}
+
+        // Enforce flags
+        let is_container_slot = slot >= 0 && i32::from(slot) < container_slots as i32;
+
+        match packet.mode {
+            SlotActionType::Pickup => {
+                let cursor_stack = screen_handler.get_behaviour().cursor_stack.lock().await;
+                if is_container_slot {
+                    if !cursor_stack.is_empty() && !allow_put_items {
+                        drop(cursor_stack);
+                        screen_handler.cancel().await;
+                        return;
+                    }
+                    if cursor_stack.is_empty() && !allow_grab_items {
+                        drop(cursor_stack);
+                        screen_handler.cancel().await;
+                        return;
+                    }
+                }
+            }
+            SlotActionType::QuickMove => {
+                if is_container_slot && !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+                if !is_container_slot && !allow_put_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Swap => {
+                if is_container_slot && (!allow_grab_items || !allow_put_items) {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Throw => {
+                if is_container_slot && !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::QuickCraft => {
+                if !allow_put_items {
+                    // Dragging items into slots
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::PickupAll => {
+                if !allow_grab_items {
+                    screen_handler.cancel().await;
+                    return;
+                }
+            }
+            SlotActionType::Clone => {}
+        }
+
+        let not_in_sync = packet.revision.0
+            != (screen_handler
+                .get_behaviour()
+                .revision
+                .load(Ordering::Relaxed) as i32);
 
         screen_handler.disable_sync();
         screen_handler
@@ -3054,7 +3307,7 @@ impl Player {
                 i32::from(slot),
                 i32::from(packet.button),
                 packet.mode.clone(),
-                self,
+                self.as_ref(),
             )
             .await;
 
@@ -3069,7 +3322,6 @@ impl Player {
             screen_handler.update_to_client().await;
         } else {
             screen_handler.send_content_updates().await;
-            drop(screen_handler);
         }
     }
 
@@ -3614,6 +3866,12 @@ impl EntityBase for Player {
         self
     }
 
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        // vanilla: min(level * 7, 100)
+        let level = self.experience_level.load(Ordering::Relaxed);
+        (level * 7).min(100) as u32
+    }
+
     fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             self.living_entity.tick_in_void(dyn_self).await;
@@ -3903,6 +4161,21 @@ impl InventoryPlayer for Player {
     // Synchronous methods remain unchanged
     fn has_infinite_materials(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
+    }
+
+    fn is_creative(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
+    }
+
+    fn experience_level(&self) -> i32 {
+        self.experience_level
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn add_experience_levels(&self, levels: i32) -> PlayerFuture<'_, ()> {
+        Box::pin(async move {
+            self.add_experience_levels(levels).await;
+        })
     }
 
     fn get_inventory(&self) -> Arc<PlayerInventory> {

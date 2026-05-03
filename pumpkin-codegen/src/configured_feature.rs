@@ -607,7 +607,7 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:kelp" => {
             quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
-
+        
         // All TODO/empty features
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
@@ -860,10 +860,24 @@ fn value_to_dpnp(v: &Value) -> TokenStream {
         .as_array()
         .map(|a| a.iter().filter_map(|x| x.as_f64()).collect())
         .unwrap_or_default();
+    let mut min_octave = i32::MAX;
+    let mut max_octave = i32::MIN;
+
+    for (index, amp) in amplitudes.iter().enumerate() {
+        if *amp != 0.0 {
+            min_octave = i32::min(min_octave, index as i32);
+            max_octave = i32::max(max_octave, index as i32);
+        }
+    }
+
+    let octaves = max_octave - min_octave;
+    let create_amp_val = 0.1f64 * (1.0f64 + 1.0f64 / (octaves + 1) as f64);
+    let final_amplitude = 0.16666666666666666f64 / create_amp_val;
     quote! {
         DoublePerlinNoiseParametersCodec {
             first_octave: #first_octave,
             amplitudes: vec![#(#amplitudes),*],
+            amplitude: #final_amplitude,
         }
     }
 }
@@ -1019,9 +1033,8 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
         }
         "minecraft:upwards_branching_trunk_placer" => {
             let extra_branch_steps = value_to_int_provider(&v["extra_branch_steps"]);
-            let place_branch_per_log_probability = v["place_branch_per_log_probability"]
-                .as_f64()
-                .unwrap_or(0.0) as f32;
+            let place_branch_per_log_probability =
+                v["place_branch_per_log_probability"].as_f64().unwrap_or(0.0) as f32;
             let extra_branch_length = value_to_int_provider(&v["extra_branch_length"]);
             let can_grow_through = value_to_block_list(&v["can_grow_through"]);
             quote! {
@@ -1039,8 +1052,7 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
             let branch_start_offset_v = &v["branch_start_offset_from_top"];
             let min = branch_start_offset_v["min_inclusive"].as_i64().unwrap_or(0) as i32;
             let max = branch_start_offset_v["max_inclusive"].as_i64().unwrap_or(0) as i32;
-            let branch_end_offset_from_top =
-                value_to_int_provider(&v["branch_end_offset_from_top"]);
+            let branch_end_offset_from_top = value_to_int_provider(&v["branch_end_offset_from_top"]);
             quote! {
                 TrunkType::Cherry(CherryTrunkPlacer {
                     branch_count: #branch_count,

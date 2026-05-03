@@ -1,6 +1,6 @@
 use std::io::{Error, Read, Write};
 
-use crate::bedrock::{RAKNET_SPLIT, RakReliability};
+use crate::bedrock::{MTU, RAKNET_SPLIT, RakReliability};
 use crate::codec::u24;
 use crate::serial::{PacketRead, PacketWrite};
 
@@ -68,15 +68,30 @@ impl Frame {
 
     pub fn read<R: Read>(reader: &mut R) -> Result<Vec<Self>, Error> {
         let mut frames = Vec::new();
+        let mut header_buf = [0u8; 1];
 
-        while let Ok(header) = u8::read(reader) {
+        while match reader.read(&mut header_buf) {
+            Ok(0) => false,
+            Ok(1) => true,
+            Err(e) => return Err(e),
+            _ => unreachable!(),
+        } {
+            let header = header_buf[0];
             let mut frame = Self::default();
+
             let reliability_id = (header & 0xE0) >> 5;
             let Some(reliability) = RakReliability::from_id(reliability_id) else {
                 return Err(Error::other("Invalid reliability"));
             };
+
             let split = (header & RAKNET_SPLIT) != 0;
-            let length = u16::read_be(reader)? >> 3;
+
+            let bit_length = u16::read_be(reader)?;
+            let byte_length = (bit_length + 7) >> 3;
+
+            if byte_length > MTU as u16 {
+                return Err(Error::other("Frame payload length exceeds RakNet MTU"));
+            }
 
             if reliability.is_reliable() {
                 frame.reliable_number = u24::read(reader)?.0;
@@ -98,8 +113,9 @@ impl Frame {
             }
 
             frame.reliability = reliability;
-            frame.payload = vec![0; length as usize];
+            frame.payload = vec![0; byte_length as usize];
             reader.read_exact(&mut frame.payload)?;
+
             frames.push(frame);
         }
 

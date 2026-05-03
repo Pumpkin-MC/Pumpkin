@@ -133,6 +133,15 @@ pub trait InventoryPlayer: Send + Sync {
     /// Checks if the player has infinite materials (creative mode).
     fn has_infinite_materials(&self) -> bool;
 
+    /// Checks if the player is in creative mode.
+    fn is_creative(&self) -> bool;
+
+    /// Gets the player's experience level.
+    fn experience_level(&self) -> i32;
+
+    /// Adds or removes experience levels.
+    fn add_experience_levels(&self, levels: i32) -> PlayerFuture<'_, ()>;
+
     /// Sends a full container content packet.
     fn enqueue_inventory_packet<'a>(
         &'a self,
@@ -222,6 +231,9 @@ pub trait ScreenHandler: Send + Sync {
 
     /// Returns this screen handler as an Any reference.
     fn as_any(&self) -> &dyn Any;
+
+    /// Returns this screen handler as a mutable Any reference.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 
     /// Gets the sync ID for this screen handler.
     fn sync_id(&self) -> u8 {
@@ -772,6 +784,13 @@ pub trait ScreenHandler: Send + Sync {
         })
     }
 
+    /// Cancels any client-side changes and resynchronizes the state.
+    fn cancel(&mut self) -> ScreenHandlerFuture<'_, ()> {
+        Box::pin(async move {
+            self.sync_state().await;
+        })
+    }
+
     /// Public entry point for slot click handling.
     fn on_slot_click<'a>(
         &'a mut self,
@@ -1234,6 +1253,26 @@ pub struct ScreenHandlerBehaviour {
     pub window_type: Option<WindowType>,
     /// Slots selected during a drag operation (for multi-slot distribution).
     pub drag_slots: Vec<u32>,
+    /// Whether players can grab items out of the inventory.
+    pub allow_grab_items: bool,
+    /// Whether players can put items into the inventory from their own.
+    pub allow_put_items: bool,
+    /// Number of slots that belong to the container (not the player inventory).
+    pub container_slots: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClickType {
+    Left,
+    Right,
+    ShiftLeft,
+    ShiftRight,
+    Middle,
+    Drop,
+    ControlDrop,
+    DoubleClick,
+    NumberKey(u8),
+    Unknown,
 }
 
 impl ScreenHandlerBehaviour {
@@ -1254,6 +1293,9 @@ impl ScreenHandlerBehaviour {
             tracked_property_values: Vec::new(),
             window_type,
             drag_slots: Vec::new(),
+            allow_grab_items: true,
+            allow_put_items: true,
+            container_slots: 0,
         }
     }
 

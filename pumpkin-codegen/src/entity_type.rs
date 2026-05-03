@@ -15,6 +15,7 @@ pub struct EntityType {
     /// Numeric registry ID for this entity type.
     pub id: u16,
     pub attributes: Option<Vec<BTreeMap<String, f64>>>,
+    pub experience_reward: Option<u32>,
     /// Static hurt sound event name when it is safely derivable from extracted entity data.
     pub hurt_sound: Option<String>,
     /// Whether this entity can be attacked by players or other entities.
@@ -180,10 +181,13 @@ impl ToTokens for NamedEntityType<'_> {
             quote! { None }
         };
 
+        let experience_reward = entity.experience_reward.unwrap_or(0);
+
         tokens.extend(quote! {
             EntityType {
                 id: #id,
                 attributes: #attributes_field,
+                experience_reward: #experience_reward,
                 hurt_sound: #hurt_sound,
                 attackable: #attackable,
                 mob: #mob,
@@ -247,6 +251,7 @@ pub fn build() -> TokenStream {
         pub struct EntityType {
             pub id: u16,
             pub attributes: &'static [(Attributes, f64)],
+            pub experience_reward: u32,
             pub hurt_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,

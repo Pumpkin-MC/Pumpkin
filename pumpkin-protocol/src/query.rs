@@ -129,11 +129,16 @@ impl SStatusRequest {
             .await
             .map_err(|_| DecodeError::UnexpectedEof)?;
 
-        let mut buf = [0u8; 4];
-        let is_full_request = match packet.reader.read(&mut buf).await {
-            Ok(0) => false,
-            Ok(4) => true,
-            // Any other byte count is malformed.
+        let position = packet.reader.position();
+        let total_len = packet.reader.get_ref().len() as u64;
+        let remaining = total_len.saturating_sub(position);
+
+        let is_full_request = match remaining {
+            0 => false,
+            4 => {
+                packet.reader.set_position(position + 4);
+                true
+            }
             _ => return Err(DecodeError::MalformedPayload),
         };
 
