@@ -126,8 +126,11 @@ impl SnbtParser<'_, '_> {
 
         let _ = parser.parse();
 
-        for suggestion in &parser.errors.suggestions {
-            builder = builder.suggest(suggestion.to_string());
+        if !parser.errors.suggestions.is_empty() {
+            builder = builder.create_offset(parser.errors.cursor);
+            for suggestion in &parser.errors.suggestions {
+                builder = builder.suggest(suggestion.to_string());
+            }
         }
 
         builder.build()
@@ -336,8 +339,8 @@ impl SnbtParser<'_, '_> {
         literal: &IntegerLiteral,
         suffix: TypeSuffix,
     ) -> Option<Number> {
-        let unsigned = literal.suffix.0 == SignedPrefix::Unsigned;
-        if unsigned && literal.sign == Sign::Minus {
+        let signed = literal.get_signed_prefix_or_default() == SignedPrefix::Signed;
+        if !signed && literal.sign == Sign::Minus {
             self.store_simple_error(&EXPECTED_NON_NEGATIVE_NUMBER);
             return None;
         }
@@ -351,8 +354,8 @@ impl SnbtParser<'_, '_> {
         let radix = literal.base.radix();
 
         // The error messages vary by a lot to match the error messages in Java.
-        match (unsigned, suffix) {
-            (false, TypeSuffix::Byte) => {
+        match (signed, suffix) {
+            (true, TypeSuffix::Byte) => {
                 let integer = self.parse_int_or_error(&number, radix)?;
 
                 integer.try_into().map_or_else(
@@ -366,7 +369,7 @@ impl SnbtParser<'_, '_> {
                     |byte| Some(Number::Byte(byte)),
                 )
             }
-            (false, TypeSuffix::Short) => {
+            (true, TypeSuffix::Short) => {
                 let integer = self.parse_int_or_error(&number, radix)?;
 
                 integer.try_into().map_or_else(
@@ -380,8 +383,8 @@ impl SnbtParser<'_, '_> {
                     |short| Some(Number::Short(short)),
                 )
             }
-            (false, TypeSuffix::Int) => Some(Number::Int(self.parse_int_or_error(&number, radix)?)),
-            (false, TypeSuffix::Long) => i64::from_str_radix(&number, radix).map_or_else(
+            (true, TypeSuffix::Int) => Some(Number::Int(self.parse_int_or_error(&number, radix)?)),
+            (true, TypeSuffix::Long) => i64::from_str_radix(&number, radix).map_or_else(
                 |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
@@ -391,7 +394,7 @@ impl SnbtParser<'_, '_> {
                 },
                 |long| Some(Number::Long(long)),
             ),
-            (true, TypeSuffix::Byte) => {
+            (false, TypeSuffix::Byte) => {
                 let integer = self.parse_int_or_error(&number, radix)?;
 
                 TryInto::<u8>::try_into(integer).map_or_else(
@@ -405,7 +408,7 @@ impl SnbtParser<'_, '_> {
                     |byte| Some(Number::Byte(byte as i8)),
                 )
             }
-            (true, TypeSuffix::Short) => {
+            (false, TypeSuffix::Short) => {
                 let integer = self.parse_int_or_error(&number, radix)?;
 
                 TryInto::<u16>::try_into(integer).map_or_else(
@@ -419,7 +422,7 @@ impl SnbtParser<'_, '_> {
                     |short| Some(Number::Short(short as i16)),
                 )
             }
-            (true, TypeSuffix::Int) => u32::from_str_radix(&number, radix).map_or_else(
+            (false, TypeSuffix::Int) => u32::from_str_radix(&number, radix).map_or_else(
                 |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
@@ -429,7 +432,7 @@ impl SnbtParser<'_, '_> {
                 },
                 |int| Some(Number::Int(int as i32)),
             ),
-            (true, TypeSuffix::Long) => u64::from_str_radix(&number, radix).map_or_else(
+            (false, TypeSuffix::Long) => u64::from_str_radix(&number, radix).map_or_else(
                 |_| {
                     self.store_dynamic_error(
                         &NUMBER_PARSE_FAILURE,
@@ -480,7 +483,7 @@ impl SnbtParser<'_, '_> {
             }
             bytes.push(self.parse_integer_literal(value, TypeSuffix::Byte)?.into());
         }
-        Some(NbtTag::ByteArray(bytes.into_boxed_slice()))
+        Some(NbtTag::ByteArray(bytes))
     }
 
     fn create_int_array(&mut self, values: &[IntegerLiteral]) -> Option<NbtTag> {

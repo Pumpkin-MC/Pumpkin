@@ -112,6 +112,16 @@ pub struct IntegerLiteral {
     pub suffix: IntegerSuffix,
 }
 
+impl IntegerLiteral {
+    pub fn get_signed_prefix_or_default(&self) -> SignedPrefix {
+        match (self.suffix.0, self.base) {
+            (SignedPrefix::None, Base::Binary | Base::Hexadecimal) => SignedPrefix::Unsigned,
+            (SignedPrefix::None, Base::Decimal) => SignedPrefix::Signed,
+            (prefix, _) => prefix,
+        }
+    }
+}
+
 pub struct Signed<T> {
     pub sign: Sign,
     pub value: T,

@@ -289,7 +289,7 @@ fn unquoted_string_literals() {
 }
 
 #[test]
-fn operation() {
+fn operations() {
     assert_parse_ok!("bool( true)", NbtTag::Byte(1));
     assert_parse_ok!("bool (false )", NbtTag::Byte(0));
 
@@ -346,7 +346,7 @@ fn operation() {
 }
 
 #[test]
-fn map() {
+fn maps() {
     assert_parse_ok!(
         "{x:5}",
         NbtTag::Compound(NbtCompound {
@@ -402,6 +402,117 @@ fn map() {
     assert_parse_err!("{9._+._+=foo:1}", "Expected literal :", 8, [":"]);
 
     assert_parse_err!("{\"a\":b", "Expected literal (", 6, ["(", ",", "}"]);
-    assert_parse_err!("{\"a\":25", "Expected literal .", 7, [",", ".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S", "u", "U", "}"]);
+    assert_parse_err!(
+        "{\"a\":25",
+        "Expected literal .",
+        7,
+        [
+            ",", ".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S", "u",
+            "U", "}"
+        ]
+    );
     assert_parse_err!("{\"a\":25,", "Expected literal \"", 8, ["\"", "'", "}"]);
+    assert_parse_err!("{,}", "Expected literal \"", 1, ["\"", "'", "}"]);
+    assert_parse_err!("{{}}", "Expected literal \"", 1, ["\"", "'", "}"]);
+
+    assert_parse_ok!(
+        "{1:1}",
+        nbt_compound_tag! {
+            "1": NbtTag::Int(1)
+        }
+    );
+}
+
+#[test]
+fn lists() {
+    assert_parse_ok!("[  ]", NbtTag::List(Vec::new()));
+    assert_parse_ok!(
+        "[5, _]",
+        NbtTag::List(vec![NbtTag::Int(5), NbtTag::String("_".to_string())])
+    );
+    assert_parse_ok!(
+        "[a, [true, c], [4s, uuid(f-0-0-0-0), f, [[], 7f, [\"\\n\", [200Ub, {x: 1e1}]]]]]",
+        NbtTag::List(vec![
+            NbtTag::String("a".to_string()),
+            NbtTag::List(vec![NbtTag::Byte(1), NbtTag::String("c".to_string())]),
+            NbtTag::List(vec![
+                NbtTag::Short(4),
+                NbtTag::IntArray(vec![15, 0, 0, 0]),
+                NbtTag::String("f".to_string()),
+                NbtTag::List(vec![
+                    NbtTag::List(Vec::new()),
+                    NbtTag::Float(7.0),
+                    NbtTag::List(vec![
+                        NbtTag::String("\n".to_string()),
+                        NbtTag::List(vec![
+                            NbtTag::Byte(-56),
+                            nbt_compound_tag! {
+                                "x": NbtTag::Double(10.0)
+                            }
+                        ]),
+                    ]),
+                ]),
+            ])
+        ])
+    );
+
+    assert_parse_err!(
+        "[1;1]",
+        "Expected literal .",
+        2,
+        [
+            ",", ".", "]", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S",
+            "u", "U"
+        ]
+    );
+
+    assert_parse_err!("[{]}", "Expected literal \"", 2, ["\"", "'", "}"]);
+    assert_parse_err!("{[}]", "Expected literal \"", 1, ["\"", "'", "}"]);
+    assert_parse_err!("[,]", "Expected literal B", 1, ["]", "B", "I", "L"]);
+    assert_parse_err!("[Z;9]", "Expected literal (", 2, ["(", ",", "]"]);
+}
+
+#[test]
+fn arrays() {
+    assert_parse_ok!("[B;]", NbtTag::ByteArray(vec![]));
+    assert_parse_ok!("[I ;1  ,2 ,  3,]", NbtTag::IntArray(vec![1, 2, 3]));
+    assert_parse_ok!("[L;1  ,2 ,  3,   4]", NbtTag::LongArray(vec![1, 2, 3, 4]));
+
+    assert_parse_err!("[B;1i]", "Invalid array element type", 6, []);
+    assert_parse_err!("[I;1L]", "Invalid array element type", 6, []);
+    assert_parse_err!(
+        "[B;128]",
+        "Failed to parse number: Value out of range. Value:\"128\" Radix:10",
+        7,
+        []
+    );
+    assert_parse_err!(
+        "[B;3000000000]",
+        "Failed to parse number: For input string: \"3000000000\"",
+        14,
+        []
+    );
+    assert_parse_err!(
+        "[I;3000000000]",
+        "Failed to parse number: For input string: \"3000000000\"",
+        14,
+        []
+    );
+    assert_parse_err!(
+        "[I; 1.0]",
+        "Expected literal u|U",
+        5,
+        [",", "]", "b", "B", "i", "I", "l", "L", "s", "S", "u", "U"]
+    );
+    assert_parse_err!("[I;{}]", "Expected literal +", 3, ["+", "-", "0", "]"]);
+    assert_parse_err!("[i;4]", "Expected literal (", 2, ["(", ",", "]"]);
+
+    assert_parse_ok!("[B; 0b11111111]", NbtTag::ByteArray(vec![-1]));
+    assert_parse_ok!("[L; 0xFFFFFFFFFFFFFFFF]", NbtTag::LongArray(vec![-1]));
+    assert_parse_err!(
+        "[L; 0xFFFFFFFFFFFFFFFFF]",
+        "Failed to parse number: String value FFFFFFFFFFFFFFFFF exceeds range of unsigned long.",
+        24,
+        []
+    );
 }

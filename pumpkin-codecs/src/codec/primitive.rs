@@ -145,40 +145,9 @@ macro_rules! stream_struct {
     };
 }
 
+stream_struct!(ByteBuffer, i8, create_byte_list, get_byte_list);
 stream_struct!(IntStream, i32, create_int_list, get_int_list);
 stream_struct!(LongStream, i64, create_long_list, get_long_list);
-
-/// A [`Box<[u8]>`] wrapper that has built-in DFU support for encoding and decoding.
-#[derive(Debug, Clone)]
-pub struct ByteBuffer(pub Box<[u8]>);
-
-impl From<Box<[u8]>> for ByteBuffer {
-    fn from(value: Box<[u8]>) -> Self {
-        Self(value)
-    }
-}
-
-impl<const N: usize> From<[u8; N]> for ByteBuffer {
-    fn from(value: [u8; N]) -> Self {
-        Self(Box::from(value))
-    }
-}
-
-impl From<ByteBuffer> for Box<[u8]> {
-    fn from(value: ByteBuffer) -> Self {
-        value.0
-    }
-}
-
-impl Primitive for ByteBuffer {
-    fn primitive_encode<O: DynamicOps>(&self, ops: &'static O) -> O::Value {
-        ops.create_byte_buffer(self.0.to_vec())
-    }
-
-    fn primitive_decode<O: DynamicOps>(ops: &'static O, input: O::Value) -> DataResult<Self> {
-        ops.get_byte_buffer(input).map(From::from)
-    }
-}
 
 #[cfg(test)]
 mod test {
@@ -193,7 +162,7 @@ mod test {
         assert_encode_success!(-913813743, JsonOps, json!(-913813743));
         assert_encode_success!("Hello, world!".to_string(), JsonOps, json!("Hello, world!"));
         assert_encode_success!(String::new(), JsonOps, json!(""));
-        assert_encode_success!(ByteBuffer::from([1u8, 2u8, 3u8]), JsonOps, json!([1, 2, 3]));
+        assert_encode_success!(ByteBuffer::from(vec![1, 2, 3]), JsonOps, json!([1, 2, 3]));
         assert_encode_success!(
             IntStream::from(vec![3, 6, 9, 11, 15]),
             JsonOps,
