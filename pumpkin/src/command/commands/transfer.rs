@@ -97,7 +97,8 @@ impl CommandExecutor for TargetPlayerExecutor {
             };
 
             if players.is_empty() {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.transfer.error.no_players",
                     "commands.transfer.error.no_players",
                     [],
                 )));
@@ -115,7 +116,8 @@ impl CommandExecutor for TargetPlayerExecutor {
 
             if players.len() == 1 {
                 sender
-                    .send_message(TextComponent::translate(
+                    .send_message(TextComponent::translate_cross(
+                        "commands.transfer.success.single",
                         "commands.transfer.success.single",
                         [
                             players[0].get_display_name().await,
@@ -126,7 +128,8 @@ impl CommandExecutor for TargetPlayerExecutor {
                     .await;
             } else {
                 sender
-                    .send_message(TextComponent::translate(
+                    .send_message(TextComponent::translate_cross(
+                        "commands.transfer.success.multiple",
                         "commands.transfer.success.multiple",
                         [
                             TextComponent::text(players.len().to_string()),

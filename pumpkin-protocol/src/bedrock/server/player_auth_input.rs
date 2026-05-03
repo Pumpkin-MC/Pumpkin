@@ -5,13 +5,8 @@ use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3}
 
 use crate::{
     codec::{
-        bitset::Bitset,
-        var_int::VarInt,
-        var_long::{VarLong, VarLongType},
-        var_uint::VarUInt,
-        var_ulong::VarULong,
+        bitset::Bitset, var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong,
     },
-    packet::{self, Packet},
     serial::PacketRead,
 };
 
@@ -40,6 +35,7 @@ pub struct SPlayerAuthInput {
 }
 
 impl PacketRead for SPlayerAuthInput {
+    #[expect(clippy::useless_let_if_seq)]
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let pitch = f32::read(reader)?;
         let yaw = f32::read(reader)?;
@@ -129,7 +125,7 @@ pub struct PlayerBlockAction {
     pub face: VarInt,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InputMode {
     Mouse = 1,
@@ -138,7 +134,7 @@ pub enum InputMode {
     MotionController = 4,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PlayMode {
     Normal = 0,
@@ -148,7 +144,7 @@ pub enum PlayMode {
     NumModes = 9,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InteractionModel {
     Touch = 0,
@@ -156,7 +152,7 @@ pub enum InteractionModel {
     Classic = 2,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputData {
     Ascend = 0,
     Descend = 1,

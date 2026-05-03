@@ -3,7 +3,7 @@ use std::io::{Error, Read, Write};
 use pumpkin_macros::packet;
 
 use crate::{
-    codec::{var_int::VarInt, var_ulong::VarULong},
+    codec::var_ulong::VarULong,
     serial::{PacketRead, PacketWrite},
 };
 
@@ -37,10 +37,7 @@ impl PacketRead for AnimateAction {
             4 => Ok(Self::MagicCriticalHit),
             128 => Ok(Self::RowRight),
             129 => Ok(Self::RowLeft),
-            _ => Err(Error::other(format!(
-                "Invalid animate action ID: {}",
-                action
-            ))),
+            _ => Err(Error::other(format!("Invalid animate action ID: {action}"))),
         }
     }
 }

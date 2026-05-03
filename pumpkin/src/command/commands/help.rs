@@ -17,7 +17,8 @@ use pumpkin_util::text::color::{Color, NamedColor};
 
 const NO_COMMANDS_ERROR_TYPE: LiteralCommandErrorType =
     LiteralCommandErrorType::new("No commands are available to show help for");
-const FAILED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new("commands.help.failed");
+const FAILED_ERROR_TYPE: CommandErrorType<0> =
+    CommandErrorType::new("commands.help.failed", "commands.help.failed");
 const PLUGIN_NOT_FOUND_ERROR_TYPE: LiteralCommandErrorType =
     LiteralCommandErrorType::new("Plugin not found or has no commands");
 

@@ -38,7 +38,7 @@ impl SText {
     }
 
     #[must_use]
-    pub fn translation(message: String, parameters: Vec<String>) -> Self {
+    pub const fn translation(message: String, parameters: Vec<String>) -> Self {
         Self {
             needs_translation: true,
             r#type: TextPacketType::Translation,

@@ -158,14 +158,16 @@ impl BlockPosArgumentConsumer {
         let pos = Self::find_arg(args, name)?;
 
         if world.level.try_get_chunk(&pos.chunk_position()).is_none() {
-            return Err(CommandError::CommandFailed(TextComponent::translate(
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                "argument.pos.unloaded",
                 "argument.pos.unloaded",
                 [],
             )));
         }
 
         if !world.is_in_build_limit(pos) {
-            return Err(CommandError::CommandFailed(TextComponent::translate(
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                "argument.pos.outofworld",
                 "argument.pos.outofworld",
                 [],
             )));
@@ -181,7 +183,8 @@ impl BlockPosArgumentConsumer {
         let pos = Self::find_arg(args, name)?;
 
         if !World::is_valid(pos) {
-            return Err(CommandError::CommandFailed(TextComponent::translate(
+            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                "argument.pos.outofbounds",
                 "argument.pos.outofbounds",
                 [],
             )));

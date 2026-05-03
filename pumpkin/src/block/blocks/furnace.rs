@@ -75,7 +75,11 @@ impl ScreenHandlerFactory for FurnaceScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate(translation::CONTAINER_FURNACE, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_FURNACE,
+            translation::bedrock::CONTAINER_FURNACE,
+            &[],
+        )
     }
 }
 

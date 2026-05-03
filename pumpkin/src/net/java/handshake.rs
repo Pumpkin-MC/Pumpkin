@@ -19,14 +19,16 @@ impl JavaClient {
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;
             if protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {
-                self.kick(TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
+                self.kick(TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
+                    translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_CLIENT,
                     [TextComponent::text(CURRENT_MC_VERSION.to_string())],
                 ))
                 .await;
             } else if protocol > CURRENT_MC_VERSION.protocol_version() as u32 {
-                self.kick(TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_OUTDATED_SERVER,
+                self.kick(TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_SERVER,
+                    translation::java::MULTIPLAYER_DISCONNECT_OUTDATED_SERVER,
                     [TextComponent::text(CURRENT_MC_VERSION.to_string())],
                 ))
                 .await;

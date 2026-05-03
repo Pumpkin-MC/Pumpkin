@@ -90,6 +90,10 @@ impl ScreenHandlerFactory for AnvilScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_REPAIR, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_REPAIR,
+            translation::bedrock::CONTAINER_REPAIR,
+            &[],
+        )
     }
 }

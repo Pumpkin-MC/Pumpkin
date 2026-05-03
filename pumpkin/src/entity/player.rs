@@ -1774,7 +1774,11 @@ impl Player {
             if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
                 self.kick(
                     DisconnectReason::KickedForIdle,
-                    TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IDLING, []),
+                    TextComponent::translate_cross(
+                        translation::java::MULTIPLAYER_DISCONNECT_IDLING,
+                        translation::java::MULTIPLAYER_DISCONNECT_IDLING,
+                        [],
+                    ),
                 )
                 .await;
                 return;
@@ -1790,7 +1794,11 @@ impl Player {
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
                 self.kick(
                     DisconnectReason::Timeout,
-                    TextComponent::translate(translation::DISCONNECT_TIMEOUT, []),
+                    TextComponent::translate_cross(
+                        translation::java::DISCONNECT_TIMEOUT,
+                        translation::bedrock::DISCONNECT_TIMEOUT,
+                        [],
+                    ),
                 )
                 .await;
                 return;
@@ -2363,7 +2371,11 @@ impl Player {
         drop(banned_players);
 
         let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, [])
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED,
+                translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
+                [],
+            )
         });
 
         self.kick(DisconnectReason::Kicked, kick_reason).await;
@@ -2394,7 +2406,11 @@ impl Player {
         drop(banned_ips);
 
         let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, [])
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                [],
+            )
         });
 
         let affected = server.get_players_by_ip(target_ip).await;

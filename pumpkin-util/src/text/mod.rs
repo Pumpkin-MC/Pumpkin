@@ -12,6 +12,7 @@ use serde::de::{Error, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
 use std::fmt::Formatter;
+use std::fmt::Write;
 use std::sync::LazyLock;
 use style::Style;
 
@@ -103,9 +104,11 @@ impl TextComponentBase {
     pub fn to_pretty_console(self) -> String {
         let mut text = match *self.content {
             TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate { translate, with } => {
-                translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with)
-            }
+            TextContent::Translate {
+                translate,
+                bedrock_translate: _,
+                with,
+            } => translation_to_pretty(format!("minecraft:{translate}"), Locale::EnUs, with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
@@ -144,7 +147,7 @@ impl TextComponentBase {
         if let Some(color) = &self.style.color {
             match color {
                 Color::Named(named) => {
-                    text.push_str(&format!("§{}", named.to_legacy_char()));
+                    let _ = write!(text, "§{}", named.to_legacy_char());
                 }
                 Color::Rgb(_rgb) => {
                     // Bedrock doesn't strictly support Java's §x hex format.
@@ -174,7 +177,11 @@ impl TextComponentBase {
         // 2. Resolve Content
         match &*self.content {
             TextContent::Text { text: t } => text.push_str(t),
-            TextContent::Translate { translate, with } => {
+            TextContent::Translate {
+                translate,
+                bedrock_translate: _,
+                with,
+            } => {
                 // TODO
                 text.push_str(&get_translation_text(
                     translate.to_string(),
@@ -211,9 +218,11 @@ impl TextComponentBase {
     pub fn get_text(self, locale: Locale) -> String {
         let mut text = match *self.content {
             TextContent::Text { text } => text.into_owned(),
-            TextContent::Translate { translate, with } => {
-                get_translation_text(format!("minecraft:{translate}"), locale, with)
-            }
+            TextContent::Translate {
+                translate,
+                bedrock_translate: _,
+                with,
+            } => get_translation_text(format!("minecraft:{translate}"), locale, with),
             TextContent::EntityNames {
                 selector,
                 separator: _,
@@ -382,6 +391,37 @@ impl TextComponent {
         Self(TextComponentBase {
             content: Box::new(TextContent::Translate {
                 translate: key.into(),
+                bedrock_translate: None,
+                with: with.into().into_iter().map(|x| x.0).collect(),
+            }),
+            style: Box::new(Style::default()),
+            extra: vec![],
+        })
+    }
+
+    /// Creates a new text component with a translation key that has a Bedrock-specific fallback.
+    ///
+    /// # Arguments
+    /// - `java_key` – The translation key for Java (e.g., "multiplayer.player.joined").
+    /// - `bedrock_key` – The translation key for Bedrock (e.g., "multiplayer.player.joined").
+    /// - `with` – The substitution parameters for the translation.
+    ///
+    /// # Returns
+    /// A new `TextComponent` that will be translated natively on both clients.
+    #[must_use]
+    pub fn translate_cross<
+        K1: Into<Cow<'static, str>>,
+        K2: Into<Cow<'static, str>>,
+        W: Into<Vec<Self>>,
+    >(
+        java_key: K1,
+        bedrock_key: K2,
+        with: W,
+    ) -> Self {
+        Self(TextComponentBase {
+            content: Box::new(TextContent::Translate {
+                translate: java_key.into(),
+                bedrock_translate: Some(bedrock_key.into()),
                 with: with.into().into_iter().map(|x| x.0).collect(),
             }),
             style: Box::new(Style::default()),
@@ -1003,6 +1043,9 @@ pub enum TextContent {
     Translate {
         /// The translation key (e.g. "multiplayer.player.joined").
         translate: Cow<'static, str>,
+        /// Bedrock translation key. If specified, Bedrock clients receive an `SText::translation` packet.
+        #[serde(skip, default)]
+        bedrock_translate: Option<Cow<'static, str>>,
         /// Substitution parameters for the translation.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         with: Vec<TextComponentBase>,

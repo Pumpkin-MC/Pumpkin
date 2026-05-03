@@ -6,11 +6,7 @@ use std::{
 use pumpkin_macros::send_cancellable;
 use pumpkin_protocol::{
     bedrock::{
-        client::{
-            chunk_radius_update::CChunkRadiusUpdate,
-            container_open::CContainerOpen,
-            level_event::{CLevelEvent, LevelEvent},
-        },
+        client::{chunk_radius_update::CChunkRadiusUpdate, container_open::CContainerOpen},
         server::{
             animate::{AnimateAction, SAnimate},
             command_request::SCommandRequest,
@@ -23,14 +19,10 @@ use pumpkin_protocol::{
             text::SText,
         },
     },
-    codec::{var_int::VarInt, var_long::VarLong, var_ulong::VarULong},
-    java::client::play::{Animation, CEntityAnimation, CSetBlockDestroyStage, CSystemChatMessage},
+    codec::{var_int::VarInt, var_long::VarLong},
+    java::client::play::{Animation, CSystemChatMessage},
 };
-use pumpkin_util::{
-    GameMode,
-    math::{position::BlockPos, vector3::Vector3},
-    text::TextComponent,
-};
+use pumpkin_util::{GameMode, math::position::BlockPos, text::TextComponent};
 
 use pumpkin_world::world::BlockFlags;
 
@@ -197,16 +189,16 @@ impl BedrockClient {
         .await;
     }
 
-    pub async fn handle_animate(&self, player: &Arc<Player>, _server: &Server, packet: SAnimate) {
+    pub fn handle_animate(&self, player: &Arc<Player>, _server: &Server, packet: &SAnimate) {
         if !player.has_client_loaded() {
             return;
         }
 
         let entity = &player.living_entity.entity;
-        let world = entity.world.load();
+        let _world = entity.world.load();
 
         // Broadcast the animation to other players
-        let java_animation = match packet.action {
+        let _java_animation = match packet.action {
             AnimateAction::SwingArm => Some(Animation::SwingMainArm),
             AnimateAction::WakeUp => Some(Animation::LeaveBed),
             AnimateAction::CriticalHit => Some(Animation::CriticalEffect),
@@ -291,6 +283,7 @@ impl BedrockClient {
         }}
     }
 
+    #[expect(clippy::match_same_arms)]
     pub async fn handle_player_action(
         &self,
         player: &Arc<Player>,

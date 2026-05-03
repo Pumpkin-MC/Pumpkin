@@ -45,23 +45,27 @@ impl CommandExecutor for Executor {
             }
 
             let text = match (category, sound) {
-                (Ok(c), Ok(s)) => TextComponent::translate(
-                    translation::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
+                (Ok(c), Ok(s)) => TextComponent::translate_cross(
+                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
+                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_SOUND,
                     [
                         TextComponent::text(s.to_name()),
                         TextComponent::text(c.to_name()),
                     ],
                 ),
-                (Ok(c), Err(_)) => TextComponent::translate(
-                    translation::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
+                (Ok(c), Err(_)) => TextComponent::translate_cross(
+                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
+                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCE_ANY,
                     [TextComponent::text(c.to_name())],
                 ),
-                (Err(_), Ok(s)) => TextComponent::translate(
-                    translation::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
+                (Err(_), Ok(s)) => TextComponent::translate_cross(
+                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
+                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_SOUND,
                     [TextComponent::text(s.to_name())],
                 ),
-                (Err(_), Err(_)) => TextComponent::translate(
-                    translation::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
+                (Err(_), Err(_)) => TextComponent::translate_cross(
+                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
+                    translation::java::COMMANDS_STOPSOUND_SUCCESS_SOURCELESS_ANY,
                     [],
                 ),
             };

@@ -67,8 +67,9 @@ impl CommandExecutor for QueryExecutor {
                 QueryMode::Day => level_time.query_day(),
             };
             sender
-                .send_message(TextComponent::translate(
-                    translation::COMMANDS_TIME_QUERY,
+                .send_message(TextComponent::translate_cross(
+                    translation::java::COMMANDS_TIME_QUERY,
+                    translation::java::COMMANDS_TIME_QUERY,
                     [TextComponent::text(curr_time.to_string())],
                 ))
                 .await;
@@ -112,8 +113,9 @@ impl CommandExecutor for ChangeExecutor {
                     level_time.send_time(world).await;
                     let curr_time = level_time.query_daytime();
                     sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_TIME_SET,
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_TIME_SET,
+                            translation::bedrock::COMMANDS_TIME_SET,
                             [TextComponent::text(curr_time.to_string())],
                         ))
                         .await;
@@ -124,8 +126,9 @@ impl CommandExecutor for ChangeExecutor {
                     level_time.set_time(time_count.into());
                     level_time.send_time(world).await;
                     sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_TIME_SET,
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_TIME_SET,
+                            translation::bedrock::COMMANDS_TIME_SET,
                             [TextComponent::text(time_count.to_string())],
                         ))
                         .await;

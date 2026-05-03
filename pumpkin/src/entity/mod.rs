@@ -321,7 +321,8 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             .load()
             .as_ref()
             .clone()
-            .unwrap_or(TextComponent::translate(
+            .unwrap_or(TextComponent::translate_cross(
+                format!("entity.minecraft.{}", entity.entity_type.resource_name),
                 format!("entity.minecraft.{}", entity.entity_type.resource_name),
                 [],
             ))
@@ -331,16 +332,13 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async move {
             // TODO: team color
             let entity = self.get_entity();
-            let mut name =
-                entity
-                    .custom_name
-                    .load()
-                    .as_ref()
-                    .clone()
-                    .unwrap_or(TextComponent::translate(
-                        format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                        [],
-                    ));
+            let mut name = entity.custom_name.load().as_ref().clone().unwrap_or(
+                TextComponent::translate_cross(
+                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                    [],
+                ),
+            );
             let name_clone = name.clone();
             name = name.hover_event(HoverEvent::show_entity(
                 entity.entity_uuid.to_string(),
@@ -2247,7 +2245,7 @@ impl Entity {
                 } else {
                     self.bedrock_flags_two.fetch_and(mask, Ordering::Relaxed);
                 }
-            };
+            }
 
             let world = self.world.load();
             let chunk_pos = self.chunk_pos.load();
@@ -2983,6 +2981,7 @@ pub enum Flag {
 }
 
 impl Flag {
+    #[must_use]
     pub const fn to_bedrock(&self) -> Option<u32> {
         match self {
             Self::OnFire => Some(entity_data_flag::ON_FIRE),

@@ -368,7 +368,11 @@ fn selector_suggestions() -> Vec<CommandSuggestion> {
 fn syntax_player_unknown(raw_arg: RawArg<'_>) -> CommandSyntaxError {
     syntax_error_for_arg_with_cursor(
         raw_arg,
-        TextComponent::translate(translation::ARGUMENT_PLAYER_UNKNOWN, []),
+        TextComponent::translate_cross(
+            translation::java::ARGUMENT_PLAYER_UNKNOWN,
+            translation::java::ARGUMENT_PLAYER_UNKNOWN,
+            [],
+        ),
         0,
     )
 }
@@ -416,7 +420,7 @@ mod test {
             TextContent::Translate { translate, .. } => translate.as_ref(),
             _ => "",
         };
-        assert_eq!(translate_key, translation::ARGUMENT_PLAYER_UNKNOWN);
+        assert_eq!(translate_key, translation::java::ARGUMENT_PLAYER_UNKNOWN);
         assert_eq!(error.context.unwrap().cursor, 4);
     }
 }

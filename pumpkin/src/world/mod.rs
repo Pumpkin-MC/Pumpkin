@@ -2225,8 +2225,9 @@ impl World {
                 .await;
         }
 
-        let msg_comp = TextComponent::translate(
-            translation::MULTIPLAYER_PLAYER_JOINED,
+        let msg_comp = TextComponent::translate_cross(
+            translation::java::MULTIPLAYER_PLAYER_JOINED,
+            translation::bedrock::MULTIPLAYER_PLAYER_JOINED,
             [TextComponent::text(player.gameprofile.name.clone())],
         )
         .color_named(NamedColor::Yellow);
@@ -3116,8 +3117,9 @@ impl World {
                 .await;
 
             if fire_event {
-                let msg_comp = TextComponent::translate(
-                    translation::MULTIPLAYER_PLAYER_LEFT,
+                let msg_comp = TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_PLAYER_LEFT,
+                    translation::bedrock::MULTIPLAYER_PLAYER_LEFT,
                     [TextComponent::text(player.gameprofile.name.clone())],
                 )
                 .color_named(NamedColor::Yellow);

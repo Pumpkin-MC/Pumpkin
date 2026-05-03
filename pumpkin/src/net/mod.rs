@@ -177,13 +177,15 @@ pub async fn can_not_join(
 
     let mut banned_players = server.data.banned_player_list.write().await;
     if let Some(entry) = banned_players.get_entry(profile) {
-        let text = TextComponent::translate(
-            translation::MULTIPLAYER_DISCONNECT_BANNED_REASON,
+        let text = TextComponent::translate_cross(
+            translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
+            translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
             [TextComponent::text(entry.reason.clone())],
         );
         return Some(match entry.expires {
-            Some(expires) => text.add_child(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
+            Some(expires) => text.add_child(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED_EXPIRATION,
                 [TextComponent::text(
                     expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],
@@ -198,8 +200,9 @@ pub async fn can_not_join(
         let whitelist = server.data.whitelist_config.read().await;
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
-            return Some(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+            return Some(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+                translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
                 &[],
             ));
         }
@@ -212,13 +215,15 @@ pub async fn can_not_join(
         .await
         .get_entry(&address.ip())
     {
-        let text = TextComponent::translate(
-            translation::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
+        let text = TextComponent::translate_cross(
+            translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
+            translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_REASON,
             [TextComponent::text(entry.reason.clone())],
         );
         return Some(match entry.expires {
-            Some(expires) => text.add_child(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
+            Some(expires) => text.add_child(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED_IP_EXPIRATION,
                 [TextComponent::text(
                     expires.format(FORMAT_DESCRIPTION).unwrap(),
                 )],

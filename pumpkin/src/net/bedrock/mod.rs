@@ -721,8 +721,7 @@ impl BedrockClient {
                     .await;
             }
             SAnimate::PACKET_ID => {
-                self.handle_animate(player, server, SAnimate::read(reader)?)
-                    .await;
+                self.handle_animate(player, server, &SAnimate::read(reader)?);
             }
             SLoadingScreen::PACKET_ID => {
                 // Ignore for now

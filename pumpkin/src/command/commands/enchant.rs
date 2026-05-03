@@ -31,14 +31,16 @@ impl CommandExecutor for Executor {
                 Ok(Ok(level)) => level,
                 Ok(Err(err)) => {
                     let err_msg = match err {
-                        NotInBounds::LowerBound(val, min) => TextComponent::translate(
+                        NotInBounds::LowerBound(val, min) => TextComponent::translate_cross(
+                            "argument.integer.low",
                             "argument.integer.low",
                             &[
                                 TextComponent::text(min.to_string()),
                                 TextComponent::text(val.to_string()),
                             ],
                         ),
-                        NotInBounds::UpperBound(val, max) => TextComponent::translate(
+                        NotInBounds::UpperBound(val, max) => TextComponent::translate_cross(
+                            "argument.integer.big",
                             "argument.integer.big",
                             &[
                                 TextComponent::text(max.to_string()),
@@ -52,7 +54,8 @@ impl CommandExecutor for Executor {
             };
 
             if level > enchantment.max_level {
-                let msg = TextComponent::translate(
+                let msg = TextComponent::translate_cross(
+                    "commands.enchant.failed.level",
                     "commands.enchant.failed.level",
                     [
                         TextComponent::text(level.to_string()),
@@ -68,9 +71,7 @@ impl CommandExecutor for Executor {
             for target in targets {
                 // let Some(target) = target.get_living_entity() else {
                 //     if only_one {
-                //         let msg = TextComponent::translate(
-                //             "commands.enchant.failed.entity",
-                //             [targets[0].get_display_name().await],
+                //         let msg = TextComponent::translate_cross(//             "commands.enchant.failed.entity".clone(), //             "commands.enchant.failed.entity", //             [targets[0].get_display_name().await],
                 //         );
                 //         sender.send_message(msg).await;
                 //         return Ok(());
@@ -85,7 +86,8 @@ impl CommandExecutor for Executor {
                 let mut item = lock.lock().await;
                 if item.is_empty() {
                     if only_one {
-                        let msg = TextComponent::translate(
+                        let msg = TextComponent::translate_cross(
+                            "commands.enchant.failed.itemless",
                             "commands.enchant.failed.itemless",
                             [targets[0].get_display_name().await],
                         );
@@ -95,7 +97,8 @@ impl CommandExecutor for Executor {
                 }
                 if !enchantment.can_enchant(item.item) {
                     if only_one {
-                        let msg = TextComponent::translate(
+                        let msg = TextComponent::translate_cross(
+                            "commands.enchant.failed.incompatible",
                             "commands.enchant.failed.incompatible",
                             [item.item.translated_name()],
                         );
@@ -108,7 +111,8 @@ impl CommandExecutor for Executor {
                         item.enchant(enchantment, level);
                         success += 1;
                     } else if only_one {
-                        let msg = TextComponent::translate(
+                        let msg = TextComponent::translate_cross(
+                            "commands.enchant.failed.incompatible",
                             "commands.enchant.failed.incompatible",
                             [item.item.translated_name()],
                         );
@@ -120,12 +124,17 @@ impl CommandExecutor for Executor {
                 }
             }
             if success == 0 {
-                let msg = TextComponent::translate(translation::COMMANDS_ENCHANT_FAILED, []);
+                let msg = TextComponent::translate_cross(
+                    translation::java::COMMANDS_ENCHANT_FAILED,
+                    translation::java::COMMANDS_ENCHANT_FAILED,
+                    [],
+                );
                 return Err(CommandError::CommandFailed(msg));
             }
             if only_one {
-                let msg = TextComponent::translate(
-                    translation::COMMANDS_ENCHANT_SUCCESS_SINGLE,
+                let msg = TextComponent::translate_cross(
+                    translation::java::COMMANDS_ENCHANT_SUCCESS_SINGLE,
+                    translation::java::COMMANDS_ENCHANT_SUCCESS_SINGLE,
                     [
                         enchantment.get_fullname(level),
                         targets[0].get_display_name().await,
@@ -133,8 +142,9 @@ impl CommandExecutor for Executor {
                 );
                 sender.send_message(msg).await;
             } else {
-                let msg = TextComponent::translate(
-                    translation::COMMANDS_ENCHANT_SUCCESS_MULTIPLE,
+                let msg = TextComponent::translate_cross(
+                    translation::java::COMMANDS_ENCHANT_SUCCESS_MULTIPLE,
+                    translation::java::COMMANDS_ENCHANT_SUCCESS_MULTIPLE,
                     [
                         enchantment.get_fullname(level),
                         TextComponent::text(targets.len().to_string()),

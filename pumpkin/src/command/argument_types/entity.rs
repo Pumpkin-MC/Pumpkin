@@ -11,24 +11,34 @@ use pumpkin_data::translation;
 use std::sync::Arc;
 
 /// A [`CommandErrorType`] to tell that no entities could be found.
-pub const NO_ENTITIES_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_NOTFOUND_ENTITY);
+pub const NO_ENTITIES_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_NOTFOUND_ENTITY,
+    translation::java::ARGUMENT_ENTITY_NOTFOUND_ENTITY,
+);
 
 /// A [`CommandErrorType`] to tell that no players could be found.
-pub const NO_PLAYERS_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_NOTFOUND_PLAYER);
+pub const NO_PLAYERS_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_NOTFOUND_PLAYER,
+    translation::java::ARGUMENT_ENTITY_NOTFOUND_PLAYER,
+);
 
 /// A [`CommandErrorType`] to tell that only players are allowed for an entity selector.
-pub const ONLY_PLAYERS_ALLOWED_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_PLAYER_ENTITIES);
+pub const ONLY_PLAYERS_ALLOWED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_PLAYER_ENTITIES,
+    translation::java::ARGUMENT_PLAYER_ENTITIES,
+);
 
 /// A [`CommandErrorType`] to tell that only 1 entity is allowed for an entity selector.
-pub const NOT_SINGLE_ENTITY_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_TOOMANY);
+pub const NOT_SINGLE_ENTITY_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_TOOMANY,
+    translation::java::ARGUMENT_ENTITY_TOOMANY,
+);
 
 /// A [`CommandErrorType`] to tell that only 1 player is allowed for an entity selector.
-pub const NOT_SINGLE_PLAYER_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_PLAYER_TOOMANY);
+pub const NOT_SINGLE_PLAYER_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_PLAYER_TOOMANY,
+    translation::java::ARGUMENT_PLAYER_TOOMANY,
+);
 
 pub const ENTITY_SELECTOR_PERMISSION: &str = "minecraft:command.selector";
 

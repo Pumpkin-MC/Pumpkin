@@ -168,7 +168,7 @@ impl PacketRead for VarLong {
 
         let decoded = ((val >> 1) as i64) ^ -((val & 1) as i64);
 
-        Ok(VarLong(decoded))
+        Ok(Self(decoded))
     }
 }
 

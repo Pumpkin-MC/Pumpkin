@@ -99,7 +99,7 @@ impl TryFrom<i32> for Action {
             34 => Ok(Self::StartFlying),
             35 => Ok(Self::StopFlying),
             36 => Ok(Self::ClientAckServerData),
-            _ => Err(format!("Invalid action ID: {}", value)),
+            _ => Err(format!("Invalid action ID: {value}")),
         }
     }
 }
@@ -108,6 +108,6 @@ impl PacketRead for Action {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let action = VarInt::read(reader)?;
 
-        Action::try_from(action.0).map_err(Error::other)
+        Self::try_from(action.0).map_err(Error::other)
     }
 }

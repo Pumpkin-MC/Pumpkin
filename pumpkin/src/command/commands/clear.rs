@@ -143,37 +143,43 @@ async fn clear_command_text_output(
     targets: &[Arc<Player>],
 ) -> Result<TextComponent, TextComponent> {
     match (targets, item_count == 0, max_count == 0) {
-        ([target], true, _) => Err(TextComponent::translate(
-            translation::CLEAR_FAILED_SINGLE,
+        ([target], true, _) => Err(TextComponent::translate_cross(
+            translation::java::CLEAR_FAILED_SINGLE,
+            translation::java::CLEAR_FAILED_SINGLE,
             [target.get_display_name().await],
         )),
-        (targets, true, _) => Err(TextComponent::translate(
-            translation::CLEAR_FAILED_MULTIPLE,
+        (targets, true, _) => Err(TextComponent::translate_cross(
+            translation::java::CLEAR_FAILED_MULTIPLE,
+            translation::java::CLEAR_FAILED_MULTIPLE,
             [TextComponent::text(targets.len().to_string())],
         )),
-        ([target], false, false) => Ok(TextComponent::translate(
-            translation::COMMANDS_CLEAR_SUCCESS_SINGLE,
+        ([target], false, false) => Ok(TextComponent::translate_cross(
+            translation::java::COMMANDS_CLEAR_SUCCESS_SINGLE,
+            translation::java::COMMANDS_CLEAR_SUCCESS_SINGLE,
             [
                 TextComponent::text(item_count.to_string()),
                 target.get_display_name().await,
             ],
         )),
-        (targets, false, false) => Ok(TextComponent::translate(
-            translation::COMMANDS_CLEAR_SUCCESS_MULTIPLE,
+        (targets, false, false) => Ok(TextComponent::translate_cross(
+            translation::java::COMMANDS_CLEAR_SUCCESS_MULTIPLE,
+            translation::java::COMMANDS_CLEAR_SUCCESS_MULTIPLE,
             [
                 TextComponent::text(item_count.to_string()),
                 TextComponent::text(targets.len().to_string()),
             ],
         )),
-        ([target], false, true) => Ok(TextComponent::translate(
-            translation::COMMANDS_CLEAR_TEST_SINGLE,
+        ([target], false, true) => Ok(TextComponent::translate_cross(
+            translation::java::COMMANDS_CLEAR_TEST_SINGLE,
+            translation::java::COMMANDS_CLEAR_TEST_SINGLE,
             [
                 TextComponent::text(item_count.to_string()),
                 target.get_display_name().await,
             ],
         )),
-        (targets, false, true) => Ok(TextComponent::translate(
-            translation::COMMANDS_CLEAR_TEST_MULTIPLE,
+        (targets, false, true) => Ok(TextComponent::translate_cross(
+            translation::java::COMMANDS_CLEAR_TEST_MULTIPLE,
+            translation::java::COMMANDS_CLEAR_TEST_MULTIPLE,
             [
                 TextComponent::text(item_count.to_string()),
                 TextComponent::text(targets.len().to_string()),
@@ -273,8 +279,9 @@ impl CommandExecutor for ItemCountExecutor {
 
             let item = ItemPredicateArgumentConsumer::find_arg(args, ARG_ITEM)?;
             let Ok(max) = count_consumer().find_arg_default_name(args)? else {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::PARSING_INT_INVALID,
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::PARSING_INT_INVALID,
+                    translation::java::PARSING_INT_INVALID,
                     [TextComponent::text(i32::MAX.to_string())],
                 )));
             };

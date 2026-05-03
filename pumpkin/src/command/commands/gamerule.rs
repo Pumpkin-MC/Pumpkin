@@ -40,7 +40,8 @@ impl CommandExecutor for QueryExecutor {
             drop(level_info);
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(TextComponent::translate_cross(
+                    "commands.gamerule.query",
                     "commands.gamerule.query",
                     [key, value],
                 ))
@@ -93,7 +94,8 @@ impl CommandExecutor for SetExecutor {
 
             let value_component = TextComponent::text(output_value);
             sender
-                .send_message(TextComponent::translate(
+                .send_message(TextComponent::translate_cross(
+                    "commands.gamerule.set",
                     "commands.gamerule.set",
                     [key, value_component],
                 ))

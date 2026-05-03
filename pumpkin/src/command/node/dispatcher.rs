@@ -16,7 +16,7 @@ use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::command::tree::Command;
 use futures::future;
-use pumpkin_data::translation::COMMAND_CONTEXT_HERE;
+use pumpkin_data::translation::java::COMMAND_CONTEXT_HERE;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
@@ -440,7 +440,7 @@ impl CommandDispatcher {
             }
 
             error_text = error_text.add_child(
-                TextComponent::translate(COMMAND_CONTEXT_HERE, &[])
+                TextComponent::translate_cross(COMMAND_CONTEXT_HERE, COMMAND_CONTEXT_HERE, &[])
                     .color(Color::Named(NamedColor::Red))
                     .italic(),
             );

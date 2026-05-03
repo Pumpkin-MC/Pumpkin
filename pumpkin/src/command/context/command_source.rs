@@ -15,10 +15,14 @@ use pumpkin_util::text::color::{Color, NamedColor};
 use std::pin::Pin;
 use std::sync::Arc;
 
-pub const REQUIRES_PLAYER: CommandErrorType<0> =
-    CommandErrorType::new(translation::PERMISSIONS_REQUIRES_PLAYER);
-pub const REQUIRES_ENTITY: CommandErrorType<0> =
-    CommandErrorType::new(translation::PERMISSIONS_REQUIRES_ENTITY);
+pub const REQUIRES_PLAYER: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+);
+pub const REQUIRES_ENTITY: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PERMISSIONS_REQUIRES_ENTITY,
+    translation::java::PERMISSIONS_REQUIRES_ENTITY,
+);
 
 pub trait ReturnValueCallable: Send + Sync {
     fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
@@ -407,10 +411,13 @@ impl CommandSource {
 
     /// Sends a message to all online operators.
     async fn send_to_ops(&self, message: TextComponent) {
-        let text =
-            TextComponent::translate("chat.type.admin", &[self.display_name.clone(), message])
-                .color(Color::Named(NamedColor::Gray))
-                .italic();
+        let text = TextComponent::translate_cross(
+            "chat.type.admin",
+            "chat.type.admin",
+            &[self.display_name.clone(), message],
+        )
+        .color(Color::Named(NamedColor::Gray))
+        .italic();
         let Some(server) = &self.server else {
             return;
         };

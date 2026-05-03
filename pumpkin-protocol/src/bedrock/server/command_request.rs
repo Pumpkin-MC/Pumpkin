@@ -1,7 +1,7 @@
 use pumpkin_macros::packet;
 use uuid::Uuid;
 
-use crate::{codec::var_uint::VarUInt, serial::PacketRead};
+use crate::serial::PacketRead;
 
 #[derive(Debug, PacketRead)]
 #[packet(77)]
