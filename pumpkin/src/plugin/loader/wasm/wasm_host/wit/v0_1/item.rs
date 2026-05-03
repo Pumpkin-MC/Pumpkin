@@ -32,25 +32,42 @@ impl HostPdcItemStack for PluginHostState {
         Ok(stack.item_count)
     }
 
-    async fn pdc_has(&mut self, item: Resource<PdcItemStack>, key: String) -> wasmtime::Result<Result<bool, String>> {
+    async fn pdc_has(
+        &mut self,
+        item: Resource<PdcItemStack>,
+        key: String,
+    ) -> wasmtime::Result<Result<bool, String>> {
         let item_arc = item_stack_from_resource(self, &item)?;
         let stack = item_arc.lock().await;
         Ok(stack.pdc_has(&key))
     }
 
-    async fn pdc_get(&mut self, item: Resource<PdcItemStack>, key: String) -> wasmtime::Result<Result<Option<Vec<u8>>, String>> {
+    async fn pdc_get(
+        &mut self,
+        item: Resource<PdcItemStack>,
+        key: String,
+    ) -> wasmtime::Result<Result<Option<Vec<u8>>, String>> {
         let item_arc = item_stack_from_resource(self, &item)?;
         let stack = item_arc.lock().await;
         Ok(stack.pdc_get(&key))
     }
 
-    async fn pdc_set(&mut self, item: Resource<PdcItemStack>, key: String, value: Vec<u8>) -> wasmtime::Result<Result<(), String>> {
+    async fn pdc_set(
+        &mut self,
+        item: Resource<PdcItemStack>,
+        key: String,
+        value: Vec<u8>,
+    ) -> wasmtime::Result<Result<(), String>> {
         let item_arc = item_stack_from_resource(self, &item)?;
         let mut stack = item_arc.lock().await;
         Ok(stack.pdc_set(key, value))
     }
 
-    async fn pdc_remove(&mut self, item: Resource<PdcItemStack>, key: String) -> wasmtime::Result<Result<bool, String>> {
+    async fn pdc_remove(
+        &mut self,
+        item: Resource<PdcItemStack>,
+        key: String,
+    ) -> wasmtime::Result<Result<bool, String>> {
         let item_arc = item_stack_from_resource(self, &item)?;
         let mut stack = item_arc.lock().await;
         Ok(stack.pdc_remove(&key))

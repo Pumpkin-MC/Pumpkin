@@ -194,9 +194,8 @@ impl ItemStack {
         item_count: 0,
         item: &Item::AIR,
         patch: Vec::new(),
-            persistent_data: PersistentDataContainer::new(),
+        persistent_data: PersistentDataContainer::new(),
     };
-
 
     pub fn pdc_has(&self, key: &str) -> Result<bool, String> {
         if !is_valid_pdc_key(key) {
@@ -623,7 +622,6 @@ impl ItemStack {
         // Store custom data like enchantments, display name, etc. would go here
         compound.put_compound("components", tag);
 
-
         if !self.persistent_data.is_empty() {
             let mut plugin_data = NbtCompound::new();
             for (key, value) in self.persistent_data.iter() {
@@ -681,7 +679,6 @@ impl ItemStack {
                 }
             }
         }
-
 
         if let Some(plugin_data) = compound.get_compound(PersistentDataContainer::NBT_FIELD) {
             for (key, value) in &plugin_data.child_tags {

@@ -100,23 +100,23 @@ impl PluginHostState {
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
- pub fn add_entity<T>(
- &mut self,
- provider: Arc<dyn EntityBase>,
- ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
- let resource = self.resource_table.push(EntityResource { provider })?;
- Ok(wasmtime::component::Resource::new_own(resource.rep()))
- }
+    pub fn add_entity<T>(
+        &mut self,
+        provider: Arc<dyn EntityBase>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(EntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
 
- pub fn add_item_stack<T>(
- &mut self,
- provider: Arc<Mutex<ItemStack>>,
- ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
- let resource = self.resource_table.push(ItemStackResource { provider })?;
- Ok(wasmtime::component::Resource::new_own(resource.rep()))
- }
+    pub fn add_item_stack<T>(
+        &mut self,
+        provider: Arc<Mutex<ItemStack>>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(ItemStackResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
 
- pub fn add_world<T>(
+    pub fn add_world<T>(
         &mut self,
         provider: Arc<World>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
