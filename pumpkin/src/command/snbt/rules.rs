@@ -550,7 +550,9 @@ impl SnbtParser<'_, '_> {
                     None
                 }
             }
-            EscapeSequenceBranch::UnicodeName(name) => todo!(),
+            EscapeSequenceBranch::UnicodeName(name) => {
+                todo!("Unicode Name functionality has not been implemented yet")
+            }
         }
     }
 
