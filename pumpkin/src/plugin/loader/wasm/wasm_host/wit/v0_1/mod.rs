@@ -15,6 +15,7 @@ pub mod entity;
 pub mod events;
 pub mod gui;
 pub mod i18n;
+pub mod item;
 pub mod logging;
 pub mod permission;
 pub mod player;

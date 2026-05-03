@@ -33,8 +33,10 @@ world plugin {
     import %world;
     /// Provides entity types and manipulation.
     import entity;
-    /// Provides boss bar creation and management.
-    import boss-bar;
+ /// Provides boss bar creation and management.
+ import boss-bar;
+ /// Provides ItemStack manipulation including PersistentDataContainer access.
+ import item;
 
     // --- Plugin-provided exports ---
 
