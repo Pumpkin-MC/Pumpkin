@@ -381,40 +381,36 @@ impl ItemEntity {
 }
 
 impl NBTStorage for ItemEntity {
- fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> super::NbtFuture<'a, ()> {
- Box::pin(async move {
- self.entity.write_nbt(nbt).await;
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> super::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.entity.write_nbt(nbt).await;
 
- let item_stack = self.item_stack.lock().await;
- item_stack.write_item_stack_pnbt(nbt);
+            let item_stack = self.item_stack.lock().await;
+            item_stack.write_item_stack_pnbt(nbt);
 
- nbt.put_u32(self.item_age.load(Ordering::Relaxed));
- nbt.put_u8(self.pickup_delay.load(Ordering::Relaxed));
- nbt.put_float(self.health.load(Relaxed));
- })
- }
+            nbt.put_u32(self.item_age.load(Ordering::Relaxed));
+            nbt.put_u8(self.pickup_delay.load(Ordering::Relaxed));
+            nbt.put_float(self.health.load(Relaxed));
+        })
+    }
 
- fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> super::NbtFuture<'a, ()> {
- Box::pin(async move {
- self.entity.read_nbt_non_mut(nbt).await;
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> super::NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.entity.read_nbt_non_mut(nbt).await;
 
- if let Some(item_stack) = ItemStack::read_item_stack_pnbt(nbt) {
- self.sync_fire_immunity_from_stack(&item_stack);
- *self.item_stack.lock().await = item_stack;
- }
+            if let Some(item_stack) = ItemStack::read_item_stack_pnbt(nbt) {
+                self.sync_fire_immunity_from_stack(&item_stack);
+                *self.item_stack.lock().await = item_stack;
+            }
 
- self.item_age.store(
- nbt.get_u32().unwrap_or(0),
- Ordering::Relaxed,
- );
- self.pickup_delay.store(
- nbt.get_u8().unwrap_or(0),
- Ordering::Relaxed,
- );
- self.health
- .store(nbt.get_float().unwrap_or(5.0).max(0.0), Relaxed);
- })
- }
+            self.item_age
+                .store(nbt.get_u32().unwrap_or(0), Ordering::Relaxed);
+            self.pickup_delay
+                .store(nbt.get_u8().unwrap_or(0), Ordering::Relaxed);
+            self.health
+                .store(nbt.get_float().unwrap_or(5.0).max(0.0), Relaxed);
+        })
+    }
 }
 
 impl EntityBase for ItemEntity {
@@ -604,50 +600,50 @@ mod tests {
         ))
     }
 
- #[tokio::test]
- async fn item_entity_nbt_round_trips_uuid_and_item_payload() {
- let world = test_world();
- let uuid = uuid::Uuid::new_v4();
- let entity = Entity::from_uuid(
- uuid,
- world.clone(),
- Vector3::new(10.0, 64.0, -5.0),
- &EntityType::ITEM,
- );
- let item_entity = ItemEntity::new_with_velocity(
- entity,
- ItemStack::new(3, &Item::DIAMOND),
- Vector3::new(0.25, 0.5, -0.125),
- 7,
- )
- .await;
- item_entity.item_age.store(42, Ordering::Relaxed);
- item_entity.health.store(3.5, Relaxed);
+    #[tokio::test]
+    async fn item_entity_nbt_round_trips_uuid_and_item_payload() {
+        let world = test_world();
+        let uuid = uuid::Uuid::new_v4();
+        let entity = Entity::from_uuid(
+            uuid,
+            world.clone(),
+            Vector3::new(10.0, 64.0, -5.0),
+            &EntityType::ITEM,
+        );
+        let item_entity = ItemEntity::new_with_velocity(
+            entity,
+            ItemStack::new(3, &Item::DIAMOND),
+            Vector3::new(0.25, 0.5, -0.125),
+            7,
+        )
+        .await;
+        item_entity.item_age.store(42, Ordering::Relaxed);
+        item_entity.health.store(3.5, Relaxed);
 
- let mut nbt = PNbtCompound::default();
- item_entity.write_nbt(&mut nbt).await;
+        let mut nbt = PNbtCompound::default();
+        item_entity.write_nbt(&mut nbt).await;
 
- // Verify that nbt data was written (non-empty payload)
- assert!(!nbt.data.is_empty(), "item entity nbt should have data");
+        // Verify that nbt data was written (non-empty payload)
+        assert!(!nbt.data.is_empty(), "item entity nbt should have data");
 
- let reloaded = ItemEntity::new_for_restore(Entity::from_uuid(
- uuid,
- world,
- Vector3::new(0.0, 0.0, 0.0),
- &EntityType::ITEM,
- ))
- .await;
- reloaded.read_nbt_non_mut(&mut nbt).await;
+        let reloaded = ItemEntity::new_for_restore(Entity::from_uuid(
+            uuid,
+            world,
+            Vector3::new(0.0, 0.0, 0.0),
+            &EntityType::ITEM,
+        ))
+        .await;
+        reloaded.read_nbt_non_mut(&mut nbt).await;
 
- let restored_stack = reloaded.item_stack.lock().await.clone();
- assert_eq!(restored_stack.item.id, Item::DIAMOND.id);
- assert_eq!(restored_stack.item_count, 3);
- assert_eq!(reloaded.item_age.load(Ordering::Relaxed), 42);
- assert_eq!(reloaded.pickup_delay.load(Ordering::Relaxed), 7);
- assert_eq!(reloaded.health.load(Relaxed), 3.5);
- assert_eq!(
- reloaded.entity.entity_uuid, uuid,
- "reloaded item entity should keep the base UUID path"
- );
- }
+        let restored_stack = reloaded.item_stack.lock().await.clone();
+        assert_eq!(restored_stack.item.id, Item::DIAMOND.id);
+        assert_eq!(restored_stack.item_count, 3);
+        assert_eq!(reloaded.item_age.load(Ordering::Relaxed), 42);
+        assert_eq!(reloaded.pickup_delay.load(Ordering::Relaxed), 7);
+        assert_eq!(reloaded.health.load(Relaxed), 3.5);
+        assert_eq!(
+            reloaded.entity.entity_uuid, uuid,
+            "reloaded item entity should keep the base UUID path"
+        );
+    }
 }
