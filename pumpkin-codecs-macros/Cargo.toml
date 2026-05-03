@@ -1,0 +1,20 @@
+[package]
+name = "pumpkin-codecs-macros"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+
+proc-macro-error2.workspace = true
+proc-macro-crate.workspace = true
+
+quote.workspace = true
+syn.workspace = true
+
+[lints]
+workspace = true

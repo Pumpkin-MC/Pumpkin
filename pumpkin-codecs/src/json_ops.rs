@@ -13,7 +13,6 @@ pub struct JsonOps;
 
 impl JsonOps {
     /// A function to get a JSON value as a string, similar to Google's GSON's `getAsString()` method for `JsonElement`.
-    /// This is to keep parity with the `JsonOps` methods that check for `compressed`.
     ///
     /// In particular, this method may return `Some` for *ONLY* the following:
     /// - Booleans (always)

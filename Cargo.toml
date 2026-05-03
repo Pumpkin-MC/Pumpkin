@@ -11,7 +11,8 @@ members = [
     "pumpkin/",
     "pumpkin-data",
     "pumpkin-plugin-api",
-    "pumpkin-codecs"
+    "pumpkin-codecs",
+    "pumpkin-codecs-macros"
 ]
 exclude = ["pumpkin-codegen"]
 
@@ -91,7 +92,7 @@ strip = false
 
 [workspace.dependencies]
 tokio = { version = "1.52", default-features = false }
-syn = { version = "2.0", default-features = false, features = ["printing"] }
+syn = { version = "2.0", default-features = false, features = ["printing", "derive"] }
 
 thiserror = "2.0"
 
@@ -141,7 +142,9 @@ num-traits = "0.2"
 p384 = "0.13.1"
 phf = "0.13.1"
 proc-macro2 = "1.0"
+proc-macro-crate = "3.5.0"
 pumpkin-codecs = { path = "pumpkin-codecs" }
+pumpkin-codecs-macros = { path = "pumpkin-codecs-macros" }
 pumpkin-config = { path = "pumpkin-config" }
 pumpkin-data = { path = "pumpkin-data" }
 pumpkin-inventory = { path = "pumpkin-inventory" }
