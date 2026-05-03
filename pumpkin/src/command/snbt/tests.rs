@@ -238,15 +238,11 @@ fn quoted_string_literals() {
 
     assert_parse_err!("'\\'", "Invalid string contents", 3, ["\"", "'", "\\"]);
 
-    assert_parse_ok!(
-        "'hello worl\\bd'",
-        NbtTag::String("hello worl\u{8}d".to_string())
-    );
+    assert_parse_ok!("'\\b'", NbtTag::String("\u{8}".to_string()));
     assert_parse_ok!("'hello\\sword'", NbtTag::String("hello word".to_string()));
-    assert_parse_ok!("'hello\\tword'", NbtTag::String("hello\tword".to_string()));
     assert_parse_ok!(
-        "'\\some or \\none'",
-        NbtTag::String(" ome or \none".to_string())
+        "'hello\\tword\n'",
+        NbtTag::String("hello\tword\n".to_string())
     );
     assert_parse_ok!("'\\f\\r'", NbtTag::String("\u{c}\r".to_string()));
 

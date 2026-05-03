@@ -107,9 +107,9 @@ impl SnbtParser<'_, '_> {
             } else {
                 // This shouldn't happen... If it didn't parse successfully, there should be an error to supplement it.
                 // Hacky way to report an error:
-                const PARSING_FAILED_WITHOUR_ERRORS: CommandErrorType<0> = CommandErrorType::new(COMMAND_FAILED);
+                const PARSING_FAILED_WITHOUT_ERRORS: CommandErrorType<0> = CommandErrorType::new(COMMAND_FAILED);
                 tracing::error!("Failed to parse SNBT, while having zero errors to report (report this to Pumpkin): {}", reader.string());
-                PARSING_FAILED_WITHOUR_ERRORS.create(reader)
+                PARSING_FAILED_WITHOUT_ERRORS.create(reader)
             }
         })
     }
