@@ -213,8 +213,7 @@ fn should_generate_frequency(
             random.next_f32() < frequency
         }
         FrequencyReductionMethod::LegacyType3 => {
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));
-            let carver_seed = get_carver_seed(&mut random, seed as u64, chunk_x, chunk_z);
+            let carver_seed = get_carver_seed(seed as u64, chunk_x, chunk_z);
             let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
             random.next_f64() < f64::from(frequency)
         }

@@ -193,6 +193,7 @@ impl ChunkData {
             light_engine: std::sync::Mutex::new(light_engine),
             light_populated: AtomicBool::new(chunk_data.light_correct),
             status: chunk_data.status,
+            blending_data: None,
         })
     }
 

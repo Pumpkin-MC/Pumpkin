@@ -578,8 +578,7 @@ pub struct StructureGeneratorContext {
 
 #[must_use]
 pub fn create_chunk_random(seed: i64, chunk_x: i32, chunk_z: i32) -> RandomGenerator {
-    let mut random: RandomGenerator = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));
-    let carver_seed = get_carver_seed(&mut random, seed as u64, chunk_x, chunk_z);
+    let carver_seed = get_carver_seed(seed as u64, chunk_x, chunk_z);
     RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed))
 }
 
