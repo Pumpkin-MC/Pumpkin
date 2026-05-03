@@ -122,8 +122,8 @@ pub trait DynamicOps {
     }
 
     /// Creates a byte buffer that can be represented by this `DynamicOps` using a [`Vec<u8>`].
-    fn create_byte_list(&self, buffer: Vec<i8>) -> Self::Value {
-        self.create_list(buffer.iter().map(|b| self.create_byte(*b)))
+    fn create_byte_list(&self, vec: Vec<i8>) -> Self::Value {
+        self.create_list(vec.into_iter().map(|b| self.create_byte(b)))
     }
 
     /// Gets a [`Vec<i32>`] (`int` list) from a generic value represented by this `DynamicOps`.
