@@ -34,12 +34,29 @@ impl BlockMetadata for TallPlantBlock {
 impl BlockBehaviour for TallPlantBlock {
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            let upper_state = args
-                .block_accessor
-                .get_block_state(&args.position.up())
-                .await;
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-                && upper_state.is_air()
+            let up_pos = args.position.up();
+
+            let upper_state = args.block_accessor.get_block_state(&up_pos).await;
+            let Some(world) = args.world else {
+                return <Self as PlantBlockBase>::can_place_at(
+                    self,
+                    args.block_accessor,
+                    args.position,
+                )
+                .await
+                    && upper_state.is_air();
+            };
+
+            if up_pos.0.y > world.get_top_y() {
+                return false;
+            }
+            return <Self as PlantBlockBase>::can_place_at(
+                self,
+                args.block_accessor,
+                args.position,
+            )
+            .await
+                && upper_state.is_air();
         })
     }
 
@@ -50,10 +67,16 @@ impl BlockBehaviour for TallPlantBlock {
         Box::pin(async move {
             let tall_plant_props =
                 TallSeagrassLikeProperties::from_state_id(args.state_id, args.block);
-            let other_block_pos = match tall_plant_props.half {
-                DoubleBlockHalf::Upper => args.position.down(),
-                DoubleBlockHalf::Lower => args.position.up(),
+            let (support_block_pos, other_block_pos) = match tall_plant_props.half {
+                DoubleBlockHalf::Upper => (args.position.down_height(2), args.position.down()),
+                DoubleBlockHalf::Lower => (args.position.down(), args.position.up()),
             };
+            if !<Self as PlantBlockBase>::can_place_at(self, args.world, &support_block_pos.up())
+                .await
+            {
+                return Block::AIR.default_state.id;
+            }
+
             let (other_block, other_state_id) =
                 args.world.get_block_and_state_id(&other_block_pos).await;
             if Self::ids().contains(&other_block.id) {
