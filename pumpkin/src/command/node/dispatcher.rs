@@ -492,7 +492,7 @@ impl CommandDispatcher {
         let context = context.build(truncated_input);
 
         for child in children {
-            let mut builder = SuggestionsBuilder::new(truncated_input, start);
+            let builder = SuggestionsBuilder::new(truncated_input, start);
 
             let future: Pin<Box<dyn Future<Output = Suggestions> + Send>> =
                 match self.tree.classify_id(child) {
@@ -523,9 +523,7 @@ impl CommandDispatcher {
                     }),
                     NodeIdClassification::Argument(argument_node_id) => {
                         let node = &self.tree[argument_node_id];
-                        node.meta
-                            .argument_type
-                            .list_suggestions(&context, &mut builder)
+                        node.meta.argument_type.list_suggestions(&context, builder)
                     }
                 };
 

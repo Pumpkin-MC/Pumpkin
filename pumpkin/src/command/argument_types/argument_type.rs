@@ -11,7 +11,7 @@ use crate::command::{
 use std::any::Any;
 use std::pin::Pin;
 
-pub type JavaClientArgumentType<'a> = pumpkin_protocol::java::client::play::ArgumentType<'a>;
+pub type JavaClientArgumentType = pumpkin_protocol::java::client::play::ArgumentType;
 
 /// Represents an argument type that parses a particular type `Item`.
 pub trait ArgumentType: Send + Sync {
@@ -42,14 +42,14 @@ pub trait ArgumentType: Send + Sync {
     fn list_suggestions(
         &self,
         _context: &CommandContext,
-        _suggestions_builder: &mut SuggestionsBuilder,
+        _suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         Box::pin(async move { Suggestions::empty() })
     }
 
     /// Returns the Java client-side parser used for this argument type.
     #[must_use]
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_>;
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType;
 
     /// Overrides the suggestion providers provided from this argument if a [`Some`] containing them
     /// is returned.
@@ -102,12 +102,12 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
     fn list_suggestions(
         &self,
         context: &CommandContext,
-        suggestions_builder: &mut SuggestionsBuilder,
+        suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>>;
 
     /// Returns the Java client-side parser used for this argument type.
     #[must_use]
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_>;
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType;
 
     /// Overrides the suggestion providers provided from this argument if a [`Some`] containing them
     /// is returned.
@@ -154,12 +154,12 @@ impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U 
     fn list_suggestions(
         &self,
         context: &CommandContext,
-        suggestions_builder: &mut SuggestionsBuilder,
+        suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         self.list_suggestions(context, suggestions_builder)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         self.client_side_parser()
     }
 

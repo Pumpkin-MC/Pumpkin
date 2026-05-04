@@ -1,3 +1,4 @@
+use crate::data::advancement_data::AdvancementManager;
 use crate::{
     entity::{NBTStorage, player::Player},
     server::Server,
@@ -95,6 +96,12 @@ impl ServerPlayerData {
                     {
                         error!(
                             "Failed to save player data for {}: {e}",
+                            player.gameprofile.id,
+                        );
+                    }
+                    if let Err(e) = AdvancementManager::save_player(&player).await {
+                        error!(
+                            "Failed to save player advancement for {}: {e}",
                             player.gameprofile.id,
                         );
                     }

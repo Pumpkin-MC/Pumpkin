@@ -1,4 +1,6 @@
 use colored::{ColoredString, Colorize};
+use proc_macro2::TokenStream;
+use quote::{ToTokens, quote};
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// Text color for chat components.
@@ -354,5 +356,28 @@ impl TryFrom<&str> for NamedColor {
             "white" => Ok(Self::White),
             _ => Err(()),
         }
+    }
+}
+
+impl ToTokens for NamedColor {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Self::Black => quote! { NamedColor::Black },
+            Self::DarkBlue => quote! { NamedColor::DarkBlue },
+            Self::DarkGreen => quote! { NamedColor::DarkGreen },
+            Self::DarkAqua => quote! { NamedColor::DarkAqua },
+            Self::DarkRed => quote! { NamedColor::DarkRed },
+            Self::DarkPurple => quote! { NamedColor::DarkPurple },
+            Self::Gold => quote! { NamedColor::Gold },
+            Self::Gray => quote! { NamedColor::Gray },
+            Self::DarkGray => quote! { NamedColor::DarkGray },
+            Self::Blue => quote! { NamedColor::Blue },
+            Self::Green => quote! { NamedColor::Green },
+            Self::Aqua => quote! { NamedColor::Aqua },
+            Self::Red => quote! { NamedColor::Red },
+            Self::LightPurple => quote! { NamedColor::LightPurple },
+            Self::Yellow => quote! { NamedColor::Yellow },
+            Self::White => quote! { NamedColor::White },
+        })
     }
 }

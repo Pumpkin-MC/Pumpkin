@@ -30,7 +30,7 @@ impl ArgumentType for EntityAnchorArgumentType {
         )
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::EntityAnchor
     }
 

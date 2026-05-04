@@ -108,6 +108,8 @@ tracing-serde-structured = { workspace = true }
 
 bitflags = { workspace = true }
 
+indexmap.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
 

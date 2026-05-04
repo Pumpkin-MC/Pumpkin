@@ -2,6 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_COMMANDS;
 use pumpkin_macros::java_packet;
+use pumpkin_util::identifier::Identifier;
 use pumpkin_util::version::MinecraftVersion;
 
 use crate::{ClientPacket, VarInt, WritingError, ser::NetworkWriteExt};
@@ -63,7 +64,7 @@ pub enum ProtoNodeType<'a> {
         name: &'a str,
         is_executable: bool,
         redirect_target: Option<i32>,
-        parser: ArgumentType<'a>,
+        parser: ArgumentType,
         override_suggestion_type: Option<SuggestionProviders>,
         restricted: bool,
     },
@@ -176,7 +177,7 @@ impl ProtoNode<'_> {
 
 #[derive(Debug, Clone)]
 #[repr(u32)]
-pub enum ArgumentType<'a> {
+pub enum ArgumentType {
     Bool,
     Float { min: Option<f32>, max: Option<f32> },
     Double { min: Option<f64>, max: Option<f64> },
@@ -221,10 +222,10 @@ pub enum ArgumentType<'a> {
     Dimension,
     Gamemode,
     Time { min: i32 },
-    ResourceOrTag { identifier: &'a str },
-    ResourceOrTagKey { identifier: &'a str },
-    Resource { identifier: &'a str },
-    ResourceKey { identifier: &'a str },
+    ResourceOrTag { identifier: Identifier },
+    ResourceOrTagKey { identifier: Identifier },
+    Resource { identifier: Identifier },
+    ResourceKey { identifier: Identifier },
     TemplateMirror,
     TemplateRotation,
     Heightmap,
@@ -235,7 +236,7 @@ pub enum ArgumentType<'a> {
     Uuid,
 }
 
-impl ArgumentType<'_> {
+impl ArgumentType {
     pub const ENTITY_FLAG_ONLY_SINGLE: u8 = 1;
     pub const ENTITY_FLAG_PLAYERS_ONLY: u8 = 2;
 
@@ -322,10 +323,10 @@ impl ArgumentType<'_> {
     }
 
     fn write_with_identifier(
-        extra_identifier: &str,
+        extra_identifier: &Identifier,
         write: &mut impl Write,
     ) -> Result<(), WritingError> {
-        write.write_string(extra_identifier)
+        write.write_string(extra_identifier.to_string().as_str())
     }
 }
 

@@ -23,7 +23,7 @@ impl ArgumentType for IntRangeArgumentType {
         IntBounds::from_reader(reader)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::IntRange
     }
 
@@ -48,7 +48,7 @@ impl ArgumentType for FloatRangeArgumentType {
         DoubleBounds::from_reader(reader)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::FloatRange
     }
 

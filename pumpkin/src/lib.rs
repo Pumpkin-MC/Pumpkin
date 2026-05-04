@@ -3,6 +3,7 @@
 
 use crate::crash::CrashReport;
 use crate::data::VanillaData;
+use crate::data::advancement_data::AdvancementManager;
 use crate::logging::{GzipRollingLogger, PumpkinCommandCompleter, ReadlineLogWrapper};
 use crate::net::bedrock::BedrockClient;
 use crate::net::java::{JavaClient, PacketHandlerResult};
@@ -391,6 +392,10 @@ impl PumpkinServer {
             error!("Error saving all players during shutdown: {e}");
         }
 
+        if let Err(e) = AdvancementManager::save_all_players(self.server.get_all_players()).await {
+            error!("Error saving all players advancements during shutdown: {e}");
+        }
+
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players() {
             player
@@ -474,6 +479,10 @@ impl PumpkinServer {
                                     server_clone.remove_player(&player).await;
                                     if let Err(e) = server_clone.player_data_storage
                                         .handle_player_leave(&player)
+                                        .await {
+                                            error!("Failed to save player data on disconnect: {e}");
+                                        }
+                                    if let Err(e) = AdvancementManager::save_player(&player)
                                         .await {
                                             error!("Failed to save player data on disconnect: {e}");
                                         }
