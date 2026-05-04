@@ -20,7 +20,7 @@ impl ArgumentType for EntityAnchorArgumentType {
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let i = reader.cursor();
-        let anchor = reader.read_unquoted_string()?;
+        let anchor = reader.read_unquoted_string();
         EntityAnchor::from_id(anchor.as_str()).map_or_else(
             || {
                 reader.set_cursor(i);

@@ -2805,6 +2805,7 @@ dependencies = [
  "num-bigint",
  "ordered-float",
  "postcard",
+ "pumpkin-codecs",
  "pumpkin-config",
  "pumpkin-data",
  "pumpkin-inventory",

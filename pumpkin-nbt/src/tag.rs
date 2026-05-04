@@ -10,7 +10,7 @@ use crate::{
     get_nbt_string, io, nbt_byte_array, nbt_int_array, nbt_long_array, serializer,
 };
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum NbtTag {
     End = END_ID,
@@ -20,7 +20,7 @@ pub enum NbtTag {
     Long(i64) = LONG_ID,
     Float(f32) = FLOAT_ID,
     Double(f64) = DOUBLE_ID,
-    ByteArray(Box<[u8]>) = BYTE_ARRAY_ID,
+    ByteArray(Vec<i8>) = BYTE_ARRAY_ID,
     String(String) = STRING_ID,
     List(Vec<Self>) = LIST_ID,
     Compound(NbtCompound) = COMPOUND_ID,
@@ -80,7 +80,7 @@ impl NbtTag {
         if let Self::Compound(mut compound) = tag {
             // Try to get the wrapped tag, stored by "".
             if Self::is_wrapper_compound(&compound) {
-                compound.child_tags.remove(0).1
+                compound.child_tags.remove("").unwrap()
             } else {
                 Self::Compound(compound)
             }
@@ -94,7 +94,7 @@ impl NbtTag {
     /// A *wrapper compound* is a compound that stores exactly one
     /// key-value pair, an empty string key (`""`) and an `NbtTag`.
     fn is_wrapper_compound(compound: &NbtCompound) -> bool {
-        compound.child_tags.len() == 1 && compound.child_tags[0].0.is_empty()
+        compound.child_tags.len() == 1 && compound.child_tags.contains_key("")
     }
 
     /// Wraps the provided tag if needed with the provided element type of list
@@ -135,7 +135,9 @@ impl NbtTag {
                 }
 
                 w.write_i32_be(len as i32)?;
-                w.write_slice(&byte_array)?;
+                for int in byte_array {
+                    w.write_i8_be(int)?;
+                }
             }
             Self::String(string) => {
                 Self::write_string(&string, w)?;
@@ -283,7 +285,12 @@ impl NbtTag {
                     return Err(Error::NegativeLength(len));
                 }
 
-                let byte_array = reader.read_boxed_slice(len as usize)?;
+                let len = len as usize;
+                let mut byte_array = Vec::with_capacity(len);
+                for _ in 0..len {
+                    let byte = reader.get_i8_be()?;
+                    byte_array.push(byte);
+                }
                 Ok(Self::ByteArray(byte_array))
             }
             STRING_ID => Ok(Self::String(get_nbt_string(reader)?)),
@@ -393,7 +400,7 @@ impl NbtTag {
     }
 
     #[must_use]
-    pub fn extract_byte_array(&self) -> Option<&[u8]> {
+    pub fn extract_byte_array(&self) -> Option<&[i8]> {
         match self {
             Self::ByteArray(byte_array) => Some(byte_array),
             _ => None,
@@ -447,9 +454,9 @@ impl From<&str> for NbtTag {
     }
 }
 
-impl From<&[u8]> for NbtTag {
-    fn from(value: &[u8]) -> Self {
-        Self::ByteArray(value.into())
+impl From<&[i8]> for NbtTag {
+    fn from(value: &[i8]) -> Self {
+        Self::ByteArray(value.to_vec())
     }
 }
 
@@ -567,7 +574,7 @@ impl<'de> Deserialize<'de> for NbtTag {
                         while let Some(value) = seq.next_element()? {
                             vec.push(value);
                         }
-                        Ok(NbtTag::ByteArray(vec.into_boxed_slice()))
+                        Ok(NbtTag::ByteArray(vec))
                     }
                     _ => {
                         let mut vec = Vec::new();
