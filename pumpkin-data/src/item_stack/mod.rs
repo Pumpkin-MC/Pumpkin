@@ -11,6 +11,7 @@ use crate::tag::Taggable;
 use crate::{Block, Enchantment};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::pnbt::PNbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::GameMode;
 use rand;
 use std::borrow::Cow;
@@ -32,11 +33,92 @@ pub enum DamageResult {
     Broken,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PersistentDataContainer {
+    entries: Vec<(String, Vec<u8>)>,
+}
+
+impl PersistentDataContainer {
+    pub const NBT_FIELD: &str = "pumpkin:plugin_data";
+
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.entries.iter().any(|(entry_key, _)| entry_key == key)
+    }
+
+    #[must_use]
+    pub fn get(&self, key: &str) -> Option<&[u8]> {
+        self.entries
+            .iter()
+            .find(|(entry_key, _)| entry_key == key)
+            .map(|(_, value)| value.as_slice())
+    }
+
+    pub fn insert(&mut self, key: String, value: Vec<u8>) {
+        match self
+            .entries
+            .binary_search_by(|(entry_key, _)| entry_key.as_str().cmp(key.as_str()))
+        {
+            Ok(index) => self.entries[index].1 = value,
+            Err(index) => self.entries.insert(index, (key, value)),
+        }
+    }
+
+    pub fn remove(&mut self, key: &str) -> bool {
+        match self
+            .entries
+            .binary_search_by(|(entry_key, _)| entry_key.as_str().cmp(key))
+        {
+            Ok(index) => {
+                self.entries.remove(index);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    #[must_use]
+    pub fn keys(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .map(|(entry_key, _)| entry_key.clone())
+            .collect()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &[u8])> {
+        self.entries
+            .iter()
+            .map(|(entry_key, value)| (entry_key.as_str(), value.as_slice()))
+    }
+}
+
+#[must_use]
+pub fn is_valid_pdc_key(key: &str) -> bool {
+    let Some((namespace, local_name)) = key.split_once(':') else {
+        return false;
+    };
+
+    !namespace.is_empty() && !local_name.is_empty() && !local_name.contains(':')
+}
+
 #[derive(Clone)]
 pub struct ItemStack {
     pub item_count: u8,
     pub item: &'static Item,
     pub patch: Vec<(DataComponent, Option<Box<dyn DataComponentImpl>>)>,
+    pub persistent_data: PersistentDataContainer,
 }
 
 // impl Hash for ItemStack {
@@ -61,6 +143,7 @@ impl ItemStack {
             item_count,
             item,
             patch: Vec::new(),
+            persistent_data: PersistentDataContainer::new(),
         }
     }
 
@@ -74,6 +157,7 @@ impl ItemStack {
             item_count,
             item,
             patch: component,
+            persistent_data: PersistentDataContainer::new(),
         }
     }
 
@@ -110,7 +194,46 @@ impl ItemStack {
         item_count: 0,
         item: &Item::AIR,
         patch: Vec::new(),
+        persistent_data: PersistentDataContainer::new(),
     };
+
+    pub fn pdc_has(&self, key: &str) -> Result<bool, String> {
+        if !is_valid_pdc_key(key) {
+            return Err(format!("invalid PDC key format: {key}"));
+        }
+
+        Ok(self.persistent_data.contains_key(key))
+    }
+
+    pub fn pdc_get(&self, key: &str) -> Result<Option<Vec<u8>>, String> {
+        if !is_valid_pdc_key(key) {
+            return Err(format!("invalid PDC key format: {key}"));
+        }
+
+        Ok(self.persistent_data.get(key).map(ToOwned::to_owned))
+    }
+
+    pub fn pdc_set(&mut self, key: String, value: Vec<u8>) -> Result<(), String> {
+        if !is_valid_pdc_key(&key) {
+            return Err(format!("invalid PDC key format: {key}"));
+        }
+
+        self.persistent_data.insert(key, value);
+        Ok(())
+    }
+
+    pub fn pdc_remove(&mut self, key: &str) -> Result<bool, String> {
+        if !is_valid_pdc_key(key) {
+            return Err(format!("invalid PDC key format: {key}"));
+        }
+
+        Ok(self.persistent_data.remove(key))
+    }
+
+    #[must_use]
+    pub fn pdc_keys(&self) -> Vec<String> {
+        self.persistent_data.keys()
+    }
 
     pub fn split_off(&mut self, amount: u8) -> Self {
         let count = amount.min(self.item_count);
@@ -498,6 +621,14 @@ impl ItemStack {
 
         // Store custom data like enchantments, display name, etc. would go here
         compound.put_compound("components", tag);
+
+        if !self.persistent_data.is_empty() {
+            let mut plugin_data = NbtCompound::new();
+            for (key, value) in self.persistent_data.iter() {
+                plugin_data.put(key, NbtTag::ByteArray(value.to_vec().into_boxed_slice()));
+            }
+            compound.put_compound(PersistentDataContainer::NBT_FIELD, plugin_data);
+        }
     }
 
     pub fn write_item_stack_pnbt(&self, nbt: &mut PNbtCompound) {
@@ -549,6 +680,20 @@ impl ItemStack {
             }
         }
 
+        if let Some(plugin_data) = compound.get_compound(PersistentDataContainer::NBT_FIELD) {
+            for (key, value) in &plugin_data.child_tags {
+                let byte_array = value.extract_byte_array()?;
+
+                if !is_valid_pdc_key(key) {
+                    return None;
+                }
+
+                item_stack
+                    .persistent_data
+                    .insert(key.clone(), byte_array.to_vec());
+            }
+        }
+
         Some(item_stack)
     }
 
@@ -589,6 +734,7 @@ impl From<&RecipeResultStruct> for ItemStack {
             item: Item::from_registry_key(value.id.strip_prefix("minecraft:").unwrap_or(value.id))
                 .expect("Crafting recipe gives invalid item"),
             patch: Vec::new(),
+            persistent_data: PersistentDataContainer::new(),
         }
     }
 }
@@ -1022,5 +1168,56 @@ mod tests {
                 "damage should clamp to 0 for set_damage({amount})"
             );
         }
+    }
+
+    #[test]
+    fn pdc_set_get_remove_round_trip() {
+        let mut stack = ItemStack::new(4, &Item::DIAMOND);
+
+        assert_eq!(stack.pdc_has("pumpkin:test"), Ok(false));
+        assert_eq!(stack.pdc_get("pumpkin:test"), Ok(None));
+
+        stack
+            .pdc_set("pumpkin:test".to_string(), vec![1, 2, 3, 4])
+            .unwrap();
+
+        assert_eq!(stack.pdc_has("pumpkin:test"), Ok(true));
+        assert_eq!(stack.pdc_get("pumpkin:test"), Ok(Some(vec![1, 2, 3, 4])));
+        assert_eq!(stack.pdc_keys(), vec!["pumpkin:test".to_string()]);
+        assert_eq!(stack.pdc_remove("pumpkin:test"), Ok(true));
+        assert_eq!(stack.pdc_get("pumpkin:test"), Ok(None));
+    }
+
+    #[test]
+    fn item_stack_serialization_round_trips_plugin_data() {
+        let mut stack = ItemStack::new(2, &Item::DIAMOND_SWORD);
+        stack
+            .pdc_set("pumpkin:test".to_string(), vec![9, 8, 7])
+            .unwrap();
+        stack.pdc_set("pumpkin:extra".to_string(), vec![1]).unwrap();
+
+        let mut compound = NbtCompound::new();
+        stack.write_item_stack(&mut compound);
+
+        let plugin_data = compound
+            .get_compound(PersistentDataContainer::NBT_FIELD)
+            .expect("plugin data should be serialized");
+        assert_eq!(
+            plugin_data
+                .get("pumpkin:test")
+                .and_then(NbtTag::extract_byte_array)
+                .expect("pumpkin:test should be a byte array"),
+            &[9, 8, 7]
+        );
+
+        let round_tripped = ItemStack::read_item_stack(&compound).expect("item stack should load");
+        assert_eq!(
+            round_tripped.pdc_get("pumpkin:test").unwrap(),
+            Some(vec![9, 8, 7])
+        );
+        assert_eq!(
+            round_tripped.pdc_get("pumpkin:extra").unwrap(),
+            Some(vec![1])
+        );
     }
 }

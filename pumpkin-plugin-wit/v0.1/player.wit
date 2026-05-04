@@ -1,9 +1,10 @@
 /// Represents a player connected to the Minecraft server.
 interface player {
-    use common.{hand, item-stack, position, game-mode};
-    use %world.{%world};
-    use entity.{entity};
-    use permission.{permission-level};
+ use common.{hand, item-stack, position, game-mode};
+ use %world.{%world};
+ use entity.{entity};
+ use item.{%pdc-item-stack};
+ use permission.{permission-level};
     use text.{text-component};
     use gui.{gui};
 
@@ -144,8 +145,13 @@ interface player {
         get-selected-slot: func () -> u8;
         /// Returns the item currently in the specified hand.
         get-item-in-hand: func (hand: hand) -> option<item-stack>;
-        /// Returns the item in the specified inventory slot.
-        get-inventory-item: func (slot: u8) -> option<item-stack>;
+ /// Returns the item in the specified inventory slot.
+ get-inventory-item: func (slot: u8) -> option<item-stack>;
+
+ /// Returns a rich item-stack resource with PDC access for the item in the specified hand.
+ get-item-in-hand-rich: func (hand: hand) -> option<%pdc-item-stack>;
+ /// Returns a rich item-stack resource with PDC access for the item in the specified inventory slot.
+ get-inventory-item-rich: func (slot: u8) -> option<%pdc-item-stack>;
 
         // Status
 

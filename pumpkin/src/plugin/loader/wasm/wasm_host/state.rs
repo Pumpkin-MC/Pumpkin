@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::text::TextComponent;
 use tokio::sync::Mutex;
 use wasmtime::component::ResourceTable;
@@ -33,6 +34,7 @@ pub type ServerResource = WasmResource<Arc<Server>>;
 pub type ContextResource = WasmResource<Arc<Context>>;
 pub type PlayerResource = WasmResource<Arc<Player>>;
 pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
+pub type ItemStackResource = WasmResource<Arc<Mutex<ItemStack>>>;
 pub type WorldResource = WasmResource<Arc<World>>;
 pub type ScoreboardResource = WasmResource<Arc<World>>;
 pub type GuiResource = WasmResource<Arc<Mutex<PluginGui>>>;
@@ -103,6 +105,14 @@ impl PluginHostState {
         provider: Arc<dyn EntityBase>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(EntityResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_item_stack<T>(
+        &mut self,
+        provider: Arc<Mutex<ItemStack>>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(ItemStackResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

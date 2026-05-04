@@ -1,0 +1,37 @@
+/// Provides ItemStack manipulation including PersistentDataContainer access.
+interface item {
+ /// A handle to an ItemStack on the server with PDC access.
+ resource pdc-item-stack {
+  /// Returns the registry key (e.g., "minecraft:diamond").
+  get-registry-key: func() -> string;
+  /// Returns the number of items in the stack.
+  get-count: func() -> u8;
+
+  /// Checks whether the PDC contains a value for the given key.
+  ///
+  /// Key must follow the `namespace:key` format (e.g., "pumpkin:my-data").
+  /// Returns an error string if the key format is invalid.
+  pdc-has: func(key: string) -> result<bool, string>;
+
+  /// Retrieves the byte array stored under the given PDC key.
+  ///
+  /// Returns `some(data)` if present, `none` if the key is absent.
+  /// Returns an error string if the key format is invalid.
+  pdc-get: func(key: string) -> result<option<list<u8>>, string>;
+
+  /// Stores a byte array under the given PDC key, replacing any existing value.
+  ///
+  /// Key must follow the `namespace:key` format.
+  /// Returns an error string if the key format is invalid.
+  pdc-set: func(key: string, value: list<u8>) -> result<_, string>;
+
+  /// Removes the entry for the given PDC key.
+  ///
+  /// Returns `true` if the key existed and was removed, `false` if it was absent.
+  /// Returns an error string if the key format is invalid.
+  pdc-remove: func(key: string) -> result<bool, string>;
+
+  /// Returns all PDC keys currently set on this item stack.
+  pdc-keys: func() -> list<string>;
+ }
+}

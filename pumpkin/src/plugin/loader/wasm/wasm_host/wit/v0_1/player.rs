@@ -18,6 +18,7 @@ use crate::{
             },
             pumpkin::{
                 self,
+                plugin::item::PdcItemStack,
                 plugin::player::{Player, PlayerSkin, SkinParts},
                 plugin::world::World,
             },
@@ -573,6 +574,45 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         }
         let item_stack = player.inventory.main_inventory[slot].lock().await.clone();
         Ok(to_wit_item_stack(&item_stack))
+    }
+
+    async fn get_item_in_hand_rich(
+        &mut self,
+        player: Resource<Player>,
+        hand: pumpkin::plugin::common::Hand,
+    ) -> wasmtime::Result<Option<Resource<PdcItemStack>>> {
+        let player = player_from_resource(self, &player)?;
+        let inventory = player.inventory();
+        let item_stack = match hand {
+            pumpkin::plugin::common::Hand::Left => inventory.off_hand_item().await,
+            pumpkin::plugin::common::Hand::Right => inventory.held_item(),
+        };
+        let item_arc = item_stack.clone();
+        if item_arc.lock().await.is_empty() {
+            return Ok(None);
+        }
+        self.add_item_stack(item_arc)
+            .map(Some)
+            .map_err(|_| wasmtime::Error::msg("failed to add item-stack resource"))
+    }
+
+    async fn get_inventory_item_rich(
+        &mut self,
+        player: Resource<Player>,
+        slot: u8,
+    ) -> wasmtime::Result<Option<Resource<PdcItemStack>>> {
+        let player = player_from_resource(self, &player)?;
+        let slot_idx = slot as usize;
+        if slot_idx >= PlayerInventory::MAIN_SIZE {
+            return Ok(None);
+        }
+        let item_arc = player.inventory.main_inventory[slot_idx].clone();
+        if item_arc.lock().await.is_empty() {
+            return Ok(None);
+        }
+        self.add_item_stack(item_arc)
+            .map(Some)
+            .map_err(|_| wasmtime::Error::msg("failed to add item-stack resource"))
     }
 
     async fn get_health(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
