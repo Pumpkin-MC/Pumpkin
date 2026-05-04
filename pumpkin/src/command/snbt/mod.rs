@@ -45,24 +45,6 @@ pub const INVALID_ARRAY_ELEMENT_TYPE: CommandErrorType<0> =
 pub const EXPECTED_INTEGER_TYPE: CommandErrorType<0> =
     CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_INTEGER_TYPE);
 
-/// Traverses through each alternative from left to right,
-/// stopping at the first successful parse.
-macro_rules! alternatives {
-    ($reader: expr, $($alternative:block),*) => {
-        'result: {
-            let start = $reader.cursor();
-            $(
-                let result = $alternative;
-                if result.is_some() {
-                    break 'result result;
-                }
-                $reader.set_cursor(start);
-            )*
-            None
-        }
-    };
-}
-
 /// A structure that parses SNBT.
 ///
 /// This stores a reader and gives the furthest error, or suggestions
