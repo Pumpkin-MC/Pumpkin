@@ -226,6 +226,7 @@ impl PerlinNoiseSampler {
 }
 
 /// Data for a single octave in an octave Perlin noise sampler.
+#[derive(Clone)]
 pub struct SamplerData {
     /// The Perlin noise sampler for this octave.
     pub sampler: PerlinNoiseSampler,
@@ -242,6 +243,7 @@ pub struct SamplerData {
 /// Octave noise, also known as fractal noise, combines multiple octaves of Perlin noise
 /// with different frequencies and amplitudes to create more complex, natural-looking patterns.
 /// Each octave adds finer detail to the overall noise.
+#[derive(Clone)]
 pub struct OctavePerlinNoiseSampler {
     /// The list of samplers for each octave, with their associated parameters.
     pub samplers: Box<[SamplerData]>,

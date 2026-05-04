@@ -111,7 +111,8 @@ impl CommandExecutor for Executor {
 
             if success {
                 sender
-                    .send_message(TextComponent::translate(
+                    .send_message(TextComponent::translate_cross(
+                        "commands.setblock.success",
                         "commands.setblock.success",
                         [
                             TextComponent::text(pos.0.x.to_string()),
@@ -122,7 +123,8 @@ impl CommandExecutor for Executor {
                     .await;
                 Ok(1)
             } else {
-                Err(CommandError::CommandFailed(TextComponent::translate(
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.setblock.failed",
                     "commands.setblock.failed",
                     [],
                 )))

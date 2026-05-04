@@ -38,7 +38,11 @@ impl ScreenHandlerFactory for ShulkerBoxScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_SHULKERBOX, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_SHULKERBOX,
+            translation::bedrock::CONTAINER_SHULKERBOX,
+            &[],
+        )
     }
 }
 

@@ -11,8 +11,10 @@ use crate::net::GameProfile;
 use pumpkin_data::translation;
 use uuid::Uuid;
 
-pub const UNKNOWN_PLAYER_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_PLAYER_UNKNOWN);
+pub const UNKNOWN_PLAYER_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_PLAYER_UNKNOWN,
+    translation::java::ARGUMENT_PLAYER_UNKNOWN,
+);
 
 /// A result from the [`GameProfileArgumentType`], which can be resolved into
 /// one or more [`GameProfile`]s, successfully or not.

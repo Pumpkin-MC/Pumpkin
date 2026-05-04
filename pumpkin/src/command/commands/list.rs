@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::translation::{COMMANDS_LIST_NAMEANDID, COMMANDS_LIST_PLAYERS};
+use pumpkin_data::translation::java::{COMMANDS_LIST_NAMEANDID, COMMANDS_LIST_PLAYERS};
 use pumpkin_util::{
     permission::{Permission, PermissionDefault, PermissionRegistry},
     text::TextComponent,
@@ -40,7 +40,8 @@ impl CommandExecutor for ListCommandExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        COMMANDS_LIST_PLAYERS,
                         COMMANDS_LIST_PLAYERS,
                         [
                             TextComponent::text(players_len.to_string()),
@@ -70,7 +71,8 @@ fn get_player_names_and_ids(players: &[Arc<Player>]) -> TextComponent {
     let names_and_ids = players
         .iter()
         .map(|p| {
-            TextComponent::translate(
+            TextComponent::translate_cross(
+                COMMANDS_LIST_NAMEANDID,
                 COMMANDS_LIST_NAMEANDID,
                 &[
                     p.get_name(),

@@ -38,6 +38,20 @@ impl SText {
     }
 
     #[must_use]
+    pub const fn translation(message: String, parameters: Vec<String>) -> Self {
+        Self {
+            needs_translation: true,
+            r#type: TextPacketType::Translation,
+            source_name: String::new(),
+            message,
+            parameters,
+            xuid: String::new(),
+            platform_chat_id: String::new(),
+            filtered_message: None,
+        }
+    }
+
+    #[must_use]
     pub fn system_message(message: String) -> Self {
         Self {
             needs_translation: false,

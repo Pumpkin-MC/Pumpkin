@@ -1243,7 +1243,8 @@ impl LivingEntity {
                 if let Some(cause) = cause
                     && source.is_some()
                 {
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        format!("death.attack.{}.player", damage_type.message_id),
                         format!("death.attack.{}.player", damage_type.message_id),
                         [
                             dyn_self.get_display_name().await,
@@ -1251,7 +1252,8 @@ impl LivingEntity {
                         ],
                     )
                 } else {
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        format!("death.attack.{}", damage_type.message_id),
                         format!("death.attack.{}", damage_type.message_id),
                         [dyn_self.get_display_name().await],
                     )
@@ -1259,13 +1261,15 @@ impl LivingEntity {
             }
             DeathMessageType::FallVariants => {
                 //TODO
-                TextComponent::translate(
-                    translation::DEATH_FELL_ACCIDENT_GENERIC,
+                TextComponent::translate_cross(
+                    translation::java::DEATH_FELL_ACCIDENT_GENERIC,
+                    translation::bedrock::DEATH_FELL_ACCIDENT_GENERIC,
                     [dyn_self.get_display_name().await],
                 )
             }
             DeathMessageType::IntentionalGameDesign => TextComponent::text("[")
-                .add_child(TextComponent::translate(
+                .add_child(TextComponent::translate_cross(
+                    format!("death.attack.{}.message", damage_type.message_id),
                     format!("death.attack.{}.message", damage_type.message_id),
                     [dyn_self.get_display_name().await],
                 ))

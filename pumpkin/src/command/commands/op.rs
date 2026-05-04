@@ -64,7 +64,8 @@ impl CommandExecutor for Executor {
                 }
 
                 sender
-                    .send_message(TextComponent::translate(
+                    .send_message(TextComponent::translate_cross(
+                        "commands.op.success",
                         "commands.op.success",
                         [TextComponent::text(profile.name.clone())],
                     ))
@@ -78,7 +79,8 @@ impl CommandExecutor for Executor {
             }
 
             if successes == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate(
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.op.failed",
                     "commands.op.failed",
                     [],
                 )))

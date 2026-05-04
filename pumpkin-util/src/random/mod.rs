@@ -149,23 +149,22 @@ pub fn get_region_seed(world_seed: u64, region_x: i32, region_z: i32, salt: u32)
 /// Carver seeds are used for terrain carving features like caves and ravines.
 ///
 /// # Arguments
-/// - `random` – The random number generator to use.
-/// - `world_seed` – The base world seed.
+/// - `world_seed` – The base world seed (plus carver index).
 /// - `chunk_x` – The X chunk coordinate.
 /// - `chunk_z` – The Z chunk coordinate.
 ///
 /// # Returns
 /// A carver seed for the given chunk.
 #[inline]
-pub fn get_carver_seed(
-    random: &mut RandomGenerator,
-    world_seed: u64,
-    chunk_x: i32,
-    chunk_z: i32,
-) -> u64 {
-    let x = random.next_i64();
-    let z = random.next_i64();
-    (chunk_x as u64).wrapping_mul(x as u64) ^ (chunk_z as u64).wrapping_mul(z as u64) ^ world_seed
+#[must_use]
+pub fn get_carver_seed(world_seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
+    let mut random = LegacyRand::from_seed(world_seed);
+    let l = random.next_i64() | 1;
+    let m = random.next_i64() | 1;
+    ((chunk_x as i64)
+        .wrapping_mul(l)
+        .wrapping_add((chunk_z as i64).wrapping_mul(m)) as u64)
+        ^ world_seed
 }
 
 #[enum_dispatch]

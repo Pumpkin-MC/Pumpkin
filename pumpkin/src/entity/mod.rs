@@ -34,7 +34,12 @@ use pumpkin_data::{
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
     PositionFlag,
+    bedrock::client::set_actor_data::{
+        CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_flag,
+        entity_data_key,
+    },
     codec::var_int::VarInt,
+    codec::var_ulong::VarULong,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
         CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata,
@@ -316,7 +321,8 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             .load()
             .as_ref()
             .clone()
-            .unwrap_or(TextComponent::translate(
+            .unwrap_or(TextComponent::translate_cross(
+                format!("entity.minecraft.{}", entity.entity_type.resource_name),
                 format!("entity.minecraft.{}", entity.entity_type.resource_name),
                 [],
             ))
@@ -326,16 +332,13 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async move {
             // TODO: team color
             let entity = self.get_entity();
-            let mut name =
-                entity
-                    .custom_name
-                    .load()
-                    .as_ref()
-                    .clone()
-                    .unwrap_or(TextComponent::translate(
-                        format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                        [],
-                    ));
+            let mut name = entity.custom_name.load().as_ref().clone().unwrap_or(
+                TextComponent::translate_cross(
+                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                    [],
+                ),
+            );
             let name_clone = name.clone();
             name = name.hover_event(HoverEvent::show_entity(
                 entity.entity_uuid.to_string(),
@@ -508,6 +511,10 @@ pub struct Entity {
     pub data: AtomicI32,
     /// Stores entity boolean flags (on fire, sneaking, invisible, glowing, etc.)
     pub flags: std::sync::atomic::AtomicI8,
+    /// Stores Bedrock-specific entity boolean flags (bit 0-63)
+    pub bedrock_flags: std::sync::atomic::AtomicI64,
+    /// Stores more Bedrock-specific entity boolean flags (bit 0-63)
+    pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity cannot collide with anything (e.g. spectator)
     pub no_clip: AtomicBool,
     /// Multiplies movement for one tick before being reset
@@ -615,6 +622,8 @@ impl Entity {
             damage_immunities: Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
             flags: std::sync::atomic::AtomicI8::new(0),
+            bedrock_flags: std::sync::atomic::AtomicI64::new(0),
+            bedrock_flags_two: std::sync::atomic::AtomicI64::new(0),
             fire_immune: AtomicBool::new(false),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
@@ -848,13 +857,13 @@ impl Entity {
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
-        self.on_ground.store(false, Ordering::SeqCst);
-        self.supporting_block_pos.store(None);
-        self.horizontal_collision.store(false, Ordering::SeqCst);
-
         if movement.length_squared() == 0.0 {
             return movement;
         }
+
+        self.on_ground.store(false, Ordering::SeqCst);
+        self.supporting_block_pos.store(None);
+        self.horizontal_collision.store(false, Ordering::SeqCst);
 
         let bounding_box = self.bounding_box.load();
 
@@ -2202,19 +2211,75 @@ impl Entity {
     async fn set_flag(&self, flag: Flag, value: bool) {
         let index = flag as u8;
         let mask = (1i8).wrapping_shl(index as u32);
-        let mut b = self.flags.load(Ordering::Relaxed);
-        if value {
-            b |= mask;
+        let new_je_flags = if value {
+            self.flags.fetch_or(mask, Ordering::Relaxed) | mask
         } else {
-            b &= !mask;
-        }
-        self.flags.store(b, Ordering::Relaxed);
+            self.flags.fetch_and(!mask, Ordering::Relaxed) & !mask
+        };
+
         self.send_meta_data(&[Metadata::new(
             TrackedData::SHARED_FLAGS_ID,
             MetaDataType::BYTE,
-            b,
+            new_je_flags,
         )])
         .await;
+
+        if let Some(bedrock_flag) = flag.to_bedrock() {
+            let (key, index) = if bedrock_flag >= 64 {
+                (entity_data_key::FLAGS_TWO, (bedrock_flag - 64) as u8)
+            } else {
+                (entity_data_key::FLAGS, bedrock_flag as u8)
+            };
+
+            if value {
+                let mask = 1i64 << index;
+                if key == entity_data_key::FLAGS {
+                    self.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+                } else {
+                    self.bedrock_flags_two.fetch_or(mask, Ordering::Relaxed);
+                }
+            } else {
+                let mask = !(1i64 << index);
+                if key == entity_data_key::FLAGS {
+                    self.bedrock_flags.fetch_and(mask, Ordering::Relaxed);
+                } else {
+                    self.bedrock_flags_two.fetch_and(mask, Ordering::Relaxed);
+                }
+            }
+
+            let world = self.world.load();
+            let chunk_pos = self.chunk_pos.load();
+            for player in world.players.load().iter() {
+                if let ClientPlatform::Bedrock(client) = &player.client {
+                    let center = player.living_entity.entity.chunk_pos.load();
+                    let view_distance =
+                        crate::world::chunker::get_view_distance(player).get() as i32;
+
+                    if is_within_view_distance(chunk_pos, center, view_distance) {
+                        let mut metadata = EntityMetadata(std::collections::HashMap::new());
+                        metadata.set(
+                            entity_data_key::FLAGS,
+                            MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
+                        );
+                        metadata.set(
+                            entity_data_key::FLAGS_TWO,
+                            MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
+                        );
+                        client
+                            .send_game_packet(&CSetActorData {
+                                actor_runtime_id: VarULong(self.entity_id as u64),
+                                metadata,
+                                synced_properties: PropertySyncData {
+                                    int_properties: std::collections::HashMap::new(),
+                                    float_properties: std::collections::HashMap::new(),
+                                },
+                                tick: VarULong(0),
+                            })
+                            .await;
+                    }
+                }
+            }
+        }
     }
 
     /// Plays sound at this entity's position with the entity's sound category
@@ -2740,6 +2805,7 @@ impl NBTStorage for Entity {
             let z = nbt.get_f64().unwrap_or(0.0);
             let pos = Vector3::new(x, y, z);
             self.set_pos(pos);
+            self.last_sent_pos.store(pos);
             self.first_loaded_chunk_position.store(Some(pos.to_i32()));
             let vx = nbt.get_f64().unwrap_or(0.0);
             let vy = nbt.get_f64().unwrap_or(0.0);
@@ -2748,7 +2814,12 @@ impl NBTStorage for Entity {
             let yaw = nbt.get_f32().unwrap_or(0.0);
             let pitch = nbt.get_f32().unwrap_or(0.0);
             self.set_rotation(yaw, pitch);
+            let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            self.last_sent_yaw.store(yaw_byte, Relaxed);
+            self.last_sent_pitch.store(pitch_byte, Relaxed);
             self.head_yaw.store(yaw);
+            self.last_sent_head_yaw.store(yaw_byte, Relaxed);
             self.fire_ticks
                 .store(i32::from(nbt.get_short().unwrap_or(0)), Relaxed);
             self.on_ground
@@ -2907,6 +2978,21 @@ pub enum Flag {
     Glowing = 6,
     /// Indicates if the entity is flying due to a fall.
     FallFlying = 7,
+}
+
+impl Flag {
+    #[must_use]
+    pub const fn to_bedrock(&self) -> Option<u32> {
+        match self {
+            Self::OnFire => Some(entity_data_flag::ON_FIRE),
+            Self::Sneaking => Some(entity_data_flag::SNEAKING),
+            Self::Sprinting => Some(entity_data_flag::SPRINTING),
+            Self::Swimming => Some(entity_data_flag::SWIMMING),
+            Self::Invisible => Some(entity_data_flag::INVISIBLE),
+            Self::FallFlying => Some(entity_data_flag::GLIDING),
+            Self::Glowing => None,
+        }
+    }
 }
 
 #[cfg(test)]

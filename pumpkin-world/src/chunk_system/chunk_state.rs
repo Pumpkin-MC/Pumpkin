@@ -229,6 +229,7 @@ impl Chunk {
                 light_engine: Mutex::new(ChunkLight::default()),
                 light_populated: AtomicBool::new(false),
                 status: ChunkStatus::Empty,
+                blending_data: None,
                 dirty: AtomicBool::new(false),
             })),
         ) {
@@ -317,6 +318,7 @@ impl Chunk {
             fluid_ticks: Default::default(),
             block_entities: Mutex::new(block_entities),
             status: proto_chunk.stage.into(),
+            blending_data: proto_chunk.blending_data.clone(),
         };
 
         chunk.heightmap = Mutex::new(chunk.calculate_heightmap());

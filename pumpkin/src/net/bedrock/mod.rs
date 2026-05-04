@@ -22,10 +22,12 @@ use pumpkin_protocol::{
         packet_decoder::UDPNetworkDecoder,
         packet_encoder::UDPNetworkEncoder,
         server::{
+            animate::SAnimate,
             client_cache_status::SClientCacheStatus,
             command_request::SCommandRequest,
             container_close::SContainerClose,
             interaction::SInteraction,
+            loading_screen::SLoadingScreen,
             login::SLogin,
             player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput,
@@ -685,7 +687,7 @@ impl BedrockClient {
         let reader = &mut &packet.payload[..];
         match packet.id {
             SPlayerAuthInput::PACKET_ID => {
-                self.player_pos_update(player, SPlayerAuthInput::read(reader)?, server)
+                self.handle_player_auth_input(player, SPlayerAuthInput::read(reader)?, server)
                     .await;
             }
             SRequestChunkRadius::PACKET_ID => {
@@ -717,6 +719,12 @@ impl BedrockClient {
             SPlayerAction::PACKET_ID => {
                 self.handle_player_action(player, server, SPlayerAction::read(reader)?)
                     .await;
+            }
+            SAnimate::PACKET_ID => {
+                self.handle_animate(player, server, &SAnimate::read(reader)?);
+            }
+            SLoadingScreen::PACKET_ID => {
+                // Ignore for now
             }
             _ => {
                 warn!("Bedrock: Received Unknown Game packet: {}", packet.id);

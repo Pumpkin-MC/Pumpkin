@@ -401,6 +401,7 @@ use pumpkin_nbt::pnbt::PNbtCompound;
 impl NBTStorage for EndermanEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             if let Some(block_state) = self.carried_block.load() {
                 nbt.put_bool(true);
                 nbt.put_int(block_state as i32);
@@ -412,6 +413,7 @@ impl NBTStorage for EndermanEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if nbt.get_bool().unwrap_or(false) {
                 let block_state = nbt.get_int().unwrap_or(0);
                 self.set_carried_block(Some(block_state as u16)).await;

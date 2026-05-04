@@ -34,8 +34,9 @@ impl JavaClient {
         // TODO: If client is an operator or has otherwise suitable elevated permissions, allow the client to bypass this requirement.
         let max_players = server.basic_config.max_players;
         if max_players > 0 && server.get_player_count() >= max_players as usize {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_SERVER_FULL,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_SERVER_FULL,
+                translation::java::MULTIPLAYER_DISCONNECT_SERVER_FULL,
                 [],
             ))
             .await;
@@ -137,12 +138,14 @@ impl JavaClient {
                 Ok(new_profile) => *profile = new_profile,
                 Err(error) => {
                     self.kick(match error {
-                        AuthError::FailedResponse => TextComponent::translate(
-                            translation::MULTIPLAYER_DISCONNECT_AUTHSERVERS_DOWN,
+                        AuthError::FailedResponse => TextComponent::translate_cross(
+                            translation::java::MULTIPLAYER_DISCONNECT_AUTHSERVERS_DOWN,
+                            translation::java::MULTIPLAYER_DISCONNECT_AUTHSERVERS_DOWN,
                             [],
                         ),
-                        AuthError::UnverifiedUsername => TextComponent::translate(
-                            translation::MULTIPLAYER_DISCONNECT_UNVERIFIED_USERNAME,
+                        AuthError::UnverifiedUsername => TextComponent::translate_cross(
+                            translation::java::MULTIPLAYER_DISCONNECT_UNVERIFIED_USERNAME,
+                            translation::java::MULTIPLAYER_DISCONNECT_UNVERIFIED_USERNAME,
                             [],
                         ),
                         e => TextComponent::text(e.to_string()),
@@ -161,8 +164,9 @@ impl JavaClient {
                 &profile.id,
                 &online_player.gameprofile.name
             );
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
                 [],
             ))
             .await;
@@ -178,8 +182,9 @@ impl JavaClient {
                 &profile.id,
                 &online_player.gameprofile.name
             );
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
                 [],
             ))
             .await;

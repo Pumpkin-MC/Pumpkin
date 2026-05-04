@@ -48,9 +48,15 @@ impl ClientPacket for CChunkData<'_> {
                 Ok(())
             };
 
-            write_heightmap(1, &heightmaps.world_surface)?;
-            write_heightmap(4, &heightmaps.motion_blocking)?;
-            write_heightmap(5, &heightmaps.motion_blocking_no_leaves)?;
+            write_heightmap(1, heightmaps.world_surface.as_deref().unwrap_or(&[0; 37]))?;
+            write_heightmap(4, heightmaps.motion_blocking.as_deref().unwrap_or(&[0; 37]))?;
+            write_heightmap(
+                5,
+                heightmaps
+                    .motion_blocking_no_leaves
+                    .as_deref()
+                    .unwrap_or(&[0; 37]),
+            )?;
         }
         drop(heightmaps);
 
