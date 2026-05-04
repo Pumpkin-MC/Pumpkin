@@ -1,0 +1,95 @@
+[config]
+default_to_workspace = false
+
+[env]
+# Resolve NDK root: honour $ANDROID_NDK_HOME if set, otherwise pick the
+# latest NDK installed by Android Studio under ~/Android/Sdk/ndk/.
+ANDROID_NDK_BIN = { script = [
+  "ndk=${ANDROID_NDK_HOME:-$(ls -d \"$HOME/Android/Sdk/ndk/\"* 2>/dev/null | sort -V | tail -1)}",
+  "echo $ndk/toolchains/llvm/prebuilt/linux-x86_64/bin",
+] }
+CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = { script = ["echo $ANDROID_NDK_BIN/aarch64-linux-android34-clang"] }
+CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER  = { script = ["echo $ANDROID_NDK_BIN/x86_64-linux-android34-clang"] }
+CC_aarch64_linux_android = { script = ["echo $ANDROID_NDK_BIN/aarch64-linux-android34-clang"] }
+AR_aarch64_linux_android = { script = ["echo $ANDROID_NDK_BIN/llvm-ar"] }
+CC_x86_64_linux_android  = { script = ["echo $ANDROID_NDK_BIN/x86_64-linux-android34-clang"] }
+AR_x86_64_linux_android  = { script = ["echo $ANDROID_NDK_BIN/llvm-ar"] }
+
+[tasks.android]
+description = "Build debug APK (cargo make android)"
+dependencies = ["android-rust", "android-copy", "android-apk-debug"]
+
+[tasks.android-release]
+description = "Build release APK (cargo make android-release)"
+dependencies = ["android-rust-release", "android-copy-release", "android-apk-release"]
+
+[tasks.android-rust]
+description = "Build pumpkin binary + JNI bridge for both Android ABIs (debug)"
+dependencies = ["android-rust-arm64-debug", "android-rust-x86_64-debug"]
+
+[tasks.android-rust-release]
+description = "Build pumpkin binary + JNI bridge for both Android ABIs (release)"
+dependencies = ["android-rust-arm64-release", "android-rust-x86_64-release"]
+
+[tasks.android-rust-arm64-debug]
+command = "cargo"
+args = ["build", "--target", "aarch64-linux-android", "-p", "pumpkin", "-p", "pumpkin-android-jni"]
+
+[tasks.android-rust-x86_64-debug]
+command = "cargo"
+args = ["build", "--target", "x86_64-linux-android", "-p", "pumpkin", "-p", "pumpkin-android-jni"]
+
+[tasks.android-rust-arm64-release]
+command = "cargo"
+args = ["build", "--target", "aarch64-linux-android", "--release", "-p", "pumpkin", "-p", "pumpkin-android-jni"]
+
+[tasks.android-rust-x86_64-release]
+command = "cargo"
+args = ["build", "--target", "x86_64-linux-android", "--release", "-p", "pumpkin", "-p", "pumpkin-android-jni"]
+
+
+[tasks.android-copy]
+description = "Copy debug build artifacts into android/app/src/main/jniLibs"
+script_runner = "@shell"
+script = [
+  "mkdir -p android/app/src/main/jniLibs/arm64-v8a android/app/src/main/jniLibs/x86_64",
+  "cp target/aarch64-linux-android/debug/pumpkin           android/app/src/main/jniLibs/arm64-v8a/libpumpkin.so",
+  "cp target/x86_64-linux-android/debug/pumpkin            android/app/src/main/jniLibs/x86_64/libpumpkin.so",
+  "cp target/aarch64-linux-android/debug/librust_terminal.so  android/app/src/main/jniLibs/arm64-v8a/librust_terminal.so",
+  "cp target/x86_64-linux-android/debug/librust_terminal.so   android/app/src/main/jniLibs/x86_64/librust_terminal.so",
+]
+
+[tasks.android-copy-release]
+description = "Copy release build artifacts into android/app/src/main/jniLibs"
+script_runner = "@shell"
+script = [
+  "mkdir -p android/app/src/main/jniLibs/arm64-v8a android/app/src/main/jniLibs/x86_64",
+  "cp target/aarch64-linux-android/release/pumpkin          android/app/src/main/jniLibs/arm64-v8a/libpumpkin.so",
+  "cp target/x86_64-linux-android/release/pumpkin           android/app/src/main/jniLibs/x86_64/libpumpkin.so",
+  "cp target/aarch64-linux-android/release/librust_terminal.so android/app/src/main/jniLibs/arm64-v8a/librust_terminal.so",
+  "cp target/x86_64-linux-android/release/librust_terminal.so  android/app/src/main/jniLibs/x86_64/librust_terminal.so",
+]
+
+[tasks.android-gradle-wrapper]
+description = "Download gradle-wrapper.jar if missing"
+script_runner = "@shell"
+script = [
+  "JAR=android/gradle/wrapper/gradle-wrapper.jar",
+  "[ -f \"$JAR\" ] && exit 0",
+  "echo 'Downloading gradle-wrapper.jar...'",
+  "curl -fsSL 'https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar' -o \"$JAR\"",
+]
+
+[tasks.android-apk-debug]
+description = "Assemble debug APK via Gradle"
+dependencies = ["android-gradle-wrapper"]
+cwd = "android"
+script_runner = "@shell"
+script = ["./gradlew assembleDebug"]
+
+[tasks.android-apk-release]
+description = "Assemble release APK via Gradle"
+dependencies = ["android-gradle-wrapper"]
+cwd = "android"
+script_runner = "@shell"
+script = ["./gradlew assembleRelease"]

@@ -1,0 +1,2 @@
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,--hash-style=both"]

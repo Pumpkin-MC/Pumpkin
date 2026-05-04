@@ -1,0 +1,18 @@
+[package]
+name = "pumpkin-android-jni"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "rust_terminal"
+crate-type = ["cdylib"]
+
+[dependencies]
+jni = "0.21"
+libc = "0.2"
+nix = { version = "0.27", features = ["term", "process", "fs", "poll"] }
+
+[lints]
+workspace = true
