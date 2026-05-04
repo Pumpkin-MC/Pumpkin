@@ -11,6 +11,8 @@ pub mod cactus;
 pub mod cactus_flower;
 pub mod chorus_flower;
 pub mod chorus_plant;
+pub mod coral;
+pub mod coral_fan;
 pub mod crop;
 pub mod dry_vegetation;
 pub mod flower;

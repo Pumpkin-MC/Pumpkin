@@ -1,4 +1,4 @@
-use crate::generation::proto_chunk::GenerationCache;
+use crate::{generation::proto_chunk::GenerationCache, world::BlockRegistryExt};
 use pumpkin_data::tag;
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -10,9 +10,11 @@ use super::CoralFeature;
 pub struct CoralMushroomFeature;
 
 impl CoralMushroomFeature {
+    #[allow(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
+        block_registry: &dyn BlockRegistryExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature
@@ -42,7 +44,13 @@ impl CoralMushroomFeature {
 
                     if !((condition_a && condition_b && condition_c && condition_d)
                         && !random_check
-                        && CoralFeature::generate_coral_piece(chunk, random, block, pos))
+                        && CoralFeature::generate_coral_piece(
+                            chunk,
+                            block_registry,
+                            random,
+                            block,
+                            pos,
+                        ))
                     {
                         continue;
                     }
