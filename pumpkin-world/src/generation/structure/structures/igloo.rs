@@ -6,13 +6,13 @@
 //!   - Ladder segments (igloo/middle.nbt) repeated 4-11 times
 //!   - Basement room (igloo/bottom.nbt)
 
-use std::sync::Arc;
-
 use pumpkin_util::{
+    BlockDirection,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::RandomGenerator,
 };
 use serde::Deserialize;
+use std::sync::Arc;
 
 use crate::{
     ProtoChunk,
@@ -75,6 +75,7 @@ impl StructureGenerator for IglooGenerator {
         // IMPORTANT: Random call order must match vanilla for deterministic placement:
         // 1. Rotation first (vanilla: BlockRotation.random(random) calls nextInt(4))
         let rotation_index = context.random.next_bounded_i32(4) as u8;
+        let facing = BlockDirection::from_index(rotation_index);
         let rotation = BlockRotation::from_index(rotation_index);
 
         // 2. Basement check (vanilla: random.nextDouble() < 0.5)
@@ -92,7 +93,7 @@ impl StructureGenerator for IglooGenerator {
         // Load templates from cache
         let top_template = get_template("igloo/top")?;
 
-        let piece = IglooPiece {
+        let mut piece = IglooPiece {
             shiftable_structure_piece: ShiftableStructurePiece::new(
                 StructurePieceType::Igloo,
                 x,
@@ -118,6 +119,10 @@ impl StructureGenerator for IglooGenerator {
             has_basement,
             ladder_segments,
         };
+        piece
+            .shiftable_structure_piece
+            .piece
+            .set_facing(Some(facing));
 
         collector.add_piece(Box::new(piece));
 

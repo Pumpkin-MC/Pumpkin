@@ -37,6 +37,7 @@ use crate::{
                     stairs::StairsPiece,
                 },
             },
+            template::{BlockMirror, BlockRotation},
         },
     },
 };
@@ -262,7 +263,13 @@ impl StrongholdPiece {
     #[must_use]
     pub const fn new(r#type: StructurePieceType, chain_length: u32, bbox: BlockBox) -> Self {
         Self {
-            piece: StructurePiece::new(r#type, bbox, chain_length),
+            piece: StructurePiece::new(
+                r#type,
+                bbox,
+                chain_length,
+                BlockRotation::None,
+                BlockMirror::None,
+            ),
             entry_door: EntranceType::Opening,
         }
     }

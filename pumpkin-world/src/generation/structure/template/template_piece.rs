@@ -69,7 +69,7 @@ impl TemplatePiece {
         );
 
         Self {
-            piece: StructurePiece::new(piece_type, bounding_box, 0),
+            piece: StructurePiece::new(piece_type, bounding_box, 0, rotation, mirror),
             template,
             rotation,
             mirror,

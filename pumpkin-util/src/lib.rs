@@ -141,6 +141,26 @@ impl BlockDirection {
             _ => Self::West,
         }
     }
+    pub fn as_index(&self) -> u8 {
+        match self {
+            Self::North => 0,
+            Self::East => 1,
+            Self::South => 2,
+            Self::West => 3,
+            Self::Down => 4,
+            Self::Up => 5,
+        }
+    }
+    pub fn from_index(value: u8) -> Self {
+        match value {
+            0 => Self::North,
+            1 => Self::East,
+            2 => Self::South,
+            3 => Self::West,
+            4 => Self::Down,
+            _ => Self::Up,
+        }
+    }
 }
 
 /// A mutable slice split into three parts: the element at the split index, the start, and the end.

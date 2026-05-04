@@ -21,6 +21,7 @@ use crate::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
                 StructurePiecesCollector, StructurePosition,
             },
+            template::{BlockMirror, BlockRotation},
         },
     },
 };
@@ -40,11 +41,12 @@ impl StructureGenerator for DesertPyramidGenerator {
         let z = start_block_z(context.chunk_z);
 
         let facing = BlockDirection::get_random_horizontal_direction(&mut context.random);
-
         let mut piece = StructurePiece::new(
             StructurePieceType::DesertTemple,
             BlockBox::create_box(x, 64, z, facing.get_axis(), WIDTH, HEIGHT, DEPTH),
             0,
+            BlockRotation::None,
+            BlockMirror::None,
         );
         piece.set_facing(Some(facing));
 

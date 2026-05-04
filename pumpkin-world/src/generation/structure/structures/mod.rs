@@ -11,6 +11,9 @@ use pumpkin_util::{
 use tracing::debug;
 
 use crate::generation::structure::structures::stronghold::StrongholdPieceType;
+use crate::generation::structure::template::BlockMirror;
+use crate::generation::structure::template::BlockRotation;
+use crate::generation::structure::template::BlockStateResolver;
 use crate::{
     ProtoChunk,
     generation::{
@@ -95,6 +98,8 @@ pub struct StructurePiece {
     pub bounding_box: BlockBox,
     pub facing: Option<BlockDirection>,
     pub chain_length: u32,
+    pub rotation: BlockRotation,
+    pub mirror: BlockMirror,
 }
 
 impl StructurePiece {
@@ -103,17 +108,44 @@ impl StructurePiece {
         r#type: StructurePieceType,
         bounding_box: BlockBox,
         chain_length: u32,
+        rotation: BlockRotation,
+        mirror: BlockMirror,
     ) -> Self {
         Self {
             r#type,
             bounding_box,
             facing: None,
             chain_length,
+            rotation,
+            mirror,
         }
     }
 
     pub const fn set_facing(&mut self, facing: Option<BlockDirection>) {
         self.facing = facing;
+        if facing.is_none() {
+            self.rotation = BlockRotation::None;
+            self.mirror = BlockMirror::None;
+        } else {
+            match facing {
+                Some(BlockDirection::South) => {
+                    self.mirror = BlockMirror::LeftRight;
+                    self.rotation = BlockRotation::None;
+                }
+                Some(BlockDirection::West) => {
+                    self.mirror = BlockMirror::LeftRight;
+                    self.rotation = BlockRotation::Clockwise90;
+                }
+                Some(BlockDirection::East) => {
+                    self.mirror = BlockMirror::None;
+                    self.rotation = BlockRotation::Clockwise90;
+                }
+                _ => {
+                    self.mirror = BlockMirror::None;
+                    self.rotation = BlockRotation::None;
+                }
+            }
+        }
     }
 
     const fn offset_pos(&self, x: i32, y: i32, z: i32) -> Vector3<i32> {
@@ -384,17 +416,14 @@ impl StructurePiece {
             debug!("Structure out of bounds");
             return;
         }
-
-        // // Apply Mirror and Rotation
-        // if self.mirror != BlockMirror::None {
-        //     block = block.mirror(self.mirror);
-        // }
-        // if self.rotation != BlockRotation::None {
-        //     block = block.rotate(self.rotation);
-        // }
+        let block_state =
+            match BlockStateResolver::resolve_from_block_state(block, self.rotation, self.mirror) {
+                Some(value) => value,
+                None => block,
+            };
 
         // World interaction
-        world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block);
+        world.set_block_state(block_pos.x, block_pos.y, block_pos.z, block_state);
 
         // let fluid_state = world.get_fluid_state(&block_pos);
         // if !fluid_state.is_empty() {

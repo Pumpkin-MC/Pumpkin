@@ -25,6 +25,7 @@ use crate::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
                 StructurePiecesCollector, StructurePosition,
             },
+            template::{BlockMirror, BlockRotation},
         },
     },
 };
@@ -44,11 +45,12 @@ impl StructureGenerator for JungleTempleGenerator {
         let z = start_block_z(context.chunk_z);
 
         let facing = BlockDirection::get_random_horizontal_direction(&mut context.random);
-
         let mut piece = StructurePiece::new(
             StructurePieceType::JungleTemple,
             BlockBox::create_box(x, 64, z, facing.get_axis(), WIDTH, 10, DEPTH),
             0,
+            BlockRotation::None,
+            BlockMirror::None,
         );
         piece.set_facing(Some(facing));
 
@@ -103,7 +105,7 @@ impl StructurePieceBase for JungleTemplePiece {
             return;
         }
         let bb = chunk_box;
-
+        println!("{} {}", chunk.x, chunk.z);
         self.piece.fill(
             chunk,
             bb,
@@ -271,7 +273,7 @@ impl StructurePieceBase for JungleTemplePiece {
         );
         self.piece.add_block(
             chunk,
-            Self::redstone_wire_bidirectional(HorizontalFacing::East, HorizontalFacing::West),
+            Self::attached_tripwire_bidirectional(HorizontalFacing::East, HorizontalFacing::West),
             2,
             -3,
             8,

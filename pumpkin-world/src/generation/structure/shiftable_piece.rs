@@ -5,7 +5,11 @@ use pumpkin_util::{
 
 use crate::{
     ProtoChunk,
-    generation::structure::{piece::StructurePieceType, structures::StructurePiece},
+    generation::structure::{
+        piece::StructurePieceType,
+        structures::StructurePiece,
+        template::{BlockMirror, BlockRotation},
+    },
 };
 
 pub const DEFAULT_H_POS: i32 = -1;
@@ -36,6 +40,8 @@ impl ShiftableStructurePiece {
                 r#type,
                 BlockBox::create_box(x, y, z, axis, width, height, depth),
                 0,
+                BlockRotation::None,
+                BlockMirror::None,
             ),
             h_pos: DEFAULT_H_POS,
             width,
