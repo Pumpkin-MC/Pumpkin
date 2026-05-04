@@ -790,10 +790,7 @@ impl SnbtParser<'_, '_> {
         // This has to match the actual rules, so this code is pretty awkward.
         let mut result = None;
 
-        if matches!(
-            self.reader.peek_byte(),
-            Some(b'0'..=b'9' | b'+' | b'-' | b'.')
-        ) {
+        if matches!(self.reader.peek(), Some('0'..='9' | '+' | '-' | '.')) {
             if let Some(tag) = self.parse_or_revert(Self::float_literal) {
                 result = Some(Literal::Tag(tag));
             } else if let Some(literal) = self.parse_or_revert(Self::integer_literal) {
@@ -804,10 +801,10 @@ impl SnbtParser<'_, '_> {
         let result = if let Some(result) = result {
             result
         } else {
-            match self.reader.peek_byte() {
-                Some(b'"' | b'\'') => Literal::String(self.quoted_string_literal()?),
-                Some(b'{') => Literal::Tag(self.map_literal()?),
-                Some(b'[') => Literal::Tag(self.list_literal()?),
+            match self.reader.peek() {
+                Some('"' | '\'') => Literal::String(self.quoted_string_literal()?),
+                Some('{') => Literal::Tag(self.map_literal()?),
+                Some('[') => Literal::Tag(self.list_literal()?),
                 _ => Literal::Tag(self.unquoted_string_or_built_in()?),
             }
         };
