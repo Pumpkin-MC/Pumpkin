@@ -1,4 +1,5 @@
-use pumpkin_util::Difficulty;
+use pumpkin_data::entity::EntityType;
+use pumpkin_util::{Difficulty, GameMode};
 
 use crate::entity::living::LivingEntity;
 use crate::world::World;
@@ -7,6 +8,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 const MIN_DISTANCE: f64 = 2.0;
+
+/// Returns true if players in this gamemode must be excluded from hostile targeting.
+const fn is_excluded_gamemode(gamemode: GameMode) -> bool {
+    matches!(gamemode, GameMode::Creative | GameMode::Spectator)
+}
 
 pub type PredicateFn = dyn Fn(Arc<LivingEntity>, Arc<World>) -> Pin<Box<dyn Future<Output = bool> + Send>>
     + Send
@@ -105,6 +111,16 @@ impl TargetPredicate {
             return false;
         }
 
+        // Vanilla parity: EntityPredicate::EXCEPT_CREATIVE_OR_SPECTATOR — filter
+        // creative/spectator players at acquisition so hostile mobs never briefly
+        // target them (issue #1760).
+        if target.entity.entity_type == &EntityType::PLAYER
+            && let Some(player) = world.get_player_by_uuid(target.entity.entity_uuid)
+            && is_excluded_gamemode(player.gamemode.load())
+        {
+            return false;
+        }
+
         if self.attackable
             && (!target.can_take_damage()
                 || world.level_info.load().difficulty == Difficulty::Peaceful)
@@ -130,5 +146,30 @@ impl TargetPredicate {
         }
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn survival_player_not_excluded() {
+        assert!(!is_excluded_gamemode(GameMode::Survival));
+    }
+
+    #[test]
+    fn adventure_player_not_excluded() {
+        assert!(!is_excluded_gamemode(GameMode::Adventure));
+    }
+
+    #[test]
+    fn creative_player_excluded() {
+        assert!(is_excluded_gamemode(GameMode::Creative));
+    }
+
+    #[test]
+    fn spectator_player_excluded() {
+        assert!(is_excluded_gamemode(GameMode::Spectator));
     }
 }
