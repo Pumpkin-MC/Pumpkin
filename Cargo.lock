@@ -2811,6 +2811,7 @@ dependencies = [
  "pumpkin-macros",
  "pumpkin-nbt",
  "pumpkin-protocol",
+ "pumpkin-storage",
  "pumpkin-util",
  "pumpkin-world",
  "rand 0.10.1",
@@ -2954,6 +2955,21 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "pumpkin-storage"
+version = "0.1.0-dev+26.1"
+dependencies = [
+ "flate2",
+ "pumpkin-data",
+ "pumpkin-nbt",
+ "pumpkin-util",
+ "serde",
+ "temp-dir",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

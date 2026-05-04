@@ -1,13 +1,31 @@
-use std::collections::HashMap;
-use std::path::Path;
+//! Types describing the contents of `level.dat`.
+//!
+//! Moved here from `pumpkin-world` so that backend-agnostic storage code can
+//! name the types it reads and writes. The on-disk encoding (Gzip + NBT) and
+//! the read/write traits still live in `pumpkin-world` until the
+//! [`WorldInfoStorage`](crate) trait replaces them.
 
-use crate::CURRENT_MC_VERSION;
-use pumpkin_data::game_rules::GameRuleRegistry;
+use std::collections::HashMap;
+
+use pumpkin_data::{game_rules::GameRuleRegistry, packet::CURRENT_MC_VERSION};
 use pumpkin_util::{Difficulty, serde_enum_as_integer, world_seed::Seed};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-pub mod anvil;
+use crate::BoxFuture;
+use crate::error::StorageError;
+
+/// Persistent storage for world-level metadata (`level.dat` on vanilla).
+pub trait WorldInfoStorage: Send + Sync {
+    /// Reads the current world info.
+    ///
+    /// Returns [`StorageError::NotFound`] (or an I/O error whose
+    /// [`StorageError::is_not_found`] returns `true`) when no world info has
+    /// been stored yet.
+    fn load(&self) -> BoxFuture<'_, Result<LevelData, StorageError>>;
+
+    /// Persists `data` as the current world info, overwriting any prior value.
+    fn save<'a>(&'a self, data: &'a LevelData) -> BoxFuture<'a, Result<(), StorageError>>;
+}
 
 // Constraint: disk biome palette serialization changed in 1.21.5
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.9
@@ -15,15 +33,6 @@ pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4790; // 26.1.2
 
 pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.9
 pub const MAXIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19133; // 1.21.9
-
-pub trait WorldInfoReader {
-    fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError>;
-}
-
-pub trait WorldInfoWriter: Sync + Send {
-    fn write_world_info(&self, info: &LevelData, level_folder: &Path)
-    -> Result<(), WorldInfoError>;
-}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -331,28 +340,5 @@ impl LevelData {
     pub const fn set_pos(&mut self, x: i32, z: i32) {
         self.spawn_x = x;
         self.spawn_z = z;
-    }
-}
-
-#[derive(Error, Debug)]
-pub enum WorldInfoError {
-    #[error("Io error: {0}")]
-    IoError(std::io::ErrorKind),
-    #[error("Info not found!")]
-    InfoNotFound,
-    #[error("Deserialization error: {0}")]
-    DeserializationError(String),
-    #[error("Unsupported world data version: {0}")]
-    UnsupportedDataVersion(i32),
-    #[error("Unsupported world level version: {0}")]
-    UnsupportedLevelVersion(i32),
-}
-
-impl From<std::io::Error> for WorldInfoError {
-    fn from(value: std::io::Error) -> Self {
-        match value.kind() {
-            std::io::ErrorKind::NotFound => Self::InfoNotFound,
-            value => Self::IoError(value),
-        }
     }
 }

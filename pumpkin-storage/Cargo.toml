@@ -1,0 +1,25 @@
+[package]
+name = "pumpkin-storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
+
+pumpkin-data.workspace = true
+pumpkin-nbt.workspace = true
+pumpkin-util.workspace = true
+
+flate2.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["fs", "io-util", "sync", "macros", "rt"] }
+temp-dir.workspace = true
+
+[lints]
+workspace = true
