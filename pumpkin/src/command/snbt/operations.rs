@@ -4,11 +4,15 @@ use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
 use crate::command::{errors::error_types::CommandErrorType, parser::Parser, snbt::SnbtParser};
 use pumpkin_codecs::DynamicOps;
 
-pub const EXPECTED_NUMBER_OR_BOOLEAN: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_NUMBER_OR_BOOLEAN);
+pub const EXPECTED_NUMBER_OR_BOOLEAN: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_NUMBER_OR_BOOLEAN,
+    translation::java::SNBT_PARSER_EXPECTED_NUMBER_OR_BOOLEAN,
+);
 
-pub const EXPECTED_STRING_UUID: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_STRING_UUID);
+pub const EXPECTED_STRING_UUID: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_STRING_UUID,
+    translation::java::SNBT_PARSER_EXPECTED_STRING_UUID,
+);
 
 /// Represents an *operation* that can take *operands* and return a required *result*.
 pub type SnbtOperation = fn(parser: &mut SnbtParser, args: &[NbtTag]) -> Option<NbtTag>;

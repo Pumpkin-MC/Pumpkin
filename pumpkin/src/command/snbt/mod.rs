@@ -14,27 +14,39 @@ use crate::command::snbt::markers::{
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_codecs::Number;
-use pumpkin_data::translation::{self, COMMAND_FAILED};
+use pumpkin_data::translation;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 
-pub const NUMBER_PARSE_FAILURE: CommandErrorType<1> =
-    CommandErrorType::new(translation::SNBT_PARSER_NUMBER_PARSE_FAILURE);
+pub const NUMBER_PARSE_FAILURE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_NUMBER_PARSE_FAILURE,
+    translation::java::SNBT_PARSER_NUMBER_PARSE_FAILURE,
+);
 
-pub const UNDERSCORE_NOT_ALLOWED: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_UNDESCORE_NOT_ALLOWED);
+pub const UNDERSCORE_NOT_ALLOWED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_UNDESCORE_NOT_ALLOWED,
+    translation::java::SNBT_PARSER_UNDESCORE_NOT_ALLOWED,
+);
 
-pub const EXPECTED_HEX_ESCAPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_HEX_ESCAPE);
+pub const EXPECTED_HEX_ESCAPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_HEX_ESCAPE,
+    translation::java::SNBT_PARSER_EXPECTED_HEX_ESCAPE,
+);
 
-pub const EXPECTED_NON_NEGATIVE_NUMBER: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_NON_NEGATIVE_NUMBER);
+pub const EXPECTED_NON_NEGATIVE_NUMBER: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_NON_NEGATIVE_NUMBER,
+    translation::java::SNBT_PARSER_EXPECTED_NON_NEGATIVE_NUMBER,
+);
 
-pub const INVALID_ARRAY_ELEMENT_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_INVALID_ARRAY_ELEMENT_TYPE);
+pub const INVALID_ARRAY_ELEMENT_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_INVALID_ARRAY_ELEMENT_TYPE,
+    translation::java::SNBT_PARSER_INVALID_ARRAY_ELEMENT_TYPE,
+);
 
-pub const EXPECTED_INTEGER_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_INTEGER_TYPE);
+pub const EXPECTED_INTEGER_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_INTEGER_TYPE,
+    translation::java::SNBT_PARSER_EXPECTED_INTEGER_TYPE,
+);
 
 /// A structure that parses SNBT.
 ///
@@ -67,8 +79,9 @@ impl SnbtParser<'_, '_> {
             if let Some(error) = errors.command_error {
                 CommandSyntaxError {
                     error_type: error.error_type,
-                    message: TextComponent::translate(
-                        error.translation_key,
+                    message: TextComponent::translate_cross(
+                        error.java_translation_key,
+                        error.bedrock_translation_key,
                         error
                             .arguments
                             .into_iter()
@@ -80,7 +93,10 @@ impl SnbtParser<'_, '_> {
             } else {
                 // This shouldn't happen... If it didn't parse successfully, there should be an error to supplement it.
                 // Hacky way to report an error:
-                const PARSING_FAILED_WITHOUT_ERRORS: CommandErrorType<0> = CommandErrorType::new(COMMAND_FAILED);
+                const PARSING_FAILED_WITHOUT_ERRORS: CommandErrorType<0> = CommandErrorType::new(
+                    translation::java::COMMAND_FAILED,
+                    translation::java::COMMAND_FAILED
+                );
                 tracing::error!("Failed to parse SNBT, while having zero errors to report (report this to Pumpkin): {}", reader.string());
                 PARSING_FAILED_WITHOUT_ERRORS.create(reader)
             }

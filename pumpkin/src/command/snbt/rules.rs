@@ -13,44 +13,70 @@ use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_ops::NbtOps;
 use pumpkin_nbt::tag::NbtTag;
 
-pub const INVALID_CODEPOINT: CommandErrorType<1> =
-    CommandErrorType::new(translation::SNBT_PARSER_INVALID_CODEPOINT);
+pub const INVALID_CODEPOINT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_INVALID_CODEPOINT,
+    translation::java::SNBT_PARSER_INVALID_CODEPOINT,
+);
 
-pub const NO_SUCH_OPERATION: CommandErrorType<1> =
-    CommandErrorType::new(translation::SNBT_PARSER_NO_SUCH_OPERATION);
+pub const NO_SUCH_OPERATION: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_NO_SUCH_OPERATION,
+    translation::java::SNBT_PARSER_NO_SUCH_OPERATION,
+);
 
-pub const EXPECTED_FLOAT_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_FLOAT_TYPE);
+pub const EXPECTED_FLOAT_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_FLOAT_TYPE,
+    translation::java::SNBT_PARSER_EXPECTED_FLOAT_TYPE,
+);
 
-pub const INVALID_CHARACTER_NAME: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_INVALID_CHARACTER_NAME);
+pub const INVALID_CHARACTER_NAME: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_INVALID_CHARACTER_NAME,
+    translation::java::SNBT_PARSER_INVALID_CHARACTER_NAME,
+);
 
-pub const INVALID_UNQUOTED_START: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_INVALID_UNQUOTED_START);
+pub const INVALID_UNQUOTED_START: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_INVALID_UNQUOTED_START,
+    translation::java::SNBT_PARSER_INVALID_UNQUOTED_START,
+);
 
-pub const EXPECTED_UNQUOTED_STRING: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_UNQUOTED_STRING);
+pub const EXPECTED_UNQUOTED_STRING: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_UNQUOTED_STRING,
+    translation::java::SNBT_PARSER_EXPECTED_UNQUOTED_STRING,
+);
 
-pub const INVALID_STRING_CONTENTS: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_INVALID_STRING_CONTENTS);
+pub const INVALID_STRING_CONTENTS: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_INVALID_STRING_CONTENTS,
+    translation::java::SNBT_PARSER_INVALID_STRING_CONTENTS,
+);
 
-pub const EXPECTED_BINARY_NUMERAL: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_BINARY_NUMERAL);
+pub const EXPECTED_BINARY_NUMERAL: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_BINARY_NUMERAL,
+    translation::java::SNBT_PARSER_EXPECTED_BINARY_NUMERAL,
+);
 
-pub const EXPECTED_DECIMAL_NUMERAL: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_DECIMAL_NUMERAL);
+pub const EXPECTED_DECIMAL_NUMERAL: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_DECIMAL_NUMERAL,
+    translation::java::SNBT_PARSER_EXPECTED_DECIMAL_NUMERAL,
+);
 
-pub const EXPECTED_HEX_NUMERAL: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EXPECTED_HEX_NUMERAL);
+pub const EXPECTED_HEX_NUMERAL: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EXPECTED_HEX_NUMERAL,
+    translation::java::SNBT_PARSER_EXPECTED_HEX_NUMERAL,
+);
 
-pub const EMPTY_KEY: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_EMPTY_KEY);
+pub const EMPTY_KEY: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_EMPTY_KEY,
+    translation::java::SNBT_PARSER_EMPTY_KEY,
+);
 
-pub const LEADING_ZERO_NOT_ALLOWED: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_LEADING_ZERO_NOT_ALLOWED);
+pub const LEADING_ZERO_NOT_ALLOWED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_LEADING_ZERO_NOT_ALLOWED,
+    translation::java::SNBT_PARSER_LEADING_ZERO_NOT_ALLOWED,
+);
 
-pub const INFINITY_NOT_ALLOWED: CommandErrorType<0> =
-    CommandErrorType::new(translation::SNBT_PARSER_INFINITY_NOT_ALLOWED);
+pub const INFINITY_NOT_ALLOWED: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::SNBT_PARSER_INFINITY_NOT_ALLOWED,
+    translation::java::SNBT_PARSER_INFINITY_NOT_ALLOWED,
+);
 
 /// Parses a string literal.
 macro_rules! parse_string_literal {

@@ -9,7 +9,8 @@ use crate::command::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DelayedCommandSyntaxError {
     pub error_type: &'static dyn AnyCommandErrorType,
-    pub translation_key: &'static str,
+    pub java_translation_key: &'static str,
+    pub bedrock_translation_key: &'static str,
     pub arguments: Vec<Cow<'static, str>>,
 }
 
@@ -34,7 +35,8 @@ impl ParserErrors {
             reader,
             || DelayedCommandSyntaxError {
                 error_type,
-                translation_key: error_type.translation_key,
+                java_translation_key: error_type.java_translation_key,
+                bedrock_translation_key: error_type.bedrock_translation_key,
                 arguments: vec![],
             },
             |entries| {
@@ -56,7 +58,8 @@ impl ParserErrors {
             reader,
             || DelayedCommandSyntaxError {
                 error_type,
-                translation_key: error_type.translation_key,
+                java_translation_key: error_type.java_translation_key,
+                bedrock_translation_key: error_type.bedrock_translation_key,
                 arguments: vec![arg1.into()],
             },
             |entries| {
@@ -77,7 +80,8 @@ impl ParserErrors {
             reader,
             || DelayedCommandSyntaxError {
                 error_type,
-                translation_key: error_type.translation_key,
+                java_translation_key: error_type.java_translation_key,
+                bedrock_translation_key: error_type.bedrock_translation_key,
                 arguments: vec![],
             },
             |entries| {
@@ -99,7 +103,8 @@ impl ParserErrors {
             reader,
             || DelayedCommandSyntaxError {
                 error_type,
-                translation_key: error_type.translation_key,
+                java_translation_key: error_type.java_translation_key,
+                bedrock_translation_key: error_type.bedrock_translation_key,
                 arguments: vec![arg1.into()],
             },
             |entries| {
