@@ -6,6 +6,7 @@ use crate::command::node::detached::{
 use crate::command::node::{
     Command, CommandExecutor, RedirectModifier, Redirection, Requirement, Requirements,
 };
+use crate::command::suggestion::provider::SuggestionProvider;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -119,6 +120,7 @@ pub struct RequiredArgumentBuilder {
     common: CommonArgumentBuilder,
     name: Cow<'static, str>,
     argument_type: Arc<dyn AnyArgumentType>,
+    suggestion_provider: Option<Arc<dyn SuggestionProvider>>,
 }
 
 mod private {
@@ -356,7 +358,21 @@ impl RequiredArgumentBuilder {
             common: CommonArgumentBuilder::new(),
             name: name.into(),
             argument_type: Arc::new(arg_type),
+            suggestion_provider: None,
         }
+    }
+
+    /// Sets the [`SuggestionProvider`] of this builder for the `ArgumentDetachedNode`.
+    #[must_use]
+    pub fn suggests(self, provider: impl SuggestionProvider + 'static) -> Self {
+        self.suggests_arc(Arc::new(provider))
+    }
+
+    /// Sets the [`SuggestionProvider`] of this builder for the `ArgumentDetachedNode`.
+    #[must_use]
+    pub fn suggests_arc(mut self, provider: Arc<dyn SuggestionProvider>) -> Self {
+        self.suggestion_provider = Some(provider);
+        self
     }
 }
 
@@ -410,6 +426,7 @@ impl ArgumentBuilder<ArgumentDetachedNode> for RequiredArgumentBuilder {
             self.common.target,
             self.common.modifier,
             self.common.forks,
+            self.suggestion_provider,
         );
         node.children = self.common.arguments;
         node

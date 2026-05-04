@@ -42,7 +42,7 @@ pub trait ArgumentType: Send + Sync {
     fn list_suggestions(
         &self,
         _context: &CommandContext,
-        _suggestions_builder: &mut SuggestionsBuilder,
+        _suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         Box::pin(async move { Suggestions::empty() })
     }
@@ -102,7 +102,7 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
     fn list_suggestions(
         &self,
         context: &CommandContext,
-        suggestions_builder: &mut SuggestionsBuilder,
+        suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>>;
 
     /// Returns the Java client-side parser used for this argument type.
@@ -154,7 +154,7 @@ impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U 
     fn list_suggestions(
         &self,
         context: &CommandContext,
-        suggestions_builder: &mut SuggestionsBuilder,
+        suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         self.list_suggestions(context, suggestions_builder)
     }
