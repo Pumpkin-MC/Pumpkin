@@ -1739,6 +1739,12 @@ impl World {
         client.send_game_packet(&actor_data).await;
 
         player.send_abilities_update().await;
+        {
+            let command_dispatcher = server.command_dispatcher.read().await;
+
+            client_suggestions::send_bedrock_commands_packet(&player, server, &command_dispatcher)
+                .await;
+        };
 
         let mut frame_set = FrameSet::default();
 

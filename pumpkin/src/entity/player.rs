@@ -2080,7 +2080,12 @@ impl Player {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update().await;
 
-        client_suggestions::send_c_commands_packet(self, server, command_dispatcher).await;
+        if let ClientPlatform::Bedrock(_) = &self.client {
+            client_suggestions::send_bedrock_commands_packet(self, server, command_dispatcher)
+                .await;
+        } else {
+            client_suggestions::send_c_commands_packet(self, server, command_dispatcher).await;
+        }
     }
 
     /// Sends the world time to only this player.

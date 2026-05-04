@@ -1,3 +1,4 @@
+pub mod available_commands;
 pub mod chunk_radius_update;
 pub mod container_open;
 pub mod correct_player_move;
