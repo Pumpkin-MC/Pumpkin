@@ -113,23 +113,30 @@ impl CommandExecutor for GiveExecutor {
                 }
             }
 
-            let translation_name = TextComponent::translate(effect.translation_key.to_string(), []);
+            let translation_name = TextComponent::translate_cross(
+                effect.translation_key.to_string(),
+                effect.translation_key.to_string(),
+                [],
+            );
 
             if successes == 0 {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.effect.give.failed",
                     "commands.effect.give.failed",
                     [],
                 )));
             } else if targets.len() == 1 {
                 sender
-                    .send_message(TextComponent::translate(
+                    .send_message(TextComponent::translate_cross(
+                        "commands.effect.give.success.single",
                         "commands.effect.give.success.single",
                         [translation_name, targets[0].get_display_name().await],
                     ))
                     .await;
             } else {
                 sender
-                    .send_message(TextComponent::translate(
+                    .send_message(TextComponent::translate_cross(
+                        "commands.effect.give.success.multiple",
                         "commands.effect.give.success.multiple",
                         [
                             translation_name,
@@ -170,7 +177,8 @@ impl CommandExecutor for ClearExecutor {
 
                 //if the player or everyplayer don't have any effect
                 if succeeded_clears == 0 {
-                    return Err(CommandError::CommandFailed(TextComponent::translate(
+                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                        "commands.effect.clear.everything.failed",
                         "commands.effect.clear.everything.failed",
                         [],
                     )));
@@ -178,14 +186,16 @@ impl CommandExecutor for ClearExecutor {
                 //a player have at least 1 effect
                 else if targets.len() == 1 {
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.effect.clear.everything.success.single",
                             "commands.effect.clear.everything.success.single",
                             [targets[0].get_display_name().await],
                         ))
                         .await;
                 } else {
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.effect.clear.everything.success.multiple",
                             "commands.effect.clear.everything.success.multiple",
                             [TextComponent::text(targets.len().to_string())],
                         ))
@@ -208,26 +218,37 @@ impl CommandExecutor for ClearExecutor {
                 }
 
                 if succeeded_clears == 0 {
-                    return Err(CommandError::CommandFailed(TextComponent::translate(
+                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                        "commands.effect.clear.specific.failed",
                         "commands.effect.clear.specific.failed",
                         [],
                     )));
                 } else if targets.len() == 1 {
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.effect.clear.specific.success.single",
                             "commands.effect.clear.specific.success.single",
                             [
-                                TextComponent::translate(effect.translation_key, []),
+                                TextComponent::translate_cross(
+                                    effect.translation_key,
+                                    effect.translation_key,
+                                    [],
+                                ),
                                 targets[0].get_display_name().await,
                             ],
                         ))
                         .await;
                 } else {
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.effect.clear.specific.success.multiple",
                             "commands.effect.clear.specific.success.multiple",
                             [
-                                TextComponent::translate(effect.translation_key, []),
+                                TextComponent::translate_cross(
+                                    effect.translation_key,
+                                    effect.translation_key,
+                                    [],
+                                ),
                                 TextComponent::text(targets.len().to_string()),
                             ],
                         ))

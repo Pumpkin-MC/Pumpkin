@@ -43,7 +43,8 @@ impl CommandExecutor for Executor {
                 if let Some(idx) = idx {
                     lock.banned_players.remove(idx);
                     sender
-                        .send_message(TextComponent::translate(
+                        .send_message(TextComponent::translate_cross(
+                            "commands.pardon.success",
                             "commands.pardon.success",
                             [TextComponent::text(target.name.clone())],
                         ))
@@ -56,7 +57,8 @@ impl CommandExecutor for Executor {
                 lock.save();
                 Ok(successes)
             } else {
-                Err(CommandError::CommandFailed(TextComponent::translate(
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.pardon.failed",
                     "commands.pardon.failed",
                     [],
                 )))

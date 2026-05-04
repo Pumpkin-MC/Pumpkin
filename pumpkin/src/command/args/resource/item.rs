@@ -59,12 +59,14 @@ impl<'a> FindArg<'a> for ItemArgumentConsumer {
             Some(Arg::Item(name)) => Item::from_registry_key(name).map_or_else(
                 || {
                     if name.starts_with("minecraft:") {
-                        Err(CommandError::CommandFailed(TextComponent::translate(
+                        Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            "argument.item.id.invalid",
                             "argument.item.id.invalid",
                             [TextComponent::text((*name).to_string())],
                         )))
                     } else {
-                        Err(CommandError::CommandFailed(TextComponent::translate(
+                        Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            "argument.item.id.invalid",
                             "argument.item.id.invalid",
                             [TextComponent::text("minecraft:".to_string() + *name)],
                         )))
@@ -141,15 +143,21 @@ impl<'a> FindArg<'a> for ItemPredicateArgumentConsumer {
                         Item::from_registry_key(name).map_or_else(
                             || {
                                 if name.starts_with("minecraft:") {
-                                    Err(CommandError::CommandFailed(TextComponent::translate(
-                                        "argument.item.id.invalid",
-                                        [TextComponent::text((*name).to_string())],
-                                    )))
+                                    Err(CommandError::CommandFailed(
+                                        TextComponent::translate_cross(
+                                            "argument.item.id.invalid",
+                                            "argument.item.id.invalid",
+                                            [TextComponent::text((*name).to_string())],
+                                        ),
+                                    ))
                                 } else {
-                                    Err(CommandError::CommandFailed(TextComponent::translate(
-                                        "argument.item.id.invalid",
-                                        [TextComponent::text("minecraft:".to_string() + *name)],
-                                    )))
+                                    Err(CommandError::CommandFailed(
+                                        TextComponent::translate_cross(
+                                            "argument.item.id.invalid",
+                                            "argument.item.id.invalid",
+                                            [TextComponent::text("minecraft:".to_string() + *name)],
+                                        ),
+                                    ))
                                 }
                             },
                             |item| Ok(ItemPredicate::Item(item)),
@@ -158,7 +166,8 @@ impl<'a> FindArg<'a> for ItemPredicateArgumentConsumer {
                     |tag| {
                         get_tag_ids(RegistryKey::Item, tag).map_or_else(
                             || {
-                                Err(CommandError::CommandFailed(TextComponent::translate(
+                                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                                    "arguments.item.tag.unknown",
                                     "arguments.item.tag.unknown",
                                     [TextComponent::text((*tag).to_string())],
                                 )))

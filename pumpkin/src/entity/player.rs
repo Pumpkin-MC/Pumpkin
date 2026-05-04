@@ -3,6 +3,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
@@ -23,6 +24,7 @@ use pumpkin_protocol::bedrock::client::update_abilities::{
 use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_util::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
@@ -111,7 +113,7 @@ const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 pub const DATA_VERSION: i32 = 4790; // 26.1.2
 
-struct HeapNode(i32, Vector2<i32>, SyncChunk);
+struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
 
 impl Eq for HeapNode {}
 
@@ -140,7 +142,7 @@ pub struct ChunkManager {
     chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
     chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
     chunk_queue: BinaryHeap<HeapNode>,
-    entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
+    entity_chunk_queue: VecDeque<(Vector2<i32>, Weak<ChunkEntityData>)>,
     batches_sent_since_ack: u8,
     last_chunk_batch_sent_at: Instant,
     /// The current world for chunk loading. Updated on dimension change.
@@ -202,7 +204,8 @@ impl ChunkManager {
                 continue;
             }
             if self.should_enqueue_chunk(pos, &chunk) {
-                self.chunk_queue.push(HeapNode(dst, pos, chunk));
+                self.chunk_queue
+                    .push(HeapNode(dst, pos, Arc::downgrade(&chunk)));
             }
         }
     }
@@ -248,6 +251,11 @@ impl ChunkManager {
                 && !unloading_chunks.contains(pos)
         });
 
+        self.entity_chunk_queue.retain(|(pos, _)| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
+                && !unloading_chunks.contains(pos)
+        });
+
         let mut tasks: Vec<_> = self
             .chunk_queue
             .drain()
@@ -265,7 +273,7 @@ impl ChunkManager {
                 let chunk = chunk.value().clone();
                 if self.should_enqueue_chunk(*pos, &chunk) {
                     let dst = (pos.x - center.x).abs().max((pos.y - center.y).abs());
-                    tasks.push(HeapNode(dst, *pos, chunk));
+                    tasks.push(HeapNode(dst, *pos, Arc::downgrade(&chunk)));
                 }
             }
         }
@@ -313,17 +321,19 @@ impl ChunkManager {
         self.chunks_per_tick = chunks_per_tick.ceil() as usize;
     }
 
-    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
-        if self.should_enqueue_chunk(position, &chunk) {
+    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) {
+        if self.should_enqueue_chunk(position, chunk) {
             let dst = (position.x - self.center.x)
                 .abs()
                 .max((position.y - self.center.y).abs());
-            self.chunk_queue.push(HeapNode(dst, position, chunk));
+            self.chunk_queue
+                .push(HeapNode(dst, position, Arc::downgrade(chunk)));
         }
     }
 
-    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
-        self.entity_chunk_queue.push_back((position, chunk));
+    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: &SyncEntityChunk) {
+        self.entity_chunk_queue
+            .push_back((position, Arc::downgrade(chunk)));
     }
 
     #[must_use]
@@ -336,8 +346,12 @@ impl ChunkManager {
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
         let take = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
         let mut chunks = Vec::with_capacity(take);
-        for _ in 0..take {
-            chunks.push(self.chunk_queue.pop().unwrap().2);
+        while chunks.len() < take
+            && let Some(node) = self.chunk_queue.pop()
+        {
+            if let Some(chunk) = node.2.upgrade() {
+                chunks.push(chunk);
+            }
         }
         self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
         self.last_chunk_batch_sent_at = Instant::now();
@@ -351,16 +365,19 @@ impl ChunkManager {
             .len()
             .min(self.chunks_per_tick.max(1));
 
-        let chunks: Box<[Arc<ChunkEntityData>]> = self
-            .entity_chunk_queue
-            .drain(..chunk_size)
-            .map(|(_, chunk)| chunk)
-            .collect();
+        let mut chunks = Vec::with_capacity(chunk_size);
+        while chunks.len() < chunk_size
+            && let Some((_, weak_chunk)) = self.entity_chunk_queue.pop_front()
+        {
+            if let Some(chunk) = weak_chunk.upgrade() {
+                chunks.push(chunk);
+            }
+        }
 
         self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
         self.last_chunk_batch_sent_at = Instant::now();
 
-        chunks
+        chunks.into_boxed_slice()
     }
 }
 
@@ -779,7 +796,10 @@ impl Player {
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
-        level.clean_entity_chunks(&chunks_to_clean);
+        if !chunks_to_clean.is_empty() {
+            level.clean_entity_chunks(&chunks_to_clean);
+            world.remove_entities_in_chunks(&chunks_to_clean).await;
+        }
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
@@ -1754,7 +1774,11 @@ impl Player {
             if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
                 self.kick(
                     DisconnectReason::KickedForIdle,
-                    TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IDLING, []),
+                    TextComponent::translate_cross(
+                        translation::java::MULTIPLAYER_DISCONNECT_IDLING,
+                        translation::java::MULTIPLAYER_DISCONNECT_IDLING,
+                        [],
+                    ),
                 )
                 .await;
                 return;
@@ -1770,7 +1794,11 @@ impl Player {
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
                 self.kick(
                     DisconnectReason::Timeout,
-                    TextComponent::translate(translation::DISCONNECT_TIMEOUT, []),
+                    TextComponent::translate_cross(
+                        translation::java::DISCONNECT_TIMEOUT,
+                        translation::bedrock::DISCONNECT_TIMEOUT,
+                        [],
+                    ),
                 )
                 .await;
                 return;
@@ -2343,7 +2371,11 @@ impl Player {
         drop(banned_players);
 
         let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, [])
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED,
+                translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
+                [],
+            )
         });
 
         self.kick(DisconnectReason::Kicked, kick_reason).await;
@@ -2374,7 +2406,11 @@ impl Player {
         drop(banned_ips);
 
         let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, [])
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                [],
+            )
         });
 
         let affected = server.get_players_by_ip(target_ip).await;
@@ -2686,7 +2722,9 @@ impl Player {
             }
             ClientPlatform::Bedrock(client) => {
                 client
-                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .send_game_packet(&SText::system_message(text.clone().0.to_bedrock_legacy(
+                        Locale::from_str(&self.config.load().locale).unwrap_or(Locale::EnUs),
+                    )))
                     .await;
             }
         }

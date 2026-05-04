@@ -83,8 +83,9 @@ async fn ban_ip(
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
 
     let Some(target_ip) = parse_ip(target, server).await else {
-        return Err(CommandError::CommandFailed(TextComponent::translate(
-            translation::COMMANDS_BANIP_INVALID,
+        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            translation::java::COMMANDS_BANIP_INVALID,
+            translation::bedrock::COMMANDS_BANIP_INVALID,
             [],
         )));
     };
@@ -92,8 +93,9 @@ async fn ban_ip(
     let mut banned_ips = server.data.banned_ip_list.write().await;
 
     if banned_ips.get_entry(&target_ip).is_some() {
-        return Err(CommandError::CommandFailed(TextComponent::translate(
-            translation::COMMANDS_BANIP_FAILED,
+        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            translation::java::COMMANDS_BANIP_FAILED,
+            translation::java::COMMANDS_BANIP_FAILED,
             [],
         )));
     }
@@ -117,8 +119,9 @@ async fn ban_ip(
         .join(" ");
 
     sender
-        .send_message(TextComponent::translate(
-            translation::COMMANDS_BANIP_SUCCESS,
+        .send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_BANIP_SUCCESS,
+            translation::bedrock::COMMANDS_BANIP_SUCCESS,
             [
                 TextComponent::text(target_ip.to_string()),
                 TextComponent::text(reason),
@@ -127,8 +130,9 @@ async fn ban_ip(
         .await;
 
     sender
-        .send_message(TextComponent::translate(
-            translation::COMMANDS_BANIP_INFO,
+        .send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_BANIP_INFO,
+            translation::java::COMMANDS_BANIP_INFO,
             [
                 TextComponent::text(affected.len().to_string()),
                 TextComponent::text(names),
@@ -141,7 +145,11 @@ async fn ban_ip(
         target
             .kick(
                 DisconnectReason::Kicked,
-                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, []),
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                    translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                    [],
+                ),
             )
             .await;
     }

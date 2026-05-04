@@ -1,62 +1,117 @@
 use pumpkin_data::translation;
 
 // These are akin to the translatable built-in exceptions in Minecraft.
-pub const READER_EXPECTED_START_QUOTE: CommandErrorType<0> =
-    CommandErrorType::new(translation::PARSING_QUOTE_EXPECTED_START);
-pub const READER_EXPECTED_END_QUOTE: CommandErrorType<0> =
-    CommandErrorType::new(translation::PARSING_QUOTE_EXPECTED_END);
-pub const READER_INVALID_ESCAPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::PARSING_QUOTE_ESCAPE);
-pub const READER_INVALID_BOOL: CommandErrorType<1> =
-    CommandErrorType::new(translation::PARSING_BOOL_INVALID);
-pub const READER_EXPECTED_BOOL: CommandErrorType<0> =
-    CommandErrorType::new(translation::PARSING_BOOL_EXPECTED);
-pub const READER_INVALID_INT: CommandErrorType<1> =
-    CommandErrorType::new(translation::PARSING_INT_INVALID);
-pub const READER_EXPECTED_INT: CommandErrorType<0> =
-    CommandErrorType::new(translation::PARSING_INT_EXPECTED);
-pub const READER_INVALID_LONG: CommandErrorType<1> =
-    CommandErrorType::new(translation::PARSING_LONG_INVALID);
-pub const READER_EXPECTED_LONG: CommandErrorType<0> =
-    CommandErrorType::new(translation::PARSING_LONG_EXPECTED);
-pub const READER_INVALID_DOUBLE: CommandErrorType<1> =
-    CommandErrorType::new(translation::PARSING_DOUBLE_INVALID);
-pub const READER_EXPECTED_DOUBLE: CommandErrorType<0> =
-    CommandErrorType::new(translation::PARSING_DOUBLE_EXPECTED);
-pub const READER_INVALID_FLOAT: CommandErrorType<1> =
-    CommandErrorType::new(translation::PARSING_FLOAT_INVALID);
-pub const READER_EXPECTED_FLOAT: CommandErrorType<0> =
-    CommandErrorType::new(translation::PARSING_FLOAT_EXPECTED);
-pub const READER_EXPECTED_SYMBOL: CommandErrorType<1> =
-    CommandErrorType::new(translation::PARSING_EXPECTED);
+pub const READER_EXPECTED_START_QUOTE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PARSING_QUOTE_EXPECTED_START,
+    translation::java::PARSING_QUOTE_EXPECTED_START,
+);
+pub const READER_EXPECTED_END_QUOTE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PARSING_QUOTE_EXPECTED_END,
+    translation::java::PARSING_QUOTE_EXPECTED_END,
+);
+pub const READER_INVALID_ESCAPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::PARSING_QUOTE_ESCAPE,
+    translation::java::PARSING_QUOTE_ESCAPE,
+);
+pub const READER_INVALID_BOOL: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::PARSING_BOOL_INVALID,
+    translation::java::PARSING_BOOL_INVALID,
+);
+pub const READER_EXPECTED_BOOL: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PARSING_BOOL_EXPECTED,
+    translation::java::PARSING_BOOL_EXPECTED,
+);
+pub const READER_INVALID_INT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::PARSING_INT_INVALID,
+    translation::java::PARSING_INT_INVALID,
+);
+pub const READER_EXPECTED_INT: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PARSING_INT_EXPECTED,
+    translation::java::PARSING_INT_EXPECTED,
+);
+pub const READER_INVALID_LONG: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::PARSING_LONG_INVALID,
+    translation::java::PARSING_LONG_INVALID,
+);
+pub const READER_EXPECTED_LONG: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PARSING_LONG_EXPECTED,
+    translation::java::PARSING_LONG_EXPECTED,
+);
+pub const READER_INVALID_DOUBLE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::PARSING_DOUBLE_INVALID,
+    translation::java::PARSING_DOUBLE_INVALID,
+);
+pub const READER_EXPECTED_DOUBLE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PARSING_DOUBLE_EXPECTED,
+    translation::java::PARSING_DOUBLE_EXPECTED,
+);
+pub const READER_INVALID_FLOAT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::PARSING_FLOAT_INVALID,
+    translation::java::PARSING_FLOAT_INVALID,
+);
+pub const READER_EXPECTED_FLOAT: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PARSING_FLOAT_EXPECTED,
+    translation::java::PARSING_FLOAT_EXPECTED,
+);
+pub const READER_EXPECTED_SYMBOL: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::PARSING_EXPECTED,
+    translation::java::PARSING_EXPECTED,
+);
 
-pub const LITERAL_INCORRECT: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_LITERAL_INCORRECT);
+pub const LITERAL_INCORRECT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_LITERAL_INCORRECT,
+    translation::java::ARGUMENT_LITERAL_INCORRECT,
+);
 
-pub const DOUBLE_TOO_LOW: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_DOUBLE_LOW);
-pub const DOUBLE_TOO_HIGH: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_DOUBLE_BIG);
-pub const FLOAT_TOO_LOW: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_FLOAT_LOW);
-pub const FLOAT_TOO_HIGH: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_FLOAT_BIG);
-pub const INTEGER_TOO_LOW: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_INTEGER_LOW);
-pub const INTEGER_TOO_HIGH: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_INTEGER_BIG);
-pub const LONG_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(translation::ARGUMENT_LONG_LOW);
-pub const LONG_TOO_HIGH: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_LONG_BIG);
+pub const DOUBLE_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_DOUBLE_LOW,
+    translation::java::ARGUMENT_DOUBLE_LOW,
+);
+pub const DOUBLE_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_DOUBLE_BIG,
+    translation::java::ARGUMENT_DOUBLE_BIG,
+);
+pub const FLOAT_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_FLOAT_LOW,
+    translation::java::ARGUMENT_FLOAT_LOW,
+);
+pub const FLOAT_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_FLOAT_BIG,
+    translation::java::ARGUMENT_FLOAT_BIG,
+);
+pub const INTEGER_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_INTEGER_LOW,
+    translation::java::ARGUMENT_INTEGER_LOW,
+);
+pub const INTEGER_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_INTEGER_BIG,
+    translation::java::ARGUMENT_INTEGER_BIG,
+);
+pub const LONG_TOO_LOW: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_LONG_LOW,
+    translation::java::ARGUMENT_LONG_LOW,
+);
+pub const LONG_TOO_HIGH: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_LONG_BIG,
+    translation::java::ARGUMENT_LONG_BIG,
+);
 
-pub const DISPATCHER_UNKNOWN_COMMAND: CommandErrorType<0> =
-    CommandErrorType::new(translation::COMMAND_UNKNOWN_COMMAND);
-pub const DISPATCHER_UNKNOWN_ARGUMENT: CommandErrorType<0> =
-    CommandErrorType::new(translation::COMMAND_UNKNOWN_ARGUMENT);
-pub const DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR: CommandErrorType<0> =
-    CommandErrorType::new(translation::COMMAND_EXPECTED_SEPARATOR);
-pub const DISPATCHER_PARSE_EXCEPTION: CommandErrorType<1> =
-    CommandErrorType::new(translation::COMMAND_EXCEPTION);
+pub const DISPATCHER_UNKNOWN_COMMAND: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMAND_UNKNOWN_COMMAND,
+    translation::bedrock::COMMANDS_GENERIC_UNKNOWN,
+);
+pub const DISPATCHER_UNKNOWN_ARGUMENT: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMAND_UNKNOWN_ARGUMENT,
+    translation::java::COMMAND_UNKNOWN_ARGUMENT,
+);
+pub const DISPATCHER_EXPECTED_ARGUMENT_SEPARATOR: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMAND_EXPECTED_SEPARATOR,
+    translation::java::COMMAND_EXPECTED_SEPARATOR,
+);
+pub const DISPATCHER_PARSE_EXCEPTION: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMAND_EXCEPTION,
+    translation::bedrock::COMMANDS_GENERIC_SYNTAX,
+);
 
 use crate::command::errors::{
     command_syntax_error::{CommandSyntaxError, ContextProvider},
@@ -70,7 +125,7 @@ use pumpkin_util::text::TextComponent;
 pub enum TemplateText {
     /// This is first translated, then arguments are substituted (which are not constant)
     /// when it needs to be displayed.
-    TranslationKey(&'static str),
+    TranslationKey(&'static str, &'static str),
 
     /// Directly shows up to the user without any translation done.
     Literal(&'static str),
@@ -89,14 +144,21 @@ pub enum TemplateText {
 /// - `CommandErrorType<N>` = `DynamicNCommandExceptionType`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CommandErrorType<const N: usize> {
-    pub translation_key: &'static str,
+    pub java_translation_key: &'static str,
+    pub bedrock_translation_key: &'static str,
 }
 
 impl<const N: usize> CommandErrorType<N> {
     /// Creates an error type from a given translation string.
     #[must_use]
-    pub const fn new(translation_key: &'static str) -> Self {
-        Self { translation_key }
+    pub const fn new(
+        java_translation_key: &'static str,
+        bedrock_translation_key: &'static str,
+    ) -> Self {
+        Self {
+            java_translation_key,
+            bedrock_translation_key,
+        }
     }
 
     /// Creates an error without context from itself and from a slice of `N` arguments.
@@ -107,7 +169,11 @@ impl<const N: usize> CommandErrorType<N> {
     ) -> CommandSyntaxError {
         CommandSyntaxError::create_without_context(
             self,
-            TextComponent::translate(self.translation_key, args),
+            TextComponent::translate_cross(
+                self.java_translation_key,
+                self.bedrock_translation_key,
+                args.to_vec(),
+            ),
         )
     }
 
@@ -122,7 +188,11 @@ impl<const N: usize> CommandErrorType<N> {
     {
         CommandSyntaxError::create(
             self,
-            TextComponent::translate(self.translation_key, args),
+            TextComponent::translate_cross(
+                self.java_translation_key,
+                self.bedrock_translation_key,
+                args.to_vec(),
+            ),
             context_provider,
         )
     }
@@ -206,7 +276,7 @@ impl<T: AnyCommandErrorType> PartialEq<T> for dyn AnyCommandErrorType {
 impl<const N: usize> Sealed for CommandErrorType<N> {}
 impl<const N: usize> AnyCommandErrorType for CommandErrorType<N> {
     fn text(&self) -> TemplateText {
-        TemplateText::TranslationKey(self.translation_key)
+        TemplateText::TranslationKey(self.java_translation_key, self.bedrock_translation_key)
     }
 
     fn argument_count(&self) -> usize {
@@ -281,7 +351,7 @@ mod test {
     const TEST_LITERAL_ERROR_TYPE: LiteralCommandErrorType =
         LiteralCommandErrorType::new("Test error");
     const TEST_TRANSLATABLE_ERROR_TYPE: CommandErrorType<1> =
-        CommandErrorType::new("this.key.is.arbitrary");
+        CommandErrorType::new("this.key.is.arbitrary", "this.key.is.arbitrary");
 
     #[test]
     fn create_literal_error() {
@@ -322,7 +392,8 @@ mod test {
         assert_eq!(error.error_type, &TEST_TRANSLATABLE_ERROR_TYPE);
         assert_eq!(
             error.message,
-            TextComponent::translate(
+            TextComponent::translate_cross(
+                "this.key.is.arbitrary",
                 "this.key.is.arbitrary",
                 [TextComponent::text("some argument")]
             )

@@ -52,8 +52,9 @@ impl CommandExecutor for Executor {
                         .set_weather_parameters(&world, processed_duration, 0, false, false)
                         .await;
                     sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_WEATHER_SET_CLEAR,
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_WEATHER_SET_CLEAR,
+                            translation::java::COMMANDS_WEATHER_SET_CLEAR,
                             [],
                         ))
                         .await;
@@ -66,8 +67,9 @@ impl CommandExecutor for Executor {
                         .set_weather_parameters(&world, 0, processed_duration, true, false)
                         .await;
                     sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_WEATHER_SET_RAIN,
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_WEATHER_SET_RAIN,
+                            translation::java::COMMANDS_WEATHER_SET_RAIN,
                             [],
                         ))
                         .await;
@@ -80,8 +82,9 @@ impl CommandExecutor for Executor {
                         .set_weather_parameters(&world, 0, processed_duration, true, true)
                         .await;
                     sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_WEATHER_SET_THUNDER,
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_WEATHER_SET_THUNDER,
+                            translation::java::COMMANDS_WEATHER_SET_THUNDER,
                             [],
                         ))
                         .await;

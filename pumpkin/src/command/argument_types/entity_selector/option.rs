@@ -10,20 +10,34 @@ use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::text::TextComponent;
 use std::str::FromStr;
 
-pub const UNKNOWN_OPTION_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_UNKNOWN);
-pub const INAPPLICABLE_OPTION_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_INAPPLICABLE);
-pub const DISTANCE_NEGATIVE_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_DISTANCE_NEGATIVE);
-pub const LEVEL_NEGATIVE_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_LEVEL_NEGATIVE);
-pub const LIMIT_TOO_SMALL_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_LIMIT_TOOSMALL);
-pub const SORT_UNKNOWN_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_SORT_IRREVERSIBLE);
-pub const GAMEMODE_INVALID_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID);
+pub const UNKNOWN_OPTION_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_UNKNOWN,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_UNKNOWN,
+);
+pub const INAPPLICABLE_OPTION_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_INAPPLICABLE,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_INAPPLICABLE,
+);
+pub const DISTANCE_NEGATIVE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_DISTANCE_NEGATIVE,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_DISTANCE_NEGATIVE,
+);
+pub const LEVEL_NEGATIVE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_LEVEL_NEGATIVE,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_LEVEL_NEGATIVE,
+);
+pub const LIMIT_TOO_SMALL_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_LIMIT_TOOSMALL,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_LIMIT_TOOSMALL,
+);
+pub const SORT_UNKNOWN_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_SORT_IRREVERSIBLE,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_SORT_IRREVERSIBLE,
+);
+pub const GAMEMODE_INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_MODE_INVALID,
+);
 
 /// Options to customize an [`EntitySelectorParser`].
 ///

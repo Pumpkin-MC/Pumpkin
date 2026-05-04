@@ -16,6 +16,7 @@ impl Carver for CaveCarver {
         random: &mut RandomGenerator,
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
+        legacy_random_source: bool,
     ) {
         let (is_nether, cave_config) = match config.additional {
             CarverAdditionalConfig::Cave(ref c) => (false, c),
@@ -85,6 +86,7 @@ impl Carver for CaveCarver {
                     if is_nether { 5.0 } else { 1.0 }, // this.getYScale()
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
             }
         }
@@ -151,10 +153,17 @@ impl CaveCarver {
         y_scale: f64,
         floor_level: f64,
         is_nether: bool,
+        legacy_random_source: bool,
     ) {
-        let mut random = RandomGenerator::Xoroshiro(
-            pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(tunnel_seed as u64),
-        );
+        let mut random = if legacy_random_source {
+            RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
+                tunnel_seed as u64,
+            ))
+        } else {
+            RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
+                tunnel_seed as u64,
+            ))
+        };
         let split_point = random.next_bounded_i32(dist / 2) + dist / 4;
         let steep = random.next_bounded_i32(6) == 0;
         let mut y_rota = 0.0f32;
@@ -195,6 +204,7 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
                 self.create_tunnel(
                     config,
@@ -213,6 +223,7 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
                 return;
             }
@@ -301,17 +312,14 @@ impl CaveCarver {
                 let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
 
                 if xd * xd + zd * zd < 1.0 {
-                    let mut has_grass = false;
-                    for world_y in (min_y..=max_y).rev() {
-                        let yd = (world_y as f64 + 0.5 - y) / vertical_radius;
+                    for world_y in (min_y + 1..=max_y).rev() {
+                        let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
                         if !self.should_skip(xd, yd, zd, floor_level)
                             && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            has_grass |= self.carve_block(
-                                chunk, config, world_x, world_y, world_z, is_nether, has_grass,
-                            );
+                            self.carve_block(chunk, config, world_x, world_y, world_z, is_nether);
                         }
                     }
                 }
@@ -336,7 +344,6 @@ impl CaveCarver {
         y: i32,
         z: i32,
         is_nether: bool,
-        mut has_grass: bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
@@ -344,12 +351,6 @@ impl CaveCarver {
 
         if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
             return false;
-        }
-
-        if block.id == pumpkin_data::Block::GRASS_BLOCK.id
-            || block.id == pumpkin_data::Block::MYCELIUM.id
-        {
-            has_grass = true;
         }
 
         // Only carve if it's replaceable
@@ -370,19 +371,6 @@ impl CaveCarver {
                 chunk.set_block_state(x & 15, local_y, z & 15, lava);
             } else {
                 chunk.set_block_state(x & 15, local_y, z & 15, air);
-            }
-
-            if has_grass {
-                let down_y = y - 1;
-                let local_down_y = down_y - chunk.bottom_y() as i32;
-                if (0..chunk.height() as i32).contains(&local_down_y) {
-                    let down_state_id = chunk.get_block_state_raw(x & 15, local_down_y, z & 15);
-                    if pumpkin_data::Block::from_state_id(down_state_id).id
-                        == pumpkin_data::Block::DIRT.id
-                    {
-                        // dirt replacement skipped
-                    }
-                }
             }
 
             return true;

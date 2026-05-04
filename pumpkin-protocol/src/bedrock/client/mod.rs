@@ -7,6 +7,7 @@ pub mod gamerules_changed;
 pub mod handshake;
 pub mod inventory_content;
 pub mod level_chunk;
+pub mod level_event;
 pub mod move_player;
 pub mod network_chunk_publisher_update;
 pub mod network_settings;

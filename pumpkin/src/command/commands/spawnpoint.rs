@@ -131,8 +131,9 @@ async fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: Block
         .await;
 
     sender
-        .send_message(TextComponent::translate(
-            translation::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE_NEW,
+        .send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE_NEW,
+            translation::java::COMMANDS_SPAWNPOINT_SUCCESS_SINGLE_NEW,
             [
                 TextComponent::text(pos.0.x.to_string()),
                 TextComponent::text(pos.0.y.to_string()),
