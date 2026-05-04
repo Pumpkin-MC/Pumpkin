@@ -108,8 +108,6 @@ use crate::entity::vehicle::boat::BoatEntity;
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
 use pumpkin_data::Block;
-use pumpkin_data::item::Item;
-use pumpkin_data::item_stack::ItemStack;
 use std::sync::atomic::AtomicBool;
 
 #[expect(clippy::too_many_lines)]
@@ -234,9 +232,7 @@ pub async fn from_type(
         }
         id if id == EntityType::EXPERIENCE_ORB.id => Arc::new(ExperienceOrbEntity::new(entity, 1)),
         id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(entity, 4.0, 80)),
-        id if id == EntityType::ITEM.id => {
-            Arc::new(ItemEntity::new(entity, ItemStack::new(1, &Item::AIR)).await)
-        }
+        id if id == EntityType::ITEM.id => Arc::new(ItemEntity::new_for_restore(entity).await),
         id if id == EntityType::ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::SPECTRAL_ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::WIND_CHARGE.id => {
