@@ -1,14 +1,8 @@
 use std::borrow::Cow;
 
-use pumpkin_util::text::TextComponent;
-
 use crate::command::{
-    errors::{
-        command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext, ContextProvider},
-        error_types::{AnyCommandErrorType, CommandErrorType},
-    },
+    errors::error_types::{AnyCommandErrorType, CommandErrorType},
     string_reader::StringReader,
-    suggestion::suggestions::{Suggestions, SuggestionsBuilder},
 };
 
 /// A delayed version of [`CommandSyntaxError`].
@@ -20,7 +14,7 @@ pub struct DelayedCommandSyntaxError {
 }
 
 #[derive(Debug, Default)]
-pub struct SnbtErrors {
+pub struct ParserErrors {
     pub cursor: usize,
     pub command_error: Option<DelayedCommandSyntaxError>,
     pub suggestions: Vec<Cow<'static, str>>,
@@ -29,7 +23,7 @@ pub struct SnbtErrors {
 /// A trait so that a parser specializing
 /// to keep track of errors don't need to keep track
 /// of suggestions, and vice versa.
-impl SnbtErrors {
+impl ParserErrors {
     pub fn simple_static(
         &mut self,
         reader: &StringReader,
@@ -134,5 +128,47 @@ impl SnbtErrors {
         } else if new == current {
             suggestions(&mut self.suggestions);
         }
+    }
+}
+
+/// A trait that rule-like parsers like `SnbtParser` implement.
+pub trait Parser<'r, 's> {
+    fn state_mut(&mut self) -> (&mut StringReader<'s>, &mut ParserErrors);
+
+    /// Records that a simple error occurred while parsing, and adds suggestions to counteract it.
+    fn store_simple_error_and_suggest(
+        &mut self,
+        error_type: &'static CommandErrorType<0>,
+        suggestions: &[&'static str],
+    ) {
+        let (reader, errors) = self.state_mut();
+        errors.simple_static(reader, error_type, suggestions);
+    }
+
+    /// Records that a dynamic error occurred while parsing, and adds suggestions to counteract it.
+    fn store_dynamic_error_and_suggest(
+        &mut self,
+        error_type: &'static CommandErrorType<1>,
+        arg1: impl Into<Cow<'static, str>>,
+        suggestions: &[&'static str],
+    ) {
+        let (reader, errors) = self.state_mut();
+        errors.dynamic_static(reader, error_type, arg1, suggestions);
+    }
+
+    /// Records that a simple error occurred while parsing.
+    fn store_simple_error(&mut self, error_type: &'static CommandErrorType<0>) {
+        let (reader, errors) = self.state_mut();
+        errors.simple(reader, error_type, Vec::new());
+    }
+
+    /// Records that a dynamic error occurred while parsing.
+    fn store_dynamic_error(
+        &mut self,
+        error_type: &'static CommandErrorType<1>,
+        arg1: impl Into<Cow<'static, str>>,
+    ) {
+        let (reader, errors) = self.state_mut();
+        errors.dynamic(reader, error_type, arg1, Vec::new());
     }
 }

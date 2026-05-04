@@ -1,6 +1,3 @@
-#![allow(unused)] // temporary
-
-mod errors;
 mod markers;
 mod operations;
 mod rules;
@@ -8,22 +5,16 @@ mod rules;
 #[cfg(test)]
 mod tests;
 
-use std::borrow::Cow;
-use std::collections::HashMap;
-
 use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
-use crate::command::snbt::errors::SnbtErrors;
+use crate::command::parser::{Parser, ParserErrors};
 use crate::command::snbt::markers::{
-    ArrayPrefix, Base, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix, TypeSuffix,
+    ArrayPrefix, Base, IntegerLiteral, Sign, SignedPrefix, TypeSuffix,
 };
-use crate::command::snbt::operations::SnbtOperations;
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
-use pumpkin_codecs::{DynamicOps, Number};
-use pumpkin_data::translation::{self, COMMAND_CONTEXT_PARSE_ERROR, COMMAND_FAILED};
-use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_nbt::nbt_ops::NbtOps;
+use pumpkin_codecs::Number;
+use pumpkin_data::translation::{self, COMMAND_FAILED};
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 
@@ -51,19 +42,19 @@ pub const EXPECTED_INTEGER_TYPE: CommandErrorType<0> =
 /// to fix errors that have ever occurred while parsing.
 pub struct SnbtParser<'r, 's> {
     reader: &'r mut StringReader<'s>,
-    errors: SnbtErrors,
+    errors: ParserErrors,
 }
 
-///
-/// USAGE
-///
+//
+// USAGE
+//
 impl SnbtParser<'_, '_> {
     /// Parses SNBT with a given [`StringReader`], giving the result or error from parsing.
     pub fn parse_for_commands(reader: &mut StringReader) -> Result<NbtTag, CommandSyntaxError> {
         let (result, errors) = {
             let mut parser = SnbtParser {
                 reader,
-                errors: SnbtErrors::default(),
+                errors: ParserErrors::default(),
             };
 
             let literal = parser.parse();
@@ -96,14 +87,14 @@ impl SnbtParser<'_, '_> {
         })
     }
 
-    /// Parses SNBT with a given [`StringReader`], giving the suggestions to fix errors from parsing.
+    // Parses SNBT with a given [`StringReader`], giving the suggestions to fix errors from parsing.
     pub fn parse_for_suggestions(
         reader: &mut StringReader,
         mut builder: SuggestionsBuilder,
     ) -> Suggestions {
         let mut parser = SnbtParser {
             reader,
-            errors: SnbtErrors::default(),
+            errors: ParserErrors::default(),
         };
 
         let _ = parser.parse();
@@ -123,42 +114,6 @@ impl SnbtParser<'_, '_> {
 // HELPER FUNCTIONS
 //
 impl SnbtParser<'_, '_> {
-    /// Records that a simple error occurred while parsing, and adds suggestions to counteract it.
-    fn store_simple_error_and_suggest(
-        &mut self,
-        error_type: &'static CommandErrorType<0>,
-        suggestions: &[&'static str],
-    ) {
-        self.errors
-            .simple_static(self.reader, error_type, suggestions);
-    }
-
-    /// Records that a dynamic error occurred while parsing, and adds suggestions to counteract it.
-    fn store_dynamic_error_and_suggest(
-        &mut self,
-        error_type: &'static CommandErrorType<1>,
-        arg1: impl Into<Cow<'static, str>>,
-        suggestions: &[&'static str],
-    ) {
-        self.errors
-            .dynamic_static(self.reader, error_type, arg1, suggestions);
-    }
-
-    /// Records that a simple error occurred while parsing.
-    fn store_simple_error(&mut self, error_type: &'static CommandErrorType<0>) {
-        self.errors.simple(self.reader, error_type, Vec::new());
-    }
-
-    /// Records that a dynamic error occurred while parsing.
-    fn store_dynamic_error(
-        &mut self,
-        error_type: &'static CommandErrorType<1>,
-        arg1: impl Into<Cow<'static, str>>,
-    ) {
-        self.errors
-            .dynamic(self.reader, error_type, arg1, Vec::new());
-    }
-
     /// Utility method that parses a type suffix of an integer.
     fn integer_type_suffix(&mut self) -> Option<TypeSuffix> {
         self.reader.skip_whitespace();
@@ -276,7 +231,6 @@ impl SnbtParser<'_, '_> {
         new: S,
         insert: impl Fn(&mut S, T),
     ) -> S {
-        let list_cursor = self.reader.cursor();
         let mut elements = new;
         let mut first = true;
 
@@ -498,5 +452,11 @@ impl SnbtParser<'_, '_> {
             longs.push(self.parse_integer_literal(value, suffix)?.into());
         }
         Some(NbtTag::LongArray(longs))
+    }
+}
+
+impl<'r, 's> Parser<'r, 's> for SnbtParser<'r, 's> {
+    fn state_mut(&mut self) -> (&mut StringReader<'s>, &mut ParserErrors) {
+        (self.reader, &mut self.errors)
     }
 }

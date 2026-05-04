@@ -1,21 +1,17 @@
 use std::collections::HashMap;
 
-use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
 use crate::command::errors::error_types::{CommandErrorType, LITERAL_INCORRECT};
-use crate::command::snbt::errors::SnbtErrors;
+use crate::command::parser::Parser;
 use crate::command::snbt::markers::{
     ArrayPrefix, Base, IntegerLiteral, IntegerSuffix, Sign, Signed, SignedPrefix, TypeSuffix,
 };
 use crate::command::snbt::operations::SnbtOperations;
 use crate::command::snbt::{NUMBER_PARSE_FAILURE, SnbtParser};
-use crate::command::string_reader::StringReader;
-use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_codecs::{DynamicOps, Number};
-use pumpkin_data::translation::{self, COMMAND_CONTEXT_PARSE_ERROR, COMMAND_FAILED};
+use pumpkin_data::translation;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::nbt_ops::NbtOps;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_util::text::TextComponent;
 
 pub const INVALID_CODEPOINT: CommandErrorType<1> =
     CommandErrorType::new(translation::SNBT_PARSER_INVALID_CODEPOINT);
@@ -160,7 +156,7 @@ impl SnbtParser<'_, '_> {
                         },
                     )
                 }
-                Some('b' | 'B' | 's' | 'S' | 'i' | 'I' | 'l' | 'L') => Some(IntegerSuffix(
+                Some('b' | 'B' | 'i' | 'I' | 'l' | 'L') => Some(IntegerSuffix(
                     SignedPrefix::None,
                     parser.integer_type_suffix()?,
                 )),
@@ -423,7 +419,7 @@ impl SnbtParser<'_, '_> {
                 Ok(_) => self.store_simple_error(&INFINITY_NOT_ALLOWED),
             },
             Some(TypeSuffix::Float) => match buffer.parse::<f32>() {
-                Err(error) => {
+                Err(_) => {
                     self.store_dynamic_error(&NUMBER_PARSE_FAILURE, "Invalid float literal");
                 }
                 Ok(value) if value.is_finite() => {
@@ -486,7 +482,7 @@ impl SnbtParser<'_, '_> {
             Return(char),
             CheckValidity(u32),
             UnicodeName(String),
-        };
+        }
 
         let cursor_at_escaping_char = self.reader.cursor();
         let branch = match self.reader.read() {
@@ -550,7 +546,7 @@ impl SnbtParser<'_, '_> {
                     None
                 }
             }
-            EscapeSequenceBranch::UnicodeName(name) => {
+            EscapeSequenceBranch::UnicodeName(_name) => {
                 todo!("Unicode Name functionality has not been implemented yet")
             }
         }

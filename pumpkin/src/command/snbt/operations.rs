@@ -1,8 +1,7 @@
 use pumpkin_data::translation;
 use pumpkin_nbt::{nbt_ops::NbtOps, tag::NbtTag};
-use uuid::Uuid;
 
-use crate::command::{errors::error_types::CommandErrorType, snbt::SnbtParser};
+use crate::command::{errors::error_types::CommandErrorType, parser::Parser, snbt::SnbtParser};
 use pumpkin_codecs::DynamicOps;
 
 pub const EXPECTED_NUMBER_OR_BOOLEAN: CommandErrorType<0> =

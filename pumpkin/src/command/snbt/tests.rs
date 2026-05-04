@@ -1,18 +1,12 @@
 use std::collections::HashMap;
 
 use pumpkin_nbt::{compound::NbtCompound, nbt_compound_tag, tag::NbtTag};
-use pumpkin_util::text::TextComponent;
 
 const BUILT_IN_LIKE_SUGGESTIONS: &[&str] = &["(", "bool", "false", "true", "uuid"];
 
 use crate::command::{
-    errors::{
-        command_syntax_error::CommandSyntaxError,
-        error_types::{CommandErrorType, LITERAL_INCORRECT},
-    },
-    snbt::{NUMBER_PARSE_FAILURE, SnbtParser},
-    string_reader::StringReader,
-    suggestion::suggestions::SuggestionsBuilder,
+    errors::command_syntax_error::CommandSyntaxError, snbt::SnbtParser,
+    string_reader::StringReader, suggestion::suggestions::SuggestionsBuilder,
 };
 
 fn parse(snbt: &str) -> Result<NbtTag, CommandSyntaxError> {
@@ -20,7 +14,7 @@ fn parse(snbt: &str) -> Result<NbtTag, CommandSyntaxError> {
 }
 
 fn suggestions(snbt: &str) -> Vec<String> {
-    let mut builder = SuggestionsBuilder::new(snbt, 0);
+    let builder = SuggestionsBuilder::new(snbt, 0);
     let suggestions = SnbtParser::parse_for_suggestions(&mut StringReader::new(snbt), builder);
     suggestions
         .suggestions
