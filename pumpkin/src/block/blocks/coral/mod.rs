@@ -7,9 +7,9 @@ use rand::RngExt;
 
 use crate::world::World;
 
-pub mod coral;
 pub mod coral_block;
 pub mod coral_fan;
+pub mod coral_plant;
 
 pub async fn scan_for_water(world: &Arc<World>, pos: &BlockPos) -> bool {
     for direction in BlockDirection::all() {
