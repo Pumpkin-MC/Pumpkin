@@ -1,6 +1,8 @@
 use pumpkin_protocol::{
     codec::var_int::VarInt,
-    java::client::play::{ArgumentType, CCommands, ProtoNode, ProtoNodeType},
+    java::client::play::{
+        ArgumentType, CCommands, ProtoNode, ProtoNodeType, StringProtoArgBehavior,
+    },
 };
 use std::sync::Arc;
 
@@ -11,9 +13,9 @@ use crate::command::node::{
 };
 use crate::entity::player::Player;
 use crate::server::Server;
-// Make sure CommandEnum is imported here!
 use pumpkin_protocol::bedrock::client::available_commands::{
-    CAvailableCommands, Command, CommandEnum, CommandOverload, CommandParameter,
+    CAvailableCommands, Command, CommandEnum, CommandOverload, CommandParameter, arg_flags,
+    arg_types, command_permissions,
 };
 
 use super::tree::{Node, NodeType};
@@ -282,12 +284,12 @@ pub async fn send_bedrock_commands_packet(
         let overloads = build_overloads_from_nodes(&tree.nodes, &tree.children, &mut ctx);
 
         commands.push(Command {
-            name: key.to_string(),
+            name: key.clone(),
             description: String::new(),
             flags: 0,
-            permission: String::new(),
+            permission: command_permissions::ANY.to_string(),
             aliases_enum_index: -1,
-            chained_subcommand_data_indices: Vec::new(),
+            chained_subcommand_offsets: Vec::new(),
             overloads,
         });
     }
@@ -337,9 +339,9 @@ pub async fn send_bedrock_commands_packet(
             name,
             description: String::new(),
             flags: 0,
-            permission: String::new(),
+            permission: command_permissions::ANY.to_string(),
             aliases_enum_index: -1,
-            chained_subcommand_data_indices: Vec::new(),
+            chained_subcommand_offsets: Vec::new(),
             overloads,
         });
     }
@@ -348,10 +350,10 @@ pub async fn send_bedrock_commands_packet(
         enum_values,
         chained_subcommand_values: Vec::new(),
         suffixes: Vec::new(),
-        enums,
         chained_subcommands: Vec::new(),
+        enums,
         commands,
-        dynamic_enums: Vec::new(),
+        soft_enums: Vec::new(),
         constraints: Vec::new(),
     };
 
@@ -395,15 +397,17 @@ fn collect_overloads_from_nodes(
                 let enum_idx = ensure_command_enum(
                     ctx.enums,
                     ctx.enum_values,
-                    &format!("SubCommand_{}", string),
-                    &[string.clone()],
+                    &format!("SubCommand_{string}"),
+                    std::slice::from_ref(string),
                 );
                 let mut params = current_params.clone();
                 params.push(CommandParameter {
                     name: string.clone(),
-                    type_info: (0x100000 | 0x200000 | enum_idx) as u32,
+                    type_info: arg_flags::ARG_FLAG_VALID
+                        | arg_flags::ARG_FLAG_ENUM
+                        | enum_idx as u32,
                     optional: false,
-                    flags: 0,
+                    options: 0,
                 });
                 collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
             }
@@ -413,7 +417,7 @@ fn collect_overloads_from_nodes(
                     name: name.clone(),
                     type_info: bedrock_param_type(&consumer.get_client_side_parser()),
                     optional: false,
-                    flags: 0,
+                    options: 0,
                 });
                 collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
             }
@@ -444,7 +448,7 @@ fn build_overloads_from_attached_nodes(
             parameters: Vec::new(),
         });
     }
-    collect_overloads_from_attached(tree, child_ids, &mut Vec::new(), &mut overloads, ctx);
+    collect_overloads_from_attached(tree, child_ids, &Vec::new(), &mut overloads, ctx);
     if overloads.is_empty() {
         overloads.push(CommandOverload {
             chaining: false,
@@ -457,7 +461,7 @@ fn build_overloads_from_attached_nodes(
 fn collect_overloads_from_attached(
     tree: &[&AttachedNode],
     child_ids: &[NodeId],
-    current_params: &mut Vec<CommandParameter>,
+    current_params: &[CommandParameter],
     overloads: &mut Vec<CommandOverload>,
     ctx: &mut BuilderContext,
 ) {
@@ -471,15 +475,17 @@ fn collect_overloads_from_attached(
                 let enum_idx = ensure_command_enum(
                     ctx.enums,
                     ctx.enum_values,
-                    &format!("SubCommand_{}", name),
+                    &format!("SubCommand_{name}"),
                     &[name.to_string()],
                 );
-                let mut params = current_params.clone();
+                let mut params = current_params.to_vec();
                 params.push(CommandParameter {
                     name: name.to_string(),
-                    type_info: (0x100000 | 0x200000 | enum_idx) as u32,
+                    type_info: arg_flags::ARG_FLAG_VALID
+                        | arg_flags::ARG_FLAG_ENUM
+                        | enum_idx as u32,
                     optional: false,
-                    flags: 0,
+                    options: 0,
                 });
                 let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
                 if lit.owned.command.is_some() {
@@ -488,22 +494,24 @@ fn collect_overloads_from_attached(
                         parameters: params.clone(),
                     });
                 }
-                collect_overloads_from_attached(tree, &grandchild_ids, &mut params, overloads, ctx);
+                collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
             }
             AttachedNode::Command(cmd) => {
                 let name = cmd.meta.literal.as_ref();
                 let enum_idx = ensure_command_enum(
                     ctx.enums,
                     ctx.enum_values,
-                    &format!("SubCommand_{}", name),
+                    &format!("SubCommand_{name}"),
                     &[name.to_string()],
                 );
-                let mut params = current_params.clone();
+                let mut params = current_params.to_vec();
                 params.push(CommandParameter {
                     name: name.to_string(),
-                    type_info: (0x100000 | 0x200000 | enum_idx) as u32,
+                    type_info: arg_flags::ARG_FLAG_VALID
+                        | arg_flags::ARG_FLAG_ENUM
+                        | enum_idx as u32,
                     optional: false,
-                    flags: 0,
+                    options: 0,
                 });
                 let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
                 if cmd.owned.command.is_some() {
@@ -512,16 +520,16 @@ fn collect_overloads_from_attached(
                         parameters: params.clone(),
                     });
                 }
-                collect_overloads_from_attached(tree, &grandchild_ids, &mut params, overloads, ctx);
+                collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
             }
             AttachedNode::Argument(arg) => {
                 let parser = arg.meta.argument_type.client_side_parser();
-                let mut params = current_params.clone();
+                let mut params = current_params.to_vec();
                 params.push(CommandParameter {
                     name: arg.meta.name.to_string(),
                     type_info: bedrock_param_type(&parser),
                     optional: false,
-                    flags: 0,
+                    options: 0,
                 });
                 let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
                 if arg.owned.command.is_some() {
@@ -530,7 +538,7 @@ fn collect_overloads_from_attached(
                         parameters: params.clone(),
                     });
                 }
-                collect_overloads_from_attached(tree, &grandchild_ids, &mut params, overloads, ctx);
+                collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
             }
             AttachedNode::Root(_) => {}
         }
@@ -538,12 +546,13 @@ fn collect_overloads_from_attached(
 }
 
 fn ensure_enum_value(enum_values: &mut Vec<String>, value: &str) -> usize {
-    if let Some(pos) = enum_values.iter().position(|v| v == value) {
-        pos
-    } else {
-        enum_values.push(value.to_string());
-        enum_values.len() - 1
-    }
+    enum_values
+        .iter()
+        .position(|v| v == value)
+        .unwrap_or_else(|| {
+            enum_values.push(value.to_string());
+            enum_values.len() - 1
+        })
 }
 
 fn ensure_command_enum(
@@ -556,11 +565,10 @@ fn ensure_command_enum(
         return pos;
     }
 
-    let mut value_indices = Vec::new();
-    for val in values {
-        let val_idx = ensure_enum_value(enum_values, val);
-        value_indices.push(val_idx as u32);
-    }
+    let value_indices: Vec<usize> = values
+        .iter()
+        .map(|val| ensure_enum_value(enum_values, val))
+        .collect();
 
     enums.push(CommandEnum {
         name: name.to_string(),
@@ -570,17 +578,32 @@ fn ensure_command_enum(
     enums.len() - 1
 }
 
-/// Maps a Java `ArgumentType` to a Bedrock `CommandParamType` and adds the VALID flag (0x100000).
-fn bedrock_param_type(arg: &ArgumentType<'_>) -> u32 {
+const fn bedrock_param_type(arg: &ArgumentType<'_>) -> u32 {
     let base = match arg {
-        ArgumentType::Integer { .. } | ArgumentType::Long { .. } => 0x10, // INT
-        ArgumentType::Float { .. } | ArgumentType::Double { .. } => 0x11, // FLOAT
-        ArgumentType::Bool => 0x18,                                       // BOOL
-        ArgumentType::Entity { .. } => 0x0F,                              // TARGET
-        ArgumentType::BlockPos | ArgumentType::ColumnPos => 0x28,         // BLOCK_POSITION
-        ArgumentType::Vec3 => 0x27,                                       // POSITION
-        ArgumentType::Vec2 => 0x27,
-        _ => 0x20, // STRING fallback
+        ArgumentType::Integer { .. } | ArgumentType::Long { .. } | ArgumentType::Time { .. } => {
+            arg_types::ARG_TYPE_INT
+        }
+        ArgumentType::Float { .. } | ArgumentType::Double { .. } => arg_types::ARG_TYPE_FLOAT,
+        ArgumentType::Bool => arg_types::ARG_TYPE_INT,
+        ArgumentType::Entity { .. }
+        | ArgumentType::GameProfile
+        | ArgumentType::ScoreHolder { .. } => arg_types::ARG_TYPE_TARGET,
+        ArgumentType::BlockPos | ArgumentType::ColumnPos => arg_types::ARG_TYPE_BLOCK_POS,
+        ArgumentType::Vec3 | ArgumentType::Vec2 | ArgumentType::Rotation | ArgumentType::Angle => {
+            arg_types::ARG_TYPE_ENTITY_POS
+        }
+        ArgumentType::String(StringProtoArgBehavior::GreedyPhrase) => arg_types::ARG_TYPE_RAW_TEXT,
+        ArgumentType::Message => arg_types::ARG_TYPE_MESSAGE,
+        ArgumentType::IntRange => arg_types::ARG_TYPE_INT_RANGE,
+        ArgumentType::ItemSlot | ArgumentType::ItemSlots => arg_types::ARG_TYPE_EQUIPMENT_SLOT,
+        ArgumentType::Component
+        | ArgumentType::Style
+        | ArgumentType::Nbt
+        | ArgumentType::NbtTag
+        | ArgumentType::NbtPath => arg_types::ARG_TYPE_JSON,
+        ArgumentType::Operation => arg_types::ARG_TYPE_OPERATOR,
+        // Default to STRING for non-converted types as it's the most compatible fallback.
+        _ => arg_types::ARG_TYPE_STRING,
     };
-    base | 0x100000 // Apply ARG_FLAG_VALID
+    base | arg_flags::ARG_FLAG_VALID
 }
