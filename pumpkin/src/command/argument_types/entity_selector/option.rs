@@ -317,12 +317,10 @@ impl EntitySelectorOption {
         for option in Self::VALUES {
             let lower_prefix = builder.remaining_lowercase();
             if option.name().starts_with(lower_prefix) && option.can_use(parser) {
+                let key = format!("argument.entity.options.{}.description", option.name());
                 builder = builder.suggest_with_tooltip(
                     format!("{}=", option.name()),
-                    TextComponent::translate(
-                        format!("argument.entity.options.{}.description", option.name()),
-                        [],
-                    ),
+                    TextComponent::translate_cross(key.clone(), key, []),
                 );
             }
         }
