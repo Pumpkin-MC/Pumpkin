@@ -118,7 +118,7 @@ impl SnbtParser<'_, '_> {
         if !parser.errors.suggestions.is_empty() {
             builder = builder.create_offset(parser.errors.cursor);
             for suggestion in &parser.errors.suggestions {
-                builder = builder.suggest(suggestion.to_string());
+                builder = builder.filter_and_suggest_one(suggestion.to_string());
             }
         }
 

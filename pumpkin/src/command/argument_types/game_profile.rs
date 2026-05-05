@@ -1,16 +1,20 @@
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::entity::ONLY_PLAYERS_ALLOWED_ERROR_TYPE;
 use crate::command::argument_types::entity_selector::EntitySelector;
-use crate::command::argument_types::entity_selector::parser::EntitySelectorParser;
+use crate::command::argument_types::entity_selector::parser::{
+    EntitySelectorParser, EntitySelectorParserSuggestions,
+};
 use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::net::authentication::lookup_profile_by_name;
 use crate::net::{GameProfile, offline_uuid};
 use crate::server::Server;
 use pumpkin_data::translation;
+use std::pin::Pin;
 use uuid::Uuid;
 
 pub const UNKNOWN_PLAYER_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
@@ -196,6 +200,14 @@ impl ArgumentType for GameProfileArgumentType {
         JavaClientArgumentType::GameProfile
     }
 
+    fn list_suggestions<'a>(
+        &'a self,
+        context: &'a CommandContext,
+        suggestions_builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        EntitySelectorParserSuggestions::list_suggestions(context, suggestions_builder)
+    }
+
     fn examples(&self) -> Vec<String> {
         examples!("Herobrine", "98765", "@a", "@p[limit=2]")
     }
@@ -209,7 +221,7 @@ impl GameProfileArgumentType {
         if reader.peek() == Some('@') {
             // We read a selector variable.
             let parser = EntitySelectorParser::new(reader, allow_selectors);
-            let selector = parser.parse()?;
+            let selector = parser.parse_and_consume()?;
             if selector.includes_entities {
                 Err(ONLY_PLAYERS_ALLOWED_ERROR_TYPE.create(reader))
             } else {
