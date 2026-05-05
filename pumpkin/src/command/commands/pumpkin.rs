@@ -13,13 +13,15 @@ const NAMES: [&str; 2] = ["pumpkin", "version"];
 
 const DESCRIPTION: &str = "Display information about Pumpkin.";
 
-struct Executor;
+struct Executor {
+    contributors: Vec<Contributor>,
+}
 
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_HASH: &str = env!("GIT_HASH");
 const GIT_HASH_FULL: &str = env!("GIT_HASH_FULL");
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct Contributor {
     login: String,
 }
@@ -66,6 +68,15 @@ fn extract_next_url(header: &str) -> Option<String> {
         })
 }
 
+impl Executor {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            contributors: fetch_all_contributors(),
+        }
+    }
+}
+
 #[expect(clippy::too_many_lines)]
 impl CommandExecutor for Executor {
     fn execute<'a>(
@@ -74,8 +85,9 @@ impl CommandExecutor for Executor {
         _server: &'a crate::server::Server,
         _args: &'a ConsumedArgs<'a>,
     ) -> CommandResult<'a> {
+        let contributors = self.contributors.clone();
+
         Box::pin(async move {
-            let contributors = fetch_all_contributors();
             let contributor_names = contributors
                 .iter()
                 .map(|c| c.login.as_str())
@@ -245,5 +257,5 @@ impl CommandExecutor for Executor {
 }
 
 pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor::new())
 }
