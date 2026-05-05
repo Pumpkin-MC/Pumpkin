@@ -6,6 +6,7 @@ use crate::version::MinecraftVersion;
 mod block_state;
 mod entity_id;
 mod item_id;
+mod sound_id;
 
 /// Returns the list of remap builder functions paired with their output file names.
 #[allow(clippy::type_complexity)]
@@ -14,6 +15,7 @@ pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
         (block_state::build, "block_state_remap.rs"),
         (entity_id::build, "entity_id_remap.rs"),
         (item_id::build, "item_id_remap.rs"),
+        (sound_id::build, "sound_id_remap.rs"),
     ]
 }
 

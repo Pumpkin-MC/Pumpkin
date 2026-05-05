@@ -215,6 +215,11 @@ pub mod item_id_remap;
 #[path = "generated/entity_id_remap.rs"]
 pub mod entity_id_remap;
 
+#[cfg(feature = "sound_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/sound_id_remap.rs"]
+pub mod sound_id_remap;
+
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]
