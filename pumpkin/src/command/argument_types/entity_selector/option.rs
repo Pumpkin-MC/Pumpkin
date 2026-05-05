@@ -207,7 +207,7 @@ impl EntitySelectorOption {
                 }
             }
             Self::Sort => {
-                let string = parser.reader.read_unquoted_string()?;
+                let string = parser.reader.read_unquoted_string();
                 parser.order = match string.as_str() {
                     "nearest" => Ok(Order::Nearest),
                     "furthest" => Ok(Order::Furthest),
@@ -227,7 +227,7 @@ impl EntitySelectorOption {
                 if parser.has_flag(Flags::GAMEMODE_NOT_EQUALS_SET) && !invert {
                     return Err(self.inapplicable_error(parser.reader));
                 }
-                let string = parser.reader.read_unquoted_string()?;
+                let string = parser.reader.read_unquoted_string();
                 if let Ok(gamemode) = GameMode::from_str(&string) {
                     parser.set_includes_entities(false);
                     parser.add_predicate(EntitySelectorPredicate::GameMode(gamemode, invert));

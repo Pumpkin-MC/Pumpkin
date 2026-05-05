@@ -1,3 +1,4 @@
+pub mod provider;
 pub mod suggestions;
 
 use pumpkin_util::text::TextComponent;
@@ -381,8 +382,8 @@ mod test {
         assert_eq!(
             &merged.suggestions,
             &[
-                Suggestion::without_tooltip(StringRange::between(4, 5), "BAR"),
                 Suggestion::without_tooltip(StringRange::between(4, 5), "bar"),
+                Suggestion::without_tooltip(StringRange::between(4, 5), "BAR"),
                 Suggestion::without_tooltip(StringRange::between(4, 5), "bars"),
                 Suggestion::without_tooltip(StringRange::between(4, 5), "baz"),
                 Suggestion::without_tooltip(StringRange::between(4, 5), "foo"),

@@ -47,7 +47,7 @@ impl ArgumentType for TimeArgumentType {
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let value = reader.read_float()?;
-        let unit = reader.read_unquoted_string()?;
+        let unit = reader.read_unquoted_string();
         // Find our unit's translation to ticks.
         let ticks_per_unit = match unit.as_str() {
             "t" | "" => 1,
