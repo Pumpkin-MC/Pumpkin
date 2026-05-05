@@ -1,5 +1,11 @@
-use std::sync::Arc;
-
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, BlockIsReplacing, BlockMetadata, CanPlaceAtArgs,
+        GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+        blocks::coral::{is_dead_coral, scan_for_water, try_schedule_die_tick},
+    },
+    entity::EntityBase,
+};
 use pumpkin_data::{
     Block, BlockDirection, FacingExt, HorizontalFacingExt,
     block_properties::{
@@ -12,32 +18,18 @@ use pumpkin_world::{
     BlockStateId,
     world::{BlockAccessor, BlockFlags},
 };
-use rand::RngExt;
-
-use crate::{
-    block::{
-        BlockBehaviour, BlockFuture, BlockIsReplacing, BlockMetadata, CanPlaceAtArgs,
-        GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
-        blocks::plant::coral::scan_for_water,
-    },
-    entity::EntityBase,
-    world::World,
-};
 pub struct CoralFanBlock;
 impl BlockMetadata for CoralFanBlock {
     fn ids() -> Box<[u16]> {
-        let alive_fans = [
+        let alive_wall_fans = tag::Block::MINECRAFT_WALL_CORALS.1;
+        let alive_coral_fans: &[u16] = &[
             Block::BRAIN_CORAL_FAN.id,
             Block::BUBBLE_CORAL_FAN.id,
             Block::FIRE_CORAL_FAN.id,
             Block::HORN_CORAL_FAN.id,
             Block::TUBE_CORAL_FAN.id,
-            Block::BRAIN_CORAL_WALL_FAN.id,
-            Block::BUBBLE_CORAL_WALL_FAN.id,
-            Block::FIRE_CORAL_WALL_FAN.id,
-            Block::HORN_CORAL_WALL_FAN.id,
-            Block::TUBE_CORAL_WALL_FAN.id,
         ];
+        let alive_fans = [alive_wall_fans, alive_coral_fans].concat();
         let mut plants = Vec::new();
         for alive_fan_id in alive_fans {
             let clone = alive_fan_id;
@@ -121,7 +113,7 @@ impl BlockBehaviour for CoralFanBlock {
     }
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !scan_for_water(args.world, args.position).await && !is_dead(args.block) {
+            if !scan_for_water(args.world, args.position).await && !is_dead_coral(args.block) {
                 let current_state = args.world.get_block_state(args.position).await;
                 let dead_block_state_id = if is_wall_fan(args.block) {
                     let props =
@@ -139,10 +131,6 @@ impl BlockBehaviour for CoralFanBlock {
     }
     fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
         Box::pin(async move {
-            let replacing_block = args.block_accessor.get_block(args.position).await;
-            if replacing_block != &Block::WATER && replacing_block != args.block {
-                return false;
-            }
             let support_block = args
                 .block_accessor
                 .get_block_state(&args.position.down())
@@ -191,35 +179,12 @@ fn get_default_coral_fan_state_id(block: &Block, waterlogged: bool) -> BlockStat
     props.waterlogged = waterlogged;
     props.to_state_id(block)
 }
-async fn try_schedule_die_tick(block: &Block, world: &Arc<World>, pos: &BlockPos) {
-    let tick_delay = 60 + rand::rng().random_range(0..40);
-    world
-        .schedule_block_tick(
-            block,
-            *pos,
-            tick_delay as u8,
-            pumpkin_world::tick::TickPriority::Normal,
-        )
-        .await;
-}
 fn is_wall_fan(block: &Block) -> bool {
     block.has_tag(&tag::Block::MINECRAFT_WALL_CORALS)
         || block == &Block::DEAD_BRAIN_CORAL_WALL_FAN
         || block == &Block::DEAD_BUBBLE_CORAL_WALL_FAN
         || block == &Block::DEAD_FIRE_CORAL_WALL_FAN
         || block == &Block::DEAD_HORN_CORAL_WALL_FAN
-        || block == &Block::DEAD_TUBE_CORAL_WALL_FAN
-}
-fn is_dead(block: &Block) -> bool {
-    block == &Block::DEAD_BRAIN_CORAL_FAN
-        || block == &Block::DEAD_BRAIN_CORAL_WALL_FAN
-        || block == &Block::DEAD_BUBBLE_CORAL_FAN
-        || block == &Block::DEAD_BUBBLE_CORAL_WALL_FAN
-        || block == &Block::DEAD_FIRE_CORAL_FAN
-        || block == &Block::DEAD_FIRE_CORAL_WALL_FAN
-        || block == &Block::DEAD_HORN_CORAL_FAN
-        || block == &Block::DEAD_HORN_CORAL_WALL_FAN
-        || block == &Block::DEAD_TUBE_CORAL_FAN
         || block == &Block::DEAD_TUBE_CORAL_WALL_FAN
 }
 fn get_dead_type(block: &Block) -> Block {

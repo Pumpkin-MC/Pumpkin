@@ -94,5 +94,7 @@ pub mod slime;
 pub mod spawner;
 pub mod tnt;
 
+pub mod coral;
+
 // Misc / abstract
 pub mod abstract_wall_mounting;
