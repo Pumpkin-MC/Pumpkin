@@ -86,9 +86,9 @@ impl SuggestionsBuilder {
 
     /// Adds all suggestions from another [`SuggestionsBuilder`] to this one.
     #[must_use]
-    pub fn append(mut self, other: &Self) -> Self {
-        for suggestion in &other.result {
-            self.result.push(suggestion.clone());
+    pub fn append(mut self, other: Self) -> Self {
+        for suggestion in other.result {
+            self.result.push(suggestion);
         }
         self
     }
@@ -103,6 +103,90 @@ impl SuggestionsBuilder {
             start,
             result: Vec::new(),
         }
+    }
+
+    /// Takes only the values that satisfy the current builder prefix, and
+    /// suggests them. For this function to work currently, **all values provided
+    /// must be in lowercase**.
+    ///
+    /// Example:
+    /// - If the builder has `b` and the values are `acacia_boat`, `blue`, and `stick`, only the first two will get counted,
+    ///   as `boat` and `blue` start with the letter `b`.
+    /// - If the builder has `bl` instead, only `blue` will get counted.
+    #[must_use]
+    pub fn filter_and_suggest_lowercase(mut self, values: Vec<String>) -> Self {
+        for value in values {
+            if Self::matches_substr(self.remaining_lowercase(), &value) {
+                self = self.suggest(value);
+            }
+        }
+        self
+    }
+
+    /// Takes only the values that satisfy the current builder prefix, and
+    /// suggests them.
+    ///
+    /// Example:
+    /// - If the builder has `b` and the values are `acacia_boat`, `blue`, and `stick`, only the first two will get counted,
+    ///   as `boat` and `blue` start with the letter `b`.
+    /// - If the builder has `bl` instead, only `blue` will get counted.
+    #[must_use]
+    pub fn filter_and_suggest(mut self, values: &[&str]) -> Self {
+        for value in values {
+            if Self::matches_substr(self.remaining_lowercase(), &value.to_lowercase()) {
+                self = self.suggest(value.to_string());
+            }
+        }
+        self
+    }
+
+    /// Takes the value only if it satisfies the current builder prefix, and
+    /// suggests them.
+    #[must_use]
+    pub fn filter_and_suggest_one(mut self, value: impl Into<SuggestionText>) -> Self {
+        let value = value.into();
+        if Self::matches_substr(
+            self.remaining_lowercase(),
+            &value.cached_text().to_lowercase(),
+        ) {
+            self = self.suggest(value);
+        }
+        self
+    }
+
+    /// Takes only the values that satisfy the current builder prefix, and
+    /// suggests them.
+    ///
+    /// Example:
+    /// - If the builder has `b` and the values are `acacia_boat`, `blue`, and `stick`, only the first two will get counted,
+    ///   as `boat` and `blue` start with the letter `b`.
+    /// - If the builder has `bl` instead, only `blue` will get counted.
+    #[must_use]
+    pub fn filter_and_suggest_iter(
+        mut self,
+        values: impl IntoIterator<Item = impl Into<SuggestionText>>,
+    ) -> Self {
+        for value in values {
+            let value = value.into();
+            if Self::matches_substr(
+                self.remaining_lowercase(),
+                &value.cached_text().to_lowercase(),
+            ) {
+                self = self.suggest(value);
+            }
+        }
+        self
+    }
+
+    fn matches_substr(pattern: &str, input: &str) -> bool {
+        let mut current_str = input;
+        while !current_str.starts_with(pattern) {
+            match current_str.find(['.', '_', '/']) {
+                Some(pos) => current_str = &current_str[(pos + 1)..],
+                None => return false,
+            }
+        }
+        true
     }
 }
 

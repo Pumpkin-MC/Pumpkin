@@ -19,6 +19,13 @@ pub enum GameMode {
 }
 
 impl GameMode {
+    pub const VALUES: [Self; 4] = [
+        Self::Survival,
+        Self::Creative,
+        Self::Adventure,
+        Self::Spectator,
+    ];
+
     /// Returns the display string for this game mode.
     #[must_use]
     pub const fn to_str(&self) -> &'static str {
@@ -27,6 +34,17 @@ impl GameMode {
             Self::Creative => "Creative",
             Self::Adventure => "Adventure",
             Self::Spectator => "Spectator",
+        }
+    }
+
+    /// Returns the lowercase name of this game mode.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Survival => "survival",
+            Self::Creative => "creative",
+            Self::Adventure => "adventure",
+            Self::Spectator => "spectator",
         }
     }
 }
