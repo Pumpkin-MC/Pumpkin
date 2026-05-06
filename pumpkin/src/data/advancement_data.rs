@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::error;
 use uuid::Uuid;
+use pumpkin_util::identifier::Identifier;
 
 /// Manages player advancements, including data creation and saving.
 pub struct AdvancementManager {
@@ -33,7 +34,7 @@ impl AdvancementManager {
 
     /// Retrieves the list of all available advancements in the game.
     #[must_use]
-    pub fn get_advancements(&self) -> Vec<&'static str> {
+    pub fn get_advancements(&self) -> Vec<Identifier> {
         Advancement::get_list().to_vec()
     }
 

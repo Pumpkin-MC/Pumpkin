@@ -36,14 +36,13 @@ impl ArgumentType for ResourceKeyArgument {
         context: &CommandContext,
         mut suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
-        info!("list suggestions {:?}", &self.0);
         if self.0 == ADVANCEMENT_REGISTRY {
             let advancements = context.server().advancement_manager.get_advancements();
             Box::pin(async move {
                 let string = suggestions_builder.remaining().to_lowercase();
                 for identifier in advancements {
-                    if identifier.starts_with(&string) {
-                        suggestions_builder = suggestions_builder.suggest(identifier);
+                    if identifier.to_string().starts_with(&string) || identifier.path().starts_with(&string) {
+                        suggestions_builder = suggestions_builder.suggest(identifier.to_string());
                     }
                 }
                 suggestions_builder.build()

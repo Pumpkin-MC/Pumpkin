@@ -7,6 +7,7 @@ use quote::{ToTokens, format_ident, quote};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::BTreeMap, fs};
 
+
 #[derive(Deserialize, Default)]
 pub struct AdvancementStruct {
     pub parent: Option<ResourceLocation>,
@@ -182,11 +183,12 @@ pub(crate) fn build() -> TokenStream {
 
         name_to_type.extend(quote! { #raw_name => Some(Self::#format_name), });
         minecraft_name_to_type.extend(quote! { #minecraft_name => Some(Self::#format_name), });
-        minecraft_namespaces.extend(quote! { #minecraft_name,})
+        minecraft_namespaces.extend(quote! { Identifier::vanilla_static(#raw_name),})
     }
 
     quote! {
         use pumpkin_util::text::TextComponent;
+        use pumpkin_util::identifier::Identifier;
         use crate::item_stack::ItemStack;
         use crate::item::Item;
         use crate::advancement_data::*;
@@ -256,7 +258,7 @@ pub(crate) fn build() -> TokenStream {
                 }
             }
 
-            pub fn get_list() -> [&'static str;#capacity] {
+            pub const fn get_list() -> [Identifier;#capacity] {
                 [#minecraft_namespaces]
             }
         }
