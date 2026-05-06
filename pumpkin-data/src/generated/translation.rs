@@ -14121,7 +14121,6 @@ pub mod java {
     pub const PERMISSIONS_REQUIRES_ENTITY: &str = "permissions.requires.entity";
     #[doc = "A player is required to run this command here"]
     pub const PERMISSIONS_REQUIRES_PLAYER: &str = "permissions.requires.player";
-    #[doc = ""]
     pub const POTION_POTENCY_0: &str = "potion.potency.0";
     #[doc = "II"]
     pub const POTION_POTENCY_1: &str = "potion.potency.1";
@@ -14490,7 +14489,6 @@ pub mod java {
     pub const SELECTWORLD_GAMEMODE_SPECTATOR_INFO: &str = "selectWorld.gameMode.spectator.info";
     #[doc = "You can look but don't touch"]
     pub const SELECTWORLD_GAMEMODE_SPECTATOR_LINE1: &str = "selectWorld.gameMode.spectator.line1";
-    #[doc = ""]
     pub const SELECTWORLD_GAMEMODE_SPECTATOR_LINE2: &str = "selectWorld.gameMode.spectator.line2";
     #[doc = "Survival"]
     pub const SELECTWORLD_GAMEMODE_SURVIVAL: &str = "selectWorld.gameMode.survival";
@@ -34815,7 +34813,6 @@ pub mod bedrock {
     pub const POTION_POISON_SPLASH_NAME: &str = "potion.poison.splash.name";
     #[doc = "Lingering Potion of Poison"]
     pub const POTION_POISON_LINGER_NAME: &str = "potion.poison.linger.name";
-    #[doc = ""]
     pub const POTION_POTENCY_0: &str = "potion.potency.0";
     #[doc = "II"]
     pub const POTION_POTENCY_1: &str = "potion.potency.1";
@@ -36435,7 +36432,6 @@ pub mod bedrock {
     pub const RESOURCEPACK_SKYRIM_DESCRIPTION: &str = "resourcePack.Skyrim.description";
     #[doc = "Adventure Time"]
     pub const RESOURCEPACK_MASHUPADVENTURETIME_NAME: &str = "resourcePack.MashupAdventureTime.name";
-    #[doc = ""]
     pub const RESOURCEPACK_MASHUPADVENTURETIME_DESCRIPTION: &str =
         "resourcePack.MashupAdventureTime.description";
     #[doc = "Skins"]
@@ -36610,7 +36606,6 @@ pub mod bedrock {
     pub const SELECTWORLD_GAMEMODE_SPECTATOR: &str = "selectWorld.gameMode.spectator";
     #[doc = "You can look but don't touch"]
     pub const SELECTWORLD_GAMEMODE_SPECTATOR_LINE1: &str = "selectWorld.gameMode.spectator.line1";
-    #[doc = ""]
     pub const SELECTWORLD_GAMEMODE_SPECTATOR_LINE2: &str = "selectWorld.gameMode.spectator.line2";
     #[doc = "Survival"]
     pub const SELECTWORLD_GAMEMODE_SURVIVAL: &str = "selectWorld.gameMode.survival";
@@ -41209,7 +41204,6 @@ pub mod bedrock {
     pub const XBOX_SIGNIN_ERROR: &str = "xbox.signin.error";
     #[doc = "Thanks for testing Realms! The features are not final and you might run into bugs. Send us feedback! We're listening."]
     pub const XBOX_SIGNIN_ERROR_POCKET_LINE1: &str = "xbox.signin.error.pocket.line1";
-    #[doc = ""]
     pub const XBOX_SIGNIN_ERROR_POCKET_LINE2: &str = "xbox.signin.error.pocket.line2";
     #[doc = "During this test, everyone will need to sign in with a Microsoft account so they can be sent invites and added to Realms."]
     pub const XBOX_SIGNIN_ERROR_POCKET_LINE3: &str = "xbox.signin.error.pocket.line3";

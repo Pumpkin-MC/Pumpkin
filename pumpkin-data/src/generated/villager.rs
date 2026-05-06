@@ -4332,9 +4332,7 @@ impl VillagerProfession {
     #[must_use]
     pub fn trade_set(&self, level: i32) -> Option<VillagerTradeSet> {
         match self {
-            Self::None => match level {
-                _ => None,
-            },
+            Self::None => None,
             Self::Armorer => match level {
                 1i32 => Some(VillagerTradeSet {
                     trades: TRADES_ARMORER_LEVEL_1,
@@ -4565,9 +4563,7 @@ impl VillagerProfession {
                 }),
                 _ => None,
             },
-            Self::Nitwit => match level {
-                _ => None,
-            },
+            Self::Nitwit => None,
             Self::Shepherd => match level {
                 1i32 => Some(VillagerTradeSet {
                     trades: TRADES_SHEPHERD_LEVEL_1,
