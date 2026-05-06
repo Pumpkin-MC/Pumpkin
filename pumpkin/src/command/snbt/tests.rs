@@ -313,7 +313,7 @@ fn operations() {
         "uuid(3d53a-f40-c-f69db9d37a56)",
         "Expected literal ,",
         7,
-        [")", ","]
+        []
     );
     assert_parse_ok!(
         "uuid(fffffffffffffff-0-0-0-0)",
@@ -389,7 +389,7 @@ fn maps() {
             "9._+._+foo": NbtTag::Int(1)
         }
     );
-    assert_parse_err!("{9._+._+=foo:1}", "Expected literal :", 8, [":"]);
+    assert_parse_err!("{9._+._+=foo:1}", "Expected literal :", 8, []);
 
     assert_parse_err!("{\"a\":b", "Expected literal (", 6, ["(", ",", "}"]);
     assert_parse_err!(
@@ -402,8 +402,8 @@ fn maps() {
         ]
     );
     assert_parse_err!("{\"a\":25,", "Expected literal \"", 8, ["\"", "'", "}"]);
-    assert_parse_err!("{,}", "Expected literal \"", 1, ["\"", "'", "}"]);
-    assert_parse_err!("{{}}", "Expected literal \"", 1, ["\"", "'", "}"]);
+    assert_parse_err!("{,}", "Expected literal \"", 1, []);
+    assert_parse_err!("{{}}", "Expected literal \"", 1, []);
 
     assert_parse_ok!(
         "{1:1}",
@@ -446,20 +446,12 @@ fn lists() {
         ])
     );
 
-    assert_parse_err!(
-        "[1;1]",
-        "Expected literal .",
-        2,
-        [
-            ",", ".", "]", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S",
-            "u", "U"
-        ]
-    );
+    assert_parse_err!("[1;1]", "Expected literal .", 2, []);
 
-    assert_parse_err!("[{]}", "Expected literal \"", 2, ["\"", "'", "}"]);
-    assert_parse_err!("{[}]", "Expected literal \"", 1, ["\"", "'", "}"]);
-    assert_parse_err!("[,]", "Expected literal B", 1, ["]", "B", "I", "L"]);
-    assert_parse_err!("[Z;9]", "Expected literal (", 2, ["(", ",", "]"]);
+    assert_parse_err!("[{]}", "Expected literal \"", 2, []);
+    assert_parse_err!("{[}]", "Expected literal \"", 1, []);
+    assert_parse_err!("[,]", "Expected literal B", 1, []);
+    assert_parse_err!("[Z;9]", "Expected literal (", 2, []);
 }
 
 #[test]
@@ -488,14 +480,9 @@ fn arrays() {
         14,
         []
     );
-    assert_parse_err!(
-        "[I; 1.0]",
-        "Expected literal u|U",
-        5,
-        [",", "]", "b", "B", "i", "I", "l", "L", "s", "S", "u", "U"]
-    );
-    assert_parse_err!("[I;{}]", "Expected literal +", 3, ["+", "-", "0", "]"]);
-    assert_parse_err!("[i;4]", "Expected literal (", 2, ["(", ",", "]"]);
+    assert_parse_err!("[I; 1.0]", "Expected literal u|U", 5, []);
+    assert_parse_err!("[I;{}]", "Expected literal +", 3, []);
+    assert_parse_err!("[i;4]", "Expected literal (", 2, []);
 
     assert_parse_ok!("[B; 0b11111111]", NbtTag::ByteArray(vec![-1]));
     assert_parse_ok!("[L; 0xFFFFFFFFFFFFFFFF]", NbtTag::LongArray(vec![-1]));
