@@ -106,7 +106,7 @@ impl SuggestionsBuilder {
     }
 
     /// Takes only the values that satisfy the current builder prefix, and
-    /// suggest them. For this function to work currently, **all values provided
+    /// suggests them. For this function to work currently, **all values provided
     /// must be in lowercase**.
     ///
     /// Example:
@@ -124,7 +124,7 @@ impl SuggestionsBuilder {
     }
 
     /// Takes only the values that satisfy the current builder prefix, and
-    /// suggest them.
+    /// suggests them.
     ///
     /// Example:
     /// - If the builder has `b` and the values are `acacia_boat`, `blue`, and `stick`, only the first two will get counted,
@@ -141,7 +141,7 @@ impl SuggestionsBuilder {
     }
 
     /// Takes the value only if it satisfies the current builder prefix, and
-    /// suggest them.
+    /// suggests them.
     #[must_use]
     pub fn filter_and_suggest_one(mut self, value: impl Into<SuggestionText>) -> Self {
         let value = value.into();
@@ -155,7 +155,7 @@ impl SuggestionsBuilder {
     }
 
     /// Takes only the values that satisfy the current builder prefix, and
-    /// suggest them.
+    /// suggests them.
     ///
     /// Example:
     /// - If the builder has `b` and the values are `acacia_boat`, `blue`, and `stick`, only the first two will get counted,
