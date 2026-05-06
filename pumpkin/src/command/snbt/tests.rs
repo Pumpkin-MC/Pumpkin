@@ -15,7 +15,7 @@ fn parse(snbt: &str) -> Result<NbtTag, CommandSyntaxError> {
 
 fn suggestions(snbt: &str) -> Vec<String> {
     let builder = SuggestionsBuilder::new(snbt, 0);
-    let suggestions = SnbtParser::parse_for_suggestions(&mut StringReader::new(snbt), builder);
+    let suggestions = SnbtParser::parse_for_suggestions(builder);
     suggestions
         .suggestions
         .into_iter()
