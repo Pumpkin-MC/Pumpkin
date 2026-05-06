@@ -45,7 +45,7 @@ pub trait ArgumentType: Send + Sync {
     fn list_suggestions<'a>(
         &'a self,
         _context: &'a CommandContext,
-        _suggestions_builder: SuggestionsBuilder,
+        _builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
         Box::pin(async move { Suggestions::empty() })
     }
@@ -105,7 +105,7 @@ pub trait AnyArgumentType: Sealed + Send + Sync {
     fn list_suggestions<'a>(
         &'a self,
         context: &'a CommandContext,
-        suggestions_builder: SuggestionsBuilder,
+        builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>>;
 
     /// Returns the Java client-side parser used for this argument type.
@@ -162,9 +162,9 @@ impl<U: ArgumentType<Item = T>, T: Send + Sync + 'static> AnyArgumentType for U 
     fn list_suggestions<'a>(
         &'a self,
         context: &'a CommandContext,
-        suggestions_builder: SuggestionsBuilder,
+        builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        self.list_suggestions(context, suggestions_builder)
+        self.list_suggestions(context, builder)
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {

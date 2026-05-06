@@ -75,9 +75,9 @@ impl ArgumentType for GameProfileArgumentType {
     fn list_suggestions<'a>(
         &'a self,
         context: &'a CommandContext,
-        suggestions_builder: SuggestionsBuilder,
+        builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        EntitySelectorParserSuggestions::list_suggestions(context, suggestions_builder)
+        EntitySelectorParserSuggestions::list_suggestions(context, builder)
     }
 
     fn examples(&self) -> Vec<String> {

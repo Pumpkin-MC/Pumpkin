@@ -40,13 +40,9 @@ impl ArgumentType for EntityAnchorArgumentType {
     fn list_suggestions<'a>(
         &'a self,
         _context: &'a CommandContext,
-        suggestions_builder: SuggestionsBuilder,
+        builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            suggestions_builder
-                .filter_and_suggest(&["eyes", "feet"])
-                .build()
-        })
+        Box::pin(async move { builder.filter_and_suggest(&["eyes", "feet"]).build() })
     }
 
     fn examples(&self) -> Vec<String> {
