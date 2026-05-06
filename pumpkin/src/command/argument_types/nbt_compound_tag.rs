@@ -15,9 +15,9 @@ pub const EXPECTED_COMPOUND_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::
 );
 
 /// Parses **only** compound NBT tags from SNBT.
-pub struct NbtCompoundTagArgumentType;
+pub struct NbtCompoundArgumentType;
 
-impl ArgumentType for NbtCompoundTagArgumentType {
+impl ArgumentType for NbtCompoundArgumentType {
     type Item = NbtCompound;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -31,7 +31,7 @@ impl ArgumentType for NbtCompoundTagArgumentType {
     }
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
-        JavaClientArgumentType::NbtCompoundTag
+        JavaClientArgumentType::NbtCompound
     }
 
     fn examples(&self) -> Vec<String> {
@@ -39,7 +39,7 @@ impl ArgumentType for NbtCompoundTagArgumentType {
     }
 }
 
-impl NbtCompoundTagArgumentType {
+impl NbtCompoundArgumentType {
     /// Returns the parsed [`NbtCompound`] from the name of the argument.
     pub fn get<'a>(
         context: &'a CommandContext,

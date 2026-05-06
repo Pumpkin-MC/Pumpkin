@@ -200,7 +200,7 @@ pub enum ArgumentType<'a> {
     Component,
     Style,
     Message,
-    NbtCompoundTag,
+    NbtCompound,
     NbtTag,
     NbtPath,
     Objective,
