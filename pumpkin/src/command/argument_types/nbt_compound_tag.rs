@@ -3,6 +3,7 @@ use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 
 use crate::command::{
     argument_types::argument_type::{ArgumentType, JavaClientArgumentType},
+    context::command_context::CommandContext,
     errors::{command_syntax_error::CommandSyntaxError, error_types::CommandErrorType},
     snbt::SnbtParser,
     string_reader::StringReader,
@@ -35,5 +36,15 @@ impl ArgumentType for NbtCompoundTagArgumentType {
 
     fn examples(&self) -> Vec<String> {
         examples!("{}", "{x: 3}")
+    }
+}
+
+impl NbtCompoundTagArgumentType {
+    /// Returns the parsed [`NbtCompound`] from the name of the argument.
+    pub fn get<'a>(
+        context: &'a CommandContext,
+        name: &'_ str,
+    ) -> Result<&'a NbtCompound, CommandSyntaxError> {
+        context.get_argument(name)
     }
 }

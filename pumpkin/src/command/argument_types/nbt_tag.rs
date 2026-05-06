@@ -37,3 +37,13 @@ impl ArgumentType for NbtTagArgumentType {
         )
     }
 }
+
+impl NbtTagArgumentType {
+    /// Returns the parsed [`NbtTag`] from the name of the argument.
+    pub fn get<'a>(
+        context: &'a CommandContext,
+        name: &'_ str,
+    ) -> Result<&'a NbtTag, CommandSyntaxError> {
+        context.get_argument(name)
+    }
+}
