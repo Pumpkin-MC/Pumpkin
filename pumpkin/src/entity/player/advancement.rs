@@ -26,12 +26,14 @@ pub struct AdvancementProgress {
 
 impl AdvancementProgress {
     /// Returns `true` if the advancement is completely done.
-    pub fn is_done(&self) -> bool {
+    #[must_use]
+    pub const fn is_done(&self) -> bool {
         self.complete
     }
 
     /// Returns `true` if the advancement has any progress. Currently just returns if it is fully complete.
-    pub fn has_progress(&self) -> bool {
+    #[must_use]
+    pub const fn has_progress(&self) -> bool {
         self.complete
     }
 }
@@ -45,7 +47,6 @@ pub struct PlayerAdvancement {
     to_update: HashSet<&'static Advancement>,
     manager: Arc<AdvancementManager>,
     path: PathBuf,
-    owner: Uuid,
     /// A weak reference to the player who owns these advancements.
     pub player: Weak<Player>,
 }
@@ -62,20 +63,19 @@ pub enum AdvancementDataError {
 impl PlayerAdvancement {
     /// Creates a new instance of `PlayerAdvancement`.
     pub(crate) fn new(manager: Arc<AdvancementManager>, uuid: Uuid) -> Self {
-        PlayerAdvancement {
+        Self {
             advancements: IndexMap::new(),
             path: manager.advancement_path.join(format!("{}.json", &uuid)),
             manager,
             player: Weak::new(),
             is_first_packet: true,
-            owner: uuid,
-            to_update: Default::default(),
+            to_update: HashSet::default(),
         }
     }
 
     /// Associates the `PlayerAdvancement` data with the given player.
-    pub fn set_player(&mut self, player: Arc<Player>) {
-        self.player = Arc::downgrade(&player);
+    pub fn set_player(&mut self, player: &Arc<Player>) {
+        self.player = Arc::downgrade(player);
     }
 
     /// Returns whether advancement saving is enabled for this player.
@@ -140,15 +140,6 @@ impl PlayerAdvancement {
         self.is_first_packet = false;
     }
 
-    /// Begins progress on a specific advancement.
-    fn start_progress(
-        &mut self,
-        _advancement: &'static Advancement,
-        advancement_progress: AdvancementProgress,
-    ) -> AdvancementProgress {
-        advancement_progress
-    }
-
     /// Gets the current progress for a given advancement, creating a default uncompleted progress if it doesn't exist.
     pub fn get_or_start_progress(
         &mut self,
@@ -162,9 +153,7 @@ impl PlayerAdvancement {
         &mut self,
         advancement: &'static Advancement,
     ) -> &mut AdvancementProgress {
-        self.advancements
-            .entry(advancement)
-            .or_insert_with(AdvancementProgress::default)
+        self.advancements.entry(advancement).or_default()
     }
 
     /// Grants the rewards (like experience) associated with completing an advancement.

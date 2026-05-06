@@ -33,7 +33,7 @@ fn serialize_advancements<S: Serializer>(
 
 pub struct AdvancementSer<'a>(pub &'a Advancement);
 
-impl<'a> Serialize for AdvancementSer<'a> {
+impl Serialize for AdvancementSer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -55,7 +55,7 @@ impl<'a> Serialize for AdvancementSer<'a> {
 
 pub struct DisplaySerializer<'a>(pub &'a AdvancementDisplay);
 
-impl<'a> Serialize for DisplaySerializer<'a> {
+impl Serialize for DisplaySerializer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -99,7 +99,7 @@ pub struct CUpdateAdvancements {
 impl CUpdateAdvancements {
     #[must_use]
     #[allow(unused)]
-    pub fn new(
+    pub const fn new(
         reset: bool,
         advancement: Vec<Advancement>,
         progress: Vec<AdvancementProgress>,

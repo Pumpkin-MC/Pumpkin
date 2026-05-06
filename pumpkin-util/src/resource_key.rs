@@ -7,18 +7,16 @@ pub struct ResourceKey {
 }
 
 impl ResourceKey {
-    pub fn new(registry_name: Identifier, identifier: Identifier) -> Self {
+    #[must_use]
+    pub const fn new(registry_name: Identifier, identifier: Identifier) -> Self {
         Self {
             registry_name,
             identifier,
         }
     }
 
-    pub fn cast(&self, registry: &Identifier) -> Option<&ResourceKey> {
-        if self.registry_name == *registry {
-            Some(self)
-        } else {
-            None
-        }
+    #[must_use]
+    pub fn cast(&self, registry: &Identifier) -> Option<&Self> {
+        (self.registry_name == *registry).then_some(self)
     }
 }

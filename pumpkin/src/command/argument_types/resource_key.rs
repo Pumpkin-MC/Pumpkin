@@ -16,11 +16,12 @@ use tracing::info;
 pub static ADVANCEMENT_REGISTRY: Identifier = Identifier::vanilla_static("advancement");
 
 pub const ERROR_INVALID_ADVANCEMENT: CommandErrorType<1> =
-    CommandErrorType::new(translation::ADVANCEMENT_ADVANCEMENTNOTFOUND);
+    CommandErrorType::new(translation::java::ADVANCEMENT_ADVANCEMENTNOTFOUND, "");
 
 pub struct ResourceKeyArgument(pub Identifier);
 
-pub static ERROR_INVALID: CommandErrorType<0> = CommandErrorType::new("argument.id.invalid");
+pub static ERROR_INVALID: CommandErrorType<0> =
+    CommandErrorType::new(translation::java::ARGUMENT_ID_INVALID, "");
 
 impl ArgumentType for ResourceKeyArgument {
     type Item = ResourceKey;
@@ -36,7 +37,7 @@ impl ArgumentType for ResourceKeyArgument {
         mut suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         info!("list suggestions {:?}", &self.0);
-        if &self.0 == &ADVANCEMENT_REGISTRY {
+        if self.0 == ADVANCEMENT_REGISTRY {
             let advancements = context.server().advancement_manager.get_advancements();
             Box::pin(async move {
                 let string = suggestions_builder.remaining().to_lowercase();

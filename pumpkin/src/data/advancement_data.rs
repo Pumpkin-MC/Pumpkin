@@ -32,11 +32,13 @@ impl AdvancementManager {
     }
 
     /// Retrieves the list of all available advancements in the game.
+    #[must_use]
     pub fn get_advancements(&self) -> Vec<&'static str> {
         Advancement::get_list().to_vec()
     }
 
     /// Creates and returns a new instance of `PlayerAdvancement` with the configured path.
+    #[must_use]
     pub fn new_advancement(self: Arc<Self>, owner: Uuid) -> PlayerAdvancement {
         PlayerAdvancement::new(self, owner)
     }

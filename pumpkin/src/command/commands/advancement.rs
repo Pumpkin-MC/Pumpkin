@@ -23,24 +23,42 @@ const ARG_TARGETS: &str = "targets";
 const ARG_ADVANCEMENT: &str = "advancement";
 
 #[allow(unused)]
-const ERROR_CRITERION_NOT_FOUND: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND);
-const ERROR_GRANT_ONE_TO_ONE: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_ONE_FAILURE);
-const ERROR_REVOKE_ONE_TO_ONE: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_ONE_FAILURE);
-const ERROR_GRANT_ONE_TO_MANY: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_MANY_FAILURE);
-const ERROR_REVOKE_ONE_TO_MANY: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_MANY_FAILURE);
-const ERROR_GRANT_MANY_TO_ONE: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_ONE_FAILURE);
-const ERROR_REVOKE_MANY_TO_ONE: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_ONE_FAILURE);
-const ERROR_GRANT_MANY_TO_MANY: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_MANY_FAILURE);
-const ERROR_REVOKE_MANY_TO_MANY: CommandErrorType<2> =
-    CommandErrorType::new(translation::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_MANY_FAILURE);
+const ERROR_CRITERION_NOT_FOUND: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND,
+    "",
+);
+const ERROR_GRANT_ONE_TO_ONE: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_ONE_FAILURE,
+    "",
+);
+const ERROR_REVOKE_ONE_TO_ONE: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_ONE_FAILURE,
+    "",
+);
+const ERROR_GRANT_ONE_TO_MANY: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_MANY_FAILURE,
+    "",
+);
+const ERROR_REVOKE_ONE_TO_MANY: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_MANY_FAILURE,
+    "",
+);
+const ERROR_GRANT_MANY_TO_ONE: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_ONE_FAILURE,
+    "",
+);
+const ERROR_REVOKE_MANY_TO_ONE: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_ONE_FAILURE,
+    "",
+);
+const ERROR_GRANT_MANY_TO_MANY: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_MANY_FAILURE,
+    "",
+);
+const ERROR_REVOKE_MANY_TO_MANY: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_MANY_FAILURE,
+    "",
+);
 
 #[derive(Clone, Copy)]
 enum Action {
@@ -80,7 +98,7 @@ impl Action {
     ) -> bool {
         let mut guard = player.advancements.lock().await;
         match self {
-            Action::Grant => {
+            Self::Grant => {
                 let progress = guard.get_or_start_progress(advancement);
                 if progress.is_done() {
                     false
@@ -90,21 +108,21 @@ impl Action {
                 }
             }
 
-            Action::Revoke => {
+            Self::Revoke => {
                 let progress = guard.get_or_start_progress(advancement);
-                if !progress.has_progress() {
-                    false
-                } else {
+                if progress.has_progress() {
                     guard.revoke(advancement);
                     true
+                } else {
+                    false
                 }
             }
         }
     }
-    fn get_key(&self) -> &str {
+    const fn get_key(&self) -> &str {
         match self {
-            Action::Grant => "grant",
-            Action::Revoke => "revoke",
+            Self::Grant => "grant",
+            Self::Revoke => "revoke",
         }
     }
 }
@@ -118,23 +136,17 @@ enum Mode {
 }
 
 impl Mode {
-    fn parents(&self) -> bool {
+    const fn parents(self) -> bool {
         match self {
-            Mode::Only => false,
-            Mode::Through => true,
-            Mode::From => false,
-            Mode::Until => true,
-            Mode::Everything => true,
+            Self::Only | Self::From => false,
+            Self::Through | Self::Until | Self::Everything => true,
         }
     }
 
-    fn children(&self) -> bool {
+    const fn children(self) -> bool {
         match self {
-            Mode::Only => false,
-            Mode::Through => true,
-            Mode::From => true,
-            Mode::Until => false,
-            Mode::Everything => true,
+            Self::Only | Self::Until => false,
+            Self::Through | Self::From | Self::Everything => true,
         }
     }
 }
@@ -165,6 +177,7 @@ async fn perform_everything(
     perform(context, players, action, advancements, true).await
 }
 
+#[allow(clippy::too_many_lines)]
 async fn perform(
     context: Arc<CommandSource>,
     targets: Vec<Arc<Player>>,
@@ -218,52 +231,19 @@ async fn perform(
                 TextComponent::text(targets.len().to_string()),
             ]))
         };
-    } else {
-        if let [first_advancement] = advancements[..] {
-            if let [first_player] = targets.as_slice() {
-                context
-                    .send_feedback(
-                        TextComponent::translate(
-                            format!(
-                                "commands.advancement.{}.one.to.one.success",
-                                action.get_key()
-                            ),
-                            [
-                                first_advancement.name(),
-                                first_player.get_display_name().await,
-                            ],
-                        ),
-                        true,
-                    )
-                    .await;
-            } else {
-                context
-                    .send_feedback(
-                        TextComponent::translate(
-                            format!(
-                                "commands.advancement.{}.one.to.many.success",
-                                action.get_key()
-                            ),
-                            [
-                                first_advancement.name(),
-                                TextComponent::text(targets.len().to_string()),
-                            ],
-                        ),
-                        true,
-                    )
-                    .await;
-            }
-        } else if let [first] = targets.as_slice() {
+    }
+    if let [first_advancement] = advancements[..] {
+        if let [first_player] = targets.as_slice() {
             context
                 .send_feedback(
                     TextComponent::translate(
                         format!(
-                            "commands.advancement.{}.many.to.many.success",
+                            "commands.advancement.{}.one.to.one.success",
                             action.get_key()
                         ),
                         [
-                            TextComponent::text(advancements.len().to_string()),
-                            first.get_display_name().await,
+                            first_advancement.name(),
+                            first_player.get_display_name().await,
                         ],
                     ),
                     true,
@@ -274,11 +254,11 @@ async fn perform(
                 .send_feedback(
                     TextComponent::translate(
                         format!(
-                            "commands.advancement.{}.many.to.many.success",
+                            "commands.advancement.{}.one.to.many.success",
                             action.get_key()
                         ),
                         [
-                            TextComponent::text(advancements.len().to_string()),
+                            first_advancement.name(),
                             TextComponent::text(targets.len().to_string()),
                         ],
                     ),
@@ -286,6 +266,38 @@ async fn perform(
                 )
                 .await;
         }
+    } else if let [first] = targets.as_slice() {
+        context
+            .send_feedback(
+                TextComponent::translate(
+                    format!(
+                        "commands.advancement.{}.many.to.many.success",
+                        action.get_key()
+                    ),
+                    [
+                        TextComponent::text(advancements.len().to_string()),
+                        first.get_display_name().await,
+                    ],
+                ),
+                true,
+            )
+            .await;
+    } else {
+        context
+            .send_feedback(
+                TextComponent::translate(
+                    format!(
+                        "commands.advancement.{}.many.to.many.success",
+                        action.get_key()
+                    ),
+                    [
+                        TextComponent::text(advancements.len().to_string()),
+                        TextComponent::text(targets.len().to_string()),
+                    ],
+                ),
+                true,
+            )
+            .await;
     }
     Ok(i)
 }

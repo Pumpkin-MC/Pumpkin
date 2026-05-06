@@ -378,6 +378,6 @@ impl ToTokens for NamedColor {
             Self::LightPurple => quote! { NamedColor::LightPurple },
             Self::Yellow => quote! { NamedColor::Yellow },
             Self::White => quote! { NamedColor::White },
-        })
+        });
     }
 }

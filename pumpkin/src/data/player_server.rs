@@ -99,7 +99,7 @@ impl ServerPlayerData {
                             player.gameprofile.id,
                         );
                     }
-                    if let Err(e) = AdvancementManager::save_player(&player).await {
+                    if let Err(e) = AdvancementManager::save_player(player).await {
                         error!(
                             "Failed to save player advancement for {}: {e}",
                             player.gameprofile.id,
