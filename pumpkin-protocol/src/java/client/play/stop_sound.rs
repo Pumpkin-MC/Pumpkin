@@ -5,7 +5,6 @@ use pumpkin_data::{packet::clientbound::PLAY_STOP_SOUND, sound::SoundCategory};
 use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::version::MinecraftVersion;
-use serde::Serialize;
 use std::io::Write;
 
 #[java_packet(PLAY_STOP_SOUND)]

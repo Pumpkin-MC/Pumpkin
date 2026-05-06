@@ -35,6 +35,7 @@ impl AdvancementDisplay {
         self.background_texture.is_some()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         title: &'static str,
         description: &'static str,

@@ -55,7 +55,7 @@ pub struct AdvancementDisplay {
 }
 
 fn as_translate(text: &TextComponent) -> TokenStream {
-    let Translate { translate, with: _ } = text.0.content.as_ref() else {
+    let Translate { translate, bedrock_translate : _ , with: _ } = text.0.content.as_ref() else {
         panic!()
     };
     quote! { #translate }
@@ -180,8 +180,8 @@ pub(crate) fn build() -> TokenStream {
             };
         }]);
 
-        name_to_type.extend(quote! { #raw_name => Some(&Self::#format_name), });
-        minecraft_name_to_type.extend(quote! { #minecraft_name => Some(&Self::#format_name), });
+        name_to_type.extend(quote! { #raw_name => Some(Self::#format_name), });
+        minecraft_name_to_type.extend(quote! { #minecraft_name => Some(Self::#format_name), });
         minecraft_namespaces.extend(quote! { #minecraft_name,})
     }
 

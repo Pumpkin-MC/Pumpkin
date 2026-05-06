@@ -127,6 +127,7 @@ impl Action {
     }
 }
 #[derive(Clone, Copy)]
+#[allow(unused)]
 enum Mode {
     Only,
     Through,

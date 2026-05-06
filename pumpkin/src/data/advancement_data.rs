@@ -64,7 +64,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_advancement_manager_new() {
+    fn advancement_manager_new() {
         let path = PathBuf::from("test_data");
         let manager = AdvancementManager::new(path, true);
         assert_eq!(
@@ -74,7 +74,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_advancement_path() {
+    fn get_advancement_path() {
         let path = PathBuf::from("world/playerdata");
         let manager = AdvancementManager::new(path, true);
         let advancement_path = manager.advancement_path;

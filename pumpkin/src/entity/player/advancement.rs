@@ -219,7 +219,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_advancement_progress() {
+    fn advancement_progress() {
         let progress = AdvancementProgress { complete: false };
         assert!(!progress.is_done());
         assert!(!progress.has_progress());
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn test_new_player_advancement() {
+    fn new_player_advancement() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -242,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_or_start_progress() {
+    fn get_or_start_progress() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -256,7 +256,7 @@ mod tests {
     }
 
     #[test]
-    fn test_revoke_advancement() {
+    fn revoke_advancement() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -265,14 +265,14 @@ mod tests {
         {
             let progress_mut = pa.get_mut_or_start_progress(adv);
             progress_mut.complete = true;
-        }
+        };
         assert!(pa.get_or_start_progress(adv).is_done());
         pa.revoke(adv);
         assert!(!pa.get_or_start_progress(adv).is_done());
     }
 
     #[test]
-    fn test_save_advancement_progress() {
+    fn save_advancement_progress() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -283,7 +283,7 @@ mod tests {
         {
             let progress_mut = pa.get_mut_or_start_progress(adv);
             progress_mut.complete = true;
-        }
+        };
 
         // Save should succeed
         assert!(pa.save().is_ok(), "Save should succeed");
@@ -299,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn test_save_disabled() {
+    fn save_disabled() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), false));
         let id = Uuid::new_v4();
@@ -310,7 +310,7 @@ mod tests {
         {
             let progress_mut = pa.get_mut_or_start_progress(adv);
             progress_mut.complete = true;
-        }
+        };
 
         // Save should return Ok but not actually save
         assert!(
@@ -324,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_nonexistent_file() {
+    fn load_nonexistent_file() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -342,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_advancement_progress() {
+    fn load_advancement_progress() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
 
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn test_save_load_roundtrip() {
+    fn save_load_roundtrip() {
         let temp_dir = tempdir().unwrap();
 
         // Create and save advancements
@@ -377,7 +377,7 @@ mod tests {
         {
             let progress_mut = pa.get_mut_or_start_progress(adv);
             progress_mut.complete = true;
-        }
+        };
 
         assert!(pa.save().is_ok(), "Save should succeed");
 
@@ -399,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_invalid_advancement_id() {
+    fn load_invalid_advancement_id() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
 
@@ -424,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn test_save_multiple_advancements() {
+    fn save_multiple_advancements() {
         let temp_dir = tempdir().unwrap();
         let manager = Arc::new(AdvancementManager::new(temp_dir.path(), true));
         let id = Uuid::new_v4();
@@ -437,11 +437,11 @@ mod tests {
         {
             let progress_mut1 = pa.get_mut_or_start_progress(adv1);
             progress_mut1.complete = true;
-        }
+        };
         {
             let progress_mut2 = pa.get_mut_or_start_progress(adv2);
             progress_mut2.complete = false;
-        }
+        };
 
         assert!(pa.save().is_ok(), "Save should succeed");
 
