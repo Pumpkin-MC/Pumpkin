@@ -28,6 +28,7 @@ pumpkin-world.workspace = true
 pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
 pumpkin-macros.workspace = true
+pumpkin-codecs.workspace = true
 
 dashmap.workspace = true
 crossbeam.workspace = true
@@ -51,6 +52,8 @@ notify.workspace = true
 serde.workspace = true
 serde_repr.workspace = true
 serde_json.workspace = true
+
+colored.workspace = true
 
 bytes.workspace = true
 

@@ -7,8 +7,10 @@ use crate::command::string_reader::StringReader;
 use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 
-pub const INCOMPLETE_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS3D_INCOMPLETE);
+pub const INCOMPLETE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS3D_INCOMPLETE,
+    translation::java::ARGUMENT_POS3D_INCOMPLETE,
+);
 
 /// An argument type for a 3-dimensional vector.
 pub enum Vec3ArgumentType {

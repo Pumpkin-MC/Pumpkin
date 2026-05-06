@@ -47,7 +47,11 @@ impl ScreenHandlerFactory for DropperScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_DROPPER, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_DROPPER,
+            translation::bedrock::CONTAINER_DROPPER,
+            &[],
+        )
     }
 }
 

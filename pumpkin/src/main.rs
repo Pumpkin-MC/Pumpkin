@@ -121,11 +121,13 @@ async fn main() {
     });
 
     let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
-    pumpkin_server.init_plugins().await;
+    let plugin_wait_time = pumpkin_server.init_plugins().await;
+
+    let time_elapsed = time.elapsed().saturating_sub(plugin_wait_time);
 
     info!(
         "Started server; took {}",
-        TextComponent::text(format!("{}ms", time.elapsed().as_millis()))
+        TextComponent::text(format!("{}ms", time_elapsed.as_millis()))
             .color_named(NamedColor::Gold)
             .to_pretty_console()
     );

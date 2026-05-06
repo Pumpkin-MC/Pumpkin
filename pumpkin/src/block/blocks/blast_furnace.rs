@@ -75,7 +75,11 @@ impl ScreenHandlerFactory for BlastingFurnaceScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate(translation::CONTAINER_BLAST_FURNACE, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_BLAST_FURNACE,
+            translation::bedrock::TILE_BLAST_FURNACE_NAME,
+            &[],
+        )
     }
 }
 

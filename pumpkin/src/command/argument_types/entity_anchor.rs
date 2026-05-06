@@ -8,8 +8,10 @@ use pumpkin_data::translation;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
-pub const INVALID_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ANCHOR_INVALID);
+pub const INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ANCHOR_INVALID,
+    translation::java::ARGUMENT_ANCHOR_INVALID,
+);
 
 pub struct EntityAnchorArgumentType;
 
@@ -18,7 +20,7 @@ impl ArgumentType for EntityAnchorArgumentType {
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let i = reader.cursor();
-        let anchor = reader.read_unquoted_string()?;
+        let anchor = reader.read_unquoted_string();
         EntityAnchor::from_id(anchor.as_str()).map_or_else(
             || {
                 reader.set_cursor(i);

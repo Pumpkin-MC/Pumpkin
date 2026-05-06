@@ -9,9 +9,13 @@ use rustc_hash::FxHashSet;
 use crate::tick::{MAX_TICK_DELAY, OrderedTick, ScheduledTick};
 
 pub struct ChunkTickScheduler<T> {
-    tick_queue: Mutex<[Vec<OrderedTick<T>>; MAX_TICK_DELAY]>,
-    queued_ticks: Mutex<FxHashSet<(BlockPos, T)>>,
+    inner: Mutex<Option<Box<ChunkTickSchedulerInner<T>>>>,
     offset: AtomicUsize,
+}
+
+struct ChunkTickSchedulerInner<T> {
+    tick_queue: [Vec<OrderedTick<T>>; MAX_TICK_DELAY],
+    queued_ticks: FxHashSet<(BlockPos, T)>,
 }
 
 impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
@@ -21,29 +25,37 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
         let next_offset = (current_offset + 1) % MAX_TICK_DELAY;
         self.offset.store(next_offset, Ordering::SeqCst);
 
-        let res = {
-            let mut queue = self.tick_queue.lock().unwrap_or_else(|e| e.into_inner());
-            std::mem::take(&mut queue[current_offset])
+        let mut inner_guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(inner) = inner_guard.as_mut() else {
+            return Vec::new();
         };
 
+        let res = std::mem::take(&mut inner.tick_queue[current_offset]);
+
         if !res.is_empty() {
-            let mut set = self.queued_ticks.lock().unwrap_or_else(|e| e.into_inner());
             for next_tick in &res {
-                set.remove(&(next_tick.position, next_tick.value));
+                inner
+                    .queued_ticks
+                    .remove(&(next_tick.position, next_tick.value));
             }
         }
         res
     }
 
     pub fn schedule_tick(&self, tick: &ScheduledTick<&'a T>, sub_tick_order: u64) {
-        let mut set = self.queued_ticks.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inner_guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let inner = inner_guard.get_or_insert_with(|| {
+            Box::new(ChunkTickSchedulerInner {
+                tick_queue: std::array::from_fn(|_| Vec::new()),
+                queued_ticks: FxHashSet::default(),
+            })
+        });
 
-        if set.insert((tick.position, tick.value)) {
-            let mut queue = self.tick_queue.lock().unwrap_or_else(|e| e.into_inner());
+        if inner.queued_ticks.insert((tick.position, tick.value)) {
             let offset = self.offset.load(Ordering::SeqCst);
             let index = (offset + tick.delay as usize) % MAX_TICK_DELAY;
 
-            queue[index].push(OrderedTick {
+            inner.tick_queue[index].push(OrderedTick {
                 priority: tick.priority,
                 sub_tick_order,
                 position: tick.position,
@@ -53,29 +65,34 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
     }
 
     pub fn is_scheduled(&self, pos: BlockPos, value: &T) -> bool {
-        self.queued_ticks
+        self.inner
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .contains(&(pos, value))
+            .as_ref()
+            .is_some_and(|inner| inner.queued_ticks.contains(&(pos, value)))
     }
 
     pub fn has_ticks(&self) -> bool {
-        !self
-            .queued_ticks
+        self.inner
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .is_empty()
+            .as_ref()
+            .is_some_and(|inner| !inner.queued_ticks.is_empty())
     }
 
     #[must_use]
     pub fn to_vec(&self) -> Vec<ScheduledTick<&'a T>> {
         let offset = self.offset.load(Ordering::SeqCst);
-        let queue = self.tick_queue.lock().unwrap_or_else(|e| e.into_inner());
+        let inner_guard = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(inner) = inner_guard.as_ref() else {
+            return Vec::new();
+        };
+
         let mut res = Vec::new();
 
         for i in 0..MAX_TICK_DELAY {
             let index = (offset + i) % MAX_TICK_DELAY;
-            res.extend(queue[index].iter().map(|x| ScheduledTick {
+            res.extend(inner.tick_queue[index].iter().map(|x| ScheduledTick {
                 delay: i as u8,
                 priority: x.priority,
                 position: x.position,
@@ -95,11 +112,14 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
 
         let (lower, _) = iter.size_hint();
         if lower > 0 {
-            scheduler
-                .queued_ticks
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .reserve(lower);
+            let mut inner_guard = scheduler.inner.lock().unwrap_or_else(|e| e.into_inner());
+            let inner = inner_guard.get_or_insert_with(|| {
+                Box::new(ChunkTickSchedulerInner {
+                    tick_queue: std::array::from_fn(|_| Vec::new()),
+                    queued_ticks: FxHashSet::default(),
+                })
+            });
+            inner.queued_ticks.reserve(lower);
         }
 
         for tick in iter {
@@ -112,8 +132,7 @@ impl<'a, T: std::hash::Hash + Eq + 'static> FromIterator<ScheduledTick<&'a T>>
 impl<T> Default for ChunkTickScheduler<T> {
     fn default() -> Self {
         Self {
-            tick_queue: Mutex::new(std::array::from_fn(|_| Vec::new())),
-            queued_ticks: Mutex::new(FxHashSet::default()),
+            inner: Mutex::new(None),
             offset: AtomicUsize::new(0),
         }
     }

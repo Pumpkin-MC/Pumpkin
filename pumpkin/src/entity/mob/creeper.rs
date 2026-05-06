@@ -121,7 +121,7 @@ use pumpkin_nbt::pnbt::PNbtCompound;
 impl NBTStorage for CreeperEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_bool(self.charged.load(Ordering::Relaxed));
             nbt.put_short(self.fuse_time.load(Ordering::Relaxed) as i16);
             nbt.put_byte(self.explosion_radius.load(Ordering::Relaxed) as i8);
@@ -131,11 +131,7 @@ impl NBTStorage for CreeperEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             self.charged
                 .store(nbt.get_bool().unwrap_or(false), Ordering::Relaxed);
             self.fuse_time

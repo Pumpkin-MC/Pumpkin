@@ -38,7 +38,11 @@ impl ScreenHandlerFactory for EnderChestScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_ENDERCHEST, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_ENDERCHEST,
+            translation::bedrock::CONTAINER_ENDERCHEST,
+            &[],
+        )
     }
 }
 

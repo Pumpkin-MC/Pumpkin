@@ -1,3 +1,4 @@
+use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
@@ -78,7 +79,6 @@ use pumpkin_protocol::{
         client::{
             creative_content::{CreativeContent, Group},
             gamerules_changed::GameRules,
-            play_status::CPlayStatus,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_artributes::{Attribute, CUpdateAttributes},
         },
@@ -1709,16 +1709,24 @@ impl World {
         metadata.set(entity_data_key::HEIGHT, MetadataValue::Float(1.8));
 
         // This is super important, otherwise the client will float by default
-        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::HAS_GRAVITY as u8);
-        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::CLIMB as u8);
-        // Player-specific: survival has collision
-        metadata.set_flag(
-            entity_data_key::FLAGS,
-            entity_data_flag::HAS_COLLISION as u8,
+        let entity = &player.living_entity.entity;
+        entity.bedrock_flags.fetch_or(
+            (1i64 << entity_data_flag::HAS_GRAVITY)
+                | (1i64 << entity_data_flag::CLIMB)
+                | (1i64 << entity_data_flag::HAS_COLLISION)
+                | (1i64 << entity_data_flag::BREATHING),
+            Ordering::Relaxed,
         );
 
-        // Prevents the client from showing air buddles on hud even when not in water
-        metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::BREATHING as u8);
+        metadata.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Long(entity.bedrock_flags.load(Ordering::Relaxed)),
+        );
+        metadata.set(
+            entity_data_key::FLAGS_TWO,
+            MetadataValue::Long(entity.bedrock_flags_two.load(Ordering::Relaxed)),
+        );
+
         let actor_data = CSetActorData {
             actor_runtime_id: VarULong(runtime_id),
             metadata,
@@ -1731,6 +1739,12 @@ impl World {
         client.send_game_packet(&actor_data).await;
 
         player.send_abilities_update().await;
+        {
+            let command_dispatcher = server.command_dispatcher.read().await;
+
+            client_suggestions::send_bedrock_commands_packet(&player, server, &command_dispatcher)
+                .await;
+        };
 
         let mut frame_set = FrameSet::default();
 
@@ -1805,9 +1819,6 @@ impl World {
                 },
                 &mut frame_set,
             )
-            .await;
-        client
-            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
             .await;
         client.send_frame_set(frame_set, 0x84).await;
     }
@@ -1935,7 +1946,20 @@ impl World {
             }],
         ))
         .await;
+
+        // If the player has a custom tab_list_name, send an update for it
+        if let Some(tab_list_name) = player.get_tab_list_name().await {
+            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: gameprofile.id,
+                    actions: &[PlayerAction::UpdateDisplayName(Some(&tab_list_name))],
+                }],
+            ))
+            .await;
+        }
         // Here, we send all the infos of players who already joined.
+        let mut players_tab_list_names = Vec::new();
         {
             let mut current_player_data = Vec::new();
             let players = self.players.load();
@@ -1944,6 +1968,7 @@ impl World {
                 .filter(|p| p.gameprofile.id != player.gameprofile.id)
             {
                 let chat_session = player.chat_session.lock().await;
+                let tab_list_name = player.get_tab_list_name().await;
 
                 let mut player_actions = vec![
                     PlayerAction::AddPlayer {
@@ -1970,6 +1995,11 @@ impl World {
                 drop(chat_session);
 
                 current_player_data.push((&player.gameprofile.id, player_actions));
+
+                // Collect tab_list_names for sending later
+                if tab_list_name.is_some() {
+                    players_tab_list_names.push((player.gameprofile.id, tab_list_name));
+                }
             }
 
             let mut action_flags = PlayerInfoFlags::ADD_PLAYER
@@ -1992,6 +2022,21 @@ impl World {
             client
                 .enqueue_packet(&CPlayerInfoUpdate::new(action_flags.bits(), &entries))
                 .await;
+
+            // Send tab_list_names for existing players with custom names
+            for (player_id, tab_list_name) in &players_tab_list_names {
+                if let Some(name) = tab_list_name {
+                    client
+                        .enqueue_packet(&CPlayerInfoUpdate::new(
+                            PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                            &[pumpkin_protocol::java::client::play::Player {
+                                uuid: *player_id,
+                                actions: &[PlayerAction::UpdateDisplayName(Some(name))],
+                            }],
+                        ))
+                        .await;
+                }
+            }
         };
 
         let gameprofile = &player.gameprofile;
@@ -2186,8 +2231,9 @@ impl World {
                 .await;
         }
 
-        let msg_comp = TextComponent::translate(
-            translation::MULTIPLAYER_PLAYER_JOINED,
+        let msg_comp = TextComponent::translate_cross(
+            translation::java::MULTIPLAYER_PLAYER_JOINED,
+            translation::bedrock::MULTIPLAYER_PLAYER_JOINED,
             [TextComponent::text(player.gameprofile.name.clone())],
         )
         .color_named(NamedColor::Yellow);
@@ -3077,8 +3123,9 @@ impl World {
                 .await;
 
             if fire_event {
-                let msg_comp = TextComponent::translate(
-                    translation::MULTIPLAYER_PLAYER_LEFT,
+                let msg_comp = TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_PLAYER_LEFT,
+                    translation::bedrock::MULTIPLAYER_PLAYER_LEFT,
                     [TextComponent::text(player.gameprofile.name.clone())],
                 )
                 .color_named(NamedColor::Yellow);
@@ -3158,12 +3205,56 @@ impl World {
         self.remove_entity_data(base_entity).await;
     }
 
+    pub async fn remove_entities_in_chunks(&self, chunks: &[Vector2<i32>]) {
+        let chunks_set: FxHashSet<_> = chunks.iter().copied().collect();
+        let mut entities_to_remove = Vec::new();
+
+        self.entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.retain(|entity| {
+                let base_entity = entity.get_entity();
+                let pos = base_entity.chunk_pos.load();
+                if chunks_set.contains(&pos) {
+                    entities_to_remove.push(entity.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+            new_entities
+        });
+
+        for entity in entities_to_remove {
+            self.spawn_state.load().remove_entity(self, entity.as_ref());
+            self.remove_entity_data(entity.get_entity()).await;
+        }
+    }
+
     pub async fn set_block_breaking(&self, from: &Entity, location: BlockPos, progress: i32) {
         let chunk_pos = location.chunk_position(); // pumpkin's BlockPos already has this method
-        self.broadcast_to_chunk_except(
+        let je_packet = CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8);
+
+        let (event_id, data) = match progress {
+            -1 => (LevelEvent::BlockStopBreak, 0),
+            0 => (LevelEvent::BlockStartBreak, 0),
+            _ => (LevelEvent::BlockUpdateBreak, progress),
+        };
+
+        let be_packet = CLevelEvent {
+            event_id: VarInt(event_id as i32),
+            position: Vector3::new(
+                location.0.x as f32,
+                location.0.y as f32,
+                location.0.z as f32,
+            ),
+            data: VarInt(data),
+        };
+
+        self.broadcast_to_chunk_except_editioned(
             chunk_pos,
             &[from.entity_uuid],
-            &CSetBlockDestroyStage::new(from.entity_id.into(), location, progress as i8),
+            &je_packet,
+            &be_packet,
         )
         .await;
     }
@@ -4106,6 +4197,43 @@ impl World {
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
         Self::broadcast_java_grouped(packet, recipients_by_version).await;
+    }
+
+    pub async fn broadcast_to_chunk_except_editioned<J: ClientPacket, B: BClientPacket>(
+        &self,
+        chunk_pos: Vector2<i32>,
+        except: &[uuid::Uuid],
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        let players = self.players.load();
+        let recipients = players.iter().filter(|p| {
+            if except.contains(&p.living_entity.entity.entity_uuid) {
+                return false;
+            }
+            let center = p.living_entity.entity.chunk_pos.load();
+            let view_distance = get_view_distance(p).get() as i32;
+
+            is_within_view_distance(chunk_pos, center, view_distance)
+        });
+
+        let mut java_recipients = Vec::new();
+        let mut bedrock_recipients = Vec::new();
+
+        for p in recipients {
+            match &p.client {
+                ClientPlatform::Java(_) => java_recipients.push(p),
+                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client.clone()),
+            }
+        }
+
+        let je_recipients_by_version =
+            Self::collect_java_recipients_by_version(java_recipients.into_iter());
+        Self::broadcast_java_grouped(je_packet, je_recipients_by_version).await;
+
+        for recipient in bedrock_recipients {
+            recipient.send_game_packet(be_packet).await;
+        }
     }
 }
 

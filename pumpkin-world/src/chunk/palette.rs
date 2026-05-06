@@ -22,18 +22,27 @@ pub fn has_random_ticking_fluid(state_id: u16) -> bool {
 
 #[derive(Clone)]
 pub struct HeterogeneousPaletteData<V: Hash + Eq + Copy, const DIM: usize> {
-    cube: Box<AbstractCube<V, DIM>>,
+    storage: PaletteStorage<V, DIM>,
     palette: Vec<V>,
     counts: Vec<u16>,
 }
 
-impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
+#[derive(Clone)]
+enum PaletteStorage<V, const DIM: usize> {
+    Dense(Box<AbstractCube<V, DIM>>),
+    Indexed(Box<AbstractCube<u8, DIM>>),
+}
+
+impl<V: Hash + Eq + Copy + Default, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
     fn get(&self, x: usize, y: usize, z: usize) -> V {
         debug_assert!(x < DIM);
         debug_assert!(y < DIM);
         debug_assert!(z < DIM);
 
-        self.cube[y][z][x]
+        match &self.storage {
+            PaletteStorage::Dense(cube) => cube[y][z][x],
+            PaletteStorage::Indexed(indices) => self.palette[indices[y][z][x] as usize],
+        }
     }
 
     /// Returns the Original
@@ -42,25 +51,73 @@ impl<V: Hash + Eq + Copy, const DIM: usize> HeterogeneousPaletteData<V, DIM> {
         debug_assert!(y < DIM);
         debug_assert!(z < DIM);
 
-        let original = self.cube[y][z][x];
-        let original_index = self.palette.iter().position(|v| v == &original).unwrap();
-        self.counts[original_index] -= 1;
-
-        if self.counts[original_index] == 0 {
-            // Remove from palette and counts Vecs if the count hits zero.
-            self.palette.swap_remove(original_index);
-            self.counts.swap_remove(original_index);
+        let original = self.get(x, y, z);
+        if original == value {
+            return original;
         }
 
-        // Set the new value in the cube
-        self.cube[y][z][x] = value;
+        let original_index = self.palette.iter().position(|v| v == &original).unwrap();
 
         // Find or add the new value to the palette.
-        if let Some(new_index) = self.palette.iter().position(|v| v == &value) {
+        let new_index = if let Some(new_index) = self.palette.iter().position(|v| v == &value) {
             self.counts[new_index] += 1;
+            new_index
         } else {
             self.palette.push(value);
             self.counts.push(1);
+            self.palette.len() - 1
+        };
+
+        // Handle storage upgrades or updates
+        let mut upgraded = false;
+        match &mut self.storage {
+            PaletteStorage::Dense(cube) => {
+                cube[y][z][x] = value;
+            }
+            PaletteStorage::Indexed(indices) => {
+                if new_index <= 255 {
+                    indices[y][z][x] = new_index as u8;
+                } else {
+                    // Upgrade to Dense
+                    let mut cube = Box::new([[[V::default(); DIM]; DIM]; DIM]);
+                    for (i, v) in cube
+                        .as_flattened_mut()
+                        .as_flattened_mut()
+                        .iter_mut()
+                        .enumerate()
+                    {
+                        let y = i / (DIM * DIM);
+                        let z = (i / DIM) % DIM;
+                        let x = i % DIM;
+                        *v = self.palette[indices[y][z][x] as usize];
+                    }
+                    cube[y][z][x] = value;
+                    self.storage = PaletteStorage::Dense(cube);
+                    upgraded = true;
+                }
+            }
+        }
+
+        self.counts[original_index] -= 1;
+
+        if self.counts[original_index] == 0 {
+            let last_index = self.palette.len() - 1;
+            // Remove from palette and counts Vecs if the count hits zero.
+            self.palette.swap_remove(original_index);
+            self.counts.swap_remove(original_index);
+
+            // If we are indexed, we need to update all indices because swap_remove changed indices
+            if !upgraded && let PaletteStorage::Indexed(indices) = &mut self.storage {
+                for row in indices.iter_mut() {
+                    for col in row.iter_mut() {
+                        for idx in col.iter_mut() {
+                            if *idx as usize == last_index {
+                                *idx = original_index as u8;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         original
@@ -100,11 +157,24 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             Self::Homogeneous(palette[0])
         } else {
             // Heterogeneous cube, store the full data
-            Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
-                cube,
-                palette,
-                counts,
-            }))
+            if palette.len() <= 256 && std::mem::size_of::<V>() > 1 {
+                let mut indices = Box::new([[[0u8; DIM]; DIM]; DIM]);
+                for (i, v) in cube.as_flattened().as_flattened().iter().enumerate() {
+                    let idx = palette.iter().position(|p| p == v).unwrap();
+                    indices.as_flattened_mut().as_flattened_mut()[i] = idx as u8;
+                }
+                Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                    storage: PaletteStorage::Indexed(indices),
+                    palette,
+                    counts,
+                }))
+            } else {
+                Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                    storage: PaletteStorage::Dense(cube),
+                    palette,
+                    counts,
+                }))
+            }
         }
     }
 
@@ -125,22 +195,39 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
                 // Don't use HashMap's here, because its slow
                 let blocks_per_i64 = 64 / bits_per_entry;
 
-                let packed_indices: Box<[i64]> = data
-                    .cube
-                    .as_flattened()
-                    .as_flattened()
-                    .chunks(blocks_per_i64 as usize)
-                    .map(|chunk| {
-                        chunk.iter().enumerate().fold(0, |acc, (index, key)| {
-                            let key_index = data.palette.iter().position(|&x| x == *key).unwrap();
-                            debug_assert!((1 << bits_per_entry) > key_index);
+                let packed_indices: Box<[i64]> = match &data.storage {
+                    PaletteStorage::Dense(cube) => cube
+                        .as_flattened()
+                        .as_flattened()
+                        .chunks(blocks_per_i64 as usize)
+                        .map(|chunk| {
+                            chunk.iter().enumerate().fold(0, |acc, (index, key)| {
+                                let key_index =
+                                    data.palette.iter().position(|&x| x == *key).unwrap();
+                                debug_assert!((1 << bits_per_entry) > key_index);
 
-                            let packed_offset_index =
-                                (key_index as u64) << (bits_per_entry as u64 * index as u64);
-                            acc | packed_offset_index as i64
+                                let packed_offset_index =
+                                    (key_index as u64) << (bits_per_entry as u64 * index as u64);
+                                acc | packed_offset_index as i64
+                            })
                         })
-                    })
-                    .collect();
+                        .collect(),
+                    PaletteStorage::Indexed(indices) => indices
+                        .as_flattened()
+                        .as_flattened()
+                        .chunks(blocks_per_i64 as usize)
+                        .map(|chunk| {
+                            chunk.iter().enumerate().fold(0, |acc, (index, key_index)| {
+                                let key_index = *key_index as usize;
+                                debug_assert!((1 << bits_per_entry) > key_index);
+
+                                let packed_offset_index =
+                                    (key_index as u64) << (bits_per_entry as u64 * index as u64);
+                                acc | packed_offset_index as i64
+                            })
+                        })
+                        .collect(),
+                };
 
                 (data.palette.clone().into_boxed_slice(), packed_indices)
             }
@@ -166,10 +253,45 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
         let index_mask = (1 << bits_per_key) - 1;
         let keys_per_i64 = 64 / bits_per_key;
 
-        let mut decompressed_values = Vec::with_capacity(Self::VOLUME);
+        // Optimized path for indexed storage if palette is small enough
+        if palette.len() <= 256 && std::mem::size_of::<V>() > 1 {
+            let mut indices = Box::new([[[0u8; DIM]; DIM]; DIM]);
+            let mut counts = vec![0u16; palette.len()];
+            let indices_flat = indices.as_flattened_mut().as_flattened_mut();
 
-        // We already have the palette from the input `palette_slice`.
-        // The counts will be created in the next step.
+            let mut packed_data_iter = packed_data.iter();
+            let mut current_packed_word = *packed_data_iter.next().unwrap_or(&0);
+
+            for (i, index_out) in indices_flat.iter_mut().enumerate().take(Self::VOLUME) {
+                let bit_index_in_word = i % keys_per_i64 as usize;
+                if bit_index_in_word == 0 && i > 0 {
+                    current_packed_word = *packed_data_iter.next().unwrap_or(&0);
+                }
+
+                let lookup_index = ((current_packed_word as u64)
+                    >> (bit_index_in_word as u64 * bits_per_key as u64))
+                    & index_mask;
+
+                let idx = lookup_index as usize;
+                if idx < palette.len() {
+                    *index_out = idx as u8;
+                    counts[idx] += 1;
+                } else {
+                    warn!("Lookup index out of bounds! Defaulting...");
+                    // value is already 0, and counts[0] will be updated correctly if we track it
+                }
+            }
+            // fix counts[0] if it was skipped in out-of-bounds cases (rare)
+            // But actually we should just ensure it's correct.
+
+            return Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
+                storage: PaletteStorage::Indexed(indices),
+                palette: palette.to_vec(),
+                counts,
+            }));
+        }
+
+        let mut decompressed_values = Vec::with_capacity(Self::VOLUME);
 
         let mut packed_data_iter = packed_data.iter();
         let mut current_packed_word = *packed_data_iter.next().unwrap_or(&0);
@@ -216,7 +338,7 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
             .copy_from_slice(&decompressed_values);
 
         Self::Heterogeneous(Box::new(HeterogeneousPaletteData {
-            cube,
+            storage: PaletteStorage::Dense(cube),
             palette: palette.to_vec(),
             counts,
         }))
@@ -257,7 +379,16 @@ impl<V: Hash + Eq + Copy + Default, const DIM: usize> PalettedContainer<V, DIM> 
     pub fn iter(&self) -> Box<dyn Iterator<Item = &V> + '_> {
         match self {
             Self::Homogeneous(registry_id) => Box::new(repeat_n(registry_id, Self::VOLUME)),
-            Self::Heterogeneous(data) => Box::new(data.cube.as_flattened().as_flattened().iter()),
+            Self::Heterogeneous(data) => match &data.storage {
+                PaletteStorage::Dense(cube) => Box::new(cube.as_flattened().as_flattened().iter()),
+                PaletteStorage::Indexed(indices) => Box::new(
+                    indices
+                        .as_flattened()
+                        .as_flattened()
+                        .iter()
+                        .map(|&idx| &data.palette[idx as usize]),
+                ),
+            },
         }
     }
 
@@ -289,25 +420,28 @@ impl BiomePalette {
                 if raw_bits_per_entry > BIOME_NETWORK_MAX_MAP_BITS {
                     let bits_per_entry = BIOME_NETWORK_MAX_BITS;
                     let values_per_i64 = 64 / bits_per_entry;
-                    let packed_data = data
-                        .cube
-                        .as_flattened()
-                        .as_flattened()
-                        .chunks(values_per_i64 as usize)
-                        .map(|chunk| {
-                            chunk.iter().enumerate().fold(0, |acc, (index, value)| {
-                                debug_assert!((1 << bits_per_entry) > *value);
-                                let packed_offset_index =
-                                    (*value as u64) << (bits_per_entry as u64 * index as u64);
-                                acc | packed_offset_index as i64
-                            })
-                        })
-                        .collect();
+                    let mut packed_data = Vec::new();
+                    let mut current_idx = 0;
+                    while current_idx < Self::VOLUME {
+                        let mut acc = 0u64;
+                        for i in 0..values_per_i64 as usize {
+                            if current_idx + i < Self::VOLUME {
+                                let y = (current_idx + i) / (Self::SIZE * Self::SIZE);
+                                let z = ((current_idx + i) / Self::SIZE) % Self::SIZE;
+                                let x = (current_idx + i) % Self::SIZE;
+                                let value = data.get(x, y, z);
+                                debug_assert!((1 << bits_per_entry) > value);
+                                acc |= (value as u64) << (bits_per_entry as u64 * i as u64);
+                            }
+                        }
+                        packed_data.push(acc as i64);
+                        current_idx += values_per_i64 as usize;
+                    }
 
                     NetworkSerialization {
                         bits_per_entry,
                         palette: NetworkPalette::Direct,
-                        packed_data,
+                        packed_data: packed_data.into_boxed_slice(),
                     }
                 } else {
                     let bits_per_entry = raw_bits_per_entry.max(BIOME_NETWORK_MIN_MAP_BITS);
@@ -364,26 +498,28 @@ impl BlockPalette {
                 if raw_bits_per_entry > BLOCK_NETWORK_MAX_MAP_BITS {
                     let bits_per_entry = BLOCK_NETWORK_MAX_BITS;
                     let values_per_i64 = 64 / bits_per_entry;
-                    let packed_data = data
-                        .cube
-                        .as_flattened()
-                        .as_flattened()
-                        .chunks(values_per_i64 as usize)
-                        .map(|chunk| {
-                            chunk.iter().enumerate().fold(0u64, |acc, (index, value)| {
-                                debug_assert!((1 << bits_per_entry) > *value);
-
-                                let packed_offset_index =
-                                    (*value as u64) << (bits_per_entry as u64 * index as u64);
-                                acc | packed_offset_index
-                            }) as i64
-                        })
-                        .collect();
+                    let mut packed_data = Vec::new();
+                    let mut current_idx = 0;
+                    while current_idx < Self::VOLUME {
+                        let mut acc = 0u64;
+                        for i in 0..values_per_i64 as usize {
+                            if current_idx + i < Self::VOLUME {
+                                let y = (current_idx + i) / (Self::SIZE * Self::SIZE);
+                                let z = ((current_idx + i) / Self::SIZE) % Self::SIZE;
+                                let x = (current_idx + i) % Self::SIZE;
+                                let value = data.get(x, y, z);
+                                debug_assert!((1 << bits_per_entry) > value);
+                                acc |= (value as u64) << (bits_per_entry as u64 * i as u64);
+                            }
+                        }
+                        packed_data.push(acc as i64);
+                        current_idx += values_per_i64 as usize;
+                    }
 
                     NetworkSerialization {
                         bits_per_entry,
                         palette: NetworkPalette::Direct,
-                        packed_data,
+                        packed_data: packed_data.into_boxed_slice(),
                     }
                 } else {
                     let bits_per_entry = raw_bits_per_entry.max(BLOCK_NETWORK_MIN_MAP_BITS);

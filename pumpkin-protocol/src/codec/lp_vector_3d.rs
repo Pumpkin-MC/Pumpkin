@@ -50,12 +50,12 @@ impl LpVector3d {
         // Write low 16 bits (Little Endian)
         writer
             .write_all(&(packed_data as u16).to_le_bytes())
-            .unwrap();
+            .map_err(WritingError::IoError)?;
 
         // Write next 32 bits (Big Endian)
         writer
             .write_all(&((packed_data >> 16) as i32).to_be_bytes())
-            .unwrap();
+            .map_err(WritingError::IoError)?;
 
         if is_extended {
             let scale_tail = VarInt((scale_factor >> 2) as i32);
@@ -156,7 +156,8 @@ fn from_long(quantized: i64, scale: f64) -> f64 {
 impl Serialize for LpVector3d {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut buf = Vec::new();
-        self.write(&mut buf).unwrap();
+        self.write(&mut buf)
+            .map_err(|e| serde::ser::Error::custom(e.to_string()))?;
         serializer.serialize_bytes(&buf)
     }
 }
@@ -202,10 +203,11 @@ mod tests {
     }
 
     #[test]
-    fn write_legacy_writes_three_i16_be_components() {
+    fn write_legacy_writes_three_i16_be_components() -> Result<(), Box<dyn std::error::Error>> {
         let velocity = LpVector3d(Vector3::new(0.5, -0.5, 0.0));
         let mut buf = Vec::new();
-        velocity.write_legacy(&mut buf).unwrap();
+        velocity.write_legacy(&mut buf)?;
         assert_eq!(buf, vec![0x0F, 0xA0, 0xF0, 0x60, 0x00, 0x00]);
+        Ok(())
     }
 }

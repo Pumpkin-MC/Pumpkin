@@ -74,7 +74,11 @@ impl ScreenHandlerFactory for SmokerScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate(translation::CONTAINER_SMOKER, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_SMOKER,
+            translation::bedrock::TILE_SMOKER_NAME,
+            &[],
+        )
     }
 }
 #[pumpkin_block("minecraft:smoker")]

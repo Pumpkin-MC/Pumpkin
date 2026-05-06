@@ -159,6 +159,7 @@ use crate::block::blocks::blast_furnace::BlastFurnaceBlock;
 use crate::block::blocks::chain::ChainBlock;
 use crate::block::blocks::cobweb::CobwebBlock;
 use crate::block::blocks::crafting_table::CraftingTableBlock;
+use crate::block::blocks::dragon_egg::DragonEggBlock;
 use crate::block::blocks::end_rod::EndRodBlock;
 use crate::block::blocks::ender_chest::EnderChestBlock;
 use crate::block::blocks::hopper::HopperBlock;
@@ -265,6 +266,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChiseledBookshelfBlock);
     manager.register(ShelfBlock);
     manager.register(LecternBlock);
+    manager.register(DragonEggBlock);
     manager.register(StemBlock);
     manager.register(AttachedStemBlock);
     manager.register(ChainBlock);

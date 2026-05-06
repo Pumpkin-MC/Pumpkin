@@ -7,7 +7,7 @@ use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -16,6 +16,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+use pumpkin_nbt::pnbt::PNbtCompound;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -56,7 +57,15 @@ impl CowEntity {
     }
 }
 
-impl NBTStorage for CowEntity {}
+impl NBTStorage for CowEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        self.mob_entity.living_entity.write_nbt(nbt)
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        self.mob_entity.living_entity.read_nbt_non_mut(nbt)
+    }
+}
 
 impl Mob for CowEntity {
     fn get_mob_entity(&self) -> &MobEntity {

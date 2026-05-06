@@ -6,6 +6,7 @@ use crate::serial::PacketWrite;
 #[packet(143)]
 pub struct CNetworkSettings {
     compression_threshold: u16,
+    /// `ZLib` = 0, Snappy = 1, None = 255
     compression_method: u16,
     client_throttle_enabled: bool,
     client_throttle_threshold: i8,

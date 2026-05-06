@@ -17,23 +17,35 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use uuid::Uuid;
 
-pub const INVALID_NAME_OR_UUID_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_INVALID);
+pub const INVALID_NAME_OR_UUID_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_INVALID,
+    translation::java::ARGUMENT_ENTITY_INVALID,
+);
 
-pub const UNKNOWN_SELECTOR_TYPE_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_SELECTOR_UNKNOWN);
+pub const UNKNOWN_SELECTOR_TYPE_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_SELECTOR_UNKNOWN,
+    translation::java::ARGUMENT_ENTITY_SELECTOR_UNKNOWN,
+);
 
-pub const SELECTORS_NOT_ALLOWED_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_SELECTOR_NOT_ALLOWED);
+pub const SELECTORS_NOT_ALLOWED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_SELECTOR_NOT_ALLOWED,
+    translation::java::ARGUMENT_ENTITY_SELECTOR_NOT_ALLOWED,
+);
 
-pub const MISSING_SELECTOR_TYPE_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_SELECTOR_MISSING);
+pub const MISSING_SELECTOR_TYPE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_SELECTOR_MISSING,
+    translation::java::ARGUMENT_ENTITY_SELECTOR_MISSING,
+);
 
-pub const EXPECTED_END_OF_OPTIONS_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_UNTERMINATED);
+pub const EXPECTED_END_OF_OPTIONS_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_UNTERMINATED,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_UNTERMINATED,
+);
 
-pub const EXPECTED_OPTION_VALUE_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new(translation::ARGUMENT_ENTITY_OPTIONS_VALUELESS);
+pub const EXPECTED_OPTION_VALUE_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ARGUMENT_ENTITY_OPTIONS_VALUELESS,
+    translation::java::ARGUMENT_ENTITY_OPTIONS_VALUELESS,
+);
 
 bitflags! {
     /// A list of bit flags to set entity selector parser properties.

@@ -17,6 +17,7 @@ impl Carver for CanyonCarver {
         random: &mut RandomGenerator,
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
+        legacy_random_source: bool,
     ) {
         let CarverAdditionalConfig::Canyon(ref canyon_config) = config.additional else {
             return;
@@ -51,6 +52,7 @@ impl Carver for CanyonCarver {
             0,
             distance,
             y_scale,
+            legacy_random_source,
         );
     }
 }
@@ -71,10 +73,17 @@ impl CanyonCarver {
         step: i32,
         distance: i32,
         y_scale: f64,
+        legacy_random_source: bool,
     ) {
-        let mut random = RandomGenerator::Xoroshiro(
-            pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(tunnel_seed as u64),
-        );
+        let mut random = if legacy_random_source {
+            RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
+                tunnel_seed as u64,
+            ))
+        } else {
+            RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
+                tunnel_seed as u64,
+            ))
+        };
         let width_factor_per_height =
             self.init_width_factors(chunk.height() as usize, config, &mut random);
         let mut y_rota = 0.0f32;
@@ -234,8 +243,7 @@ impl CanyonCarver {
                 let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
 
                 if xd * xd + zd * zd < 1.0 {
-                    let mut has_grass = false;
-                    for world_y in (min_y..=max_y).rev() {
+                    for world_y in (min_y + 1..=max_y).rev() {
                         let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
                         if !self.should_skip(
@@ -248,8 +256,7 @@ impl CanyonCarver {
                         ) && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            has_grass |= self
-                                .carve_block(chunk, config, world_x, world_y, world_z, has_grass);
+                            self.carve_block(chunk, config, world_x, world_y, world_z);
                         }
                     }
                 }
@@ -280,7 +287,6 @@ impl CanyonCarver {
         x: i32,
         y: i32,
         z: i32,
-        mut has_grass: bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
@@ -288,12 +294,6 @@ impl CanyonCarver {
 
         if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
             return false;
-        }
-
-        if block.id == pumpkin_data::Block::GRASS_BLOCK.id
-            || block.id == pumpkin_data::Block::MYCELIUM.id
-        {
-            has_grass = true;
         }
 
         if config.replaceable.1.contains(&block.id) {
@@ -310,18 +310,6 @@ impl CanyonCarver {
                 chunk.set_block_state(x & 15, local_y, z & 15, air);
             }
 
-            if has_grass {
-                let down_y = y - 1;
-                let local_down_y = down_y - chunk.bottom_y() as i32;
-                if (0..chunk.height() as i32).contains(&local_down_y) {
-                    let down_state_id = chunk.get_block_state_raw(x & 15, local_down_y, z & 15);
-                    if pumpkin_data::Block::from_state_id(down_state_id).id
-                        == pumpkin_data::Block::DIRT.id
-                    {
-                        // dirt replacement skipped
-                    }
-                }
-            }
             return true;
         }
         false

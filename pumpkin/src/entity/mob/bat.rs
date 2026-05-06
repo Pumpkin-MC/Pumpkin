@@ -69,7 +69,7 @@ use pumpkin_nbt::pnbt::PNbtCompound;
 impl NBTStorage for BatEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
             nbt.put_byte(flags as i8);
         })
@@ -77,11 +77,7 @@ impl NBTStorage for BatEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             let flags = nbt.get_byte().unwrap_or(0) as u8;
             let roosting = (flags & ROOSTING_FLAG) != 0;
             self.set_roosting(roosting).await;

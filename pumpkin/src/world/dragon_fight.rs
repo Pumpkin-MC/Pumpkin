@@ -622,7 +622,11 @@ impl DragonFight {
     fn make_bossbar(&self) -> Bossbar {
         Bossbar {
             uuid: self.bossbar_uuid,
-            title: TextComponent::translate("entity.minecraft.ender_dragon", []),
+            title: TextComponent::translate_cross(
+                "entity.minecraft.ender_dragon",
+                "entity.minecraft.ender_dragon",
+                [],
+            ),
             health: 1.0,
             color: BossbarColor::Pink,
             division: BossbarDivisions::NoDivision,

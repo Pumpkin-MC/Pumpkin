@@ -110,7 +110,7 @@ use pumpkin_nbt::pnbt::PNbtCompound;
 impl NBTStorage for SheepEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_bool(self.is_sheared());
             nbt.put_byte(self.get_color() as i8);
         })
@@ -118,11 +118,7 @@ impl NBTStorage for SheepEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             let sheared = nbt.get_bool().unwrap_or(false);
             let color = nbt.get_byte().unwrap_or(0) as u8;
             let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };

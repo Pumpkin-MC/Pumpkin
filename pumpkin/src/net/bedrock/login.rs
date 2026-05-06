@@ -1,9 +1,10 @@
 use crate::{
-    net::{ClientPlatform, DisconnectReason, GameProfile, bedrock::BedrockClient},
+    net::{ClientPlatform, DisconnectReason, GameProfile, PlayerConfig, bedrock::BedrockClient},
     server::Server,
 };
-use pumpkin_config::networking::compression::CompressionInfo;
-use pumpkin_protocol::bedrock::server::resource_pack_response::SResourcePackResponse;
+use pumpkin_protocol::bedrock::server::{
+    login::ClientData, resource_pack_response::SResourcePackResponse,
+};
 use pumpkin_protocol::{
     bedrock::{
         client::{
@@ -18,7 +19,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::jwt::AuthError;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
-use serde::Deserialize;
+use serde::{Deserialize, de::Error};
 use serde_repr::Deserialize_repr;
 use std::sync::Arc;
 use thiserror::Error;
@@ -39,6 +40,8 @@ pub enum LoginError {
     SelfSignedNotAllowed,
     #[error("Got a guest/splitscreen login request. Currently unimplemented.")]
     GuestUnimplemented,
+    #[error("Failed to decode extra using decode_b64_url_nopad.")]
+    DecodeExtraError,
 }
 
 #[derive(Deserialize_repr)]
@@ -80,7 +83,11 @@ fn verify_oidc_token_path(
 }
 
 impl BedrockClient {
-    pub async fn handle_request_network_settings(&self, packet: SRequestNetworkSettings) {
+    pub async fn handle_request_network_settings(
+        &self,
+        packet: SRequestNetworkSettings,
+        server: &Server,
+    ) {
         if packet.protocol_version < CURRENT_BEDROCK_MC_PROTOCOL as i32 {
             self.send_game_packet(&CPlayStatus::OutdatedClient).await;
             return;
@@ -88,9 +95,21 @@ impl BedrockClient {
             self.send_game_packet(&CPlayStatus::OutdatedServer).await;
             return;
         }
-        self.send_game_packet(&CNetworkSettings::new(0, 0, false, 0, 0.0))
-            .await;
-        self.set_compression(CompressionInfo::default()).await;
+        let compression = server
+            .advanced_config
+            .networking
+            .bedrock_compression
+            .info
+            .clone();
+        self.send_game_packet(&CNetworkSettings::new(
+            compression.threshold as u16,
+            0,
+            false,
+            0,
+            0.0,
+        ))
+        .await;
+        self.set_compression(compression).await;
     }
 
     pub async fn handle_login(self: &Arc<Self>, packet: SLogin, server: &Server) -> Option<()> {
@@ -135,9 +154,27 @@ impl BedrockClient {
             pumpkin_util::jwt::extract_oidc_token_player_claims(&auth_payload.token)?
         };
 
+        let raw_token_str = std::str::from_utf8(&packet.raw_token).map_err(|_| {
+            LoginError::InvalidTokenFormat(serde_json::Error::custom(
+                "raw_token is not valid UTF-8",
+            ))
+        })?; // You'll need to add a string conversion error to LoginError, or handle it cleanly.
+
+        let mut parts = raw_token_str.split('.');
+        let _header = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
+        let payload_b64 = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
+
+        let payload_bytes = pumpkin_util::jwt::decode_b64_url_nopad(payload_b64)
+            .map_err(|_| LoginError::DecodeExtraError)?;
+        let client_data: ClientData = serde_json::from_slice(&payload_bytes)?;
+
+        let real_name = player_data.display_name;
+        // IMPORTANT: Bedrock allows spaces in names. While we could support this, it would significantly complicate parsing player arguments in commands, so we don't
+        let under_score_name = real_name.replace(' ', "_");
+
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
-            name: player_data.display_name,
+            name: under_score_name,
             properties: Vec::new(),
             profile_actions: None,
         };
@@ -158,6 +195,14 @@ impl BedrockClient {
             .add_player(ClientPlatform::Bedrock(self.clone()), profile, None)
             .await
         {
+            // TODO: kinda sad we don't use more of client_data, we should store it somewhere, at least for plugin devs
+            let new_config = PlayerConfig {
+                locale: client_data.language_code,
+                ..Default::default()
+            };
+
+            player.config.store(std::sync::Arc::new(new_config));
+
             // player spawn happens after resource packs are resolved
             *self.player.lock().await = Some(player);
         }

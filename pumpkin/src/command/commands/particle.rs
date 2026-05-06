@@ -74,7 +74,8 @@ impl CommandExecutor for Executor {
                 .await;
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(TextComponent::translate_cross(
+                    "commands.particle.success",
                     "commands.particle.success",
                     [TextComponent::text(format!("{particle:?}"))],
                 ))

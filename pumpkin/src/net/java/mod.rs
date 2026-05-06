@@ -159,8 +159,16 @@ impl JavaClient {
         let crypt_key: [u8; 16] = shared_secret
             .try_into()
             .map_err(|_| EncryptionError::SharedWrongLength)?;
-        self.network_reader.lock().await.set_encryption(&crypt_key);
-        self.network_writer.lock().await.set_encryption(&crypt_key);
+        self.network_reader
+            .lock()
+            .await
+            .set_encryption(&crypt_key)
+            .map_err(|_| EncryptionError::AlreadyEncrypted)?;
+        self.network_writer
+            .lock()
+            .await
+            .set_encryption(&crypt_key)
+            .map_err(|_| EncryptionError::AlreadyEncrypted)?;
         Ok(())
     }
 

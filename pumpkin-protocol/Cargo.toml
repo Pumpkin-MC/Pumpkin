@@ -30,7 +30,7 @@ cfb8.workspace = true
 hybrid-array = "0.4"
 
 # compression
-async-compression = { workspace = true, features = ["tokio", "zlib"] }
+async-compression = { workspace = true, features = ["tokio", "zlib", "deflate"] }
 flate2.workspace = true
 
 take_mut.workspace = true

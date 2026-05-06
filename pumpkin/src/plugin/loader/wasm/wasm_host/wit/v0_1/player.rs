@@ -313,6 +313,33 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn get_tab_list_name(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::text::TextComponent>>> {
+        let player = player_from_resource(self, &player)?;
+        let tab_list_name = player.get_tab_list_name().await;
+        tab_list_name.map_or_else(
+            || Ok(None),
+            |name| {
+                self.add_text_component(name)
+                    .map(Some)
+                    .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
+            },
+        )
+    }
+
+    async fn set_tab_list_name(
+        &mut self,
+        player: Resource<Player>,
+        name: Option<wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>>,
+    ) -> wasmtime::Result<()> {
+        let name = name.map(|n| text_component_from_resource(self, &n));
+        let player = player_from_resource(self, &player)?;
+        player.set_tab_list_name(name).await;
+        Ok(())
+    }
+
     async fn send_system_message(
         &mut self,
         player: Resource<Player>,

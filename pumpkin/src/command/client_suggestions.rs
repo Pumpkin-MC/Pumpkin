@@ -1,19 +1,24 @@
 use pumpkin_protocol::{
     codec::var_int::VarInt,
-    java::client::play::{CCommands, ProtoNode, ProtoNodeType},
+    java::client::play::{
+        ArgumentType, CCommands, ProtoNode, ProtoNodeType, StringProtoArgBehavior,
+    },
 };
 use std::sync::Arc;
 
-use super::tree::{Node, NodeType};
-use crate::server::Server;
-use crate::{
-    command::node::{
-        attached::{AttachedNode, NodeId},
-        dispatcher::CommandDispatcher,
-        tree::ROOT_NODE_ID,
-    },
-    entity::player::Player,
+use crate::command::node::{
+    attached::{AttachedNode, NodeId},
+    dispatcher::CommandDispatcher,
+    tree::ROOT_NODE_ID,
 };
+use crate::entity::player::Player;
+use crate::server::Server;
+use pumpkin_protocol::bedrock::client::available_commands::{
+    CAvailableCommands, Command, CommandEnum, CommandOverload, CommandParameter, arg_flags,
+    arg_types, command_permissions,
+};
+
+use super::tree::{Node, NodeType};
 
 #[expect(clippy::too_many_lines)]
 pub async fn send_c_commands_packet(
@@ -65,24 +70,9 @@ pub async fn send_c_commands_packet(
 
     let node_id_offset = proto_nodes.len();
 
-    // We can finally assign indices from our tree:
-    // ID = 2: node_id_offset
-    // ID = 3: node_id_offset + 1
-    // ID = 4: node_id_offset + 2      and so on...
     let mut root_node_children_second: Box<[VarInt]> = Box::new([]);
 
-    // TODO:
-    // Once the /op and /deop commands are ported to the new dispatcher,
-    // we'll be able to make this function take an &Arc<Server> instead of &Server.
-    // With that permissions can be evaluated.
-    //
-    // &Arc<Server> ----------------------------,
-    //                                          |
-    //                                          v
-    // let source = player.get_command_source(server).await;
-
     for node in &dispatcher.tree {
-        // We map IDs to the indexes:
         let children: Box<[VarInt]> = node
             .children_ref()
             .values()
@@ -97,25 +87,10 @@ pub async fn send_c_commands_packet(
             .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
             .map(|i| i.try_into().expect("i32 limit reached for ids"));
 
-        // TODO:
-        //
-        // As stated in the previous TODO, after
-        // we can get a reference to an Arc of Server,
-        // we can add the permission checking.
-        //
-        // Right now, we incorrectly assume that
-        // requirements are always satisfied. Hopefully
-        // this can be fixed once the `/op` and `/deop` commands
-        // are reimplemented with the Arcs, after which we can uncomment
-        // the following line instead of the current one:
-        //
-        // let satisfies_requirements = node.requirements().evaluate(&source).await;
         let satisfies_requirements = true;
 
         match node {
             AttachedNode::Root(_) => {
-                // We skip the root node because we already have a root node.
-                // We do need to capture its children though, for later.
                 root_node_children_second = children;
             }
             AttachedNode::Literal(literal_attached_node) => {
@@ -163,14 +138,8 @@ pub async fn send_c_commands_packet(
 
     if !root_node_children_second.is_empty() {
         let root_node = &mut proto_nodes[root_node_index];
-
-        // Take the first children buffer, leaving it empty.
         let mut first = std::mem::take(&mut root_node.children).into_vec();
-
-        // Add elements of the second buffer to the first.
         first.append(&mut root_node_children_second.into_vec());
-
-        // Convert it back to a boxed slice.
         root_node.children = first.into_boxed_slice();
     }
 
@@ -179,19 +148,10 @@ pub async fn send_c_commands_packet(
 }
 
 fn resolve_node_id(node_id: NodeId, node_id_offset: usize, root_node_index: usize) -> usize {
-    // ASSUMPTION:
-    // We assume, in all Trees, that
-    // their root node always has a local ID of 1.
-    // Other nodes will ALWAYS have an ID greater than 1.
-    // (No node, not even the root node, can have an ID of 0
-    // as it is wrapped in a `NonZero<usize>`)
-    //
-    // If this is violated, then logic errors arise!
-    // See the `Tree` documentation for more information.
     if node_id == ROOT_NODE_ID {
         root_node_index
     } else {
-        const FIRST_NONROOT_ID: usize = 2; // ROOT_NODE_ID.0.get() + 1
+        const FIRST_NONROOT_ID: usize = 2;
         debug_assert!(
             node_id.0.get() >= FIRST_NONROOT_ID,
             "Root node should have been handled in the if body"
@@ -284,4 +244,366 @@ fn nodes_to_proto_node_builders<'a>(
     }
 
     (is_executable, child_nodes)
+}
+
+struct BuilderContext<'a> {
+    enum_values: &'a mut Vec<String>,
+    enums: &'a mut Vec<CommandEnum>,
+}
+
+pub async fn send_bedrock_commands_packet(
+    player: &Arc<Player>,
+    server: &Server,
+    dispatcher: &CommandDispatcher,
+) {
+    let cmd_src = super::CommandSender::Player(player.clone());
+
+    let mut enum_values: Vec<String> = Vec::new();
+    let mut enums: Vec<CommandEnum> = Vec::new();
+    let mut commands: Vec<Command> = Vec::new();
+
+    let fallback_dispatcher = &dispatcher.fallback_dispatcher;
+    for key in fallback_dispatcher.commands.keys() {
+        let Ok(tree) = fallback_dispatcher.get_tree(key) else {
+            continue;
+        };
+
+        let Some(permission) = fallback_dispatcher.permissions.get(key) else {
+            continue;
+        };
+
+        if !cmd_src.has_permission(server, permission.as_str()).await {
+            continue;
+        }
+
+        let mut ctx = BuilderContext {
+            enum_values: &mut enum_values,
+            enums: &mut enums,
+        };
+
+        let overloads = build_overloads_from_nodes(&tree.nodes, &tree.children, &mut ctx);
+
+        commands.push(Command {
+            name: key.clone(),
+            description: String::new(),
+            flags: 0,
+            permission: command_permissions::ANY.to_string(),
+            aliases_enum_index: -1,
+            chained_subcommand_offsets: Vec::new(),
+            overloads,
+        });
+    }
+
+    let tree_nodes: Vec<&AttachedNode> = dispatcher.tree.iter().collect();
+
+    let root_child_ids: Vec<NodeId> = tree_nodes
+        .first()
+        .and_then(|n| {
+            if let AttachedNode::Root(_) = n {
+                Some(n.children_ref().values().copied().collect())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+
+    for child_id in root_child_ids {
+        let idx = child_id.0.get() - 1;
+        let Some(node) = tree_nodes.get(idx) else {
+            continue;
+        };
+
+        let (name, is_executable, child_ids) = match node {
+            AttachedNode::Literal(lit) => (
+                lit.meta.literal.to_string(),
+                lit.owned.command.is_some(),
+                node.children_ref().values().copied().collect::<Vec<_>>(),
+            ),
+            AttachedNode::Command(cmd) => (
+                cmd.meta.literal.to_string(),
+                cmd.owned.command.is_some(),
+                node.children_ref().values().copied().collect::<Vec<_>>(),
+            ),
+            _ => continue,
+        };
+
+        let mut ctx = BuilderContext {
+            enum_values: &mut enum_values,
+            enums: &mut enums,
+        };
+
+        let overloads =
+            build_overloads_from_attached_nodes(&tree_nodes, &child_ids, is_executable, &mut ctx);
+
+        commands.push(Command {
+            name,
+            description: String::new(),
+            flags: 0,
+            permission: command_permissions::ANY.to_string(),
+            aliases_enum_index: -1,
+            chained_subcommand_offsets: Vec::new(),
+            overloads,
+        });
+    }
+
+    let packet = CAvailableCommands {
+        enum_values,
+        chained_subcommand_values: Vec::new(),
+        suffixes: Vec::new(),
+        chained_subcommands: Vec::new(),
+        enums,
+        commands,
+        soft_enums: Vec::new(),
+        constraints: Vec::new(),
+    };
+
+    if let crate::net::ClientPlatform::Bedrock(bedrock_client) = &player.client {
+        bedrock_client.send_game_packet(&packet).await;
+    }
+}
+
+fn build_overloads_from_nodes(
+    nodes: &[Node],
+    children: &[usize],
+    ctx: &mut BuilderContext,
+) -> Vec<CommandOverload> {
+    let mut overloads = Vec::new();
+    collect_overloads_from_nodes(nodes, children, &mut Vec::new(), &mut overloads, ctx);
+    if overloads.is_empty() {
+        overloads.push(CommandOverload {
+            chaining: false,
+            parameters: Vec::new(),
+        });
+    }
+    overloads
+}
+
+fn collect_overloads_from_nodes(
+    nodes: &[Node],
+    children: &[usize],
+    current_params: &mut Vec<CommandParameter>,
+    overloads: &mut Vec<CommandOverload>,
+    ctx: &mut BuilderContext,
+) {
+    let mut has_executable = false;
+
+    for &i in children {
+        let node = &nodes[i];
+        match &node.node_type {
+            NodeType::ExecuteLeaf { .. } => {
+                has_executable = true;
+            }
+            NodeType::Literal { string, .. } => {
+                let enum_idx = ensure_command_enum(
+                    ctx.enums,
+                    ctx.enum_values,
+                    &format!("SubCommand_{string}"),
+                    std::slice::from_ref(string),
+                );
+                let mut params = current_params.clone();
+                params.push(CommandParameter {
+                    name: string.clone(),
+                    type_info: arg_flags::ARG_FLAG_VALID
+                        | arg_flags::ARG_FLAG_ENUM
+                        | enum_idx as u32,
+                    optional: false,
+                    options: 0,
+                });
+                collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
+            }
+            NodeType::Argument { name, consumer } => {
+                let mut params = current_params.clone();
+                params.push(CommandParameter {
+                    name: name.clone(),
+                    type_info: bedrock_param_type(&consumer.get_client_side_parser()),
+                    optional: false,
+                    options: 0,
+                });
+                collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
+            }
+            NodeType::Require { .. } => {
+                collect_overloads_from_nodes(nodes, &node.children, current_params, overloads, ctx);
+            }
+        }
+    }
+
+    if has_executable {
+        overloads.push(CommandOverload {
+            chaining: false,
+            parameters: current_params.clone(),
+        });
+    }
+}
+
+fn build_overloads_from_attached_nodes(
+    tree: &[&AttachedNode],
+    child_ids: &[NodeId],
+    is_root_executable: bool,
+    ctx: &mut BuilderContext,
+) -> Vec<CommandOverload> {
+    let mut overloads = Vec::new();
+    if is_root_executable {
+        overloads.push(CommandOverload {
+            chaining: false,
+            parameters: Vec::new(),
+        });
+    }
+    collect_overloads_from_attached(tree, child_ids, &Vec::new(), &mut overloads, ctx);
+    if overloads.is_empty() {
+        overloads.push(CommandOverload {
+            chaining: false,
+            parameters: Vec::new(),
+        });
+    }
+    overloads
+}
+
+fn collect_overloads_from_attached(
+    tree: &[&AttachedNode],
+    child_ids: &[NodeId],
+    current_params: &[CommandParameter],
+    overloads: &mut Vec<CommandOverload>,
+    ctx: &mut BuilderContext,
+) {
+    for &child_id in child_ids {
+        let idx = child_id.0.get() - 1;
+        let Some(node) = tree.get(idx) else { continue };
+
+        match node {
+            AttachedNode::Literal(lit) => {
+                let name = lit.meta.literal.as_ref();
+                let enum_idx = ensure_command_enum(
+                    ctx.enums,
+                    ctx.enum_values,
+                    &format!("SubCommand_{name}"),
+                    &[name.to_string()],
+                );
+                let mut params = current_params.to_vec();
+                params.push(CommandParameter {
+                    name: name.to_string(),
+                    type_info: arg_flags::ARG_FLAG_VALID
+                        | arg_flags::ARG_FLAG_ENUM
+                        | enum_idx as u32,
+                    optional: false,
+                    options: 0,
+                });
+                let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
+                if lit.owned.command.is_some() {
+                    overloads.push(CommandOverload {
+                        chaining: false,
+                        parameters: params.clone(),
+                    });
+                }
+                collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
+            }
+            AttachedNode::Command(cmd) => {
+                let name = cmd.meta.literal.as_ref();
+                let enum_idx = ensure_command_enum(
+                    ctx.enums,
+                    ctx.enum_values,
+                    &format!("SubCommand_{name}"),
+                    &[name.to_string()],
+                );
+                let mut params = current_params.to_vec();
+                params.push(CommandParameter {
+                    name: name.to_string(),
+                    type_info: arg_flags::ARG_FLAG_VALID
+                        | arg_flags::ARG_FLAG_ENUM
+                        | enum_idx as u32,
+                    optional: false,
+                    options: 0,
+                });
+                let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
+                if cmd.owned.command.is_some() {
+                    overloads.push(CommandOverload {
+                        chaining: false,
+                        parameters: params.clone(),
+                    });
+                }
+                collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
+            }
+            AttachedNode::Argument(arg) => {
+                let parser = arg.meta.argument_type.client_side_parser();
+                let mut params = current_params.to_vec();
+                params.push(CommandParameter {
+                    name: arg.meta.name.to_string(),
+                    type_info: bedrock_param_type(&parser),
+                    optional: false,
+                    options: 0,
+                });
+                let grandchild_ids: Vec<NodeId> = node.children_ref().values().copied().collect();
+                if arg.owned.command.is_some() {
+                    overloads.push(CommandOverload {
+                        chaining: false,
+                        parameters: params.clone(),
+                    });
+                }
+                collect_overloads_from_attached(tree, &grandchild_ids, &params, overloads, ctx);
+            }
+            AttachedNode::Root(_) => {}
+        }
+    }
+}
+
+fn ensure_enum_value(enum_values: &mut Vec<String>, value: &str) -> usize {
+    enum_values
+        .iter()
+        .position(|v| v == value)
+        .unwrap_or_else(|| {
+            enum_values.push(value.to_string());
+            enum_values.len() - 1
+        })
+}
+
+fn ensure_command_enum(
+    enums: &mut Vec<CommandEnum>,
+    enum_values: &mut Vec<String>,
+    name: &str,
+    values: &[String],
+) -> usize {
+    if let Some(pos) = enums.iter().position(|e| e.name == name) {
+        return pos;
+    }
+
+    let value_indices: Vec<usize> = values
+        .iter()
+        .map(|val| ensure_enum_value(enum_values, val))
+        .collect();
+
+    enums.push(CommandEnum {
+        name: name.to_string(),
+        value_indices,
+    });
+
+    enums.len() - 1
+}
+
+const fn bedrock_param_type(arg: &ArgumentType<'_>) -> u32 {
+    let base = match arg {
+        ArgumentType::Integer { .. } | ArgumentType::Long { .. } | ArgumentType::Time { .. } => {
+            arg_types::ARG_TYPE_INT
+        }
+        ArgumentType::Float { .. } | ArgumentType::Double { .. } => arg_types::ARG_TYPE_FLOAT,
+        ArgumentType::Bool => arg_types::ARG_TYPE_INT,
+        ArgumentType::Entity { .. }
+        | ArgumentType::GameProfile
+        | ArgumentType::ScoreHolder { .. } => arg_types::ARG_TYPE_TARGET,
+        ArgumentType::BlockPos | ArgumentType::ColumnPos => arg_types::ARG_TYPE_BLOCK_POS,
+        ArgumentType::Vec3 | ArgumentType::Vec2 | ArgumentType::Rotation | ArgumentType::Angle => {
+            arg_types::ARG_TYPE_ENTITY_POS
+        }
+        ArgumentType::String(StringProtoArgBehavior::GreedyPhrase) => arg_types::ARG_TYPE_RAW_TEXT,
+        ArgumentType::Message => arg_types::ARG_TYPE_MESSAGE,
+        ArgumentType::IntRange => arg_types::ARG_TYPE_INT_RANGE,
+        ArgumentType::ItemSlot | ArgumentType::ItemSlots => arg_types::ARG_TYPE_EQUIPMENT_SLOT,
+        ArgumentType::Component
+        | ArgumentType::Style
+        | ArgumentType::Nbt
+        | ArgumentType::NbtTag
+        | ArgumentType::NbtPath => arg_types::ARG_TYPE_JSON,
+        ArgumentType::Operation => arg_types::ARG_TYPE_OPERATOR,
+        // Default to STRING for non-converted types as it's the most compatible fallback.
+        _ => arg_types::ARG_TYPE_STRING,
+    };
+    base | arg_flags::ARG_FLAG_VALID
 }

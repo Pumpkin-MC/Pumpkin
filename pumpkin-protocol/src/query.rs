@@ -159,15 +159,14 @@ pub struct CHandshake {
 
 impl CHandshake {
     #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let token = CString::new(self.challenge_token.to_string())
-            .expect("challenge_token string contains no interior nul bytes");
+    pub fn encode(&self) -> Option<Vec<u8>> {
+        let token = CString::new(self.challenge_token.to_string()).ok()?;
 
         let mut buf = Vec::with_capacity(6 + token.as_bytes_with_nul().len());
         buf.push(PacketType::Handshake as u8);
         buf.extend_from_slice(&self.session_id.to_be_bytes());
         buf.extend_from_slice(token.as_bytes_with_nul());
-        buf
+        Some(buf)
     }
 }
 
@@ -185,10 +184,10 @@ pub struct CBasicStatus {
 
 impl CBasicStatus {
     #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let game_type = CString::new("SMP").unwrap();
-        let num_players = CString::new(self.num_players.to_string()).unwrap();
-        let max_players = CString::new(self.max_players.to_string()).unwrap();
+    pub fn encode(&self) -> Option<Vec<u8>> {
+        let game_type = CString::new("SMP").ok()?;
+        let num_players = CString::new(self.num_players.to_string()).ok()?;
+        let max_players = CString::new(self.max_players.to_string()).ok()?;
 
         let mut buf = Vec::new();
         buf.push(PacketType::Status as u8);
@@ -201,7 +200,7 @@ impl CBasicStatus {
         // The port is written little-endian — this is a known Notchian quirk.
         buf.extend_from_slice(&self.host_port.to_le_bytes());
         buf.extend_from_slice(self.host_ip.as_bytes_with_nul());
-        buf
+        Some(buf)
     }
 }
 
@@ -222,7 +221,7 @@ pub struct CFullStatus {
 
 impl CFullStatus {
     #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Option<Vec<u8>> {
         let mut buf = Vec::new();
         buf.push(PacketType::Status as u8);
         buf.extend_from_slice(&self.session_id.to_be_bytes());
@@ -230,28 +229,25 @@ impl CFullStatus {
 
         let kv_pairs: &[(&str, &CString)] = &[
             ("hostname", &self.hostname),
-            ("gametype", &CString::new("SMP").unwrap()),
-            ("game_id", &CString::new("MINECRAFT").unwrap()),
+            ("gametype", &CString::new("SMP").ok()?),
+            ("game_id", &CString::new("MINECRAFT").ok()?),
             ("version", &self.version),
             ("plugins", &self.plugins),
             ("map", &self.map),
             (
                 "numplayers",
-                &CString::new(self.num_players.to_string()).unwrap(),
+                &CString::new(self.num_players.to_string()).ok()?,
             ),
             (
                 "maxplayers",
-                &CString::new(self.max_players.to_string()).unwrap(),
+                &CString::new(self.max_players.to_string()).ok()?,
             ),
-            (
-                "hostport",
-                &CString::new(self.host_port.to_string()).unwrap(),
-            ),
+            ("hostport", &CString::new(self.host_port.to_string()).ok()?),
             ("hostip", &self.host_ip),
         ];
 
         for (key, value) in kv_pairs {
-            buf.extend_from_slice(CString::new(*key).unwrap().as_bytes_with_nul());
+            buf.extend_from_slice(CString::new(*key).ok()?.as_bytes_with_nul());
             buf.extend_from_slice(value.as_bytes_with_nul());
         }
 
@@ -264,7 +260,7 @@ impl CFullStatus {
         }
         buf.push(0x00);
 
-        buf
+        Some(buf)
     }
 }
 
@@ -273,16 +269,17 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn handshake_request() {
+    async fn handshake_request() -> Result<(), Box<dyn std::error::Error>> {
         let bytes = vec![0xFE, 0xFD, 0x09, 0x00, 0x00, 0x00, 0x01];
-        let mut raw = RawQueryPacket::decode(bytes).await.unwrap();
+        let mut raw = RawQueryPacket::decode(bytes).await?;
         assert_eq!(raw.packet_type, PacketType::Handshake);
-        let pkt = SHandshake::decode(&mut raw).await.unwrap();
+        let pkt = SHandshake::decode(&mut raw).await?;
         assert_eq!(pkt, SHandshake { session_id: 1 });
+        Ok(())
     }
 
     #[tokio::test]
-    async fn handshake_response() {
+    async fn handshake_response() -> Result<(), Box<dyn std::error::Error>> {
         let expected = vec![
             0x09, 0x00, 0x00, 0x00, 0x01, 0x39, 0x35, 0x31, 0x33, 0x33, 0x30, 0x37, 0x00,
         ];
@@ -290,16 +287,17 @@ mod tests {
             session_id: 1,
             challenge_token: 9513307,
         };
-        assert_eq!(pkt.encode(), expected);
+        assert_eq!(pkt.encode().ok_or("Encoding failed")?, expected);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn basic_stat_request() {
+    async fn basic_stat_request() -> Result<(), Box<dyn std::error::Error>> {
         let bytes = vec![
             0xFE, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x91, 0x29, 0x5B,
         ];
-        let mut raw = RawQueryPacket::decode(bytes).await.unwrap();
-        let pkt = SStatusRequest::decode(&mut raw).await.unwrap();
+        let mut raw = RawQueryPacket::decode(bytes).await?;
+        let pkt = SStatusRequest::decode(&mut raw).await?;
         assert_eq!(
             pkt,
             SStatusRequest {
@@ -308,10 +306,11 @@ mod tests {
                 is_full_request: false
             }
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn basic_stat_response() {
+    async fn basic_stat_response() -> Result<(), Box<dyn std::error::Error>> {
         let expected = vec![
             0x00, 0x00, 0x00, 0x00, 0x01, 0x41, 0x20, 0x4D, 0x69, 0x6E, 0x65, 0x63, 0x72, 0x61,
             0x66, 0x74, 0x20, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x00, 0x53, 0x4D, 0x50, 0x00,
@@ -320,24 +319,25 @@ mod tests {
         ];
         let pkt = CBasicStatus {
             session_id: 1,
-            motd: CString::new("A Minecraft Server").unwrap(),
-            map: CString::new("world").unwrap(),
+            motd: CString::new("A Minecraft Server")?,
+            map: CString::new("world")?,
             num_players: 2,
             max_players: 20,
             host_port: 25565,
-            host_ip: CString::new("127.0.0.1").unwrap(),
+            host_ip: CString::new("127.0.0.1")?,
         };
-        assert_eq!(pkt.encode(), expected);
+        assert_eq!(pkt.encode().ok_or("Encoding failed")?, expected);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn full_stat_request() {
+    async fn full_stat_request() -> Result<(), Box<dyn std::error::Error>> {
         let bytes = vec![
             0xFE, 0xFD, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x91, 0x29, 0x5B, 0x00, 0x00, 0x00,
             0x00,
         ];
-        let mut raw = RawQueryPacket::decode(bytes).await.unwrap();
-        let pkt = SStatusRequest::decode(&mut raw).await.unwrap();
+        let mut raw = RawQueryPacket::decode(bytes).await?;
+        let pkt = SStatusRequest::decode(&mut raw).await?;
         assert_eq!(
             pkt,
             SStatusRequest {
@@ -346,10 +346,11 @@ mod tests {
                 is_full_request: true
             }
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn full_stat_response() {
+    async fn full_stat_response() -> Result<(), Box<dyn std::error::Error>> {
         let expected = vec![
             0x00, 0x00, 0x00, 0x00, 0x01, 0x73, 0x70, 0x6C, 0x69, 0x74, 0x6E, 0x75, 0x6D, 0x00,
             0x80, 0x00, 0x68, 0x6F, 0x73, 0x74, 0x6E, 0x61, 0x6D, 0x65, 0x00, 0x41, 0x20, 0x4D,
@@ -370,20 +371,18 @@ mod tests {
         ];
         let pkt = CFullStatus {
             session_id: 1,
-            hostname: CString::new("A Minecraft Server").unwrap(),
-            version: CString::new("Beta 1.9 Prerelease 4").unwrap(),
-            plugins: CString::new("").unwrap(),
-            map: CString::new("world").unwrap(),
+            hostname: CString::new("A Minecraft Server")?,
+            version: CString::new("Beta 1.9 Prerelease 4")?,
+            plugins: CString::new("")?,
+            map: CString::new("world")?,
             num_players: 2,
             max_players: 20,
             host_port: 25565,
-            host_ip: CString::new("127.0.0.1").unwrap(),
-            players: vec![
-                CString::new("barneygale").unwrap(),
-                CString::new("Vivalahelvig").unwrap(),
-            ],
+            host_ip: CString::new("127.0.0.1")?,
+            players: vec![CString::new("barneygale")?, CString::new("Vivalahelvig")?],
         };
-        assert_eq!(pkt.encode(), expected);
+        assert_eq!(pkt.encode().ok_or("Encoding failed")?, expected);
+        Ok(())
     }
 
     #[tokio::test]

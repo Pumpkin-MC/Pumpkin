@@ -5,6 +5,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::f64::consts::TAU;
 use std::mem;
 use std::num::NonZeroU8;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
@@ -17,12 +18,15 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::bedrock::client::level_chunk::CLevelChunk;
+use pumpkin_protocol::bedrock::client::play_status::CPlayStatus;
 use pumpkin_protocol::bedrock::client::set_time::CSetTime;
 use pumpkin_protocol::bedrock::client::update_abilities::{
     Ability, AbilityLayer, CUpdateAbilities,
 };
+use pumpkin_protocol::bedrock::frame_set::FrameSet;
 use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_util::translation::Locale;
 use pumpkin_world::chunk::{ChunkData, ChunkEntityData};
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
@@ -58,8 +62,8 @@ use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
-    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CKeepAlive,
-    COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
+    CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CItemCooldown,
+    CKeepAlive, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
     CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
     CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
     CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
@@ -113,7 +117,7 @@ const MAX_PREVIOUS_MESSAGES: u8 = 20; // Vanilla: 20
 
 pub const DATA_VERSION: i32 = 4790; // 26.1.2
 
-struct HeapNode(i32, Vector2<i32>, SyncChunk);
+struct HeapNode(i32, Vector2<i32>, Weak<ChunkData>);
 
 impl Eq for HeapNode {}
 
@@ -142,7 +146,7 @@ pub struct ChunkManager {
     chunk_listener: Receiver<(Vector2<i32>, SyncChunk)>,
     chunk_sent: HashMap<Vector2<i32>, Weak<ChunkData>>,
     chunk_queue: BinaryHeap<HeapNode>,
-    entity_chunk_queue: VecDeque<(Vector2<i32>, SyncEntityChunk)>,
+    entity_chunk_queue: VecDeque<(Vector2<i32>, Weak<ChunkEntityData>)>,
     batches_sent_since_ack: u8,
     last_chunk_batch_sent_at: Instant,
     /// The current world for chunk loading. Updated on dimension change.
@@ -204,7 +208,8 @@ impl ChunkManager {
                 continue;
             }
             if self.should_enqueue_chunk(pos, &chunk) {
-                self.chunk_queue.push(HeapNode(dst, pos, chunk));
+                self.chunk_queue
+                    .push(HeapNode(dst, pos, Arc::downgrade(&chunk)));
             }
         }
     }
@@ -250,6 +255,11 @@ impl ChunkManager {
                 && !unloading_chunks.contains(pos)
         });
 
+        self.entity_chunk_queue.retain(|(pos, _)| {
+            (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_distance_i32
+                && !unloading_chunks.contains(pos)
+        });
+
         let mut tasks: Vec<_> = self
             .chunk_queue
             .drain()
@@ -267,7 +277,7 @@ impl ChunkManager {
                 let chunk = chunk.value().clone();
                 if self.should_enqueue_chunk(*pos, &chunk) {
                     let dst = (pos.x - center.x).abs().max((pos.y - center.y).abs());
-                    tasks.push(HeapNode(dst, *pos, chunk));
+                    tasks.push(HeapNode(dst, *pos, Arc::downgrade(&chunk)));
                 }
             }
         }
@@ -315,17 +325,19 @@ impl ChunkManager {
         self.chunks_per_tick = chunks_per_tick.ceil() as usize;
     }
 
-    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: SyncChunk) {
-        if self.should_enqueue_chunk(position, &chunk) {
+    pub fn push_chunk(&mut self, position: Vector2<i32>, chunk: &SyncChunk) {
+        if self.should_enqueue_chunk(position, chunk) {
             let dst = (position.x - self.center.x)
                 .abs()
                 .max((position.y - self.center.y).abs());
-            self.chunk_queue.push(HeapNode(dst, position, chunk));
+            self.chunk_queue
+                .push(HeapNode(dst, position, Arc::downgrade(chunk)));
         }
     }
 
-    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: SyncEntityChunk) {
-        self.entity_chunk_queue.push_back((position, chunk));
+    pub fn push_entity(&mut self, position: Vector2<i32>, chunk: &SyncEntityChunk) {
+        self.entity_chunk_queue
+            .push_back((position, Arc::downgrade(chunk)));
     }
 
     #[must_use]
@@ -338,8 +350,12 @@ impl ChunkManager {
     pub fn next_chunk(&mut self) -> Box<[SyncChunk]> {
         let take = self.chunk_queue.len().min(self.chunks_per_tick.max(1));
         let mut chunks = Vec::with_capacity(take);
-        for _ in 0..take {
-            chunks.push(self.chunk_queue.pop().unwrap().2);
+        while chunks.len() < take
+            && let Some(node) = self.chunk_queue.pop()
+        {
+            if let Some(chunk) = node.2.upgrade() {
+                chunks.push(chunk);
+            }
         }
         self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
         self.last_chunk_batch_sent_at = Instant::now();
@@ -353,22 +369,31 @@ impl ChunkManager {
             .len()
             .min(self.chunks_per_tick.max(1));
 
-        let chunks: Box<[Arc<ChunkEntityData>]> = self
-            .entity_chunk_queue
-            .drain(..chunk_size)
-            .map(|(_, chunk)| chunk)
-            .collect();
+        let mut chunks = Vec::with_capacity(chunk_size);
+        while chunks.len() < chunk_size
+            && let Some((_, weak_chunk)) = self.entity_chunk_queue.pop_front()
+        {
+            if let Some(chunk) = weak_chunk.upgrade() {
+                chunks.push(chunk);
+            }
+        }
 
         self.batches_sent_since_ack = self.batches_sent_since_ack.saturating_add(1);
         self.last_chunk_batch_sent_at = Instant::now();
 
-        chunks
+        chunks.into_boxed_slice()
     }
 }
 
 /// Represents a Minecraft player entity.
 ///
 /// A `Player` is a special type of entity that represents a human player connected to the server.
+#[derive(Clone, Copy, Debug)]
+pub struct ItemCooldown {
+    pub start_tick: i32,
+    pub duration: i32,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -441,6 +466,7 @@ pub struct Player {
     pub permission_lvl: AtomicCell<PermissionLvl>,
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
+    pub bedrock_spawned: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
     /// Item usage tracking for bows, crossbows, etc.
@@ -453,6 +479,7 @@ pub struct Player {
     pub experience_progress: AtomicCell<f32>,
     /// The player's total experience points.
     pub experience_points: AtomicI32,
+    pub item_cooldowns: Mutex<HashMap<String, ItemCooldown>>,
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_manager: Mutex<ChunkManager>,
     pub has_played_before: AtomicBool,
@@ -466,6 +493,7 @@ pub struct Player {
     pub tab_list_header: Mutex<TextComponent>,
     pub tab_list_footer: Mutex<TextComponent>,
     pub display_name: Mutex<Option<TextComponent>>,
+    pub tab_list_name: Mutex<Option<TextComponent>>,
     pub tab_list_order: AtomicI32,
     pub tab_list_latency: AtomicI32,
     pub tab_list_listed: AtomicBool,
@@ -562,6 +590,7 @@ impl Player {
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(false),
+            bedrock_spawned: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(60),
             // Item usage tracking
             using_item: AtomicBool::new(false),
@@ -584,6 +613,7 @@ impl Player {
             experience_level: AtomicI32::new(0),
             experience_progress: AtomicCell::new(0.0),
             experience_points: AtomicI32::new(0),
+            item_cooldowns: Mutex::new(HashMap::new()),
             // Default to sending 16 chunks per tick.
             chunk_manager: Mutex::new(ChunkManager::new(
                 16,
@@ -605,6 +635,7 @@ impl Player {
             tab_list_header: Mutex::new(TextComponent::text("")),
             tab_list_footer: Mutex::new(TextComponent::text("")),
             display_name: Mutex::new(None),
+            tab_list_name: Mutex::new(None),
             tab_list_order: AtomicI32::new(0),
             tab_list_latency: AtomicI32::new(0),
             tab_list_listed: AtomicBool::new(false),
@@ -619,6 +650,44 @@ impl Player {
             .await;
     }
 
+    pub async fn start_cooldown(&self, group: String, duration: i32) {
+        let mut cooldowns = self.item_cooldowns.lock().await;
+        cooldowns.insert(
+            group.clone(),
+            ItemCooldown {
+                start_tick: self.tick_counter.load(Ordering::Relaxed),
+                duration,
+            },
+        );
+        self.client
+            .send_packet_now(&CItemCooldown::new(group, VarInt(duration)))
+            .await;
+    }
+
+    pub async fn get_cooldown(&self, group: &str) -> f32 {
+        let cooldowns = self.item_cooldowns.lock().await;
+        if let Some(cooldown) = cooldowns.get(group) {
+            let current_tick = self.tick_counter.load(Ordering::Relaxed);
+            let elapsed = current_tick - cooldown.start_tick;
+            if elapsed < cooldown.duration {
+                return 1.0 - (elapsed as f32 / cooldown.duration as f32);
+            }
+        }
+        0.0
+    }
+
+    pub async fn is_on_cooldown(&self, group: &str) -> bool {
+        let mut cooldowns = self.item_cooldowns.lock().await;
+        if let Some(cooldown) = cooldowns.get(group) {
+            let current_tick = self.tick_counter.load(Ordering::Relaxed);
+            if current_tick - cooldown.start_tick < cooldown.duration {
+                return true;
+            }
+            cooldowns.remove(group);
+        }
+        false
+    }
+
     pub async fn set_display_name(&self, display_name: Option<TextComponent>) {
         *self.display_name.lock().await = display_name.clone();
         // Update the tab list for everyone
@@ -629,6 +698,24 @@ impl Player {
                 &[pumpkin_protocol::java::client::play::Player {
                     uuid: self.gameprofile.id,
                     actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
+                }],
+            ))
+            .await;
+    }
+
+    pub async fn get_tab_list_name(&self) -> Option<TextComponent> {
+        self.tab_list_name.lock().await.clone()
+    }
+
+    pub async fn set_tab_list_name(&self, name: Option<TextComponent>) {
+        *self.tab_list_name.lock().await = name.clone();
+        let world = self.world();
+        world
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: self.gameprofile.id,
+                    actions: &[PlayerAction::UpdateDisplayName(name.as_ref())],
                 }],
             ))
             .await;
@@ -720,7 +807,10 @@ impl Player {
         // Decrement the value of watched chunks
         let chunks_to_clean = level.mark_chunks_as_not_watched(&radial_chunks).await;
         // Remove chunks with no watchers from the cache
-        level.clean_entity_chunks(&chunks_to_clean);
+        if !chunks_to_clean.is_empty() {
+            level.clean_entity_chunks(&chunks_to_clean);
+            world.remove_entities_in_chunks(&chunks_to_clean).await;
+        }
         // Remove left over entries from all possiblily loaded chunks
         level.clean_memory();
 
@@ -1463,17 +1553,54 @@ impl Player {
     }
 
     pub async fn show_title(&self, text: &TextComponent, mode: &TitleMode) {
-        match mode {
-            TitleMode::Title => self.client.enqueue_packet(&CTitleText::new(text)).await,
-            TitleMode::SubTitle => self.client.enqueue_packet(&CSubtitle::new(text)).await,
-            TitleMode::ActionBar => self.client.enqueue_packet(&CActionBar::new(text)).await,
+        match &self.client {
+            ClientPlatform::Java(client) => match mode {
+                TitleMode::Title => client.enqueue_packet(&CTitleText::new(text)).await,
+                TitleMode::SubTitle => client.enqueue_packet(&CSubtitle::new(text)).await,
+                TitleMode::ActionBar => client.enqueue_packet(&CActionBar::new(text)).await,
+            },
+            ClientPlatform::Bedrock(client) => {
+                let action_type = match mode {
+                    TitleMode::Title => 2,
+                    TitleMode::SubTitle => 3,
+                    TitleMode::ActionBar => 4,
+                };
+                client
+                    .send_game_packet(
+                        &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
+                            action_type,
+                            text.clone().get_text(),
+                            0,
+                            0,
+                            0,
+                        ),
+                    )
+                    .await;
+            }
         }
     }
 
     pub async fn send_title_animation(&self, fade_in: i32, stay: i32, fade_out: i32) {
-        self.client
-            .enqueue_packet(&CTitleAnimation::new(fade_in, stay, fade_out))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CTitleAnimation::new(fade_in, stay, fade_out))
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(
+                        &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
+                            5,
+                            String::new(),
+                            fade_in,
+                            stay,
+                            fade_out,
+                        ),
+                    )
+                    .await;
+            }
+        }
     }
 
     pub async fn spawn_particle(
@@ -1623,6 +1750,16 @@ impl Player {
                             })
                             .await;
                     }
+
+                    if !self.bedrock_spawned.load(Ordering::Relaxed) && chunk_count > 4 {
+                        let mut frame_set = FrameSet::default();
+
+                        bedrock_client
+                            .write_game_packet_to_set(&CPlayStatus::PlayerSpawn, &mut frame_set)
+                            .await;
+                        bedrock_client.send_frame_set(frame_set, 0x84).await;
+                        self.bedrock_spawned.store(true, Ordering::Relaxed);
+                    }
                 }
             }
         }
@@ -1685,7 +1822,11 @@ impl Player {
             if idle_duration >= Duration::from_secs(idle_timeout_minutes as u64 * 60) {
                 self.kick(
                     DisconnectReason::KickedForIdle,
-                    TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IDLING, []),
+                    TextComponent::translate_cross(
+                        translation::java::MULTIPLAYER_DISCONNECT_IDLING,
+                        translation::java::MULTIPLAYER_DISCONNECT_IDLING,
+                        [],
+                    ),
                 )
                 .await;
                 return;
@@ -1701,7 +1842,11 @@ impl Player {
             if self.wait_for_keep_alive.load(Ordering::Relaxed) {
                 self.kick(
                     DisconnectReason::Timeout,
-                    TextComponent::translate(translation::DISCONNECT_TIMEOUT, []),
+                    TextComponent::translate_cross(
+                        translation::java::DISCONNECT_TIMEOUT,
+                        translation::bedrock::DISCONNECT_TIMEOUT,
+                        [],
+                    ),
                 )
                 .await;
                 return;
@@ -1946,7 +2091,12 @@ impl Player {
         self.permission_lvl.store(lvl);
         self.send_permission_lvl_update().await;
 
-        client_suggestions::send_c_commands_packet(self, server, command_dispatcher).await;
+        if let ClientPlatform::Bedrock(_) = &self.client {
+            client_suggestions::send_bedrock_commands_packet(self, server, command_dispatcher)
+                .await;
+        } else {
+            client_suggestions::send_c_commands_packet(self, server, command_dispatcher).await;
+        }
     }
 
     /// Sends the world time to only this player.
@@ -2170,13 +2320,26 @@ impl Player {
             return;
         }
 
-        self.client
-            .enqueue_packet(&CSetHealth::new(
-                self.living_entity.health.load(),
-                self.hunger_manager.level.load().into(),
-                self.hunger_manager.saturation.load(),
-            ))
-            .await;
+        match &self.client {
+            ClientPlatform::Java(client) => {
+                client
+                    .enqueue_packet(&CSetHealth::new(
+                        self.living_entity.health.load(),
+                        self.hunger_manager.level.load().into(),
+                        self.hunger_manager.saturation.load(),
+                    ))
+                    .await;
+            }
+            ClientPlatform::Bedrock(client) => {
+                client
+                    .send_game_packet(
+                        &pumpkin_protocol::bedrock::client::set_health::CSetHealth::new(
+                            self.living_entity.health.load() as i32,
+                        ),
+                    )
+                    .await;
+            }
+        }
     }
 
     pub async fn tick_health(&self) {
@@ -2274,7 +2437,11 @@ impl Player {
         drop(banned_players);
 
         let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, [])
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_BANNED,
+                translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
+                [],
+            )
         });
 
         self.kick(DisconnectReason::Kicked, kick_reason).await;
@@ -2305,7 +2472,11 @@ impl Player {
         drop(banned_ips);
 
         let kick_reason = reason.unwrap_or_else(|| {
-            TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_IP_BANNED, [])
+            TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
+                [],
+            )
         });
 
         let affected = server.get_players_by_ip(target_ip).await;
@@ -2417,11 +2588,25 @@ impl Player {
                     ))
                     .await;
 
-                self.client
-                    .enqueue_packet(&CGameEvent::new(
-                        GameEvent::ChangeGameMode,
-                        gamemode as i32 as f32,
-                    )).await;
+                match &self.client {
+                    crate::net::ClientPlatform::Java(client) => {
+                        client
+                            .enqueue_packet(&CGameEvent::new(
+                                GameEvent::ChangeGameMode,
+                                gamemode as i32 as f32,
+                            ))
+                            .await;
+                    }
+                    crate::net::ClientPlatform::Bedrock(client) => {
+                        client
+                            .send_game_packet(
+                                &pumpkin_protocol::bedrock::client::set_player_gamemode::CSetPlayerGamemode {
+                                    gamemode,
+                                },
+                            )
+                            .await;
+                    }
+                }
 
                 true
             }
@@ -2617,7 +2802,9 @@ impl Player {
             }
             ClientPlatform::Bedrock(client) => {
                 client
-                    .send_game_packet(&SText::system_message(text.clone().get_text()))
+                    .send_game_packet(&SText::system_message(text.clone().0.to_bedrock_legacy(
+                        Locale::from_str(&self.config.load().locale).unwrap_or(Locale::EnUs),
+                    )))
                     .await;
             }
         }
@@ -2808,10 +2995,14 @@ impl Player {
 
         let current_level = self.experience_level.load(Ordering::Relaxed);
         let current_points = self.experience_points.load(Ordering::Relaxed);
-        let total_exp = experience::points_to_level(current_level) + current_points;
-        let new_total_exp = total_exp + added_points;
-        let (new_level, new_points) = experience::total_to_level_and_points(new_total_exp);
+
+        let total_exp = experience::points_to_level(current_level) as i64 + current_points as i64;
+        let new_total_exp = total_exp + added_points as i64;
+        let safe_new_total = new_total_exp.clamp(0, i32::MAX as i64) as i32;
+
+        let (new_level, new_points) = experience::total_to_level_and_points(safe_new_total);
         let progress = experience::progress_in_level(new_points, new_level);
+
         self.set_experience(new_level, progress, new_points).await;
     }
 
@@ -3791,6 +3982,12 @@ impl EntityBase for Player {
 
     fn as_nbt_storage(&self) -> &dyn NBTStorage {
         self
+    }
+
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        // vanilla: min(level * 7, 100)
+        let level = self.experience_level.load(Ordering::Relaxed);
+        (level * 7).min(100) as u32
     }
 
     fn tick_in_void<'a>(&'a self, dyn_self: &'a dyn EntityBase) -> EntityBaseFuture<'a, ()> {

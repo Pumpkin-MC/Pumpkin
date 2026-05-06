@@ -259,7 +259,11 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_OBSTRUCTED, []),
+                        &TextComponent::translate_cross(
+                            translation::java::BLOCK_MINECRAFT_BED_OBSTRUCTED,
+                            translation::java::BLOCK_MINECRAFT_BED_OBSTRUCTED,
+                            [],
+                        ),
                         true,
                     )
                     .await;
@@ -272,7 +276,11 @@ impl BlockBehaviour for BedBlock {
 
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_OCCUPIED, []),
+                        &TextComponent::translate_cross(
+                            translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
+                            translation::bedrock::TILE_BED_OCCUPIED,
+                            [],
+                        ),
                         true,
                     )
                     .await;
@@ -291,8 +299,9 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate(
-                            translation::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
+                        &TextComponent::translate_cross(
+                            translation::java::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
+                            translation::java::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
                             [],
                         ),
                         true,
@@ -313,8 +322,9 @@ impl BlockBehaviour for BedBlock {
                 .await
             {
                 args.player
-                    .send_system_message(&TextComponent::translate(
-                        translation::BLOCK_MINECRAFT_SET_SPAWN,
+                    .send_system_message(&TextComponent::translate_cross(
+                        translation::java::BLOCK_MINECRAFT_SET_SPAWN,
+                        translation::bedrock::TILE_BED_RESPAWNSET,
                         [],
                     ))
                     .await;
@@ -324,7 +334,11 @@ impl BlockBehaviour for BedBlock {
             if !can_sleep(args.world).await {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_NO_SLEEP, []),
+                        &TextComponent::translate_cross(
+                            translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
+                            translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
+                            [],
+                        ),
                         true,
                     )
                     .await;
@@ -343,8 +357,9 @@ impl BlockBehaviour for BedBlock {
                 {
                     args.player
                         .send_system_message_raw(
-                            &TextComponent::translate(
-                                translation::BLOCK_MINECRAFT_BED_NOT_SAFE,
+                            &TextComponent::translate_cross(
+                                translation::java::BLOCK_MINECRAFT_BED_NOT_SAFE,
+                                translation::java::BLOCK_MINECRAFT_BED_NOT_SAFE,
                                 [],
                             ),
                             true,

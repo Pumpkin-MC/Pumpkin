@@ -241,7 +241,9 @@ use pumpkin_nbt::pnbt::PNbtCompound;
 impl NBTStorage for ArmorStandEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.living_entity.write_nbt(nbt).await;
             let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
+            // ...
 
             nbt.put_bool(self.is_invisible());
             nbt.put_bool(self.is_small());
@@ -274,7 +276,9 @@ impl NBTStorage for ArmorStandEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.living_entity.read_nbt_non_mut(nbt).await;
             let mut flags = 0u8;
+            // ...
 
             let invisible = nbt.get_bool().unwrap_or(false);
             if invisible {

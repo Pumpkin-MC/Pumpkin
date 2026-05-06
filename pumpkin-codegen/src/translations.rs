@@ -1,33 +1,60 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use std::{collections::BTreeMap, fs};
 
-/// Generates the `TokenStream` for translation key constants sourced from `en_us.json`.
 pub fn build() -> TokenStream {
-    let en_us: BTreeMap<String, String> = serde_json::from_str(
-        &fs::read_to_string("../assets/en_us.json").expect("en_us is missing"),
+    let java_json: BTreeMap<String, String> = serde_json::from_str(
+        &fs::read_to_string("../assets/en_us_java.json").expect("en_us_java is missing"),
     )
     .unwrap();
 
-    let mut constants = TokenStream::new();
+    let mut java_constants = TokenStream::new();
+    for (name, value) in &java_json {
+        let ident = to_valid_ident(name);
+        java_constants.extend(quote! {
+            #[doc = #value]
+            pub const #ident: &str = #name;
+        });
+    }
 
-    for (name, value) in &en_us {
-        let clean_name = name.to_uppercase().replace(['.', '-'], "_");
-        let ident = format_ident!("{}", clean_name);
+    let bedrock_content = fs::read_to_string("../assets/en_us_bedrock.lang").expect("en_us_bedrock is missing");
+    let mut bedrock_constants = TokenStream::new();
 
-        if value.is_empty() {
-            constants.extend(quote! {
-                pub const #ident: &str = #name;
-            });
-        } else {
-            constants.extend(quote! {
+    for line in bedrock_content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with('/') {
+            continue;
+        }
+
+        if let Some((name, value)) = line.split_once('=') {
+            let name = name.trim();
+            let value = value.trim();
+            let ident = to_valid_ident(name);
+
+            bedrock_constants.extend(quote! {
                 #[doc = #value]
                 pub const #ident: &str = #name;
             });
         }
     }
 
+    // --- Final Assembly ---
     quote! {
-        #constants
+        pub mod java {
+            #java_constants
+        }
+        pub mod bedrock {
+            #bedrock_constants
+        }
     }
+}
+
+fn to_valid_ident(name: &str) -> Ident {
+    let mut clean = name.to_uppercase().replace(['.', ':', '-'], "_");
+    
+    if clean.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+        clean.insert(0, '_');
+    }
+    
+    format_ident!("{}", clean)
 }

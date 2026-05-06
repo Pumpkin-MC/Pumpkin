@@ -85,6 +85,11 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn is_air(&self, local_pos: &Vector3<i32>) -> bool;
     fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome;
+    fn get_blending_data(
+        &self,
+        chunk_x: i32,
+        chunk_z: i32,
+    ) -> Option<&crate::generation::blender::blending_data::BlendingData>;
 }
 
 const AIR_BLOCK: Block = Block::AIR;
@@ -169,6 +174,7 @@ pub struct ProtoChunk {
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
     pub carving_mask: crate::generation::carver::mask::CarvingMask,
+    pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     /// Block entities pending creation when the chunk is finalized.
     /// These are created from structure templates during world generation.
     pub pending_block_entities: Vec<NbtCompound>,
@@ -251,6 +257,7 @@ impl ProtoChunk {
                 height as i32,
                 dimension.min_y,
             ),
+            blending_data: None,
             pending_block_entities: Vec::new(),
         }
     }
@@ -262,6 +269,7 @@ impl ProtoChunk {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
         proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
+        proto_chunk.blending_data = chunk_data.blending_data.clone();
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data.heightmap.lock().unwrap();
@@ -663,7 +671,8 @@ impl ProtoChunk {
             ActiveSupplier::Nether(s) => s,
             ActiveSupplier::Overworld(s) => s,
         };
-        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
+        let blender = Blender::empty();
+        let biome_supplier = blender.get_biome_supplier(base_supplier);
         let min_y = self.bottom_y();
         let bottom_section = section_coords::block_to_section(min_y as i32);
         let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
@@ -1135,9 +1144,7 @@ impl ProtoChunk {
             }
 
             let mut candidates = set.structures.to_vec();
-            let mut random: RandomGenerator =
-                RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed));
-            let carver_seed = get_carver_seed(&mut random, seed, self.x, self.z);
+            let carver_seed = get_carver_seed(seed, self.x, self.z);
             let mut random: RandomGenerator =
                 RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
 
@@ -1219,7 +1226,8 @@ impl ProtoChunk {
             ActiveSupplier::Nether(s) => s,
             ActiveSupplier::Overworld(s) => s,
         };
-        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
+        let blender = Blender::empty();
+        let biome_supplier = blender.get_biome_supplier(base_supplier);
         // Use an empty offset sampler since we are querying arbitrary world coordinates
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
         let mut multi_noise_sampler =

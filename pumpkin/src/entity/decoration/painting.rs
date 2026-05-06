@@ -22,12 +22,14 @@ use pumpkin_nbt::pnbt::PNbtCompound;
 impl NBTStorage for PaintingEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.entity.write_nbt(nbt).await;
             nbt.put_byte(self.entity.data.load(Ordering::Relaxed) as i8);
         })
     }
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
+            self.entity.read_nbt_non_mut(nbt).await;
             let facing = nbt.get_byte().unwrap_or(3);
             self.entity.data.store(facing as i32, Ordering::Relaxed);
         })

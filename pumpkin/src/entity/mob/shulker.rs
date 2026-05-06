@@ -322,7 +322,7 @@ impl ShulkerEntity {
 impl NBTStorage for ShulkerEntity {
     fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             nbt.put_byte(self.attach_face.load(Ordering::Relaxed) as i8);
             nbt.put_byte(self.peek_amount.load(Ordering::Relaxed) as i8);
             nbt.put_byte(self.color.load(Ordering::Relaxed) as i8);
@@ -331,11 +331,7 @@ impl NBTStorage for ShulkerEntity {
 
     fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
             if let Ok(face) = nbt.get_byte() {
                 self.attach_face.store(face as u8, Ordering::Relaxed);
             }

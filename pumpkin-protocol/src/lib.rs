@@ -268,8 +268,10 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for StreamEncryptor<W> {
             } else {
                 let out_block: &mut Array<u8, U1> = (&mut out[..])
                     .try_into()
-                    .expect("Output slice size does not match block size");
-                cipher.encrypt_b2b(block, out_block).unwrap();
+                    .map_err(|_| Error::other("Output slice size does not match block size"))?;
+                cipher
+                    .encrypt_b2b(block, out_block)
+                    .map_err(|_| Error::other("Encryption failed"))?;
             }
 
             let write = Pin::new(&mut ref_self.write);
@@ -361,6 +363,8 @@ pub enum PacketDecodeError {
     NotCompressed,
     #[error("the connection has closed")]
     ConnectionClosed,
+    #[error("{0}")]
+    Message(String),
 }
 
 impl From<ReadingError> for PacketDecodeError {
@@ -537,20 +541,20 @@ mod test {
     };
 
     #[test]
-    fn serde_id_or_id() {
+    fn serde_id_or_id() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
 
         let id = IdOr::<SoundEvent>::Id(0);
-        id.serialize(&mut Serializer::new(&mut buf)).unwrap();
+        id.serialize(&mut Serializer::new(&mut buf))?;
 
-        let deser_id =
-            IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice())).unwrap();
+        let deser_id = IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice()))?;
 
         assert!(id == deser_id);
+        Ok(())
     }
 
     #[test]
-    fn serde_id_or_value() {
+    fn serde_id_or_value() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = Vec::new();
         let event = SoundEvent {
             sound_name: "test".to_string(),
@@ -558,11 +562,11 @@ mod test {
         };
 
         let id = IdOr::<SoundEvent>::Value(event);
-        id.serialize(&mut Serializer::new(&mut buf)).unwrap();
+        id.serialize(&mut Serializer::new(&mut buf))?;
 
-        let deser_id =
-            IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice())).unwrap();
+        let deser_id = IdOr::<SoundEvent>::deserialize(&mut Deserializer::new(buf.as_slice()))?;
 
         assert!(id == deser_id);
+        Ok(())
     }
 }

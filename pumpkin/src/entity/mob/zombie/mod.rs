@@ -6,10 +6,11 @@ use crate::entity::ai::goal::swim::SwimGoal;
 use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::zombie_attack::ZombieAttackGoal;
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, NBTStorage, NbtFuture,
     ai::goal::{active_target::ActiveTargetGoal, look_at_entity::LookAtEntityGoal},
 };
 use pumpkin_data::entity::EntityType;
+use pumpkin_nbt::pnbt::PNbtCompound;
 use std::sync::{Arc, Weak};
 
 pub mod drowned;
@@ -69,7 +70,15 @@ impl ZombieEntityBase {
     }
 }
 
-impl NBTStorage for ZombieEntityBase {}
+impl NBTStorage for ZombieEntityBase {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        self.mob_entity.living_entity.write_nbt(nbt)
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        self.mob_entity.living_entity.read_nbt_non_mut(nbt)
+    }
+}
 
 impl Mob for ZombieEntityBase {
     fn get_mob_entity(&self) -> &MobEntity {
