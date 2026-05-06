@@ -41,7 +41,9 @@ impl ArgumentType for ResourceKeyArgument {
             Box::pin(async move {
                 let string = suggestions_builder.remaining().to_lowercase();
                 for identifier in advancements {
-                    if identifier.to_string().starts_with(&string) || identifier.path().starts_with(&string) {
+                    if identifier.to_string().starts_with(&string)
+                        || identifier.path().starts_with(&string)
+                    {
                         suggestions_builder = suggestions_builder.suggest(identifier.to_string());
                     }
                 }
