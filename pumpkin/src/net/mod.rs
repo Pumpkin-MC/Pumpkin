@@ -241,6 +241,8 @@ pub enum EncryptionError {
     FailedDecrypt,
     #[error("shared secret has the wrong length")]
     SharedWrongLength,
+    #[error("encryption is already enabled")]
+    AlreadyEncrypted,
 }
 
 fn is_valid_player_name(name: &str) -> bool {

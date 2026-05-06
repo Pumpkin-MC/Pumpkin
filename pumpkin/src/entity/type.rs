@@ -97,9 +97,11 @@ use crate::entity::projectile::arrow::ArrowEntity;
 use crate::entity::projectile::egg::EggEntity;
 use crate::entity::projectile::ender_pearl::EnderPearlEntity;
 use crate::entity::projectile::eye_of_ender::EyeOfEnder;
+use crate::entity::projectile::fireball::FireballEntity;
 use crate::entity::projectile::firework_rocket::FireworkRocketEntity;
 use crate::entity::projectile::lingering_potion::LingeringPotionEntity;
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
+use crate::entity::projectile::small_fireball::SmallFireballEntity;
 use crate::entity::projectile::snowball::SnowballEntity;
 use crate::entity::projectile::splash_potion::SplashPotionEntity;
 use crate::entity::projectile::wind_charge::WindChargeEntity;
@@ -239,6 +241,8 @@ pub async fn from_type(
         }
         id if id == EntityType::ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::SPECTRAL_ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
+        id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
+        id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),
         id if id == EntityType::WIND_CHARGE.id => {
             let thrown = ThrownItemEntity {
                 entity,

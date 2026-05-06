@@ -31,15 +31,16 @@ pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::Sound
 }
 
 #[must_use]
-pub fn proto_to_data_sound(id_or: &crate::IdOr<crate::SoundEvent>) -> IdOr<SoundEvent> {
+pub fn proto_to_data_sound(id_or: &crate::IdOr<crate::SoundEvent>) -> Option<IdOr<SoundEvent>> {
     match id_or {
         crate::IdOr::Id(id) => {
-            IdOr::Id(Sound::from_name(Sound::NAMES[*id as usize]).expect("Invalid sound id"))
+            let name = Sound::NAMES.get(*id as usize)?;
+            Some(IdOr::Id(Sound::from_name(name)?))
         }
-        crate::IdOr::Value(sound) => IdOr::Value(SoundEvent {
+        crate::IdOr::Value(sound) => Some(IdOr::Value(SoundEvent {
             sound_name: sound.sound_name.clone(),
             range: sound.range,
-        }),
+        })),
     }
 }
 
@@ -168,14 +169,12 @@ fn serialize_status_effects<T: SerializeStruct>(
     seq.serialize_field::<VarInt>("", &VarInt(effects.len() as i32))?;
 
     for effect in effects {
-        seq.serialize_field::<VarInt>(
-            "",
-            &VarInt(
-                StatusEffect::from_minecraft_name(&effect.effect_id)
-                    .unwrap()
-                    .registry_id() as i32,
-            ),
-        )?;
+        let effect_id = StatusEffect::from_minecraft_name(&effect.effect_id)
+            .ok_or_else(|| {
+                serde::ser::Error::custom(format!("Invalid status effect: {}", effect.effect_id))
+            })?
+            .registry_id();
+        seq.serialize_field::<VarInt>("", &VarInt(effect_id as i32))?;
         // Effect parameters
         seq.serialize_field::<VarInt>("", &VarInt::from(effect.amplifier))?;
         seq.serialize_field::<VarInt>("", &VarInt::from(effect.duration))?;
@@ -222,9 +221,10 @@ fn deserialize_consume_effect<'a, A: SeqAccess<'a>>(
                 .ok_or(de::Error::custom(
                     "No sound IdOr<SoundEvent> in ConsumeEffect",
                 ))?;
-            Ok(ConsumeEffect::PlaySound(proto_to_data_sound(
-                &proto_sound_event,
-            )))
+            Ok(ConsumeEffect::PlaySound(
+                proto_to_data_sound(&proto_sound_event)
+                    .ok_or(de::Error::custom("Invalid sound in ConsumeEffect"))?,
+            ))
         }
         _ => Err(de::Error::custom("Invalid effect_type in ConsumeEffect")),
     }
@@ -399,7 +399,8 @@ impl DataComponentCodec<Self> for ConsumableImpl {
             "No ConsumableImpl consume_particles bool!",
         ))?;
 
-        let sound_event = proto_to_data_sound(&proto_sound_event);
+        let sound_event = proto_to_data_sound(&proto_sound_event)
+            .ok_or(de::Error::custom("Invalid sound in ConsumableImpl"))?;
         let effects_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No array_len VarInt in ConsumableImpl"))?
@@ -461,7 +462,8 @@ impl DataComponentCodec<Self> for EquippableImpl {
                 .ok_or(de::Error::custom(
                     "No EquippableImpl equip_sound IdOr<SoundEvent>!",
                 ))?,
-        );
+        )
+        .ok_or(de::Error::custom("Invalid sound in EquippableImpl"))?;
         let asset_id =
             seq.next_element::<Option<Cow<'static, str>>>()?
                 .ok_or(de::Error::custom(
@@ -502,7 +504,10 @@ impl DataComponentCodec<Self> for EquippableImpl {
                 .ok_or(de::Error::custom(
                     "No EquippableImpl shearing_sound IdOr<SoundEvent>!",
                 ))?,
-        );
+        )
+        .ok_or(de::Error::custom(
+            "Invalid shearing sound in EquippableImpl",
+        ))?;
 
         Ok(Self {
             slot,

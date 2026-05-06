@@ -103,12 +103,16 @@ impl UDPNetworkEncoder {
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub const fn set_encryption(&mut self, _key: &[u8; 16]) {
+    pub const fn set_encryption(
+        &mut self,
+        _key: &[u8; 16],
+    ) -> Result<(), crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError> {
         // if matches!(self.writer, EncryptionWriter::Encrypt(_)) {
-        //     panic!("Cannot upgrade a stream that already has a cipher!");
+        //     return Err(crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError);
         // }
-        // let cipher = Aes128Cfb8Enc::new_from_slices(key, key).expect("invalid key");
+        // let cipher = Aes128Cfb8Enc::new_from_slices(key, key).map_err(|_| ());
         // take_mut::take(&mut self.writer, |encoder| encoder.upgrade(cipher));
+        Ok(())
     }
 
     pub fn write_game_packet(
@@ -132,20 +136,26 @@ impl UDPNetworkEncoder {
 
         inner_buffer
             .write_var_uint(&VarUInt(total_content_length))
-            .unwrap();
-        inner_buffer.write_var_uint(&header_varint).unwrap();
+            .map_err(|_| Error::other("Failed to write total content length"))?;
+        inner_buffer
+            .write_var_uint(&header_varint)
+            .map_err(|_| Error::other("Failed to write header varint"))?;
         inner_buffer.write_all(packet_payload)?;
 
         // Handle Outer Container
-        writer.write_u8(0xfe).unwrap(); // Bedrock Game Packet Header
+        writer
+            .write_u8(0xfe)
+            .map_err(|e| Error::other(e.to_string()))?; // Bedrock Game Packet Header
 
         if let Some((_threshold, level)) = self.compression {
             // Write Compression Method (0x00 for Zlib)
-            writer.write_u8(0x00).unwrap();
+            writer
+                .write_u8(0x00)
+                .map_err(|e| Error::other(e.to_string()))?;
 
             let mut encoder = DeflateEncoder::new(Vec::new(), Compression::new(level));
-            encoder.write_all(&inner_buffer).unwrap();
-            let compressed_data = encoder.finish().unwrap();
+            encoder.write_all(&inner_buffer)?;
+            let compressed_data = encoder.finish()?;
 
             writer.write_all(&compressed_data)?;
         } else {
@@ -172,7 +182,7 @@ mod tests {
     use std::io::Cursor;
 
     #[tokio::test]
-    async fn bedrock_compression_cycle() {
+    async fn bedrock_compression_cycle() -> Result<(), Box<dyn std::error::Error>> {
         let mut encoder = UDPNetworkEncoder::new();
         encoder.set_compression((256, 6));
 
@@ -180,24 +190,23 @@ mod tests {
         let payload = b"Hello Bedrock Compression!";
         let mut encoded_buf = Vec::new();
 
-        encoder
-            .write_game_packet(
-                packet_id,
-                SubClient::Main,
-                SubClient::Main,
-                payload,
-                &mut encoded_buf,
-            )
-            .unwrap();
+        encoder.write_game_packet(
+            packet_id,
+            SubClient::Main,
+            SubClient::Main,
+            payload,
+            &mut encoded_buf,
+        )?;
 
         let mut decoder = UDPNetworkDecoder::new();
         decoder.set_compression(256);
 
-        let decompressed_payload = decoder.get_packet_payload(encoded_buf).await.unwrap();
+        let decompressed_payload = decoder.get_packet_payload(encoded_buf).await?;
         let mut cursor = Cursor::new(decompressed_payload);
-        let raw_packet = decoder.get_game_packet(&mut cursor).unwrap();
+        let raw_packet = decoder.get_game_packet(&mut cursor)?;
 
         assert_eq!(raw_packet.id, packet_id as i32);
         assert_eq!(raw_packet.payload.as_ref(), payload);
+        Ok(())
     }
 }

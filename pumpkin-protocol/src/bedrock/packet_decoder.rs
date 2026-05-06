@@ -23,7 +23,7 @@ impl<R: AsyncRead + Unpin> DecryptionReader<R> {
     pub fn upgrade(self, cipher: Aes128Cfb8Dec) -> Self {
         match self {
             Self::None(stream) => Self::Decrypt(Box::new(StreamDecryptor::new(cipher, stream))),
-            Self::Decrypt(_) => panic!("Cannot upgrade a stream that already has a cipher!"),
+            Self::Decrypt(_) => self,
         }
     }
 }
@@ -61,6 +61,12 @@ impl Default for UDPNetworkDecoder {
     }
 }
 
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+#[error("Encryption already enabled")]
+pub struct EncryptionAlreadyEnabledError;
+
 impl UDPNetworkDecoder {
     #[must_use]
     pub const fn new() -> Self {
@@ -72,12 +78,16 @@ impl UDPNetworkDecoder {
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub const fn set_encryption(&mut self, _key: &[u8; 16]) {
+    pub const fn set_encryption(
+        &mut self,
+        _key: &[u8; 16],
+    ) -> Result<(), EncryptionAlreadyEnabledError> {
         // if matches!(self.reader, DecryptionReader::Decrypt(_)) {
-        //     panic!("Cannot upgrade a stream that already has a cipher!");
+        //     return Err(EncryptionAlreadyEnabledError);
         // }
-        // let cipher = Aes128Cfb8Dec::new_from_slices(key, key).expect("invalid key");
+        // let cipher = Aes128Cfb8Dec::new_from_slices(key, key).map_err(|_| ());
         // take_mut::take(&mut self.reader, |decoder| decoder.upgrade(cipher));
+        Ok(())
     }
 
     pub async fn get_packet_payload(

@@ -61,14 +61,14 @@ mod tests {
         codec::lp_vector_3d::{LpVector3d, encode_legacy_velocity_component},
     };
 
-    fn encode_packet(version: MinecraftVersion) -> Vec<u8> {
+    fn encode_packet(version: MinecraftVersion) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let packet = CEntityVelocity::new(
             VarInt(1),
             pumpkin_util::math::vector3::Vector3::new(0.5, -0.5, 0.25),
         );
         let mut out = Vec::new();
-        packet.write_packet_data(&mut out, &version).unwrap();
-        out
+        packet.write_packet_data(&mut out, &version)?;
+        Ok(out)
     }
 
     fn legacy_bytes(x: f64, y: f64, z: f64) -> Vec<u8> {
@@ -80,26 +80,28 @@ mod tests {
     }
 
     #[test]
-    fn entity_velocity_uses_legacy_format_for_1_21_8() {
+    fn entity_velocity_uses_legacy_format_for_1_21_8() -> Result<(), Box<dyn std::error::Error>> {
         // V_1_21_7 enum variant represents protocol 772 (used by 1.21.7 and 1.21.8).
-        let encoded = encode_packet(MinecraftVersion::V_1_21_7);
+        let encoded = encode_packet(MinecraftVersion::V_1_21_7)?;
         let expected_legacy_tail = legacy_bytes(0.5, -0.5, 0.25);
 
         assert_eq!(encoded, [&[1], expected_legacy_tail.as_slice()].concat());
+        Ok(())
     }
 
     #[test]
-    fn entity_velocity_uses_packed_format_for_1_21_9() {
-        let encoded = encode_packet(MinecraftVersion::V_1_21_9);
+    fn entity_velocity_uses_packed_format_for_1_21_9() -> Result<(), Box<dyn std::error::Error>> {
+        let encoded = encode_packet(MinecraftVersion::V_1_21_9)?;
         let legacy_like = legacy_bytes(0.5, -0.5, 0.25);
 
         assert_ne!(&encoded[1..], legacy_like.as_slice());
 
         // Ensure the packed bytes can still be decoded back to a velocity.
         let mut cursor = std::io::Cursor::new(&encoded[1..]);
-        let decoded = LpVector3d::read(&mut cursor).unwrap();
+        let decoded = LpVector3d::read(&mut cursor)?;
         assert!(decoded.0.x.is_finite());
         assert!(decoded.0.y.is_finite());
         assert!(decoded.0.z.is_finite());
+        Ok(())
     }
 }
