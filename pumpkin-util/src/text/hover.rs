@@ -1,7 +1,6 @@
-use proc_macro2::TokenStream;
-use quote::ToTokens;
-use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, vec};
+
+use serde::{Deserialize, Serialize};
 
 use super::{TextComponent, TextComponentBase};
 
