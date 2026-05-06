@@ -31,7 +31,7 @@ impl ArgumentType for LongArgumentType {
         )
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Long {
             min: (self.min != i64::MIN).then_some(self.min),
             max: (self.max != i64::MAX).then_some(self.max),

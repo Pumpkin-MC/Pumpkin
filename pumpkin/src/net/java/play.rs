@@ -248,10 +248,7 @@ impl JavaClient {
     ) {
         if player.permission_lvl.load() >= PermissionLvl::Two {
             player.set_gamemode(change_game_mode.game_mode).await;
-            let gamemode_string = format!(
-                "gameMode.{}",
-                change_game_mode.game_mode.to_str().to_lowercase()
-            );
+            let gamemode_string = format!("gameMode.{}", change_game_mode.game_mode.name());
             player
                 .send_system_message(&TextComponent::translate_cross(
                     translation::java::COMMANDS_GAMEMODE_SUCCESS_SELF,

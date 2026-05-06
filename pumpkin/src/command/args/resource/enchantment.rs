@@ -1,6 +1,3 @@
-use pumpkin_data::Enchantment;
-use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
-
 use crate::command::{
     CommandSender,
     args::{
@@ -11,13 +8,16 @@ use crate::command::{
     tree::RawArgs,
 };
 use crate::server::Server;
+use pumpkin_data::Enchantment;
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
+use pumpkin_util::identifier::Identifier;
 
 pub struct EnchantmentArgumentConsumer;
 
 impl GetClientSideArgParser for EnchantmentArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::Resource {
-            identifier: "enchantment",
+            identifier: Identifier::vanilla_static("enchantment"),
         }
     }
 

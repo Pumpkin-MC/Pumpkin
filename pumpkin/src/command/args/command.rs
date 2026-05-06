@@ -17,7 +17,7 @@ use super::{Arg, ArgumentConsumer, DefaultNameArgConsumer, FindArg, GetClientSid
 pub struct CommandTreeArgumentConsumer;
 
 impl GetClientSideArgParser for CommandTreeArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::String(StringProtoArgBehavior::SingleWord)
     }
 

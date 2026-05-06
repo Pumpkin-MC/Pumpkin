@@ -6,6 +6,7 @@ use pumpkin_util::{
 };
 use tokio::sync::RwLock;
 
+mod advancement;
 mod ban;
 mod banip;
 mod banlist;
@@ -159,6 +160,7 @@ pub async fn default_dispatcher(
     setidletimeout::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
 
+    advancement::register(&mut dispatcher, registry);
     dispatcher
 }
 

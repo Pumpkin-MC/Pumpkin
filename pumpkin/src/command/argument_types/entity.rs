@@ -1,13 +1,18 @@
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::entity_selector::EntitySelector;
-use crate::command::argument_types::entity_selector::parser::EntitySelectorParser;
+use crate::command::argument_types::entity_selector::parser::{
+    EntitySelectorParser, EntitySelectorParserSuggestions,
+};
 use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use pumpkin_data::translation;
+use std::pin::Pin;
 use std::sync::Arc;
 
 /// A [`CommandErrorType`] to tell that no entities could be found.
@@ -82,7 +87,20 @@ impl ArgumentType for EntityArgumentType {
         self.parse_with_allow_selectors(reader, true)
     }
 
-    fn client_side_parser(&'_ self) -> JavaClientArgumentType<'_> {
+    fn parse_with_source<'a>(
+        &'a self,
+        reader: &'a mut StringReader,
+        source: &'a CommandSource,
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Item, CommandSyntaxError>> + Send + 'a>> {
+        Box::pin(async move {
+            self.parse_with_allow_selectors(
+                reader,
+                source.has_permission(ENTITY_SELECTOR_PERMISSION).await,
+            )
+        })
+    }
+
+    fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Entity {
             flags: (self.is_single() as u8 * JavaClientArgumentType::ENTITY_FLAG_ONLY_SINGLE)
                 | (self.is_players_only() as u8 * JavaClientArgumentType::ENTITY_FLAG_PLAYERS_ONLY),
@@ -99,6 +117,14 @@ impl ArgumentType for EntityArgumentType {
             "5e5677dc-bb96-4669-a4ab-60468b574e8e"
         )
     }
+
+    fn list_suggestions<'a>(
+        &'a self,
+        context: &'a CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        EntitySelectorParserSuggestions::list_suggestions(context, builder)
+    }
 }
 
 impl EntityArgumentType {
@@ -109,7 +135,7 @@ impl EntityArgumentType {
     ) -> Result<<Self as ArgumentType>::Item, CommandSyntaxError> {
         let selector = {
             let parser = EntitySelectorParser::new(reader, allow_selectors);
-            parser.parse()?
+            parser.parse_and_consume()?
         };
         if selector.max_selected > 1 && self.is_single() {
             reader.set_cursor(0);

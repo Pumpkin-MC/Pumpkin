@@ -2800,6 +2800,7 @@ dependencies = [
  "flate2",
  "futures",
  "hmac 0.13.0",
+ "indexmap",
  "libloading",
  "notify",
  "num-bigint",

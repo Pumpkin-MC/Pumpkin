@@ -578,7 +578,7 @@ fn ensure_command_enum(
     enums.len() - 1
 }
 
-const fn bedrock_param_type(arg: &ArgumentType<'_>) -> u32 {
+const fn bedrock_param_type(arg: &ArgumentType) -> u32 {
     let base = match arg {
         ArgumentType::Integer { .. } | ArgumentType::Long { .. } | ArgumentType::Time { .. } => {
             arg_types::ARG_TYPE_INT

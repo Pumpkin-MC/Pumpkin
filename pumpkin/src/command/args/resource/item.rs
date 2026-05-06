@@ -20,7 +20,7 @@ use crate::server::Server;
 pub struct ItemArgumentConsumer;
 
 impl GetClientSideArgParser for ItemArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::ItemStack
     }
 
@@ -99,7 +99,7 @@ impl ItemPredicate {
 }
 
 impl GetClientSideArgParser for ItemPredicateArgumentConsumer {
-    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+    fn get_client_side_parser(&self) -> ArgumentType {
         ArgumentType::ItemPredicate
     }
 
