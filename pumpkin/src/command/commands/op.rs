@@ -58,8 +58,8 @@ impl CommandExecutor for OpCommandExecutor {
                     .source
                     .send_feedback(
                         TextComponent::translate_cross(
-                            "commands.op.success",
-                            "commands.op.success",
+                            translation::java::COMMANDS_OP_SUCCESS,
+                            translation::bedrock::COMMANDS_OP_SUCCESS,
                             [TextComponent::text(profile.name.clone())],
                         ),
                         true,
