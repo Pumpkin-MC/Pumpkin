@@ -13,8 +13,10 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-pub const ALREADY_OP_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::java::COMMANDS_OP_FAILED, translation::bedrock::COMMANDS_OP_FAILED);
+pub const ALREADY_OP_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_OP_FAILED,
+    translation::bedrock::COMMANDS_OP_FAILED,
+);
 
 const DESCRIPTION: &str = "Grants operator status to a player.";
 const PERMISSION: &str = "minecraft:command.op";
