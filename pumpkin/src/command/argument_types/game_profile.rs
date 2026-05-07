@@ -33,7 +33,9 @@ impl GameProfileResult {
 
     /// Resolves this result with the help of a [`CommandSource`].
     ///
-    /// **Warning**: Do not lock write/read access to one of these data locks
+    /// # Warning
+    ///
+    /// Do not lock write/read access to one of these data locks
     /// before calling this method, as that may cause a *deadlock*:
     /// - `server.data.user_cache`
     /// - `server.data.operator_config`
@@ -229,7 +231,9 @@ impl GameProfileArgumentType {
 
     /// Tries to get any number of [`GameProfile`]s from a parsed argument of the provided [`CommandContext`].
     ///
-    /// **Warning**: Do not lock write/read access to one of these data locks
+    /// # Warning
+    ///
+    /// Do not lock write/read access to one of these data locks
     /// before calling this method, as that may cause a *deadlock*:
     /// - `server.data.user_cache`
     /// - `server.data.operator_config`
