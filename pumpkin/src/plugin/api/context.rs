@@ -22,8 +22,8 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use super::{EventPriority, Payload};
 
-type PendingCommands = Arc<std::sync::Mutex<Vec<(crate::command::tree::CommandTree, String)>>>;
-type PendingHandlers = Arc<std::sync::Mutex<Vec<(&'static str, Box<dyn DynEventHandler>)>>>;
+type CommandRegistrar = Arc<dyn Fn(crate::command::tree::CommandTree, String) + Send + Sync>;
+type HandlerRegistrar = Arc<dyn Fn(&'static str, Box<dyn DynEventHandler>) + Send + Sync>;
 
 /// The `Context` struct represents the context of a plugin, containing metadata,
 /// a server reference, and event handlers.
@@ -39,19 +39,18 @@ pub struct Context {
     pub plugin_manager: Arc<PluginManager>,
     pub permission_manager: Arc<RwLock<PermissionManager>>,
     pub logger: Arc<OnceLock<LoggerOption>>,
-    // Commands and event handlers queued during `on_load`.
+    // Commands and event handlers registered during `on_load`.
     //
     // Native plugins are dylibs that compile their own copy of pumpkin (and thus their
-    // own copy of hashbrown).  Calling `HashMap::entry` or `tokio::sync::RwLock::write`
-    // from plugin code on data structures owned by the server binary causes infinite
+    // own copy of hashbrown). Calling `HashMap::entry` from plugin code on data
+    // structures owned by the server binary causes infinite
     // probe loops / permanent lock failures on macOS due to `Group::static_empty()`
     // being at a different address in each binary.
     //
-    // The fix: plugin code only pushes to these plain `Vec`s (no hashmap involved);
-    // the loader drains them *after* `on_load` returns, doing all hashmap work inside
-    // the server binary where the right hashbrown copy is in scope.
-    pub(crate) pending_commands: PendingCommands,
-    pub(crate) pending_handlers: PendingHandlers,
+    // These callbacks are built by the server binary, keeping the hashmap work on
+    // the side where the right hashbrown copy is in scope.
+    command_registrar: CommandRegistrar,
+    handler_registrar: HandlerRegistrar,
 }
 impl Context {
     /// Creates a new instance of `Context`.
@@ -70,6 +69,8 @@ impl Context {
         handlers: Arc<RwLock<HandlerMap>>,
         plugin_manager: Arc<PluginManager>,
         logger: Arc<OnceLock<LoggerOption>>,
+        command_registrar: CommandRegistrar,
+        handler_registrar: HandlerRegistrar,
     ) -> Self {
         let permission_manager = server.permission_manager.clone();
         Self {
@@ -79,8 +80,8 @@ impl Context {
             plugin_manager,
             permission_manager,
             logger,
-            pending_commands: Arc::new(std::sync::Mutex::new(Vec::new())),
-            pending_handlers: Arc::new(std::sync::Mutex::new(Vec::new())),
+            command_registrar,
+            handler_registrar,
         }
     }
 
@@ -166,10 +167,9 @@ impl Context {
 
     /// Registers a command during plugin initialisation (`on_load`).
     ///
-    /// Queues the command tree for insertion into `command_dispatcher` by the
-    /// loader after `on_load` returns.  This avoids calling into the server's
-    /// tokio lock from inside a dylib, which causes permanent lock failures on
-    /// macOS due to cross-binary `Group::static_empty()` mismatches in hashbrown.
+    /// Inserts the command tree through a server-owned callback. This keeps the
+    /// `HashMap` work inside the server binary, avoiding cross-binary hashbrown
+    /// sentinel mismatches on macOS.
     ///
     /// For registering commands *after* the server is fully started (e.g. from
     /// an event handler) use [`register_command`] instead.
@@ -184,16 +184,13 @@ impl Context {
         } else {
             format!("{}:{permission}", self.metadata.name)
         };
-        self.pending_commands
-            .lock()
-            .expect("pending_commands lock poisoned")
-            .push((tree, full_permission_node));
+        (self.command_registrar)(tree, full_permission_node);
     }
 
     /// Registers an event handler during plugin initialisation (`on_load`).
     ///
-    /// Queues the handler for insertion into the handler map by the loader after
-    /// `on_load` returns.  See [`register_command_sync`] for why this is needed.
+    /// Inserts the handler through a server-owned callback. See
+    /// [`register_command_sync`] for why this is needed.
     ///
     /// For registering handlers *after* the server is fully started use
     /// [`register_event`] instead.
@@ -212,10 +209,7 @@ impl Context {
             _phantom: std::marker::PhantomData::<E>,
         };
         let boxed: Box<dyn DynEventHandler> = Box::new(typed);
-        self.pending_handlers
-            .lock()
-            .expect("pending_handlers lock poisoned")
-            .push((E::get_name_static(), boxed));
+        (self.handler_registrar)(E::get_name_static(), boxed);
     }
 
     /// Asynchronously registers a command with the server.

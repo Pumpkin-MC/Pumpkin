@@ -461,41 +461,6 @@ impl PluginManager {
         Ok(sorted)
     }
 
-    /// Drain commands and event handlers queued by the plugin during `on_load`.
-    ///
-    /// All `HashMap` work is done here, inside the server binary, so that hashbrown
-    /// uses the correct `Group::static_empty()` sentinel (see [`Context`] for details).
-    async fn flush_pending_registrations(
-        context: &Arc<Context>,
-        handlers: &Arc<RwLock<HandlerMap>>,
-    ) {
-        let pending_cmds = std::mem::take(
-            &mut *context
-                .pending_commands
-                .lock()
-                .expect("pending_commands poisoned"),
-        );
-        if !pending_cmds.is_empty() {
-            let mut dispatcher = context.server.command_dispatcher.write().await;
-            for (tree, perm) in pending_cmds {
-                dispatcher.fallback_dispatcher.register(tree, perm);
-            }
-        }
-
-        let pending_hdls = std::mem::take(
-            &mut *context
-                .pending_handlers
-                .lock()
-                .expect("pending_handlers poisoned"),
-        );
-        if !pending_hdls.is_empty() {
-            let mut map = handlers.write().await;
-            for (name, boxed) in pending_hdls {
-                map.entry(name).or_default().push(boxed);
-            }
-        }
-    }
-
     /// Spawn initialization for a single plugin
     async fn spawn_plugin_initialization(
         &self,
@@ -518,19 +483,39 @@ impl PluginManager {
             .clone()
             .ok_or(ManagerError::ServerNotInitialized)?;
 
+        let server = Arc::clone(
+            &self
+                .server
+                .read()
+                .await
+                .clone()
+                .ok_or(ManagerError::ServerNotInitialized)?,
+        );
+        let command_server = Arc::clone(&server);
+        let command_registrar = Arc::new(move |tree, permission| {
+            let mut dispatcher = command_server
+                .command_dispatcher
+                .try_write()
+                .expect("command dispatcher lock held during plugin initialization");
+            dispatcher.fallback_dispatcher.register(tree, permission);
+        });
+
+        let handler_map = Arc::clone(&self.handlers);
+        let handler_registrar = Arc::new(move |name, handler| {
+            let mut handlers = handler_map
+                .try_write()
+                .expect("handler map lock held during plugin initialization");
+            handlers.entry(name).or_default().push(handler);
+        });
+
         let context = Arc::new(Context::new(
             metadata.clone(),
-            Arc::clone(
-                &self
-                    .server
-                    .read()
-                    .await
-                    .clone()
-                    .ok_or(ManagerError::ServerNotInitialized)?,
-            ),
+            server,
             Arc::clone(&self.handlers),
             Arc::clone(&self_ref),
             Arc::clone(&LOGGER_IMPL),
+            command_registrar,
+            handler_registrar,
         ));
 
         // Create the plugin structure first
@@ -560,8 +545,6 @@ impl PluginManager {
             // Initialize the plugin
             match instance.on_load(context.clone()).await {
                 Ok(()) => {
-                    Self::flush_pending_registrations(&context, &self_ref_clone.handlers).await;
-
                     // Update plugin state to loaded
                     {
                         let mut plugins = self_ref_clone.plugins.write().await;
