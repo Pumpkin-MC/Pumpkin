@@ -200,13 +200,13 @@ macro_rules! decode_impl {
     };
 }
 
-/// Provides an easy `xmap`-like implementation of a *second type*
-/// by using the already-existing implementation of a *first type*.
+/// Provides easy `xmap`-like `Encode` and `Decode` implementations of a *second type*
+/// by using the already-existing implementations of a *first type*.
 ///
 /// The macro is written as `xmap_codec_impl!(first => second, forward, backward)`,
 /// where:
-/// - `forward` is the infallible conversion `fn(first_type) -> second_type` (for decoding).
-/// - `backward` is the infallible conversion `fn(&second_type) -> first_type` (for encoding).
+/// - `forward` is the infallible conversion `fn(first) -> second` (for decoding).
+/// - `backward` is the infallible conversion `fn(&second) -> first` (for encoding).
 #[macro_export]
 macro_rules! xmap_codec_impl {
     ($first_type:ty => $second_type:ty, $forward:path, $backward:path) => {
@@ -215,13 +215,13 @@ macro_rules! xmap_codec_impl {
     };
 }
 
-/// Provides an easy `comapFlatMap`-like implementation of a *second type*
-/// by using the already-existing implementation of a *first type*.
+/// Provides easy `comapFlatMap`-like `Encode` and `Decode` implementations of a *second type*
+/// by using the already-existing implementations of a *first type*.
 ///
 /// The macro is written as `comap_flat_map_codec_impl!(first => second, forward, backward)`,
 /// where:
-/// - `forward` is the fallible conversion `fn(first_type) -> DataResult<second_type>` (for decoding).
-/// - `backward` is the infallible conversion `fn(&second_type) -> first_type` (for encoding).
+/// - `forward` is the fallible conversion `fn(first) -> DataResult<second>` (for decoding).
+/// - `backward` is the infallible conversion `fn(&second) -> first` (for encoding).
 #[macro_export]
 macro_rules! comap_flat_map_codec_impl {
     ($first_type:ty => $second_type:ty, $forward:path, $backward:path) => {
@@ -230,13 +230,13 @@ macro_rules! comap_flat_map_codec_impl {
     };
 }
 
-/// Provides an easy `flatComapMap`-like implementation of a *second type*
-/// by using the already-existing implementation of a *first type*.
+/// Provides easy `flatComapMap`-like `Encode` and `Decode` implementations of a *second type*
+/// by using the already-existing implementations of a *first type*.
 ///
 /// The macro is written as `flat_comap_map_codec_impl!(first => second, forward, backward)`,
 /// where:
-/// - `forward` is the infallible conversion `fn(first_type) -> second_type` (for decoding).
-/// - `backward` is the fallible conversion `fn(&second_type) -> DataResult<first_type>` (for encoding).
+/// - `forward` is the infallible conversion `fn(first) -> second` (for decoding).
+/// - `backward` is the fallible conversion `fn(&second) -> DataResult<first>` (for encoding).
 #[macro_export]
 macro_rules! flat_comap_map_codec_impl {
     ($first_type:ty => $second_type:ty, $forward:path, $backward:path) => {
@@ -245,13 +245,13 @@ macro_rules! flat_comap_map_codec_impl {
     };
 }
 
-/// Provides an easy `flatXmap`-like implementation of a *second type*
-/// by using the already-existing implementation of a *first type*.
+/// Provides easy `flatXmap`-like `Encode` and `Decode` implementations of a *second type*
+/// by using the already-existing implementations of a *first type*.
 ///
 /// The macro is written as `flat_xmap_codec_impl!(first => second, forward, backward)`,
 /// where:
-/// - `forward` is the fallible conversion `fn(first_type) -> DataResult<second_type>` (for decoding).
-/// - `backward` is the fallible conversion `fn(&second_type) -> DataResult<first_type>` (for encoding).
+/// - `forward` is the fallible conversion `fn(first) -> DataResult<second>` (for decoding).
+/// - `backward` is the fallible conversion `fn(&second) -> DataResult<first>` (for encoding).
 #[macro_export]
 macro_rules! flat_xmap_codec_impl {
     ($first_type:ty => $second_type:ty, $forward:path, $backward:path) => {
