@@ -383,6 +383,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
             .then(
                 literal("rate").then(
                     argument("rate", FloatArgumentType::new(1.0, 10000.0))
+                        .suggests(TickSuggestionProvider(&["20"]))
                         .executes(TickExecutor(SubCommand::Rate)),
                 ),
             )
