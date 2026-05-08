@@ -51,14 +51,19 @@ impl TickExecutor {
         if manager.is_sprinting() {
             source
                 .send_feedback(
-                    TextComponent::translate(translation::COMMANDS_TICK_STATUS_SPRINTING, []),
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_STATUS_SPRINTING,
+                        translation::java::COMMANDS_TICK_STATUS_SPRINTING,
+                        [],
+                    ),
                     false,
                 )
                 .await;
             source
                 .send_feedback(
-                    TextComponent::translate(
-                        translation::COMMANDS_TICK_QUERY_RATE_SPRINTING,
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_QUERY_RATE_SPRINTING,
+                        translation::java::COMMANDS_TICK_QUERY_RATE_SPRINTING,
                         [
                             TextComponent::text(format!("{tick_rate:.1}")),
                             TextComponent::text(avg_mspt_str),
@@ -73,8 +78,9 @@ impl TickExecutor {
             let target_mspt_str = nanos_to_millis_string(manager.nanoseconds_per_tick());
             source
                 .send_feedback(
-                    TextComponent::translate(
-                        translation::COMMANDS_TICK_QUERY_RATE_RUNNING,
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_QUERY_RATE_RUNNING,
+                        translation::java::COMMANDS_TICK_QUERY_RATE_RUNNING,
                         [
                             TextComponent::text(format!("{tick_rate:.1}")),
                             TextComponent::text(avg_mspt_str),
@@ -97,21 +103,33 @@ impl TickExecutor {
         if manager.is_frozen() {
             sender
                 .send_feedback(
-                    TextComponent::translate(translation::COMMANDS_TICK_STATUS_FROZEN, []),
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_STATUS_FROZEN,
+                        translation::java::COMMANDS_TICK_STATUS_FROZEN,
+                        [],
+                    ),
                     false,
                 )
                 .await;
         } else if avg_tick_nanos > manager.nanoseconds_per_tick() {
             sender
                 .send_feedback(
-                    TextComponent::translate(translation::COMMANDS_TICK_STATUS_LAGGING, []),
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_STATUS_LAGGING,
+                        translation::java::COMMANDS_TICK_STATUS_LAGGING,
+                        [],
+                    ),
                     false,
                 )
                 .await;
         } else {
             sender
                 .send_feedback(
-                    TextComponent::translate(translation::COMMANDS_TICK_STATUS_RUNNING, []),
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_STATUS_RUNNING,
+                        translation::java::COMMANDS_TICK_STATUS_RUNNING,
+                        [],
+                    ),
                     false,
                 )
                 .await;
@@ -133,8 +151,9 @@ impl TickExecutor {
 
             sender
                 .send_feedback(
-                    TextComponent::translate(
-                        translation::COMMANDS_TICK_QUERY_PERCENTILES,
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_QUERY_PERCENTILES,
+                        translation::java::COMMANDS_TICK_QUERY_PERCENTILES,
                         [
                             TextComponent::text(nanos_to_millis_string(p50_nanos)),
                             TextComponent::text(nanos_to_millis_string(p95_nanos)),
@@ -155,8 +174,9 @@ impl TickExecutor {
         if manager.step_game_if_paused(source.server(), ticks).await {
             source
                 .send_feedback(
-                    TextComponent::translate(
-                        translation::COMMANDS_TICK_STEP_SUCCESS,
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_STEP_SUCCESS,
+                        translation::java::COMMANDS_TICK_STEP_SUCCESS,
                         [TextComponent::text(ticks.to_string())],
                     ),
                     true,
@@ -165,8 +185,12 @@ impl TickExecutor {
         } else {
             source
                 .send_feedback(
-                    TextComponent::translate(translation::COMMANDS_TICK_STEP_FAIL, [])
-                        .color_named(NamedColor::Red),
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_STEP_FAIL,
+                        translation::java::COMMANDS_TICK_STEP_FAIL,
+                        [],
+                    )
+                    .color_named(NamedColor::Red),
                     true,
                 )
                 .await;
@@ -183,14 +207,22 @@ impl TickExecutor {
         {
             source
                 .send_feedback(
-                    TextComponent::translate(translation::COMMANDS_TICK_SPRINT_STOP_SUCCESS, []),
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
+                        translation::java::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
+                        [],
+                    ),
                     true,
                 )
                 .await;
         }
         source
             .send_feedback(
-                TextComponent::translate(translation::COMMANDS_TICK_STATUS_SPRINTING, []),
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_TICK_STATUS_SPRINTING,
+                    translation::java::COMMANDS_TICK_STATUS_SPRINTING,
+                    [],
+                ),
                 true,
             )
             .await;
@@ -204,8 +236,9 @@ impl TickExecutor {
         manager.set_tick_rate(source.server(), rate).await;
         source
             .send_feedback(
-                TextComponent::translate(
-                    translation::COMMANDS_TICK_RATE_SUCCESS,
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_TICK_RATE_SUCCESS,
+                    translation::java::COMMANDS_TICK_RATE_SUCCESS,
                     [TextComponent::text(format!("{rate:.1}"))],
                 ),
                 true,
@@ -252,8 +285,9 @@ impl CommandExecutor for TickExecutor {
                     if manager.stop_stepping(server).await {
                         source
                             .send_feedback(
-                                TextComponent::translate(
-                                    translation::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
+                                TextComponent::translate_cross(
+                                    translation::java::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
+                                    translation::java::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
                                     [],
                                 ),
                                 true,
@@ -262,8 +296,9 @@ impl CommandExecutor for TickExecutor {
                         Ok(1)
                     } else {
                         source
-                            .send_error(TextComponent::translate(
-                                translation::COMMANDS_TICK_SPRINT_STOP_FAIL,
+                            .send_error(TextComponent::translate_cross(
+                                translation::java::COMMANDS_TICK_SPRINT_STOP_FAIL,
+                                translation::java::COMMANDS_TICK_SPRINT_STOP_FAIL,
                                 [],
                             ))
                             .await;
@@ -283,8 +318,9 @@ impl CommandExecutor for TickExecutor {
                     if manager.stop_sprinting(server).await {
                         source
                             .send_feedback(
-                                TextComponent::translate(
-                                    translation::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
+                                TextComponent::translate_cross(
+                                    translation::java::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
+                                    translation::java::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
                                     [],
                                 ),
                                 true,
@@ -294,8 +330,9 @@ impl CommandExecutor for TickExecutor {
                     } else {
                         source
                             .send_error(
-                                TextComponent::translate(
-                                    translation::COMMANDS_TICK_SPRINT_STOP_FAIL,
+                                TextComponent::translate_cross(
+                                    translation::java::COMMANDS_TICK_SPRINT_STOP_FAIL,
+                                    translation::java::COMMANDS_TICK_SPRINT_STOP_FAIL,
                                     [],
                                 )
                                 .color(Color::Named(NamedColor::Red)),
