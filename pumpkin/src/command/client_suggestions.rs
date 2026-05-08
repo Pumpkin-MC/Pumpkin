@@ -6,6 +6,7 @@ use pumpkin_protocol::{
 };
 use std::sync::Arc;
 
+use super::tree::{Node, NodeType};
 use crate::command::node::{
     attached::{AttachedNode, NodeId},
     dispatcher::CommandDispatcher,
@@ -18,7 +19,6 @@ use pumpkin_protocol::bedrock::client::available_commands::{
     arg_types, command_permissions,
 };
 use pumpkin_protocol::java::client::play::SuggestionProviders;
-use super::tree::{Node, NodeType};
 
 #[expect(clippy::too_many_lines)]
 pub async fn send_c_commands_packet(
