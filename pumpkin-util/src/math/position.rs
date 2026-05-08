@@ -708,21 +708,58 @@ pub const fn pack_local_chunk_section(block_pos: &BlockPos) -> i16 {
 
 #[cfg(test)]
 mod test {
+    use crate::math::position::BlockPos;
     use pumpkin_codecs::{assert_decode, assert_encode_success};
     use pumpkin_nbt::nbt_ops::NbtOps;
     use pumpkin_nbt::tag::NbtTag;
-    use crate::math::position::BlockPos;
 
     #[test]
     fn codec() {
-        assert_encode_success!(BlockPos::new(1, 2, 3), NbtOps, NbtTag::IntArray(vec![1, 2, 3]));
-        assert_encode_success!(BlockPos::new(-1000, 200, 4521), NbtOps, NbtTag::IntArray(vec![-1000, 200, 4521]));
+        assert_encode_success!(
+            BlockPos::new(1, 2, 3),
+            NbtOps,
+            NbtTag::IntArray(vec![1, 2, 3])
+        );
+        assert_encode_success!(
+            BlockPos::new(-1000, 200, 4521),
+            NbtOps,
+            NbtTag::IntArray(vec![-1000, 200, 4521])
+        );
 
-        assert_decode!(BlockPos, NbtTag::IntArray(vec![1, 2, 3]), NbtOps, is_success);
+        assert_decode!(
+            BlockPos,
+            NbtTag::IntArray(vec![1, 2, 3]),
+            NbtOps,
+            is_success
+        );
 
         assert_decode!(BlockPos, NbtTag::List(vec![]), NbtOps, is_error);
-        assert_decode!(BlockPos, NbtTag::List(vec![NbtTag::Int(1), NbtTag::Float(2.0), NbtTag::Int(3)]), NbtOps, is_success);
-        assert_decode!(BlockPos, NbtTag::List(vec![NbtTag::Int(1), NbtTag::Float(2.0), NbtTag::String("69".to_string())]), NbtOps, is_error);
-        assert_decode!(BlockPos, NbtTag::List(vec![NbtTag::Int(1), NbtTag::Float(2.0), NbtTag::Int(3), NbtTag::Byte(3)]), NbtOps, is_error);
+        assert_decode!(
+            BlockPos,
+            NbtTag::List(vec![NbtTag::Int(1), NbtTag::Float(2.0), NbtTag::Int(3)]),
+            NbtOps,
+            is_success
+        );
+        assert_decode!(
+            BlockPos,
+            NbtTag::List(vec![
+                NbtTag::Int(1),
+                NbtTag::Float(2.0),
+                NbtTag::String("69".to_string())
+            ]),
+            NbtOps,
+            is_error
+        );
+        assert_decode!(
+            BlockPos,
+            NbtTag::List(vec![
+                NbtTag::Int(1),
+                NbtTag::Float(2.0),
+                NbtTag::Int(3),
+                NbtTag::Byte(3)
+            ]),
+            NbtOps,
+            is_error
+        );
     }
 }
