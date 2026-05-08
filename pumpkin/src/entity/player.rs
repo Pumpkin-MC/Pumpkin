@@ -61,12 +61,12 @@ use pumpkin_protocol::java::client::play::{
     Animation, CAcknowledgeBlockChange, CActionBar, CChangeDifficulty, CChunkBatchEnd,
     CChunkBatchStart, CChunkData, CCloseContainer, CCombatDeath, CCustomPayload,
     CDisguisedChatMessage, CEntityAnimation, CEntityPositionSync, CGameEvent, CItemCooldown,
-    CKeepAlive, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate, CPlayerPosition,
-    CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty, CSetContainerSlot,
-    CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth, CSetPlayerInventory,
-    CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage, CTabList,
-    CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent, Metadata,
-    PlayerAction, PlayerInfoFlags, PreviousMessage,
+    CKeepAlive, CMapItemData, COpenScreen, CParticle, CPlayerAbilities, CPlayerInfoUpdate,
+    CPlayerPosition, CPlayerSpawnPosition, CRespawn, CSetContainerContent, CSetContainerProperty,
+    CSetContainerSlot, CSetCursorItem, CSetEquipment, CSetExperience, CSetHealth,
+    CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle, CSystemChatMessage,
+    CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect, CUpdateTime, GameEvent,
+    MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags, PreviousMessage,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -1803,6 +1803,7 @@ impl Player {
         // experience handling
         self.tick_experience().await;
         self.tick_health().await;
+        self.tick_maps(server).await;
 
         // Timeout/keep alive handling
         self.tick_client_load_timeout();
@@ -2822,6 +2823,68 @@ impl Player {
                     points.into(),
                 ))
                 .await;
+        }
+    }
+
+    pub async fn tick_maps(&self, server: &Server) {
+        use pumpkin_data::data_component_impl::MapIdImpl;
+        use pumpkin_data::item::Item;
+
+        for hand in Hand::all() {
+            let item_in_hand = self.inventory.get_stack_in_hand(hand).await;
+
+            let stack = item_in_hand.lock().await;
+            if stack.item.id == Item::FILLED_MAP.id
+                && let Some(map_id_comp) = stack.get_data_component::<MapIdImpl>()
+            {
+                let map_id = map_id_comp.id;
+                if let Some(map_data_arc) = server.map_manager.get_map(map_id) {
+                    let mut map_data = map_data_arc.lock().await;
+                    map_data.update(self).await;
+
+                    let tick_count = self.tick_counter.load(Ordering::Relaxed);
+                    if map_data.dirty || tick_count % 10 == 0 {
+                        let scale = 1 << map_data.scale;
+                        let pos = self.position();
+                        let dx = pos.x - map_data.center_x as f64;
+                        let dz = pos.z - map_data.center_z as f64;
+
+                        let icon_x = (dx / scale as f64 * 2.0).clamp(-128.0, 127.0) as i8;
+                        let icon_z = (dz / scale as f64 * 2.0).clamp(-128.0, 127.0) as i8;
+
+                        let yaw = self.living_entity.entity.yaw.load();
+                        let icon_direction =
+                            ((((yaw * 16.0 / 360.0).round() as i32 + 8) % 16 + 16) % 16) as i8;
+
+                        let icons = [MapIcon {
+                            icon_type: VarInt(0), // White pointer
+                            x: icon_x,
+                            z: icon_z,
+                            direction: icon_direction,
+                            display_name: None,
+                        }];
+
+                        let data = map_data.dirty.then(|| MapPatch {
+                            columns: 128,
+                            rows: 128,
+                            x: 0,
+                            z: 0,
+                            data: &*map_data.colors,
+                        });
+
+                        self.client
+                            .enqueue_packet(&CMapItemData {
+                                map_id: VarInt(map_id),
+                                scale: map_data.scale,
+                                locked: map_data.locked,
+                                icons: Some(&icons),
+                                data,
+                            })
+                            .await;
+                        map_data.dirty = false;
+                    }
+                }
+            }
         }
     }
 

@@ -237,6 +237,7 @@ mod test {
                 snapshot: false,
                 series: "main".to_string(),
             },
+            map_id: 0,
         },
     });
 

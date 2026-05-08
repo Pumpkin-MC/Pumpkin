@@ -145,11 +145,10 @@ impl ParsedMappings {
                     } else {
                         shifts_at[index + 1]
                     };
-                    let mut mapped_id = shifts_to[index];
-                    for id in *from..to {
+                    for (mapped_id, id) in (shifts_to[index]..).zip(*from..to) {
                         result[id as usize] = mapped_id;
-                        mapped_id += 1;
                     }
+
                 }
 
                 result

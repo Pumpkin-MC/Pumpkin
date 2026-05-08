@@ -58,6 +58,7 @@ mod tracked_data;
 mod translations;
 mod version;
 mod villager;
+mod wit;
 mod world_event;
 
 /// Output directory where all generated Rust source files are written.
@@ -69,6 +70,8 @@ pub fn main() {
     type BuilderFn = fn() -> TokenStream;
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
+
+    wit::main();
 
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (packet::build, "packet.rs"),

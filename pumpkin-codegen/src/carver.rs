@@ -22,12 +22,10 @@ pub fn build() -> TokenStream {
         let lava_level = value_to_y_offset(&config["lava_level"]);
 
         let replaceable_str = config["replaceable"].as_str().unwrap_or("");
-        let replaceable = if replaceable_str.starts_with('#') {
-            let tag_name = replaceable_str[1..]
+        let replaceable = if let Some(tag_name) = replaceable_str.strip_prefix('#') {
+            let tag_name = tag_name
                 .to_uppercase()
-                .replace(':', "_")
-                .replace('.', "_")
-                .replace('-', "_");
+                .replace([':', '.', '-'], "_");
             let tag_ident = format_ident!("{}", tag_name);
             quote! { crate::tag::Block::#tag_ident }
         } else {

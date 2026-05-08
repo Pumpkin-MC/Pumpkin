@@ -1057,15 +1057,13 @@ fn value_to_tree_feature(config: &Value) -> TokenStream {
 }
 
 fn value_to_block_list(v: &Value) -> TokenStream {
-    if let Some(s) = v.as_str() {
-        if let Some(tag) = s.strip_prefix('#') {
-            let name = format!(
-                "MINECRAFT_{}",
-                tag.strip_prefix("minecraft:").unwrap_or(tag).to_uppercase()
-            );
-            let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-            return quote! { &pumpkin_data::tag::Block::#ident.1 };
-        }
+    if let Some(tag) = v.as_str().and_then(|s| s.strip_prefix('#')) {
+        let name = format!(
+            "MINECRAFT_{}",
+            tag.strip_prefix("minecraft:").unwrap_or(tag).to_uppercase()
+        );
+        let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+        return quote! { &pumpkin_data::tag::Block::#ident.1 };
     }
     let mut blocks = Vec::new();
     if let Some(arr) = v.as_array() {

@@ -14,6 +14,7 @@ use tracing::{debug, error, info, trace, warn};
 pub mod chunker;
 pub mod explosion;
 pub mod loot;
+pub mod map;
 pub mod portal;
 pub mod time;
 

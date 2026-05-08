@@ -12,7 +12,10 @@ use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
 use crate::world::custom_bossbar::CustomBossbars;
-use crate::{command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World};
+use crate::{
+    command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
+    world::map::MapManager,
+};
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
@@ -94,11 +97,15 @@ pub struct Server {
     pub dimensions: Vec<Dimension>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
+    /// Assigns unique IDs to maps.
+    map_id: AtomicI32,
     /// Mojang's public keys, used for chat session signing
     /// Pulled from Mojang API on startup
     pub mojang_public_keys: ArcSwap<Vec<RsaPublicKey>>,
     /// The server's custom bossbars
     pub bossbars: Mutex<CustomBossbars>,
+    /// Manages all maps on the server
+    pub map_manager: MapManager,
     /// The default gamemode when a player joins the server (reset every restart)
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
@@ -214,6 +221,7 @@ impl Server {
             ))),
             permission_registry,
             container_id: 0.into(),
+            map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions: vec![
                 Dimension::OVERWORLD,
@@ -228,6 +236,7 @@ impl Server {
             listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
+            map_manager: MapManager::new(),
             defaultgamemode,
             player_data_storage,
             white_list,
@@ -759,6 +768,17 @@ impl Server {
     /// Generates a new container id.
     pub fn new_container_id(&self) -> u32 {
         self.container_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// Generates a new map id.
+    pub fn next_map_id(&self) -> i32 {
+        let id = self.map_id.fetch_add(1, Ordering::SeqCst);
+        self.level_info.rcu(|level_info| {
+            let mut new_level_info = (**level_info).clone();
+            new_level_info.map_id = self.map_id.load(Ordering::SeqCst);
+            new_level_info
+        });
+        id
     }
 
     pub fn get_branding(&self) -> CPluginMessage<'_> {

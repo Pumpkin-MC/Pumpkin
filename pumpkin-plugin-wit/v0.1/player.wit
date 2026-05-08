@@ -6,6 +6,8 @@ interface player {
     use permission.{permission-level};
     use text.{text-component};
     use gui.{gui};
+    use java-packets.{clientbound-packet as java-packet};
+    use bedrock-packets.{clientbound-packet as bedrock-packet};
 
     /// Various abilities a player can have.
     record player-abilities {
@@ -211,5 +213,12 @@ interface player {
         get-skin-parts: func() -> skin-parts;
         /// Sets which skin parts are visible.
         set-skin-parts: func(parts: skin-parts);
+
+        /// Sends a Java-specific clientbound packet to the player.
+        send-java-packet: func(packet: java-packet);
+        /// Sends a Bedrock-specific clientbound packet to the player.
+        send-bedrock-packet: func(packet: bedrock-packet);
+        /// Sends a custom payload packet (plugin message) to the player.
+        send-custom-payload: func(channel: string, data: list<u8>);
     }
 }

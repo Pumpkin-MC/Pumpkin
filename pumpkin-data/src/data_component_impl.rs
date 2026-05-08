@@ -5,7 +5,7 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::{
     AttributeModifiers, BlocksAttacks, Consumable, CustomData, CustomName, Damage, DamageResistant,
     DeathProtection, Enchantable, Enchantments, Equippable, FireworkExplosion, Fireworks, Food,
-    ItemModel, ItemName, JukeboxPlayable, MaxDamage, MaxStackSize, PotionContents,
+    ItemModel, ItemName, JukeboxPlayable, MapId, MaxDamage, MaxStackSize, PotionContents,
     StoredEnchantments, Tool, Unbreakable, UseCooldown, Weapon,
 };
 use crate::effect::{self, StatusEffect};
@@ -69,6 +69,7 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
         StoredEnchantments => Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn()),
         UseCooldown => Some(UseCooldownImpl::read_data(data)?.to_dyn()),
+        MapId => Some(MapIdImpl::read_data(data)?.to_dyn()),
         _ => None,
     }
 }
@@ -83,6 +84,7 @@ pub fn read_data_pnbt(
         Enchantments => Some(EnchantmentsImpl::read_data_pnbt(nbt)?.to_dyn()),
         Damage => Some(DamageImpl::read_data_pnbt(nbt)?.to_dyn()),
         Unbreakable => Some(UnbreakableImpl::read_data_pnbt(nbt)?.to_dyn()),
+        MapId => Some(MapIdImpl::read_data_pnbt(nbt)?.to_dyn()),
         _ => None,
     }
 }
@@ -414,6 +416,7 @@ fn hash() {
         -1580618251i32
     );
     assert_eq!(MaxStackSizeImpl { size: 99 }.get_hash(), -1632321551i32);
+    assert_eq!(MapIdImpl { id: 10 }.get_hash(), -919192125i32);
 }
 
 impl DataComponentImpl for EnchantmentsImpl {
@@ -1557,7 +1560,35 @@ pub struct DyedColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapColorImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct MapIdImpl;
+pub struct MapIdImpl {
+    pub id: i32,
+}
+
+impl MapIdImpl {
+    fn read_data(data: &NbtTag) -> Option<Self> {
+        data.extract_int().map(|id| Self { id })
+    }
+
+    fn read_data_pnbt(nbt: &mut PNbtCompound) -> Option<Self> {
+        nbt.get_i32().ok().map(|id| Self { id })
+    }
+}
+
+impl DataComponentImpl for MapIdImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Int(self.id)
+    }
+
+    fn write_data_pnbt(&self, nbt: &mut PNbtCompound) {
+        nbt.put_i32(self.id);
+    }
+
+    fn get_hash(&self) -> i32 {
+        get_i32_hash(self.id) as i32
+    }
+
+    default_impl!(MapId);
+}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapDecorationsImpl;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

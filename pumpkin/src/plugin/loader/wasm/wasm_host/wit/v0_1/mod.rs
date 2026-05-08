@@ -13,6 +13,7 @@ pub mod common;
 pub mod context;
 pub mod entity;
 pub mod events;
+pub mod generated_packets;
 pub mod gui;
 pub mod i18n;
 pub mod logging;
@@ -30,6 +31,9 @@ bindgen!({
     imports: { default: async | trappable },
     exports: { default: async | trappable},
 });
+
+impl pumpkin::plugin::java_packets::Host for PluginHostState {}
+impl pumpkin::plugin::bedrock_packets::Host for PluginHostState {}
 
 pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
     Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;

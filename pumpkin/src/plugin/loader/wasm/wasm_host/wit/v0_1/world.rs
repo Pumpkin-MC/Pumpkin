@@ -48,6 +48,8 @@ impl PluginHostState {
 }
 
 impl pumpkin::plugin::world::Host for PluginHostState {}
+impl pumpkin::plugin::particles::Host for PluginHostState {}
+impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
 impl pumpkin::plugin::world::HostWorld for PluginHostState {
     async fn get_id(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
@@ -245,15 +247,17 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     async fn play_sound(
         &mut self,
         world: Resource<World>,
-        sound: String,
+        sound: pumpkin::plugin::sounds::Sound,
         category: pumpkin::plugin::world::SoundCategory,
         pos: pumpkin::plugin::common::Position,
         volume: f32,
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound}")))?;
+        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
+        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+
         let internal_category = match category {
             pumpkin::plugin::world::SoundCategory::Master => {
                 pumpkin_data::sound::SoundCategory::Master
@@ -303,15 +307,16 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     async fn spawn_particle(
         &mut self,
         world: Resource<World>,
-        particle: String,
+        particle: pumpkin::plugin::particles::Particle,
         pos: pumpkin::plugin::common::Position,
         offset: pumpkin::plugin::common::Position,
         max_speed: f32,
         count: i32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        let particle_data = pumpkin_data::particle::Particle::from_name(&particle)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle}")))?;
+        let particle_name = format!("{particle:?}").to_lowercase().replace('_', "-");
+        let particle_data = pumpkin_data::particle::Particle::from_name(&particle_name)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle_name}")))?;
 
         world_ref
             .provider

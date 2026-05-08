@@ -874,6 +874,52 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn send_java_packet(
+        &mut self,
+        player: Resource<Player>,
+        packet: pumpkin::plugin::java_packets::ClientboundPacket,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_java_packet(
+            &packet, player.client.java().version.load(),
+        ) {
+            player.client.java().send_packet_now_data(bytes).await;
+        }
+        Ok(())
+    }
+
+    async fn send_bedrock_packet(
+        &mut self,
+        player: Resource<Player>,
+        packet: pumpkin::plugin::bedrock_packets::ClientboundPacket,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_bedrock_packet(
+            &packet,
+        ) {
+            player.client.send_packet_now_data(bytes).await;
+        }
+        Ok(())
+    }
+
+    async fn send_custom_payload(
+        &mut self,
+        player: Resource<Player>,
+        channel: String,
+        data: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if let crate::net::ClientPlatform::Java(_) = player.client {
+            player
+                .client
+                .send_packet_now(&pumpkin_protocol::java::client::play::CCustomPayload::new(
+                    &channel, &data,
+                ))
+                .await;
+        }
+        Ok(())
+    }
+
     async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
         let _ = self
             .resource_table

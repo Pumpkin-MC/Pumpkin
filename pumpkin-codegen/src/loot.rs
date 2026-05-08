@@ -257,7 +257,7 @@ impl ToTokens for LootPoolEntryTypesStruct {
             Self::LootTable => {
                 tokens.extend(quote! { LootPoolEntryTypes::LootTable });
             }
-            Self::Dynamic(entry) => {
+            Self::Dynamic(_entry) => {
                 // TODO
                 tokens.extend(quote! { LootPoolEntryTypes::Dynamic });
             }

@@ -9,6 +9,7 @@ use crate::{
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
 };
+use bytes::Bytes;
 
 use pumpkin_data::translation;
 use pumpkin_protocol::{ClientPacket, Property};
@@ -155,6 +156,13 @@ impl ClientPlatform {
         match self {
             Self::Java(java) => java.send_packet_now(packet).await,
             Self::Bedrock(_) => (),
+        }
+    }
+
+    pub async fn send_packet_now_data(&self, data: Bytes) {
+        match self {
+            Self::Java(java) => java.send_packet_now_data(data).await,
+            Self::Bedrock(bedrock) => bedrock.enqueue_packet_data(data).await,
         }
     }
 

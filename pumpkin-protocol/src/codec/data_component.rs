@@ -6,9 +6,9 @@ use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomNameImpl, DamageImpl, DataComponentImpl,
     EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape,
-    FireworksImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl,
-    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, UseCooldownImpl,
-    get,
+    FireworksImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, MapIdImpl, MaxStackSizeImpl,
+    PotionContentsImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl,
+    UseCooldownImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -844,6 +844,7 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         _ => Err(serde::de::Error::custom(format!("{id:?} (TODO)"))),
     }
 }
@@ -866,7 +867,22 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
         DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
+        DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         _ => todo!("{} not yet implemented", id.to_name()),
+    }
+}
+
+impl DataComponentCodec<Self> for MapIdImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.id))
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let id = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No MapId VarInt!"))?
+            .0;
+        Ok(Self { id })
     }
 }
 

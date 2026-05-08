@@ -11,8 +11,13 @@ pub fn build() -> TokenStream {
     let mut java_constants = TokenStream::new();
     for (name, value) in &java_json {
         let ident = to_valid_ident(name);
+        let doc = if !value.is_empty() {
+            quote!(#[doc = #value])
+        } else {
+            quote!()
+        };
         java_constants.extend(quote! {
-            #[doc = #value]
+            #doc
             pub const #ident: &str = #name;
         });
     }
@@ -31,8 +36,13 @@ pub fn build() -> TokenStream {
             let value = value.trim();
             let ident = to_valid_ident(name);
 
+            let doc = if !value.is_empty() {
+                quote!(#[doc = #value])
+            } else {
+                quote!()
+            };
             bedrock_constants.extend(quote! {
-                #[doc = #value]
+                #doc
                 pub const #ident: &str = #name;
             });
         }
@@ -52,7 +62,7 @@ pub fn build() -> TokenStream {
 fn to_valid_ident(name: &str) -> Ident {
     let mut clean = name.to_uppercase().replace(['.', ':', '-'], "_");
     
-    if clean.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+    if clean.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         clean.insert(0, '_');
     }
     

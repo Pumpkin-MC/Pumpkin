@@ -110,7 +110,7 @@ pub fn build() -> TokenStream {
     };
 
     // Pre-process all trade sets mentioned in trade_sets map
-    for (set_key, set_data) in &data.trade_sets {
+    for (_set_key, set_data) in &data.trade_sets {
         let tag = &set_data.trades;
         if !tag.starts_with("#minecraft:") {
             continue;
@@ -199,19 +199,23 @@ pub fn build() -> TokenStream {
         for (level_str, set_key) in &prof_data.trade_sets {
             let level = level_str.parse::<i32>().unwrap();
             let set_key_clean = set_key.strip_prefix("minecraft:").unwrap_or(set_key);
-            if let Some(set) = data.trade_sets.get(set_key_clean) {
-                if let Some(trades_ident) = generated_trade_sets.get(&set.trades) {
-                    let amount = set.amount as i32;
-                    level_matches.push(quote! { #level => Some(VillagerTradeSet { trades: #trades_ident, amount: #amount }) });
-                }
+            if let Some(trades_ident) = data.trade_sets.get(set_key_clean).and_then(|set| generated_trade_sets.get(&set.trades)) {
+                let set = data.trade_sets.get(set_key_clean).unwrap();
+                let amount = set.amount as i32;
+                level_matches.push(quote! { #level => Some(VillagerTradeSet { trades: #trades_ident, amount: #amount }) });
             }
         }
-        profession_trade_sets.push(quote! {
-            Self::#ident => match level {
-                #(#level_matches,)*
-                _ => None,
+        let profession_trade_set = if level_matches.is_empty() {
+            quote! { Self::#ident => None }
+        } else {
+            quote! {
+                Self::#ident => match level {
+                    #(#level_matches,)*
+                    _ => None,
+                }
             }
-        });
+        };
+        profession_trade_sets.push(profession_trade_set);
     }
 
     for (i, name) in data.types.keys().enumerate() {
