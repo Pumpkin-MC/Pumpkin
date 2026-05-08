@@ -1,8 +1,10 @@
 use std::{borrow::Cow, fmt::Display};
 
+use pumpkin_codecs::{
+    DataResult, FlatTryFrom, comap_flat_map_codec_impl,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use pumpkin_codecs::{DataResult, Decode, DynamicOps, Encode, FlatTryFrom};
 
 pub const VANILLA_NAMESPACE: &str = "minecraft";
 pub const PUMPKIN_NAMESPACE: &str = "pumpkin";
@@ -383,35 +385,23 @@ impl<'de> Deserialize<'de> for Identifier {
     }
 }
 
+comap_flat_map_codec_impl!(String => Identifier, Identifier::flat_try_from, ToString::to_string);
+
 impl FlatTryFrom<String> for Identifier {
     fn flat_try_from(value: String) -> DataResult<Self> {
         Self::parse(&value).map_or_else(
             |_| DataResult::new_error(format!("Not a valid resource location: {value}")),
-            DataResult::new_success
+            DataResult::new_success,
         )
-    }
-}
-
-impl Encode for Identifier {
-    fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
-        self.to_string().encode(ops, prefix)
-    }
-}
-
-impl Decode for Identifier {
-    fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
-        String::decode(input, ops).flat_map(|(s, p)| {
-            Identifier::flat_try_from(s).map(|ident| (ident, p))
-        })
     }
 }
 
 #[cfg(test)]
 mod test {
-    use serde_json::json;
-    use pumpkin_codecs::{assert_decode, assert_encode_success};
-    use pumpkin_codecs::json_ops::JsonOps;
     use crate::identifier::{Identifier, IdentifierError};
+    use pumpkin_codecs::json_ops::JsonOps;
+    use pumpkin_codecs::{assert_decode, assert_encode_success};
+    use serde_json::json;
 
     #[test]
     fn new() -> Result<(), IdentifierError> {
@@ -446,9 +436,21 @@ mod test {
 
     #[test]
     fn codec() {
-        assert_encode_success!(Identifier::from_static("abc", "def"), JsonOps, json!("abc:def"));
-        assert_encode_success!(Identifier::from_static("", "no_namespace"), JsonOps, json!(":no_namespace"));
-        assert_encode_success!(Identifier::vanilla_static("example"), JsonOps, json!("minecraft:example"));
+        assert_encode_success!(
+            Identifier::from_static("abc", "def"),
+            JsonOps,
+            json!("abc:def")
+        );
+        assert_encode_success!(
+            Identifier::from_static("", "no_namespace"),
+            JsonOps,
+            json!(":no_namespace")
+        );
+        assert_encode_success!(
+            Identifier::vanilla_static("example"),
+            JsonOps,
+            json!("minecraft:example")
+        );
 
         assert_decode!(Identifier, json!("abc:def"), JsonOps, is_success);
         assert_decode!(Identifier, json!("vanilla"), JsonOps, is_success);

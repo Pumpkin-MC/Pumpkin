@@ -140,3 +140,122 @@ impl<T: Decode> FieldDecode for T {
         decoded_option.map(|o| o.unwrap_or(default))
     }
 }
+
+/// Provides a fallible/infallible encode conversion from a first type to a second type via `backward`.
+///
+/// You probably do not need to use this directly.
+#[macro_export]
+macro_rules! encode_impl {
+    (infallible $second_type:ty, $backward:path) => {
+        impl $crate::Encode for $second_type {
+            fn encode<O: $crate::DynamicOps>(
+                &self,
+                ops: &'static O,
+                prefix: O::Value,
+            ) -> $crate::DataResult<O::Value> {
+                $backward(self).encode(ops, prefix)
+            }
+        }
+    };
+
+    (fallible $backward:path) => {
+        impl $crate::Encode for $second_type {
+            fn encode<O: $crate::DynamicOps>(
+                &self,
+                ops: &'static O,
+                prefix: O::Value,
+            ) -> $crate::DataResult<O::Value> {
+                $backward(self).flat_map(|m| m.encode(ops, prefix))
+            }
+        }
+    };
+}
+
+/// Provides a fallible/infallible decode conversion from a first type to a second type via `forward`.
+///
+/// You probably do not need to use this directly.
+#[macro_export]
+macro_rules! decode_impl {
+    (infallible $first_type:ty, $second_type:ty, $forward:path) => {
+        impl $crate::Decode for $second_type {
+            fn decode<O: $crate::DynamicOps>(
+                input: O::Value,
+                ops: &'static O,
+            ) -> $crate::DataResult<(Self, O::Value)> {
+                <$first_type>::decode(input, ops).flat_map(|(s, p)| ($forward(s), p))
+            }
+        }
+    };
+
+    (fallible $first_type:ty, $second_type:ty, $forward:path) => {
+        impl $crate::Decode for $second_type {
+            fn decode<O: $crate::DynamicOps>(
+                input: O::Value,
+                ops: &'static O,
+            ) -> $crate::DataResult<(Self, O::Value)> {
+                <$first_type>::decode(input, ops)
+                    .flat_map(|(s, p)| $forward(s).map(|ident| (ident, p)))
+            }
+        }
+    };
+}
+
+/// Provides an easy `xmap`-like implementation of a *second type*
+/// by using the already-existing implementation of a *first type*.
+///
+/// The macro is written as `xmap_codec_impl!(first => second, forward, backward)`,
+/// where:
+/// - `forward` is the infallible conversion `fn(first_type) -> second_type` (for decoding).
+/// - `backward` is the infallible conversion `fn(&second_type) -> first_type` (for encoding).
+#[macro_export]
+macro_rules! xmap_codec_impl {
+    ($first_type:ty => $second_type:ty, $forward:path, $backward:path) => {
+        $crate::encode_impl!(infallible $second_type, $backward);
+        $crate::decode_impl!(infallible $first_type, $second_type, $forward);
+    };
+}
+
+/// Provides an easy `comapFlatMap`-like implementation of a *second type*
+/// by using the already-existing implementation of a *first type*.
+///
+/// The macro is written as `comap_flat_map_codec_impl!(first => second, forward, backward)`,
+/// where:
+/// - `forward` is the fallible conversion `fn(first_type) -> DataResult<second_type>` (for decoding).
+/// - `backward` is the infallible conversion `fn(&second_type) -> first_type` (for encoding).
+#[macro_export]
+macro_rules! comap_flat_map_codec_impl {
+    ($first_type:ty => $second_type:ty, $forward:path, $backward:path) => {
+        $crate::encode_impl!(infallible $second_type, $backward);
+        $crate::decode_impl!(fallible $first_type, $second_type, $forward);
+    };
+}
+
+/// Provides an easy `flatComapMap`-like implementation of a *second type*
+/// by using the already-existing implementation of a *first type*.
+///
+/// The macro is written as `flat_comap_map_codec_impl!(first => second, forward, backward)`,
+/// where:
+/// - `forward` is the infallible conversion `fn(first_type) -> second_type` (for decoding).
+/// - `backward` is the fallible conversion `fn(&second_type) -> DataResult<first_type>` (for encoding).
+#[macro_export]
+macro_rules! flat_comap_map_codec_impl {
+    ($first_type:ty => $second_type:ty, $forward:path, $backward:path) => {
+        $crate::encode_impl!(fallible $second_type, $backward);
+        $crate::decode_impl!(infallible $first_type, $second_type, $forward);
+    };
+}
+
+/// Provides an easy `flatXmap`-like implementation of a *second type*
+/// by using the already-existing implementation of a *first type*.
+///
+/// The macro is written as `flat_xmap_codec_impl!(first => second, forward, backward)`,
+/// where:
+/// - `forward` is the fallible conversion `fn(first_type) -> DataResult<second_type>` (for decoding).
+/// - `backward` is the fallible conversion `fn(&second_type) -> DataResult<first_type>` (for encoding).
+#[macro_export]
+macro_rules! flat_xmap_codec_impl {
+    ($first_type:ty => $second_type:ty, $forward:path, $backward:path) => {
+        $crate::encode_impl!(fallible $second_type, $backward);
+        $crate::decode_impl!(fallible $first_type, $second_type, $forward);
+    };
+}
