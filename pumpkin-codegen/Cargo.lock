@@ -831,6 +831,7 @@ dependencies = [
  "num-traits",
  "p384",
  "proc-macro2",
+ "pumpkin-codecs",
  "pumpkin-nbt",
  "quote",
  "rsa",
