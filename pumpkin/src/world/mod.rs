@@ -57,6 +57,7 @@ use pumpkin_data::{
     item_stack::ItemStack,
     particle::Particle,
     sound::{Sound, SoundCategory},
+    sound_id_remap::remap_sound_id_for_version,
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, translation};
@@ -2351,8 +2352,12 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
         for player in self.players.load().iter() {
+            let mut sound_id = Sound::EntityGenericExplode as u16;
+            if let ClientPlatform::Java(java_client) = &player.client {
+                sound_id = remap_sound_id_for_version(sound_id, java_client.version.load());
+            }
+            let sound = IdOr::<SoundEvent>::Id(sound_id);
             if player.position().squared_distance_to_vec(&position) > 4096.0 {
                 continue;
             }
