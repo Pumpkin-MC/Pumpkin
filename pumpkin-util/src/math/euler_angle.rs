@@ -1,7 +1,7 @@
+use pumpkin_codecs::codec::list::validate_fixed_size;
+use pumpkin_codecs::{DataResult, FlatTryFrom, comap_flat_map_codec_impl};
 use pumpkin_nbt::tag::NbtTag;
 use serde::{Deserialize, Serialize};
-use pumpkin_codecs::{comap_flat_map_codec_impl, DataResult, FlatTryFrom};
-use pumpkin_codecs::codec::list::validate_fixed_size;
 
 /// Represents a 3D rotation using Euler angles in degrees.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -93,11 +93,14 @@ impl From<&EulerAngle> for Vec<f32> {
 
 impl FlatTryFrom<Vec<f32>> for EulerAngle {
     fn flat_try_from(value: Vec<f32>) -> DataResult<Self> {
-        validate_fixed_size(value, 6)
-            .map(|v| {
-                let [ x, y, z ]: [f32; 3] = v.try_into().unwrap_or_else(|_| unreachable!());
-                Self { pitch: x, yaw: y, roll: z }
-            })
+        validate_fixed_size(value, 6).map(|v| {
+            let [x, y, z]: [f32; 3] = v.try_into().unwrap_or_else(|_| unreachable!());
+            Self {
+                pitch: x,
+                yaw: y,
+                roll: z,
+            }
+        })
     }
 }
 

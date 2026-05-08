@@ -7,9 +7,9 @@ use std::hash::Hash;
 
 use crate::math::vector2::Vector2;
 use num_traits::Euclid;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use pumpkin_codecs::{comap_flat_map_codec_impl, xmap_codec_impl, DataResult, FlatTryFrom, IntStream};
 use pumpkin_codecs::codec::list::validate_fixed_size;
+use pumpkin_codecs::{DataResult, FlatTryFrom, IntStream, comap_flat_map_codec_impl};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// An iterator that yields all `BlockPos` positions within a cuboid region.
 pub struct BlockPosIterator {
@@ -635,18 +635,17 @@ impl<'de> Deserialize<'de> for BlockPos {
 
 impl From<&BlockPos> for IntStream {
     fn from(value: &BlockPos) -> Self {
-        let Vector3 {x, y, z } = value.0;
+        let Vector3 { x, y, z } = value.0;
         Self(vec![x, y, z])
     }
 }
 
 impl FlatTryFrom<IntStream> for BlockPos {
     fn flat_try_from(value: IntStream) -> DataResult<Self> {
-        validate_fixed_size(value.0, 3)
-            .map(|v| {
-                let [ x, y, z ]: [i32; 3] = v.try_into().unwrap_or_else(|_| unreachable!());
-                Self(Vector3::new(x, y, z))
-            })
+        validate_fixed_size(value.0, 3).map(|v| {
+            let [x, y, z]: [i32; 3] = v.try_into().unwrap_or_else(|_| unreachable!());
+            Self(Vector3::new(x, y, z))
+        })
     }
 }
 

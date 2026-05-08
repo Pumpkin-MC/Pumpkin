@@ -182,8 +182,7 @@ macro_rules! decode_impl {
                 input: O::Value,
                 ops: &'static O,
             ) -> $crate::DataResult<(Self, O::Value)> {
-                <$first_type>::decode(input, ops)
-                    .map(|(s, p)| ($forward(s), p))
+                <$first_type>::decode(input, ops).map(|(s, p)| ($forward(s), p))
             }
         }
     };
