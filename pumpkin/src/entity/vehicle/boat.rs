@@ -85,6 +85,12 @@ impl BoatEntity {
             for stack in loot_table.get_loot(params) {
                 world.drop_stack(&pos, stack).await;
             }
+        } else if entity_drops
+            && let Some(item) = Item::from_registry_key(self.entity.entity_type.resource_name)
+        {
+            world
+                .drop_stack(&self.entity.block_pos.load(), ItemStack::new(1, item))
+                .await;
         }
 
         self.entity.remove().await;

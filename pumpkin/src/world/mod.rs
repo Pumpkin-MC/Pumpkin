@@ -828,19 +828,28 @@ impl World {
                 let entity_bb = entity_inner.bounding_box.load();
 
                 for player in players_clone.iter() {
-                    let player_pos = player.living_entity.entity.pos.load();
+                    let (player_pos, player_collision_box) = {
+                        let player_entity = &player.living_entity.entity;
+                        let vehicle = player_entity.vehicle.lock().await.clone();
+                        if let Some(vehicle) = vehicle {
+                            let vehicle_entity = vehicle.get_entity();
+                            (
+                                vehicle_entity.pos.load(),
+                                vehicle_entity.bounding_box.load().expand(1.0, 0.5, 1.0),
+                            )
+                        } else {
+                            (
+                                player_entity.pos.load(),
+                                player_entity.bounding_box.load().expand(1.0, 0.5, 1.0),
+                            )
+                        }
+                    };
                     let entity_pos = entity_inner.pos.load();
 
                     if (player_pos.x - entity_pos.x).abs() < 5.0
                         && (player_pos.y - entity_pos.y).abs() < 5.0
                         && (player_pos.z - entity_pos.z).abs() < 5.0
-                        && player
-                            .living_entity
-                            .entity
-                            .bounding_box
-                            .load()
-                            .expand(1.0, 0.5, 1.0)
-                            .intersects(&entity_bb)
+                        && player_collision_box.intersects(&entity_bb)
                     {
                         entity_clone.on_player_collision(player).await;
                         break;
