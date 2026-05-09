@@ -27,6 +27,14 @@ body:
       placeholder: "Example: 1.0.0/39b4cb3"
     validations:
       required: true
+  - type: input
+    id: version
+    attributes:
+      label: "Client Version"
+      description: "Please share your version to help us debug this ASAP." 
+      placeholder: "Example: 26.1.2"
+    validations:
+      required: true
   - type: textarea
     id: what-happened
     attributes:
