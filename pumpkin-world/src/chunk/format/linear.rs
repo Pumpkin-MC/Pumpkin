@@ -562,13 +562,13 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         for chunk in chunks {
             let index = Self::get_chunk_index(chunk.x, chunk.y);
 
-            let result = match &self.chunks_data[index] {
-                Some(data) => match S::from_bytes(data, chunk) {
+            let result = self.chunks_data[index].as_ref().map_or_else(
+                || LoadedData::Missing(chunk),
+                |data| match S::from_bytes(data, chunk) {
                     Ok(c) => LoadedData::Loaded(c),
                     Err(err) => LoadedData::Error((chunk, err)),
                 },
-                None => LoadedData::Missing(chunk),
-            };
+            );
 
             if stream.send(result).await.is_err() {
                 // Receiver dropped — stop early to avoid unnecessary work.

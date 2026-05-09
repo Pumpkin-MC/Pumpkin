@@ -835,18 +835,21 @@ impl World {
                     let (player_pos, player_collision_box) = {
                         let player_entity = &player.living_entity.entity;
                         let vehicle = player_entity.vehicle.lock().await.clone();
-                        if let Some(vehicle) = vehicle {
-                            let vehicle_entity = vehicle.get_entity();
-                            (
-                                vehicle_entity.pos.load(),
-                                vehicle_entity.bounding_box.load().expand(1.0, 0.5, 1.0),
-                            )
-                        } else {
-                            (
-                                player_entity.pos.load(),
-                                player_entity.bounding_box.load().expand(1.0, 0.5, 1.0),
-                            )
-                        }
+                        vehicle.map_or_else(
+                            || {
+                                (
+                                    player_entity.pos.load(),
+                                    player_entity.bounding_box.load().expand(1.0, 0.5, 1.0),
+                                )
+                            },
+                            |vehicle| {
+                                let vehicle_entity = vehicle.get_entity();
+                                (
+                                    vehicle_entity.pos.load(),
+                                    vehicle_entity.bounding_box.load().expand(1.0, 0.5, 1.0),
+                                )
+                            },
+                        )
                     };
                     let entity_pos = entity_inner.pos.load();
 

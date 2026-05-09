@@ -1071,13 +1071,14 @@ impl GenerationSchedule {
                                 let holder = self.chunk_map.get_mut(&new_pos).unwrap();
                                 let mut tmp = None;
                                 swap(&mut tmp, &mut holder.chunk);
-                                let tmp = match tmp {
-                                    Some(v) => v,
-                                    None => panic!(
+                                let tmp = tmp.unwrap_or_else(
+                                    || {
+                                        panic!(
                                         "Missing chunk for position {:?} while processing generation task for {:?} stage {:?}",
                                         new_pos, node.pos, node.stage
-                                    ),
-                                };
+                                        )
+                                    },
+                                );
                                 match tmp {
                                     Chunk::Level(chunk) => {
                                         cache.chunks.push(Chunk::Level(chunk));

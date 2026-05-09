@@ -251,16 +251,16 @@ impl Blender {
         F: Fn(&BlendingData, i32, i32, i32) -> f64,
     {
         let packed = (chunk_x as u32 as u64) | ((chunk_z as u32 as u64) << 32);
-        if let Some(data) = self.height_and_biome_blending_data.get(&packed) {
-            getter(
-                data,
-                cell_x - biome_coords::from_chunk(chunk_x),
-                cell_y,
-                cell_z - biome_coords::from_chunk(chunk_z),
-            )
-        } else {
-            f64::MAX
-        }
+        self.height_and_biome_blending_data
+            .get(&packed)
+            .map_or(f64::MAX, |data| {
+                getter(
+                    data,
+                    cell_x - biome_coords::from_chunk(chunk_x),
+                    cell_y,
+                    cell_z - biome_coords::from_chunk(chunk_z),
+                )
+            })
     }
 
     pub fn blend_biome(
@@ -314,11 +314,9 @@ pub struct BlenderBiomeSupplier<'a> {
 
 impl BiomeSupplier for BlenderBiomeSupplier<'_> {
     fn biome(&self, x: i32, y: i32, z: i32, sampler: &mut MultiNoiseSampler<'_>) -> &'static Biome {
-        if let Some(blended) = self.blender.blend_biome(x, y, z, &self.shift_noise) {
-            blended
-        } else {
-            self.base.biome(x, y, z, sampler)
-        }
+        self.blender
+            .blend_biome(x, y, z, &self.shift_noise)
+            .unwrap_or_else(|| self.base.biome(x, y, z, sampler))
     }
 }
 

@@ -90,14 +90,15 @@ impl BlockStateResolver {
 
             // Block rotation (signs, banners - 0-15 value)
             "rotation" => {
-                if let Ok(rot_value) = value.parse::<i32>() {
-                    let mirrored = mirror.mirror_block_rotation(rot_value);
-                    let rotated = rotation.rotate_block_rotation(mirrored);
-                    // Use static strings for the 16 possible rotation values
-                    Self::rotation_to_str(rotated)
-                } else {
-                    Self::leak_str(value)
-                }
+                value.parse::<i32>().map_or_else(
+                    |_| Self::leak_str(value),
+                    |rot_value| {
+                        let mirrored = mirror.mirror_block_rotation(rot_value);
+                        let rotated = rotation.rotate_block_rotation(mirrored);
+                        // Use static strings for the 16 possible rotation values
+                        Self::rotation_to_str(rotated)
+                    },
+                )
             }
 
             // Half properties don't need rotation (top/bottom stays the same)

@@ -369,21 +369,25 @@ fn put_idor(nbt: &mut NbtCompound, key: &str, val: &IdOr<SoundEvent>) {
 }
 
 fn get_idor(nbt: &NbtCompound, key: &str, default: Sound) -> IdOr<SoundEvent> {
-    if let Some(sound) = nbt.get_string(key) {
-        let sound = sound.strip_prefix("minecraft:").unwrap_or(sound);
-        IdOr::Id(Sound::from_name(sound).unwrap_or(default))
-    } else if let Some(sound_compound) = nbt.get_compound(key) {
-        let sound_name = sound_compound
-            .get_string("sound_id")
-            .expect("SoundEvent compound must have a 'sound_id' field");
-        let range = sound_compound.get_float("range");
-        IdOr::Value(SoundEvent {
-            sound_name: sound_name.to_string(),
-            range,
-        })
-    } else {
-        IdOr::Id(default)
-    }
+    nbt.get_string(key).map_or_else(
+        || {
+            nbt.get_compound(key)
+                .map_or(IdOr::Id(default), |sound_compound| {
+                    let sound_name = sound_compound
+                        .get_string("sound_id")
+                        .expect("SoundEvent compound must have a 'sound_id' field");
+                    let range = sound_compound.get_float("range");
+                    IdOr::Value(SoundEvent {
+                        sound_name: sound_name.to_string(),
+                        range,
+                    })
+                })
+        },
+        |sound| {
+            let sound = sound.strip_prefix("minecraft:").unwrap_or(sound);
+            IdOr::Id(Sound::from_name(sound).unwrap_or(default))
+        },
+    )
 }
 
 fn get_idset_hash<T: IDSetContent>(val: &IDSet<T>) -> u32 {
@@ -669,14 +673,15 @@ impl ConsumableImpl {
         let consume_particles = compound.get_bool("has_consume_particles").unwrap_or(false);
         let opt_list = compound.get_list("on_consume_effects");
 
-        let effects: Cow<'static, [ConsumeEffect]> = if let Some(effect_list) = opt_list {
-            effect_list
-                .iter()
-                .filter_map(ConsumeEffect::read_data)
-                .collect()
-        } else {
-            Cow::Borrowed(&[])
-        };
+        let effects: Cow<'static, [ConsumeEffect]> = opt_list.map_or_else(
+            || Cow::Borrowed(&[] as &[ConsumeEffect]),
+            |effect_list| {
+                effect_list
+                    .iter()
+                    .filter_map(ConsumeEffect::read_data)
+                    .collect()
+            },
+        );
 
         Some(Self {
             consume_seconds,
@@ -1423,11 +1428,9 @@ impl EquippableImpl {
         let equip_sound = get_idor(compound, "equip_sound", Sound::ItemArmorEquipGeneric);
         let shearing_sound = get_idor(compound, "shearing_sound_sound", Sound::ItemShearsSnip);
 
-        let allowed_entities = if let Some(nbt) = compound.get("allowed_entities") {
-            IDSet::<EntityType>::read(nbt)
-        } else {
-            None
-        };
+        let allowed_entities = compound
+            .get("allowed_entities")
+            .and_then(IDSet::<EntityType>::read);
 
         Some(Self {
             slot,
@@ -1804,15 +1807,16 @@ pub struct PotionContentsImpl {
 impl PotionContentsImpl {
     pub fn read_data(tag: &NbtTag) -> Option<Self> {
         let compound = tag.extract_compound()?;
-        let potion_id = if let Some(id) = compound.get_int("potion") {
-            Some(id)
-        } else if let Some(name) = compound.get_string("potion") {
-            // Handle "minecraft:swiftness" -> "swiftness"
-            let name = name.strip_prefix("minecraft:").unwrap_or(name);
-            crate::potion::Potion::from_name(name).map(|p| p.id as i32)
-        } else {
-            None
-        };
+        let potion_id = compound.get_int("potion").map_or_else(
+            || {
+                compound.get_string("potion").and_then(|name| {
+                    // Handle "minecraft:swiftness" -> "swiftness"
+                    let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                    crate::potion::Potion::from_name(name).map(|p| p.id as i32)
+                })
+            },
+            Some,
+        );
 
         let custom_color = compound.get_int("custom_color");
         let custom_name = compound.get_string("custom_name").map(|s| s.to_string());
