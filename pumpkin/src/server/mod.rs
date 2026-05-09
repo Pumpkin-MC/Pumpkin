@@ -11,6 +11,7 @@ use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
+use crate::world::WorldPortal;
 use crate::world::custom_bossbar::CustomBossbars;
 use crate::{
     command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
@@ -25,6 +26,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
+use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
 use crate::command::CommandSender;
@@ -284,13 +286,14 @@ impl Server {
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                World::load(
-                    into_level(dim, &config, path, registry.clone(), seed, Some(pool)),
-                    l_info,
-                    dim,
-                    registry,
-                    weak,
-                )
+                let level = into_level(dim, &config, path, seed, Some(pool));
+                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
+                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(
+                    world.clone(),
+                    tokio::runtime::Handle::current(),
+                ));
+                level.world_portal.store(Arc::new(Some(portal)));
+                world
             })
         };
 
@@ -303,9 +306,9 @@ impl Server {
         );
 
         let worlds_vec = vec![
-            Arc::new(overworld.expect("Overworld panicked")),
-            Arc::new(nether.expect("Nether panicked")),
-            Arc::new(end.expect("End panicked")),
+            overworld.expect("Overworld panicked"),
+            nether.expect("Nether panicked"),
+            end.expect("End panicked"),
         ];
         server.worlds.store(Arc::new(worlds_vec));
         if let Ok(k) = keys {
@@ -380,27 +383,21 @@ impl Server {
             let seed = server.level_info.load().world_gen_settings.seed;
 
             // TODO: gen_pool should be reused
-            let world = World::load(
-                pumpkin_world::dimension::into_level(
-                    dimension,
-                    &config,
-                    world_path,
-                    registry.clone(),
-                    seed,
-                    None,
-                ),
-                l_info,
-                dimension,
-                registry,
-                weak,
-            );
-            let world_arc = Arc::new(world);
+            let level =
+                pumpkin_world::dimension::into_level(dimension, &config, world_path, seed, None);
+            let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+            let world = Arc::new(world);
+            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(
+                world.clone(),
+                tokio::runtime::Handle::current(),
+            ));
+            level.world_portal.store(Arc::new(Some(portal)));
             server.worlds.rcu(|worlds| {
                 let mut new_worlds = (**worlds).clone();
-                new_worlds.push(world_arc.clone());
+                new_worlds.push(world.clone());
                 new_worlds
             });
-            world_arc
+            world
         })
         .await
         .expect("World creation panicked")

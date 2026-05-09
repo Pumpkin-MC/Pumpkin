@@ -4,7 +4,7 @@ use crate::chunk::ChunkHeightmapType;
 use crate::generation::generator;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::{BlockAccessor, BlockRegistryExt};
+use crate::world::{BlockAccessor, WorldPortalExt};
 use crate::{BlockStateId, ProtoChunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::biome::Biome;
@@ -360,7 +360,7 @@ impl Cache {
         &mut self,
         stage: StagedChunkEnum,
         generator: &generator::VanillaGenerator,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         lighting_config: &LightingEngineConfig,
     ) {
         let mid = ((self.size * self.size) >> 1) as usize;
@@ -407,9 +407,12 @@ impl Cache {
                 // Engine's internal state is cleared by initialize_light() and will be dropped here
                 drop(engine);
             }
+            StagedChunkEnum::Spawn => {
+                ProtoChunk::spawn_mobs(self, block_registry);
+            }
             StagedChunkEnum::Full => {
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
-                debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
+                debug_assert_eq!(chunk.stage, StagedChunkEnum::Spawn);
                 chunk.stage = StagedChunkEnum::Full;
                 self.chunks[mid].upgrade_to_level_chunk(&generator.dimension, lighting_config);
             }

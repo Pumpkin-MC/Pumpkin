@@ -6,7 +6,7 @@ use pumpkin_util::{
 };
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct SculkPatchFeature {
     pub charge_count: i32,
@@ -21,7 +21,7 @@ pub struct SculkPatchFeature {
 impl SculkPatchFeature {
     pub fn generate<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,

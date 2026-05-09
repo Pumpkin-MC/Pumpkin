@@ -7,7 +7,7 @@ use pumpkin_util::{
 };
 
 use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
-use crate::{generation::rule::RuleTest, world::BlockRegistryExt};
+use crate::{generation::rule::RuleTest, world::WorldPortalExt};
 
 pub struct OreFeature {
     pub size: i32,
@@ -25,7 +25,7 @@ impl OreFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

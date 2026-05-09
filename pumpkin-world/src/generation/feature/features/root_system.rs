@@ -6,7 +6,7 @@ use pumpkin_util::{
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct RootSystemFeature {
     pub feature: Box<crate::generation::feature::placed_features::PlacedFeature>,
@@ -29,7 +29,7 @@ impl RootSystemFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature_name: &str,
@@ -87,7 +87,7 @@ impl RootSystemFeature {
     fn place_roots<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) {
@@ -98,7 +98,7 @@ impl RootSystemFeature {
     fn place_rooted_dirt<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) {
@@ -151,7 +151,7 @@ impl RootSystemFeature {
     fn place_hanging_roots<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) {

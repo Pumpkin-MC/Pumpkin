@@ -69,7 +69,7 @@ use super::features::{
     weeping_vines::WeepingVinesFeature,
 };
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> =
     LazyLock::new(build_configured_features);
@@ -147,7 +147,7 @@ impl ConfiguredFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature_name: &str, // This placed feature

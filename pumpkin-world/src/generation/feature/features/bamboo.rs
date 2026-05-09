@@ -9,7 +9,7 @@ use pumpkin_util::{
 };
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct BambooFeature {
     pub probability: f32,
@@ -20,7 +20,7 @@ impl BambooFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

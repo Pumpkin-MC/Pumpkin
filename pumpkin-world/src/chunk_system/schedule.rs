@@ -721,14 +721,14 @@ impl GenerationSchedule {
                         Chunk::Level(chunk) => {
                             let mut holder = self.chunk_map.remove(&new_pos).unwrap();
                             if new_pos == pos {
-                                if holder.current_stage != StagedChunkEnum::Lighting {
+                                if holder.current_stage != StagedChunkEnum::Spawn {
                                     warn!(
                                         "receive_chunk(Level): holder at {:?} for pos {:?} expected {:?}; aligning",
                                         holder.current_stage,
                                         new_pos,
-                                        StagedChunkEnum::Lighting
+                                        StagedChunkEnum::Spawn
                                     );
-                                    holder.current_stage = StagedChunkEnum::Lighting;
+                                    holder.current_stage = StagedChunkEnum::Spawn;
                                 }
                                 self.drop_node(holder.tasks[StagedChunkEnum::Full as usize]);
                                 holder.tasks[StagedChunkEnum::Full as usize] = NodeKey::null();

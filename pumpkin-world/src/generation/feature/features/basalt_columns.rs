@@ -4,7 +4,7 @@ use pumpkin_util::{
     random::{RandomGenerator, RandomImpl},
 };
 
-use crate::{generation::proto_chunk::GenerationCache, world::BlockRegistryExt};
+use crate::{generation::proto_chunk::GenerationCache, world::WorldPortalExt};
 
 const LAVA_SEA_LEVEL: i32 = 32; // TODO: use getSeaLevel() instead of hardcoding this
 const CLUSTERED_REACH: i32 = 5;
@@ -22,7 +22,7 @@ impl BasaltColumnsFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height_limit: u16,
         _feature: &str,

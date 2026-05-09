@@ -14,8 +14,9 @@ use crate::{
     },
     generation::get_world_gen,
     tick::{OrderedTick, ScheduledTick, TickPriority},
-    world::BlockRegistryExt,
+    world::WorldPortalExt,
 };
+use arc_swap::ArcSwap;
 use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
@@ -24,14 +25,11 @@ use pumpkin_data::{Block, block_properties::has_random_ticks, fluid::Fluid};
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{
     path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
-    },
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     thread,
 };
 use tokio::time::timeout;
@@ -62,7 +60,7 @@ pub type SyncEntityChunk = Arc<ChunkEntityData>;
 /// For more details on world generation, refer to the `WorldGenerator` module.
 pub struct Level {
     pub seed: Seed,
-    pub block_registry: Arc<dyn BlockRegistryExt>,
+    pub world_portal: ArcSwap<Option<Arc<dyn WorldPortalExt>>>,
     pub level_folder: LevelFolder,
     pub lighting_config: LightingEngineConfig,
 
@@ -143,7 +141,6 @@ impl Level {
     pub fn from_root_folder(
         level_config: &LevelConfig,
         root_folder: PathBuf,
-        block_registry: Arc<dyn BlockRegistryExt>,
         seed: i64,
         dimension: Dimension,
         gen_pool: Option<Arc<rayon::ThreadPool>>,
@@ -187,7 +184,7 @@ impl Level {
 
         let level_ref = Arc::new(Self {
             seed,
-            block_registry,
+            world_portal: ArcSwap::new(Arc::new(None)),
             world_gen,
             level_folder,
             lighting_config: level_config.lighting,
