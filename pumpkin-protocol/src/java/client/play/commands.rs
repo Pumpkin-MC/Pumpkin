@@ -227,6 +227,7 @@ pub enum ArgumentType<'a> {
     ResourceOrTagKey { identifier: &'a str },
     Resource { identifier: &'a str },
     ResourceKey { identifier: &'a str },
+    ResourceSelector,
     TemplateMirror,
     TemplateRotation,
     Heightmap,
@@ -247,20 +248,36 @@ impl ArgumentType<'_> {
     pub fn to_id(&self, version: &MinecraftVersion) -> i32 {
         // Safety: Since Self is repr(u32), it is guaranteed to hold the discriminant in the first 4 bytes
         // See https://doc.rust-lang.org/reference/items/enumerations.html#pointer-casting
-        let mut id = unsafe { *std::ptr::from_ref::<Self>(self).cast::<i32>() };
+        let id = unsafe { *std::ptr::from_ref::<Self>(self).cast::<i32>() };
 
-        if version < &MinecraftVersion::V_1_21_6 {
+        // TODO: Should probably be extracting ViaVersion backward mapping data for this
+        if version < &MinecraftVersion::V_1_21_5 {
             match id {
-                ..=16 => {}
-                // 17 => HexColor
-                18..=53 => id -= 1,
-                // 54 => Dialog
-                55.. => id -= 2,
-                _ => panic!("{self:?} does not exist in this Minecraft version (< 1.21.6)."),
-            }
-        }
+                ..=16 => id,
+                18..=46 => id - 1,
+                48..=53 => id - 2,
+                55.. => id - 3,
 
-        id
+                // Fallbacks:
+                // 17 HexColor => String
+                // 47 ResourceSelector => String
+                // 54 Dialog => String
+                17 | 47 | 54 => 5,
+            }
+        } else if version < &MinecraftVersion::V_1_21_6 {
+            match id {
+                ..=16 => id,
+                18..=53 => id - 1,
+                55.. => id - 2,
+
+                // Fallbacks:
+                // 17 HexColor => String
+                // 54 Dialog => String
+                17 | 54 => 5,
+            }
+        } else {
+            id
+        }
     }
 
     #[expect(clippy::match_same_arms)]
