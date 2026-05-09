@@ -8,6 +8,7 @@ use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, living::Li
 use crate::server::Server;
 use crate::world::loot::{LootContextParameters, LootTableExt};
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tracked_data::TrackedData;
