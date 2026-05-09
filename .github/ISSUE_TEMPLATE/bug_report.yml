@@ -30,9 +30,9 @@ body:
   - type: input
     id: clientversion
     attributes:
-      label: "Client Version"
+      label: "Client Version (Bedrock/Java)"
       description: "Please share your version to help us debug this ASAP." 
-      placeholder: "Example: 26.1.2"
+      placeholder: "Example: java 26.1.2"
     validations:
       required: true
   - type: textarea
