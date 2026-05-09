@@ -61,7 +61,7 @@ mod worldborder;
 #[must_use]
 pub async fn default_dispatcher(
     registry: &RwLock<PermissionRegistry>,
-    basic_config: &BasicConfiguration,
+    _basic_config: &BasicConfiguration,
 ) -> CommandDispatcher {
     let mut dispatcher = crate::command::dispatcher::CommandDispatcher::default();
 
@@ -82,10 +82,6 @@ pub async fn default_dispatcher(
     dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
     dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
     dispatcher.register(time::init_command_tree(), "minecraft:command.time");
-    dispatcher.register(
-        tick::init_command_tree(basic_config.tps),
-        "minecraft:command.tick",
-    );
     dispatcher.register(give::init_command_tree(), "minecraft:command.give");
     dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
     dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
@@ -129,7 +125,6 @@ pub async fn default_dispatcher(
     );
     dispatcher.register(data::init_command_tree(), "minecraft:command.data");
     // Three
-    dispatcher.register(op::init_command_tree(), "minecraft:command.op");
     dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
     dispatcher.register(kick::init_command_tree(), "minecraft:command.kick");
     dispatcher.register(plugin::init_command_tree(), "pumpkin:command.plugin");
@@ -154,10 +149,12 @@ pub async fn default_dispatcher(
     difficulty::register(&mut dispatcher, registry);
     help::register(&mut dispatcher, registry);
     kill::register(&mut dispatcher, registry);
+    op::register(&mut dispatcher, registry);
     list::register(&mut dispatcher, registry);
     seed::register(&mut dispatcher, registry);
     setidletimeout::register(&mut dispatcher, registry);
     stop::register(&mut dispatcher, registry);
+    tick::register(&mut dispatcher, registry);
 
     dispatcher
 }
@@ -412,13 +409,6 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .unwrap();
     registry
         .register_permission(Permission::new(
-            "minecraft:command.op",
-            "Grants operator status to a player",
-            PermissionDefault::Op(PermissionLvl::Three),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
             "minecraft:command.deop",
             "Revokes operator status from a player",
             PermissionDefault::Op(PermissionLvl::Three),
@@ -477,13 +467,6 @@ fn register_level_3_permissions(registry: &mut PermissionRegistry) {
         .register_permission(Permission::new(
             "minecraft:command.whitelist",
             "Manages server whitelist",
-            PermissionDefault::Op(PermissionLvl::Three),
-        ))
-        .unwrap();
-    registry
-        .register_permission(Permission::new(
-            "minecraft:command.tick",
-            "Triggers the tick event",
             PermissionDefault::Op(PermissionLvl::Three),
         ))
         .unwrap();

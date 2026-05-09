@@ -7,7 +7,9 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
-use crate::net::GameProfile;
+use crate::net::authentication::lookup_profile_by_name;
+use crate::net::{GameProfile, offline_uuid};
+use crate::server::Server;
 use pumpkin_data::translation;
 use uuid::Uuid;
 
@@ -25,27 +27,153 @@ pub enum GameProfileResult {
 }
 
 impl GameProfileResult {
+    fn unknown_player_syntax_error() -> CommandSyntaxError {
+        UNKNOWN_PLAYER_ERROR_TYPE.create_without_context()
+    }
+
     /// Resolves this result with the help of a [`CommandSource`].
+    ///
+    /// # Warning
+    ///
+    /// Do not lock write/read access to one of these data locks
+    /// before calling this method, as that may cause a *deadlock*:
+    /// - `server.data.user_cache`
+    /// - `server.data.operator_config`
+    /// - `server.data.banned_player_list`
+    /// - `server.data.whitelist_config`
+    ///
+    /// Instead, call this method *before* using `write()`/`read()` on a lock.
     pub async fn resolve(
         &self,
         source: &CommandSource,
     ) -> Result<Vec<GameProfile>, CommandSyntaxError> {
         let players = match self {
             Self::Selector(selector) => selector.find_players(source).await,
-            Self::Name(name) => source
-                .server()
-                .get_player_by_name(name.as_str())
-                .map_or_else(
-                    || Err(UNKNOWN_PLAYER_ERROR_TYPE.create_without_context()),
-                    |p| Ok(vec![p]),
-                ),
-            Self::Uuid(uuid) => source.server().get_player_by_uuid(*uuid).map_or_else(
-                || Err(UNKNOWN_PLAYER_ERROR_TYPE.create_without_context()),
-                |p| Ok(vec![p]),
-            ),
+            Self::Name(name) => {
+                let server = source.server();
+                if let Some(player) = server.get_player_by_name(name) {
+                    return Ok(vec![player.gameprofile.clone()]);
+                }
+
+                let cached_entry = server.data.user_cache.write().await.get_by_name(name);
+                if let Some(entry) = cached_entry {
+                    return Ok(vec![Self::profile_from_uuid_name(entry.uuid, entry.name)]);
+                }
+
+                if let Some(profile) = Self::resolve_known_profile_by_name(server, name).await {
+                    return Ok(vec![profile]);
+                }
+
+                if server.basic_config.online_mode {
+                    return match lookup_profile_by_name(
+                        name,
+                        &server.advanced_config.networking.authentication,
+                    ) {
+                        Ok(Some((uuid, resolved_name))) => {
+                            server
+                                .data
+                                .user_cache
+                                .write()
+                                .await
+                                .upsert(uuid, resolved_name.clone());
+                            Ok(vec![Self::profile_from_uuid_name(uuid, resolved_name)])
+                        }
+                        _ => Err(Self::unknown_player_syntax_error()),
+                    };
+                } else if let Ok(uuid) = offline_uuid(name) {
+                    let profile = Self::profile_from_uuid_name(uuid, name.clone());
+                    server
+                        .data
+                        .user_cache
+                        .write()
+                        .await
+                        .upsert(profile.id, profile.name.clone());
+                    return Ok(vec![profile]);
+                }
+
+                return Err(Self::unknown_player_syntax_error());
+            }
+            Self::Uuid(uuid) => {
+                let server = source.server();
+
+                if let Some(player) = server.get_player_by_uuid(*uuid) {
+                    return Ok(vec![player.gameprofile.clone()]);
+                }
+
+                let cached_entry = server.data.user_cache.write().await.get_by_uuid(*uuid);
+                if let Some(entry) = cached_entry {
+                    return Ok(vec![Self::profile_from_uuid_name(entry.uuid, entry.name)]);
+                }
+
+                if let Some(profile) = Self::resolve_known_profile_by_uuid(server, *uuid).await {
+                    return Ok(vec![profile]);
+                }
+
+                return Err(Self::unknown_player_syntax_error());
+            }
         }?;
 
         Ok(players.iter().map(|p| &p.gameprofile).cloned().collect())
+    }
+
+    async fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<GameProfile> {
+        let ops = server.data.operator_config.read().await;
+        if let Some(op) = ops.ops.iter().find(|op| op.name.eq_ignore_ascii_case(name)) {
+            return Some(Self::profile_from_uuid_name(op.uuid, op.name.clone()));
+        }
+
+        let banned_players = server.data.banned_player_list.read().await;
+        if let Some(entry) = banned_players
+            .banned_players
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case(name))
+        {
+            return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
+        }
+
+        let whitelist = server.data.whitelist_config.read().await;
+        if let Some(entry) = whitelist
+            .whitelist
+            .iter()
+            .find(|entry| entry.name.eq_ignore_ascii_case(name))
+        {
+            return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
+        }
+
+        None
+    }
+
+    async fn resolve_known_profile_by_uuid(server: &Server, uuid: Uuid) -> Option<GameProfile> {
+        let ops = server.data.operator_config.read().await;
+        if let Some(op) = ops.ops.iter().find(|op| op.uuid == uuid) {
+            return Some(Self::profile_from_uuid_name(op.uuid, op.name.clone()));
+        }
+
+        let banned_players = server.data.banned_player_list.read().await;
+        if let Some(entry) = banned_players
+            .banned_players
+            .iter()
+            .find(|entry| entry.uuid == uuid)
+        {
+            return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
+        }
+
+        let whitelist = server.data.whitelist_config.read().await;
+        if let Some(entry) = whitelist.whitelist.iter().find(|entry| entry.uuid == uuid) {
+            return Some(Self::profile_from_uuid_name(entry.uuid, entry.name.clone()));
+        }
+
+        None
+    }
+
+    #[allow(clippy::missing_const_for_fn)]
+    fn profile_from_uuid_name(uuid: Uuid, name: String) -> GameProfile {
+        GameProfile {
+            id: uuid,
+            name,
+            properties: vec![],
+            profile_actions: None,
+        }
     }
 }
 
@@ -102,6 +230,17 @@ impl GameProfileArgumentType {
     }
 
     /// Tries to get any number of [`GameProfile`]s from a parsed argument of the provided [`CommandContext`].
+    ///
+    /// # Warning
+    ///
+    /// Do not lock write/read access to one of these data locks
+    /// before calling this method, as that may cause a *deadlock*:
+    /// - `server.data.user_cache`
+    /// - `server.data.operator_config`
+    /// - `server.data.banned_player_list`
+    /// - `server.data.whitelist_config`
+    ///
+    /// Instead, call this function *before* using `write()`/`read()` on a lock.
     pub async fn get(
         context: &CommandContext<'_>,
         name: &str,
