@@ -1,0 +1,124 @@
+use pumpkin_util::math::vector2::Vector2;
+use std::{num::NonZeroU8, sync::Arc};
+
+use pumpkin_protocol::{
+    bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
+    java::client::play::{CCenterChunk, CUnloadChunk},
+};
+use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
+
+use crate::{
+    entity::{EntityBase, player::Player},
+    net::ClientPlatform,
+};
+
+pub fn get_view_distance(player: &Player) -> NonZeroU8 {
+    let server = player.world().server.upgrade().unwrap();
+    player.config.load().view_distance.clamp(
+        NonZeroU8::new(2).unwrap(),
+        server.basic_config.view_distance,
+    )
+}
+
+// Checks if the target chunk is within the view distance
+// of the center chunk. Uses Chebyshev distance.
+#[must_use]
+#[inline]
+pub fn is_within_view_distance(
+    center: Vector2<i32>,
+    target: Vector2<i32>,
+    view_distance: i32,
+) -> bool {
+    (target.x - center.x).abs().max((target.y - center.y).abs()) <= view_distance
+}
+
+pub async fn update_position(player: &Arc<Player>) {
+    let entity = &player.living_entity.entity;
+    let new_chunk_center = entity.chunk_pos.load();
+    let old_cylindrical = player.watched_section.load();
+
+    // This does break when a new player spawns
+    // if old_cylindrical.center == new_chunk_center {
+    //     return;
+    // }
+
+    let view_distance = get_view_distance(player);
+    let new_cylindrical = Cylindrical::new(new_chunk_center, view_distance);
+
+    if old_cylindrical == new_cylindrical {
+        return;
+    }
+
+    match &player.client {
+        ClientPlatform::Java(java_client) => {
+            java_client
+                .send_packet_now(&CCenterChunk {
+                    chunk_x: new_chunk_center.x.into(),
+                    chunk_z: new_chunk_center.y.into(),
+                })
+                .await;
+        }
+        ClientPlatform::Bedrock(bedrock_client) => {
+            bedrock_client
+                .send_game_packet(&CNetworkChunkPublisherUpdate::new(
+                    player.get_entity().block_pos.load(),
+                    u32::from(view_distance.get()) * 16,
+                ))
+                .await;
+        }
+    }
+    let mut loading_chunks = Vec::new();
+    let mut unloading_chunks = Vec::new();
+    Cylindrical::for_each_changed_chunk(
+        old_cylindrical,
+        new_cylindrical,
+        &mut loading_chunks,
+        &mut unloading_chunks,
+    );
+
+    // Use the chunk_manager's world reference, which is updated on dimension change.
+    // This ensures we load chunks from the correct world after portal teleportation.
+    let world = {
+        let mut chunk_manager = player.chunk_manager.lock().await;
+        let world = chunk_manager.world().clone();
+        chunk_manager.update_center_and_view_distance(
+            new_chunk_center,
+            view_distance.into(),
+            &world.level,
+            &loading_chunks,
+            &unloading_chunks,
+        );
+        world
+    };
+
+    player.watched_section.store(new_cylindrical);
+
+    if let ClientPlatform::Java(_) = &player.client {
+        for chunk in &unloading_chunks {
+            player
+                .client
+                .enqueue_packet(&CUnloadChunk::new(chunk.x, chunk.y))
+                .await;
+        }
+    }
+
+    // Make sure the watched section and the chunk watcher updates are async atomic. We want to
+    // ensure what we unload when the player disconnects is correct.
+    world
+        .level
+        .mark_chunks_as_newly_watched(&loading_chunks)
+        .await;
+    let chunks_to_clean = world
+        .level
+        .mark_chunks_as_not_watched(&unloading_chunks)
+        .await;
+
+    if !chunks_to_clean.is_empty() {
+        world.level.clean_entity_chunks(&chunks_to_clean);
+        world.remove_entities_in_chunks(&chunks_to_clean).await;
+    }
+
+    if !loading_chunks.is_empty() {
+        world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
+    }
+}

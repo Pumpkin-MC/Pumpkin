@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Допомагаємо кожному запускати швидкі \nта ефективні сервери в Minecraft.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s, Протокол %s)\n",
+    "commands.pumpkin.github": "[Github репозиторій]",
+    "commands.pumpkin.website": "[Сайт]",
+    "commands.pumpkin.version.hover": "Натисніть щоб скопіювати версію",
+    "commands.pumpkin.description.hover": "Натисніть щоб скопіювати опис",
+    "commands.pumpkin.minecraft_version.hover": "Натисніть щоб скопіювати версію Minecraft",
+    "commands.pumpkin.github.hover": "Натисніть щоб відкрити репозиторій.",
+    "commands.pumpkin.website.hover": "Натисніть щоб відкрити сайт."
+}

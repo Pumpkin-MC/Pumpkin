@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "Giúp bất cứ ai có thể host một server Minecraft nhanh và mượt.\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %1$s, Giao thức %2$s)\n",
+    "commands.pumpkin.github": "[Repositorys GitHub]",
+    "commands.pumpkin.website": "[Trang web]",
+    "commands.pumpkin.version.hover": "Click để sao chép phiên bản",
+    "commands.pumpkin.description.hover": "Click để sao chép mô tả",
+    "commands.pumpkin.minecraft_version.hover": "Click để sao chép phiên bản Minecraft",
+    "commands.pumpkin.github.hover": "Click để mở repository.",
+    "commands.pumpkin.website.hover": "Click để mở trang web."
+}

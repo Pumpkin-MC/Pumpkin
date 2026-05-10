@@ -1,0 +1,61 @@
+use pumpkin_data::{Block, tag, tag::Taggable};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{BlockStateId, world::BlockAccessor};
+
+pub mod bamboo;
+pub mod bamboo_sapling;
+pub mod big_dripleaf;
+pub mod big_dripleaf_stem;
+pub mod bush;
+pub mod cactus;
+pub mod cactus_flower;
+pub mod chorus_flower;
+pub mod chorus_plant;
+pub mod crop;
+pub mod dry_vegetation;
+pub mod flower;
+pub mod flowerbed;
+pub mod fungus;
+pub mod kelp;
+pub mod leaf_litter;
+pub mod lily_pad;
+pub mod mushroom_plant;
+pub mod nether_sprouts;
+pub mod roots;
+pub mod sapling;
+pub mod sea_pickles;
+pub mod seagrass;
+pub mod segmented;
+pub mod short_plant;
+pub mod small_dripleaf;
+pub mod spore_blossom;
+pub mod sugar_cane;
+pub mod tall_plant;
+pub mod tall_seagrass;
+pub mod twisting_vines;
+pub mod weeping_vines;
+pub mod wither_rose;
+
+trait PlantBlockBase {
+    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = block_accessor.get_block(pos).await;
+        block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_VEGETATION)
+    }
+
+    async fn get_state_for_neighbor_update(
+        &self,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+        block_state: BlockStateId,
+    ) -> BlockStateId {
+        if !self.can_place_at(block_accessor, block_pos).await {
+            return Block::AIR.default_state.id;
+        }
+        block_state
+    }
+
+    async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        self.can_plant_on_top(block_accessor, &block_pos.down())
+            .await
+    }
+}

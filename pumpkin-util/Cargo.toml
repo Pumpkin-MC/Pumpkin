@@ -1,0 +1,36 @@
+[package]
+name = "pumpkin-util"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+pumpkin-nbt.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+bytes.workspace = true
+
+num-derive.workspace = true
+num-traits.workspace = true
+
+colored.workspace = true
+md5.workspace = true
+quote.workspace = true
+syn.workspace = true
+proc-macro2.workspace = true
+enum_dispatch.workspace = true
+
+uuid.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+base64.workspace = true
+p384 = { workspace = true, features = ["ecdsa"] }
+thiserror.workspace = true
+ecdsa.workspace = true
+rsa.workspace = true
+sha2.workspace = true
+crypto-bigint.workspace = true
+ureq.workspace = true
+
+[lints]
+workspace = true

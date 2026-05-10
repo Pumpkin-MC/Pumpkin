@@ -1,0 +1,35 @@
+use pumpkin_data::Block;
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+
+use crate::generation::proto_chunk::GenerationCache;
+use crate::{
+    generation::block_state_provider::BlockStateProvider,
+    world::{BlockAccessor, WorldPortalExt},
+};
+
+pub struct SimpleBlockFeature {
+    pub to_place: BlockStateProvider,
+    pub schedule_tick: Option<bool>,
+}
+
+impl SimpleBlockFeature {
+    pub fn generate<T: GenerationCache>(
+        &self,
+        block_registry: &dyn WorldPortalExt,
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> bool {
+        let state = self.to_place.get(random, pos);
+        let block = Block::from_state_id(state.id);
+        let block_accessor: &dyn BlockAccessor = chunk;
+        if !block_registry.can_place_at(block, state, block_accessor, &pos) {
+            return false;
+        }
+
+        // TODO: check things..
+        chunk.set_block_state(&pos.0, state);
+        // TODO: schedule tick when needed
+        true
+    }
+}

@@ -1,0 +1,30 @@
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+
+use crate::{ProtoChunk, generation::block_state_provider::BlockStateProvider};
+
+pub struct FallenTreeFeature {
+    pub trunk_provider: BlockStateProvider,
+}
+
+impl FallenTreeFeature {
+    pub const fn generate(
+        &self,
+        _chunk: &mut ProtoChunk,
+        _min_y: i8,
+        _height: u16,
+        _feature: &str, // This placed feature
+        _random: &mut RandomGenerator,
+        _pos: BlockPos,
+    ) -> bool {
+        false
+    }
+
+    fn gen_stump(&self, chunk: &mut ProtoChunk, random: &mut RandomGenerator, pos: BlockPos) {
+        chunk.set_block_state(
+            pos.0.x,
+            pos.0.y,
+            pos.0.z,
+            self.trunk_provider.get(random, pos),
+        );
+    }
+}

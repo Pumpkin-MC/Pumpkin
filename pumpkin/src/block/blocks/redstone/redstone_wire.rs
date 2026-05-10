@@ -1,0 +1,571 @@
+use std::sync::Arc;
+
+use pumpkin_data::block_properties::{
+    BlockProperties, EastRedstone, NorthRedstone, ObserverLikeProperties,
+    RedstoneWireLikeProperties, RepeaterLikeProperties, SouthRedstone, WestRedstone,
+};
+use pumpkin_data::{Block, BlockDirection, BlockState, HorizontalFacingExt};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::BlockStateId;
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
+
+use crate::block::registry::BlockActionResult;
+use crate::block::{
+    BlockFuture, BrokenArgs, CanPlaceAtArgs, GetRedstonePowerArgs, GetStateForNeighborUpdateArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs, PrepareArgs,
+};
+use crate::{
+    block::{BlockBehaviour, NormalUseArgs},
+    world::World,
+};
+
+use super::turbo::RedstoneWireTurbo;
+use super::{get_redstone_power_no_dust, update_wire_neighbors};
+
+type RedstoneWireProperties = RedstoneWireLikeProperties;
+
+#[pumpkin_block("minecraft:redstone_wire")]
+pub struct RedstoneWireBlock;
+
+impl BlockBehaviour for RedstoneWireBlock {
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    }
+
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut wire = RedstoneWireProperties::default(args.block);
+            wire.power = calculate_power(args.world, args.position).await;
+            wire = get_regulated_sides(wire, args.world, args.position).await;
+            if is_dot(wire) {
+                wire = make_cross(wire.power);
+            }
+
+            wire.to_state_id(args.block)
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            let mut wire = RedstoneWireProperties::from_state_id(args.state_id, args.block);
+            let old_state = wire;
+            let new_side: WireConnection;
+
+            match args.direction {
+                BlockDirection::Up => {
+                    return args.state_id;
+                }
+                BlockDirection::Down => {
+                    return get_regulated_sides(wire, args.world, args.position)
+                        .await
+                        .to_state_id(args.block);
+                }
+                BlockDirection::North => {
+                    let side = get_side(args.world, args.position, BlockDirection::North).await;
+                    wire.north = side.to_north();
+                    new_side = side;
+                }
+                BlockDirection::South => {
+                    let side = get_side(args.world, args.position, BlockDirection::South).await;
+                    wire.south = side.to_south();
+                    new_side = side;
+                }
+                BlockDirection::East => {
+                    let side = get_side(args.world, args.position, BlockDirection::East).await;
+                    wire.east = side.to_east();
+                    new_side = side;
+                }
+                BlockDirection::West => {
+                    let side = get_side(args.world, args.position, BlockDirection::West).await;
+                    wire.west = side.to_west();
+                    new_side = side;
+                }
+            }
+
+            wire = get_regulated_sides(wire, args.world, args.position).await;
+            wire.power = calculate_power(args.world, args.position).await;
+
+            if is_cross(old_state) && new_side.is_none() {
+                return wire.to_state_id(args.block);
+            }
+            if !is_dot(old_state) && is_dot(wire) {
+                let power = wire.power;
+                wire = make_cross(power);
+            }
+            wire.to_state_id(args.block)
+        })
+    }
+
+    fn prepare<'a>(&'a self, args: PrepareArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            let wire_props =
+                RedstoneWireLikeProperties::from_state_id(args.state_id, &Block::REDSTONE_WIRE);
+
+            for direction in BlockDirection::horizontal() {
+                let other_block_pos = args.position.offset(direction.to_offset());
+                let other_block = args.world.get_block(&other_block_pos).await;
+
+                if wire_props.is_side_connected(direction) && other_block != &Block::REDSTONE_WIRE {
+                    let up_block_pos = other_block_pos.up();
+                    let up_block = args.world.get_block(&up_block_pos).await;
+                    if up_block == &Block::REDSTONE_WIRE {
+                        args.world
+                            .replace_with_state_for_neighbor_update(
+                                &up_block_pos,
+                                direction.opposite(),
+                                args.flags,
+                            )
+                            .await;
+                    }
+
+                    let down_block_pos = other_block_pos.down();
+                    let down_block = args.world.get_block(&down_block_pos).await;
+                    if down_block == &Block::REDSTONE_WIRE {
+                        args.world
+                            .replace_with_state_for_neighbor_update(
+                                &down_block_pos,
+                                direction.opposite(),
+                                args.flags,
+                            )
+                            .await;
+                    }
+                }
+            }
+            for side_dir in BlockDirection::all() {
+                let side_block_pos = args.position.offset(side_dir.to_offset());
+                for dir in BlockDirection::all() {
+                    if dir.opposite() == side_dir {
+                        continue;
+                    }
+                    let side_neighbor_pos = side_block_pos.offset(dir.to_offset());
+                    let side_neighbor_block = args.world.get_block(&side_neighbor_pos).await;
+                    if side_neighbor_block == &Block::REDSTONE_WALL_TORCH
+                        || side_neighbor_block == &Block::PISTON
+                        || side_neighbor_block == &Block::STICKY_PISTON
+                    {
+                        args.world
+                            .update_neighbor(&side_neighbor_pos, &Block::REDSTONE_WIRE)
+                            .await;
+                    }
+                }
+            }
+        })
+    }
+
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let state = args.world.get_block_state(args.position).await;
+            let wire = RedstoneWireProperties::from_state_id(state.id, args.block);
+            if on_use(wire, args.world, args.position).await {
+                BlockActionResult::Success
+            } else {
+                BlockActionResult::Pass
+            }
+        })
+    }
+
+    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if can_place_at(args.world.as_ref(), args.position).await {
+                let state = args.world.get_block_state(args.position).await;
+                let mut wire = RedstoneWireProperties::from_state_id(state.id, args.block);
+                let new_power = calculate_power(args.world, args.position).await;
+                if wire.power != new_power {
+                    wire.power = new_power;
+                    args.world
+                        .set_block_state(
+                            args.position,
+                            wire.to_state_id(&Block::REDSTONE_WIRE),
+                            BlockFlags::empty(),
+                        )
+                        .await;
+                    RedstoneWireTurbo::update_surrounding_neighbors(args.world, *args.position)
+                        .await;
+                }
+            } else {
+                args.world
+                    .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
+                    .await;
+            }
+        })
+    }
+
+    fn get_weak_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
+            if args.direction == BlockDirection::Up
+                || wire.is_side_connected(args.direction.opposite())
+            {
+                wire.power
+            } else {
+                0
+            }
+        })
+    }
+
+    fn get_strong_redstone_power<'a>(
+        &'a self,
+        args: GetRedstonePowerArgs<'a>,
+    ) -> BlockFuture<'a, u8> {
+        Box::pin(async move {
+            let wire = RedstoneWireProperties::from_state_id(args.state.id, args.block);
+            if args.direction == BlockDirection::Up
+                || wire.is_side_connected(args.direction.opposite())
+            {
+                wire.power
+            } else {
+                0
+            }
+        })
+    }
+
+    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            update_wire_neighbors(args.world, args.position).await;
+        })
+    }
+
+    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            update_wire_neighbors(args.world, args.position).await;
+        })
+    }
+}
+
+async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    let floor = world.get_block_state(&block_pos.down()).await;
+    floor.is_side_solid(BlockDirection::Up)
+}
+
+async fn on_use(wire: RedstoneWireProperties, world: &Arc<World>, block_pos: &BlockPos) -> bool {
+    if is_cross(wire) || is_dot(wire) {
+        let mut new_wire = if is_cross(wire) {
+            RedstoneWireProperties::default(&Block::REDSTONE_WIRE)
+        } else {
+            make_cross(wire.power)
+        };
+        new_wire.power = wire.power;
+
+        new_wire = get_regulated_sides(new_wire, world, block_pos).await;
+        if wire != new_wire {
+            world
+                .set_block_state(
+                    block_pos,
+                    new_wire.to_state_id(&Block::REDSTONE_WIRE),
+                    BlockFlags::empty(),
+                )
+                .await;
+            update_wire_neighbors(world, block_pos).await;
+            return true;
+        }
+    }
+    false
+}
+
+#[must_use]
+pub const fn make_cross(power: u8) -> RedstoneWireProperties {
+    RedstoneWireProperties {
+        north: NorthRedstone::Side,
+        south: SouthRedstone::Side,
+        east: EastRedstone::Side,
+        west: WestRedstone::Side,
+        power,
+    }
+}
+
+async fn can_connect_to(
+    world: &World,
+    block: &Block,
+    side: BlockDirection,
+    state: &BlockState,
+) -> bool {
+    if world
+        .block_registry
+        .emits_redstone_power(block, state, side)
+        .await
+    {
+        return true;
+    }
+    if block == &Block::REPEATER {
+        let repeater_props = RepeaterLikeProperties::from_state_id(state.id, block);
+        return repeater_props.facing.to_block_direction() == side
+            || repeater_props.facing.to_block_direction() == side.opposite();
+    } else if block == &Block::OBSERVER {
+        let observer_props = ObserverLikeProperties::from_state_id(state.id, block);
+        return observer_props.facing == side.to_facing();
+    } else if block == &Block::REDSTONE_WIRE {
+        return true;
+    }
+    false
+}
+
+fn can_connect_diagonal_to(block: &Block) -> bool {
+    block == &Block::REDSTONE_WIRE
+}
+
+pub async fn get_side(world: &World, pos: &BlockPos, side: BlockDirection) -> WireConnection {
+    let neighbor_pos: BlockPos = pos.offset(side.to_offset());
+    let (neighbor, state) = world.get_block_and_state(&neighbor_pos).await;
+
+    if can_connect_to(world, neighbor, side, state).await {
+        return WireConnection::Side;
+    }
+
+    let up_pos = pos.offset(BlockDirection::Up.to_offset());
+    let up_state = world.get_block_state(&up_pos).await;
+
+    if !up_state.is_solid_block()
+        && state.is_side_solid(side.opposite())
+        && can_connect_diagonal_to(
+            world
+                .get_block(&neighbor_pos.offset(BlockDirection::Up.to_offset()))
+                .await,
+        )
+    {
+        WireConnection::Up
+    } else if !state.is_solid_block()
+        && can_connect_diagonal_to(
+            world
+                .get_block(&neighbor_pos.offset(BlockDirection::Down.to_offset()))
+                .await,
+        )
+    {
+        WireConnection::Side
+    } else {
+        WireConnection::None
+    }
+}
+
+async fn get_all_sides(
+    mut wire: RedstoneWireProperties,
+    world: &World,
+    pos: &BlockPos,
+) -> RedstoneWireProperties {
+    wire.north = get_side(world, pos, BlockDirection::North).await.to_north();
+    wire.south = get_side(world, pos, BlockDirection::South).await.to_south();
+    wire.east = get_side(world, pos, BlockDirection::East).await.to_east();
+    wire.west = get_side(world, pos, BlockDirection::West).await.to_west();
+    wire
+}
+
+#[must_use]
+pub fn is_dot(wire: RedstoneWireProperties) -> bool {
+    wire.north == NorthRedstone::None
+        && wire.south == SouthRedstone::None
+        && wire.east == EastRedstone::None
+        && wire.west == WestRedstone::None
+}
+
+#[must_use]
+pub fn is_cross(wire: RedstoneWireProperties) -> bool {
+    wire.north == NorthRedstone::Side
+        && wire.south == SouthRedstone::Side
+        && wire.east == EastRedstone::Side
+        && wire.west == WestRedstone::Side
+}
+
+pub async fn get_regulated_sides(
+    wire: RedstoneWireProperties,
+    world: &World,
+    pos: &BlockPos,
+) -> RedstoneWireProperties {
+    let mut state = get_all_sides(wire, world, pos).await;
+    if is_dot(wire) && is_dot(state) {
+        return state;
+    }
+    let north_none = state.north == NorthRedstone::None;
+    let south_none = state.south == SouthRedstone::None;
+    let east_none = state.east == EastRedstone::None;
+    let west_none = state.west == WestRedstone::None;
+    let north_south_none = north_none && south_none;
+    let east_west_none = east_none && west_none;
+    if north_none && east_west_none {
+        state.north = NorthRedstone::Side;
+    }
+    if south_none && east_west_none {
+        state.south = SouthRedstone::Side;
+    }
+    if east_none && north_south_none {
+        state.east = EastRedstone::Side;
+    }
+    if west_none && north_south_none {
+        state.west = WestRedstone::Side;
+    }
+    state
+}
+
+trait RedstoneWireLikePropertiesExt {
+    fn is_side_connected(&self, direction: BlockDirection) -> bool;
+    //fn get_connection_type(&self, direction: BlockDirection) -> WireConnection;
+}
+
+impl RedstoneWireLikePropertiesExt for RedstoneWireLikeProperties {
+    fn is_side_connected(&self, direction: BlockDirection) -> bool {
+        match direction {
+            BlockDirection::North => self.north.to_wire_connection().is_connected(),
+            BlockDirection::South => self.south.to_wire_connection().is_connected(),
+            BlockDirection::East => self.east.to_wire_connection().is_connected(),
+            BlockDirection::West => self.west.to_wire_connection().is_connected(),
+            _ => false,
+        }
+    }
+
+    /*
+    fn get_connection_type(&self, direction: BlockDirection) -> WireConnection {
+        match direction {
+            BlockDirection::North => self.north.to_wire_connection(),
+            BlockDirection::South => self.south.to_wire_connection(),
+            BlockDirection::East => self.east.to_wire_connection(),
+            BlockDirection::West => self.west.to_wire_connection(),
+            _ => WireConnection::None,
+        }
+    }
+     */
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WireConnection {
+    Up,
+    Side,
+    None,
+}
+
+impl WireConnection {
+    fn is_connected(self) -> bool {
+        self != Self::None
+    }
+
+    fn is_none(self) -> bool {
+        self == Self::None
+    }
+
+    const fn to_north(self) -> NorthRedstone {
+        match self {
+            Self::Up => NorthRedstone::Up,
+            Self::Side => NorthRedstone::Side,
+            Self::None => NorthRedstone::None,
+        }
+    }
+
+    const fn to_south(self) -> SouthRedstone {
+        match self {
+            Self::Up => SouthRedstone::Up,
+            Self::Side => SouthRedstone::Side,
+            Self::None => SouthRedstone::None,
+        }
+    }
+
+    const fn to_east(self) -> EastRedstone {
+        match self {
+            Self::Up => EastRedstone::Up,
+            Self::Side => EastRedstone::Side,
+            Self::None => EastRedstone::None,
+        }
+    }
+
+    const fn to_west(self) -> WestRedstone {
+        match self {
+            Self::Up => WestRedstone::Up,
+            Self::Side => WestRedstone::Side,
+            Self::None => WestRedstone::None,
+        }
+    }
+}
+trait CardinalWireConnectionExt {
+    fn to_wire_connection(&self) -> WireConnection;
+}
+
+impl CardinalWireConnectionExt for NorthRedstone {
+    fn to_wire_connection(&self) -> WireConnection {
+        match self {
+            Self::Side => WireConnection::Side,
+            Self::Up => WireConnection::Up,
+            Self::None => WireConnection::None,
+        }
+    }
+}
+
+impl CardinalWireConnectionExt for SouthRedstone {
+    fn to_wire_connection(&self) -> WireConnection {
+        match self {
+            Self::Side => WireConnection::Side,
+            Self::Up => WireConnection::Up,
+            Self::None => WireConnection::None,
+        }
+    }
+}
+
+impl CardinalWireConnectionExt for EastRedstone {
+    fn to_wire_connection(&self) -> WireConnection {
+        match self {
+            Self::Side => WireConnection::Side,
+            Self::Up => WireConnection::Up,
+            Self::None => WireConnection::None,
+        }
+    }
+}
+
+impl CardinalWireConnectionExt for WestRedstone {
+    fn to_wire_connection(&self) -> WireConnection {
+        match self {
+            Self::Side => WireConnection::Side,
+            Self::Up => WireConnection::Up,
+            Self::None => WireConnection::None,
+        }
+    }
+}
+
+async fn max_wire_power(wire_power: u8, world: &World, pos: BlockPos) -> u8 {
+    let (block, block_state) = world.get_block_and_state(&pos).await;
+    if block == &Block::REDSTONE_WIRE {
+        let wire = RedstoneWireProperties::from_state_id(block_state.id, block);
+        wire_power.max(wire.power)
+    } else {
+        wire_power
+    }
+}
+
+async fn calculate_power(world: &World, pos: &BlockPos) -> u8 {
+    let mut block_power: u8 = 0;
+    let mut wire_power: u8 = 0;
+
+    let up_pos = pos.offset(BlockDirection::Up.to_offset());
+    let up_state = world.get_block_state(&up_pos).await;
+
+    for side in BlockDirection::all() {
+        let neighbor_pos = pos.offset(side.to_offset());
+        wire_power = max_wire_power(wire_power, world, neighbor_pos).await;
+        let (neighbor, neighbor_state) = world.get_block_and_state(&neighbor_pos).await;
+        block_power = block_power.max(
+            get_redstone_power_no_dust(neighbor, neighbor_state, world, neighbor_pos, side).await,
+        );
+        if side.is_horizontal() {
+            if !up_state.is_solid_block() && neighbor_state.is_solid_block() {
+                wire_power = max_wire_power(
+                    wire_power,
+                    world,
+                    neighbor_pos.offset(BlockDirection::Up.to_offset()),
+                )
+                .await;
+            }
+
+            if !neighbor_state.is_solid_block() {
+                wire_power = max_wire_power(
+                    wire_power,
+                    world,
+                    neighbor_pos.offset(BlockDirection::Down.to_offset()),
+                )
+                .await;
+            }
+        }
+    }
+
+    block_power.max(wire_power.saturating_sub(1))
+}

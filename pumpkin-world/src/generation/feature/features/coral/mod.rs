@@ -1,0 +1,97 @@
+use crate::generation::proto_chunk::GenerationCache;
+use pumpkin_data::{
+    Block, BlockDirection, BlockState,
+    block_properties::{BlockProperties, EnumVariants, SeaPickleLikeProperties},
+    tag,
+};
+use pumpkin_util::{
+    math::position::BlockPos,
+    random::{RandomGenerator, RandomImpl},
+};
+
+pub mod coral_claw;
+pub mod coral_mushroom;
+pub mod coral_tree;
+
+pub struct CoralFeature;
+
+impl CoralFeature {
+    pub fn generate_coral_piece<T: GenerationCache>(
+        chunk: &mut T,
+        random: &mut RandomGenerator,
+        state: &BlockState,
+        pos: BlockPos,
+    ) -> bool {
+        let block = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
+        let above_block = GenerationCache::get_block_state(chunk, &pos.up().0).to_block_id();
+
+        if block != Block::WATER && !&tag::Block::MINECRAFT_CORALS.1.contains(&block)
+            || above_block != Block::WATER
+        {
+            return false;
+        }
+        chunk.set_block_state(&pos.0, state);
+        if random.next_f32() < 0.25 {
+            chunk.set_block_state(
+                &pos.0,
+                Self::get_random_tag_entry(tag::Block::MINECRAFT_CORALS, random),
+            );
+        } else if random.next_f32() < 0.05 {
+            let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
+            props.pickles = (random.next_bounded_i32(4) as u8) + 1;
+            chunk.set_block_state(
+                &pos.0,
+                BlockState::from_id(props.to_state_id(&Block::SEA_PICKLE)),
+            );
+        }
+        for dir in BlockDirection::horizontal() {
+            let dir_pos = pos.offset(dir.to_offset());
+            if random.next_f32() >= 0.2
+                || GenerationCache::get_block_state(chunk, &dir_pos.0).to_block_id() != Block::WATER
+            {
+                continue;
+            }
+            let wall_coral =
+                Self::get_random_tag_entry_block(tag::Block::MINECRAFT_WALL_CORALS, random);
+            let original_props = &wall_coral
+                .properties(wall_coral.default_state.id)
+                .unwrap()
+                .to_props();
+            let facing = dir.to_facing();
+            // Set the right Axis
+            let props: Vec<(&str, &str)> = original_props
+                .iter()
+                .map(|(key, value)| {
+                    if *key == "facing" {
+                        (*key, facing.to_value())
+                    } else {
+                        (*key, *value)
+                    }
+                })
+                .collect();
+            chunk.set_block_state(
+                &dir_pos.0,
+                BlockState::from_id(wall_coral.from_properties(&props).to_state_id(wall_coral)),
+            );
+        }
+
+        true
+    }
+
+    pub fn get_random_tag_entry(
+        tag: tag::Tag,
+        random: &mut RandomGenerator,
+    ) -> &'static BlockState {
+        let block = Self::get_random_tag_entry_block(tag, random);
+        block.default_state
+    }
+
+    pub fn get_random_tag_entry_block(
+        tag: tag::Tag,
+        random: &mut RandomGenerator,
+    ) -> &'static Block {
+        let values = tag.1;
+        let value = values[random.next_bounded_i32(values.len() as i32) as usize];
+        Block::from_id(value)
+    }
+}

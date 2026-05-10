@@ -1,0 +1,9 @@
+[files]
+extend-exclude = ["assets/", "pumpkin-data/src/generated"]
+
+[default.extend-words]
+handled = "handled"
+received = "received"
+ba = "ba"
+fo = "fo"
+undescore = "undescore"

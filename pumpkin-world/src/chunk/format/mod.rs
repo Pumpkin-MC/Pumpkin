@@ -1,0 +1,514 @@
+use std::{
+    path::PathBuf,
+    pin::Pin,
+    sync::{
+        RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+
+use bytes::Bytes;
+use pumpkin_data::{Block, chunk::ChunkStatus, fluid::Fluid};
+use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
+use rustc_hash::FxHashMap;
+use tokio::sync::Mutex;
+use tracing::debug;
+
+use crate::{
+    chunk::{
+        ChunkEntityData, ChunkReadingError, ChunkSerializingError,
+        format::anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
+        io::{Dirtiable, file_manager::PathFromLevelFolder},
+    },
+    generation::section_coords,
+    level::LevelFolder,
+    tick::{ScheduledTick, scheduler::ChunkTickScheduler},
+};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
+use serde::{Deserialize, Serialize};
+
+use super::{
+    ChunkData, ChunkHeightmaps, ChunkLight, ChunkParsingError, ChunkSections,
+    palette::{BiomePalette, BlockPalette},
+};
+pub mod anvil;
+pub mod linear;
+pub mod pump;
+
+impl SingleChunkDataSerializer for ChunkData {
+    #[inline]
+    fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+        Self::internal_from_bytes(bytes, pos).map_err(ChunkReadingError::ParsingError)
+    }
+
+    #[inline]
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
+        Box::pin(async move { self.internal_to_bytes().await })
+    }
+
+    #[inline]
+    fn position(&self) -> (i32, i32) {
+        (self.x, self.z)
+    }
+}
+
+impl PathFromLevelFolder for ChunkData {
+    #[inline]
+    fn file_path(folder: &LevelFolder, file_name: &str) -> PathBuf {
+        folder.region_folder.join(file_name)
+    }
+}
+
+impl Dirtiable for ChunkData {
+    #[inline]
+    fn mark_dirty(&self, flag: bool) {
+        self.dirty.store(flag, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+}
+
+impl ChunkData {
+    pub fn internal_from_bytes(
+        chunk_data: &[u8],
+        position: Vector2<i32>,
+    ) -> Result<Self, ChunkParsingError> {
+        let chunk_data = pumpkin_nbt::from_pnbt::<ChunkNbt>(chunk_data)
+            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+
+        if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Expected data for chunk {},{} but got it for {},{}!",
+                position.x, position.y, chunk_data.x_pos, chunk_data.z_pos,
+            )));
+        }
+        let min_y_section = chunk_data.min_y_section;
+        let max_y_section = chunk_data
+            .sections
+            .iter()
+            .map(|s| s.y)
+            .max()
+            .unwrap_or(min_y_section as i8);
+
+        let section_count = (max_y_section as i32 - min_y_section + 1).max(0) as usize;
+        let mut block_lights = vec![LightContainer::Empty(0); section_count];
+        let mut sky_lights = vec![LightContainer::Empty(0); section_count];
+        let mut block_palettes = vec![BlockPalette::default(); section_count];
+        let mut biome_palettes = vec![BiomePalette::default(); section_count];
+
+        for section in chunk_data.sections {
+            let index = (section.y as i32 - min_y_section) as usize;
+            if index >= section_count {
+                continue;
+            }
+
+            // When loading light data, missing data should default to 0 (no light)
+            block_lights[index] = section
+                .block_light
+                .map_or(LightContainer::Empty(0), LightContainer::Full);
+            sky_lights[index] = section
+                .sky_light
+                .map_or(LightContainer::Empty(0), LightContainer::Full);
+
+            // Convert NBT to Palettes
+            block_palettes[index] = section
+                .block_states
+                .map(BlockPalette::from_disk_nbt)
+                .unwrap_or_default();
+            biome_palettes[index] = section
+                .biomes
+                .map(BiomePalette::from_disk_nbt)
+                .unwrap_or_default();
+        }
+
+        // Assemble the LightEngine
+        let light_engine = ChunkLight {
+            block_light: block_lights.into_boxed_slice(),
+            sky_light: sky_lights.into_boxed_slice(),
+        };
+
+        // Assemble the ChunkSections
+        let min_y = section_coords::section_to_block(chunk_data.min_y_section);
+        let (random_tick_sections, randomly_ticking_mask) =
+            ChunkSections::build_random_tick_sections_cache(&block_palettes);
+        let section = ChunkSections {
+            count: block_palettes.len(),
+            block_sections: RwLock::new(block_palettes.into_boxed_slice()),
+            random_tick_sections: RwLock::new(random_tick_sections),
+            randomly_ticking_mask: std::sync::atomic::AtomicU32::new(randomly_ticking_mask),
+            biome_sections: RwLock::new(biome_palettes.into_boxed_slice()),
+            min_y,
+        };
+        Ok(Self {
+            section,
+            heightmap: std::sync::Mutex::new(chunk_data.heightmaps),
+            x: position.x,
+            z: position.y,
+            // This chunk is read from disk, so it has not been modified
+            dirty: AtomicBool::new(false),
+            block_ticks: ChunkTickScheduler::from_iter(chunk_data.block_ticks),
+            fluid_ticks: ChunkTickScheduler::from_iter(chunk_data.fluid_ticks),
+            pending_block_entities: {
+                let mut block_entities = FxHashMap::default();
+                for nbt in chunk_data.block_entities {
+                    if let Some(x) = nbt.get_int("x")
+                        && let Some(y) = nbt.get_int("y")
+                        && let Some(z) = nbt.get_int("z")
+                    {
+                        block_entities.insert(BlockPos::new(x, y, z), nbt);
+                    }
+                }
+                std::sync::Mutex::new(block_entities)
+            },
+            light_engine: std::sync::Mutex::new(light_engine),
+            light_populated: AtomicBool::new(chunk_data.light_correct),
+            status: chunk_data.status,
+            blending_data: None,
+        })
+    }
+
+    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        let is_light_correct = self
+            .light_populated
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        let block_entities_nbt = {
+            let entities_guard = self.pending_block_entities.lock().unwrap();
+            entities_guard.values().cloned().collect::<Vec<_>>()
+        };
+
+        fn extract_light_ref(light: Option<&LightContainer>) -> Option<&[u8]> {
+            match light {
+                Some(LightContainer::Full(data)) => Some(data.as_ref()),
+                _ => None,
+            }
+        }
+
+        let light_lock = self.light_engine.lock().unwrap();
+        let heightmap_lock = self.heightmap.lock().unwrap();
+        let block_lock = self.section.block_sections.read().unwrap();
+        let biome_lock = self.section.biome_sections.read().unwrap();
+
+        let min_section_y = (self.section.min_y >> 4) as i8;
+
+        let sections = (0..self.section.count)
+            .map(|i| ChunkSectionNbtRef {
+                y: i as i8 + min_section_y,
+                block_states: Some(block_lock[i].to_disk_nbt()),
+                biomes: Some(biome_lock[i].to_disk_nbt()),
+                block_light: extract_light_ref(light_lock.block_light.get(i)),
+                sky_light: extract_light_ref(light_lock.sky_light.get(i)),
+            })
+            .collect::<Vec<_>>();
+
+        let nbt_ref = ChunkNbtRef {
+            data_version: WORLD_DATA_VERSION,
+            x_pos: self.x,
+            z_pos: self.z,
+            min_y_section: section_coords::block_to_section(self.section.min_y),
+            status: &self.status,
+            heightmaps: &heightmap_lock,
+            sections,
+            block_ticks: &self.block_ticks.to_vec(),
+            fluid_ticks: &self.fluid_ticks.to_vec(),
+            block_entities: &block_entities_nbt,
+            light_correct: is_light_correct,
+        };
+
+        let result =
+            pumpkin_nbt::to_pnbt(&nbt_ref).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+
+        Ok(result.into())
+    }
+}
+
+impl PathFromLevelFolder for ChunkEntityData {
+    #[inline]
+    fn file_path(folder: &LevelFolder, file_name: &str) -> PathBuf {
+        folder.entities_folder.join(file_name)
+    }
+}
+
+impl Dirtiable for ChunkEntityData {
+    #[inline]
+    fn mark_dirty(&self, flag: bool) {
+        self.dirty.store(flag, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+}
+
+impl SingleChunkDataSerializer for ChunkEntityData {
+    #[inline]
+    fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
+        Self::internal_from_bytes(bytes, pos).map_err(ChunkReadingError::ParsingError)
+    }
+
+    #[inline]
+    fn to_bytes(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
+        Box::pin(async move { self.internal_to_bytes().await })
+    }
+
+    #[inline]
+    fn position(&self) -> (i32, i32) {
+        (self.x, self.z)
+    }
+}
+
+impl ChunkEntityData {
+    fn internal_from_bytes(
+        chunk_data: &[u8],
+        position: Vector2<i32>,
+    ) -> Result<Self, ChunkParsingError> {
+        let chunk_entity_data = pumpkin_nbt::from_pnbt::<EntityNbt>(chunk_data)
+            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+
+        if chunk_entity_data.position[0] != position.x
+            || chunk_entity_data.position[1] != position.y
+        {
+            return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
+                "Expected data for entity chunk {},{} but got it for {},{}!",
+                position.x,
+                position.y,
+                chunk_entity_data.position[0],
+                chunk_entity_data.position[1],
+            )));
+        }
+        let mut map = FxHashMap::default();
+        for mut entity_nbt in chunk_entity_data.entities {
+            let uuid = {
+                let _id = entity_nbt.get_string().ok();
+                entity_nbt.get_uuid().ok()
+            };
+            entity_nbt.read_pos = 0;
+
+            let Some(uuid) = uuid else {
+                debug!(
+                    "Entity in chunk {},{} is missing UUID or ID: {:?}",
+                    position.x, position.y, entity_nbt
+                );
+                continue;
+            };
+
+            map.insert(uuid, entity_nbt);
+        }
+
+        Ok(Self {
+            x: position.x,
+            z: position.y,
+            data: Mutex::new(map),
+            dirty: AtomicBool::new(false),
+        })
+    }
+
+    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        let nbt = EntityNbt {
+            data_version: WORLD_DATA_VERSION,
+            position: [self.x, self.z],
+            entities: self.data.lock().await.values().cloned().collect(),
+        };
+
+        let result =
+            pumpkin_nbt::to_pnbt(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        Ok(result.into())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct ChunkSectionNBT {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_states: Option<ChunkSectionBlockStates>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    biomes: Option<ChunkSectionBiomes>,
+    #[serde(rename = "BlockLight", skip_serializing_if = "Option::is_none")]
+    block_light: Option<Box<[u8]>>,
+    #[serde(rename = "SkyLight", skip_serializing_if = "Option::is_none")]
+    sky_light: Option<Box<[u8]>>,
+    #[serde(rename = "Y")]
+    y: i8,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct ChunkSectionNbtRef<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_states: Option<ChunkSectionBlockStates>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    biomes: Option<ChunkSectionBiomes>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    block_light: Option<&'a [u8]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sky_light: Option<&'a [u8]>,
+    y: i8,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChunkSectionBiomes {
+    #[serde(
+        serialize_with = "nbt_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) data: Option<Box<[i64]>>,
+    pub(crate) palette: Box<[u8]>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ChunkSectionBlockStates {
+    #[serde(
+        serialize_with = "nbt_long_array",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) data: Option<Box<[i64]>>,
+    pub(crate) palette: Box<[u16]>,
+}
+
+#[derive(Debug, Clone)]
+pub enum LightContainer {
+    Empty(u8),
+    Full(Box<[u8]>),
+}
+
+impl LightContainer {
+    pub const DIM: usize = 16;
+    pub const ARRAY_SIZE: usize = Self::DIM * Self::DIM * Self::DIM / 2;
+
+    #[must_use]
+    pub fn new_empty(default: u8) -> Self {
+        assert!(default <= 15, "Default value must be between 0 and 15");
+        Self::Empty(default)
+    }
+
+    #[must_use]
+    pub fn new(data: Box<[u8]>) -> Self {
+        assert!(
+            data.len() == Self::ARRAY_SIZE,
+            "Data length must be {}",
+            Self::ARRAY_SIZE
+        );
+        Self::Full(data)
+    }
+
+    #[must_use]
+    pub fn new_filled(default: u8) -> Self {
+        assert!(default <= 15, "Default value must be between 0 and 15");
+        let value = default << 4 | default;
+        Self::Full([value; Self::ARRAY_SIZE].into())
+    }
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty(_))
+    }
+
+    const fn index(x: usize, y: usize, z: usize) -> usize {
+        y * 16 * 16 + z * 16 + x
+    }
+
+    #[must_use]
+    pub fn get(&self, x: usize, y: usize, z: usize) -> u8 {
+        match self {
+            Self::Full(data) => {
+                let index = Self::index(x, y, z);
+                data[index >> 1] >> (4 * (index & 1)) & 0x0F
+            }
+            Self::Empty(default) => *default,
+        }
+    }
+
+    pub fn set(&mut self, x: usize, y: usize, z: usize, value: u8) {
+        match self {
+            Self::Full(data) => {
+                let index = Self::index(x, y, z);
+                let mask = 0x0F << (4 * (index & 1));
+                data[index >> 1] &= !mask;
+                data[index >> 1] |= value << (4 * (index & 1));
+            }
+            Self::Empty(default) => {
+                if value != *default {
+                    *self = Self::new_filled(*default);
+                    self.set(x, y, z, value);
+                }
+            }
+        }
+    }
+
+    pub fn fill(&mut self, value: u8) {
+        *self = Self::new_filled(value);
+    }
+}
+
+impl Default for LightContainer {
+    fn default() -> Self {
+        Self::new_empty(15)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ChunkNbt {
+    data_version: i32,
+    #[serde(rename = "xPos")]
+    x_pos: i32,
+    #[serde(rename = "zPos")]
+    z_pos: i32,
+    #[serde(rename = "yPos")]
+    min_y_section: i32,
+    status: ChunkStatus,
+    #[serde(rename = "sections")]
+    sections: Vec<ChunkSectionNBT>,
+    heightmaps: ChunkHeightmaps,
+    #[serde(rename = "block_ticks")]
+    block_ticks: Vec<ScheduledTick<&'static Block>>,
+    #[serde(rename = "fluid_ticks")]
+    fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
+    #[serde(rename = "block_entities")]
+    block_entities: Vec<NbtCompound>,
+    #[serde(rename = "isLightOn", default)]
+    light_correct: bool,
+}
+
+// Used ONLY for saving (to_bytes). Borrows data, zero clones.
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct ChunkNbtRef<'a> {
+    data_version: i32,
+    #[serde(rename = "xPos")]
+    x_pos: i32,
+    #[serde(rename = "zPos")]
+    z_pos: i32,
+    #[serde(rename = "yPos")]
+    min_y_section: i32,
+    status: &'a ChunkStatus,
+    #[serde(rename = "sections")]
+    sections: Vec<ChunkSectionNbtRef<'a>>,
+    heightmaps: &'a ChunkHeightmaps,
+    #[serde(rename = "block_ticks")]
+    block_ticks: &'a [ScheduledTick<&'static Block>],
+    #[serde(rename = "fluid_ticks")]
+    fluid_ticks: &'a [ScheduledTick<&'static Fluid>],
+    #[serde(rename = "block_entities")]
+    block_entities: &'a [NbtCompound],
+    #[serde(rename = "isLightOn", default)]
+    light_correct: bool,
+}
+
+use pumpkin_nbt::pnbt::PNbtCompound;
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct EntityNbt {
+    data_version: i32,
+    position: [i32; 2],
+    entities: Vec<PNbtCompound>,
+}

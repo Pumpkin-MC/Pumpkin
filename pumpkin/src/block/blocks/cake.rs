@@ -1,0 +1,196 @@
+use std::sync::Arc;
+
+use crate::{
+    block::{
+        BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+        OnPlaceArgs, OnScheduledTickArgs, UseWithItemArgs, blocks::candle_cakes::cake_from_candle,
+        registry::BlockActionResult,
+    },
+    entity::player::Player,
+    world::World,
+};
+use pumpkin_data::item::Item;
+use pumpkin_data::{
+    Block,
+    block_properties::{BlockProperties, CakeLikeProperties},
+    sound::{Sound, SoundCategory},
+};
+use pumpkin_macros::pumpkin_block;
+use pumpkin_util::{GameMode, math::position::BlockPos};
+use pumpkin_world::{
+    BlockStateId,
+    tick::TickPriority,
+    world::{BlockAccessor, BlockFlags},
+};
+use rand::{RngExt, rng};
+
+#[pumpkin_block("minecraft:cake")]
+pub struct CakeBlock;
+
+impl CakeBlock {
+    pub async fn consume_if_hungry(
+        world: &Arc<World>,
+        player: &Player,
+        block: &Block,
+        location: &BlockPos,
+        state_id: u16,
+    ) -> BlockActionResult {
+        match player.gamemode.load() {
+            GameMode::Survival | GameMode::Adventure => {
+                let hunger_level = player.hunger_manager.level.load();
+                if hunger_level >= 20 {
+                    return BlockActionResult::Pass;
+                }
+                player.hunger_manager.level.store(20.min(hunger_level + 2));
+                player
+                    .hunger_manager
+                    .saturation
+                    .store(player.hunger_manager.saturation.load() + 0.4);
+                player.send_health().await;
+            }
+            GameMode::Creative | GameMode::Spectator => {}
+        }
+
+        let mut properties = CakeLikeProperties::from_state_id(state_id, block);
+        match properties.bites {
+            0..=5 => {
+                properties.bites += 1;
+                world
+                    .set_block_state(
+                        location,
+                        properties.to_state_id(block),
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+                BlockActionResult::Consume
+            }
+            6 => {
+                world
+                    .set_block_state(
+                        location,
+                        Block::AIR.default_state.id,
+                        BlockFlags::NOTIFY_ALL,
+                    )
+                    .await;
+                BlockActionResult::Consume
+            }
+            _ => {
+                panic!("invalid bite index");
+            }
+        }
+    }
+}
+
+impl BlockBehaviour for CakeBlock {
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if !can_place_at(args.world, args.position).await {
+                return Block::AIR.default_state.id;
+            }
+            Block::CAKE.default_state.id
+        })
+    }
+
+    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    }
+
+    fn use_with_item<'a>(
+        &'a self,
+        args: UseWithItemArgs<'a>,
+    ) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position).await;
+            let properties = CakeLikeProperties::from_state_id(state_id, args.block);
+            let item_lock = args.item_stack.lock().await;
+            let item = item_lock.item;
+            drop(item_lock);
+            match item.id {
+                id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
+                    if properties.bites != 0 {
+                        return Self::consume_if_hungry(
+                            args.world,
+                            args.player,
+                            args.block,
+                            args.position,
+                            state_id,
+                        )
+                        .await;
+                    }
+
+                    if args.player.gamemode.load() != GameMode::Creative {
+                        let held_item = args.player.inventory.held_item();
+                        let mut held_item_guard = held_item.lock().await;
+                        held_item_guard.decrement(1);
+                    }
+                    args.world
+                        .set_block_state(
+                            args.position,
+                            cake_from_candle(item).default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        )
+                        .await;
+                    let seed: f64 = rng().random();
+                    args.player
+                        .play_sound(
+                            Sound::BlockCakeAddCandle as u16,
+                            SoundCategory::Blocks,
+                            &args.position.to_f64(),
+                            1.0,
+                            1.0,
+                            seed,
+                        )
+                        .await;
+                    BlockActionResult::Consume
+                }
+                _ => {
+                    return Self::consume_if_hungry(
+                        args.world,
+                        args.player,
+                        args.block,
+                        args.position,
+                        state_id,
+                    )
+                    .await;
+                }
+            }
+        })
+    }
+
+    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
+        Box::pin(async move {
+            let state_id = args.world.get_block_state_id(args.position).await;
+            Self::consume_if_hungry(args.world, args.player, args.block, args.position, state_id)
+                .await
+        })
+    }
+
+    fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
+        Box::pin(async move {
+            if !can_place_at(args.world.as_ref(), args.position).await {
+                args.world
+                    .break_block(args.position, None, BlockFlags::empty())
+                    .await;
+            }
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if !can_place_at(args.world, args.position).await {
+                args.world
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
+                    .await;
+            }
+            args.state_id
+        })
+    }
+}
+
+async fn can_place_at(world: &dyn BlockAccessor, position: &BlockPos) -> bool {
+    let state = world.get_block_state(&position.down()).await;
+    state.is_solid()
+}

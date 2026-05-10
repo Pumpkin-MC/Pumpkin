@@ -1,0 +1,21 @@
+[package]
+name = "pumpkin-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+pumpkin-util.workspace = true
+serde.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+toml.workspace = true
+
+[features]
+# Adds helper to change the config at runtime
+test_helper = []
+
+[lints]
+workspace = true

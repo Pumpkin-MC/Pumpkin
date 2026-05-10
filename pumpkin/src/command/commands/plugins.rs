@@ -1,0 +1,59 @@
+use pumpkin_util::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+
+use crate::command::{
+    CommandExecutor, CommandResult, CommandSender, args::ConsumedArgs, tree::CommandTree,
+};
+
+const NAMES: [&str; 2] = ["pl", "plugins"];
+
+const DESCRIPTION: &str = "List all available plugins.";
+
+struct Executor;
+
+impl CommandExecutor for Executor {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        _args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let plugins = server.plugin_manager.active_plugins().await;
+
+            let message_text = if plugins.is_empty() {
+                "There are no loaded plugins.".to_string()
+            } else if plugins.len() == 1 {
+                "There is 1 plugin loaded:\n".to_string()
+            } else {
+                format!("There are {} plugins loaded:\n", plugins.len())
+            };
+            let mut message = TextComponent::text(message_text);
+
+            for (i, metadata) in plugins.clone().into_iter().enumerate() {
+                let fmt = if i == plugins.len() - 1 {
+                    metadata.name.clone()
+                } else {
+                    format!("{}, ", metadata.name)
+                };
+                let hover_text = format!(
+                    "Version: {}\nAuthors: {}\nDescription: {}",
+                    metadata.version,
+                    metadata.authors.join(", "),
+                    metadata.description
+                );
+                let component = TextComponent::text(fmt)
+                    .color_named(NamedColor::Green)
+                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
+                message = message.add_child(component);
+            }
+
+            sender.send_message(message).await;
+
+            Ok(plugins.len() as i32)
+        })
+    }
+}
+
+pub fn init_command_tree() -> CommandTree {
+    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
+}

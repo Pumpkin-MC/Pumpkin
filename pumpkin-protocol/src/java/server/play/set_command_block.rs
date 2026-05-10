@@ -1,0 +1,40 @@
+use pumpkin_data::packet::serverbound::PLAY_SET_COMMAND_BLOCK;
+use pumpkin_macros::java_packet;
+use pumpkin_util::math::position::BlockPos;
+use serde::Deserialize;
+
+use crate::codec::var_int::VarInt;
+
+#[derive(Deserialize)]
+#[java_packet(PLAY_SET_COMMAND_BLOCK)]
+pub struct SSetCommandBlock {
+    pub pos: BlockPos,
+    pub command: String,
+    pub mode: VarInt,
+
+    /// Operation mode flags
+    /// - 0x01: Track output
+    /// - 0x02: Is conditional
+    /// - 0x04: Automatic
+    pub flags: i8,
+}
+
+pub enum CommandBlockMode {
+    Chain,
+    Repeating,
+    /// Redstone only
+    Impulse,
+}
+
+impl TryFrom<VarInt> for CommandBlockMode {
+    type Error = ();
+
+    fn try_from(value: VarInt) -> Result<Self, Self::Error> {
+        match value.0 {
+            0 => Ok(Self::Chain),
+            1 => Ok(Self::Repeating),
+            2 => Ok(Self::Impulse),
+            _ => Err(()),
+        }
+    }
+}

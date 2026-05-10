@@ -1,0 +1,45 @@
+use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockProperties};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+
+use crate::generation::proto_chunk::GenerationCache;
+use crate::world::WorldPortalExt;
+
+pub struct VinesFeature;
+
+impl VinesFeature {
+    #[expect(clippy::too_many_arguments)]
+    pub fn generate<T: GenerationCache>(
+        &self,
+        chunk: &mut T,
+        _block_registry: &dyn WorldPortalExt,
+        _min_y: i8,
+        _height: u16,
+        _feature: &str,
+        _random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> bool {
+        if !chunk.is_air(&pos.0) {
+            return false;
+        }
+        for dir in BlockDirection::all() {
+            // TODO
+            if dir == BlockDirection::Down
+                || !GenerationCache::get_block_state(chunk, &pos.offset(dir.to_offset()).0)
+                    .to_state()
+                    .is_full_cube()
+            {
+                continue;
+            }
+            let mut vine =
+                pumpkin_data::block_properties::VineLikeProperties::default(&Block::VINE);
+            vine.north = dir == BlockDirection::North;
+            vine.east = dir == BlockDirection::East;
+            vine.south = dir == BlockDirection::South;
+            vine.west = dir == BlockDirection::West;
+            vine.up = dir == BlockDirection::Up;
+            chunk.set_block_state(&pos.0, BlockState::from_id(vine.to_state_id(&Block::VINE)));
+            return true;
+        }
+        false
+    }
+}

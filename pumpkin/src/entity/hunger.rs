@@ -1,0 +1,199 @@
+use std::sync::Arc;
+
+use super::{EntityBase, NBTStorage, NBTStorageInit, player::Player};
+use crate::entity::NbtFuture;
+use crossbeam::atomic::AtomicCell;
+use pumpkin_data::damage::DamageType;
+use pumpkin_util::Difficulty;
+
+const MAX_FOOD: u8 = 20;
+const EXHAUSTION_COST: f32 = 4.0;
+const MAX_EXHAUSTION: f32 = 40.0;
+
+pub struct HungerManager {
+    pub level: AtomicCell<u8>,
+    pub saturation: AtomicCell<f32>,
+    pub exhaustion: AtomicCell<f32>,
+    pub tick_timer: AtomicCell<u32>,
+}
+
+impl Default for HungerManager {
+    fn default() -> Self {
+        Self {
+            level: AtomicCell::new(MAX_FOOD),
+            saturation: AtomicCell::new(5.0),
+            exhaustion: AtomicCell::new(0.0),
+            tick_timer: AtomicCell::new(0),
+        }
+    }
+}
+
+impl HungerManager {
+    pub async fn tick(&self, player: &Arc<Player>) {
+        let mut level = self.level.load();
+        let mut saturation = self.saturation.load();
+        let mut exhaustion = self.exhaustion.load();
+        let mut timer = self.tick_timer.load();
+
+        let level_info = player.world().level_info.load();
+        let difficulty = level_info.difficulty;
+        let natural_regen = level_info.game_rules.natural_health_regeneration;
+        let health = player.living_entity.health.load();
+        let can_heal = player.can_food_heal();
+
+        let mut needs_sync = false;
+        let mut heal_amount = 0.0;
+        let mut damage_amount = 0.0;
+
+        if exhaustion > EXHAUSTION_COST {
+            exhaustion -= EXHAUSTION_COST;
+            if saturation > 0.0 {
+                saturation = (saturation - 1.0).max(0.0);
+            } else if difficulty != Difficulty::Peaceful {
+                level = level.saturating_sub(1);
+            }
+            needs_sync = true;
+        }
+
+        if natural_regen && saturation > 0.0 && can_heal && level >= 20 {
+            timer += 1;
+            if timer >= 10 {
+                let cost = saturation.min(6.0);
+                saturation -= cost;
+                exhaustion += cost;
+                heal_amount = cost / 6.0;
+                timer = 0;
+                needs_sync = true;
+            }
+        } else if natural_regen && level >= 18 && can_heal {
+            timer += 1;
+            if timer >= 80 {
+                heal_amount = 1.0;
+                exhaustion += 6.0;
+                timer = 0;
+                needs_sync = true;
+            }
+        } else if level == 0 {
+            timer += 1;
+            if timer >= 80 {
+                timer = 0;
+                let should_starve = match difficulty {
+                    Difficulty::Peaceful => false,
+                    Difficulty::Easy => health > 10.0,
+                    Difficulty::Normal => health > 1.0,
+                    Difficulty::Hard => true,
+                };
+
+                if should_starve {
+                    damage_amount = 1.0;
+                }
+                self.tick_timer.store(0);
+            }
+        } else {
+            timer = 0;
+        }
+
+        if needs_sync || timer != self.tick_timer.load() {
+            self.level.store(level);
+            self.saturation.store(saturation);
+            self.exhaustion.store(exhaustion);
+            self.tick_timer.store(timer);
+        }
+
+        if needs_sync {
+            player.send_health().await;
+        }
+        if heal_amount > 0.0 {
+            player.heal(heal_amount).await;
+        }
+        if damage_amount > 0.0 {
+            player
+                .damage(&**player, damage_amount, DamageType::STARVE)
+                .await;
+        }
+    }
+
+    pub async fn eat(&self, player: &Player, food: u8, saturation_modifier: f32) {
+        let added_saturation = f32::from(food) * saturation_modifier * 2.0;
+
+        let current_level = self.level.load();
+        let current_sat = self.saturation.load();
+
+        let new_level = (current_level + food).min(MAX_FOOD);
+
+        let new_sat = (current_sat + added_saturation).min(f32::from(new_level));
+
+        self.level.store(new_level);
+        self.saturation.store(new_sat);
+
+        player.send_health().await;
+    }
+
+    /// Add exhaustion to trigger hunger decrease
+    pub fn add_exhaustion(&self, exhaustion: f32) {
+        let current = self.exhaustion.load();
+        self.exhaustion
+            .store((current + exhaustion).min(MAX_EXHAUSTION));
+    }
+
+    /// Add hunger manually
+    pub fn add_hunger(&self, hunger: u8) {
+        let current = self.level.load();
+        self.level.store((current + hunger).min(MAX_FOOD));
+    }
+
+    /// Add saturation manually
+    pub fn add_saturation(&self, saturation: f32) {
+        let current = self.saturation.load();
+        self.saturation
+            .store((current + saturation).min(f32::from(self.level.load())));
+    }
+
+    pub fn set_level(&self, level: u8) {
+        self.level.store(level.min(MAX_FOOD));
+    }
+
+    pub fn set_saturation(&self, saturation: f32) {
+        self.saturation
+            .store(saturation.min(f32::from(self.level.load())));
+    }
+
+    pub fn get_exhaustion(&self) -> f32 {
+        self.exhaustion.load()
+    }
+
+    pub fn set_exhaustion(&self, exhaustion: f32) {
+        self.exhaustion.store(exhaustion.min(MAX_EXHAUSTION));
+    }
+
+    pub fn restart(&self) {
+        self.level.store(MAX_FOOD);
+        self.saturation.store(5.0);
+        self.exhaustion.store(0.0);
+        self.tick_timer.store(0);
+    }
+}
+
+use pumpkin_nbt::pnbt::PNbtCompound;
+
+impl NBTStorage for HungerManager {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async {
+            nbt.put_int(self.level.load().into());
+            nbt.put_float(self.saturation.load());
+            nbt.put_float(self.exhaustion.load());
+            nbt.put_int(self.tick_timer.load() as i32);
+        })
+    }
+
+    fn read_nbt<'a>(&'a mut self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+        Box::pin(async move {
+            self.level.store(nbt.get_int().unwrap_or(20) as u8);
+            self.saturation.store(nbt.get_float().unwrap_or(5.0));
+            self.exhaustion.store(nbt.get_float().unwrap_or(0.0));
+            self.tick_timer.store(nbt.get_int().unwrap_or(0) as u32);
+        })
+    }
+}
+
+impl NBTStorageInit for HungerManager {}

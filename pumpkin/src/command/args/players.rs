@@ -1,0 +1,117 @@
+use std::sync::Arc;
+
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
+
+use crate::command::CommandSender;
+use crate::command::args::{ConsumeResult, ConsumeResultWithSyntax};
+use crate::command::dispatcher::CommandError;
+use crate::command::tree::RawArgs;
+use crate::entity::player::Player;
+use crate::server::Server;
+
+use super::super::args::ArgumentConsumer;
+use super::entities::{ensure_player_only_selector, parse_target_selector_with_context};
+use super::{Arg, DefaultNameArgConsumer, FindArg, GetClientSideArgParser};
+
+/// Select zero, one or multiple players
+pub struct PlayersArgumentConsumer;
+
+impl GetClientSideArgParser for PlayersArgumentConsumer {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+        // todo: investigate why this does not accept target selectors
+        ArgumentType::Entity {
+            flags: ArgumentType::ENTITY_FLAG_PLAYERS_ONLY,
+        }
+    }
+
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
+        None
+    }
+}
+
+impl ArgumentConsumer for PlayersArgumentConsumer {
+    fn consume<'a, 'b>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a Server,
+        args: &'b mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let s_opt: Option<&'a str> = args.pop().map(|arg| arg.value);
+
+        let Some(s) = s_opt else {
+            return Box::pin(async move { None });
+        };
+
+        let sync_result: Option<Vec<Arc<Player>>> = match s {
+            "@s" => match sender {
+                CommandSender::Player(p) => Some(vec![p.clone()]),
+                _ => None,
+            },
+            #[expect(clippy::match_same_arms)]
+            // todo: implement for non-players and remove this line
+            "@n" | "@p" => match sender {
+                CommandSender::Player(p) => Some(vec![p.clone()]),
+                _ => None,
+            },
+            _ => None,
+        };
+
+        if let Some(players) = sync_result {
+            return Box::pin(async move { Some(Arg::Players(players)) });
+        }
+
+        Box::pin(async move {
+            let players = match s {
+                "@r" => server
+                    .get_random_player()
+                    .map_or_else(|| Some(vec![]), |p| Some(vec![p])),
+                "@a" | "@e" => Some(server.get_all_players()),
+                name => server.get_player_by_name(name).map(|p| vec![p]),
+            };
+
+            players.map(Arg::Players)
+        })
+    }
+
+    fn consume_with_syntax<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a Server,
+        args: &mut RawArgs<'a>,
+    ) -> ConsumeResultWithSyntax<'a> {
+        let Some(raw_arg) = args.pop() else {
+            return Box::pin(async { Ok(None) });
+        };
+
+        let selector = match parse_target_selector_with_context(raw_arg) {
+            Ok(selector) => selector,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+
+        if let Err(error) = ensure_player_only_selector(&selector, raw_arg) {
+            return Box::pin(async move { Err(error) });
+        }
+
+        Box::pin(async move {
+            let players = server.select_players(&selector, Some(sender));
+            Ok(Some(Arg::Players(players)))
+        })
+    }
+}
+
+impl DefaultNameArgConsumer for PlayersArgumentConsumer {
+    fn default_name(&self) -> &'static str {
+        "target"
+    }
+}
+
+impl<'a> FindArg<'a> for PlayersArgumentConsumer {
+    type Data = &'a [Arc<Player>];
+
+    fn find_arg(args: &'a super::ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+        match args.get(name) {
+            Some(Arg::Players(data)) => Ok(data),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+        }
+    }
+}

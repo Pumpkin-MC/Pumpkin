@@ -1,0 +1,147 @@
+use pumpkin_util::text::TextComponent;
+use pumpkin_world::world::BlockFlags;
+
+use crate::command::args::block::BlockArgumentConsumer;
+use crate::command::args::position_block::BlockPosArgumentConsumer;
+use crate::command::args::{ConsumedArgs, FindArg};
+use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, literal};
+use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
+
+const NAMES: [&str; 1] = ["setblock"];
+
+const DESCRIPTION: &str = "Place a block.";
+
+const ARG_BLOCK: &str = "block";
+const ARG_BLOCK_POS: &str = "pos";
+
+#[derive(Clone, Copy)]
+enum Mode {
+    /// with particles + item drops
+    Destroy,
+
+    /// only replaces air
+    Keep,
+
+    /// default; without particles
+    Replace,
+
+    /// places block without triggering updates around it
+    Strict,
+}
+
+struct Executor(Mode);
+
+impl CommandExecutor for Executor {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let block = BlockArgumentConsumer::find_arg(args, ARG_BLOCK)?;
+            let block_state_id = block.default_state.id;
+            let mode = self.0;
+            let world = match sender {
+                CommandSender::Console | CommandSender::Rcon(_) | CommandSender::Dummy => {
+                    let guard = server.worlds.load();
+
+                    guard
+                        .first()
+                        .cloned()
+                        .ok_or(CommandError::InvalidRequirement)?
+                }
+                CommandSender::Player(player) => player.world().clone(),
+                CommandSender::CommandBlock(_, w) => w.clone(),
+            };
+            let pos = BlockPosArgumentConsumer::find_loaded_arg(args, ARG_BLOCK_POS, &world)?;
+
+            let success = match mode {
+                Mode::Destroy => {
+                    world
+                        .clone()
+                        .break_block(&pos, None, BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE)
+                        .await;
+                    world
+                        .set_block_state(
+                            &pos,
+                            block_state_id,
+                            BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                    true
+                }
+                Mode::Replace => {
+                    world
+                        .set_block_state(
+                            &pos,
+                            block_state_id,
+                            BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                        )
+                        .await;
+                    true
+                }
+                Mode::Keep => {
+                    let old_state = world.get_block_state(&pos).await;
+                    if old_state.is_air() {
+                        world
+                            .set_block_state(
+                                &pos,
+                                block_state_id,
+                                BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                            )
+                            .await;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                Mode::Strict => {
+                    world
+                        .set_block_state(
+                            &pos,
+                            block_state_id,
+                            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                        )
+                        .await;
+                    true
+                }
+            };
+
+            if success {
+                sender
+                    .send_message(TextComponent::translate_cross(
+                        "commands.setblock.success",
+                        "commands.setblock.success",
+                        [
+                            TextComponent::text(pos.0.x.to_string()),
+                            TextComponent::text(pos.0.y.to_string()),
+                            TextComponent::text(pos.0.z.to_string()),
+                        ],
+                    ))
+                    .await;
+                Ok(1)
+            } else {
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.setblock.failed",
+                    "commands.setblock.failed",
+                    [],
+                )))
+            }
+        })
+    }
+}
+
+pub fn init_command_tree() -> CommandTree {
+    CommandTree::new(NAMES, DESCRIPTION).then(
+        argument(ARG_BLOCK_POS, BlockPosArgumentConsumer).then(
+            argument(ARG_BLOCK, BlockArgumentConsumer)
+                .then(literal("replace").execute(Executor(Mode::Replace)))
+                .then(literal("destroy").execute(Executor(Mode::Destroy)))
+                .then(literal("keep").execute(Executor(Mode::Keep)))
+                .then(literal("strict").execute(Executor(Mode::Strict)))
+                .execute(Executor(Mode::Replace)),
+        ),
+    )
+}

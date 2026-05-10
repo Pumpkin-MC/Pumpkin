@@ -1,0 +1,12 @@
+{
+  "commands.pumpkin.version": "Pumpkin %s\n",
+  "commands.pumpkin.description": "모든 사람이 빠르고 효율적인 마인크래프트 서버를 호스팅할 수 있도록 지원합니다.\n",
+  "commands.pumpkin.minecraft_version": "(마인크래프트 %s, 프로토콜 %s)\n",
+  "commands.pumpkin.github": "[깃허브 저장소]",
+  "commands.pumpkin.website": "[웹사이트]",
+  "commands.pumpkin.version.hover": "클릭하여 버전 복사",
+  "commands.pumpkin.description.hover": "클릭하여 설명 복사",
+  "commands.pumpkin.minecraft_version.hover": "클릭하여 마인크래프트 버전 복사",
+  "commands.pumpkin.github.hover": "클릭하여 저장소 열기.",
+  "commands.pumpkin.website.hover": "클릭하여 웹사이트 열기."
+}

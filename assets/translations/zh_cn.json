@@ -1,0 +1,12 @@
+{
+    "commands.pumpkin.version": "Pumpkin %s\n",
+    "commands.pumpkin.description": "让每个人都能搭建快速且高效的 Minecraft 服务器。\n",
+    "commands.pumpkin.minecraft_version": "(Minecraft %s，协议 %s)\n",
+    "commands.pumpkin.github": "[GitHub 仓库]",
+    "commands.pumpkin.website": "[官方网站]",
+    "commands.pumpkin.version.hover": "点击复制版本号",
+    "commands.pumpkin.description.hover": "点击复制描述",
+    "commands.pumpkin.minecraft_version.hover": "点击复制 Minecraft 版本",
+    "commands.pumpkin.github.hover": "点击打开仓库。",
+    "commands.pumpkin.website.hover": "点击打开网站。"
+}

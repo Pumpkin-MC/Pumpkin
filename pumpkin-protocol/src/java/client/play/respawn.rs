@@ -1,0 +1,54 @@
+use pumpkin_data::packet::clientbound::PLAY_RESPAWN;
+use pumpkin_macros::java_packet;
+use pumpkin_util::{math::position::BlockPos, resource_location::ResourceLocation};
+use serde::{Deserialize, Serialize};
+
+use crate::VarInt;
+
+#[derive(Serialize, Deserialize)]
+#[java_packet(PLAY_RESPAWN)]
+pub struct CRespawn {
+    pub dimension_type: VarInt,
+    pub dimension_name: ResourceLocation,
+    pub hashed_seed: i64,
+    pub game_mode: u8,
+    pub previous_gamemode: i8,
+    pub debug: bool,
+    pub is_flat: bool,
+    pub death_dimension_name: Option<(ResourceLocation, BlockPos)>,
+    pub portal_cooldown: VarInt,
+    pub sealevel: VarInt,
+    pub data_kept: u8,
+}
+
+impl CRespawn {
+    #[expect(clippy::too_many_arguments)]
+    #[must_use]
+    pub const fn new(
+        dimension_type: VarInt,
+        dimension_name: ResourceLocation,
+        hashed_seed: i64,
+        game_mode: u8,
+        previous_gamemode: i8,
+        debug: bool,
+        is_flat: bool,
+        death_dimension_name: Option<(ResourceLocation, BlockPos)>,
+        portal_cooldown: VarInt,
+        sealevel: VarInt,
+        data_kept: u8,
+    ) -> Self {
+        Self {
+            dimension_type,
+            dimension_name,
+            hashed_seed,
+            game_mode,
+            previous_gamemode,
+            debug,
+            is_flat,
+            death_dimension_name,
+            portal_cooldown,
+            sealevel,
+            data_kept,
+        }
+    }
+}

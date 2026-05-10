@@ -1,0 +1,106 @@
+use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
+use pumpkin_world::BlockStateId;
+
+use crate::block::{BlockBehaviour, BlockFuture, CanUpdateAtArgs};
+use crate::block::{BlockIsReplacing, OnPlaceArgs};
+
+pub trait SegmentProperties {
+    fn get_segment_amount(&self) -> u8;
+    fn set_segment_amount(&mut self, amount: u8);
+    fn get_facing(&self) -> HorizontalFacing;
+    fn set_facing(&mut self, facing: HorizontalFacing);
+}
+
+macro_rules! impl_segment_properties {
+    ($type:ty, $amount_field:ident) => {
+        impl SegmentProperties for $type {
+            fn get_segment_amount(&self) -> u8 {
+                self.$amount_field
+            }
+
+            fn set_segment_amount(&mut self, amount: u8) {
+                self.$amount_field = amount;
+            }
+
+            fn get_facing(&self) -> HorizontalFacing {
+                self.facing
+            }
+
+            fn set_facing(&mut self, facing: HorizontalFacing) {
+                self.facing = facing;
+            }
+        }
+    };
+}
+
+impl_segment_properties!(
+    pumpkin_data::block_properties::PinkPetalsLikeProperties,
+    flower_amount
+);
+impl_segment_properties!(
+    pumpkin_data::block_properties::LeafLitterLikeProperties,
+    segment_amount
+);
+
+pub trait Segmented: BlockBehaviour {
+    type Properties: BlockProperties + SegmentProperties;
+
+    fn can_add_segment(&self, props: &Self::Properties) -> bool {
+        props.get_segment_amount() < 4
+    }
+
+    fn get_next_segment_amount(&self, current: u8) -> u8 {
+        (current + 1).min(4)
+    }
+
+    fn get_facing_for_segment(
+        &self,
+        player_facing: HorizontalFacing,
+        segment_amount: u8,
+    ) -> HorizontalFacing {
+        let base_facing = match segment_amount {
+            1 => HorizontalFacing::South,
+            2 => HorizontalFacing::East,
+            3 => HorizontalFacing::North,
+            _ => HorizontalFacing::West,
+        };
+
+        match player_facing {
+            HorizontalFacing::North => base_facing,
+            HorizontalFacing::East => base_facing.rotate_clockwise(),
+            HorizontalFacing::South => base_facing.rotate_clockwise().rotate_clockwise(),
+            HorizontalFacing::West => base_facing.rotate_counter_clockwise(),
+        }
+    }
+
+    fn can_update_at<'a>(&'a self, ctx: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            let current_props = Self::Properties::from_state_id(ctx.state_id, ctx.block);
+            self.can_add_segment(&current_props)
+        })
+    }
+
+    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if let BlockIsReplacing::Itself(existing_state_id) = args.replacing {
+                let mut props = Self::Properties::from_state_id(existing_state_id, args.block);
+
+                if self.can_add_segment(&props) {
+                    let current_amount = props.get_segment_amount();
+                    let next_amount = self.get_next_segment_amount(current_amount);
+                    props.set_segment_amount(next_amount);
+                    props.to_state_id(args.block)
+                } else {
+                    existing_state_id
+                }
+            } else {
+                // Set first segment orientation based on player direction
+                let player_facing = args.player.living_entity.entity.get_horizontal_facing();
+                let mut props = Self::Properties::default(args.block);
+                props.set_segment_amount(1);
+                props.set_facing(self.get_facing_for_segment(player_facing, 1));
+                props.to_state_id(args.block)
+            }
+        })
+    }
+}

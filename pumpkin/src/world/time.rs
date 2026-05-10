@@ -1,0 +1,78 @@
+use pumpkin_protocol::{bedrock::client::set_time::CSetTime, java::client::play::CUpdateTime};
+
+use super::World;
+
+pub struct LevelTime {
+    pub world_age: i64,
+    pub time_of_day: i64,
+    pub rain_time: i64,
+}
+
+impl Default for LevelTime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LevelTime {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            world_age: 0,
+            time_of_day: 0,
+            rain_time: 0,
+        }
+    }
+
+    pub const fn tick_time(&mut self, advance_time: bool, advance_weather: bool) {
+        self.world_age += 1;
+        if advance_weather {
+            self.rain_time += 1;
+        }
+        if advance_time {
+            self.time_of_day += 1;
+        }
+    }
+
+    pub async fn send_time(&self, world: &World) {
+        let advance_time = {
+            let lock = world.level_info.load();
+            lock.game_rules.advance_time
+        };
+
+        world
+            .broadcast_editioned(
+                &CUpdateTime::new(self.world_age, self.time_of_day, advance_time),
+                &CSetTime::new(self.time_of_day as _), // TODO do we need to tell bedrock that time is frozen?
+            )
+            .await;
+    }
+
+    pub const fn add_time(&mut self, time: i64) {
+        self.time_of_day += time;
+    }
+
+    pub const fn set_time(&mut self, time: i64) {
+        self.time_of_day = time;
+    }
+
+    #[must_use]
+    pub const fn query_daytime(&self) -> i64 {
+        self.time_of_day % 24000
+    }
+
+    #[must_use]
+    pub const fn query_gametime(&self) -> i64 {
+        self.world_age
+    }
+
+    #[must_use]
+    pub const fn query_day(&self) -> i64 {
+        self.time_of_day / 24000
+    }
+
+    #[must_use]
+    pub const fn is_night(&self) -> bool {
+        (self.time_of_day % 24000) >= 12000 && (self.time_of_day % 24000) <= 23999
+    }
+}

@@ -1,0 +1,2811 @@
+use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_util::{Hand, PermissionLvl};
+use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
+use rsa::signature::Verifier;
+use sha1::Sha1;
+use std::num::NonZeroU8;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+use thiserror::Error;
+use tracing::{Level, debug, error, info, trace, warn};
+
+use crate::block::BlockHitResult;
+use crate::block::registry::BlockActionResult;
+use crate::block::{self, BlockIsReplacing};
+use crate::entity::EntityBase;
+use crate::entity::equipment_break_status;
+use crate::entity::player::{ChatMode, ChatSession, Player};
+use crate::error::PumpkinError;
+use crate::log_at_level;
+use crate::net::PlayerConfig;
+use crate::net::java::JavaClient;
+use crate::plugin::block::block_place::BlockPlaceEvent;
+use crate::plugin::player::changed_main_hand::PlayerChangedMainHandEvent;
+use crate::plugin::player::fish::{PlayerFishEvent, PlayerFishState};
+use crate::plugin::player::item_held::PlayerItemHeldEvent;
+use crate::plugin::player::player_chat::PlayerChatEvent;
+use crate::plugin::player::player_command_send::PlayerCommandSendEvent;
+use crate::plugin::player::player_interact_entity_event::PlayerInteractEntityEvent;
+use crate::plugin::player::player_interact_event::{InteractAction, PlayerInteractEvent};
+use crate::plugin::player::player_interact_unknown_entity_event::PlayerInteractUnknownEntityEvent;
+use crate::plugin::player::player_move::PlayerMoveEvent;
+use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
+use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
+
+use crate::block::entities::command_block::CommandBlockEntity;
+use crate::block::entities::sign::SignBlockEntity;
+use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
+use crate::server::{Server, seasonal_events};
+use crate::world::{World, chunker};
+use pumpkin_data::block_properties::{
+    BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
+};
+use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{Block, BlockDirection, BlockState, translation};
+use pumpkin_inventory::InventoryError;
+use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
+use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler};
+use pumpkin_macros::send_cancellable;
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::java::client::play::{
+    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
+    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetSelectedSlot, CSystemChatMessage,
+    CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction,
+};
+use pumpkin_protocol::java::server::play::{
+    Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SChangeGameMode, SChatCommand,
+    SChatMessage, SChunkBatch, SClientCommand, SClientInformationPlay, SCloseContainer,
+    SCommandSuggestion, SConfirmTeleport, SCookieResponse as SPCookieResponse, SInteract,
+    SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest,
+    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerPosition,
+    SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
+    SRecipeBookSeenRecipe, SSelectTrade, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem,
+    SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn, Status,
+};
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
+use pumpkin_util::text::color::NamedColor;
+use pumpkin_util::{GameMode, text::TextComponent};
+use pumpkin_world::world::BlockFlags;
+use tokio::sync::Mutex;
+
+/// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
+/// Vanilla: 2 minutes
+const CHAT_MESSAGE_MAX_AGE: i64 = 1000 * 60 * 2;
+
+#[derive(Debug, Error)]
+pub enum BlockPlacingError {
+    BlockOutOfReach,
+    InvalidHand,
+    InvalidBlockFace,
+    BlockOutOfWorld,
+    InvalidGamemode,
+}
+
+impl std::fmt::Display for BlockPlacingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl PumpkinError for BlockPlacingError {
+    fn is_kick(&self) -> bool {
+        match self {
+            Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => false,
+            Self::InvalidBlockFace | Self::InvalidHand => true,
+        }
+    }
+
+    fn severity(&self) -> Level {
+        match self {
+            Self::BlockOutOfWorld | Self::InvalidGamemode => Level::TRACE,
+            Self::BlockOutOfReach | Self::InvalidBlockFace | Self::InvalidHand => Level::WARN,
+        }
+    }
+
+    fn client_kick_reason(&self) -> Option<String> {
+        match self {
+            Self::BlockOutOfReach | Self::BlockOutOfWorld | Self::InvalidGamemode => None,
+            Self::InvalidBlockFace => Some("Invalid block face".into()),
+            Self::InvalidHand => Some("Invalid hand".into()),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ChatError {
+    #[error("sent an oversized message")]
+    OversizedMessage,
+    #[error("sent a message with illegal characters")]
+    IllegalCharacters,
+    #[error("sent a chat with invalid/no signature")]
+    UnsignedChat,
+    #[error("has too many unacknowledged chats queued")]
+    TooManyPendingChats,
+    #[error("sent a chat that couldn't be validated")]
+    ChatValidationFailed,
+    #[error("sent a chat with an out of order timestamp")]
+    OutOfOrderChat,
+    #[error("has an expired public key")]
+    ExpiredPublicKey,
+    #[error("attempted to initialize a session with an invalid public key")]
+    InvalidPublicKey,
+}
+
+impl PumpkinError for ChatError {
+    fn is_kick(&self) -> bool {
+        true
+    }
+
+    fn severity(&self) -> Level {
+        Level::WARN
+    }
+
+    fn client_kick_reason(&self) -> Option<String> {
+        match self {
+            Self::OversizedMessage => Some("Chat message too long".into()),
+            Self::IllegalCharacters => Some(
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
+                    translation::java::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
+                    [],
+                )
+                .get_text(),
+            ),
+            Self::UnsignedChat => Some(
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT,
+                    translation::java::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT,
+                    [],
+                )
+                .get_text(),
+            ),
+            Self::TooManyPendingChats => Some(
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                    translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                    [],
+                )
+                .get_text(),
+            ),
+            Self::ChatValidationFailed => Some(
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
+                    translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
+                    [],
+                )
+                .get_text(),
+            ),
+            Self::OutOfOrderChat => Some(
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT,
+                    translation::java::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT,
+                    [],
+                )
+                .get_text(),
+            ),
+            Self::ExpiredPublicKey => Some(
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
+                    translation::java::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
+                    [],
+                )
+                .get_text(),
+            ),
+            Self::InvalidPublicKey => Some(
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
+                    translation::java::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
+                    [],
+                )
+                .get_text(),
+            ),
+        }
+    }
+}
+
+/// Handles all Play packets sent by a real player.
+/// NEVER TRUST THE CLIENT. HANDLE EVERY ERROR; UNWRAP/EXPECT ARE FORBIDDEN.
+impl JavaClient {
+    pub async fn handle_confirm_teleport(
+        &self,
+        player: &Player,
+        confirm_teleport: SConfirmTeleport,
+    ) {
+        let mut awaiting_teleport = player.awaiting_teleport.lock().await;
+        if let Some((id, position)) = awaiting_teleport.as_ref() {
+            if id == &confirm_teleport.teleport_id {
+                // We should set the position now to what we requested in the teleport packet.
+                // This may fix issues when the client sends the position while being teleported.
+                player.living_entity.entity.set_pos(*position);
+
+                *awaiting_teleport = None;
+                drop(awaiting_teleport);
+            } else {
+                drop(awaiting_teleport);
+                self.kick(TextComponent::text("Wrong teleport id")).await;
+            }
+        } else {
+            drop(awaiting_teleport);
+            self.kick(TextComponent::text(
+                "Send Teleport confirm, but we did not teleport",
+            ))
+            .await;
+        }
+    }
+
+    pub async fn handle_change_game_mode(
+        &self,
+        player: &Arc<Player>,
+        change_game_mode: SChangeGameMode,
+    ) {
+        if player.permission_lvl.load() >= PermissionLvl::Two {
+            player.set_gamemode(change_game_mode.game_mode).await;
+            let gamemode_string = format!(
+                "gameMode.{}",
+                change_game_mode.game_mode.to_str().to_lowercase()
+            );
+            player
+                .send_system_message(&TextComponent::translate_cross(
+                    translation::java::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                    translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                    [TextComponent::translate_cross(
+                        gamemode_string.clone(),
+                        gamemode_string,
+                        [],
+                    )],
+                ))
+                .await;
+        }
+    }
+
+    const fn clamp_horizontal(pos: f64) -> f64 {
+        pos.clamp(-3.0E7, 3.0E7)
+    }
+
+    const fn clamp_vertical(pos: f64) -> f64 {
+        pos.clamp(-2.0E7, 2.0E7)
+    }
+
+    pub fn handle_player_loaded(player: &Player) {
+        player.set_client_loaded(true);
+    }
+
+    /// Returns whether syncing the position was needed
+    #[expect(clippy::too_many_arguments)]
+    async fn sync_position(
+        &self,
+        player: &Arc<Player>,
+        world: &World,
+        pos: Vector3<f64>,
+        last_pos: Vector3<f64>,
+        yaw: f32,
+        pitch: f32,
+        on_ground: bool,
+    ) -> bool {
+        let delta = Vector3::new(pos.x - last_pos.x, pos.y - last_pos.y, pos.z - last_pos.z);
+        let entity_id = player.entity_id();
+
+        // Teleport when more than 8 blocks (-8..=7.999755859375)
+        if delta.length_squared() < 64.0 {
+            return false;
+        }
+        // Sync position with all other players.
+        world
+            .broadcast_packet_except(
+                &[player.gameprofile.id],
+                &CEntityPositionSync::new(
+                    entity_id.into(),
+                    pos,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    yaw,
+                    pitch,
+                    on_ground,
+                ),
+            )
+            .await;
+        true
+    }
+
+    pub async fn handle_position(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        packet: SPlayerPosition,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
+        if player.awaiting_teleport.lock().await.is_some() {
+            return;
+        }
+        // y = feet Y
+        let position = packet.position;
+        if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                [],
+            ))
+            .await;
+            return;
+        }
+        let position = Vector3::new(
+            Self::clamp_horizontal(position.x),
+            Self::clamp_vertical(position.y),
+            Self::clamp_horizontal(position.z),
+        );
+
+        send_cancellable! {{
+            server;
+            PlayerMoveEvent {
+                player: player.clone(),
+                from: player.living_entity.entity.pos.load(),
+                to: position,
+                cancelled: false,
+            };
+
+            'after: {
+                let pos = event.to;
+                let entity = &player.living_entity.entity;
+                let last_pos = entity.pos.load();
+                player.living_entity.entity.set_pos(pos);
+
+                let height_difference = pos.y - last_pos.y;
+                if entity.on_ground.load(Ordering::Relaxed) && packet.collision & FLAG_ON_GROUND == 0 && height_difference > 0.0 {
+                    player.jump().await;
+                }
+
+                let new_on_ground = packet.collision & FLAG_ON_GROUND != 0;
+                entity.on_ground.store(new_on_ground, Ordering::Relaxed);
+                if new_on_ground && entity.fall_flying.load(Ordering::Relaxed) {
+                    entity.set_fall_flying(false).await;
+                }
+                let world = &player.world();
+
+                // TODO: Warn when player moves to quickly
+                if !self.sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0).await {
+                    // Send the new position to all other players.
+                    world
+                        .broadcast_packet_except(
+                            &[player.gameprofile.id],
+                            &CUpdateEntityPos::new(
+                                player.entity_id().into(),
+                                Vector3::new(
+                                    pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                    pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                    pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                                ),
+                                packet.collision & FLAG_ON_GROUND != 0,
+                            ),
+                        )
+                        .await;
+                }
+
+                // Only process fall damage if player is alive
+                if !player.abilities.lock().await.flying
+                    && player.living_entity.health.load() > 0.0
+                    && !player.living_entity.dead.load(Ordering::Relaxed)
+                {
+                    player.living_entity
+                        .fall(
+                            player.clone(),
+                            height_difference,
+                            packet.collision & FLAG_ON_GROUND != 0,
+                            player.gamemode.load() == GameMode::Creative,
+                        )
+                        .await;
+                }
+                chunker::update_position(player).await;
+                let delta = Vector3::new(
+                    pos.x - last_pos.x,
+                    pos.y - last_pos.y,
+                    pos.z - last_pos.z,
+                );
+                // Only update idle timeout if there's actual movement (vanilla threshold)
+                if delta.length_squared() > 1.0E-5 {
+                    player.update_last_action_time();
+                }
+                player.progress_motion(delta).await;
+            }
+
+            'cancelled: {
+                self.force_tp(player, player.living_entity.entity.pos.load()).await;
+            }
+        }}
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub async fn handle_position_rotation(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        packet: SPlayerPositionRotation,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
+        if player.awaiting_teleport.lock().await.is_some() {
+            return;
+        }
+        // y = feet Y
+        let position = packet.position;
+        if !position.x.is_finite()
+            || !position.y.is_finite()
+            || !position.z.is_finite()
+            || !packet.yaw.is_finite()
+            || !packet.pitch.is_finite()
+        {
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                [],
+            ))
+            .await;
+            return;
+        }
+
+        let position = Vector3::new(
+            Self::clamp_horizontal(position.x),
+            Self::clamp_vertical(position.y),
+            Self::clamp_horizontal(position.z),
+        );
+
+        send_cancellable! {{
+            server;
+            PlayerMoveEvent::new(
+                player.clone(),
+                player.living_entity.entity.pos.load(),
+                position,
+            );
+
+            'after: {
+                let pos = event.to;
+                let entity = &player.living_entity.entity;
+                let last_pos = entity.pos.load();
+                player.living_entity.entity.set_pos(pos);
+
+                let height_difference = pos.y - last_pos.y;
+                if entity.on_ground.load(Ordering::Relaxed)
+                    && (packet.collision & FLAG_ON_GROUND) != 0
+                    && height_difference > 0.0
+                {
+                    player.jump().await;
+                }
+                entity
+                    .on_ground
+                    .store((packet.collision & FLAG_ON_GROUND) != 0, Ordering::Relaxed);
+
+                entity.set_rotation(wrap_degrees(packet.yaw) % 360.0, wrap_degrees(packet.pitch));
+
+                let entity_id = entity.entity_id;
+
+                let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
+                let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
+                // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
+                let world = entity.world.load_full();
+
+                // TODO: Warn when player moves to quickly
+                if !self
+                    .sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
+                    .await
+                {
+                    // Send the new position to all other players.
+                    world
+                        .broadcast_packet_except(
+                            &[player.gameprofile.id],
+                            &CUpdateEntityPosRot::new(
+                                entity_id.into(),
+                                Vector3::new(
+                                    pos.x.mul_add(4096.0, -(last_pos.x * 4096.0)) as i16,
+                                    pos.y.mul_add(4096.0, -(last_pos.y * 4096.0)) as i16,
+                                    pos.z.mul_add(4096.0, -(last_pos.z * 4096.0)) as i16,
+                                ),
+                                yaw as u8,
+                                pitch as u8,
+                                (packet.collision & FLAG_ON_GROUND) != 0,
+                            ),
+                        )
+                        .await;
+                }
+
+                world
+                    .broadcast_packet_except(
+                        &[player.gameprofile.id],
+                        &CHeadRot::new(entity_id.into(), yaw as u8),
+                    )
+                    .await;
+                // Only process fall damage if player is alive
+                if !player.abilities.lock().await.flying
+                    && player.living_entity.health.load() > 0.0
+                    && !player.living_entity.dead.load(Ordering::Relaxed)
+                {
+                    player.living_entity
+                        .fall(
+                            player.clone(),
+                            height_difference,
+                            (packet.collision & FLAG_ON_GROUND) != 0,
+                            player.gamemode.load() == GameMode::Creative,
+                        )
+                        .await;
+                }
+                chunker::update_position(player).await;
+                let delta = Vector3::new(
+                    pos.x - last_pos.x,
+                    pos.y - last_pos.y,
+                    pos.z - last_pos.z,
+                );
+                // Only update idle timeout if there's actual movement (vanilla threshold)
+                if delta.length_squared() > 1.0E-5 {
+                    player.update_last_action_time();
+                }
+                player.progress_motion(delta).await;
+            }
+
+            'cancelled: {
+                self.force_tp(player, position).await;
+            }
+        }}
+    }
+
+    pub async fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
+        let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
+        *player.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
+        self.enqueue_packet(&CPlayerPosition::new(
+            teleport_id.into(),
+            player.living_entity.entity.pos.load(),
+            Vector3::new(0.0, 0.0, 0.0),
+            player.living_entity.entity.yaw.load(),
+            player.living_entity.entity.pitch.load(),
+            Vec::new(),
+        ))
+        .await;
+    }
+
+    pub async fn handle_rotation(&self, player: &Player, rotation: SPlayerRotation) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                [],
+            ))
+            .await;
+            return;
+        }
+        let entity = &player.living_entity.entity;
+        entity.on_ground.store(rotation.ground, Ordering::Relaxed);
+        entity.set_rotation(
+            wrap_degrees(rotation.yaw) % 360.0,
+            wrap_degrees(rotation.pitch),
+        );
+        // Send the new position to all other players.
+        let entity_id = entity.entity_id;
+        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
+        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
+        // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
+
+        let world = entity.world.load_full();
+        let packet =
+            CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
+        world
+            .broadcast_packet_except(&[player.gameprofile.id], &packet)
+            .await;
+        let packet = CHeadRot::new(entity_id.into(), yaw as u8);
+        world
+            .broadcast_packet_except(&[player.gameprofile.id], &packet)
+            .await;
+    }
+
+    pub async fn handle_chat_command(
+        &self,
+        player: &Arc<Player>,
+        server: &Arc<Server>,
+        command: &SChatCommand,
+    ) {
+        player.update_last_action_time();
+        let player_clone = player.clone();
+        let server_clone = server.clone();
+        send_cancellable! {{
+            server;
+            PlayerCommandSendEvent {
+                player: player.clone(),
+                command: command.command.clone(),
+                cancelled: false
+            };
+
+            'after: {
+                let command = event.command;
+                let command_clone = command.clone();
+                // Some commands can take a long time to execute. If they do, they block packet processing for the player.
+                // That's why we will spawn a task instead.
+                server.spawn_task(async move {
+                    let dispatcher = server_clone.command_dispatcher.read().await;
+                    dispatcher.handle_command(
+                        &player_clone.get_command_source(&server_clone).await,
+                        &command_clone
+                    ).await;
+                });
+
+                if server.advanced_config.commands.log_console {
+                    info!(
+                        "Player ({}): executed command /{}",
+                        player.gameprofile.name,
+                        command
+                    );
+                }
+            }
+        }}
+    }
+
+    pub fn handle_player_ground(&self, player: &Player, ground: &SSetPlayerGround) {
+        player
+            .living_entity
+            .entity
+            .on_ground
+            .store(ground.on_ground, Ordering::Relaxed);
+    }
+
+    pub async fn handle_pick_item_from_block(
+        &self,
+        player: &Arc<Player>,
+        pick_item: SPickItemFromBlock,
+    ) {
+        if !player.can_interact_with_block_at(&pick_item.pos, 1.0) {
+            return;
+        }
+
+        let world = player.world();
+        let block = world.get_block(&pick_item.pos).await;
+
+        if block.item_id == 0 {
+            // Invalid block id (blocks such as tall seagrass)
+            return;
+        }
+
+        let stack = ItemStack::new(1, Item::from_id(block.item_id).unwrap());
+
+        let slot_with_stack = player.inventory().get_slot_with_stack(&stack).await;
+
+        if slot_with_stack != -1 {
+            if PlayerInventory::is_valid_hotbar_index(slot_with_stack as usize) {
+                player.inventory.set_selected_slot(slot_with_stack as u8);
+            } else {
+                player
+                    .inventory
+                    .swap_slot_with_hotbar(slot_with_stack as usize)
+                    .await;
+            }
+        } else if player.gamemode.load() == GameMode::Creative {
+            player.inventory.swap_stack_with_hotbar(stack).await;
+        }
+
+        player
+            .client
+            .enqueue_packet(&CSetSelectedSlot::new(
+                player.inventory.get_selected_slot() as i8
+            ))
+            .await;
+        player
+            .player_screen_handler
+            .lock()
+            .await
+            .send_content_updates()
+            .await;
+    }
+
+    // pub fn handle_pick_item_from_entity(&self, _pick_item: SPickItemFromEntity) {
+    //     // TODO: Implement and merge any redundant code with pick_item_from_block
+    // }
+
+    pub async fn handle_set_command_block(
+        &self,
+        player: &Arc<Player>,
+        mut command: SSetCommandBlock,
+    ) {
+        if !player.is_creative() {
+            return;
+        }
+        if player.permission_lvl.load() < PermissionLvl::Two {
+            return;
+        }
+        let pos = command.pos;
+        if let Some(block_entity) = player.world().get_block_entity(&pos).await {
+            if block_entity.resource_location() != CommandBlockEntity::ID {
+                warn!("Client tried to change Command block but not Command block entity found");
+                return;
+            }
+
+            let Ok(command_block_mode) = CommandBlockMode::try_from(command.mode) else {
+                self.kick(TextComponent::text("Invalid Command block mode"))
+                    .await;
+                return;
+            };
+
+            let block = player.world().get_block(&pos).await;
+            let old_state_id = player.world().get_block_state_id(&pos).await;
+            let mut props = CommandBlockLikeProperties::from_state_id(old_state_id, block);
+
+            let block_type = match command_block_mode {
+                CommandBlockMode::Chain => Block::CHAIN_COMMAND_BLOCK,
+                CommandBlockMode::Repeating => Block::REPEATING_COMMAND_BLOCK,
+                CommandBlockMode::Impulse => Block::COMMAND_BLOCK,
+            };
+
+            let old_command_block: &CommandBlockEntity =
+                block_entity.as_any().downcast_ref().unwrap();
+
+            props.conditional = command.flags & 0x2 != 0;
+
+            let new_state_id = props.to_state_id(&block_type);
+            player
+                .world()
+                .set_block_state(
+                    &command.pos,
+                    new_state_id,
+                    BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+                )
+                .await;
+
+            if command.command.starts_with('/') {
+                command.command.remove(0);
+            }
+
+            let command_block = CommandBlockEntity {
+                position: pos,
+                powered: old_command_block.powered.load(Ordering::SeqCst).into(),
+                condition_met: old_command_block
+                    .condition_met
+                    .load(Ordering::SeqCst)
+                    .into(),
+                auto: (command.flags & 0x4 != 0).into(),
+                dirty: old_command_block.dirty.load(Ordering::SeqCst).into(),
+                command: Mutex::new(command.command.clone()),
+                last_output: old_command_block.last_output.lock().await.clone().into(),
+                track_output: (command.flags & 0x1 != 0).into(),
+                success_count: AtomicU32::new(0),
+            };
+            player
+                .world()
+                .add_block_entity(Arc::new(command_block))
+                .await;
+
+            player
+                .send_system_message(&TextComponent::text(format!(
+                    "Command set: {}",
+                    command.command
+                )))
+                .await;
+
+            // The 0x4 flag means always active
+            if command.flags & 0x4 != 0 && block_type != Block::CHAIN_COMMAND_BLOCK {
+                player
+                    .world()
+                    .schedule_block_tick(
+                        &block_type,
+                        pos,
+                        1,
+                        pumpkin_world::tick::TickPriority::Normal,
+                    )
+                    .await;
+            }
+        }
+    }
+
+    pub async fn handle_player_command(
+        &self,
+        player: &Arc<Player>,
+        command: SPlayerCommand,
+        server: &Server,
+    ) {
+        if command.entity_id != player.entity_id().into() {
+            return;
+        }
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+
+        let entity = &player.living_entity.entity;
+        match command.action {
+            Action::StartSprinting => {
+                if !entity.sprinting.load(Ordering::Relaxed) {
+                    send_cancellable! {{
+                        server;
+                        PlayerToggleSprintEvent::new(player.clone(), true);
+                        'after: {
+                            player.living_entity.entity.set_sprinting(event.is_sprinting).await;
+                        }
+                    }}
+                }
+            }
+            Action::StopSprinting => {
+                if entity.sprinting.load(Ordering::Relaxed) {
+                    send_cancellable! {{
+                        server;
+                        PlayerToggleSprintEvent::new(player.clone(), false);
+                        'after: {
+                            player.living_entity.entity.set_sprinting(event.is_sprinting).await;
+                        }
+                    }}
+                }
+            }
+            Action::LeaveBed => player.wake_up().await,
+
+            Action::StartHorseJump | Action::StopHorseJump | Action::OpenVehicleInventory => {
+                debug!("todo");
+            }
+            Action::StartFlyingElytra => {
+                let fall_flying = entity.check_fall_flying();
+                if entity.fall_flying.load(Ordering::Relaxed) != fall_flying {
+                    entity.set_fall_flying(fall_flying).await;
+                }
+            }
+            // <= 1.21.5
+            Action::StartSneaking | Action::StopSneaking => {
+                self.handle_player_input(
+                    player,
+                    SPlayerInput {
+                        input: SPlayerInput::SNEAK,
+                    },
+                    server,
+                )
+                .await;
+            }
+        }
+    }
+
+    pub async fn handle_player_input(
+        &self,
+        player: &Arc<Player>,
+        input: SPlayerInput,
+        server: &Server,
+    ) {
+        let sneak = input.input & SPlayerInput::SNEAK != 0;
+        if player.get_entity().sneaking.load(Ordering::Relaxed) != sneak {
+            send_cancellable! {{
+                server;
+                PlayerToggleSneakEvent::new(player.clone(), sneak);
+                'after: {
+                    player.get_entity().set_sneaking(event.is_sneaking).await;
+                    if event.is_sneaking {
+                        let vehicle = player.get_entity().vehicle.lock().await.clone();
+                        if let Some(vehicle) = vehicle {
+                            vehicle
+                                .get_entity()
+                                .remove_passenger(player.entity_id())
+                                .await;
+                        }
+                    }
+                }
+            }}
+        } else if sneak {
+            let vehicle = player.get_entity().vehicle.lock().await.clone();
+            if let Some(vehicle) = vehicle {
+                vehicle
+                    .get_entity()
+                    .remove_passenger(player.entity_id())
+                    .await;
+            }
+        }
+    }
+
+    pub async fn handle_move_vehicle(&self, player: &Arc<Player>, packet: SMoveVehicle) {
+        let entity = player.get_entity();
+        let vehicle = entity.vehicle.lock().await;
+        if let Some(vehicle) = vehicle.as_ref() {
+            let vehicle_entity = vehicle.get_entity();
+            vehicle_entity.set_pos(Vector3::new(packet.x, packet.y, packet.z));
+            vehicle_entity.set_rotation(packet.yaw, packet.pitch);
+        }
+    }
+
+    pub async fn handle_paddle_boat(&self, player: &Arc<Player>, packet: SPaddleBoat) {
+        let vehicle = player.get_entity().vehicle.lock().await.clone();
+        if let Some(vehicle) = vehicle {
+            vehicle
+                .set_paddle_state(packet.left_paddle, packet.right_paddle)
+                .await;
+        }
+    }
+
+    #[allow(clippy::unused_async)]
+    pub async fn handle_recipe_book_change_settings(
+        &self,
+        _player: &Arc<Player>,
+        _packet: SRecipeBookChangeSettings,
+    ) {
+        // Client is updating its recipe book filter/open state; no server action needed.
+    }
+
+    #[allow(clippy::unused_async)]
+    pub async fn handle_recipe_book_seen_recipe(
+        &self,
+        _player: &Arc<Player>,
+        _packet: SRecipeBookSeenRecipe,
+    ) {
+        // Client acknowledged a recipe display; no server action needed.
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub async fn handle_place_recipe(&self, player: &Arc<Player>, packet: SPlaceRecipe) {
+        use pumpkin_data::recipes::{
+            CookingRecipeType, CraftingRecipeTypes, RECIPES_COOKING, RECIPES_CRAFTING,
+            RecipeIngredientTypes,
+        };
+        use pumpkin_data::screen::WindowType;
+
+        // Take `amount` items matching `ingredient` from inventory, committing to one item type.
+        async fn take_n_ingredient(
+            inventory: &PlayerInventory,
+            ingredient: &RecipeIngredientTypes,
+            amount: u8,
+        ) -> ItemStack {
+            let mut remaining = amount;
+            let mut result: Option<ItemStack> = None;
+            for slot in &inventory.main_inventory {
+                if remaining == 0 {
+                    break;
+                }
+                let mut stack = slot.lock().await;
+                if stack.is_empty() || !ingredient.match_item(stack.item) {
+                    continue;
+                }
+                // Commit to the first item type encountered.
+                if result.as_ref().is_some_and(|r| r.item.id != stack.item.id) {
+                    continue;
+                }
+                let take = remaining.min(stack.item_count);
+                let taken = stack.split(take);
+                remaining -= taken.item_count;
+                match &mut result {
+                    None => result = Some(taken),
+                    Some(r) => r.increment(taken.item_count),
+                }
+            }
+            result.unwrap_or_else(|| ItemStack::EMPTY.clone())
+        }
+
+        // Compute the maximum number of times all ingredients can be supplied from inventory.
+        // Each ingredient slot commits to one item type (no mixing within a slot).
+        async fn compute_biggest_craftable(
+            ingredients: &[&RecipeIngredientTypes],
+            inventory: &PlayerInventory,
+        ) -> u8 {
+            // Aggregate inventory by item id -> (item, count).
+            let mut available: Vec<(&'static pumpkin_data::item::Item, u32)> = Vec::new();
+            for slot in &inventory.main_inventory {
+                let stack = slot.lock().await;
+                if !stack.is_empty() {
+                    if let Some(e) = available.iter_mut().find(|(i, _)| i.id == stack.item.id) {
+                        e.1 += u32::from(stack.item_count);
+                    } else {
+                        available.push((stack.item, u32::from(stack.item_count)));
+                    }
+                }
+            }
+
+            // From 64 down to 1, find the highest amount where every slot can be satisfied.
+            'outer: for amount in (1u32..=64).rev() {
+                let mut budget = available.clone();
+                for ing in ingredients {
+                    // Pick the first item type that satisfies this slot and has enough.
+                    let Some(idx) = budget
+                        .iter()
+                        .position(|(item, count)| *count >= amount && ing.match_item(item))
+                    else {
+                        continue 'outer;
+                    };
+                    budget[idx].1 -= amount;
+                }
+                return amount as u8;
+            }
+            0
+        }
+
+        let target_id = packet.recipe_display_id.0 as usize;
+        let use_max = packet.use_max_items;
+
+        // Count crafting display IDs.
+        let crafting_display_count = RECIPES_CRAFTING
+            .iter()
+            .filter(|r| {
+                !matches!(
+                    r,
+                    CraftingRecipeTypes::CraftingSpecial
+                        | CraftingRecipeTypes::CraftingDecoratedPot { .. }
+                )
+            })
+            .count();
+
+        let (grid_width, crafting_inv) = {
+            let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+            let handler = screen_handler_arc.lock().await;
+            let grid_width: usize = match handler.window_type() {
+                Some(WindowType::Crafting) => 3,
+                None => 2, // player inventory 2x2
+                _ => return,
+            };
+            (grid_width, handler.get_behaviour().slots[1].get_inventory())
+        };
+
+        if target_id < crafting_display_count {
+            // Crafting recipe
+            let mut counter = 0usize;
+            let recipe = RECIPES_CRAFTING.iter().find(|r| {
+                if matches!(
+                    r,
+                    CraftingRecipeTypes::CraftingSpecial
+                        | CraftingRecipeTypes::CraftingDecoratedPot { .. }
+                ) {
+                    return false;
+                }
+                let found = counter == target_id;
+                counter += 1;
+                found
+            });
+            let Some(recipe) = recipe else { return };
+
+            let grid_size = grid_width * grid_width;
+
+            // Map each grid position to its required ingredient (None = empty/unused).
+            let mut ingredient_slots: Vec<Option<&RecipeIngredientTypes>> = vec![None; grid_size];
+            match recipe {
+                CraftingRecipeTypes::CraftingShaped { pattern, key, .. } => {
+                    for (row, row_str) in pattern.iter().enumerate() {
+                        for (col, ch) in row_str.chars().enumerate() {
+                            if ch != ' '
+                                && let Some(ing) =
+                                    key.iter().find_map(|(k, v)| (*k == ch).then_some(v))
+                            {
+                                ingredient_slots[row * grid_width + col] = Some(ing);
+                            }
+                        }
+                    }
+                }
+                CraftingRecipeTypes::CraftingShapeless { ingredients, .. } => {
+                    for (i, ing) in ingredients.iter().enumerate().take(grid_size) {
+                        ingredient_slots[i] = Some(ing);
+                    }
+                }
+                CraftingRecipeTypes::CraftingTransmute {
+                    input, material, ..
+                } => {
+                    ingredient_slots[0] = Some(input);
+                    ingredient_slots[1] = Some(material);
+                }
+                _ => return,
+            }
+
+            // Check if this exact recipe is already placed (determines stacking vs fresh fill).
+            let recipe_matches = {
+                let mut ok = true;
+                for (idx, ing) in ingredient_slots.iter().enumerate() {
+                    let slot_arc = crafting_inv.get_stack(idx).await;
+                    let stack = slot_arc.lock().await;
+                    match ing {
+                        None => {
+                            if !stack.is_empty() {
+                                ok = false;
+                                break;
+                            }
+                        }
+                        Some(ingredient) => {
+                            if stack.is_empty() || !ingredient.match_item(stack.item) {
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                ok
+            };
+
+            // Read minimum count from occupied slots before clearing (needed for stacking).
+            let current_min = if recipe_matches && !use_max {
+                let mut min = u8::MAX;
+                for (idx, ing) in ingredient_slots.iter().enumerate() {
+                    if ing.is_some() {
+                        let slot_arc = crafting_inv.get_stack(idx).await;
+                        let stack = slot_arc.lock().await;
+                        if !stack.is_empty() {
+                            min = min.min(stack.item_count);
+                        }
+                    }
+                }
+                if min == u8::MAX { 0 } else { min }
+            } else {
+                0
+            };
+
+            // Always clear the grid first, returning items to inventory.
+            for i in 0..grid_size {
+                let stack = crafting_inv.remove_stack(i).await;
+                if !stack.is_empty() {
+                    player.inventory.offer(stack, false, player.as_ref()).await;
+                }
+            }
+
+            // Determine how many of each ingredient to place per slot.
+            let active_ingredients: Vec<&RecipeIngredientTypes> =
+                ingredient_slots.iter().flatten().copied().collect();
+            let amount_to_craft = if use_max {
+                compute_biggest_craftable(&active_ingredients, &player.inventory).await
+            } else if recipe_matches {
+                current_min.saturating_add(1)
+            } else {
+                1
+            };
+
+            if amount_to_craft == 0 {
+                let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+                screen_handler_arc.lock().await.send_content_updates().await;
+                return;
+            }
+
+            // Fill each grid slot with exactly `amount_to_craft` matching items.
+            for (idx, ing) in ingredient_slots.iter().enumerate() {
+                let Some(ingredient) = ing else { continue };
+                let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
+                if !taken.is_empty() {
+                    crafting_inv.set_stack(idx, taken).await;
+                }
+            }
+        } else {
+            // Cooking recipe
+            let cooking_index = target_id - crafting_display_count;
+            let Some(recipe) = RECIPES_COOKING.get(cooking_index) else {
+                return;
+            };
+
+            let furnace_inv = {
+                let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+                let handler = screen_handler_arc.lock().await;
+                match handler.window_type() {
+                    Some(WindowType::Furnace | WindowType::BlastFurnace | WindowType::Smoker) => {
+                        handler.get_behaviour().slots[0].get_inventory()
+                    }
+                    _ => return,
+                }
+            };
+
+            let ingredient = match recipe {
+                CookingRecipeType::Smelting(r)
+                | CookingRecipeType::Blasting(r)
+                | CookingRecipeType::Smoking(r)
+                | CookingRecipeType::CampfireCooking(r) => &r.ingredient,
+            };
+
+            // Check if ingredient already matches (for stacking).
+            let (recipe_matches, current_count) = {
+                let slot_arc = furnace_inv.get_stack(0).await;
+                let stack = slot_arc.lock().await;
+                let matches = !stack.is_empty() && ingredient.match_item(stack.item);
+                let count = if matches { stack.item_count } else { 0 };
+                (matches, count)
+            };
+
+            // Always clear slot 0 first, returning item to inventory.
+            let old = furnace_inv.remove_stack(0).await;
+            if !old.is_empty() {
+                player.inventory.offer(old, false, player.as_ref()).await;
+            }
+
+            let amount_to_craft = if use_max {
+                compute_biggest_craftable(&[ingredient], &player.inventory).await
+            } else if recipe_matches {
+                current_count.saturating_add(1)
+            } else {
+                1
+            };
+
+            if amount_to_craft > 0 {
+                let taken = take_n_ingredient(&player.inventory, ingredient, amount_to_craft).await;
+                if !taken.is_empty() {
+                    furnace_inv.set_stack(0, taken).await;
+                }
+            }
+        }
+
+        let screen_handler_arc = player.current_screen_handler.lock().await.clone();
+        screen_handler_arc.lock().await.send_content_updates().await;
+    }
+    pub async fn handle_swing_arm(&self, player: &Arc<Player>, swing_arm: SSwingArm) {
+        player.update_last_action_time();
+        let Ok(hand) = Hand::try_from(swing_arm.hand.0) else {
+            self.kick(TextComponent::text("Invalid hand")).await;
+            return;
+        };
+
+        let (yaw, pitch) = player.rotation();
+        let hit_result = player
+            .world()
+            .raycast(
+                player.eye_position(),
+                player
+                    .eye_position()
+                    .add(&(Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)) * 4.5)),
+                async |pos, world| {
+                    let block = world.get_block(pos).await;
+                    block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
+                },
+            )
+            .await;
+
+        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+            PlayerInteractEvent::new(
+                player,
+                InteractAction::LeftClickBlock,
+                player.world().get_block(&hit_pos).await,
+                Some(hit_pos),
+            )
+        } else {
+            PlayerInteractEvent::new(player, InteractAction::LeftClickAir, &Block::AIR, None)
+        };
+
+        let server = player.world().server.upgrade().unwrap();
+
+        send_cancellable! {{
+            server;
+            event;
+            'after: {
+                player.swing_hand(hand, false).await;
+            }
+        }}
+    }
+
+    pub async fn handle_chat_message(
+        &self,
+        server: &Server,
+        player: &Arc<Player>,
+        chat_message: SChatMessage,
+    ) {
+        player.update_last_action_time();
+        let gameprofile = &player.gameprofile;
+
+        if let Err(err) = self
+            .validate_chat_message(server, player, &chat_message)
+            .await
+        {
+            log_at_level!(
+                err.severity(),
+                "{} (uuid {}) {}",
+                gameprofile.name,
+                gameprofile.id,
+                err
+            );
+            if err.is_kick()
+                && let Some(reason) = err.client_kick_reason()
+            {
+                self.kick(TextComponent::text(reason)).await;
+            }
+            return;
+        }
+
+        send_cancellable! {{
+            server;
+            PlayerChatEvent::new(player.clone(), chat_message.message.clone(), vec![]);
+
+            'after: {
+                info!("<chat> {}: {}", gameprofile.name, event.message);
+
+                let config = &server.advanced_config;
+
+                let message = match seasonal_events::modify_chat_message(&event.message, config) {
+                    Some(m) => m,
+                    None => event.message.clone(),
+                };
+
+                let decorated_message = TextComponent::chat_decorated(
+                    &config.chat.format,
+                    &gameprofile.name,
+                    &message,
+                );
+
+                let entity = &player.living_entity.entity;
+                let world = entity.world.load_full();
+                if server.basic_config.allow_chat_reports {
+                    world.broadcast_secure_player_chat(player, &chat_message, &decorated_message).await;
+                } else {
+                    let je_packet = CSystemChatMessage::new(
+                        &decorated_message,
+                        false,
+                    );
+                    let be_packet = SText::new(
+                        message, player.gameprofile.name.clone()
+                    );
+
+                    world.broadcast_editioned(&je_packet, &be_packet).await;
+                }
+            }
+        }}
+    }
+
+    /// Runs all vanilla checks for a valid chat message
+    pub async fn validate_chat_message(
+        &self,
+        server: &Server,
+        player: &Arc<Player>,
+        chat_message: &SChatMessage,
+    ) -> Result<(), ChatError> {
+        // Check for oversized messages
+        // If we're able to find the 257th UTF-16 character, the message is too big.
+        if chat_message.message.encode_utf16().nth(256).is_some() {
+            return Err(ChatError::OversizedMessage);
+        }
+        // Check for illegal characters
+        if chat_message
+            .message
+            .chars()
+            .any(|c| c == '§' || c < ' ' || c == '\x7F')
+        {
+            return Err(ChatError::IllegalCharacters);
+        }
+        // These checks are only run in secure chat mode
+        if server.basic_config.allow_chat_reports {
+            // Check for unsigned chat
+            if let Some(signature) = &chat_message.signature {
+                if signature.len() != 256 {
+                    return Err(ChatError::UnsignedChat); // Signature is the wrong length
+                }
+            } else {
+                return Err(ChatError::UnsignedChat); // There is no signature
+            }
+
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+
+            // Verify message timestamp
+            if chat_message.timestamp > now || chat_message.timestamp < (now - CHAT_MESSAGE_MAX_AGE)
+            {
+                return Err(ChatError::OutOfOrderChat);
+            }
+
+            // Verify session expiry
+            if player.chat_session.lock().await.expires_at < now {
+                return Err(ChatError::ExpiredPublicKey);
+            }
+
+            // Validate previous signature checksum (new in 1.21.5)
+            // The client can bypass this check by sending 0
+            if chat_message.checksum != 0 {
+                let checksum =
+                    polynomial_rolling_hash(player.signature_cache.lock().await.last_seen.as_ref());
+                if checksum != chat_message.checksum {
+                    return Err(ChatError::ChatValidationFailed);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn handle_chat_session_update(
+        &self,
+        player: &Arc<Player>,
+        server: &Server,
+        session: SPlayerSession,
+    ) {
+        // Keep the chat session default if we don't want reports
+        if !server.basic_config.allow_chat_reports {
+            return;
+        }
+
+        if let Err(err) = self.validate_chat_session(player, server, &session) {
+            log_at_level!(
+                err.severity(),
+                "{} (uuid {}) {}",
+                player.gameprofile.name,
+                player.gameprofile.id,
+                err
+            );
+            if err.is_kick()
+                && let Some(reason) = err.client_kick_reason()
+            {
+                self.kick(TextComponent::text(reason)).await;
+            }
+            return;
+        }
+
+        // Update the chat session fields
+        *player.chat_session.lock().await = ChatSession::new(
+            session.session_id,
+            session.expires_at,
+            session.public_key.clone(),
+            session.key_signature.clone(),
+        );
+
+        server
+            .broadcast_packet_all(&CPlayerInfoUpdate::new(
+                0x02,
+                &[pumpkin_protocol::java::client::play::Player {
+                    uuid: player.gameprofile.id,
+                    actions: &[PlayerAction::InitializeChat(Some(InitChat {
+                        session_id: session.session_id,
+                        expires_at: session.expires_at,
+                        public_key: session.public_key.clone(),
+                        signature: session.key_signature.clone(),
+                    }))],
+                }],
+            ))
+            .await;
+    }
+
+    /// Runs vanilla checks for a valid player session
+    pub fn validate_chat_session(
+        &self,
+        player: &Player,
+        server: &Server,
+        session: &SPlayerSession,
+    ) -> Result<(), ChatError> {
+        // Verify session expiry
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        if session.expires_at < now {
+            return Err(ChatError::InvalidPublicKey);
+        }
+
+        let key_signature = RsaPkcs1v15Signature::try_from(session.key_signature.as_ref())
+            .map_err(|_| ChatError::InvalidPublicKey)?;
+
+        let mut signable = Vec::new();
+        signable.extend_from_slice(player.gameprofile.id.as_bytes());
+        signable.extend_from_slice(&session.expires_at.to_be_bytes());
+        signable.extend_from_slice(&session.public_key);
+
+        let public_keys_guard = server.mojang_public_keys.load();
+
+        // Verify signature with RSA-SHA1
+        let is_valid = public_keys_guard.iter().any(|key| {
+            let verifying_key = VerifyingKey::<Sha1>::new(key.clone());
+            verifying_key.verify(&signable, &key_signature).is_ok()
+        });
+
+        // Verify that the signable is valid for any one of Mojang's public keys
+        if !is_valid {
+            return Err(ChatError::InvalidPublicKey);
+        }
+
+        Ok(())
+    }
+
+    pub async fn handle_client_information(
+        &self,
+        player: &Arc<Player>,
+        client_information: SClientInformationPlay,
+    ) {
+        if let (Ok(main_hand), Ok(chat_mode)) = (
+            Hand::try_from(client_information.main_hand.0),
+            ChatMode::try_from(client_information.chat_mode.0),
+        ) {
+            if client_information.view_distance <= 0 {
+                self.kick(TextComponent::text(
+                    "Cannot have zero or negative view distance!",
+                ))
+                .await;
+                return;
+            }
+
+            let (update_settings, update_watched, main_hand_changed) = {
+                // 1. Load current snapshot
+                let current_config = player.config.load();
+
+                // 2. Calculate if settings changed before we overwrite
+                let main_hand_changed = current_config.main_hand != main_hand;
+                let update_settings =
+                    main_hand_changed || current_config.skin_parts != client_information.skin_parts;
+
+                let old_view_distance = current_config.view_distance;
+                let new_view_distance_raw = client_information.view_distance as u8;
+
+                let update_watched = if old_view_distance.get() == new_view_distance_raw {
+                    false
+                } else {
+                    debug!(
+                        "Player {} ({}) updated their render distance: {} -> {}.",
+                        player.gameprofile.name, self.id, old_view_distance, new_view_distance_raw
+                    );
+                    true
+                };
+
+                // 3. Construct the new config
+                // If view_distance is 0, we exit early (safe guard)
+                let Some(new_view_distance) = NonZeroU8::new(new_view_distance_raw) else {
+                    return;
+                };
+
+                let new_config = PlayerConfig {
+                    locale: client_information.locale,
+                    view_distance: new_view_distance,
+                    chat_mode,
+                    chat_colors: client_information.chat_colors,
+                    skin_parts: client_information.skin_parts,
+                    main_hand,
+                    text_filtering: client_information.text_filtering,
+                    server_listing: client_information.server_listing,
+                };
+
+                // 4. Atomically swap the new config into the player
+                player.config.store(std::sync::Arc::new(new_config));
+
+                (update_settings, update_watched, main_hand_changed)
+            };
+
+            if update_watched {
+                chunker::update_position(player).await;
+            }
+
+            if main_hand_changed && let Some(server) = player.world().server.upgrade() {
+                let event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
+                let _ = server.plugin_manager.fire(event).await;
+            }
+
+            if update_settings {
+                debug!(
+                    "Player {} ({}) updated their skin.",
+                    player.gameprofile.name, self.id,
+                );
+                player.send_client_information().await;
+            }
+        } else {
+            self.kick(TextComponent::text("Invalid hand or chat type"))
+                .await;
+        }
+    }
+
+    pub async fn handle_client_status(&self, player: &Arc<Player>, client_status: SClientCommand) {
+        player.update_last_action_time();
+        match client_status.action_id.0 {
+            0 => {
+                // Perform respawn
+                if player.living_entity.health.load() > 0.0 {
+                    return;
+                }
+                player.world().clone().respawn_player(player, false).await;
+
+                {
+                    let screen_handler = player.current_screen_handler.lock().await;
+                    let mut screen_handler = screen_handler.lock().await;
+                    screen_handler.sync_state().await;
+                };
+
+                // Restore abilities based on gamemode after respawn
+                {
+                    let mut abilities = player.abilities.lock().await;
+                    abilities.set_for_gamemode(player.gamemode.load());
+                };
+                player.send_abilities_update().await;
+            }
+            1 => {
+                // Request stats
+                debug!("todo");
+            }
+            _ => {
+                self.kick(TextComponent::text("Invalid client status"))
+                    .await;
+            }
+        }
+    }
+
+    pub async fn handle_attack(&self, player: &Arc<Player>, attack: SAttack, server: &Arc<Server>) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+        let entity_id = attack.entity_id;
+        let player_entity = &player.living_entity.entity;
+        let world = player_entity.world.load_full();
+
+        let config = &server.advanced_config.pvp;
+        if !config.enabled {
+            return;
+        }
+
+        if entity_id.0 == player.entity_id() {
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                [],
+            ))
+            .await;
+            return;
+        }
+
+        let player_target = world.get_player_by_id(entity_id.0);
+        let target: Option<Arc<dyn EntityBase>> = player_target
+            .as_ref()
+            .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
+            .or_else(|| world.get_entity_by_id(entity_id.0));
+        let Some(target) = target else {
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                [],
+            ))
+            .await;
+            return;
+        };
+        if let Some(player_victim) = &player_target {
+            if player_victim.living_entity.health.load() <= 0.0 {
+                return;
+            }
+            if config.protect_creative && player_victim.gamemode.load() == GameMode::Creative {
+                world
+                    .play_sound(
+                        Sound::EntityPlayerAttackNodamage,
+                        SoundCategory::Players,
+                        &player_victim.position(),
+                    )
+                    .await;
+                return;
+            }
+        }
+        player.attack(target).await;
+    }
+
+    pub async fn handle_interact(
+        &self,
+        player: &Arc<Player>,
+        interact: SInteract,
+        server: &Arc<Server>,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+        let entity_id = interact.entity_id;
+
+        let sneaking = interact.sneaking;
+        let player_entity = &player.living_entity.entity;
+        if player_entity.sneaking.load(Ordering::Relaxed) != sneaking {
+            player_entity.set_sneaking(sneaking).await;
+        }
+        let Ok(action) = ActionType::try_from(interact.r#type.0) else {
+            self.kick(TextComponent::text("Invalid action type")).await;
+            return;
+        };
+
+        // Resolve the target entity for the event
+        let world = player_entity.world.load_full();
+        let player_target = world.get_player_by_id(entity_id.0);
+        let target: Option<Arc<dyn EntityBase>> = player_target
+            .as_ref()
+            .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
+            .or_else(|| world.get_entity_by_id(entity_id.0));
+
+        if let Some(target) = target {
+            send_cancellable! {{
+                server;
+                PlayerInteractEntityEvent::new(
+                    player,
+                    Arc::clone(&target),
+                    action.clone(),
+                    interact.target_position,
+                    sneaking,
+                );
+
+                'after: {
+                    match event.action {
+                        ActionType::Attack => {
+                            let config = &server.advanced_config.pvp;
+                            if !config.enabled {
+                                return;
+                            }
+
+                            if entity_id.0 == player.entity_id() {
+                                self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
+                                .await;
+                                return;
+                            }
+
+                            if let Some(player_victim) = &player_target {
+                                if player_victim.living_entity.health.load() <= 0.0 {
+                                    return;
+                                }
+                                if config.protect_creative
+                                    && player_victim.gamemode.load() == GameMode::Creative
+                                {
+                                    world
+                                        .play_sound(
+                                            Sound::EntityPlayerAttackNodamage,
+                                            SoundCategory::Players,
+                                            &player_victim.position(),
+                                        )
+                                        .await;
+                                    return;
+                                }
+                            }
+                            player.attack(event.target).await;
+                        }
+                        ActionType::Interact | ActionType::InteractAt => {
+                            let held = player.inventory.held_item();
+                            let mut stack = held.lock().await;
+                            if !event.target.interact(player, &mut stack).await {
+                                server
+                                    .item_registry
+                                    .use_on_entity(&mut stack, player, event.target)
+                                    .await;
+                            }
+                        }
+                    }
+                }
+            }}
+        } else {
+            // Entity not found
+            send_cancellable! {{
+                server;
+                PlayerInteractUnknownEntityEvent::new(player, entity_id.0, action);
+
+                'after: {
+                    if event.action == ActionType::Attack {
+                        error!(
+                            "Player id {} interacted with entity id {}, which was not found.",
+                            player.entity_id(),
+                            event.entity_id
+                        );
+                        self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
+                        .await;
+                    }
+                }
+            }}
+        }
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub async fn handle_player_action(
+        &self,
+        player: &Arc<Player>,
+        player_action: SPlayerAction,
+        server: &Server,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+        match Status::try_from(player_action.status.0) {
+            Ok(status) => match status {
+                Status::StartedDigging => {
+                    if !player.can_interact_with_block_at(&player_action.position, 1.0) {
+                        warn!(
+                            "Player {0} tried to interact with block out of reach at {1}",
+                            player.gameprofile.name, player_action.position
+                        );
+                        self.update_sequence(player, player_action.sequence.0);
+                        return;
+                    }
+                    let position = player_action.position;
+                    let entity = &player.living_entity.entity;
+                    let world = entity.world.load_full();
+                    let (block, state) = world.get_block_and_state(&position).await;
+
+                    let inventory = player.inventory();
+                    let held = inventory.held_item();
+                    if !server
+                        .item_registry
+                        .can_mine(held.lock().await.item, player)
+                    {
+                        self.enqueue_packet(&CBlockUpdate::new(
+                            position,
+                            VarInt(i32::from(state.id)),
+                        ))
+                        .await;
+                        self.update_sequence(player, player_action.sequence.0);
+                        return;
+                    }
+
+                    // TODO: do validation
+                    // TODO: Config
+                    if player.gamemode.load() == GameMode::Creative {
+                        // Block break & play sound
+                        let new_state = world
+                            .break_block(
+                                &position,
+                                Some(player.clone()),
+                                BlockFlags::NOTIFY_NEIGHBORS | BlockFlags::SKIP_DROPS,
+                            )
+                            .await;
+                        if new_state.is_some() {
+                            server
+                                .block_registry
+                                .broken(&world, block, player, &position, server, state)
+                                .await;
+                        }
+                        self.sync_block_state_to_client(&world, position).await;
+                        self.update_sequence(player, player_action.sequence.0);
+                        return;
+                    }
+                    player.start_mining_time.store(
+                        player.tick_counter.load(Ordering::Relaxed),
+                        Ordering::Relaxed,
+                    );
+                    if !state.is_air() {
+                        let speed = block::calc_block_breaking(player, state, block).await;
+                        // Instant break
+                        if speed >= 1.0 {
+                            let broken_state = world.get_block_state(&position).await;
+                            let new_state = world
+                                .break_block(
+                                    &position,
+                                    Some(player.clone()),
+                                    BlockFlags::NOTIFY_NEIGHBORS,
+                                )
+                                .await;
+                            if new_state.is_some() {
+                                server
+                                    .block_registry
+                                    .broken(&world, block, player, &position, server, broken_state)
+                                    .await;
+                                player.apply_tool_damage_for_block_break(broken_state).await;
+                            }
+                            self.sync_block_state_to_client(&world, position).await;
+                        } else {
+                            player.mining.store(true, Ordering::Relaxed);
+                            *player.mining_pos.lock().await = position;
+                            let progress = (speed * 10.0) as i32;
+                            world.set_block_breaking(entity, position, progress).await;
+                            player
+                                .current_block_destroy_stage
+                                .store(progress, Ordering::Relaxed);
+                        }
+                    }
+                    self.update_sequence(player, player_action.sequence.0);
+                }
+                Status::CancelledDigging => {
+                    if !player.can_interact_with_block_at(&player_action.position, 1.0) {
+                        warn!(
+                            "Player {0} tried to interact with block out of reach at {1}",
+                            player.gameprofile.name, player_action.position
+                        );
+                        self.update_sequence(player, player_action.sequence.0);
+                        return;
+                    }
+                    player.mining.store(false, Ordering::Relaxed);
+                    let entity = &player.living_entity.entity;
+                    entity
+                        .world
+                        .load()
+                        .set_block_breaking(entity, player_action.position, -1)
+                        .await;
+                    self.update_sequence(player, player_action.sequence.0);
+                }
+                Status::FinishedDigging => {
+                    // TODO: do validation
+                    let location = player_action.position;
+                    if !player.can_interact_with_block_at(&location, 1.0) {
+                        warn!(
+                            "Player {0} tried to interact with block out of reach at {1}",
+                            player.gameprofile.name, player_action.position
+                        );
+                        self.update_sequence(player, player_action.sequence.0);
+                        return;
+                    }
+
+                    // Block break & play sound
+                    let entity = &player.living_entity.entity;
+                    let world = entity.world.load_full();
+
+                    player.mining.store(false, Ordering::Relaxed);
+                    world.set_block_breaking(entity, location, -1).await;
+
+                    let (block, state) = world.get_block_and_state(&location).await;
+                    let block_drop = player.gamemode.load() != GameMode::Creative
+                        && player.can_harvest(state, block).await;
+
+                    let new_state = world
+                        .break_block(
+                            &location,
+                            Some(player.clone()),
+                            if block_drop {
+                                BlockFlags::NOTIFY_NEIGHBORS
+                            } else {
+                                BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_NEIGHBORS
+                            },
+                        )
+                        .await;
+                    if new_state.is_some() {
+                        server
+                            .block_registry
+                            .broken(&world, block, player, &location, server, state)
+                            .await;
+                        player.apply_tool_damage_for_block_break(state).await;
+                    }
+                    self.sync_block_state_to_client(&world, location).await;
+
+                    self.update_sequence(player, player_action.sequence.0);
+                }
+                Status::DropItem => {
+                    player.drop_held_item(false).await;
+                }
+                Status::DropItemStack => {
+                    player.drop_held_item(true).await;
+                }
+                Status::ReleaseItemInUse => {
+                    let item_in_use = player.living_entity.item_in_use.lock().await.clone();
+                    if let Some(stack) = item_in_use {
+                        server.item_registry.on_stopped_using(&stack, player).await;
+                    }
+
+                    player.living_entity.clear_active_hand().await;
+                }
+                Status::SwapItem => {
+                    player.swap_item().await;
+                }
+                Status::SpearJab => {
+                    debug!("todo");
+                }
+            },
+            Err(_) => self.kick(TextComponent::text("Invalid status")).await,
+        }
+    }
+
+    pub async fn handle_keep_alive(&self, player: &Player, keep_alive: SKeepAlive) {
+        if player.wait_for_keep_alive.load(Ordering::Relaxed)
+            && keep_alive.keep_alive_id == player.keep_alive_id.load(Ordering::Relaxed)
+        {
+            let ping = player.last_keep_alive_time.load().elapsed();
+            // Vanilla logic
+            player.ping.store(
+                (player.ping.load(Ordering::Relaxed) * 3 + ping.as_millis() as u32) / 4,
+                Ordering::Relaxed,
+            );
+            player.wait_for_keep_alive.store(false, Ordering::Relaxed);
+        } else {
+            self.kick(TextComponent::text(
+                "Timeout, The server probably has a deadlock!",
+            ))
+            .await;
+        }
+    }
+
+    pub fn update_sequence(&self, player: &Player, sequence: i32) {
+        if sequence < 0 {
+            error!("Expected packet sequence >= 0");
+        }
+        player.packet_sequence.store(
+            player.packet_sequence.load(Ordering::Relaxed).max(sequence),
+            Ordering::Relaxed,
+        );
+    }
+
+    async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
+        let synced_state_id = world.get_block_state_id(&position).await;
+        self.send_packet_now(&CBlockUpdate::new(
+            position,
+            VarInt(i32::from(synced_state_id)),
+        ))
+        .await;
+    }
+
+    pub async fn handle_player_abilities(
+        &self,
+        player: &Arc<Player>,
+        player_abilities: SPlayerAbilities,
+        server: &Server,
+    ) {
+        let (flying, allow_flying) = {
+            let abilities = player.abilities.lock().await;
+            (abilities.flying, abilities.allow_flying)
+        };
+
+        // Set the flying ability
+        let new_flying = player_abilities.flags & 0x02 != 0 && allow_flying;
+        if flying != new_flying {
+            send_cancellable! {{
+                server;
+                PlayerToggleFlightEvent::new(player.clone(), new_flying);
+                'after: {
+                    if event.is_flying {
+                        player.living_entity.fall_distance.store(0.0);
+                    }
+                    player.abilities.lock().await.flying = event.is_flying;
+                }
+                'cancelled: {
+                    player.send_abilities_update().await;
+                }
+            }}
+        }
+    }
+
+    pub async fn handle_play_ping_request(&self, request: SPlayPingRequest) {
+        self.enqueue_packet(&CPingResponse::new(request.payload))
+            .await;
+    }
+
+    pub async fn handle_use_item_on(
+        &self,
+        player: &Arc<Player>,
+        use_item_on: SUseItemOn,
+        server: &Arc<Server>,
+    ) -> Result<(), BlockPlacingError> {
+        if !player.has_client_loaded() {
+            return Ok(());
+        }
+        player.update_last_action_time();
+        self.update_sequence(player, use_item_on.sequence.0);
+
+        let position = use_item_on.position;
+        let cursor_pos = use_item_on.cursor_pos;
+
+        let mut should_try_decrement = false;
+
+        if !player.can_interact_with_block_at(&position, 1.0) {
+            // TODO: maybe log?
+            return Err(BlockPlacingError::BlockOutOfReach);
+        }
+
+        let Ok(face) = BlockDirection::try_from(use_item_on.face.0) else {
+            return Err(BlockPlacingError::InvalidBlockFace);
+        };
+
+        let Ok(hand) = Hand::try_from(use_item_on.hand.0) else {
+            return Err(BlockPlacingError::InvalidHand);
+        };
+
+        //TODO this.player.resetLastActionTime();
+        //TODO this.gameModeForPlayer == GameType.SPECTATOR
+
+        let inventory = player.inventory();
+        let held_item = inventory.held_item();
+        let off_hand_item = inventory.off_hand_item().await;
+        let held_item_empty = held_item.lock().await.is_empty();
+        let off_hand_item_empty = off_hand_item.lock().await.is_empty();
+
+        let item = if matches!(hand, Hand::Left) {
+            held_item
+        } else {
+            off_hand_item
+        };
+
+        let entity = &player.living_entity.entity;
+        let world = entity.world.load_full();
+        let block = world.get_block(&position).await;
+
+        let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
+
+        // Code based on the java class ServerPlayerInteractionManager
+        if !(sneaking && (!held_item_empty || !off_hand_item_empty)) {
+            let result = self
+                .call_use_item_on(
+                    player,
+                    &position,
+                    &cursor_pos,
+                    &face,
+                    &item,
+                    &world,
+                    block,
+                    server,
+                )
+                .await;
+            if result.consumes_action() {
+                // TODO: Trigger ANY_BLOCK_USE Criteria
+
+                if matches!(result, BlockActionResult::SuccessServer) {
+                    player.swing_hand(hand, true).await;
+                }
+                return Ok(());
+            }
+        }
+
+        let slot_index = if matches!(hand, Hand::Left) {
+            inventory.get_selected_slot() as usize
+        } else {
+            PlayerInventory::OFF_HAND_SLOT
+        };
+
+        let mut stack = item.lock().await;
+
+        if stack.is_empty() {
+            // TODO item cool down
+            // If the hand is empty we stop here
+            return Ok(());
+        }
+
+        let before = stack.clone();
+
+        server
+            .item_registry
+            .use_on_block(
+                &mut stack, player, position, face, cursor_pos, block, server,
+            )
+            .await;
+
+        // Check if the item is a block, because not every item can be placed :D
+        let item_id = stack.item.id;
+        if let Some(block) = Block::from_item_id(item_id) {
+            should_try_decrement = self
+                .run_is_block_place(player, block, server, use_item_on, position, face)
+                .await?;
+        }
+
+        if should_try_decrement {
+            // TODO: Config
+            // Decrease block count
+            if player.gamemode.load() != GameMode::Creative {
+                stack.decrement(1);
+            }
+        }
+
+        let after = stack.clone();
+        drop(stack);
+
+        // Broadcast the break entity status before the slot sync; the client
+        // needs the old item texture in the slot for break particles.
+        if !before.is_empty() && after.is_empty() {
+            let slot = if slot_index == player.inventory.get_selected_slot() as usize {
+                &EquipmentSlot::MAIN_HAND
+            } else {
+                &EquipmentSlot::OFF_HAND
+            };
+            player
+                .world()
+                .send_entity_status(&player.living_entity.entity, equipment_break_status(slot))
+                .await;
+        }
+
+        if !after.are_equal(&before) {
+            player.sync_hand_slot(slot_index, after).await;
+        }
+
+        Ok(())
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    async fn call_use_item_on(
+        &self,
+        player: &Arc<Player>,
+        position: &BlockPos,
+        cursor_pos: &Vector3<f32>,
+        face: &BlockDirection,
+        held_item: &Arc<Mutex<ItemStack>>,
+        world: &Arc<World>,
+        block: &Block,
+        server: &Arc<Server>,
+    ) -> BlockActionResult {
+        let result = server
+            .block_registry
+            .use_with_item(
+                block,
+                player,
+                position,
+                &BlockHitResult { face, cursor_pos },
+                held_item,
+                server,
+                world,
+            )
+            .await;
+
+        if result.consumes_action() {
+            // TODO: Trigger ITEM_USED_ON_BLOCK Criteria
+            return result;
+        }
+
+        if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
+            let result = server
+                .block_registry
+                .on_use(
+                    block,
+                    player,
+                    position,
+                    &BlockHitResult { face, cursor_pos },
+                    server,
+                    world,
+                )
+                .await;
+
+            if result.consumes_action() {
+                // TODO: Trigger DEFAULT_BLOCK_USE Criteria
+                return result;
+            }
+        }
+
+        BlockActionResult::Pass
+    }
+
+    pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
+        let world = player.living_entity.entity.world.load_full();
+        let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
+            return;
+        };
+        let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
+            return;
+        };
+        if sign_entity.is_waxed.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let text = if sign_data.is_front_text {
+            &sign_entity.front_text
+        } else {
+            &sign_entity.back_text
+        };
+
+        *text.messages.lock().unwrap() = [
+            sign_data.line_1,
+            sign_data.line_2,
+            sign_data.line_3,
+            sign_data.line_4,
+        ];
+        *sign_entity.currently_editing_player.lock().await = None;
+        world.update_block_entity(&block_entity).await;
+    }
+
+    pub async fn handle_use_item(
+        &self,
+        player: &Arc<Player>,
+        use_item: &SUseItem,
+        server: &Server,
+    ) {
+        if !player.has_client_loaded() {
+            return;
+        }
+        player.update_last_action_time();
+
+        let inventory = player.inventory();
+        let Ok(hand) = Hand::try_from(use_item.hand.0) else {
+            self.kick(TextComponent::text("InvalidHand")).await;
+            return;
+        };
+        self.update_sequence(player, use_item.sequence.0);
+
+        let item_in_hand = if hand == Hand::Left {
+            inventory.held_item()
+        } else {
+            inventory.off_hand_item().await
+        };
+
+        let hit_result = player
+            .world()
+            .raycast(
+                player.eye_position(),
+                player.eye_position().add(
+                    &(Vector3::rotation_vector(f64::from(use_item.pitch), f64::from(use_item.yaw))
+                        * 4.5),
+                ),
+                async |pos, world| {
+                    let block = world.get_block(pos).await;
+                    block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
+                },
+            )
+            .await;
+
+        let event = if let Some((hit_pos, _hit_dir)) = hit_result {
+            PlayerInteractEvent::new(
+                player,
+                InteractAction::RightClickBlock,
+                player.world().get_block(&hit_pos).await,
+                Some(hit_pos),
+            )
+        } else {
+            PlayerInteractEvent::new(player, InteractAction::RightClickAir, &Block::AIR, None)
+        };
+        self.prepare_hand_item_for_use(player, hand, &item_in_hand)
+            .await;
+
+        let (item_for_use, stack_for_use) = {
+            let held = item_in_hand.lock().await;
+            (held.item, held.clone())
+        };
+
+        if !self
+            .should_continue_use_after_fish_event(server, player, hand, item_for_use)
+            .await
+        {
+            return;
+        }
+
+        send_cancellable! {{
+            server;
+            event;
+            'after: {
+                server.item_registry.on_use(&stack_for_use, player).await;
+            }
+        }}
+    }
+
+    async fn prepare_hand_item_for_use(
+        &self,
+        player: &Arc<Player>,
+        hand: Hand,
+        item_in_hand: &Arc<Mutex<ItemStack>>,
+    ) {
+        let inventory = player.inventory();
+        let mut held = item_in_hand.lock().await;
+
+        if let Some(cooldown) = held.get_use_cooldown() {
+            let group = cooldown
+                .cooldown_group
+                .clone()
+                .unwrap_or_else(|| held.item.registry_key.to_string());
+            if player.is_on_cooldown(&group).await {
+                return;
+            }
+        }
+
+        if held.get_data_component::<ConsumableImpl>().is_some() {
+            // If its food we want to make sure we can actually consume it
+            if let Some(food) = held.get_data_component::<FoodImpl>() {
+                if player.abilities.lock().await.invulnerable
+                    || food.can_always_eat
+                    || player.hunger_manager.level.load() < 20
+                {
+                    player
+                        .living_entity
+                        .set_active_hand(hand, held.clone(), held.get_max_use_time())
+                        .await;
+                }
+            } else {
+                player
+                    .living_entity
+                    .set_active_hand(hand, held.clone(), held.get_max_use_time())
+                    .await;
+            }
+        }
+        if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
+            // If it can be equipped we want to make sure we can actually equip it
+            player
+                .enqueue_equipment_change(equippable.slot, &held)
+                .await;
+
+            let binding = {
+                let mut equipment = inventory.entity_equipment.lock().await;
+                equipment.get_or_insert(equippable.slot)
+            };
+            let mut equip_item = binding.lock().await;
+            if equip_item.is_empty() {
+                *equip_item = held.clone();
+                held.decrement_unless_creative(player.gamemode.load(), 1);
+            } else {
+                let binding = held.clone();
+                *held = equip_item.clone();
+                *equip_item = binding;
+            }
+        }
+    }
+
+    async fn should_continue_use_after_fish_event(
+        &self,
+        server: &Server,
+        player: &Arc<Player>,
+        hand: Hand,
+        item_for_use: &Item,
+    ) -> bool {
+        if item_for_use.id != Item::FISHING_ROD.id {
+            return true;
+        }
+
+        // TODO: Apply fishing rod durability on retrieval based on catch type.
+        let fish_event = PlayerFishEvent::new(
+            player.clone(),
+            None,
+            uuid::Uuid::nil(),
+            String::new(),
+            PlayerFishState::Fishing,
+            hand,
+            0,
+        );
+        let fish_event = server.plugin_manager.fire(fish_event).await;
+        !fish_event.cancelled
+    }
+
+    pub async fn handle_set_held_item(&self, player: &Player, held: SSetHeldItem) {
+        player.update_last_action_time();
+        let slot = held.slot;
+        if !(0..=8).contains(&slot) {
+            self.kick(TextComponent::text("Invalid held slot")).await;
+            return;
+        }
+        let slot = slot as u8;
+        let previous_slot = player.inventory.get_selected_slot();
+        if let Some(server) = player.world().server.upgrade() {
+            let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id) else {
+                return;
+            };
+            let event = PlayerItemHeldEvent::new(player_arc, previous_slot, slot);
+            let event = server.plugin_manager.fire(event).await;
+            if event.cancelled {
+                player
+                    .client
+                    .enqueue_packet(&CSetSelectedSlot::new(previous_slot as i8))
+                    .await;
+                return;
+            }
+        }
+
+        let inv = player.inventory();
+        inv.set_selected_slot(slot);
+        let stack = inv.held_item().lock().await.clone();
+        let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
+        player.living_entity.send_equipment_changes(equipment).await;
+    }
+
+    pub async fn handle_set_creative_slot(
+        &self,
+        player: &Player,
+        packet: SSetCreativeSlot,
+    ) -> Result<(), InventoryError> {
+        if player.gamemode.load() != GameMode::Creative {
+            return Err(InventoryError::PermissionError);
+        }
+        let is_negative = packet.slot < 0;
+        let valid_slot = packet.slot >= 1 && packet.slot as usize <= 45;
+        let item_stack = packet
+            .clicked_item
+            .to_stack_for_version(&self.version.load());
+        let is_legal =
+            item_stack.is_empty() || item_stack.item_count <= item_stack.get_max_stack_size();
+
+        if valid_slot && is_legal {
+            let mut player_screen_handler = player.player_screen_handler.lock().await;
+
+            let is_armor_equipped = player_screen_handler
+                .get_slot(packet.slot as usize)
+                .get_stack()
+                .await
+                .lock()
+                .await
+                .are_equal(&item_stack);
+            if !is_armor_equipped {
+                if (5..9).contains(&packet.slot) {
+                    player
+                        .enqueue_equipment_change(
+                            &match packet.slot {
+                                5 => EquipmentSlot::HEAD,
+                                6 => EquipmentSlot::CHEST,
+                                7 => EquipmentSlot::LEGS,
+                                8 => EquipmentSlot::FEET,
+                                _ => unreachable!(),
+                            },
+                            &item_stack,
+                        )
+                        .await;
+                } else if (36..45).contains(&packet.slot) {
+                    let slot = packet.slot - 36;
+                    if player.inventory().get_selected_slot() == slot as u8 {
+                        let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
+                        player.living_entity.send_equipment_changes(equipment).await;
+                    }
+                }
+            }
+
+            player_screen_handler
+                .get_slot(packet.slot as usize)
+                .set_stack(item_stack.clone())
+                .await;
+            player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
+            player_screen_handler.send_content_updates().await;
+            drop(player_screen_handler);
+        } else if is_negative && is_legal {
+            // Item drop
+            player.drop_item(item_stack).await;
+        }
+        Ok(())
+    }
+
+    pub async fn handle_chunk_batch(&self, player: &Player, packet: SChunkBatch) {
+        player
+            .chunk_manager
+            .lock()
+            .await
+            .handle_acknowledge(packet.chunks_per_tick);
+        trace!(
+            "Client requested {} chunks per tick",
+            packet.chunks_per_tick
+        );
+    }
+
+    pub async fn handle_close_container(
+        &self,
+        player: &Arc<Player>,
+        _server: &Server,
+        _packet: SCloseContainer,
+    ) {
+        player.on_handled_screen_closed().await;
+    }
+
+    pub async fn handle_command_suggestion(
+        &self,
+        player: &Arc<Player>,
+        packet: SCommandSuggestion,
+        server: &Arc<Server>,
+    ) {
+        let Some(cmd) = &packet.command.get(1..) else {
+            return;
+        };
+
+        let Some((last_word_start, _)) = cmd.char_indices().rfind(|(_, c)| c.is_whitespace())
+        else {
+            return;
+        };
+
+        let suggestions = server
+            .command_dispatcher
+            .read()
+            .await
+            .suggest(cmd, &player.get_command_source(server).await)
+            .await;
+
+        let response = CCommandSuggestions::new(
+            packet.id,
+            (last_word_start + 2).try_into().unwrap(),
+            (cmd.len() - last_word_start - 1).try_into().unwrap(),
+            suggestions.into(),
+        );
+
+        self.enqueue_packet(&response).await;
+    }
+
+    pub fn handle_cookie_response(&self, packet: &SPCookieResponse) {
+        // TODO: allow plugins to access this
+        debug!(
+            "Received cookie_response[play]: key: \"{}\", payload_length: \"{:?}\"",
+            packet.key,
+            packet.payload.as_ref().map(|p| p.len())
+        );
+    }
+
+    fn entity_blocks_block_placement(entity: &dyn EntityBase) -> bool {
+        let base_entity = entity.get_entity();
+        if base_entity.is_removed()
+            || base_entity.no_clip.load(Ordering::Relaxed)
+            || entity.is_spectator()
+        {
+            return false;
+        }
+
+        if entity.get_living_entity().is_some() {
+            return true;
+        }
+
+        // Matches vanilla's "blocksBuilding" intent for non-living entities:
+        // minecarts/boats/rafts + a few special entities.
+        let entity_type = base_entity.entity_type;
+        let resource_name = entity_type.resource_name;
+        entity_type == &EntityType::END_CRYSTAL
+            || entity_type == &EntityType::FALLING_BLOCK
+            || entity_type == &EntityType::TNT
+            || resource_name.ends_with("_minecart")
+            || resource_name.ends_with("_boat")
+            || resource_name.ends_with("_raft")
+    }
+
+    fn has_blocking_entity_in_box(world: &World, placed_box: &BoundingBox) -> bool {
+        let players = world.players.load();
+        if players.iter().any(|player| {
+            Self::entity_blocks_block_placement(player.as_ref())
+                && player
+                    .get_entity()
+                    .bounding_box
+                    .load()
+                    .intersects(placed_box)
+        }) {
+            return true;
+        }
+
+        world.entities.load().iter().any(|entity| {
+            Self::entity_blocks_block_placement(entity.as_ref())
+                && entity
+                    .get_entity()
+                    .bounding_box
+                    .load()
+                    .intersects(placed_box)
+        })
+    }
+
+    #[expect(clippy::too_many_lines)]
+    async fn run_is_block_place(
+        &self,
+        player: &Arc<Player>,
+        block: &'static Block,
+        server: &Server,
+        use_item_on: SUseItemOn,
+        location: BlockPos,
+        face: BlockDirection,
+    ) -> Result<bool, BlockPlacingError> {
+        let entity = &player.living_entity.entity;
+
+        match player.gamemode.load() {
+            GameMode::Spectator | GameMode::Adventure => {
+                return Err(BlockPlacingError::InvalidGamemode);
+            }
+            _ => {}
+        }
+
+        let clicked_block_pos = BlockPos(location.0);
+        let world = entity.world.load_full();
+
+        // Check if the block is under the world
+        if location.0.y + face.to_offset().y < world.get_bottom_y() {
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
+
+        // Check the world's max build height
+        if location.0.y + face.to_offset().y > world.get_top_y() {
+            player
+                .send_system_message_raw(
+                    &TextComponent::translate_cross(
+                        translation::java::BUILD_TOOHIGH,
+                        translation::bedrock::BUILD_TOOHIGH,
+                        vec![TextComponent::text((world.get_top_y()).to_string())],
+                    )
+                    .color_named(NamedColor::Red),
+                    true,
+                )
+                .await;
+            return Err(BlockPlacingError::BlockOutOfWorld);
+        }
+
+        let (clicked_block, clicked_block_state) =
+            world.get_block_and_state(&clicked_block_pos).await;
+
+        let replace_clicked_block = if clicked_block == block {
+            world
+                .block_registry
+                .can_update_at(
+                    &world,
+                    clicked_block,
+                    clicked_block_state.id,
+                    &clicked_block_pos,
+                    face,
+                    &use_item_on,
+                    player,
+                )
+                .await
+                .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
+        } else if clicked_block_state.replaceable() {
+            if clicked_block == &Block::WATER {
+                let water_props =
+                    WaterLikeProperties::from_state_id(clicked_block_state.id, clicked_block);
+                Some(BlockIsReplacing::Water(water_props.level))
+            } else {
+                Some(BlockIsReplacing::Other)
+            }
+        } else {
+            None
+        };
+
+        let (final_block_pos, final_face, replacing) =
+            if let Some(replacing) = replace_clicked_block {
+                (clicked_block_pos, face, replacing)
+            } else {
+                let block_pos = BlockPos(location.0 + face.to_offset());
+                let (previous_block, previous_block_state) =
+                    world.get_block_and_state(&block_pos).await;
+
+                let replace_previous_block = if previous_block == block {
+                    world
+                        .block_registry
+                        .can_update_at(
+                            &world,
+                            previous_block,
+                            previous_block_state.id,
+                            &block_pos,
+                            face.opposite(),
+                            &use_item_on,
+                            player,
+                        )
+                        .await
+                        .then_some(BlockIsReplacing::Itself(previous_block_state.id))
+                } else {
+                    previous_block_state.replaceable().then(|| {
+                        if previous_block == &Block::WATER {
+                            let water_props = WaterLikeProperties::from_state_id(
+                                previous_block_state.id,
+                                previous_block,
+                            );
+                            BlockIsReplacing::Water(water_props.level)
+                        } else {
+                            BlockIsReplacing::None
+                        }
+                    })
+                };
+
+                match replace_previous_block {
+                    Some(replacing) => (block_pos, face.opposite(), replacing),
+                    None => {
+                        // Don't place and don't decrement if the previous block is not replaceable
+                        return Ok(false);
+                    }
+                }
+            };
+
+        if !server
+            .block_registry
+            .can_place_at(
+                Some(server),
+                Some(&*world),
+                &*world,
+                Some(player),
+                block,
+                block.default_state,
+                &final_block_pos,
+                Some(final_face),
+                Some(&use_item_on),
+            )
+            .await
+        {
+            return Ok(false);
+        }
+
+        let new_state = server
+            .block_registry
+            .on_place(
+                server,
+                &world,
+                player,
+                block,
+                &final_block_pos,
+                final_face,
+                replacing,
+                &use_item_on,
+            )
+            .await;
+
+        // Mirror vanilla obstruction checks: only entities that block building should prevent
+        // placement. (e.g. arrows/xp orbs/displays/markers should not)
+        let state = BlockState::from_id(new_state);
+        for shape in state.get_block_collision_shapes() {
+            let placed_box = shape.at_pos(final_block_pos);
+
+            if Self::has_blocking_entity_in_box(world.as_ref(), &placed_box) {
+                return Ok(false);
+            }
+        }
+
+        let event =
+            BlockPlaceEvent::new(player.clone(), block, clicked_block, final_block_pos, true);
+        let event = server.plugin_manager.fire::<BlockPlaceEvent>(event).await;
+        if event.cancelled {
+            return Ok(false);
+        }
+
+        let _replaced_id = world
+            .set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL)
+            .await;
+        self.send_packet_now(&CBlockUpdate::new(
+            final_block_pos,
+            VarInt(i32::from(new_state)),
+        ))
+        .await;
+
+        server
+            .block_registry
+            .player_placed(&world, block, new_state, &final_block_pos, face, player)
+            .await;
+
+        // The block was placed successfully, so decrement their inventory
+        Ok(true)
+    }
+
+    /// Checks if the block placed was a sign, then opens a dialog.
+    pub async fn send_sign_packet(&self, block_position: BlockPos, is_front_text: bool) {
+        self.enqueue_packet(&COpenSignEditor::new(block_position, is_front_text))
+            .await;
+    }
+
+    pub async fn handle_select_trade(&self, player: &Arc<Player>, packet: SSelectTrade) {
+        let screen_handler = player.current_screen_handler.lock().await;
+        let mut screen_handler = screen_handler.lock().await;
+        if let Some(merchant) = screen_handler
+            .as_any_mut()
+            .downcast_mut::<MerchantScreenHandler>()
+        {
+            merchant
+                .set_selected_offer(packet.selected_slot.0 as usize)
+                .await;
+        }
+    }
+}

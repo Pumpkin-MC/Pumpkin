@@ -1,0 +1,88 @@
+use std::io::Read;
+
+use pumpkin_data::packet::serverbound::PLAY_INTERACT;
+use pumpkin_macros::java_packet;
+use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
+
+use crate::{
+    ServerPacket,
+    codec::{lp_vector_3d::LpVector3d, var_int::VarInt},
+    ser::{NetworkReadExt, ReadingError},
+};
+
+#[java_packet(PLAY_INTERACT)]
+pub struct SInteract {
+    pub entity_id: VarInt,
+    pub r#type: VarInt,
+    pub target_position: Option<Vector3<f64>>,
+    pub hand: Option<VarInt>,
+    pub sneaking: bool,
+}
+
+// Great job Mojang ;D
+impl ServerPacket for SInteract {
+    fn read(mut read: impl Read, version: &MinecraftVersion) -> Result<Self, ReadingError> {
+        // 26.1+ removes the 'type' field and uses doubles for location
+        if version >= &MinecraftVersion::V_26_1 {
+            let entity_id = read.get_var_int()?;
+            let hand = Some(read.get_var_int()?);
+            let target_position = Some(LpVector3d::read(&mut read)?.0);
+            let sneaking = read.get_bool()?;
+
+            return Ok(Self {
+                entity_id,
+                r#type: VarInt(2), // InteractAt for compatibility
+                target_position,
+                hand,
+                sneaking,
+            });
+        }
+
+        let entity_id = read.get_var_int()?;
+        let r#type = read.get_var_int()?;
+        let action = ActionType::try_from(r#type.0)
+            .map_err(|_| ReadingError::Message("invalid action type".to_string()))?;
+
+        let target_position: Option<Vector3<f64>> = match action {
+            ActionType::Interact | ActionType::Attack => None,
+            ActionType::InteractAt => Some(
+                Vector3::new(read.get_f32_be()?, read.get_f32_be()?, read.get_f32_be()?).to_f64(),
+            ),
+        };
+
+        let hand = match action {
+            ActionType::Interact | ActionType::InteractAt => Some(read.get_var_int()?),
+            ActionType::Attack => None,
+        };
+
+        Ok(Self {
+            entity_id,
+            r#type,
+            target_position,
+            hand,
+            sneaking: read.get_bool()?,
+        })
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum ActionType {
+    Interact,
+    Attack,
+    InteractAt,
+}
+
+pub struct InvalidActionType;
+
+impl TryFrom<i32> for ActionType {
+    type Error = InvalidActionType;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Interact),
+            1 => Ok(Self::Attack),
+            2 => Ok(Self::InteractAt),
+            _ => Err(InvalidActionType),
+        }
+    }
+}

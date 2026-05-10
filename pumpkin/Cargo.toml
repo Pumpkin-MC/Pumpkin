@@ -1,0 +1,120 @@
+[package]
+name = "pumpkin"
+version.workspace = true
+description = "Empowering everyone to host fast and efficient Minecraft servers."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.tauri-winres]
+# FileDescription is handled as the Program name by Windows!
+FileDescription = "Pumpkin"
+OriginalFilename = "pumpkin.exe"
+LegalCopyright = "Copyright © 2026 Aleksander Medvedev"
+
+# Required to expose pumpkin plugin API
+[lib]
+doctest = false
+
+[dependencies]
+# pumpkin
+arc-swap.workspace = true
+rayon.workspace = true
+pumpkin-util.workspace = true
+pumpkin-nbt.workspace = true
+pumpkin-config.workspace = true
+pumpkin-inventory.workspace = true
+pumpkin-world.workspace = true
+pumpkin-data.workspace = true
+pumpkin-protocol.workspace = true
+pumpkin-macros.workspace = true
+pumpkin-codecs.workspace = true
+
+dashmap.workspace = true
+crossbeam.workspace = true
+uuid.workspace = true
+tokio = { workspace = true, features = [
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "sync",
+    "io-std",
+    "signal",
+    "fs",
+    "io-util",
+    "time",
+] }
+thiserror.workspace = true
+futures.workspace = true
+notify.workspace = true
+
+# config
+serde.workspace = true
+serde_repr.workspace = true
+serde_json.workspace = true
+
+colored.workspace = true
+
+bytes.workspace = true
+
+rand.workspace = true
+
+num-bigint.workspace = true
+
+# Console line reading
+rustyline.workspace = true
+
+# encryption
+rsa.workspace = true
+
+# authentication
+ureq = { workspace = true, features = ["json"] }
+
+sha1.workspace = true
+
+# velocity en
+hmac.workspace = true
+sha2.workspace = true
+
+base64.workspace = true
+
+# logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+time = { workspace = true, features = ["parsing", "macros", "local-offset"] }
+
+# plugins
+libloading.workspace = true
+rustc-hash.workspace = true
+
+# Task handling
+tokio-util = { workspace = true, features = ["rt"] }
+
+# System details & Rustc version
+sysinfo = "0.39"
+rustc_version_runtime = "0.3"
+
+flate2.workspace = true
+console-subscriber = { workspace = true, optional = true }
+
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+wasmparser = { workspace = true }
+
+ordered-float = "5.3.0"
+
+postcard = { workspace = true }
+tracing-serde-structured = { workspace = true }
+
+bitflags = { workspace = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+console-subscriber = ["dep:console-subscriber"]
+tokio_taskdump = ["pumpkin-world/tokio_taskdump"]
+
+[lints]
+workspace = true

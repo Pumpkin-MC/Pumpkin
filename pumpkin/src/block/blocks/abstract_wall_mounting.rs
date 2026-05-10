@@ -1,0 +1,80 @@
+use pumpkin_data::{
+    Block, BlockDirection, HorizontalFacingExt,
+    block_properties::{AttachFace, HorizontalFacing},
+};
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::{BlockStateId, world::BlockAccessor};
+
+use crate::{
+    block::{BlockFuture, GetStateForNeighborUpdateArgs},
+    entity::player::Player,
+};
+
+pub trait WallMountedBlock: Send + Sync {
+    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection;
+
+    fn get_placement_face(
+        &self,
+        player: &Player,
+        direction: BlockDirection,
+    ) -> (AttachFace, HorizontalFacing) {
+        let face = match direction {
+            BlockDirection::Up => AttachFace::Ceiling,
+            BlockDirection::Down => AttachFace::Floor,
+            _ => AttachFace::Wall,
+        };
+
+        let facing = if direction == BlockDirection::Up || direction == BlockDirection::Down {
+            player.living_entity.entity.get_horizontal_facing()
+        } else {
+            direction.opposite().to_cardinal_direction()
+        };
+
+        (face, facing)
+    }
+
+    /// Gets the direction to check for placement validation based on clicked face
+    /// This returns the `BlockDirection` that should have a solid surface for placement
+    fn get_placement_direction(
+        &self,
+        player: &Player,
+        direction: BlockDirection,
+    ) -> BlockDirection {
+        let (face, facing) = self.get_placement_face(player, direction);
+        match face {
+            AttachFace::Floor => BlockDirection::Up,
+            AttachFace::Ceiling => BlockDirection::Down,
+            AttachFace::Wall => facing.to_block_direction(),
+        }
+    }
+
+    fn can_place_at<'a>(
+        &'a self,
+        world: &'a dyn BlockAccessor,
+        pos: &'a BlockPos,
+        direction: BlockDirection,
+    ) -> BlockFuture<'a, bool> {
+        Box::pin(async move {
+            let block_pos = pos.offset(direction.to_offset());
+            let block_state = world.get_block_state(&block_pos).await;
+            block_state.is_side_solid(direction.opposite())
+        })
+    }
+
+    fn get_state_for_neighbor_update<'a>(
+        &'a self,
+        args: GetStateForNeighborUpdateArgs<'a>,
+    ) -> BlockFuture<'a, BlockStateId> {
+        Box::pin(async move {
+            if self.get_direction(args.state_id, args.block).opposite() == args.direction
+                && !self
+                    .can_place_at(args.world, args.position, args.direction)
+                    .await
+            {
+                Block::AIR.default_state.id
+            } else {
+                args.state_id
+            }
+        })
+    }
+}

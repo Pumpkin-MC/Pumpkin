@@ -1,0 +1,137 @@
+use pumpkin_data::{BlockDirection, BlockState};
+use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+
+use crate::generation::proto_chunk::GenerationCache;
+use crate::world::WorldPortalExt;
+
+pub struct SpringFeatureFeature {
+    pub state: &'static BlockState,
+    pub requires_block_below: bool,
+    pub rock_count: i32,
+    pub hole_count: i32,
+    pub valid_blocks: BlockWrapper,
+}
+
+#[derive(Clone)]
+pub enum BlockWrapper {
+    Single(String),
+    Multi(Vec<String>),
+}
+
+impl BlockWrapper {
+    fn contains(&self, name: &str) -> bool {
+        match self {
+            Self::Single(s) => s == name,
+            Self::Multi(h) => h.iter().any(|s| s == name),
+        }
+    }
+}
+
+impl SpringFeatureFeature {
+    pub fn generate<T: GenerationCache>(
+        &self,
+        _block_registry: &dyn WorldPortalExt,
+        chunk: &mut T,
+        _random: &mut RandomGenerator,
+        pos: BlockPos,
+    ) -> bool {
+        let valid_blocks = &self.valid_blocks;
+
+        if !valid_blocks.contains(
+            GenerationCache::get_block_state(chunk, &pos.up().0)
+                .to_block()
+                .name,
+        ) {
+            return false;
+        }
+        if self.requires_block_below
+            && !valid_blocks.contains(
+                GenerationCache::get_block_state(
+                    chunk,
+                    &pos.offset(BlockDirection::Down.to_offset()).0,
+                )
+                .to_block()
+                .name,
+            )
+        {
+            return false;
+        }
+        let state = GenerationCache::get_block_state(chunk, &pos.0);
+        if !state.to_state().is_air() && !valid_blocks.contains(state.to_block().name) {
+            return false;
+        }
+
+        let mut valid = 0;
+        if valid_blocks.contains(
+            GenerationCache::get_block_state(
+                chunk,
+                &pos.offset(BlockDirection::West.to_offset()).0,
+            )
+            .to_block()
+            .name,
+        ) {
+            valid += 1;
+        }
+        if valid_blocks.contains(
+            GenerationCache::get_block_state(
+                chunk,
+                &pos.offset(BlockDirection::East.to_offset()).0,
+            )
+            .to_block()
+            .name,
+        ) {
+            valid += 1;
+        }
+        if valid_blocks.contains(
+            GenerationCache::get_block_state(
+                chunk,
+                &pos.offset(BlockDirection::North.to_offset()).0,
+            )
+            .to_block()
+            .name,
+        ) {
+            valid += 1;
+        }
+        if valid_blocks.contains(
+            GenerationCache::get_block_state(
+                chunk,
+                &pos.offset(BlockDirection::South.to_offset()).0,
+            )
+            .to_block()
+            .name,
+        ) {
+            valid += 1;
+        }
+        if valid_blocks.contains(
+            GenerationCache::get_block_state(
+                chunk,
+                &pos.offset(BlockDirection::Down.to_offset()).0,
+            )
+            .to_block()
+            .name,
+        ) {
+            valid += 1;
+        }
+        let mut air = 0;
+        if chunk.is_air(&pos.offset(BlockDirection::West.to_offset()).0) {
+            air += 1;
+        }
+        if chunk.is_air(&pos.offset(BlockDirection::East.to_offset()).0) {
+            air += 1;
+        }
+        if chunk.is_air(&pos.offset(BlockDirection::North.to_offset()).0) {
+            air += 1;
+        }
+        if chunk.is_air(&pos.offset(BlockDirection::South.to_offset()).0) {
+            air += 1;
+        }
+        if chunk.is_air(&pos.offset(BlockDirection::Down.to_offset()).0) {
+            air += 1;
+        }
+        if valid == self.rock_count && air == self.hole_count {
+            chunk.set_block_state(&pos.0, self.state);
+            return true;
+        }
+        false
+    }
+}

@@ -1,0 +1,105 @@
+use pumpkin_util::math::vector3::Vector3;
+use std::{
+    f64,
+    sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    },
+};
+
+use crate::{
+    entity::{
+        Entity, EntityBase, EntityBaseFuture, NBTStorage, living::LivingEntity,
+        projectile::ThrownItemEntity, projectile_deflection::ProjectileDeflectionType,
+    },
+    server::Server,
+};
+
+const EXPLOSION_POWER: f32 = 1.2;
+const DEFAULT_DEFLECT_COOLDOWN: u8 = 5;
+
+pub struct WindChargeEntity {
+    deflect_cooldown: AtomicU8,
+    thrown_item_entity: ThrownItemEntity,
+}
+
+impl WindChargeEntity {
+    #[must_use]
+    pub const fn new(thrown_item_entity: ThrownItemEntity) -> Self {
+        Self {
+            deflect_cooldown: AtomicU8::new(DEFAULT_DEFLECT_COOLDOWN),
+            thrown_item_entity,
+        }
+    }
+
+    pub fn get_deflect_cooldown(&self) -> u8 {
+        self.deflect_cooldown.load(Ordering::Relaxed)
+    }
+
+    pub fn set_deflect_cooldown(&self, value: u8) {
+        self.deflect_cooldown.store(value, Ordering::Relaxed);
+    }
+
+    pub async fn create_explosion(&self, position: Vector3<f64>) {
+        self.get_entity()
+            .world
+            .load()
+            .explode(position, EXPLOSION_POWER)
+            .await;
+    }
+
+    pub fn deflect(
+        &mut self,
+        deflection: &ProjectileDeflectionType,
+        deflector: Option<&dyn EntityBase>,
+        _from_attack: bool,
+    ) -> bool {
+        if self.deflect_cooldown.load(Ordering::Relaxed) > 0 {
+            return false;
+        }
+
+        deflection.deflect(self, deflector);
+
+        /* TODO: Does this need to be implemented?
+        if self.get_entity().world().is_client() {
+            self.set_owner();
+            self.on_Deflected(from_attack);
+        }
+         */
+        true
+    }
+}
+
+impl NBTStorage for WindChargeEntity {}
+
+impl EntityBase for WindChargeEntity {
+    fn tick<'a>(
+        &'a self,
+        caller: &'a Arc<dyn EntityBase>,
+        server: &'a Server,
+    ) -> EntityBaseFuture<'a, ()> {
+        Box::pin(async move {
+            self.thrown_item_entity.process_tick(caller, server).await;
+
+            if self.get_deflect_cooldown() > 0 {
+                self.set_deflect_cooldown(self.get_deflect_cooldown() - 1);
+            }
+        })
+    }
+
+    fn get_entity(&self) -> &Entity {
+        &self.thrown_item_entity.entity
+    }
+
+    fn get_living_entity(&self) -> Option<&LivingEntity> {
+        None
+    }
+
+    fn as_nbt_storage(&self) -> &dyn NBTStorage {
+        self
+    }
+
+    fn cast_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}

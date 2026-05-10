@@ -1,0 +1,81 @@
+use std::time::Instant;
+
+use num_bigint::BigInt;
+use pumpkin_protocol::java::client::login::CEncryptionRequest;
+use rsa::pkcs8::EncodePublicKey;
+use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
+use sha1::Sha1;
+use sha2::Digest;
+use tracing::debug;
+
+use crate::net::EncryptionError;
+
+pub struct KeyStore {
+    pub private_key: RsaPrivateKey,
+    pub public_key_der: Box<[u8]>,
+}
+
+impl KeyStore {
+    #[must_use]
+    pub fn new() -> Self {
+        let instant = Instant::now();
+        debug!("Creating encryption keys...");
+        let private_key = Self::generate_private_key();
+
+        let public_key = private_key.to_public_key();
+
+        let public_key_der = public_key
+            .to_public_key_der()
+            .expect("Failed to encode public key to SPKI DER")
+            .into_vec()
+            .into_boxed_slice();
+
+        debug!("Created RSA keys, took {}ms", instant.elapsed().as_millis());
+
+        Self {
+            private_key,
+            public_key_der,
+        }
+    }
+
+    fn generate_private_key() -> RsaPrivateKey {
+        let mut rng = rand::rng();
+
+        RsaPrivateKey::new(&mut rng, 1024).expect("Failed to generate a key")
+    }
+
+    pub fn encryption_request<'a>(
+        &'a self,
+        server_id: &'a str,
+        verification_token: &'a [u8; 4],
+        should_authenticate: bool,
+    ) -> CEncryptionRequest<'a> {
+        CEncryptionRequest::new(
+            server_id,
+            &self.public_key_der,
+            verification_token,
+            should_authenticate,
+        )
+    }
+
+    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptionError> {
+        let decrypted = self
+            .private_key
+            .decrypt(Pkcs1v15Encrypt, data)
+            .map_err(|_| EncryptionError::FailedDecrypt)?;
+        Ok(decrypted)
+    }
+
+    pub fn get_digest(&self, secret: &[u8]) -> String {
+        auth_digest(
+            &Sha1::new()
+                .chain_update(secret)
+                .chain_update(&self.public_key_der)
+                .finalize(),
+        )
+    }
+}
+
+pub fn auth_digest(bytes: &[u8]) -> String {
+    BigInt::from_signed_bytes_be(bytes).to_str_radix(16)
+}

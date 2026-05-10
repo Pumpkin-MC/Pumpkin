@@ -1,0 +1,183 @@
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::{
+    item::Item,
+    tag::{RegistryKey, get_tag_ids},
+};
+use pumpkin_protocol::java::client::play::{ArgumentType, SuggestionProviders};
+use pumpkin_util::text::TextComponent;
+
+use crate::command::{
+    CommandSender,
+    args::{
+        Arg, ArgumentConsumer, ConsumeResult, ConsumedArgs, DefaultNameArgConsumer, FindArg,
+        GetClientSideArgParser,
+    },
+    dispatcher::CommandError,
+    tree::RawArgs,
+};
+use crate::server::Server;
+
+pub struct ItemArgumentConsumer;
+
+impl GetClientSideArgParser for ItemArgumentConsumer {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+        ArgumentType::ItemStack
+    }
+
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
+        None
+    }
+}
+
+impl ArgumentConsumer for ItemArgumentConsumer {
+    fn consume<'a>(
+        &'a self,
+        _sender: &'a CommandSender,
+        _server: &'a Server,
+        args: &mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let item = args.pop().map(|arg| arg.value);
+        // TODO: When supporting data components in this argument, do it for ItemPredicateArgumentConsumer as well (both tags and items)
+        match item {
+            Some(s) => Box::pin(async move { Some(Arg::Item(s)) }),
+            None => Box::pin(async move { None }),
+        }
+    }
+}
+
+impl DefaultNameArgConsumer for ItemArgumentConsumer {
+    fn default_name(&self) -> &'static str {
+        "item"
+    }
+}
+
+impl<'a> FindArg<'a> for ItemArgumentConsumer {
+    type Data = (&'a str, &'static Item);
+
+    fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+        match args.get(name) {
+            Some(Arg::Item(name)) => Item::from_registry_key(name).map_or_else(
+                || {
+                    if name.starts_with("minecraft:") {
+                        Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            "argument.item.id.invalid",
+                            "argument.item.id.invalid",
+                            [TextComponent::text((*name).to_string())],
+                        )))
+                    } else {
+                        Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                            "argument.item.id.invalid",
+                            "argument.item.id.invalid",
+                            [TextComponent::text("minecraft:".to_string() + *name)],
+                        )))
+                    }
+                },
+                |item| Ok((*name, item)),
+            ),
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+        }
+    }
+}
+
+pub struct ItemPredicateArgumentConsumer;
+
+pub enum ItemPredicate {
+    Item(&'static Item),
+    Tag(Vec<u16>),
+    Any,
+}
+
+impl ItemPredicate {
+    #[must_use]
+    pub fn test_item_stack(&self, stack: &ItemStack) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Item(item) => stack.get_item() == *item,
+            Self::Tag(tag) => tag.contains(&stack.get_item().id),
+        }
+    }
+}
+
+impl GetClientSideArgParser for ItemPredicateArgumentConsumer {
+    fn get_client_side_parser(&self) -> ArgumentType<'_> {
+        ArgumentType::ItemPredicate
+    }
+
+    fn get_client_side_suggestion_type_override(&self) -> Option<SuggestionProviders> {
+        None
+    }
+}
+
+impl ArgumentConsumer for ItemPredicateArgumentConsumer {
+    fn consume<'a>(
+        &'a self,
+        _sender: &'a CommandSender,
+        _server: &'a Server,
+        args: &mut RawArgs<'a>,
+    ) -> ConsumeResult<'a> {
+        let item = args.pop().map(|arg| arg.value);
+        match item {
+            Some(s) => Box::pin(async move { Some(Arg::Item(s)) }),
+            None => Box::pin(async move { None }),
+        }
+    }
+}
+
+impl DefaultNameArgConsumer for ItemPredicateArgumentConsumer {
+    fn default_name(&self) -> &'static str {
+        "item"
+    }
+}
+
+impl<'a> FindArg<'a> for ItemPredicateArgumentConsumer {
+    type Data = ItemPredicate;
+
+    fn find_arg(args: &'a ConsumedArgs, name: &str) -> Result<Self::Data, CommandError> {
+        match args.get(name) {
+            Some(Arg::Item(name)) => {
+                if *name == "*" {
+                    return Ok(ItemPredicate::Any);
+                }
+                name.strip_prefix("#").map_or_else(
+                    || {
+                        Item::from_registry_key(name).map_or_else(
+                            || {
+                                if name.starts_with("minecraft:") {
+                                    Err(CommandError::CommandFailed(
+                                        TextComponent::translate_cross(
+                                            "argument.item.id.invalid",
+                                            "argument.item.id.invalid",
+                                            [TextComponent::text((*name).to_string())],
+                                        ),
+                                    ))
+                                } else {
+                                    Err(CommandError::CommandFailed(
+                                        TextComponent::translate_cross(
+                                            "argument.item.id.invalid",
+                                            "argument.item.id.invalid",
+                                            [TextComponent::text("minecraft:".to_string() + *name)],
+                                        ),
+                                    ))
+                                }
+                            },
+                            |item| Ok(ItemPredicate::Item(item)),
+                        )
+                    },
+                    |tag| {
+                        get_tag_ids(RegistryKey::Item, tag).map_or_else(
+                            || {
+                                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                                    "arguments.item.tag.unknown",
+                                    "arguments.item.tag.unknown",
+                                    [TextComponent::text((*tag).to_string())],
+                                )))
+                            },
+                            |items| Ok(ItemPredicate::Tag(items.to_vec())),
+                        )
+                    },
+                )
+            }
+            _ => Err(CommandError::InvalidConsumption(Some(name.to_string()))),
+        }
+    }
+}

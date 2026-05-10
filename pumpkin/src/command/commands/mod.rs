@@ -1,0 +1,480 @@
+use crate::command::node::dispatcher::CommandDispatcher;
+use pumpkin_config::BasicConfiguration;
+use pumpkin_util::{
+    PermissionLvl,
+    permission::{Permission, PermissionDefault, PermissionRegistry},
+};
+use tokio::sync::RwLock;
+
+mod ban;
+mod banip;
+mod banlist;
+mod bossbar;
+mod clear;
+mod damage;
+mod data;
+pub mod defaultgamemode;
+mod deop;
+mod difficulty;
+mod effect;
+mod enchant;
+mod experience;
+mod fill;
+mod gamemode;
+mod gamerule;
+mod give;
+mod help;
+mod kick;
+mod kill;
+mod list;
+mod me;
+mod msg;
+mod op;
+mod pardon;
+mod pardonip;
+mod particle;
+mod playsound;
+mod plugin;
+mod plugins;
+mod pumpkin;
+mod rotate;
+mod say;
+mod seed;
+mod setblock;
+mod setidletimeout;
+mod setworldspawn;
+mod spawnpoint;
+mod stop;
+mod stopsound;
+mod summon;
+mod teleport;
+mod tellraw;
+mod tick;
+mod time;
+mod title;
+mod tps;
+mod transfer;
+mod weather;
+mod whitelist;
+mod worldborder;
+
+#[must_use]
+pub async fn default_dispatcher(
+    registry: &RwLock<PermissionRegistry>,
+    _basic_config: &BasicConfiguration,
+) -> CommandDispatcher {
+    let mut dispatcher = crate::command::dispatcher::CommandDispatcher::default();
+
+    let mut registry_lock = registry.write().await;
+    let registry = &mut *registry_lock;
+
+    register_permissions(registry);
+
+    // Zero
+    dispatcher.register(pumpkin::init_command_tree(), "pumpkin:command.pumpkin");
+    dispatcher.register(me::init_command_tree(), "minecraft:command.me");
+    dispatcher.register(msg::init_command_tree(), "minecraft:command.msg");
+    // Two
+    dispatcher.register(
+        worldborder::init_command_tree(),
+        "minecraft:command.worldborder",
+    );
+    dispatcher.register(effect::init_command_tree(), "minecraft:command.effect");
+    dispatcher.register(teleport::init_command_tree(), "minecraft:command.teleport");
+    dispatcher.register(time::init_command_tree(), "minecraft:command.time");
+    dispatcher.register(give::init_command_tree(), "minecraft:command.give");
+    dispatcher.register(enchant::init_command_tree(), "minecraft:command.enchant");
+    dispatcher.register(clear::init_command_tree(), "minecraft:command.clear");
+    dispatcher.register(setblock::init_command_tree(), "minecraft:command.setblock");
+    dispatcher.register(tps::init_command_tree(), "pumpkin:command.tps");
+    dispatcher.register(fill::init_command_tree(), "minecraft:command.fill");
+    dispatcher.register(
+        playsound::init_command_tree(),
+        "minecraft:command.playsound",
+    );
+    dispatcher.register(tellraw::init_command_tree(), "minecraft:command.tellraw");
+    dispatcher.register(title::init_command_tree(), "minecraft:command.title");
+    dispatcher.register(summon::init_command_tree(), "minecraft:command.summon");
+    dispatcher.register(
+        experience::init_command_tree(),
+        "minecraft:command.experience",
+    );
+    dispatcher.register(weather::init_command_tree(), "minecraft:command.weather");
+    dispatcher.register(particle::init_command_tree(), "minecraft:command.particle");
+    dispatcher.register(rotate::init_command_tree(), "minecraft:command.rotate");
+    dispatcher.register(damage::init_command_tree(), "minecraft:command.damage");
+    dispatcher.register(bossbar::init_command_tree(), "minecraft:command.bossbar");
+    dispatcher.register(say::init_command_tree(), "minecraft:command.say");
+    dispatcher.register(gamemode::init_command_tree(), "minecraft:command.gamemode");
+    dispatcher.register(gamerule::init_command_tree(), "minecraft:command.gamerule");
+    dispatcher.register(
+        stopsound::init_command_tree(),
+        "minecraft:command.stopsound",
+    );
+    dispatcher.register(
+        defaultgamemode::init_command_tree(),
+        "minecraft:command.defaultgamemode",
+    );
+    dispatcher.register(
+        setworldspawn::init_command_tree(),
+        "minecraft:command.setworldspawn",
+    );
+    dispatcher.register(
+        spawnpoint::init_command_tree(),
+        "minecraft:command.spawnpoint",
+    );
+    dispatcher.register(data::init_command_tree(), "minecraft:command.data");
+    // Three
+    dispatcher.register(deop::init_command_tree(), "minecraft:command.deop");
+    dispatcher.register(kick::init_command_tree(), "minecraft:command.kick");
+    dispatcher.register(plugin::init_command_tree(), "pumpkin:command.plugin");
+    dispatcher.register(plugins::init_command_tree(), "pumpkin:command.plugins");
+    dispatcher.register(ban::init_command_tree(), "minecraft:command.ban");
+    dispatcher.register(banip::init_command_tree(), "minecraft:command.banip");
+    dispatcher.register(pardon::init_command_tree(), "minecraft:command.pardon");
+    dispatcher.register(pardonip::init_command_tree(), "minecraft:command.pardonip");
+    dispatcher.register(
+        whitelist::init_command_tree(),
+        "minecraft:command.whitelist",
+    );
+    dispatcher.register(transfer::init_command_tree(), "minecraft:command.transfer");
+
+    let mut dispatcher = {
+        let mut wrapper_dispatcher = CommandDispatcher::new();
+        wrapper_dispatcher.fallback_dispatcher = dispatcher;
+        wrapper_dispatcher
+    };
+
+    banlist::register(&mut dispatcher, registry);
+    difficulty::register(&mut dispatcher, registry);
+    help::register(&mut dispatcher, registry);
+    kill::register(&mut dispatcher, registry);
+    op::register(&mut dispatcher, registry);
+    list::register(&mut dispatcher, registry);
+    seed::register(&mut dispatcher, registry);
+    setidletimeout::register(&mut dispatcher, registry);
+    stop::register(&mut dispatcher, registry);
+    tick::register(&mut dispatcher, registry);
+
+    dispatcher
+}
+
+fn register_permissions(registry: &mut PermissionRegistry) {
+    // Register level 0 permissions (allowed by default)
+    register_level_0_permissions(registry);
+
+    // Register level 2 permissions (OP level 2)
+    register_level_2_permissions(registry);
+
+    // Register level 3 permissions (OP level 3)
+    register_level_3_permissions(registry);
+
+    // Register our entity selector permission as well.
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.selector",
+            "Allows a player to use selector variables",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+}
+
+fn register_level_0_permissions(registry: &mut PermissionRegistry) {
+    // Register permissions for builtin commands that are allowed for everyone
+    registry
+        .register_permission(Permission::new(
+            "pumpkin:command.pumpkin",
+            "Shows information about the Pumpkin server",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.me",
+            "Broadcasts a narrative message about the player",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.msg",
+            "Sends a private message to another player",
+            PermissionDefault::Allow,
+        ))
+        .unwrap();
+}
+
+#[expect(clippy::too_many_lines)]
+fn register_level_2_permissions(registry: &mut PermissionRegistry) {
+    // Register permissions for commands with PermissionLvl::Two
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.worldborder",
+            "Manages the world border",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.effect",
+            "Adds or removes status effects",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.teleport",
+            "Teleports entities to other locations",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.time",
+            "Changes or queries the world's game time",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.give",
+            "Gives an item to a player",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.clear",
+            "Clears items from player inventory",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.setblock",
+            "Changes a block to another block",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.fill",
+            "Fills a region with a specific block",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.playsound",
+            "Plays a sound to players",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.tellraw",
+            "Displays a JSON message to players",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.title",
+            "Controls screen titles displayed to players",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.summon",
+            "Summons an entity",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.experience",
+            "Adds, removes or queries player experience",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.weather",
+            "Sets the weather in the server",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.particle",
+            "Creates particles in the world",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.rotate",
+            "Changes the rotation of an entity",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.damage",
+            "Damages entities",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.bossbar",
+            "Creates and manages boss bars",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.say",
+            "Broadcasts a message to multiple players",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.gamemode",
+            "Sets a player's game mode",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.gamerule",
+            "Sets a player's game mode",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.stopsound",
+            "Stops sounds from playing",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.defaultgamemode",
+            "Sets the default game mode for new players",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.data",
+            "Query and modify data of entities and blocks",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.enchant",
+            "Adds an enchantment to a player's selected item, subject to the same restrictions as an anvil. Also works on any mob or entity holding a weapon/tool/armor in its main hand.",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.spawnpoint",
+            "Sets the spawn point for a player",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "pumpkin:command.tps",
+            "Displays the server TPS and MSPT",
+            PermissionDefault::Op(PermissionLvl::Two),
+        ))
+        .unwrap();
+}
+
+fn register_level_3_permissions(registry: &mut PermissionRegistry) {
+    // Register permissions for commands with PermissionLvl::Three
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.setworldspawn",
+            "Sets the world spawn point",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.deop",
+            "Revokes operator status from a player",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.kick",
+            "Removes players from the server",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "pumpkin:command.plugin",
+            "Manages server plugins",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "pumpkin:command.plugins",
+            "Lists all plugins loaded on the server",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.ban",
+            "Adds players to banlist",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.banip",
+            "Adds IP addresses to banlist",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.pardon",
+            "Removes entries from the player banlist",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.pardonip",
+            "Removes entries from the IP banlist",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.whitelist",
+            "Manages server whitelist",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+    registry
+        .register_permission(Permission::new(
+            "minecraft:command.transfer",
+            "Transfers the player to another server",
+            PermissionDefault::Op(PermissionLvl::Three),
+        ))
+        .unwrap();
+}

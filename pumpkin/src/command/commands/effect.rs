@@ -1,0 +1,336 @@
+use crate::TextComponent;
+use crate::command::args::bool::BoolArgConsumer;
+use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
+use crate::command::args::players::PlayersArgumentConsumer;
+use crate::command::args::resource::effect::EffectTypeArgumentConsumer;
+use crate::command::args::{Arg, ConsumedArgs, FindArgDefaultName};
+use crate::command::dispatcher::CommandError::{self, InvalidConsumption};
+use crate::command::tree::CommandTree;
+use crate::command::tree::builder::{argument, literal};
+use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::entity::EntityBase;
+use pumpkin_data::potion::Effect;
+
+const NAMES: [&str; 1] = ["effect"];
+
+const DESCRIPTION: &str = "Adds or removes the status effects of players and other entities.";
+
+const ARG_CLEAR: &str = "clear";
+const ARG_GIVE: &str = "give";
+const ARG_EFFECT: &str = "effect";
+const ARG_TARGET: &str = "target";
+const ARG_SECOND: &str = "seconds";
+const ARG_INFINITE: &str = "infinite";
+const ARG_AMPLIFIER: &str = "amplifier";
+const ARG_HIDE_PARTICLE: &str = "hideParticles";
+
+enum Time {
+    Base,
+    Specified,
+    Infinite,
+}
+
+enum Amplifier {
+    Base,
+    Specified,
+}
+
+struct GiveExecutor(Time, Amplifier, bool);
+
+impl CommandExecutor for GiveExecutor {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
+            let Some(Arg::Effect(effect)) = args.get(ARG_EFFECT) else {
+                return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
+            };
+
+            //duration is in tick, so * 20 (not for the infinite because -1*20 cause visual glitch)
+            let second = match self.0 {
+                Time::Base => 30 * 20,
+                Time::Specified => {
+                    BoundedNumArgumentConsumer::new()
+                        .name("seconds")
+                        .min(1)
+                        .max(1_000_000)
+                        .find_arg_default_name(args)??
+                        * 20
+                }
+                Time::Infinite => -1,
+            };
+
+            let amplifier: u8 = match self.1 {
+                Amplifier::Base => 0,
+                Amplifier::Specified => BoundedNumArgumentConsumer::<i32>::new()
+                    .name("amplifier")
+                    .min(0)
+                    .max(255)
+                    .find_arg_default_name(args)?? as u8,
+            };
+
+            let mut hide_particles = self.2;
+            //if false -> parameter is referred
+            if !hide_particles {
+                let Some(Arg::Bool(hide_particle)) = args.get(ARG_HIDE_PARTICLE) else {
+                    return Err(InvalidConsumption(Some(ARG_HIDE_PARTICLE.into())));
+                };
+
+                hide_particles = *hide_particle;
+            }
+
+            let mut successes = 0;
+
+            for target in targets {
+                if target.living_entity.has_effect(effect).await
+                    && target
+                        .living_entity
+                        .get_effect(effect)
+                        .await
+                        .unwrap()
+                        .amplifier
+                        >= amplifier
+                {
+                } else {
+                    target
+                        .add_effect(Effect {
+                            effect_type: effect,
+                            duration: second,
+                            amplifier,
+                            ambient: false, //this is not a beacon effect
+                            show_particles: !hide_particles,
+                            show_icon: true,
+                            blend: true, //Currently only used in the DARKNESS effect to apply extra void fog and adjust the gamma value for lighting.
+                        })
+                        .await;
+                    successes += 1;
+                }
+            }
+
+            let translation_name = TextComponent::translate_cross(
+                effect.translation_key.to_string(),
+                effect.translation_key.to_string(),
+                [],
+            );
+
+            if successes == 0 {
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.effect.give.failed",
+                    "commands.effect.give.failed",
+                    [],
+                )));
+            } else if targets.len() == 1 {
+                sender
+                    .send_message(TextComponent::translate_cross(
+                        "commands.effect.give.success.single",
+                        "commands.effect.give.success.single",
+                        [translation_name, targets[0].get_display_name().await],
+                    ))
+                    .await;
+            } else {
+                sender
+                    .send_message(TextComponent::translate_cross(
+                        "commands.effect.give.success.multiple",
+                        "commands.effect.give.success.multiple",
+                        [
+                            translation_name,
+                            TextComponent::text(targets.len().to_string()),
+                        ],
+                    ))
+                    .await;
+            }
+
+            Ok(successes)
+        })
+    }
+}
+
+struct ClearExecutor(bool); //the param -> true = delete every effect, false = only one
+
+impl CommandExecutor for ClearExecutor {
+    fn execute<'a>(
+        &'a self,
+        sender: &'a CommandSender,
+        _server: &'a crate::server::Server,
+        args: &'a ConsumedArgs<'a>,
+    ) -> CommandResult<'a> {
+        Box::pin(async move {
+            let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
+                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
+            };
+
+            let effect;
+            //Only one effect
+            if self.0 {
+                let mut succeeded_clears: i32 = 0;
+                for target in targets {
+                    if target.remove_all_effects().await {
+                        succeeded_clears += 1;
+                    }
+                }
+
+                //if the player or everyplayer don't have any effect
+                if succeeded_clears == 0 {
+                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                        "commands.effect.clear.everything.failed",
+                        "commands.effect.clear.everything.failed",
+                        [],
+                    )));
+                }
+                //a player have at least 1 effect
+                else if targets.len() == 1 {
+                    sender
+                        .send_message(TextComponent::translate_cross(
+                            "commands.effect.clear.everything.success.single",
+                            "commands.effect.clear.everything.success.single",
+                            [targets[0].get_display_name().await],
+                        ))
+                        .await;
+                } else {
+                    sender
+                        .send_message(TextComponent::translate_cross(
+                            "commands.effect.clear.everything.success.multiple",
+                            "commands.effect.clear.everything.success.multiple",
+                            [TextComponent::text(targets.len().to_string())],
+                        ))
+                        .await;
+                }
+                Ok(succeeded_clears)
+            } else {
+                let Some(Arg::Effect(effect_type)) = args.get(ARG_EFFECT) else {
+                    return Err(InvalidConsumption(Some(ARG_EFFECT.into())));
+                };
+
+                effect = *effect_type;
+
+                let mut succeeded_clears: i32 = 0;
+                for target in targets {
+                    if target.living_entity.has_effect(effect).await {
+                        target.remove_effect(effect).await;
+                        succeeded_clears += 1;
+                    }
+                }
+
+                if succeeded_clears == 0 {
+                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                        "commands.effect.clear.specific.failed",
+                        "commands.effect.clear.specific.failed",
+                        [],
+                    )));
+                } else if targets.len() == 1 {
+                    sender
+                        .send_message(TextComponent::translate_cross(
+                            "commands.effect.clear.specific.success.single",
+                            "commands.effect.clear.specific.success.single",
+                            [
+                                TextComponent::translate_cross(
+                                    effect.translation_key,
+                                    effect.translation_key,
+                                    [],
+                                ),
+                                targets[0].get_display_name().await,
+                            ],
+                        ))
+                        .await;
+                } else {
+                    sender
+                        .send_message(TextComponent::translate_cross(
+                            "commands.effect.clear.specific.success.multiple",
+                            "commands.effect.clear.specific.success.multiple",
+                            [
+                                TextComponent::translate_cross(
+                                    effect.translation_key,
+                                    effect.translation_key,
+                                    [],
+                                ),
+                                TextComponent::text(targets.len().to_string()),
+                            ],
+                        ))
+                        .await;
+                }
+                Ok(succeeded_clears)
+            }
+        })
+    }
+}
+
+pub fn init_command_tree() -> CommandTree {
+    CommandTree::new(NAMES, DESCRIPTION)
+        .then(
+            literal(ARG_CLEAR).then(
+                argument(ARG_TARGET, PlayersArgumentConsumer)
+                    .execute(ClearExecutor(true))
+                    .then(
+                        argument(ARG_EFFECT, EffectTypeArgumentConsumer)
+                            .execute(ClearExecutor(false)),
+                    ),
+            ),
+        )
+        .then(
+            literal(ARG_GIVE).then(
+                argument(ARG_TARGET, PlayersArgumentConsumer).then(
+                    argument(ARG_EFFECT, EffectTypeArgumentConsumer)
+                        .execute(GiveExecutor(Time::Base, Amplifier::Base, true))
+                        //for specified time
+                        .then(
+                            argument(
+                                ARG_SECOND,
+                                BoundedNumArgumentConsumer::new()
+                                    .name("seconds")
+                                    .min(0)
+                                    .max(1_000_000),
+                            )
+                            .execute(GiveExecutor(Time::Specified, Amplifier::Base, true))
+                            .then(
+                                argument(
+                                    ARG_AMPLIFIER,
+                                    BoundedNumArgumentConsumer::new()
+                                        .name("amplifier")
+                                        .min(1)
+                                        .max(255),
+                                )
+                                .execute(GiveExecutor(Time::Specified, Amplifier::Specified, true))
+                                .then(
+                                    argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
+                                        GiveExecutor(Time::Specified, Amplifier::Specified, false),
+                                    ),
+                                ),
+                            ),
+                        )
+                        .then(
+                            literal(ARG_INFINITE)
+                                .execute(GiveExecutor(Time::Infinite, Amplifier::Base, true))
+                                .then(
+                                    argument(
+                                        ARG_AMPLIFIER,
+                                        BoundedNumArgumentConsumer::new()
+                                            .name("amplifier")
+                                            .min(1)
+                                            .max(255),
+                                    )
+                                    .execute(GiveExecutor(
+                                        Time::Infinite,
+                                        Amplifier::Specified,
+                                        true,
+                                    ))
+                                    .then(
+                                        argument(ARG_HIDE_PARTICLE, BoolArgConsumer).execute(
+                                            GiveExecutor(
+                                                Time::Infinite,
+                                                Amplifier::Specified,
+                                                false,
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                        ),
+                ),
+            ),
+        )
+}
