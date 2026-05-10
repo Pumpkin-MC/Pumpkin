@@ -1,6 +1,6 @@
+use heck::{ToPascalCase, ToSnakeCase};
 use std::{fs, path::Path};
 use syn::{Fields, Item};
-use heck::{ToPascalCase, ToSnakeCase};
 
 pub fn build_java_mapping() -> String {
     let mut output = String::new();
@@ -17,7 +17,14 @@ pub fn build_java_mapping() -> String {
     output.push_str("pub fn serialize_java_packet(packet: &ClientboundPacket, version: MinecraftVersion) -> Option<Bytes> {\n");
     output.push_str("    match packet {\n");
 
-    process_packets("../pumpkin-protocol/src/java/client/play", &mut output, "java_packet", "ClientboundPacket", "pumpkin_protocol::java::client::play", false);
+    process_packets(
+        "../pumpkin-protocol/src/java/client/play",
+        &mut output,
+        "java_packet",
+        "ClientboundPacket",
+        "pumpkin_protocol::java::client::play",
+        false,
+    );
 
     output.push_str("        _ => None,\n");
     output.push_str("    }\n");
@@ -29,10 +36,19 @@ pub fn build_bedrock_mapping() -> String {
     let mut output = String::new();
     output.push_str("\nuse crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::ClientboundPacket as BClientboundPacket;\n\n");
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {\n");
+    output.push_str(
+        "pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {\n",
+    );
     output.push_str("    match packet {\n");
 
-    process_packets("../pumpkin-protocol/src/bedrock/client", &mut output, "packet", "BClientboundPacket", "pumpkin_protocol::bedrock::client", true);
+    process_packets(
+        "../pumpkin-protocol/src/bedrock/client",
+        &mut output,
+        "packet",
+        "BClientboundPacket",
+        "pumpkin_protocol::bedrock::client",
+        true,
+    );
 
     output.push_str("        _ => None,\n");
     output.push_str("    }\n");
@@ -40,9 +56,18 @@ pub fn build_bedrock_mapping() -> String {
     output
 }
 
-fn process_packets(dir: &str, output: &mut String, attr_name: &str, variant_prefix: &str, rust_path_prefix: &str, skip_raknet: bool) {
+fn process_packets(
+    dir: &str,
+    output: &mut String,
+    attr_name: &str,
+    variant_prefix: &str,
+    rust_path_prefix: &str,
+    skip_raknet: bool,
+) {
     let paths = fs::read_dir(dir).expect("Failed to read packet directory");
-    let mut sorted_paths: Vec<_> = paths.map(|e| e.expect("Failed to read entry").path()).collect();
+    let mut sorted_paths: Vec<_> = paths
+        .map(|e| e.expect("Failed to read entry").path())
+        .collect();
     sorted_paths.sort();
 
     for path in sorted_paths {
@@ -50,16 +75,31 @@ fn process_packets(dir: &str, output: &mut String, attr_name: &str, variant_pref
             if skip_raknet && path.file_name().unwrap() == "raknet" {
                 continue;
             }
-            process_packets(path.to_str().unwrap(), output, attr_name, variant_prefix, rust_path_prefix, skip_raknet);
+            process_packets(
+                path.to_str().unwrap(),
+                output,
+                attr_name,
+                variant_prefix,
+                rust_path_prefix,
+                skip_raknet,
+            );
             continue;
         }
-        if path.extension().is_some_and(|ext| ext == "rs") && path.file_name().is_some_and(|name| name != "mod.rs") {
+        if path.extension().is_some_and(|ext| ext == "rs")
+            && path.file_name().is_some_and(|name| name != "mod.rs")
+        {
             parse_packet_file(&path, output, attr_name, variant_prefix, rust_path_prefix);
         }
     }
 }
 
-fn parse_packet_file(path: &Path, output: &mut String, attr_name: &str, variant_prefix: &str, rust_path_prefix: &str) {
+fn parse_packet_file(
+    path: &Path,
+    output: &mut String,
+    attr_name: &str,
+    variant_prefix: &str,
+    rust_path_prefix: &str,
+) {
     let content = fs::read_to_string(path).expect("Failed to read file");
     let file = syn::parse_file(&content).expect("Failed to parse file");
 
@@ -70,7 +110,9 @@ fn parse_packet_file(path: &Path, output: &mut String, attr_name: &str, variant_
             }
 
             let struct_name = s.ident.to_string();
-            if struct_name == "CHandshake" { continue; } // Skip CHandshake (RakNet)
+            if struct_name == "CHandshake" {
+                continue;
+            } // Skip CHandshake (RakNet)
             let wit_case = struct_name.to_pascal_case();
 
             let mut prep_code = String::new();
@@ -82,7 +124,7 @@ fn parse_packet_file(path: &Path, output: &mut String, attr_name: &str, variant_
                     let mut field_name = field.ident.as_ref().unwrap().to_string();
                     let wit_field = field_name.to_snake_case();
                     let (type_ident, is_ref) = get_type_info(&field.ty);
-                    
+
                     if field_name == "type" {
                         field_name = "r#type".to_string();
                     }
@@ -135,11 +177,17 @@ fn parse_packet_file(path: &Path, output: &mut String, attr_name: &str, variant_
             } else {
                 possible = false;
             }
-            
+
             if possible {
-                output.push_str(&format!("        {}::{}(data) => {{\n", variant_prefix, wit_case));
+                output.push_str(&format!(
+                    "        {}::{}(data) => {{\n",
+                    variant_prefix, wit_case
+                ));
                 output.push_str(&prep_code);
-                output.push_str(&format!("            let p = {}::{} {{\n", rust_path_prefix, struct_name));
+                output.push_str(&format!(
+                    "            let p = {}::{} {{\n",
+                    rust_path_prefix, struct_name
+                ));
                 output.push_str(&field_inits);
                 output.push_str("            };\n");
                 output.push_str("            let mut buf = Vec::new();\n");

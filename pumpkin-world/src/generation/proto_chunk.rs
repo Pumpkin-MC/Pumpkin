@@ -657,11 +657,11 @@ impl ProtoChunk {
         generator: &super::generator::VanillaGenerator,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
-        let dimension = generator.dimension;
+        let dimension = &generator.dimension;
         // Instantiate ONLY the supplier we actually need
-        let active_supplier = if dimension == Dimension::THE_END {
+        let active_supplier = if dimension == &Dimension::THE_END {
             ActiveSupplier::End(TheEndBiomeSupplier)
-        } else if dimension == Dimension::THE_NETHER {
+        } else if dimension == &Dimension::THE_NETHER {
             ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
         } else {
             ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
@@ -1114,6 +1114,7 @@ impl ProtoChunk {
         }
     }
 
+    #[must_use]
     pub fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
         let mut allowed_biomes = Vec::new();
         for entry in set.structures {

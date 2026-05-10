@@ -23,9 +23,7 @@ pub fn build() -> TokenStream {
 
         let replaceable_str = config["replaceable"].as_str().unwrap_or("");
         let replaceable = if let Some(tag_name) = replaceable_str.strip_prefix('#') {
-            let tag_name = tag_name
-                .to_uppercase()
-                .replace([':', '.', '-'], "_");
+            let tag_name = tag_name.to_uppercase().replace([':', '.', '-'], "_");
             let tag_ident = format_ident!("{}", tag_name);
             quote! { crate::tag::Block::#tag_ident }
         } else {
@@ -70,10 +68,12 @@ pub fn build() -> TokenStream {
                 let width_smoothness = shape["width_smoothness"].as_i64().unwrap_or(0) as i32;
                 let horizontal_radius_factor =
                     value_to_float_provider(&shape["horizontal_radius_factor"]);
-                let vertical_radius_default_factor =
-                    shape["vertical_radius_default_factor"].as_f64().unwrap_or(0.0) as f32;
-                let vertical_radius_center_factor =
-                    shape["vertical_radius_center_factor"].as_f64().unwrap_or(0.0) as f32;
+                let vertical_radius_default_factor = shape["vertical_radius_default_factor"]
+                    .as_f64()
+                    .unwrap_or(0.0) as f32;
+                let vertical_radius_center_factor = shape["vertical_radius_center_factor"]
+                    .as_f64()
+                    .unwrap_or(0.0) as f32;
 
                 quote! {
                     CarverAdditionalConfig::Canyon(CanyonCarverConfig {

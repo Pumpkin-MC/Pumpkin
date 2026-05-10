@@ -330,7 +330,7 @@ impl Chunk {
             fluid_ticks: Default::default(),
             pending_block_entities: Mutex::new(pending_block_entities),
             status: proto_chunk.stage.into(),
-            blending_data: proto_chunk.blending_data.clone(),
+            blending_data: proto_chunk.blending_data,
         };
 
         chunk.heightmap = Mutex::new(chunk.calculate_heightmap());

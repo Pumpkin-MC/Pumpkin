@@ -14,6 +14,7 @@ pub struct BlendingData {
 }
 
 impl BlendingData {
+    #[must_use]
     pub fn get_height(&self, cell_x: i32, _cell_y: i32, cell_z: i32) -> f64 {
         if !(0..16).contains(&cell_x) || !(0..16).contains(&cell_z) {
             return f64::MAX;
@@ -21,6 +22,7 @@ impl BlendingData {
         self.heights[(cell_z * 16 + cell_x) as usize]
     }
 
+    #[must_use]
     pub fn get_density(&self, cell_x: i32, _cell_y: i32, cell_z: i32) -> f64 {
         // cell_y is block_y / 8 in Blender.java
         // We'll need a better storage for this if we want full fidelity

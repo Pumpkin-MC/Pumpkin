@@ -121,7 +121,12 @@ pub fn build() -> TokenStream {
 
         let slots = enchantment.slots;
         let slots = slots.iter().map(AttributeModifierSlot::to_tokens);
-        let Translate { translate, bedrock_translate: _, with: _ } = &*enchantment.description.0.content else {
+        let Translate {
+            translate,
+            bedrock_translate: _,
+            with: _,
+        } = &*enchantment.description.0.content
+        else {
             panic!()
         };
         let translate = translate.to_string();

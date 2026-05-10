@@ -286,7 +286,7 @@ impl Server {
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                let level = into_level(dim, &config, path, seed, Some(pool));
+                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
                 let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
                 let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(
                     world.clone(),
@@ -383,8 +383,13 @@ impl Server {
             let seed = server.level_info.load().world_gen_settings.seed;
 
             // TODO: gen_pool should be reused
-            let level =
-                pumpkin_world::dimension::into_level(dimension, &config, world_path, seed, None);
+            let level = pumpkin_world::dimension::into_level(
+                dimension.clone(),
+                &config,
+                world_path,
+                seed,
+                None,
+            );
             let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
             let world = Arc::new(world);
             let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(

@@ -174,6 +174,7 @@ impl TryFrom<usize> for ChunkHeightmapType {
 }
 
 impl ChunkHeightmapType {
+    #[must_use]
     pub fn is_opaque(&self, block_state: &BlockState) -> bool {
         let block = Block::get_raw_id_from_state_id(block_state.id);
         match self {

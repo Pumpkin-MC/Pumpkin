@@ -1,5 +1,5 @@
 use crate::entity::EntityBase;
-use crate::entity::r#type::from_type;
+use crate::entity::r#type::{check_spawn_rules, from_type};
 use crate::world::World;
 use arc_swap::ArcSwap;
 use pumpkin_data::biome::Spawner;
@@ -838,6 +838,9 @@ pub async fn is_valid_spawn_position_for_type(
         return false;
     }
     if !is_spawn_position_ok(world, block_pos, entity_type).await {
+        return false;
+    }
+    if !check_spawn_rules(entity_type, world, block_pos).await {
         return false;
     }
     // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes

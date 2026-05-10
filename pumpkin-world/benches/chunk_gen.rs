@@ -12,7 +12,7 @@ fn bench_full_chunk_generation(c: &mut Criterion) {
     let dimension = Dimension::OVERWORLD;
     let seed = Seed(42);
     let block_registry = Arc::new(BlockRegistry);
-    let world_gen = get_world_gen(seed, dimension);
+    let world_gen = get_world_gen(seed, dimension.clone());
     let biome_mixer_seed = hash_seed(world_gen.random_config.seed);
 
     c.bench_function("full_chunk_generation", |b| {

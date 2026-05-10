@@ -9,6 +9,7 @@ pub struct SimpleInventory {
 }
 
 impl SimpleInventory {
+    #[must_use]
     pub fn new(size: usize) -> Self {
         Self {
             stacks: (0..size)

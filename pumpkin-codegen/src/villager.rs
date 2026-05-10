@@ -70,7 +70,12 @@ pub fn build() -> TokenStream {
     let format_trade = |trade: &TradeJson| {
         let wants_item = format_ident!(
             "{}",
-            trade.wants.id.strip_prefix("minecraft:").unwrap_or(&trade.wants.id).to_shouty_snake_case()
+            trade
+                .wants
+                .id
+                .strip_prefix("minecraft:")
+                .unwrap_or(&trade.wants.id)
+                .to_shouty_snake_case()
         );
         let wants_count = trade.wants.count.unwrap_or(1.0) as i32;
         let wants = quote! { VillagerTradeItem { item: &crate::item::Item::#wants_item, count: #wants_count } };
@@ -78,7 +83,9 @@ pub fn build() -> TokenStream {
         let wants_b = if let Some(b) = &trade.wants_b {
             let item = format_ident!(
                 "{}",
-                b.id.strip_prefix("minecraft:").unwrap_or(&b.id).to_shouty_snake_case()
+                b.id.strip_prefix("minecraft:")
+                    .unwrap_or(&b.id)
+                    .to_shouty_snake_case()
             );
             let count = b.count.unwrap_or(1.0) as i32;
             quote! { Some(VillagerTradeItem { item: &crate::item::Item::#item, count: #count }) }
@@ -88,7 +95,12 @@ pub fn build() -> TokenStream {
 
         let gives_item = format_ident!(
             "{}",
-            trade.gives.id.strip_prefix("minecraft:").unwrap_or(&trade.gives.id).to_shouty_snake_case()
+            trade
+                .gives
+                .id
+                .strip_prefix("minecraft:")
+                .unwrap_or(&trade.gives.id)
+                .to_shouty_snake_case()
         );
         let gives_count = trade.gives.count.unwrap_or(1.0) as i32;
         let gives = quote! { VillagerTradeItem { item: &crate::item::Item::#gives_item, count: #gives_count } };
@@ -122,7 +134,7 @@ pub fn build() -> TokenStream {
         }
         let prof = parts[0];
         let level_str = parts[1].strip_prefix("level_").unwrap_or(parts[1]);
-        
+
         let mut matching_trades = Vec::new();
         let prefix = format!("{prof}/{level_str}/");
         for (key, trade) in &data.villager_trades {
@@ -132,7 +144,9 @@ pub fn build() -> TokenStream {
         }
 
         // Fallback for smiths
-        if matching_trades.is_empty() && (prof == "armorer" || prof == "toolsmith" || prof == "weaponsmith") {
+        if matching_trades.is_empty()
+            && (prof == "armorer" || prof == "toolsmith" || prof == "weaponsmith")
+        {
             let smith_prefix = format!("smith/{level_str}/");
             for (key, trade) in &data.villager_trades {
                 if key.starts_with(&smith_prefix) {
@@ -199,7 +213,11 @@ pub fn build() -> TokenStream {
         for (level_str, set_key) in &prof_data.trade_sets {
             let level = level_str.parse::<i32>().unwrap();
             let set_key_clean = set_key.strip_prefix("minecraft:").unwrap_or(set_key);
-            if let Some(trades_ident) = data.trade_sets.get(set_key_clean).and_then(|set| generated_trade_sets.get(&set.trades)) {
+            if let Some(trades_ident) = data
+                .trade_sets
+                .get(set_key_clean)
+                .and_then(|set| generated_trade_sets.get(&set.trades))
+            {
                 let set = data.trade_sets.get(set_key_clean).unwrap();
                 let amount = set.amount as i32;
                 level_matches.push(quote! { #level => Some(VillagerTradeSet { trades: #trades_ident, amount: #amount }) });

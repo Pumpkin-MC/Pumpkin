@@ -130,7 +130,7 @@ struct SculkSpreader {
 }
 
 impl SculkSpreader {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             cursors: Vec::new(),
         }

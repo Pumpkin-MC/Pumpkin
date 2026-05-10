@@ -33,6 +33,7 @@ impl DoublePerlinNoiseSampler {
         )
     }
 
+    #[must_use]
     pub fn get_amplitude(amplitudes: &[f64]) -> f64 {
         let mut j = i32::MAX;
         let mut k = i32::MIN;

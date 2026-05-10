@@ -137,10 +137,7 @@ impl GenerationSchedule {
         }
 
         let max_in_flight = if gen_pool.is_some() {
-            (thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1)
-                * 4) as u16
+            (thread::available_parallelism().map_or(1, std::num::NonZero::get) * 4) as u16
         } else {
             gen_thread_count as u16
         };

@@ -138,6 +138,7 @@ pub async fn dump() {
 }
 
 impl Level {
+    #[must_use]
     pub fn from_root_folder(
         level_config: &LevelConfig,
         root_folder: PathBuf,
@@ -204,7 +205,7 @@ impl Level {
             should_save: AtomicBool::new(false),
             should_unload: AtomicBool::new(false),
             autosave_ticks: level_config.autosave_ticks,
-            pending_entity_generations: pending_entity_generations.clone(),
+            pending_entity_generations,
             level_channel: level_channel.clone(),
             thread_tracker,
             chunk_listener: listener.clone(),
@@ -213,8 +214,7 @@ impl Level {
 
         // TODO
         let total_cores = thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1)
+            .map_or(1, std::num::NonZero::get)
             .saturating_sub(2)
             .max(1);
         let threads_per_dimension = (total_cores / 2).max(1);
@@ -253,9 +253,9 @@ impl Level {
             });
         } else {
             // Fallback to spawning a new thread if no pool is available (should not happen in production)
-            let level_clone = level.clone();
+            let level_clone = level;
             thread::Builder::new()
-                .name(format!("Entity Gen {:?}", pos))
+                .name(format!("Entity Gen {pos:?}"))
                 .spawn(move || {
                     let arc_chunk = Arc::new(ChunkEntityData {
                         x: pos.x,

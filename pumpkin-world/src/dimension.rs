@@ -5,6 +5,7 @@ use pumpkin_data::dimension::Dimension;
 
 use crate::level::Level;
 
+#[must_use]
 pub fn into_level(
     dimension: Dimension,
     level_config: &LevelConfig,

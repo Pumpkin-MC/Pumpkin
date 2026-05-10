@@ -22,7 +22,8 @@ pub fn build() -> TokenStream {
         });
     }
 
-    let bedrock_content = fs::read_to_string("../assets/en_us_bedrock.lang").expect("en_us_bedrock is missing");
+    let bedrock_content =
+        fs::read_to_string("../assets/en_us_bedrock.lang").expect("en_us_bedrock is missing");
     let mut bedrock_constants = TokenStream::new();
 
     for line in bedrock_content.lines() {
@@ -61,10 +62,10 @@ pub fn build() -> TokenStream {
 
 fn to_valid_ident(name: &str) -> Ident {
     let mut clean = name.to_uppercase().replace(['.', ':', '-'], "_");
-    
+
     if clean.chars().next().is_some_and(|c| c.is_ascii_digit()) {
         clean.insert(0, '_');
     }
-    
+
     format_ident!("{}", clean)
 }
