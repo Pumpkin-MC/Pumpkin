@@ -86,16 +86,19 @@ fn parse_packet_file(path: &Path, interface: &mut Interface, variant: &mut Varia
                     fields_list.push(Field::new(field_name, field_type));
                 }
             }
-
             let wit_name = struct_name.to_kebab_case();
-            interface.type_def(TypeDef::new(
-                wit_name.clone(),
-                TypeDefKind::Record(Record::new(fields_list)),
-            ));
-            variant.case(VariantCase::value(
-                wit_name.clone(),
-                WitType::named(wit_name),
-            ));
+            if !fields_list.is_empty() {
+                interface.type_def(TypeDef::new(
+                    wit_name.clone(),
+                    TypeDefKind::Record(Record::new(fields_list)),
+                ));
+                variant.case(VariantCase::value(
+                    wit_name.clone(),
+                    WitType::named(wit_name),
+                ));
+            } else {
+                variant.case(VariantCase::empty(wit_name));
+            }
         }
     }
 }

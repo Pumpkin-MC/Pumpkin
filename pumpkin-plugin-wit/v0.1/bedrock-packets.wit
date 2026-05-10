@@ -79,7 +79,6 @@ interface bedrock-packets {
     ping-time: s64,
     pong-time: s64,
   }
-  record s-disconnect {  }
   record s-open-connection-request1 {
     magic: string,
     protocol-version: u8,
@@ -343,7 +342,7 @@ interface bedrock-packets {
     s-connected-ping(s-connected-ping),
     s-connection-request(s-connection-request),
     s-new-incoming-connection(s-new-incoming-connection),
-    s-disconnect(s-disconnect),
+    s-disconnect,
     s-open-connection-request1(s-open-connection-request1),
     s-open-connection-request2(s-open-connection-request2),
     s-unconnected-ping(s-unconnected-ping),
