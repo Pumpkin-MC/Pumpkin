@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use crate::{
@@ -199,6 +200,17 @@ impl EntityBase for AreaEffectCloudEntity {
                     is_waiting,
                 )])
                 .await;
+
+            let flags = self.entity.flags.load(Ordering::Relaxed);
+            if flags != 0 {
+                self.entity
+                    .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                        pumpkin_data::tracked_data::TrackedData::SHARED_FLAGS_ID,
+                        pumpkin_data::meta_data_type::MetaDataType::BYTE,
+                        flags,
+                    )])
+                    .await;
+            }
         })
     }
 

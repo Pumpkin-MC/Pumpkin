@@ -97,6 +97,17 @@ impl EntityBase for FallingEntity {
                     self.entity.block_pos.load(),
                 )])
                 .await;
+
+            let flags = self.entity.flags.load(Ordering::Relaxed);
+            if flags != 0 {
+                self.entity
+                    .send_meta_data(&[Metadata::new(
+                        TrackedData::SHARED_FLAGS_ID,
+                        MetaDataType::BYTE,
+                        flags,
+                    )])
+                    .await;
+            }
         })
     }
 

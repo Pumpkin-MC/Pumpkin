@@ -183,6 +183,17 @@ impl EntityBase for EyeOfEnder {
                     &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
                 )])
                 .await;
+
+            let flags = self.entity.flags.load(Ordering::Relaxed);
+            if flags != 0 {
+                self.entity
+                    .send_meta_data(&[Metadata::new(
+                        TrackedData::SHARED_FLAGS_ID,
+                        MetaDataType::BYTE,
+                        flags,
+                    )])
+                    .await;
+            }
         })
     }
 

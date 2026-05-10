@@ -81,6 +81,17 @@ impl EntityBase for EggEntity {
                     &ItemStackSerializer::from(stack.clone()),
                 )])
                 .await;
+
+            let flags = entity.flags.load(Ordering::Relaxed);
+            if flags != 0 {
+                entity
+                    .send_meta_data(&[Metadata::new(
+                        TrackedData::SHARED_FLAGS_ID,
+                        MetaDataType::BYTE,
+                        flags,
+                    )])
+                    .await;
+            }
         })
     }
 
