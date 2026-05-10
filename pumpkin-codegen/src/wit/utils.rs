@@ -1,5 +1,5 @@
-use wit_encoder::Type as WitType;
 use syn::{Type, TypePath};
+use wit_encoder::Type as WitType;
 
 pub fn map_type(ty: &Type) -> WitType {
     match ty {
@@ -17,15 +17,17 @@ pub fn map_type(ty: &Type) -> WitType {
                 "u16" | "i16" => WitType::S32,
                 "Option" => {
                     if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments
-                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                            return WitType::option(map_type(inner_ty));
+                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first()
+                    {
+                        return WitType::option(map_type(inner_ty));
                     }
                     WitType::String
                 }
                 "Vec" | "Box" => {
                     if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments
-                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                            return WitType::list(map_type(inner_ty));
+                        && let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first()
+                    {
+                        return WitType::list(map_type(inner_ty));
                     }
                     WitType::String
                 }

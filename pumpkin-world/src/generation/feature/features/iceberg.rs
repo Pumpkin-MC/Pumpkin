@@ -413,7 +413,7 @@ impl IcebergFeature {
         }
     }
 
-    fn get_ellipse_c(&self, y_off: i32, height: i32, shape_ellipse_c: i32) -> i32 {
+    const fn get_ellipse_c(&self, y_off: i32, height: i32, shape_ellipse_c: i32) -> i32 {
         let mut c = shape_ellipse_c;
         if y_off > 0 && height - y_off <= 3 {
             c = shape_ellipse_c - (4 - (height - y_off));

@@ -90,8 +90,8 @@ impl FireBlockBase {
         block_pos: &BlockPos,
         direction: BlockDirection,
     ) -> bool {
-        let dimension = world.dimension;
-        if dimension != Dimension::OVERWORLD && dimension != Dimension::THE_NETHER {
+        let dimension = &world.dimension;
+        if dimension != &Dimension::OVERWORLD && dimension != &Dimension::THE_NETHER {
             return false;
         }
         let mut found = false;

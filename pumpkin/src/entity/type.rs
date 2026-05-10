@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -13,7 +14,7 @@ use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::falling::FallingEntity;
 use crate::entity::item::ItemEntity;
 use crate::entity::living::LivingEntity;
-use crate::entity::mob::bat::BatEntity;
+use crate::entity::mob::bat::{self, BatEntity};
 use crate::entity::mob::blaze::BlazeEntity;
 use crate::entity::mob::breeze::BreezeEntity;
 use crate::entity::mob::cave_spider::CaveSpiderEntity;
@@ -107,7 +108,7 @@ use crate::entity::projectile::splash_potion::SplashPotionEntity;
 use crate::entity::projectile::wind_charge::WindChargeEntity;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::vehicle::boat::BoatEntity;
-use crate::entity::{Entity, EntityBase};
+use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
 use pumpkin_data::Block;
 use pumpkin_data::item::Item;
@@ -303,4 +304,42 @@ pub async fn from_type(
     };
 
     mob
+}
+
+pub async fn check_spawn_rules(
+    entity_type: &'static EntityType,
+    world: &World,
+    pos: &BlockPos,
+) -> bool {
+    let id = entity_type.id;
+
+    if id == EntityType::BOGGED.id
+        || id == EntityType::CAVE_SPIDER.id
+        || id == EntityType::CREEPER.id
+        || id == EntityType::ENDERMAN.id
+        || id == EntityType::GIANT.id
+        || id == EntityType::RAVAGER.id
+        || id == EntityType::SKELETON.id
+        || id == EntityType::SPIDER.id
+        || id == EntityType::WITCH.id
+        || id == EntityType::WITHER.id
+        || id == EntityType::WITHER_SKELETON.id
+        || id == EntityType::ZOMBIE.id
+        || id == EntityType::ZOMBIE_HORSE.id
+        || id == EntityType::ZOMBIE_VILLAGER.id
+        || id == EntityType::CREAKING.id
+        || id == EntityType::EVOKER.id
+        || id == EntityType::ILLUSIONER.id
+        || id == EntityType::VEX.id
+        || id == EntityType::VINDICATOR.id
+        || id == EntityType::WARDEN.id
+    {
+        return mob::MobEntity::check_monster_spawn_rules(world, pos).await;
+    }
+    if id == EntityType::BAT.id {
+        return bat::BatEntity::check_bat_spawn_rules(world, pos).await;
+    }
+
+    // TODO
+    true
 }

@@ -139,7 +139,7 @@ use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::world::{BlockAccessor, BlockFlags, BlockRegistryExt};
+use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -370,31 +370,6 @@ impl BlockActionResult {
 pub struct BlockRegistry {
     blocks: FxHashMap<u16, Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
-}
-
-impl BlockRegistryExt for BlockRegistry {
-    fn can_place_at(
-        &self,
-        block: &pumpkin_data::Block,
-        state: &BlockState,
-        block_accessor: &dyn BlockAccessor,
-        block_pos: &BlockPos,
-    ) -> bool {
-        futures::executor::block_on(async move {
-            self.can_place_at(
-                None,
-                None,
-                block_accessor,
-                None,
-                block,
-                state,
-                block_pos,
-                None,
-                None,
-            )
-            .await
-        })
-    }
 }
 
 impl BlockRegistry {

@@ -42,6 +42,7 @@ use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
+use crate::generation::section_coords::section_to_block;
 use crate::generation::structure::lazily_generate_structure;
 use crate::generation::structure::placement::should_generate_structure;
 use crate::generation::structure::structures::{
@@ -54,7 +55,7 @@ use crate::{
     block::RawBlockState,
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
-    world::{BlockAccessor, BlockRegistryExt},
+    world::{BlockAccessor, WorldPortalExt},
 };
 use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
@@ -656,11 +657,11 @@ impl ProtoChunk {
         generator: &super::generator::VanillaGenerator,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
-        let dimension = generator.dimension;
+        let dimension = &generator.dimension;
         // Instantiate ONLY the supplier we actually need
-        let active_supplier = if dimension == Dimension::THE_END {
+        let active_supplier = if dimension == &Dimension::THE_END {
             ActiveSupplier::End(TheEndBiomeSupplier)
-        } else if dimension == Dimension::THE_NETHER {
+        } else if dimension == &Dimension::THE_NETHER {
             ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
         } else {
             ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
@@ -775,6 +776,23 @@ impl ProtoChunk {
             }
             noise_sampler.swap_buffers();
         }
+    }
+
+    pub fn spawn_mobs<T: GenerationCache>(cache: &mut T, block_registry: &dyn WorldPortalExt) {
+        let chunk = cache.get_center_chunk();
+        debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
+
+        let biome = chunk.get_terrain_gen_biome(
+            section_to_block(chunk.x),
+            chunk.bottom_y() as i32 + chunk.height() as i32 - 1,
+            section_to_block(chunk.z),
+        );
+        let x = chunk.x;
+        let z = chunk.z;
+
+        block_registry.spawn_mobs_for_chunk_generation(cache, biome, x, z);
+
+        cache.get_center_chunk_mut().stage = StagedChunkEnum::Spawn;
     }
 
     #[must_use]
@@ -943,7 +961,7 @@ impl ProtoChunk {
     /// 2. Then, using the second file, we determine **how** to generate the feature.
     pub fn generate_features_and_structure<T: GenerationCache>(
         cache: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random_config: &GlobalRandomConfig,
     ) {
         let (center_x, center_z, min_y, height, biomes_in_chunk) = {
@@ -1096,6 +1114,7 @@ impl ProtoChunk {
         }
     }
 
+    #[must_use]
     pub fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
         let mut allowed_biomes = Vec::new();
         for entry in set.structures {

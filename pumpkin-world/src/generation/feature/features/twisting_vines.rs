@@ -85,9 +85,8 @@ impl TwistingVinesFeature {
                 // TODO: Set age property
                 chunk.set_block_state(&current_pos.0, Block::TWISTING_VINES.default_state);
                 break;
-            } else {
-                chunk.set_block_state(&current_pos.0, Block::TWISTING_VINES_PLANT.default_state);
             }
+            chunk.set_block_state(&current_pos.0, Block::TWISTING_VINES_PLANT.default_state);
             current_pos = current_pos.up();
         }
     }

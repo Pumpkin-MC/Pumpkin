@@ -1,8 +1,8 @@
 use std::pin::Pin;
 
-use crate::BlockStateId;
+use crate::{BlockStateId, generation::proto_chunk::GenerationCache};
 use bitflags::bitflags;
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::{Block, BlockState, chunk::Biome};
 use pumpkin_util::math::position::BlockPos;
 use thiserror::Error;
 
@@ -55,7 +55,7 @@ impl std::fmt::Display for GetBlockError {
 
 pub type WorldFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-pub trait BlockRegistryExt: Send + Sync {
+pub trait WorldPortalExt: Send + Sync {
     fn can_place_at(
         &self,
         block: &Block,
@@ -63,6 +63,14 @@ pub trait BlockRegistryExt: Send + Sync {
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
     ) -> bool;
+
+    fn spawn_mobs_for_chunk_generation(
+        &self,
+        cache: &mut dyn GenerationCache,
+        biome: &'static Biome,
+        chunk_x: i32,
+        chunk_z: i32,
+    );
 }
 
 pub trait BlockAccessor: Send + Sync {

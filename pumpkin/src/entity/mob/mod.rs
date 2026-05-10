@@ -13,10 +13,13 @@ use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
+use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomGenerator, get_seed};
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -181,6 +184,44 @@ impl MobEntity {
             }
         }
 
+        true
+    }
+
+    pub async fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos) -> bool {
+        let sky_light = world.get_sky_light_level(pos).await;
+        if sky_light > rand::random_range(0..32) {
+            return false;
+        }
+
+        let dimension = &world.dimension;
+        let block_light_limit = dimension.monster_spawn_block_light_limit;
+
+        let block_light = world.get_block_light_level(pos).await.unwrap();
+        if block_light_limit < 15 && block_light > block_light_limit {
+            return false;
+        }
+
+        let current_brightness = if world.is_thundering().await {
+            (sky_light - 10).max(block_light)
+        } else {
+            sky_light.max(block_light)
+        };
+
+        // TODO
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+        current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
+    }
+
+    pub async fn check_monster_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        if world.level_info.load().difficulty == Difficulty::Peaceful {
+            return false;
+        }
+
+        if !Self::is_dark_enough_to_spawn(world, pos).await {
+            return false;
+        }
+
+        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
         true
     }
 

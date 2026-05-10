@@ -410,7 +410,7 @@ pub struct Player {
     /// The player's previous gamemode
     pub previous_gamemode: AtomicCell<Option<GameMode>>,
     /// The player's spawnpoint
-    pub respawn_point: AtomicCell<Option<RespawnPoint>>,
+    pub respawn_point: Mutex<Option<RespawnPoint>>,
     /// The player's sleep status
     pub sleeping_since: AtomicCell<Option<u8>>,
     /// Manages the player's breath level
@@ -566,7 +566,7 @@ impl Player {
             gamemode: AtomicCell::new(gamemode),
             previous_gamemode: AtomicCell::new(None),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
-            respawn_point: AtomicCell::new(None),
+            respawn_point: Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
             // We want this to be an impossible watched section so that `chunker::update_position`
             // will mark chunks as watched for a new join rather than a respawn.
@@ -1072,21 +1072,16 @@ impl Player {
         block_pos: BlockPos,
         yaw: f32,
         pitch: f32,
+        forced: bool,
     ) -> bool {
-        if let Some(respawn_point) = self.respawn_point.load()
+        if !forced
+            && let Some(respawn_point) = self.respawn_point.lock().await.as_ref()
             && dimension == respawn_point.dimension
             && block_pos == respawn_point.position
         {
             return false;
         }
 
-        self.respawn_point.store(Some(RespawnPoint {
-            dimension,
-            position: block_pos,
-            yaw,
-            force: false,
-        }));
-
         self.client
             .send_packet_now(&CPlayerSpawnPosition::new(
                 block_pos,
@@ -1095,33 +1090,14 @@ impl Player {
                 dimension.minecraft_name.to_owned(),
             ))
             .await;
+
+        *self.respawn_point.lock().await = Some(RespawnPoint {
+            dimension,
+            position: block_pos,
+            yaw,
+            force: forced,
+        });
         true
-    }
-
-    /// Sets the respawn point with force=true, bypassing bed/anchor checks.
-    /// Used by /spawnpoint command.
-    pub async fn set_respawn_point_forced(
-        &self,
-        dimension: Dimension,
-        block_pos: BlockPos,
-        yaw: f32,
-        pitch: f32,
-    ) {
-        self.respawn_point.store(Some(RespawnPoint {
-            dimension,
-            position: block_pos,
-            yaw,
-            force: true,
-        }));
-
-        self.client
-            .send_packet_now(&CPlayerSpawnPosition::new(
-                block_pos,
-                yaw,
-                pitch,
-                dimension.minecraft_name.to_owned(),
-            ))
-            .await;
     }
 
     /// Calculates the player's respawn point based on stored spawn data.
@@ -1143,7 +1119,8 @@ impl Player {
         type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
         type AnchorProperties = pumpkin_data::block_properties::RespawnAnchorLikeProperties;
 
-        let respawn_point = self.respawn_point.load()?;
+        let respawn_guard = self.respawn_point.lock().await;
+        let respawn_point = respawn_guard.as_ref()?;
         let world = self.world();
         let pos = &respawn_point.position;
         let (block, state_id) = world.get_block_and_state_id(pos).await;
@@ -1172,7 +1149,7 @@ impl Player {
                     position,
                     yaw: respawn_point.yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension,
+                    dimension: respawn_point.dimension.clone(),
                 });
             }
             return None;
@@ -1192,7 +1169,7 @@ impl Player {
                     position: spawn_pos,
                     yaw: respawn_point.yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension,
+                    dimension: respawn_point.dimension.clone(),
                 });
             }
             return None;
@@ -1226,7 +1203,7 @@ impl Player {
                     position: spawn_pos,
                     yaw: respawn_point.yaw,
                     pitch: 0.0,
-                    dimension: respawn_point.dimension,
+                    dimension: respawn_point.dimension.clone(),
                 });
             }
             return None;
@@ -1512,10 +1489,11 @@ impl Player {
 
     pub async fn wake_up(&self) {
         let world = self.world();
-        let respawn_point = self
-            .respawn_point
-            .load()
-            .expect("Player waking up should have it's respawn point set on the bed.");
+        let respawn_point = self.respawn_point.lock().await;
+        let Some(respawn_point) = respawn_point.as_ref() else {
+            warn!("Player waking up should have it's respawn point set on the bed");
+            return;
+        };
 
         let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
         BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
@@ -3744,7 +3722,7 @@ impl NBTStorage for Player {
             nbt.put_bool(self.has_played_before.load(Ordering::Relaxed));
             self.hunger_manager.write_nbt(nbt).await;
 
-            if let Some(respawn) = self.respawn_point.load().as_ref() {
+            if let Some(respawn) = self.respawn_point.lock().await.as_ref() {
                 nbt.put_bool(true);
                 nbt.put_int(respawn.position.0.x);
                 nbt.put_int(respawn.position.0.y);
@@ -3796,15 +3774,15 @@ impl NBTStorage for Player {
                 let dim = nbt
                     .get_string()
                     .ok()
-                    .and_then(|s| Dimension::from_name(s.as_str()).copied())
-                    .unwrap_or(self.world().dimension);
+                    .and_then(|s| Dimension::from_name(s.as_str()).cloned())
+                    .unwrap_or(self.world().dimension.clone());
                 let force = nbt.get_bool().unwrap_or(false);
-                self.respawn_point.store(Some(RespawnPoint {
+                *self.respawn_point.lock().await = Some(RespawnPoint {
                     dimension: dim,
                     position: BlockPos(Vector3::new(x, y, z)),
                     yaw: 0.0,
                     force,
-                }));
+                });
             }
             self.enchantment_seed
                 .store(nbt.get_int().unwrap_or(rand::random()), Ordering::Relaxed);
@@ -4168,7 +4146,7 @@ impl Abilities {
 }
 
 /// Represents the player's stored respawn point (bed/anchor/forced).
-#[derive(Copy, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RespawnPoint {
     pub dimension: Dimension,
     pub position: BlockPos,
@@ -4176,9 +4154,6 @@ pub struct RespawnPoint {
     pub force: bool,
 }
 
-/// Calculated respawn position ready for use.
-/// Returned by `calculate_respawn_point()`.
-#[derive(Debug, Clone)]
 pub struct CalculatedRespawnPoint {
     /// The exact position to spawn at (centered in block).
     pub position: Vector3<f64>,

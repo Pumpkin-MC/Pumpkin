@@ -377,9 +377,9 @@ where
                             serializer
                                 .write(&path)
                                 .await
-                                .map_err(|e| ChunkWritingError::IoError(e.kind()))?;
+                                .map_err(|e| ChunkWritingError::IoError(e.kind()))?
                             // Read-lock released here.
-                        }
+                        };
 
                         // Drop our handle so `can_remove` may succeed.
                         drop(chunk_serializer);

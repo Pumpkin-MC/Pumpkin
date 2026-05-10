@@ -148,7 +148,6 @@ impl ParsedMappings {
                     for (mapped_id, id) in (shifts_to[index]..).zip(*from..to) {
                         result[id as usize] = mapped_id;
                     }
-
                 }
 
                 result

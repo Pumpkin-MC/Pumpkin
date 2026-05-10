@@ -314,10 +314,11 @@ impl BlockBehaviour for BedBlock {
             if args
                 .player
                 .set_respawn_point(
-                    args.world.dimension,
+                    args.world.dimension.clone(),
                     bed_head_pos,
                     args.player.get_entity().yaw.load(),
                     args.player.get_entity().pitch.load(),
+                    false,
                 )
                 .await
             {

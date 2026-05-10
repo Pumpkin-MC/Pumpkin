@@ -1,24 +1,45 @@
 use crate::wit::utils::map_type;
+use heck::ToKebabCase;
+use semver::Version;
 use std::{fs, path::Path};
 use syn::{Fields, Item};
-use wit_encoder::{Field, Interface, Package, PackageName, Record, Type as WitType, TypeDef, TypeDefKind, Variant, VariantCase};
-use semver::Version;
-use heck::ToKebabCase;
+use wit_encoder::{
+    Field, Interface, Package, PackageName, Record, Type as WitType, TypeDef, TypeDefKind, Variant,
+    VariantCase,
+};
 
 pub fn build() -> String {
-    let mut package = Package::new(PackageName::new("pumpkin", "plugin", Some(Version::new(0, 1, 0))));
+    let mut package = Package::new(PackageName::new(
+        "pumpkin",
+        "plugin",
+        Some(Version::new(0, 1, 0)),
+    ));
     let mut interface = Interface::new("bedrock-packets");
 
     let mut serverbound_variant = Variant::empty();
     let mut clientbound_variant = Variant::empty();
 
     // Process serverbound packets
-    process_packets("../pumpkin-protocol/src/bedrock/server", &mut interface, &mut serverbound_variant);
+    process_packets(
+        "../pumpkin-protocol/src/bedrock/server",
+        &mut interface,
+        &mut serverbound_variant,
+    );
     // Process clientbound packets
-    process_packets("../pumpkin-protocol/src/bedrock/client", &mut interface, &mut clientbound_variant);
+    process_packets(
+        "../pumpkin-protocol/src/bedrock/client",
+        &mut interface,
+        &mut clientbound_variant,
+    );
 
-    interface.type_def(TypeDef::new("serverbound-packet", TypeDefKind::Variant(serverbound_variant)));
-    interface.type_def(TypeDef::new("clientbound-packet", TypeDefKind::Variant(clientbound_variant)));
+    interface.type_def(TypeDef::new(
+        "serverbound-packet",
+        TypeDefKind::Variant(serverbound_variant),
+    ));
+    interface.type_def(TypeDef::new(
+        "clientbound-packet",
+        TypeDefKind::Variant(clientbound_variant),
+    ));
 
     package.interface(interface);
     package.to_string()
@@ -26,7 +47,9 @@ pub fn build() -> String {
 
 fn process_packets(dir: &str, interface: &mut Interface, variant: &mut Variant) {
     let paths = fs::read_dir(dir).expect("Failed to read packet directory");
-    let mut sorted_paths: Vec<_> = paths.map(|e| e.expect("Failed to read entry").path()).collect();
+    let mut sorted_paths: Vec<_> = paths
+        .map(|e| e.expect("Failed to read entry").path())
+        .collect();
     sorted_paths.sort();
 
     for path in sorted_paths {
@@ -34,7 +57,9 @@ fn process_packets(dir: &str, interface: &mut Interface, variant: &mut Variant) 
             process_packets(path.to_str().unwrap(), interface, variant);
             continue;
         }
-        if path.extension().is_some_and(|ext| ext == "rs") && path.file_name().is_some_and(|name| name != "mod.rs") {
+        if path.extension().is_some_and(|ext| ext == "rs")
+            && path.file_name().is_some_and(|name| name != "mod.rs")
+        {
             parse_packet_file(&path, interface, variant);
         }
     }
@@ -63,8 +88,14 @@ fn parse_packet_file(path: &Path, interface: &mut Interface, variant: &mut Varia
             }
 
             let wit_name = struct_name.to_kebab_case();
-            interface.type_def(TypeDef::new(wit_name.clone(), TypeDefKind::Record(Record::new(fields_list))));
-            variant.case(VariantCase::value(wit_name.clone(), WitType::named(wit_name)));
+            interface.type_def(TypeDef::new(
+                wit_name.clone(),
+                TypeDefKind::Record(Record::new(fields_list)),
+            ));
+            variant.case(VariantCase::value(
+                wit_name.clone(),
+                WitType::named(wit_name),
+            ));
         }
     }
 }

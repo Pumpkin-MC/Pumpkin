@@ -8,7 +8,7 @@ use pumpkin_util::{
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct VegetationPatchFeature {
     pub replaceable: BlockPredicate,
@@ -41,7 +41,7 @@ impl VegetationPatchFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature_name: &str,
@@ -79,7 +79,7 @@ impl VegetationPatchFeature {
     pub(crate) fn place_ground_patch<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         origin: BlockPos,
         replaceable: &BlockPredicate,
@@ -166,7 +166,7 @@ impl VegetationPatchFeature {
     fn place_ground<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         replaceable: &BlockPredicate,
         random: &mut RandomGenerator,
         mut below_pos: BlockPos,
@@ -196,7 +196,7 @@ impl VegetationPatchFeature {
     pub(crate) fn distribute_vegetation<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         min_y: i8,
         height: u16,

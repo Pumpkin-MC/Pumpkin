@@ -5,7 +5,7 @@ use pumpkin_util::{
 };
 
 use crate::generation::{block_state_provider::BlockStateProvider, proto_chunk::GenerationCache};
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct LakeFeature {
     pub fluid: BlockStateProvider,
@@ -15,7 +15,7 @@ pub struct LakeFeature {
 impl LakeFeature {
     pub fn generate<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,

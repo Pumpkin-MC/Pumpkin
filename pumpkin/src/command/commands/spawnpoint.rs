@@ -124,10 +124,10 @@ impl CommandExecutor for TargetsPosAngleExecutor {
 }
 
 async fn set_spawnpoint(sender: &CommandSender, target: &Arc<Player>, pos: BlockPos, yaw: f32) {
-    let dimension = target.world().dimension;
+    let dimension = &target.world().dimension;
 
     target
-        .set_respawn_point_forced(dimension, pos, yaw, 0.0)
+        .set_respawn_point(dimension.clone(), pos, yaw, 0.0, true)
         .await;
 
     sender

@@ -428,7 +428,7 @@ pub fn get_height(p: &HeightProvider, random: &mut RandomGenerator, min_y: i8, h
         HeightProvider::VeryBiasedToBottom(p) => {
             let min = p.min_inclusive.get_y(min_y as i16, height);
             let max = p.max_inclusive.get_y(min_y as i16, height);
-            let inner = p.inner.map_or(1, |n| n.get()) as i32;
+            let inner = p.inner.map_or(1, std::num::NonZero::get) as i32;
             let min_rnd = random.next_inbetween_i32(min + inner, max);
             let max_rnd = random.next_inbetween_i32(min, min_rnd - 1);
             random.next_inbetween_i32(min, max_rnd - 1 + inner)

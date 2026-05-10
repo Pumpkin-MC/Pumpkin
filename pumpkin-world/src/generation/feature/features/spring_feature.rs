@@ -2,7 +2,7 @@ use pumpkin_data::{BlockDirection, BlockState};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct SpringFeatureFeature {
     pub state: &'static BlockState,
@@ -30,7 +30,7 @@ impl BlockWrapper {
 impl SpringFeatureFeature {
     pub fn generate<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         _random: &mut RandomGenerator,
         pos: BlockPos,

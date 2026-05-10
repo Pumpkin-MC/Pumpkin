@@ -4,7 +4,7 @@ use pumpkin_util::{
 };
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{generation::feature::placed_features::PlacedFeature, world::BlockRegistryExt};
+use crate::{generation::feature::placed_features::PlacedFeature, world::WorldPortalExt};
 
 pub struct RandomPatchFeature {
     pub tries: u8,
@@ -18,7 +18,7 @@ impl RandomPatchFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature: &str,

@@ -7,7 +7,7 @@ use pumpkin_util::{
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
     generation::{block_predicate::BlockPredicate, block_state_provider::BlockStateProvider},
-    world::BlockRegistryExt,
+    world::WorldPortalExt,
 };
 
 pub struct BlockColumnFeature {
@@ -27,7 +27,7 @@ impl BlockColumnFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

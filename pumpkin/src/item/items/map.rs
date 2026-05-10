@@ -45,7 +45,7 @@ impl ItemBehaviour for MapItem {
                 let map_id = server.next_map_id();
                 let _ = server.map_manager.create_map(
                     map_id,
-                    player.world().dimension,
+                    player.world().dimension.clone(),
                     player.position().x as i32,
                     player.position().z as i32,
                     0, // Default scale

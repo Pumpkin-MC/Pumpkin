@@ -1,7 +1,9 @@
 use crate::block::entities::BlockEntity;
 use dashmap::DashMap;
+use pumpkin_data::chunk::Biome;
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
+use pumpkin_world::generation::proto_chunk::GenerationCache;
 use std::pin::Pin;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
@@ -9,6 +11,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::atomic::Ordering,
 };
+use tokio::runtime::Handle;
 use tracing::{debug, error, info, trace, warn};
 
 pub mod chunker;
@@ -58,6 +61,7 @@ use pumpkin_data::{
     item_stack::ItemStack,
     particle::Particle,
     sound::{Sound, SoundCategory},
+    sound_id_remap::remap_sound_id_for_version,
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, translation};
@@ -121,7 +125,7 @@ use pumpkin_util::{
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
 use pumpkin_world::inventory::Clearable;
-use pumpkin_world::world::GetBlockError;
+use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     BlockStateId, CURRENT_BEDROCK_MC_VERSION, biome, chunk::io::Dirtiable, inventory::Inventory,
 };
@@ -147,7 +151,7 @@ pub mod weather;
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_world::chunk::ChunkHeightmapType::MotionBlocking;
+use pumpkin_world::chunk::ChunkHeightmapType::{self, MotionBlocking};
 use uuid::Uuid;
 use weather::Weather;
 
@@ -238,7 +242,8 @@ impl World {
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(&level.level_folder.root_folder);
-
+        let dragon_fight =
+            (dimension == Dimension::THE_END).then(|| Mutex::new(dragon_fight::DragonFight::new()));
         Self {
             uuid: Uuid::new_v4(),
             level,
@@ -256,8 +261,7 @@ impl World {
             synced_block_event_queue: Mutex::new(Vec::new()),
             unsent_block_changes: Mutex::new(HashMap::new()),
             portal_poi: Mutex::new(portal_poi),
-            dragon_fight: (dimension == Dimension::THE_END)
-                .then(|| Mutex::new(dragon_fight::DragonFight::new())),
+            dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
             active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
             server,
@@ -1571,6 +1575,24 @@ impl World {
             .await
     }
 
+    pub async fn get_heightmap_height(
+        &self,
+        height_map: ChunkHeightmapType,
+        x: i32,
+        z: i32,
+    ) -> i32 {
+        let chunk_pos = Vector2::new(x >> 4, z >> 4);
+        self.level
+            .get_or_fetch_chunk(chunk_pos, |chunk| {
+                chunk
+                    .heightmap
+                    .lock()
+                    .unwrap()
+                    .get(height_map, x, z, self.min_y)
+            })
+            .await
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn spawn_bedrock_player(
         &self,
@@ -1881,7 +1903,7 @@ impl World {
                 false,
                 true,
                 false,
-                self.dimension,
+                self.dimension.clone(),
                 biome::hash_seed(self.level.seed.0), // seed
                 gamemode as u8,
                 player
@@ -2352,8 +2374,12 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
-        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
         for player in self.players.load().iter() {
+            let mut sound_id = Sound::EntityGenericExplode as u16;
+            if let ClientPlatform::Java(java_client) = &player.client {
+                sound_id = remap_sound_id_for_version(sound_id, java_client.version.load());
+            }
+            let sound = IdOr::<SoundEvent>::Id(sound_id);
             if player.position().squared_distance_to_vec(&position) > 4096.0 {
                 continue;
             }
@@ -2424,7 +2450,7 @@ impl World {
                     ),
                     spawn_yaw,
                     spawn_pitch,
-                    self.dimension,
+                    self.dimension.clone(),
                 )
             };
 
@@ -3187,12 +3213,7 @@ impl World {
     pub async fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
 
-        // Update biome
         let block_pos = base_entity.block_pos.load();
-        let biome = self.level.get_rough_biome(&block_pos).await;
-        base_entity.current_biome.store(Arc::new(biome));
-        base_entity.last_biome_update_pos.store(block_pos);
-
         let chunk_coordinate = block_pos.chunk_position();
         let mut nbt = PNbtCompound::new();
         entity.write_nbt(&mut nbt).await;
@@ -3424,6 +3445,26 @@ impl World {
             .await;
 
         replaced_block_state_id
+    }
+
+    pub async fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
+        let sky_light = self.get_sky_light_level(pos).await;
+        let block_light = self.get_block_light_level(pos).await.unwrap();
+        sky_light.max(block_light) // TODO: getSkyDarken
+    }
+
+    pub async fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
+        self.level
+            .light_engine
+            .get_block_light_level(&self.level, position)
+            .await
+    }
+
+    pub async fn get_sky_light_level(&self, position: &BlockPos) -> u8 {
+        self.level
+            .light_engine
+            .get_sky_light_level(&self.level, position)
+            .await
     }
 
     pub async fn schedule_block_tick(
@@ -4301,5 +4342,54 @@ impl BlockAccessor for World {
         position: &'a BlockPos,
     ) -> Pin<Box<dyn Future<Output = (&'static Block, &'static BlockState)> + Send + 'a>> {
         Box::pin(async move { self.get_block_and_state(position).await })
+    }
+}
+
+pub struct WorldPortal(pub Arc<World>, pub Handle);
+
+// Pure Beauty :cap:
+impl WorldPortalExt for WorldPortal {
+    fn can_place_at(
+        &self,
+        block: &pumpkin_data::Block,
+        state: &BlockState,
+        block_accessor: &dyn BlockAccessor,
+        block_pos: &BlockPos,
+    ) -> bool {
+        let handle = &self.1;
+
+        handle.block_on(async move {
+            self.0
+                .block_registry
+                .can_place_at(
+                    None,
+                    None,
+                    block_accessor,
+                    None,
+                    block,
+                    state,
+                    block_pos,
+                    None,
+                    None,
+                )
+                .await
+        })
+    }
+
+    fn spawn_mobs_for_chunk_generation(
+        &self,
+        cache: &mut dyn GenerationCache,
+        biome: &'static Biome,
+        chunk_x: i32,
+        chunk_z: i32,
+    ) {
+        let handle = &self.1;
+
+        handle.block_on(async move {
+            natural_spawner::spawn_mobs_for_chunk_generation(
+                &self.0, cache, biome, chunk_x, chunk_z,
+            )
+            .await;
+        });
     }
 }

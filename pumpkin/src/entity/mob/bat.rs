@@ -3,13 +3,16 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::chunk::ChunkHeightmapType;
 use rand::RngExt;
 use tokio::sync::Mutex;
 
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
+use crate::world::World;
 
 const ROOSTING_FLAG: u8 = 1;
 const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
@@ -37,6 +40,31 @@ impl BatEntity {
         mob_arc.set_roosting_metadata(true).await;
 
         mob_arc
+    }
+
+    pub async fn check_bat_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        if pos.0.y
+            >= world
+                .get_heightmap_height(ChunkHeightmapType::WorldSurface, pos.0.x, pos.0.z)
+                .await
+        {
+            return false;
+        }
+        if rand::random_bool(1.0) {
+            return false;
+        }
+        if world.get_max_local_raw_brightness(pos).await > rand::random_range(0..4) {
+            return false;
+        }
+        if world
+            .get_block(pos)
+            .await
+            .has_tag(&tag::Block::MINECRAFT_BATS_SPAWNABLE_ON)
+        {
+            return false;
+        }
+        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
+        true
     }
 
     fn is_roosting(&self) -> bool {
