@@ -130,6 +130,17 @@ impl EntityBase for BoatEntity {
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
             self.send_wobble_metadata().await;
+
+            let flags = self.entity.flags.load(Ordering::Relaxed);
+            if flags != 0 {
+                self.entity
+                    .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                        pumpkin_data::tracked_data::TrackedData::SHARED_FLAGS_ID,
+                        pumpkin_data::meta_data_type::MetaDataType::BYTE,
+                        flags,
+                    )])
+                    .await;
+            }
         })
     }
 

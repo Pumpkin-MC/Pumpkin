@@ -60,11 +60,11 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{
-    Arc,
     atomic::{
         AtomicBool, AtomicI32, AtomicU8, AtomicU32,
         Ordering::{self, Relaxed},
     },
+    Arc,
 };
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -155,7 +155,6 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async move {
             let entity = self.get_entity();
 
-            // If the internal age is negative, it's a baby
             let is_baby = entity.age.load(Ordering::Relaxed) < 0;
 
             if is_baby {
@@ -164,6 +163,17 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
                         TrackedData::BABY_ID,
                         MetaDataType::BOOLEAN,
                         true,
+                    )])
+                    .await;
+            }
+
+            let flags = entity.flags.load(Ordering::Relaxed);
+            if flags != 0 {
+                entity
+                    .send_meta_data(&[Metadata::new(
+                        TrackedData::SHARED_FLAGS_ID,
+                        MetaDataType::BYTE,
+                        flags,
                     )])
                     .await;
             }

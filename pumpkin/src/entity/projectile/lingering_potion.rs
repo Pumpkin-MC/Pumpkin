@@ -77,6 +77,17 @@ impl EntityBase for LingeringPotionEntity {
                     ),
                 )])
                 .await;
+
+            let flags = entity.flags.load(Ordering::Relaxed);
+            if flags != 0 {
+                entity
+                    .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                        pumpkin_data::tracked_data::TrackedData::SHARED_FLAGS_ID,
+                        pumpkin_data::meta_data_type::MetaDataType::BYTE,
+                        flags,
+                    )])
+                    .await;
+            }
         })
     }
 
