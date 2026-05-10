@@ -16,6 +16,7 @@ pub mod events;
 pub mod generated_packets;
 pub mod gui;
 pub mod i18n;
+pub mod item;
 pub mod logging;
 pub mod permission;
 pub mod player;
