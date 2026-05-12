@@ -138,6 +138,7 @@ impl ToTokens for AdvancementRewards {
         let experience = self.experience;
         let recipes = self.recipes.iter().map(|recipe| {
             quote! {
+                //TODO implement recipe reward
                 //Recipe::from_id(#recipe)
             }
         });
@@ -164,7 +165,11 @@ pub(crate) fn build() -> TokenStream {
         let raw_name = minecraft_name.strip_prefix("minecraft:").unwrap();
         let format_name = format_ident!("{}", raw_name.to_shouty_snake_case());
 
-        let parent = token_option(&advancement.parent);
+        let parent = if let Some(parent) = &advancement.parent {
+            quote!{Some(Identifier::parse_static(#parent))}
+        } else {
+            quote!{ None }
+        };
         let send_telemetry = advancement.sends_telemetry;
         let display = match &advancement.display {
             Some(display) => quote! { Some(&#display) },
@@ -173,7 +178,7 @@ pub(crate) fn build() -> TokenStream {
         let reward = advancement.rewards;
         variants.extend([quote! {
             pub const #format_name: &Self = &Self {
-                id: #raw_name,
+                id: Identifier::vanilla_static(#raw_name),
                 parent : #parent,
                 send_telemetry : #send_telemetry,
                 display : #display,
@@ -188,23 +193,30 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use pumpkin_util::text::TextComponent;
-        use pumpkin_util::identifier::Identifier;
         use crate::item_stack::ItemStack;
         use crate::item::Item;
         use crate::advancement_data::*;
         use std::sync::LazyLock;
+        use pumpkin_util::identifier::Identifier;
         use pumpkin_util::text::{color::NamedColor,
             style::Style,
             hover::HoverEvent,
             color::Color};
         use std::hash::{Hash,Hasher};
+        use std::fmt::Display;
 
         pub struct Advancement {
-            pub id : &'static str,
-            pub parent : Option<&'static str>,
+            pub id : Identifier,
+            pub parent : Option<Identifier>,
             pub send_telemetry : bool,
             pub display : Option<&'static AdvancementDisplay>,
             pub reward : &'static AdvancementReward,
+        }
+
+        impl Display for Advancement {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", self.id)
+            }
         }
 
         impl Hash for Advancement {
@@ -215,7 +227,7 @@ pub(crate) fn build() -> TokenStream {
 
         impl PartialEq<Self> for Advancement {
             fn eq(&self, other: &Self) -> bool {
-                other.id.eq(self.id)
+                other.id == self.id
             }
         }
 
@@ -240,7 +252,7 @@ pub(crate) fn build() -> TokenStream {
             }
 
             pub fn name(&self) -> TextComponent {
-                self.option_name().unwrap_or(TextComponent::text(self.id))
+                self.option_name().unwrap_or(TextComponent::text(self.id.to_string()))
             }
 
             pub fn from_name(name: &str) -> Option<&'static Self> {

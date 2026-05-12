@@ -11,7 +11,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
-use tracing::error;
+use serde_json::{from_reader, to_writer_pretty};
+use tracing::{error, warn};
 use uuid::Uuid;
 
 /// Represents the progress of a given advancement for a player.
@@ -106,7 +107,7 @@ impl PlayerAdvancement {
         }
         let file = std::fs::File::create(&self.path).map_err(AdvancementDataError::Io)?;
 
-        serde_json::to_writer_pretty(file, &self).map_err(AdvancementDataError::Json)?;
+        to_writer_pretty(file, &self).map_err(AdvancementDataError::Json)?;
         Ok(())
     }
 
@@ -119,14 +120,14 @@ impl PlayerAdvancement {
         let file = std::fs::File::open(&self.path).map_err(AdvancementDataError::Io)?;
 
         let loaded_data: HashMap<String, AdvancementProgress> =
-            serde_json::from_reader(file).map_err(AdvancementDataError::Json)?;
+            from_reader(file).map_err(AdvancementDataError::Json)?;
 
         self.advancements.clear();
         for (advancement_id, progress) in loaded_data {
             if let Some(advancement_ref) = Advancement::from_name(&advancement_id) {
                 self.advancements.insert(advancement_ref, progress);
             } else {
-                tracing::warn!("The Advancement name {} is invalid", advancement_id);
+                warn!("The Advancement name {} is invalid", advancement_id);
             }
         }
         Ok(())
@@ -205,7 +206,7 @@ impl Serialize for PlayerAdvancement {
         let mut map = serializer.serialize_map(Some(self.advancements.len()))?;
 
         for (advancement, progress) in &self.advancements {
-            map.serialize_entry(advancement.id, progress)?;
+            map.serialize_entry(&advancement.id, progress)?;
         }
         map.end()
     }

@@ -2,16 +2,129 @@ use crate::entity::player::Player;
 use crate::entity::player::advancement::{AdvancementDataError, PlayerAdvancement};
 use pumpkin_data::Advancement;
 use pumpkin_util::identifier::Identifier;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::fs::create_dir_all;
+use std::hash::Hash;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tracing::error;
+use std::sync::{Arc, RwLock};
+use tracing::{error, info};
 use uuid::Uuid;
+
+pub struct AdvancementNode {
+    pub children: HashSet<Arc<RwLock<AdvancementNode>>>,
+    pub parent: Option<Arc<RwLock<AdvancementNode>>>,
+    pub value: &'static Advancement,
+}
+
+impl AdvancementNode {
+    pub fn add_child(&mut self, child: Arc<RwLock<AdvancementNode>>) {
+        self.children.insert(child);
+    }
+
+    #[must_use]
+    pub fn new(value: &'static Advancement, parent: Option<Arc<RwLock<AdvancementNode>>>) -> Self {
+        Self {
+            value,
+            parent,
+            children: HashSet::new(),
+        }
+    }
+}
+
+impl PartialEq<Self> for AdvancementNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for AdvancementNode {}
+
+impl Display for AdvancementNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value.id)
+    }
+}
+
+impl Hash for AdvancementNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
+struct TreeNodePosition {
+    node: Arc<RwLock<AdvancementNode>>,
+    parent: Arc<TreeNodePosition>,
+    previous_sibling: Option<Arc<TreeNodePosition>>,
+    child_index: i32,
+    children: Vec<Arc<TreeNodePosition>>,
+    x: i32,
+    y: f32,
+    r#mod: f32,
+    change: f32,
+    shift: f32,
+}
+
+impl TreeNodePosition {
+    pub fn run(_root_node: Arc<RwLock<AdvancementNode>>) {
+        //TODO implement the position of the Advancement
+    }
+}
+
+#[derive(Default)]
+pub struct AdvancementTree {
+    pub nodes: HashMap<Identifier, Arc<RwLock<AdvancementNode>>>,
+    pub roots: HashSet<Arc<RwLock<AdvancementNode>>>,
+    pub tasks: HashSet<Arc<RwLock<AdvancementNode>>>,
+}
+
+impl AdvancementTree {
+    pub fn add_all(&mut self, advancements: impl IntoIterator<Item: Into<Advancement>>) {
+        let mut advancements_to_add : Vec<Advancement> = advancements
+            .into_iter()
+            .map(|a| a.into())
+            .collect();
+
+        while !advancements_to_add.is_empty() {
+            let len_before = advancements_to_add.len();
+            advancements_to_add.retain(|val| ! self.try_insert(val));
+            if len_before == advancements_to_add.len() {
+                error!("Couldn't load advancements: {:?}", advancements_to_add);
+                break;
+            }
+        }
+        info!("Loaded {} advancements", self.nodes.len());
+    }
+
+    pub fn try_insert(&mut self, advancement: &'static Advancement) -> bool {
+        let parent_id = &advancement.parent;
+
+        let parent_node = match parent_id {
+            Some(id) => match self.nodes.get(&id) {
+                Some(node) => Some(Arc::clone(node)),
+                None => return false,
+            },
+            None => None,
+        };
+
+        let node = Arc::new(RwLock::new(AdvancementNode::new(advancement, parent_node.clone())));
+        self.nodes.insert(advancement.id.clone(), Arc::clone(&node));
+
+        if let Some(parent) = parent_node {
+            parent.read().unwrap().add_child(Arc::clone(&node));
+            self.tasks.insert(node);
+        } else {
+            self.roots.insert(node);
+        }
+        true
+    }
+}
 
 /// Manages player advancements, including data creation and saving.
 pub struct AdvancementManager {
     pub advancement_path: PathBuf,
     pub save_enabled: bool,
+    pub tree: AdvancementTree,
 }
 
 impl AdvancementManager {
@@ -29,6 +142,7 @@ impl AdvancementManager {
         Self {
             advancement_path: path,
             save_enabled,
+            tree: AdvancementTree::default(),
         }
     }
 

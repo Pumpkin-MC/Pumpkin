@@ -40,7 +40,7 @@ impl Serialize for AdvancementSer<'_> {
     {
         let adv = self.0;
         let mut state = serializer.serialize_struct("Advancement", 5)?;
-        state.serialize_field("id", adv.id)?;
+        state.serialize_field("id", &adv.id.to_string())?;
         state.serialize_field("parent", &adv.parent)?;
         if let Some(display) = adv.display {
             state.serialize_field("display", &DisplaySerializer(display))?;
