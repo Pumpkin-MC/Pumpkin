@@ -158,7 +158,7 @@ macro_rules! encode_impl {
         }
     };
 
-    (fallible $backward:path) => {
+    (fallible $second_type:ty, $backward:path) => {
         impl $crate::Encode for $second_type {
             fn encode<O: $crate::DynamicOps>(
                 &self,
