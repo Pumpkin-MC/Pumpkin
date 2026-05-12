@@ -14,13 +14,17 @@ use std::string::ToString;
 
 pub static ADVANCEMENT_REGISTRY: Identifier = Identifier::vanilla_static("advancement");
 
-pub const ERROR_INVALID_ADVANCEMENT: CommandErrorType<1> =
-    CommandErrorType::new(translation::java::ADVANCEMENT_ADVANCEMENTNOTFOUND, "");
+pub const ERROR_INVALID_ADVANCEMENT: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ADVANCEMENT_ADVANCEMENTNOTFOUND,
+    translation::java::ADVANCEMENT_ADVANCEMENTNOTFOUND,
+);
 
 pub struct ResourceKeyArgument(pub Identifier);
 
-pub static ERROR_INVALID: CommandErrorType<0> =
-    CommandErrorType::new(translation::java::ARGUMENT_ID_INVALID, "");
+pub static ERROR_INVALID: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ID_INVALID,
+    translation::java::ARGUMENT_ID_INVALID,
+);
 
 impl ArgumentType for ResourceKeyArgument {
     type Item = ResourceKey;
@@ -33,20 +37,14 @@ impl ArgumentType for ResourceKeyArgument {
     fn list_suggestions(
         &self,
         context: &CommandContext,
-        mut suggestions_builder: SuggestionsBuilder,
+        suggestions_builder: SuggestionsBuilder,
     ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
         if self.0 == ADVANCEMENT_REGISTRY {
             let advancements = context.server().advancement_manager.get_advancements();
             Box::pin(async move {
-                let string = suggestions_builder.remaining().to_lowercase();
-                for identifier in advancements {
-                    if identifier.to_string().starts_with(&string)
-                        || identifier.path().starts_with(&string)
-                    {
-                        suggestions_builder = suggestions_builder.suggest(identifier.to_string());
-                    }
-                }
-                suggestions_builder.build()
+                suggestions_builder
+                    .filter_and_suggest_iter(advancements.iter().map(ToString::to_string))
+                    .build()
             })
         } else {
             Box::pin(async move { Suggestions::empty() })

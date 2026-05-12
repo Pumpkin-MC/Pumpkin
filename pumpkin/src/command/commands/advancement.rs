@@ -25,39 +25,39 @@ const ARG_ADVANCEMENT: &str = "advancement";
 #[allow(unused)]
 const ERROR_CRITERION_NOT_FOUND: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND,
 );
 const ERROR_GRANT_ONE_TO_ONE: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_ONE_FAILURE,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_ONE_FAILURE,
 );
 const ERROR_REVOKE_ONE_TO_ONE: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_ONE_FAILURE,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_ONE_FAILURE,
 );
 const ERROR_GRANT_ONE_TO_MANY: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_MANY_FAILURE,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_GRANT_ONE_TO_MANY_FAILURE,
 );
 const ERROR_REVOKE_ONE_TO_MANY: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_MANY_FAILURE,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_REVOKE_ONE_TO_MANY_FAILURE,
 );
 const ERROR_GRANT_MANY_TO_ONE: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_ONE_FAILURE,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_ONE_FAILURE,
 );
 const ERROR_REVOKE_MANY_TO_ONE: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_ONE_FAILURE,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_ONE_FAILURE,
 );
 const ERROR_GRANT_MANY_TO_MANY: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_MANY_FAILURE,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_GRANT_MANY_TO_MANY_FAILURE,
 );
 const ERROR_REVOKE_MANY_TO_MANY: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_MANY_FAILURE,
-    "",
+    translation::java::COMMANDS_ADVANCEMENT_REVOKE_MANY_TO_MANY_FAILURE,
 );
 
 #[derive(Clone, Copy)]
@@ -327,13 +327,11 @@ impl CommandExecutor for AdvancementExecutor {
 }
 
 pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
-    registry
-        .register_permission(Permission::new(
-            PERMISSION,
-            DESCRIPTION,
-            PermissionDefault::Op(PermissionLvl::Two),
-        ))
-        .expect("Permission should have registered successfully");
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
 
     let build_action = |name: &'static str, action: Action| {
         literal(name).then(
