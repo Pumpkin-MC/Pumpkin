@@ -99,7 +99,10 @@ where
 mod test {
     use crate::codec::*;
     use crate::json_ops::JsonOps;
-    use crate::{assert_decode, assert_encode_success, comap_flat_map_codec_impl, flat_xmap_codec_impl, FlatTryFrom};
+    use crate::{
+        FlatTryFrom, assert_decode, assert_encode_success, comap_flat_map_codec_impl,
+        flat_xmap_codec_impl,
+    };
     use serde_json::json;
     use std::collections::HashMap;
     use std::fmt::{Display, Formatter};
