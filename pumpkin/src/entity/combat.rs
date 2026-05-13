@@ -11,13 +11,14 @@ use crate::{
     world::World,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttackType {
     Knockback,
     Critical,
     Sweeping,
     Strong,
     Weak,
+    MaceSmash,
 }
 
 impl AttackType {
@@ -27,22 +28,31 @@ impl AttackType {
         let sprinting = entity.sprinting.load(Ordering::Relaxed);
         let on_ground = entity.on_ground.load(Ordering::Relaxed);
         let fall_distance = player.living_entity.fall_distance.load();
-        let sword = player.inventory().held_item().lock().await.is_sword();
+        let held_item = player.inventory().held_item();
+        let is_mace = {
+            let stack = held_item.lock().await;
+            stack.item.id == pumpkin_data::item::Item::MACE.id
+        };
+
+        if is_mace && !on_ground && fall_distance > 1.5 {
+            return Self::MaceSmash;
+        }
+
+        let sword = {
+            let stack = held_item.lock().await;
+            stack.is_sword()
+        };
 
         let is_strong = attack_cooldown_progress > 0.9;
         if sprinting && is_strong {
             return Self::Knockback;
         }
 
-        // TODO: even more checks
         if is_strong && !on_ground && fall_distance > 0.0 {
-            // !sprinting omitted
             return Self::Critical;
         }
 
-        // TODO: movement speed check
         if sword && is_strong {
-            // !is_crit, !is_knockback_hit, on_ground omitted
             return Self::Sweeping;
         }
 
@@ -110,6 +120,11 @@ pub async fn player_attack_sound(pos: &Vector3<f64>, world: &World, attack_type:
         AttackType::Weak => {
             world
                 .play_sound(Sound::EntityPlayerAttackWeak, SoundCategory::Players, pos)
+                .await;
+        }
+        AttackType::MaceSmash => {
+            world
+                .play_sound(Sound::ItemMaceSmashAir, SoundCategory::Players, pos)
                 .await;
         }
     }

@@ -14,7 +14,7 @@ pub struct ChunkHolder {
     pub occupied: NodeKey,
     pub occupied_by: EdgeKey,
     pub public: bool,
-    pub tasks: [NodeKey; 10],
+    pub tasks: [NodeKey; StagedChunkEnum::COUNT],
 }
 
 impl Default for ChunkHolder {
@@ -27,7 +27,7 @@ impl Default for ChunkHolder {
             occupied: NodeKey::null(),
             occupied_by: EdgeKey::null(),
             public: false,
-            tasks: [NodeKey::null(); 10],
+            tasks: [NodeKey::null(); StagedChunkEnum::COUNT],
         }
     }
 }

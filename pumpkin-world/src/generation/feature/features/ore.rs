@@ -7,7 +7,7 @@ use pumpkin_util::{
 };
 
 use crate::{block::RawBlockState, generation::proto_chunk::GenerationCache};
-use crate::{generation::rule::RuleTest, world::BlockRegistryExt};
+use crate::{generation::rule::RuleTest, world::WorldPortalExt};
 
 pub struct OreFeature {
     pub size: i32,
@@ -25,7 +25,7 @@ impl OreFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature
@@ -184,7 +184,14 @@ impl OreFeature {
                         let block_state = GenerationCache::get_block_state(chunk, &pos_vec);
 
                         for target in &self.targets {
-                            if self.should_place(chunk, block_state, random, target, &mutable_pos) {
+                            if Self::should_place(
+                                self.discard_chance_on_air_exposure,
+                                chunk,
+                                block_state,
+                                random,
+                                target,
+                                &mutable_pos,
+                            ) {
                                 chunk.set_block_state(&pos_vec, target.state);
                                 placed_blocks_count += 1;
                                 break; // Equivalent to 'continue block11;'
@@ -197,8 +204,8 @@ impl OreFeature {
         placed_blocks_count > 0
     }
 
-    fn should_place<T: GenerationCache>(
-        &self,
+    pub fn should_place<T: GenerationCache>(
+        discard_chance: f32,
         chunk: &T,
         state: RawBlockState,
         random: &mut RandomGenerator,
@@ -208,13 +215,13 @@ impl OreFeature {
         if !target.target.test(state, random) {
             return false;
         }
-        if Self::should_not_discard(random, self.discard_chance_on_air_exposure) {
+        if Self::should_not_discard(random, discard_chance) {
             return true;
         }
         !Self::is_exposed_to_air(chunk, pos)
     }
 
-    fn should_not_discard(random: &mut RandomGenerator, chance: f32) -> bool {
+    pub fn should_not_discard(random: &mut RandomGenerator, chance: f32) -> bool {
         if chance <= 0.0f32 {
             return true;
         }
@@ -224,7 +231,7 @@ impl OreFeature {
         random.next_f32() >= chance
     }
 
-    fn is_exposed_to_air<T: GenerationCache>(chunk: &T, pos: &BlockPos) -> bool {
+    pub fn is_exposed_to_air<T: GenerationCache>(chunk: &T, pos: &BlockPos) -> bool {
         for dir in BlockDirection::all() {
             if GenerationCache::get_block_state(chunk, &pos.offset(dir.to_offset()).0)
                 .to_state()

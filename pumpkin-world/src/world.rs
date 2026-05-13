@@ -1,17 +1,9 @@
 use std::pin::Pin;
-use std::sync::Arc;
 
-use crate::block::entities::BlockEntity;
-use crate::{BlockStateId, inventory::Inventory, level::Level};
+use crate::{BlockStateId, generation::proto_chunk::GenerationCache};
 use bitflags::bitflags;
-use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityType;
-use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, BlockDirection, BlockState};
-use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_data::{Block, BlockState, chunk::Biome};
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use thiserror::Error;
 
 bitflags! {
@@ -63,98 +55,7 @@ impl std::fmt::Display for GetBlockError {
 
 pub type WorldFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-pub trait SimpleWorld: BlockAccessor + Send + Sync {
-    fn set_block_state(
-        self: Arc<Self>,
-        position: &BlockPos,
-        block_state_id: BlockStateId,
-        flags: BlockFlags,
-    ) -> WorldFuture<'_, BlockStateId>;
-
-    fn update_neighbor<'a>(
-        self: Arc<Self>,
-        neighbor_block_pos: &'a BlockPos,
-        source_block: &'a pumpkin_data::Block,
-    ) -> WorldFuture<'a, ()>;
-
-    fn update_neighbors(
-        self: Arc<Self>,
-        block_pos: &BlockPos,
-        except: Option<BlockDirection>,
-    ) -> WorldFuture<'_, ()>;
-
-    fn is_space_empty(&self, bounding_box: BoundingBox) -> WorldFuture<'_, bool>;
-
-    fn spawn_from_type(
-        self: Arc<Self>,
-        entity_type: &'static EntityType,
-        position: Vector3<f64>,
-    ) -> WorldFuture<'static, ()>;
-
-    fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) -> WorldFuture<'_, ()>;
-
-    fn sync_world_event(
-        &self,
-        world_event: WorldEvent,
-        position: BlockPos,
-        data: i32,
-    ) -> WorldFuture<'_, ()>;
-
-    fn remove_block_entity<'a>(&'a self, block_pos: &'a BlockPos) -> WorldFuture<'a, ()>;
-
-    fn get_block_entity<'a>(
-        &'a self,
-        block_pos: &'a BlockPos,
-    ) -> WorldFuture<'a, Option<Arc<dyn BlockEntity>>>;
-
-    fn get_world_age(&self) -> WorldFuture<'_, i64>;
-
-    fn get_time_of_day(&self) -> WorldFuture<'_, i64>;
-
-    fn get_level(&self) -> WorldFuture<'_, &Arc<Level>>;
-
-    fn get_dimension(&self) -> WorldFuture<'_, &Dimension>;
-
-    fn play_sound<'a>(
-        &'a self,
-        sound: Sound,
-        category: SoundCategory,
-        position: &'a Vector3<f64>,
-    ) -> WorldFuture<'a, ()>;
-
-    fn play_sound_fine<'a>(
-        &'a self,
-        sound: Sound,
-        category: SoundCategory,
-        position: &'a Vector3<f64>,
-        volume: f32,
-        pitch: f32,
-    ) -> WorldFuture<'a, ()>;
-
-    /* ItemScatterer */
-    fn scatter_inventory<'a>(
-        self: Arc<Self>,
-        position: &'a BlockPos,
-        inventory: &'a Arc<dyn Inventory>,
-    ) -> WorldFuture<'a, ()>;
-
-    /// Spawn experience orbs at the given position with the specified amount
-    fn spawn_experience_orbs(
-        self: Arc<Self>,
-        position: Vector3<f64>,
-        amount: u32,
-    ) -> WorldFuture<'static, ()>;
-
-    /// `Block.updateFromNeighbourShapes`: updates a block state by calling
-    /// `get_state_for_neighbor_update` on itself for each of the 6 directions.
-    fn update_from_neighbor_shapes(
-        self: Arc<Self>,
-        block_state_id: BlockStateId,
-        position: &BlockPos,
-    ) -> WorldFuture<'_, BlockStateId>;
-}
-
-pub trait BlockRegistryExt: Send + Sync {
+pub trait WorldPortalExt: Send + Sync {
     fn can_place_at(
         &self,
         block: &Block,
@@ -162,6 +63,14 @@ pub trait BlockRegistryExt: Send + Sync {
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,
     ) -> bool;
+
+    fn spawn_mobs_for_chunk_generation(
+        &self,
+        cache: &mut dyn GenerationCache,
+        biome: &'static Biome,
+        chunk_x: i32,
+        chunk_z: i32,
+    );
 }
 
 pub trait BlockAccessor: Send + Sync {

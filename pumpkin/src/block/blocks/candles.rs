@@ -1,7 +1,7 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::{
     BlockDirection,
-    block_properties::{BlockProperties, CandleLikeProperties, EnumVariants, Integer1To4},
+    block_properties::{BlockProperties, CandleLikeProperties},
     entity::EntityPose,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -33,8 +33,8 @@ impl BlockBehaviour for CandleBlock {
                 && let BlockIsReplacing::Itself(state_id) = args.replacing
             {
                 let mut properties = CandleLikeProperties::from_state_id(state_id, args.block);
-                if properties.candles.to_index() < 3 {
-                    properties.candles = Integer1To4::from_index(properties.candles.to_index() + 1);
+                if properties.candles < 4 {
+                    properties.candles += 1;
                 }
                 return properties.to_state_id(args.block);
             }
@@ -63,9 +63,8 @@ impl BlockBehaviour for CandleBlock {
                 {
                     let was_lit = properties.lit;
 
-                    if properties.candles.to_index() < 3 {
-                        properties.candles =
-                            Integer1To4::from_index(properties.candles.to_index() + 1);
+                    if properties.candles < 4 {
+                        properties.candles += 1;
                     }
 
                     properties.lit = was_lit;
@@ -130,8 +129,7 @@ impl BlockBehaviour for CandleBlock {
         Box::pin(async move {
             let b = args.world.get_block(args.position).await;
             args.player.get_entity().pose.load() != EntityPose::Crouching
-                && CandleLikeProperties::from_state_id(args.state_id, args.block).candles
-                    != Integer1To4::L4
+                && CandleLikeProperties::from_state_id(args.state_id, args.block).candles != 4
                 && args.block.id == b.id
         })
     }

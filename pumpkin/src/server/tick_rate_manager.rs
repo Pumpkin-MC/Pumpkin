@@ -160,8 +160,9 @@ impl ServerTickRateManager {
             let tps = (total_sprinted_ticks as f64 * 1000.0) / time_spent_ms;
             let mspt = time_spent_ms / total_sprinted_ticks as f64;
 
-            TextComponent::translate(
-                translation::COMMANDS_TICK_SPRINT_REPORT,
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_TICK_SPRINT_REPORT,
+                translation::java::COMMANDS_TICK_SPRINT_REPORT,
                 [
                     TextComponent::text(format!("{tps:.2}")),
                     TextComponent::text(format!("{mspt:.2}")),
@@ -169,7 +170,11 @@ impl ServerTickRateManager {
             )
         } else {
             // This is the message for `/tick sprint stop` or a zero-tick sprint.
-            TextComponent::translate(translation::COMMANDS_TICK_SPRINT_STOP_SUCCESS, [])
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
+                translation::java::COMMANDS_TICK_SPRINT_STOP_SUCCESS,
+                [],
+            )
         };
 
         // Construct the final component with the [Server: ...] wrapper

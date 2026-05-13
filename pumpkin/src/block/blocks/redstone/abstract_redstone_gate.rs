@@ -3,8 +3,8 @@ use std::sync::Arc;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, HorizontalFacingExt,
     block_properties::{
-        BlockProperties, ComparatorLikeProperties, EnumVariants, HorizontalFacing,
-        RedstoneWireLikeProperties, RepeaterLikeProperties,
+        BlockProperties, ComparatorLikeProperties, HorizontalFacing, RedstoneWireLikeProperties,
+        RepeaterLikeProperties,
     },
 };
 use pumpkin_util::math::position::BlockPos;
@@ -300,7 +300,7 @@ pub async fn get_power<T: BlockProperties + RedstoneGateBlockProperties + Send>(
     } else {
         source_level.max(if source_block == &Block::REDSTONE_WIRE {
             let props = RedstoneWireLikeProperties::from_state_id(source_state.id, source_block);
-            props.power.to_index() as u8
+            props.power
         } else {
             0
         })

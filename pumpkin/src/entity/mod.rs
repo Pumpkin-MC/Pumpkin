@@ -14,7 +14,8 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use player::Player;
 use pumpkin_data::BlockState;
-use pumpkin_data::block_properties::{EnumVariants, Integer0To15, blocks_movement};
+use pumpkin_data::biome::Biome;
+use pumpkin_data::block_properties::blocks_movement;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
@@ -30,10 +31,16 @@ use pumpkin_data::{
     entity::{EntityPose, EntityType},
     sound::{Sound, SoundCategory},
 };
+use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
     PositionFlag,
+    bedrock::client::set_actor_data::{
+        CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_flag,
+        entity_data_key,
+    },
     codec::var_int::VarInt,
+    codec::var_ulong::VarULong,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CHeadRot, CPlayerPosition, CSetEntityMetadata,
         CSetPassengers, CSpawnEntity, CUpdateEntityRot, Metadata,
@@ -258,7 +265,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
     /// Returns true if the interaction was handled.
     fn interact<'a>(
         &'a self,
-        _player: &'a Player,
+        _player: &'a Arc<Player>,
         _item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async { false })
@@ -315,7 +322,8 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             .load()
             .as_ref()
             .clone()
-            .unwrap_or(TextComponent::translate(
+            .unwrap_or(TextComponent::translate_cross(
+                format!("entity.minecraft.{}", entity.entity_type.resource_name),
                 format!("entity.minecraft.{}", entity.entity_type.resource_name),
                 [],
             ))
@@ -325,16 +333,13 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Box::pin(async move {
             // TODO: team color
             let entity = self.get_entity();
-            let mut name =
-                entity
-                    .custom_name
-                    .load()
-                    .as_ref()
-                    .clone()
-                    .unwrap_or(TextComponent::translate(
-                        format!("entity.minecraft.{}", entity.entity_type.resource_name),
-                        [],
-                    ));
+            let mut name = entity.custom_name.load().as_ref().clone().unwrap_or(
+                TextComponent::translate_cross(
+                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                    format!("entity.minecraft.{}", entity.entity_type.resource_name),
+                    [],
+                ),
+            );
             let name_clone = name.clone();
             name = name.hover_event(HoverEvent::show_entity(
                 entity.entity_uuid.to_string(),
@@ -362,6 +367,14 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
 
     /// Returns itself as the nbt storage for saving and loading data.
     fn as_nbt_storage(&self) -> &dyn NBTStorage;
+
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        0
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        0
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -485,6 +498,9 @@ pub struct Entity {
 
     pub first_loaded_chunk_position: AtomicCell<Option<Vector3<i32>>>,
 
+    pub current_biome: ArcSwap<&'static Biome>,
+    pub last_biome_update_pos: AtomicCell<BlockPos>,
+
     pub portal_cooldown: AtomicU32,
 
     pub portal_manager: Mutex<Option<Mutex<PortalManager>>>,
@@ -496,6 +512,10 @@ pub struct Entity {
     pub data: AtomicI32,
     /// Stores entity boolean flags (on fire, sneaking, invisible, glowing, etc.)
     pub flags: std::sync::atomic::AtomicI8,
+    /// Stores Bedrock-specific entity boolean flags (bit 0-63)
+    pub bedrock_flags: std::sync::atomic::AtomicI64,
+    /// Stores more Bedrock-specific entity boolean flags (bit 0-63)
+    pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity cannot collide with anything (e.g. spectator)
     pub no_clip: AtomicBool,
     /// Multiplies movement for one tick before being reset
@@ -603,6 +623,8 @@ impl Entity {
             damage_immunities: Mutex::new(Vec::new()),
             data: AtomicI32::new(0),
             flags: std::sync::atomic::AtomicI8::new(0),
+            bedrock_flags: std::sync::atomic::AtomicI64::new(0),
+            bedrock_flags_two: std::sync::atomic::AtomicI64::new(0),
             fire_immune: AtomicBool::new(false),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
@@ -614,6 +636,8 @@ impl Entity {
             vehicle: Mutex::new(None),
             riding_cooldown: AtomicI32::new(0),
             age: AtomicI32::new(0),
+            current_biome: ArcSwap::new(Arc::new(&Biome::PLAINS)),
+            last_biome_update_pos: AtomicCell::new(BlockPos::new(floor_x, floor_y, floor_z)),
             portal_cooldown: AtomicU32::new(0),
             portal_manager: Mutex::new(None),
             custom_name: ArcSwap::new(Arc::new(None)),
@@ -834,13 +858,13 @@ impl Entity {
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
-        self.on_ground.store(false, Ordering::SeqCst);
-        self.supporting_block_pos.store(None);
-        self.horizontal_collision.store(false, Ordering::SeqCst);
-
         if movement.length_squared() == 0.0 {
             return movement;
         }
+
+        self.on_ground.store(false, Ordering::SeqCst);
+        self.supporting_block_pos.store(None);
+        self.horizontal_collision.store(false, Ordering::SeqCst);
 
         let bounding_box = self.bounding_box.load();
 
@@ -2076,33 +2100,14 @@ impl Entity {
         }
     }
 
-    pub fn get_rotation_16(&self) -> Integer0To15 {
+    pub fn get_rotation_16(&self) -> u8 {
         let adjusted_yaw = self.yaw.load().rem_euclid(360.0);
 
-        let index = (adjusted_yaw / 22.5).round() as u16 % 16;
-
-        Integer0To15::from_index(index)
+        ((adjusted_yaw / 22.5).round() as u8) % 16
     }
 
-    pub fn get_flipped_rotation_16(&self) -> Integer0To15 {
-        match self.get_rotation_16() {
-            Integer0To15::L0 => Integer0To15::L8,
-            Integer0To15::L1 => Integer0To15::L9,
-            Integer0To15::L2 => Integer0To15::L10,
-            Integer0To15::L3 => Integer0To15::L11,
-            Integer0To15::L4 => Integer0To15::L12,
-            Integer0To15::L5 => Integer0To15::L13,
-            Integer0To15::L6 => Integer0To15::L14,
-            Integer0To15::L7 => Integer0To15::L15,
-            Integer0To15::L8 => Integer0To15::L0,
-            Integer0To15::L9 => Integer0To15::L1,
-            Integer0To15::L10 => Integer0To15::L2,
-            Integer0To15::L11 => Integer0To15::L3,
-            Integer0To15::L12 => Integer0To15::L4,
-            Integer0To15::L13 => Integer0To15::L5,
-            Integer0To15::L14 => Integer0To15::L6,
-            Integer0To15::L15 => Integer0To15::L7,
-        }
+    pub fn get_flipped_rotation_16(&self) -> u8 {
+        (self.get_rotation_16() + 8) % 16
     }
 
     pub fn get_facing(&self) -> Facing {
@@ -2207,19 +2212,75 @@ impl Entity {
     async fn set_flag(&self, flag: Flag, value: bool) {
         let index = flag as u8;
         let mask = (1i8).wrapping_shl(index as u32);
-        let mut b = self.flags.load(Ordering::Relaxed);
-        if value {
-            b |= mask;
+        let new_je_flags = if value {
+            self.flags.fetch_or(mask, Ordering::Relaxed) | mask
         } else {
-            b &= !mask;
-        }
-        self.flags.store(b, Ordering::Relaxed);
+            self.flags.fetch_and(!mask, Ordering::Relaxed) & !mask
+        };
+
         self.send_meta_data(&[Metadata::new(
             TrackedData::SHARED_FLAGS_ID,
             MetaDataType::BYTE,
-            b,
+            new_je_flags,
         )])
         .await;
+
+        if let Some(bedrock_flag) = flag.to_bedrock() {
+            let (key, index) = if bedrock_flag >= 64 {
+                (entity_data_key::FLAGS_TWO, (bedrock_flag - 64) as u8)
+            } else {
+                (entity_data_key::FLAGS, bedrock_flag as u8)
+            };
+
+            if value {
+                let mask = 1i64 << index;
+                if key == entity_data_key::FLAGS {
+                    self.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
+                } else {
+                    self.bedrock_flags_two.fetch_or(mask, Ordering::Relaxed);
+                }
+            } else {
+                let mask = !(1i64 << index);
+                if key == entity_data_key::FLAGS {
+                    self.bedrock_flags.fetch_and(mask, Ordering::Relaxed);
+                } else {
+                    self.bedrock_flags_two.fetch_and(mask, Ordering::Relaxed);
+                }
+            }
+
+            let world = self.world.load();
+            let chunk_pos = self.chunk_pos.load();
+            for player in world.players.load().iter() {
+                if let ClientPlatform::Bedrock(client) = &player.client {
+                    let center = player.living_entity.entity.chunk_pos.load();
+                    let view_distance =
+                        crate::world::chunker::get_view_distance(player).get() as i32;
+
+                    if is_within_view_distance(chunk_pos, center, view_distance) {
+                        let mut metadata = EntityMetadata(std::collections::HashMap::new());
+                        metadata.set(
+                            entity_data_key::FLAGS,
+                            MetadataValue::Long(self.bedrock_flags.load(Ordering::Relaxed)),
+                        );
+                        metadata.set(
+                            entity_data_key::FLAGS_TWO,
+                            MetadataValue::Long(self.bedrock_flags_two.load(Ordering::Relaxed)),
+                        );
+                        client
+                            .send_game_packet(&CSetActorData {
+                                actor_runtime_id: VarULong(self.entity_id as u64),
+                                metadata,
+                                synced_properties: PropertySyncData {
+                                    int_properties: std::collections::HashMap::new(),
+                                    float_properties: std::collections::HashMap::new(),
+                                },
+                                tick: VarULong(0),
+                            })
+                            .await;
+                    }
+                }
+            }
+        }
     }
 
     /// Plays sound at this entity's position with the entity's sound category
@@ -2704,66 +2765,91 @@ impl Entity {
 }
 
 impl NBTStorage for Entity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             let position = self.pos.load();
-            nbt.put_string(&format!("minecraft:{}", self.entity_type.resource_name));
-            nbt.put_uuid(&self.entity_uuid);
-
-            // Pos
-            nbt.put_f64(position.x);
-            nbt.put_f64(position.y);
-            nbt.put_f64(position.z);
-
-            // Motion
+            nbt.put_string(
+                "id",
+                format!("minecraft:{}", self.entity_type.resource_name),
+            );
+            let uuid = self.entity_uuid.as_u128();
+            nbt.put(
+                "UUID",
+                NbtTag::IntArray(vec![
+                    (uuid >> 96) as i32,
+                    ((uuid >> 64) & 0xFFFF_FFFF) as i32,
+                    ((uuid >> 32) & 0xFFFF_FFFF) as i32,
+                    (uuid & 0xFFFF_FFFF) as i32,
+                ]),
+            );
+            nbt.put(
+                "Pos",
+                NbtTag::List(vec![
+                    position.x.into(),
+                    position.y.into(),
+                    position.z.into(),
+                ]),
+            );
             let velocity = self.velocity.load();
-            nbt.put_f64(velocity.x);
-            nbt.put_f64(velocity.y);
-            nbt.put_f64(velocity.z);
-
-            // Rotation
-            nbt.put_f32(self.yaw.load());
-            nbt.put_f32(self.pitch.load());
-
-            nbt.put_short(self.fire_ticks.load(Relaxed) as i16);
-            nbt.put_bool(self.on_ground.load(Relaxed));
-            nbt.put_bool(self.invulnerable.load(Relaxed));
-            nbt.put_int(self.portal_cooldown.load(Relaxed) as i32);
-            nbt.put_bool(self.has_visual_fire.load(Relaxed));
+            nbt.put(
+                "Motion",
+                NbtTag::List(vec![
+                    velocity.x.into(),
+                    velocity.y.into(),
+                    velocity.z.into(),
+                ]),
+            );
+            nbt.put(
+                "Rotation",
+                NbtTag::List(vec![self.yaw.load().into(), self.pitch.load().into()]),
+            );
+            nbt.put_short("Fire", self.fire_ticks.load(Relaxed) as i16);
+            nbt.put_bool("OnGround", self.on_ground.load(Relaxed));
+            nbt.put_bool("Invulnerable", self.invulnerable.load(Relaxed));
+            nbt.put_int("PortalCooldown", self.portal_cooldown.load(Relaxed) as i32);
+            if self.has_visual_fire.load(Relaxed) {
+                nbt.put_bool("HasVisualFire", true);
+            }
 
             // todo more...
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            let _id = nbt.get_string().unwrap();
-            let _uuid = nbt.get_uuid().unwrap();
-
-            let x = nbt.get_f64().unwrap_or(0.0);
-            let y = nbt.get_f64().unwrap_or(0.0);
-            let z = nbt.get_f64().unwrap_or(0.0);
+            let position = nbt.get_list("Pos").unwrap();
+            let x = position[0].extract_double().unwrap_or(0.0);
+            let y = position[1].extract_double().unwrap_or(0.0);
+            let z = position[2].extract_double().unwrap_or(0.0);
             let pos = Vector3::new(x, y, z);
             self.set_pos(pos);
+            self.last_sent_pos.store(pos);
             self.first_loaded_chunk_position.store(Some(pos.to_i32()));
-            let vx = nbt.get_f64().unwrap_or(0.0);
-            let vy = nbt.get_f64().unwrap_or(0.0);
-            let vz = nbt.get_f64().unwrap_or(0.0);
-            self.velocity.store(Vector3::new(vx, vy, vz));
-            let yaw = nbt.get_f32().unwrap_or(0.0);
-            let pitch = nbt.get_f32().unwrap_or(0.0);
+            let velocity = nbt.get_list("Motion").unwrap();
+            let x = velocity[0].extract_double().unwrap_or(0.0);
+            let y = velocity[1].extract_double().unwrap_or(0.0);
+            let z = velocity[2].extract_double().unwrap_or(0.0);
+            self.velocity.store(Vector3::new(x, y, z));
+            let rotation = nbt.get_list("Rotation").unwrap();
+            let yaw = rotation[0].extract_float().unwrap_or(0.0);
+            let pitch = rotation[1].extract_float().unwrap_or(0.0);
             self.set_rotation(yaw, pitch);
+            let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
+            self.last_sent_yaw.store(yaw_byte, Relaxed);
+            self.last_sent_pitch.store(pitch_byte, Relaxed);
             self.head_yaw.store(yaw);
+            self.last_sent_head_yaw.store(yaw_byte, Relaxed);
             self.fire_ticks
-                .store(i32::from(nbt.get_short().unwrap_or(0)), Relaxed);
+                .store(i32::from(nbt.get_short("Fire").unwrap_or(0)), Relaxed);
             self.on_ground
-                .store(nbt.get_bool().unwrap_or(false), Relaxed);
+                .store(nbt.get_bool("OnGround").unwrap_or(false), Relaxed);
             self.invulnerable
-                .store(nbt.get_bool().unwrap_or(false), Relaxed);
+                .store(nbt.get_bool("Invulnerable").unwrap_or(false), Relaxed);
             self.portal_cooldown
-                .store(nbt.get_int().unwrap_or(0) as u32, Relaxed);
+                .store(nbt.get_int("PortalCooldown").unwrap_or(0) as u32, Relaxed);
             self.has_visual_fire
-                .store(nbt.get_bool().unwrap_or(false), Relaxed);
+                .store(nbt.get_bool("HasVisualFire").unwrap_or(false), Relaxed);
             // todo more...
         })
     }
@@ -2781,6 +2867,15 @@ impl EntityBase for Entity {
             self.was_in_powder_snow
                 .store(was_in_powder_snow, Ordering::Relaxed);
             self.is_in_powder_snow.store(false, Ordering::Relaxed);
+
+            let block_pos = self.block_pos.load();
+            if self.last_biome_update_pos.load() != block_pos {
+                let world = self.world.load();
+                let biome = world.level.get_rough_biome(&block_pos).await;
+                self.current_biome.store(Arc::new(biome));
+                self.last_biome_update_pos.store(block_pos);
+            }
+
             self.update_last_pos();
             self.tick_portal(caller).await;
             self.update_fluid_state(caller).await;
@@ -2849,22 +2944,20 @@ impl EntityBase for Entity {
     }
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
 pub type NbtFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait NBTStorage: Send + Sync {
-    fn write_nbt<'a>(&'a self, _nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, _nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {})
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.read_nbt_non_mut(nbt).await;
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, _nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, _nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {})
     }
 }
@@ -2872,7 +2965,7 @@ pub trait NBTStorage: Send + Sync {
 pub type NBTInitFuture<'a, T> = Pin<Box<dyn Future<Output = Option<T>> + Send + 'a>>;
 
 pub trait NBTStorageInit: Send + Sync + Sized {
-    fn create_from_nbt<'a>(_nbt: &'a mut PNbtCompound) -> NBTInitFuture<'a, Self>
+    fn create_from_nbt<'a>(_nbt: &'a mut NbtCompound) -> NBTInitFuture<'a, Self>
     where
         Self: 'a,
     {
@@ -2903,6 +2996,21 @@ pub enum Flag {
     Glowing = 6,
     /// Indicates if the entity is flying due to a fall.
     FallFlying = 7,
+}
+
+impl Flag {
+    #[must_use]
+    pub const fn to_bedrock(&self) -> Option<u32> {
+        match self {
+            Self::OnFire => Some(entity_data_flag::ON_FIRE),
+            Self::Sneaking => Some(entity_data_flag::SNEAKING),
+            Self::Sprinting => Some(entity_data_flag::SPRINTING),
+            Self::Swimming => Some(entity_data_flag::SWIMMING),
+            Self::Invisible => Some(entity_data_flag::INVISIBLE),
+            Self::FallFlying => Some(entity_data_flag::GLIDING),
+            Self::Glowing => None,
+        }
+    }
 }
 
 #[cfg(test)]

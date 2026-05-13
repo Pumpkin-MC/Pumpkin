@@ -2,7 +2,7 @@ use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, CactusLikeProperties, EnumVariants, Integer0To15},
+    block_properties::{BlockProperties, CactusLikeProperties},
     tag,
 };
 use pumpkin_macros::pumpkin_block;
@@ -43,13 +43,11 @@ impl BlockBehaviour for SugarCaneBlock {
             {
                 let state_id = args.world.get_block_state(args.position).await.id;
                 let age = CactusLikeProperties::from_state_id(state_id, args.block).age;
-                if age == Integer0To15::L15 {
+                if age == 15 {
                     args.world
                         .set_block_state(&args.position.up(), state_id, BlockFlags::empty())
                         .await;
-                    let props = CactusLikeProperties {
-                        age: Integer0To15::L0,
-                    };
+                    let props = CactusLikeProperties { age: 0 };
                     args.world
                         .set_block_state(
                             args.position,
@@ -58,9 +56,7 @@ impl BlockBehaviour for SugarCaneBlock {
                         )
                         .await;
                 } else {
-                    let props = CactusLikeProperties {
-                        age: Integer0To15::from_index(age.to_index() + 1),
-                    };
+                    let props = CactusLikeProperties { age: age + 1 };
                     args.world
                         .set_block_state(
                             args.position,

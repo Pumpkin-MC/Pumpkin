@@ -408,13 +408,6 @@ impl Navigator {
                     return;
                 }
 
-                // Don't try to path-follow while airborne — let gravity handle it
-                if !on_ground {
-                    entity.movement_input.store(Vector3::new(0.0, 0.0, 0.0));
-                    self.current_goal = Some(goal);
-                    return;
-                }
-
                 let desired_yaw = wrap_degrees((dz.atan2(dx) as f32).to_degrees() - 90.0);
                 let current_yaw = entity.entity.yaw.load();
                 let yaw_diff = wrap_degrees(desired_yaw - current_yaw);
@@ -432,9 +425,13 @@ impl Navigator {
                     .movement_input
                     .store(Vector3::new(0.0, 0.0, mob_speed));
 
+                let bbox = entity.entity.bounding_box.load();
+                let width = bbox.max.x - bbox.min.x;
+                let jump_distance = 1.0f64.max(width);
+
                 // Jump when the next node is above step height and we're close enough horizontally
                 if dy > entity.get_attribute_value(&Attributes::STEP_HEIGHT)
-                    && horizontal_dist < 2.0
+                    && horizontal_dist_sq < jump_distance
                 {
                     entity
                         .jumping

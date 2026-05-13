@@ -36,8 +36,9 @@ impl JavaClient {
         // TODO: If client is an operator or has otherwise suitable elevated permissions, allow the client to bypass this requirement.
         let max_players = server.basic_config.max_players;
         if max_players > 0 && server.get_player_count() >= max_players as usize {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_SERVER_FULL,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_SERVER_FULL,
+                translation::java::MULTIPLAYER_DISCONNECT_SERVER_FULL,
                 [],
             ))
             .await;
@@ -86,7 +87,7 @@ impl JavaClient {
                 profile_actions: None,
             };
 
-            if server.advanced_config.networking.packet_compression.enabled {
+            if server.advanced_config.networking.java_compression.enabled {
                 self.enable_compression(server).await;
             }
 
@@ -139,12 +140,14 @@ impl JavaClient {
                 Ok(new_profile) => *profile = new_profile,
                 Err(error) => {
                     self.kick(match error {
-                        AuthError::FailedResponse => TextComponent::translate(
-                            translation::MULTIPLAYER_DISCONNECT_AUTHSERVERS_DOWN,
+                        AuthError::FailedResponse => TextComponent::translate_cross(
+                            translation::java::MULTIPLAYER_DISCONNECT_AUTHSERVERS_DOWN,
+                            translation::java::MULTIPLAYER_DISCONNECT_AUTHSERVERS_DOWN,
                             [],
                         ),
-                        AuthError::UnverifiedUsername => TextComponent::translate(
-                            translation::MULTIPLAYER_DISCONNECT_UNVERIFIED_USERNAME,
+                        AuthError::UnverifiedUsername => TextComponent::translate_cross(
+                            translation::java::MULTIPLAYER_DISCONNECT_UNVERIFIED_USERNAME,
+                            translation::java::MULTIPLAYER_DISCONNECT_UNVERIFIED_USERNAME,
                             [],
                         ),
                         e => TextComponent::text(e.to_string()),
@@ -163,8 +166,9 @@ impl JavaClient {
                 &profile.id,
                 &online_player.gameprofile.name
             );
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
                 [],
             ))
             .await;
@@ -180,8 +184,9 @@ impl JavaClient {
                 &profile.id,
                 &online_player.gameprofile.name
             );
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
+                translation::java::MULTIPLAYER_DISCONNECT_DUPLICATE_LOGIN,
                 [],
             ))
             .await;
@@ -195,7 +200,7 @@ impl JavaClient {
         let compression = server
             .advanced_config
             .networking
-            .packet_compression
+            .java_compression
             .info
             .clone();
         // We want to wait until we have sent the compression packet to the client
@@ -366,7 +371,7 @@ impl JavaClient {
             self.send_packet_now(&CConfigServerLinks::new(&links)).await;
         }
 
-        let resource_config = &server.advanced_config.resource_pack;
+        let resource_config = &server.advanced_config.resource_pack.java;
         if resource_config.enabled {
             let uuid = Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, resource_config.url.as_bytes());
             let resource_pack = CConfigAddResourcePack::new(

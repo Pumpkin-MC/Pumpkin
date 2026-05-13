@@ -93,7 +93,7 @@ impl PlantBlockBase for KelpBlock {
                 WaterLikeProperties::from_state_id(replacing_block_state.id, replacing_block);
 
             //Only allow placing kelp on either full water or downward flowing water
-            if water_props.level as u8 != 0 && water_props.level as u8 != 8 {
+            if water_props.level != 0 && water_props.level != 8 {
                 return false;
             }
         } else {

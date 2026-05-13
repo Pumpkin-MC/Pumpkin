@@ -2,14 +2,14 @@ use std::io::{Error, Write};
 
 use crate::{
     bedrock::client::gamerules_changed::GameRules,
-    codec::{
-        bedrock_block_pos::NetworkPos, var_int::VarInt, var_long::VarLong, var_uint::VarUInt,
-        var_ulong::VarULong,
-    },
+    codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
     serial::PacketWrite,
 };
 use pumpkin_macros::packet;
-use pumpkin_util::{GameMode, math::vector3::Vector3};
+use pumpkin_util::{
+    GameMode,
+    math::{position::BlockPos, vector3::Vector3},
+};
 use uuid::Uuid;
 
 #[derive(PacketWrite)]
@@ -63,17 +63,33 @@ pub struct CStartGame {
 
 #[derive(PacketWrite)]
 pub struct ServerJoinInformation {
-    gathering_info: Option<GatheringJoinInfo>,
+    gathering: Option<GatheringJoinInfo>,
+    store_entry_point: Option<StoreEntryPointInfo>,
+    presence: Option<PresenceInfo>,
 }
 
 #[derive(PacketWrite)]
 pub struct GatheringJoinInfo {
-    experience_id: String,
+    experience_id: Uuid,
     experience_name: String,
-    experience_world_id: String,
+    experience_world_id: Uuid,
     experience_world_name: String,
     creator_id: String,
+    unknown_uuid_1: Uuid,
+    unknown_uuid_2: Uuid,
+    server_id: String,
+}
+
+#[derive(PacketWrite)]
+pub struct StoreEntryPointInfo {
     store_id: String,
+    store_name: String,
+}
+
+#[derive(PacketWrite)]
+pub struct PresenceInfo {
+    experience_name: String,
+    world_name: String,
 }
 
 #[derive(PacketWrite)]
@@ -100,7 +116,7 @@ pub struct LevelSettings {
     pub world_gamemode: GameMode,
     pub hardcore: bool,
     pub difficulty: VarInt,
-    pub spawn_position: NetworkPos,
+    pub spawn_position: BlockPos,
     pub has_achievements_disabled: bool,
     pub editor_world_type: VarInt,
     pub is_created_in_editor: bool,

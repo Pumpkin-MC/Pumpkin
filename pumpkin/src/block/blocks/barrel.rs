@@ -6,6 +6,7 @@ use crate::block::{
     {BlockBehaviour, NormalUseArgs},
 };
 
+use crate::block::entities::barrel::BarrelBlockEntity;
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
@@ -16,7 +17,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::barrel::BarrelBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
@@ -38,7 +38,11 @@ impl ScreenHandlerFactory for BarrelScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_BARREL, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_BARREL,
+            translation::bedrock::CONTAINER_BARREL,
+            &[],
+        )
     }
 }
 

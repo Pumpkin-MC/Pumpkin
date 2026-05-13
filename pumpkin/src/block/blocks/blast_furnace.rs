@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+use crate::block::entities::{
+    PropertyDelegate, blasting_furnace::BlastingFurnaceBlockEntity,
+    furnace_like_block_entity::ExperienceContainer,
+};
 use pumpkin_data::{
     block_properties::{BlockProperties, FurnaceLikeProperties},
     screen::WindowType,
@@ -12,14 +16,7 @@ use pumpkin_inventory::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{
-    BlockStateId,
-    block::entities::{
-        PropertyDelegate, blasting_furnace::BlastingFurnaceBlockEntity,
-        furnace_like_block_entity::ExperienceContainer,
-    },
-    inventory::Inventory,
-};
+use pumpkin_world::{BlockStateId, inventory::Inventory};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -75,7 +72,11 @@ impl ScreenHandlerFactory for BlastingFurnaceScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate(translation::CONTAINER_BLAST_FURNACE, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_BLAST_FURNACE,
+            translation::bedrock::TILE_BLAST_FURNACE_NAME,
+            &[],
+        )
     }
 }
 

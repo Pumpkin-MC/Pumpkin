@@ -1,6 +1,7 @@
 use std::sync::{Arc, atomic::Ordering};
 
 use super::redstone::block_receives_redstone_power;
+use crate::block::entities::{BlockEntity, command_block::CommandBlockEntity};
 use crate::command::CommandSender;
 use crate::{
     block::{
@@ -16,11 +17,7 @@ use pumpkin_data::{
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
 };
 use pumpkin_util::{GameMode, PermissionLvl, math::position::BlockPos};
-use pumpkin_world::{
-    BlockStateId,
-    block::entities::{BlockEntity, command_block::CommandBlockEntity},
-    tick::TickPriority,
-};
+use pumpkin_world::{BlockStateId, tick::TickPriority};
 use tracing::warn;
 
 pub struct CommandBlock;

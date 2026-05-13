@@ -16,12 +16,10 @@ pub mod compound;
 pub mod deserializer;
 pub mod nbt_compress;
 pub mod nbt_ops;
-pub mod pnbt;
 pub mod serializer;
 pub mod tag;
 
 pub use deserializer::{from_bytes, from_bytes_unnamed};
-pub use pnbt::{from_pnbt, to_pnbt};
 pub use serializer::{to_bytes, to_bytes_named, to_bytes_unnamed};
 
 // This NBT crate is inspired from CrabNBT
@@ -72,7 +70,7 @@ impl de::Error for Error {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Nbt {
     pub name: String,
     pub root_tag: NbtCompound,

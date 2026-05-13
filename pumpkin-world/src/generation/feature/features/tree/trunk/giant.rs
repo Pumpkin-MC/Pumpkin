@@ -7,7 +7,7 @@ use crate::{
         block_state_provider::BlockStateProvider,
         feature::features::tree::{TreeNode, trunk::TrunkPlacer},
     },
-    world::BlockRegistryExt,
+    world::WorldPortalExt,
 };
 
 pub struct GiantTrunkPlacer;
@@ -15,7 +15,7 @@ pub struct GiantTrunkPlacer;
 impl GiantTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,

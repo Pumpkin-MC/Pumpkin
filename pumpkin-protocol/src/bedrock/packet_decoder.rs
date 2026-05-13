@@ -4,42 +4,14 @@ use std::{
     task::{Context, Poll},
 };
 
-use async_compression::tokio::bufread::ZlibDecoder;
-use bytes::Bytes;
+use async_compression::tokio::bufread::DeflateDecoder;
 use tokio::io::{AsyncRead, BufReader, ReadBuf};
 
 use crate::{
-    Aes128Cfb8Dec, CompressionThreshold, MAX_PACKET_SIZE, PacketDecodeError, RawPacket,
-    StreamDecryptor,
+    Aes128Cfb8Dec, CompressionThreshold, PacketDecodeError, RawPacket, StreamDecryptor,
     codec::var_uint::VarUInt,
     ser::{NetworkReadExt, ReadingError},
 };
-
-// decrypt -> decompress -> raw
-pub enum DecompressionReader<R: AsyncRead + Unpin> {
-    Decompress(ZlibDecoder<BufReader<R>>),
-    None(R),
-}
-
-impl<R: AsyncRead + Unpin> AsyncRead for DecompressionReader<R> {
-    #[inline]
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        match self.get_mut() {
-            Self::Decompress(reader) => {
-                let reader = Pin::new(reader);
-                reader.poll_read(cx, buf)
-            }
-            Self::None(reader) => {
-                let reader = Pin::new(reader);
-                reader.poll_read(cx, buf)
-            }
-        }
-    }
-}
 
 pub enum DecryptionReader<R: AsyncRead + Unpin> {
     Decrypt(Box<StreamDecryptor<R>>),
@@ -51,7 +23,7 @@ impl<R: AsyncRead + Unpin> DecryptionReader<R> {
     pub fn upgrade(self, cipher: Aes128Cfb8Dec) -> Self {
         match self {
             Self::None(stream) => Self::Decrypt(Box::new(StreamDecryptor::new(cipher, stream))),
-            Self::Decrypt(_) => panic!("Cannot upgrade a stream that already has a cipher!"),
+            Self::Decrypt(_) => self,
         }
     }
 }
@@ -89,6 +61,12 @@ impl Default for UDPNetworkDecoder {
     }
 }
 
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+#[error("Encryption already enabled")]
+pub struct EncryptionAlreadyEnabledError;
+
 impl UDPNetworkDecoder {
     #[must_use]
     pub const fn new() -> Self {
@@ -100,79 +78,83 @@ impl UDPNetworkDecoder {
     }
 
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
-    pub const fn set_encryption(&mut self, _key: &[u8; 16]) {
+    pub const fn set_encryption(
+        &mut self,
+        _key: &[u8; 16],
+    ) -> Result<(), EncryptionAlreadyEnabledError> {
         // if matches!(self.reader, DecryptionReader::Decrypt(_)) {
-        //     panic!("Cannot upgrade a stream that already has a cipher!");
+        //     return Err(EncryptionAlreadyEnabledError);
         // }
-        // let cipher = Aes128Cfb8Dec::new_from_slices(key, key).expect("invalid key");
+        // let cipher = Aes128Cfb8Dec::new_from_slices(key, key).map_err(|_| ());
         // take_mut::take(&mut self.reader, |decoder| decoder.upgrade(cipher));
+        Ok(())
     }
 
-    #[expect(clippy::unused_async)]
     pub async fn get_packet_payload(
         &mut self,
-        reader: Cursor<Vec<u8>>,
-    ) -> Result<Bytes, PacketDecodeError> {
-        //let mut payload = Vec::new();
-        //reader
-        //    .read_to_end(&mut payload)
-        //    .await
-        //    .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
+        full_packet: Vec<u8>,
+    ) -> Result<Vec<u8>, PacketDecodeError> {
+        if full_packet.is_empty() {
+            return Err(PacketDecodeError::MalformedLength("Empty packet".into()));
+        }
 
-        Ok(reader.into_inner().into())
+        // If the first byte isn't 0xfe, it's likely a RakNet control packet or encrypted.
+        // Ensure your RakNet implementation is providing ONLY the payload here.
+        if full_packet[0] != 0xfe {
+            return Err(PacketDecodeError::MalformedLength(format!(
+                "Missing 0xfe header (found 0x{:02x})",
+                full_packet[0]
+            )));
+        }
+
+        // If compression is NOT enabled yet, the payload starts at index 1.
+        if self.compression.is_none() {
+            return Ok(full_packet[1..].to_vec());
+        }
+
+        // If compression IS enabled, Bedrock expects a compression method byte at index 1.
+        let compression_method = full_packet[1];
+        let data_start = 2;
+
+        match compression_method {
+            0x00 => {
+                use tokio::io::AsyncReadExt;
+                let compressed_payload = &full_packet[data_start..];
+                let mut decoder = DeflateDecoder::new(BufReader::new(compressed_payload));
+                let mut decompressed = Vec::new();
+                decoder
+                    .read_to_end(&mut decompressed)
+                    .await
+                    .map_err(|e| PacketDecodeError::FailedDecompression(e.to_string()))?;
+                Ok(decompressed)
+            }
+            0xff => {
+                // None (Compression enabled but this specific packet is raw)
+                Ok(full_packet[data_start..].to_vec())
+            }
+            _ => Err(PacketDecodeError::FailedDecompression(format!(
+                "Unsupported compression method: 0x{compression_method:02x}"
+            ))),
+        }
     }
 
     pub fn get_game_packet(
         &mut self,
-        mut reader: Cursor<Vec<u8>>,
+        decompressed_reader: &mut Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
-        if self.compression.is_some() {
-            let _method = reader.get_u8().unwrap();
-            // None Compression
-        }
-
-        //compression is only included after the network settings packet is sent
-        // TODO: compression & encryption
-        let packet_len = VarUInt::decode(&mut reader).map_err(|err| match err {
+        let packet_len = VarUInt::decode(decompressed_reader).map_err(|err| match err {
             ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
             err => PacketDecodeError::MalformedLength(err.to_string()),
         })?;
 
-        let packet_len = u64::from(packet_len.0);
-        if !(0..=MAX_PACKET_SIZE).contains(&packet_len) {
-            Err(PacketDecodeError::OutOfBounds)?;
-        }
-
-        let var_header = VarUInt::decode(&mut reader)?;
-
-        // The header is 14 bits. Ensure we only consider these bits.
-        // A varint u32 could be larger, so we mask to the relevant bits.
-        let header = var_header.0 & 0x3FFF; // Mask to get the lower 14 bits (2^14 - 1)
-
-        // Extract components from GamePacket Header (14 bits)
-        // Gamepacket ID (10 bits)
-        // SubClient Sender ID (2 bits)
-        // SubClient Target ID (2 bits)
-
-        // SubClient Target ID: Lowest 2 bits
-        // let _sub_client_target = (header >> 10 & 0b11) as u8;
-
-        // SubClient Sender ID: Next 2 bits (bits 2 and 3)
-        // let _sub_client_sender = (header >> 12 & 0b11) as u8;
-
-        // Gamepacket ID: Remaining 10 bits (bits 4 to 13)
-        let gamepacket_id = (header & 0x3FF) as u16; // 0x3FF is 10 bits set to 1
+        let var_header = VarUInt::decode(decompressed_reader)?;
+        let header = var_header.0 & 0x3FFF;
+        let gamepacket_id = (header & 0x3FF) as u16;
 
         let header_size = var_header.written_size();
+        let payload_len = packet_len.0 as usize - header_size;
 
-        if (packet_len as usize) < header_size {
-            return Err(PacketDecodeError::MalformedLength(
-                "Packet length is smaller than the header size".to_string(),
-            ));
-        }
-        let payload_len = packet_len as usize - header_size;
-
-        let payload = reader
+        let payload = decompressed_reader
             .read_boxed_slice(payload_len)
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 

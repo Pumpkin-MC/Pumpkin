@@ -133,6 +133,21 @@ pub trait InventoryPlayer: Send + Sync {
     /// Checks if the player has infinite materials (creative mode).
     fn has_infinite_materials(&self) -> bool;
 
+    /// Checks if the player is in creative mode.
+    fn is_creative(&self) -> bool;
+
+    /// Gets the player's experience level.
+    fn experience_level(&self) -> i32;
+
+    /// Adds or removes experience levels.
+    fn add_experience_levels(&self, levels: i32) -> PlayerFuture<'_, ()>;
+
+    /// Gets the player's enchantment seed.
+    fn enchantment_seed(&self) -> i32;
+
+    /// Sets the player's enchantment seed.
+    fn set_enchantment_seed(&self, seed: i32) -> PlayerFuture<'_, ()>;
+
     /// Sends a full container content packet.
     fn enqueue_inventory_packet<'a>(
         &'a self,
@@ -222,6 +237,9 @@ pub trait ScreenHandler: Send + Sync {
 
     /// Returns this screen handler as an Any reference.
     fn as_any(&self) -> &dyn Any;
+
+    /// Returns this screen handler as a mutable Any reference.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 
     /// Gets the sync ID for this screen handler.
     fn sync_id(&self) -> u8 {
@@ -660,6 +678,15 @@ pub trait ScreenHandler: Send + Sync {
         player: &'a dyn InventoryPlayer,
         slot_index: i32,
     ) -> ItemStackFuture<'a>;
+
+    /// Handles a button click event (e.g., enchantment selection, beacon effects).
+    fn on_button_click<'a>(
+        &'a mut self,
+        _player: &'a dyn InventoryPlayer,
+        _button_id: i32,
+    ) -> ScreenHandlerFuture<'a, bool> {
+        Box::pin(async { false })
+    }
 
     /// Inserts an item into a range of slots.
     ///

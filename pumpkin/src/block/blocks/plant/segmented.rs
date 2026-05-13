@@ -1,12 +1,12 @@
-use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing, Integer1To4};
+use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 use pumpkin_world::BlockStateId;
 
 use crate::block::{BlockBehaviour, BlockFuture, CanUpdateAtArgs};
 use crate::block::{BlockIsReplacing, OnPlaceArgs};
 
 pub trait SegmentProperties {
-    fn get_segment_amount(&self) -> Integer1To4;
-    fn set_segment_amount(&mut self, amount: Integer1To4);
+    fn get_segment_amount(&self) -> u8;
+    fn set_segment_amount(&mut self, amount: u8);
     fn get_facing(&self) -> HorizontalFacing;
     fn set_facing(&mut self, facing: HorizontalFacing);
 }
@@ -14,11 +14,11 @@ pub trait SegmentProperties {
 macro_rules! impl_segment_properties {
     ($type:ty, $amount_field:ident) => {
         impl SegmentProperties for $type {
-            fn get_segment_amount(&self) -> Integer1To4 {
+            fn get_segment_amount(&self) -> u8 {
                 self.$amount_field
             }
 
-            fn set_segment_amount(&mut self, amount: Integer1To4) {
+            fn set_segment_amount(&mut self, amount: u8) {
                 self.$amount_field = amount;
             }
 
@@ -46,28 +46,23 @@ pub trait Segmented: BlockBehaviour {
     type Properties: BlockProperties + SegmentProperties;
 
     fn can_add_segment(&self, props: &Self::Properties) -> bool {
-        let amount = props.get_segment_amount();
-        matches!(amount, Integer1To4::L1 | Integer1To4::L2 | Integer1To4::L3)
+        props.get_segment_amount() < 4
     }
 
-    fn get_next_segment_amount(&self, current: Integer1To4) -> Integer1To4 {
-        match current {
-            Integer1To4::L1 => Integer1To4::L2,
-            Integer1To4::L2 => Integer1To4::L3,
-            Integer1To4::L3 | Integer1To4::L4 => Integer1To4::L4,
-        }
+    fn get_next_segment_amount(&self, current: u8) -> u8 {
+        (current + 1).min(4)
     }
 
     fn get_facing_for_segment(
         &self,
         player_facing: HorizontalFacing,
-        segment_amount: Integer1To4,
+        segment_amount: u8,
     ) -> HorizontalFacing {
         let base_facing = match segment_amount {
-            Integer1To4::L1 => HorizontalFacing::South,
-            Integer1To4::L2 => HorizontalFacing::East,
-            Integer1To4::L3 => HorizontalFacing::North,
-            Integer1To4::L4 => HorizontalFacing::West,
+            1 => HorizontalFacing::South,
+            2 => HorizontalFacing::East,
+            3 => HorizontalFacing::North,
+            _ => HorizontalFacing::West,
         };
 
         match player_facing {
@@ -102,8 +97,8 @@ pub trait Segmented: BlockBehaviour {
                 // Set first segment orientation based on player direction
                 let player_facing = args.player.living_entity.entity.get_horizontal_facing();
                 let mut props = Self::Properties::default(args.block);
-                props.set_segment_amount(Integer1To4::L1);
-                props.set_facing(self.get_facing_for_segment(player_facing, Integer1To4::L1));
+                props.set_segment_amount(1);
+                props.set_facing(self.get_facing_for_segment(player_facing, 1));
                 props.to_state_id(args.block)
             }
         })

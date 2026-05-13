@@ -215,6 +215,11 @@ pub mod item_id_remap;
 #[path = "generated/entity_id_remap.rs"]
 pub mod entity_id_remap;
 
+#[cfg(feature = "sound_id_remap")]
+#[rustfmt::skip]
+#[path = "generated/sound_id_remap.rs"]
+pub mod sound_id_remap;
+
 #[cfg(feature = "tag")]
 #[rustfmt::skip]
 #[path = "generated/tag.rs"]
@@ -289,3 +294,13 @@ pub use blocks::Block;
 #[rustfmt::skip]
 #[path = "generated/chunk_gen_settings.rs"]
 pub mod chunk_gen_settings;
+
+#[cfg(feature = "carver")]
+#[rustfmt::skip]
+#[path = "generated/carver.rs"]
+pub mod carver;
+
+#[cfg(feature = "villager")]
+#[rustfmt::skip]
+#[path = "generated/villager.rs"]
+pub mod villager;

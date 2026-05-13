@@ -113,7 +113,7 @@ mod tests {
         [xb[0], xb[1], yb[0], yb[1], zb[0], zb[1]]
     }
 
-    fn encode_spawn(version: MinecraftVersion) -> Vec<u8> {
+    fn encode_spawn(version: MinecraftVersion) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let velocity = pumpkin_util::math::vector3::Vector3::new(0.5, -0.5, 0.25);
         let packet = CSpawnEntity::new(
             VarInt(1),
@@ -127,26 +127,30 @@ mod tests {
             velocity,
         );
         let mut out = Vec::new();
-        packet.write_packet_data(&mut out, &version).unwrap();
-        out
+        packet.write_packet_data(&mut out, &version)?;
+        Ok(out)
     }
 
     #[test]
-    fn spawn_entity_uses_legacy_velocity_tail_for_1_21_8() {
+    fn spawn_entity_uses_legacy_velocity_tail_for_1_21_8() -> Result<(), Box<dyn std::error::Error>>
+    {
         // V_1_21_7 enum variant represents protocol 772 (used by 1.21.7 and 1.21.8).
         let velocity = pumpkin_util::math::vector3::Vector3::new(0.5, -0.5, 0.25);
         let expected_tail = legacy_tail(velocity);
-        let encoded = encode_spawn(MinecraftVersion::V_1_21_7);
+        let encoded = encode_spawn(MinecraftVersion::V_1_21_7)?;
 
         assert!(encoded.ends_with(&expected_tail));
+        Ok(())
     }
 
     #[test]
-    fn spawn_entity_does_not_use_legacy_velocity_tail_for_1_21_9() {
+    fn spawn_entity_does_not_use_legacy_velocity_tail_for_1_21_9()
+    -> Result<(), Box<dyn std::error::Error>> {
         let velocity = pumpkin_util::math::vector3::Vector3::new(0.5, -0.5, 0.25);
         let expected_tail = legacy_tail(velocity);
-        let encoded = encode_spawn(MinecraftVersion::V_1_21_9);
+        let encoded = encode_spawn(MinecraftVersion::V_1_21_9)?;
 
         assert!(!encoded.ends_with(&expected_tail));
+        Ok(())
     }
 }

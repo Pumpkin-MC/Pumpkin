@@ -30,7 +30,11 @@ impl ClientPacket for CLightUpdate<'_> {
 
         // Light masks include sections from -1 (below world) to num_sections (above world)
         // This means we need to account for 2 extra sections in the bitset
-        let light_engine = self.0.light_engine.lock().unwrap();
+        let light_engine = self
+            .0
+            .light_engine
+            .lock()
+            .map_err(|_| WritingError::Message("light_engine lock poisoned".into()))?;
         let num_sections = light_engine.sky_light.len();
 
         let mut sky_light_empty_mask = 0u64;
@@ -56,19 +60,15 @@ impl ClientPacket for CLightUpdate<'_> {
         }
 
         // Write Sky Light Mask
-        write.write_bitset(&BitSet(Box::new([sky_light_mask.try_into().unwrap()])))?;
+        write.write_bitset(&BitSet(Box::new([sky_light_mask as i64])))?;
         // Write Block Light Mask
-        write.write_bitset(&BitSet(Box::new([block_light_mask.try_into().unwrap()])))?;
+        write.write_bitset(&BitSet(Box::new([block_light_mask as i64])))?;
         // Write Empty Sky Light Mask
-        write.write_bitset(&BitSet(Box::new([sky_light_empty_mask
-            .try_into()
-            .unwrap()])))?;
+        write.write_bitset(&BitSet(Box::new([sky_light_empty_mask as i64])))?;
         // Write Empty Block Light Mask
-        write.write_bitset(&BitSet(Box::new([block_light_empty_mask
-            .try_into()
-            .unwrap()])))?;
+        write.write_bitset(&BitSet(Box::new([block_light_empty_mask as i64])))?;
 
-        let light_data_size: VarInt = LightContainer::ARRAY_SIZE.try_into().unwrap();
+        let light_data_size: VarInt = VarInt(LightContainer::ARRAY_SIZE as i32);
 
         // Write Sky Light arrays
         write.write_var_int(&VarInt(sky_light_mask.count_ones() as i32))?;

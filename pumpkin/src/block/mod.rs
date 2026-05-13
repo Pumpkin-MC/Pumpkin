@@ -1,4 +1,3 @@
-use pumpkin_data::block_properties::Integer0To15;
 use pumpkin_data::{Block, BlockState};
 
 use pumpkin_util::math::position::BlockPos;
@@ -14,8 +13,10 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 pub mod blocks;
+pub mod entities;
 pub mod fluid;
 pub mod registry;
+pub mod viewer;
 
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
@@ -217,7 +218,7 @@ pub struct NormalUseArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub position: &'a BlockPos,
-    pub player: &'a Player,
+    pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
 }
 
@@ -226,7 +227,7 @@ pub struct UseWithItemArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub position: &'a BlockPos,
-    pub player: &'a Player,
+    pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
     pub item_stack: &'a Arc<Mutex<ItemStack>>,
 }
@@ -465,7 +466,7 @@ pub async fn calc_block_breaking(
 #[derive(PartialEq, Eq, Debug)]
 pub enum BlockIsReplacing {
     Itself(BlockStateId),
-    Water(Integer0To15),
+    Water(u8),
     Other,
     None,
 }
@@ -473,10 +474,10 @@ pub enum BlockIsReplacing {
 impl BlockIsReplacing {
     #[must_use]
     /// Returns true if the block was a water source block.
-    pub fn water_source(&self) -> bool {
+    pub const fn water_source(&self) -> bool {
         match self {
             // Level 0 means the water is a source block
-            Self::Water(level) => *level == Integer0To15::L0,
+            Self::Water(level) => *level == 0,
             _ => false,
         }
     }

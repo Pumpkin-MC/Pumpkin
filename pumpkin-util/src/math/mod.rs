@@ -1,6 +1,7 @@
 use num_traits::{Float, One, PrimInt, Zero};
 
 pub mod atomic_f32;
+pub mod bit_storage;
 pub mod block_box;
 pub mod boundingbox;
 pub mod bounds;

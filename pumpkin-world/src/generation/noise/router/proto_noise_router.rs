@@ -72,7 +72,7 @@ impl DoublePerlinNoiseBuilder {
         base_random_deriver: &XoroshiroSplitter,
         parameters: &DoublePerlinNoiseParameters,
     ) -> DoublePerlinNoiseSampler {
-        let mut random = base_random_deriver.split_string(parameters.name());
+        let mut random = base_random_deriver.from_lo_and_hi(parameters.lo, parameters.hi);
         DoublePerlinNoiseSampler::from_params(&mut random, parameters, false)
     }
 }
@@ -245,8 +245,8 @@ impl ProtoNoiseRouters {
                     // NETHER_TEMPERATURE and NETHER_VEGETATION always use NormalNoise.createLegacyNetherBiome with
                     // LegacyRandomSource(seed + 0) and LegacyRandomSource(seed + 1)
                     // respectively, regardless of useLegacyRandomSource.
-                    let sampler = match data.noise_id.name() {
-                        "minecraft:nether/temperature" => {
+                    let sampler = match data.noise_id.id {
+                        id if id == DoublePerlinNoiseParameters::NETHER_TEMPERATURE.id => {
                             let mut legacy_rand =
                                 LegacyRand::from_seed(random_config.seed.wrapping_add(0));
                             DoublePerlinNoiseSampler::from_params(
@@ -255,7 +255,7 @@ impl ProtoNoiseRouters {
                                 true,
                             )
                         }
-                        "minecraft:nether/vegetation" => {
+                        id if id == DoublePerlinNoiseParameters::NETHER_VEGETATION.id => {
                             let mut legacy_rand =
                                 LegacyRand::from_seed(random_config.seed.wrapping_add(1));
                             DoublePerlinNoiseSampler::from_params(

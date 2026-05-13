@@ -6,10 +6,14 @@ use crate::command::string_reader::StringReader;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
 
-pub const INVALID_UNIT_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_TIME_INVALID_UNIT);
-pub const TICK_COUNT_TOO_LOW_ERROR_TYPE: CommandErrorType<2> =
-    CommandErrorType::new(translation::ARGUMENT_TIME_TICK_COUNT_TOO_LOW);
+pub const INVALID_UNIT_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_TIME_INVALID_UNIT,
+    translation::java::ARGUMENT_TIME_INVALID_UNIT,
+);
+pub const TICK_COUNT_TOO_LOW_ERROR_TYPE: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::ARGUMENT_TIME_TICK_COUNT_TOO_LOW,
+    translation::java::ARGUMENT_TIME_TICK_COUNT_TOO_LOW,
+);
 
 /// Represents an argument type parsing a time value, which can
 /// have one of these suffixes:
@@ -43,7 +47,7 @@ impl ArgumentType for TimeArgumentType {
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
         let value = reader.read_float()?;
-        let unit = reader.read_unquoted_string()?;
+        let unit = reader.read_unquoted_string();
         // Find our unit's translation to ticks.
         let ticks_per_unit = match unit.as_str() {
             "t" | "" => 1,

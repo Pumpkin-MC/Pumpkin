@@ -32,31 +32,25 @@ impl NoiseValuePoint {
 
 #[cfg(test)]
 mod test {
-    use pumpkin_data::{
-        chunk::Biome, chunk_gen_settings::GenerationSettings, dimension::Dimension,
-        noise_router::OVERWORLD_BASE_NOISE_ROUTER,
-    };
+    use pumpkin_data::{chunk::Biome, dimension::Dimension};
     use pumpkin_util::read_data_from_file;
 
     use crate::{
-        GlobalRandomConfig, ProtoChunk,
+        ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
-        generation::{
-            noise::router::{
-                multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-                proto_noise_router::ProtoNoiseRouters,
-            },
-            proto_chunk::TerrainCache,
+        generation::noise::router::multi_noise_sampler::{
+            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         },
     };
 
     #[test]
     fn sample_value() {
-        use crate::biome::hash_seed;
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
         use crate::generation::noise::router::multi_noise_sampler::{
             MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
         };
         use crate::generation::{biome_coords, positions::chunk_pos};
+        use pumpkin_util::world_seed::Seed;
         type PosToPoint = (i32, i32, i32, i64, i64, i64, i64, i64, i64);
         let expected_data: Vec<PosToPoint> =
             read_data_from_file!("../../assets/multi_noise_sample_no_blend_no_beard_0_0_0.json");
@@ -65,23 +59,9 @@ mod test {
         let chunk_x = 0;
         let chunk_z = 0;
 
-        let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_router =
-            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
+        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
 
-        let surface_config = GenerationSettings::from_dimension(&Dimension::OVERWORLD);
-
-        let _terrain_cache = TerrainCache::from_random(&random_config);
-        // Calculate biome mixer seed
-        let biome_mixer_seed = hash_seed(random_config.seed);
-
-        let _chunk = ProtoChunk::new(
-            chunk_x,
-            chunk_z,
-            &Dimension::OVERWORLD,
-            surface_config.default_block,
-            biome_mixer_seed,
-        );
+        let _chunk = ProtoChunk::new(chunk_x, chunk_z, &generator);
 
         let start_x = chunk_pos::start_block_x(chunk_x);
         let start_z = chunk_pos::start_block_z(chunk_z);
@@ -92,7 +72,7 @@ mod test {
             horizontal_biome_end as usize,
         );
         let mut multi_noise_sampler =
-            MultiNoiseSampler::generate(&noise_router.multi_noise, &multi_noise_config);
+            MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
 
         for (x, y, z, tem, hum, con, ero, dep, wei) in expected_data {
             let point = multi_noise_sampler.sample(x, y, z);
@@ -107,16 +87,17 @@ mod test {
 
     #[test]
     fn sample_multinoise_biome() {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator};
+        use pumpkin_util::world_seed::Seed;
+
         let expected_data: Vec<(i32, i32, i32, u8)> =
             read_data_from_file!("../../assets/multi_noise_biome_source_test.json");
 
         let seed = 0;
-        let random_config = GlobalRandomConfig::new(seed, false);
-        let noise_router =
-            ProtoNoiseRouters::generate(&OVERWORLD_BASE_NOISE_ROUTER, &random_config);
+        let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
 
         let mut sampler = MultiNoiseSampler::generate(
-            &noise_router.multi_noise,
+            &generator.base_router.multi_noise,
             &MultiNoiseSamplerBuilderOptions::new(0, 0, 4),
         );
 

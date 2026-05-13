@@ -9,8 +9,13 @@ impl JavaClient {
     pub async fn handle_status_request(&self, server: &Server) {
         debug!("Handling status request");
         let status = server.get_status();
-        self.send_packet_now(&status.lock().await.get_status())
-            .await;
+        self.send_packet_now(
+            &status
+                .lock()
+                .await
+                .get_status_packet(self.version.load().protocol_version()),
+        )
+        .await;
     }
 
     pub async fn handle_ping_request(&self, ping_request: SStatusPingRequest) {

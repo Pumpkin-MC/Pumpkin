@@ -2,6 +2,9 @@ interface %world {
     use common.{position, entity-pose};
     use text.{text-component};
     use scoreboard.{scoreboard};
+    use particles.{particle};
+    use sounds.{sound};
+    use entity-types.{entity-type};
 
     /// Defines how a block reacts when pushed by a piston.
     enum piston-behavior {
@@ -104,7 +107,7 @@ interface %world {
     resource entity {
         get-id: func() -> u32;
         get-uuid: func() -> string;
-        get-type: func() -> string;
+        get-type: func() -> entity-type;
 
         get-position: func() -> position;
         get-world: func() -> %world;
@@ -228,10 +231,10 @@ interface %world {
         get-scoreboard: func() -> scoreboard;
 
         /// Plays a sound at the specified position for all players in the world.
-        play-sound: func(sound: string, category: sound-category, pos: position, volume: f32, pitch: f32);
+        play-sound: func(sound: sound, category: sound-category, pos: position, volume: f32, pitch: f32);
 
         /// Spawns particles at the specified position.
-        spawn-particle: func(particle: string, pos: position, offset: position, max-speed: f32, count: s32);
+        spawn-particle: func(particle: particle, pos: position, offset: position, max-speed: f32, count: s32);
 
         /// Creates an explosion at the specified position.
         create-explosion: func(pos: position, power: f32, create-fire: bool, interaction: explosion-interaction);

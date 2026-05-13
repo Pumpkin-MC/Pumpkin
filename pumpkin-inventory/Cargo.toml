@@ -12,6 +12,7 @@ pumpkin-data.workspace = true
 pumpkin-world.workspace = true
 pumpkin-util.workspace = true
 
+rand.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 thiserror.workspace = true

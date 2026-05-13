@@ -78,6 +78,7 @@ pub struct CommandTree {
     pub children: Vec<usize>,
     pub names: Vec<String>,
     pub description: Cow<'static, str>,
+    pub source: Option<String>,
 }
 
 impl CommandTree {

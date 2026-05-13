@@ -1,8 +1,6 @@
 use pumpkin_data::{
     Block,
-    block_properties::{
-        BlockProperties, EnumVariants, Integer0To7, WallTorchLikeProperties, WheatLikeProperties,
-    },
+    block_properties::{BlockProperties, WallTorchLikeProperties, WheatLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
@@ -63,7 +61,7 @@ impl BlockBehaviour for AttachedStemBlock {
                 && args.neighbor_state_id != Self::get_gourd(args.block).default_state.id
             {
                 let mut props = StemProperties::default(Self::get_stem(args.block));
-                props.age = Integer0To7::from_index(7);
+                props.age = 7;
                 return props.to_state_id(Self::get_stem(args.block));
             }
             <Self as PlantBlockBase>::get_state_for_neighbor_update(

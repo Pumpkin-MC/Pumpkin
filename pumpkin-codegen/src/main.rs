@@ -13,6 +13,7 @@ mod attributes;
 mod biome;
 mod bitsets;
 mod block;
+mod carver;
 mod chunk_gen_settings;
 mod chunk_status;
 mod composter_increase_chance;
@@ -56,6 +57,8 @@ mod tag;
 mod tracked_data;
 mod translations;
 mod version;
+mod villager;
+mod wit;
 mod world_event;
 
 /// Output directory where all generated Rust source files are written.
@@ -67,6 +70,8 @@ pub fn main() {
     type BuilderFn = fn() -> TokenStream;
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");
+
+    wit::main();
 
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (packet::build, "packet.rs"),
@@ -100,6 +105,7 @@ pub fn main() {
         (entity_status::build, "entity_status.rs"),
         (tag::build, "tag.rs"),
         (noise_router::build, "noise_router.rs"),
+        (villager::build, "villager.rs"),
         (
             flower_pot_transformations::build,
             "flower_pot_transformations.rs",
@@ -122,6 +128,7 @@ pub fn main() {
             configured_feature::build,
             "configured_features_generated.rs",
         ),
+        (carver::build, "carver.rs"),
     ];
     build_functions.extend(remap::build());
 

@@ -11,7 +11,7 @@ use crate::{
 };
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties},
+    block_properties::{BlockProperties, NetherWartLikeProperties},
     damage::DamageType,
     entity::EntityType,
     item::Item,
@@ -35,9 +35,9 @@ impl BlockBehaviour for SweetBerryBushBlock {
             let state_id = args.world.get_block_state_id(args.position).await;
             let mut props = NetherWartLikeProperties::from_state_id(state_id, args.block);
             match props.age {
-                Integer0To3::L2 | Integer0To3::L3 => {
-                    let index = props.age.to_index() as u8;
-                    props.age = Integer0To3::L1;
+                2 | 3 => {
+                    let index = props.age;
+                    props.age = 1;
                     let count: u8 = rand::rng().random_range((index - 1)..=(index));
                     for _ in 0..count {
                         args.world
@@ -68,9 +68,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
         Box::pin(async move {
             let state_id = args.world.get_block_state_id(args.position).await;
             let props = NetherWartLikeProperties::from_state_id(state_id, &Block::SWEET_BERRY_BUSH);
-            if props.age != Integer0To3::L3
-                && args.item_stack.lock().await.get_item() == &Item::BONE_MEAL
-            {
+            if props.age != 3 && args.item_stack.lock().await.get_item() == &Item::BONE_MEAL {
                 BlockActionResult::Pass
             } else {
                 BlockActionResult::PassToDefaultBlockAction
@@ -123,7 +121,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
 
             let state_id = args.world.get_block_state_id(args.position).await;
             let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
-            if props.age == Integer0To3::L0 {
+            if props.age == 0 {
                 return;
             }
 
@@ -177,12 +175,12 @@ impl CropBlockBase for SweetBerryBushBlock {
 
     fn get_age(&self, state: u16, block: &Block) -> i32 {
         let props = NetherWartLikeProperties::from_state_id(state, block);
-        i32::from(props.age.to_index())
+        i32::from(props.age)
     }
 
     fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
         let mut props = NetherWartLikeProperties::from_state_id(state, block);
-        props.age = Integer0To3::from_index(age as u16);
+        props.age = age as u8;
         props.to_state_id(block)
     }
 

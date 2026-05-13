@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::entities::{has_block_block_entity, piston::PistonBlockEntity};
 use pumpkin_data::{
     Block, BlockDirection, BlockState, FacingExt,
     block_properties::{
@@ -9,11 +10,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::{
-    BlockStateId,
-    block::entities::{has_block_block_entity, piston::PistonBlockEntity},
-    world::BlockFlags,
-};
+use pumpkin_world::{BlockStateId, world::BlockFlags};
 use rand::RngExt;
 use rustc_hash::FxHashMap;
 

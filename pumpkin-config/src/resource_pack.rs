@@ -1,12 +1,17 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-/// Configuration for server resource pack distribution.
-///
-/// Controls whether a resource pack is offered or enforced,
-/// along with its metadata and client prompt behaviour.
 #[derive(Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct ResourcePackConfig {
+    pub java: JavaResourcePackConfig,
+    pub bedrock: BedrockResourcePackConfig,
+}
+
+/// Java-specific resource pack configuration (Single URL/Hash)
+#[derive(Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct JavaResourcePackConfig {
     /// Whether the resource pack system is enabled.
     pub enabled: bool,
     /// The URL to the resource pack.
@@ -19,23 +24,33 @@ pub struct ResourcePackConfig {
     pub force: bool,
 }
 
-impl ResourcePackConfig {
-    pub fn validate(&self) {
-        if !self.enabled {
-            return;
-        }
+/// Bedrock-specific configuration (Supports multiple local/remote packs)
+#[derive(Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct BedrockResourcePackConfig {
+    pub enabled: bool,
+    /// If true, players cannot join without accepting packs.
+    pub force: bool,
+    /// List of packs to be sent to the client.
+    pub packs: Vec<BedrockPack>,
+}
 
-        assert_eq!(
-            !self.url.is_empty(),
-            !self.sha1.is_empty(),
-            "Resource pack path or SHA1 hash is missing"
-        );
-
-        let hash_len = self.sha1.len();
-
-        assert_eq!(
-            hash_len, 40,
-            "Resource pack SHA1 hash is the wrong length (should be 40, is {hash_len})"
-        );
-    }
+#[derive(Deserialize, Serialize)]
+pub struct BedrockPack {
+    pub uuid: Uuid,
+    pub version: String,
+    pub size: u64,
+    pub download_url: String,
+    #[serde(default)]
+    pub content_key: String,
+    #[serde(default)]
+    pub sub_pack_name: String,
+    #[serde(default)]
+    pub content_id: String,
+    #[serde(default)]
+    pub has_scripts: bool,
+    #[serde(default)]
+    pub addon_pack: bool,
+    #[serde(default)]
+    pub rtx_enabled: bool,
 }

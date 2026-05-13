@@ -1,0 +1,389 @@
+package pumpkin:plugin@0.1.0;
+
+interface bedrock-packets {
+  record s-animate {
+    action: string,
+    runtime-entity-id: string,
+    boat-rowing-time: option<f32>,
+  }
+  record s-client-cache-status {
+    cache-supported: bool,
+  }
+  record s-command-request {
+    command: string,
+    command-type: string,
+    command-uuid: string,
+    request-id: string,
+    player-actor-unique-id: s64,
+    is-internal-source: bool,
+    version: string,
+  }
+  record s-container-close {
+    container-id: u8,
+    container-type: u8,
+    server-initiated: bool,
+  }
+  record s-interaction {
+    action: string,
+    target-runtime-id: string,
+    position: option<tuple<f64, f64, f64>>,
+  }
+  record s-loading-screen {
+    status: s32,
+    id: option<s32>,
+  }
+  record s-login {
+    protocol-version: s32,
+    jwt: list<u8>,
+    raw-token: list<u8>,
+  }
+  record s-player-action {
+    runtime-id: s32,
+    action: string,
+    block-pos: tuple<s32, s32, s32>,
+    result-pos: tuple<s32, s32, s32>,
+    face: s32,
+  }
+  record s-player-auth-input {
+    pitch: f32,
+    yaw: f32,
+    position: tuple<f64, f64, f64>,
+    move-vec: string,
+    head-yaw: f32,
+    input-data: string,
+    input-mode: s32,
+    play-mode: s32,
+    interaction-model: s32,
+    interact-pitch: f32,
+    interact-yaw: f32,
+    tick: string,
+    delta: tuple<f64, f64, f64>,
+    block-actions: option<list<string>>,
+    vehicle-rotation: option<string>,
+    vehicle-unique-id: option<string>,
+    analog-move: string,
+    camera-orientation: tuple<f64, f64, f64>,
+    raw-move: string,
+  }
+  record s-connected-ping {
+    time: s64,
+  }
+  record s-connection-request {
+    client-guid: s64,
+    time: s64,
+    security: bool,
+  }
+  record s-new-incoming-connection {
+    server-address: string,
+    internal-address: string,
+    ping-time: s64,
+    pong-time: s64,
+  }
+  record s-open-connection-request1 {
+    magic: string,
+    protocol-version: u8,
+    mtu: s32,
+  }
+  record s-open-connection-request2 {
+    magic: string,
+    server-address: string,
+    mtu: s32,
+    client-guid: s64,
+  }
+  record s-unconnected-ping {
+    time: s64,
+    magic: string,
+    client-guid: s64,
+  }
+  record s-request-chunk-radius {
+    chunk-radius: s32,
+    max-radius: u8,
+  }
+  record s-request-network-settings {
+    protocol-version: s32,
+  }
+  record s-resource-pack-response {
+    response: u8,
+    download-size: s32,
+  }
+  record s-set-local-player-as-initialized {
+    runtime-entity-id: string,
+  }
+  record s-text {
+    needs-translation: bool,
+    r-type: string,
+    source-name: string,
+    message: string,
+    parameters: list<string>,
+    xuid: string,
+    platform-chat-id: string,
+    filtered-message: option<string>,
+  }
+  record c-available-commands {
+    enum-values: list<string>,
+    chained-subcommand-values: list<string>,
+    suffixes: list<string>,
+    enums: list<string>,
+    chained-subcommands: list<string>,
+    commands: list<string>,
+    soft-enums: list<string>,
+    constraints: list<string>,
+  }
+  record c-chunk-radius-update {
+    chunk-radius: s32,
+  }
+  record c-container-open {
+    container-id: u8,
+    container-type: u8,
+    position: tuple<s32, s32, s32>,
+    target-entity-id: string,
+  }
+  record c-correct-player-move {
+    prediction-type: u8,
+    pos: tuple<f64, f64, f64>,
+    pos-delta: tuple<f64, f64, f64>,
+    on-ground: bool,
+    tick: string,
+  }
+  record creative-content {
+    groups: string,
+    entries: string,
+  }
+  record c-disconnect-player {
+    reason: s32,
+    skip-message: bool,
+    message: string,
+    filtered-message: string,
+  }
+  record c-gamerules-changed {
+    rule-data: string,
+  }
+  record c-handshake {
+    jwt-data: string,
+  }
+  record c-inventory-content {
+    inventory-id: s32,
+    slots: list<string>,
+    container-name: u8,
+    dynamic-id: option<s32>,
+    storage-item: string,
+  }
+  record c-level-chunk {
+    dimension: s32,
+    cache-enabled: bool,
+    chunk: string,
+  }
+  record c-level-event {
+    event-id: s32,
+    position: tuple<f64, f64, f64>,
+    data: s32,
+  }
+  record c-move-player {
+    player-runtime-id: string,
+    position: tuple<f64, f64, f64>,
+    pitch: f32,
+    yaw: f32,
+    head-yaw: f32,
+    mode: u8,
+    on-ground: bool,
+    riding-runtime-id: string,
+    tick: string,
+  }
+  record c-network-chunk-publisher-update {
+    pos-for-view: tuple<s32, s32, s32>,
+    new-radius: s32,
+    server-build-chunk-list: list<string>,
+  }
+  record c-network-settings {
+    compression-threshold: s32,
+    compression-method: s32,
+    client-throttle-enabled: bool,
+    client-throttle-threshold: u8,
+    client-throttle-scalar: f32,
+  }
+  record c-player-hotbar {
+    selected-slot: s32,
+    container-id: u8,
+    should-select-block: bool,
+  }
+  record c-connected-pong {
+    ping: s64,
+    pong: s64,
+  }
+  record c-connection-request-accepted {
+    client-address: string,
+    system-index: s32,
+    system-addresses: string,
+    requested-timestamp: s64,
+    timestamp: s64,
+  }
+  record c-incompatible-protocol-version {
+    protocol-version: u8,
+    magic: string,
+    server-guid: s64,
+  }
+  record c-open-connection-reply1 {
+    magic: string,
+    server-guid: s64,
+    has-server-security: bool,
+    mtu: s32,
+  }
+  record c-open-connection-reply2 {
+    magic: string,
+    server-guid: s64,
+    client-address: string,
+    mtu: s32,
+    security: bool,
+  }
+  record c-unconnected-pong {
+    time: s64,
+    server-guid: s64,
+    magic: string,
+    server-id: string,
+  }
+  record c-resource-pack-stack-packet {
+    resource-pack-required: bool,
+    resource-packs: list<string>,
+    game-version: string,
+    experiments: string,
+    include-editor-packs: bool,
+  }
+  record c-resource-packs-info {
+    resource-pack-required: bool,
+    has-addon-packs: bool,
+    has-scripts: bool,
+    is-vibrant-visuals-force-disabled: bool,
+    world-template-id: string,
+    world-template-version: string,
+    resource-packs: list<string>,
+  }
+  record c-set-actor-data {
+    actor-runtime-id: string,
+    metadata: string,
+    synced-properties: string,
+    tick: string,
+  }
+  record c-set-actor-motion {
+    target-runtime-id: string,
+    motion: tuple<f64, f64, f64>,
+    tick: string,
+  }
+  record c-set-health {
+    health: s32,
+  }
+  record c-set-player-gamemode {
+    gamemode: string,
+  }
+  record c-set-time {
+    time: s32,
+  }
+  record c-set-title {
+    action-type: s32,
+    text: string,
+    fade-in-duration: s32,
+    remain-duration: s32,
+    fade-out-duration: s32,
+    xuid: string,
+    platform-online-id: string,
+    filtered-message: string,
+  }
+  record c-start-game {
+    entity-id: string,
+    runtime-entity-id: string,
+    player-gamemode: string,
+    position: tuple<f64, f64, f64>,
+    pitch: f32,
+    yaw: f32,
+    level-settings: string,
+    level-id: string,
+    level-name: string,
+    premium-world-template-id: string,
+    is-trial: bool,
+    rewind-history-size: s32,
+    server-authoritative-block-breaking: bool,
+    current-level-time: s64,
+    enchantment-seed: s32,
+    block-properties-size: s32,
+    multiplayer-correlation-id: string,
+    enable-itemstack-net-manager: bool,
+    server-version: string,
+    compound-id: u8,
+    compound-len: s32,
+    compound-end: u8,
+    block-registry-checksum: s64,
+    world-template-id: string,
+    enable-clientside-generation: bool,
+    blocknetwork-ids-are-hashed: bool,
+    server-auth-sounds: bool,
+    server-join-information: option<string>,
+    telemetry: string,
+  }
+  record c-update-abilities {
+    target-player-raw-id: s64,
+    player-permission: u8,
+    command-permission: u8,
+    layers: list<string>,
+  }
+  record c-update-attributes {
+    runtime-id: string,
+    attributes: list<string>,
+    player-tick: string,
+  }
+  variant serverbound-packet {
+    s-animate(s-animate),
+    s-client-cache-status(s-client-cache-status),
+    s-command-request(s-command-request),
+    s-container-close(s-container-close),
+    s-interaction(s-interaction),
+    s-loading-screen(s-loading-screen),
+    s-login(s-login),
+    s-player-action(s-player-action),
+    s-player-auth-input(s-player-auth-input),
+    s-connected-ping(s-connected-ping),
+    s-connection-request(s-connection-request),
+    s-new-incoming-connection(s-new-incoming-connection),
+    s-disconnect,
+    s-open-connection-request1(s-open-connection-request1),
+    s-open-connection-request2(s-open-connection-request2),
+    s-unconnected-ping(s-unconnected-ping),
+    s-request-chunk-radius(s-request-chunk-radius),
+    s-request-network-settings(s-request-network-settings),
+    s-resource-pack-response(s-resource-pack-response),
+    s-set-local-player-as-initialized(s-set-local-player-as-initialized),
+    s-text(s-text),
+  }
+  variant clientbound-packet {
+    c-available-commands(c-available-commands),
+    c-chunk-radius-update(c-chunk-radius-update),
+    c-container-open(c-container-open),
+    c-correct-player-move(c-correct-player-move),
+    creative-content(creative-content),
+    c-disconnect-player(c-disconnect-player),
+    c-gamerules-changed(c-gamerules-changed),
+    c-handshake(c-handshake),
+    c-inventory-content(c-inventory-content),
+    c-level-chunk(c-level-chunk),
+    c-level-event(c-level-event),
+    c-move-player(c-move-player),
+    c-network-chunk-publisher-update(c-network-chunk-publisher-update),
+    c-network-settings(c-network-settings),
+    c-player-hotbar(c-player-hotbar),
+    c-connected-pong(c-connected-pong),
+    c-connection-request-accepted(c-connection-request-accepted),
+    c-incompatible-protocol-version(c-incompatible-protocol-version),
+    c-open-connection-reply1(c-open-connection-reply1),
+    c-open-connection-reply2(c-open-connection-reply2),
+    c-unconnected-pong(c-unconnected-pong),
+    c-resource-pack-stack-packet(c-resource-pack-stack-packet),
+    c-resource-packs-info(c-resource-packs-info),
+    c-set-actor-data(c-set-actor-data),
+    c-set-actor-motion(c-set-actor-motion),
+    c-set-health(c-set-health),
+    c-set-player-gamemode(c-set-player-gamemode),
+    c-set-time(c-set-time),
+    c-set-title(c-set-title),
+    c-start-game(c-start-game),
+    c-update-abilities(c-update-abilities),
+    c-update-attributes(c-update-attributes),
+  }
+}

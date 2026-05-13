@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::block::entities::mob_spawner::MobSpawnerBlockEntity;
 
 use crate::block::{BlockBehaviour, BlockFuture, PlacedArgs};
 

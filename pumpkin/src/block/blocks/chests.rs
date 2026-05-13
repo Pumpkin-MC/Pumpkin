@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::block::entities::BlockEntity;
+use crate::block::entities::chest::ChestBlockEntity;
 use futures::future::join;
 use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
@@ -16,8 +18,6 @@ use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::BlockEntity;
-use pumpkin_world::block::entities::chest::ChestBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
@@ -57,9 +57,17 @@ impl ScreenHandlerFactory for ChestScreenFactory {
 
     fn get_display_name(&self) -> TextComponent {
         if self.0.size() > 27 {
-            TextComponent::translate(translation::CONTAINER_CHESTDOUBLE, &[])
+            TextComponent::translate_cross(
+                translation::java::CONTAINER_CHESTDOUBLE,
+                translation::bedrock::CONTAINER_CHESTDOUBLE,
+                &[],
+            )
         } else {
-            TextComponent::translate(translation::CONTAINER_CHEST, &[])
+            TextComponent::translate_cross(
+                translation::java::CONTAINER_CHEST,
+                translation::bedrock::CONTAINER_CHEST,
+                &[],
+            )
         }
     }
 }
@@ -437,7 +445,7 @@ impl BlockBehaviour for TrappedChestBlock {
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        use pumpkin_world::block::entities::trapped_chest::TrappedChestBlockEntity;
+        use crate::block::entities::trapped_chest::TrappedChestBlockEntity;
         Box::pin(placed_chest_impl(args, TrappedChestBlockEntity::new))
     }
 
@@ -461,7 +469,7 @@ impl BlockBehaviour for TrappedChestBlock {
         args: GetRedstonePowerArgs<'a>,
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move {
-            use pumpkin_world::block::entities::trapped_chest::TrappedChestBlockEntity;
+            use crate::block::entities::trapped_chest::TrappedChestBlockEntity;
 
             // Get viewer count from this chest
             let viewer_count = if let Some(block_entity) =
