@@ -1,6 +1,6 @@
-use std::{net::IpAddr, net::SocketAddr};
-use std::sync::Arc;
 use arc_swap::ArcSwap;
+use std::sync::Arc;
+use std::{net::IpAddr, net::SocketAddr};
 use thiserror::Error;
 use tokio::sync::Mutex;
 

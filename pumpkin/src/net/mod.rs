@@ -1,15 +1,15 @@
-use std::{
-    net::SocketAddr,
-    num::NonZeroU8,
-    sync::{Arc, atomic::Ordering},
-};
-use arc_swap::ArcSwap;
 use crate::{
     entity::player::ChatMode,
     net::{bedrock::BedrockClient, java::JavaClient},
     server::Server,
 };
+use arc_swap::ArcSwap;
 use bytes::Bytes;
+use std::{
+    net::SocketAddr,
+    num::NonZeroU8,
+    sync::{Arc, atomic::Ordering},
+};
 
 use pumpkin_data::translation;
 use pumpkin_protocol::{ClientPacket, Property};
@@ -41,8 +41,8 @@ pub struct GameProfile {
 
 impl Clone for GameProfile {
     fn clone(&self) -> Self {
-        GameProfile {
-            id: self.id.clone(),
+        Self {
+            id: self.id,
             name: self.name.clone(),
             properties: ArcSwap::new(self.properties.load().clone()),
             profile_actions: self.profile_actions.clone(),

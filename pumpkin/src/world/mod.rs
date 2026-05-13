@@ -2008,7 +2008,10 @@ impl World {
         {
             let players = self.players.load();
             let mut data_to_process = Vec::new();
-            for p in players.iter().filter(|p| p.gameprofile.id != player.gameprofile.id) {
+            for p in players
+                .iter()
+                .filter(|p| p.gameprofile.id != player.gameprofile.id)
+            {
                 let props_guard = p.gameprofile.properties.load();
                 data_to_process.push((props_guard, p));
             }
@@ -2021,7 +2024,7 @@ impl World {
                 let mut player_actions = vec![
                     PlayerAction::AddPlayer {
                         name: &player.gameprofile.name,
-                        properties: &**properties,
+                        properties,
                     },
                     PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
                     PlayerAction::UpdateLatency(VarInt(

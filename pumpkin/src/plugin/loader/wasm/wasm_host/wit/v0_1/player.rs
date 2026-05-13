@@ -810,7 +810,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             }))
     }
 
-    async fn set_skin(&mut self, player: Resource<Player>, skin: PlayerSkin) -> wasmtime::Result<()> {
+    async fn set_skin(
+        &mut self,
+        player: Resource<Player>,
+        skin: PlayerSkin,
+    ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let mut properties = (**player.gameprofile.properties.load()).clone();
 

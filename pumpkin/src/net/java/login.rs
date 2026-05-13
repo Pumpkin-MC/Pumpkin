@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use arc_swap::ArcSwap;
 use pumpkin_data::translation;
 use pumpkin_protocol::{
@@ -12,6 +11,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
+use std::sync::Arc;
 use tracing::debug;
 use uuid::Uuid;
 

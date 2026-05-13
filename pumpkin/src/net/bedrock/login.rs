@@ -2,6 +2,7 @@ use crate::{
     net::{ClientPlatform, DisconnectReason, GameProfile, PlayerConfig, bedrock::BedrockClient},
     server::Server,
 };
+use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::{
     client::{
         network_settings::CNetworkSettings, play_status::CPlayStatus,
@@ -20,7 +21,6 @@ use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use serde::{Deserialize, de::Error};
 use serde_repr::Deserialize_repr;
 use std::sync::Arc;
-use arc_swap::ArcSwap;
 use thiserror::Error;
 use tracing::{debug, warn};
 use uuid::Uuid;

@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use arc_swap::ArcSwap;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::command::errors::command_syntax_error::{CommandSyntaxError, CommandSyntaxErrorContext};
