@@ -1874,7 +1874,7 @@ impl World {
                 actions: &[
                     PlayerAction::AddPlayer {
                         name: &gameprofile.name,
-                        properties: &gameprofile.properties,
+                        properties: &gameprofile.properties.load(),
                     },
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
                     PlayerAction::UpdateListed(true),
@@ -1886,18 +1886,21 @@ impl World {
         .await;
         // Here, we send all the infos of players who already joined.
         {
-            let mut current_player_data = Vec::new();
             let players = self.players.load();
-            for player in players
-                .iter()
-                .filter(|p| p.gameprofile.id != player.gameprofile.id)
-            {
+            let mut data_to_process = Vec::new();
+            for p in players.iter().filter(|p| p.gameprofile.id != player.gameprofile.id) {
+                let props_guard = p.gameprofile.properties.load();
+                data_to_process.push((props_guard, p));
+            }
+
+            let mut current_player_data = Vec::new();
+            for (properties, player) in &data_to_process {
                 let chat_session = player.chat_session.lock().await;
 
                 let mut player_actions = vec![
                     PlayerAction::AddPlayer {
                         name: &player.gameprofile.name,
-                        properties: &player.gameprofile.properties,
+                        properties: &**properties,
                     },
                     PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
                     PlayerAction::UpdateLatency(VarInt(

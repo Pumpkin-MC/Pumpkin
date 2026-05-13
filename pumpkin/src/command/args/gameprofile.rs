@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use arc_swap::ArcSwap;
 use pumpkin_data::translation;
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::text::TextComponent;
@@ -339,7 +341,7 @@ fn profile_from_uuid_name(uuid: Uuid, name: String) -> GameProfile {
     GameProfile {
         id: uuid,
         name,
-        properties: vec![],
+        properties: ArcSwap::new(Arc::from(vec![])),
         profile_actions: None,
     }
 }

@@ -21,6 +21,7 @@ use pumpkin_util::jwt::{AuthError, verify_chain};
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use serde::Deserialize;
 use std::sync::Arc;
+use arc_swap::ArcSwap;
 use thiserror::Error;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -93,7 +94,7 @@ impl BedrockClient {
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
             name: player_data.display_name,
-            properties: Vec::new(),
+            properties: ArcSwap::new(Arc::new(Vec::new())),
             profile_actions: None,
         };
 

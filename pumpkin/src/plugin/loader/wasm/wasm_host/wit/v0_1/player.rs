@@ -25,6 +25,7 @@ use crate::{
     },
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_protocol::Property;
 use pumpkin_util::permission::PermissionLvl;
 
 pub fn player_from_resource(
@@ -773,12 +774,29 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player
             .gameprofile
             .properties
+            .load()
             .iter()
             .find(|p| p.name == "textures")
             .map(|p| PlayerSkin {
                 value: p.value.clone(),
                 signature: p.signature.clone(),
             }))
+    }
+
+    async fn set_skin(&mut self, player: Resource<Player>, skin: PlayerSkin) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let mut properties = (**player.gameprofile.properties.load()).clone();
+
+        properties.retain(|p| p.name != "textures");
+        properties.push(Property {
+            name: "textures".into(),
+            value: skin.value,
+            signature: skin.signature,
+        });
+
+        player.gameprofile.properties.store(Arc::new(properties));
+
+        Ok(())
     }
 
     async fn get_skin_parts(&mut self, player: Resource<Player>) -> wasmtime::Result<SkinParts> {

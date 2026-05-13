@@ -203,6 +203,10 @@ interface player {
         /// Returns the player's current skin textures.
         get-skin: func() -> option<player-skin>;
 
+        /// Updates the player's skin textures.
+        /// Note: this only updates the fileds, it doesn't reload the skin.
+        set-skin: func(skin: player-skin);
+
         /// Returns the currently visible skin parts.
         get-skin-parts: func() -> skin-parts;
         /// Sets which skin parts are visible.

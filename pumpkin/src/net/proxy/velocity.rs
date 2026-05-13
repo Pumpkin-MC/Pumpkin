@@ -5,7 +5,8 @@ use std::{
     io::Read,
     net::{IpAddr, SocketAddr},
 };
-
+use std::sync::Arc;
+use arc_swap::ArcSwap;
 use bytes::{BufMut, BytesMut};
 use hmac::{Hmac, KeyInit, Mac};
 use pumpkin_config::networking::proxy::VelocityConfig;
@@ -99,7 +100,7 @@ fn read_game_profile(read: impl Read) -> Result<GameProfile, VelocityError> {
     Ok(GameProfile {
         id,
         name,
-        properties,
+        properties: ArcSwap::new(Arc::from(properties)),
         profile_actions: None,
     })
 }
