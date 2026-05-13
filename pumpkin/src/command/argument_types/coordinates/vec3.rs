@@ -15,6 +15,7 @@ pub const INCOMPLETE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
     translation::java::ARGUMENT_POS3D_INCOMPLETE,
 );
 
+#[derive(Debug, Default)]
 /// An argument type for a 3-dimensional vector.
 pub enum Vec3ArgumentType {
     /// The default `Vec3ArgumentType` variant.
@@ -26,6 +27,7 @@ pub enum Vec3ArgumentType {
     /// (the coordinate is integral) and it is not relative,
     /// a `+0.5` offset is added to it.
     ///
+    #[default]
     Default,
     /// No center correction occurs for this `Vec3ArgumentType` variant.
     Uncorrected,
