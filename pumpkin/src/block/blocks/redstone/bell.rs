@@ -1,6 +1,7 @@
 use crate::Arc;
 use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::block_receives_redstone_power;
+use crate::block::entities::bell::BellBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockFuture, BlockHitResult, BrokenArgs, CanPlaceAtArgs, NormalUseArgs,
@@ -18,7 +19,6 @@ use pumpkin_data::{HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::bell::BellBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 async fn ring_bell(

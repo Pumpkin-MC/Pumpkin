@@ -5,7 +5,7 @@ use crate::generation::{
     block_predicate::BlockPredicate, block_state_provider::BlockStateProvider,
     proto_chunk::GenerationCache,
 };
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct DiskFeature {
     pub state_provider: BlockStateProvider,
@@ -19,7 +19,7 @@ impl DiskFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str,
@@ -55,7 +55,7 @@ impl DiskFeature {
     fn place_column<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         top: i32,
         bottom: i32,

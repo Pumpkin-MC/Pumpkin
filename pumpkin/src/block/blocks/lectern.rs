@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::entities::lectern::LecternBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockFuture, BrokenArgs, NormalUseArgs, OnPlaceArgs, PlacedArgs,
@@ -15,7 +16,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::lectern::LecternBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 

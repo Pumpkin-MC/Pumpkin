@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use pumpkin_data::tag;
-use pumpkin_util::GameMode;
-use pumpkin_world::block::entities::{
+use crate::block::entities::{
     BlockEntity,
     sign::{DyeColor, Text},
 };
+use pumpkin_data::tag;
+use pumpkin_util::GameMode;
 
 use crate::{
     block::{UseWithItemArgs, registry::BlockActionResult},

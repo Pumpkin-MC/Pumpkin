@@ -1,3 +1,4 @@
+pub mod animate;
 pub mod client_cache_status;
 pub mod command_request;
 pub mod container_close;

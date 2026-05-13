@@ -226,7 +226,9 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             if type_str == "minecraft:scattered_ore" {
                 quote! {
                     ConfiguredFeature::ScatteredOre(crate::generation::feature::features::scattered_ore::ScatteredOreFeature {
-                        // TODO
+                        size: #size,
+                        discard_chance_on_air_exposure: #discard,
+                        targets: vec![#(#targets),*],
                     })
                 }
             } else {
@@ -607,13 +609,20 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
         "minecraft:kelp" => {
             quote! { ConfiguredFeature::Kelp(crate::generation::feature::features::kelp::KelpFeature {}) }
         }
-        
+
         // All TODO/empty features
         "minecraft:fossil" => {
             quote! { ConfiguredFeature::Fossil(crate::generation::feature::features::fossil::FossilFeature {}) }
         }
         "minecraft:lake" => {
-            quote! { ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {}) }
+            let fluid = value_to_block_state_provider(&config["fluid"]);
+            let barrier = value_to_block_state_provider(&config["barrier"]);
+            quote! {
+                ConfiguredFeature::Lake(crate::generation::feature::features::lake::LakeFeature {
+                    fluid: #fluid,
+                    barrier: #barrier,
+                })
+            }
         }
         "minecraft:huge_brown_mushroom" => {
             quote! { ConfiguredFeature::HugeBrownMushroom(crate::generation::feature::features::huge_brown_mushroom::HugeBrownMushroomFeature {}) }
@@ -625,7 +634,49 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { ConfiguredFeature::Vines(crate::generation::feature::features::vines::VinesFeature) }
         }
         "minecraft:root_system" => {
-            quote! { ConfiguredFeature::RootSystem(crate::generation::feature::features::root_system::RootSystemFeature {}) }
+            let feature = value_to_inline_placed_feature(&config["feature"]);
+            let required_vertical_space_for_tree = config["required_vertical_space_for_tree"]
+                .as_i64()
+                .unwrap_or(0) as i32;
+            let root_radius = config["root_radius"].as_i64().unwrap_or(0) as i32;
+            let root_replaceable = value_to_block_predicate(&config["root_replaceable"]);
+            let root_state_provider = value_to_block_state_provider(&config["root_state_provider"]);
+            let root_placement_attempts =
+                config["root_placement_attempts"].as_i64().unwrap_or(0) as i32;
+            let root_column_max_height =
+                config["root_column_max_height"].as_i64().unwrap_or(0) as i32;
+            let hanging_root_radius = config["hanging_root_radius"].as_i64().unwrap_or(0) as i32;
+            let hanging_roots_vertical_span = config["hanging_roots_vertical_span"]
+                .as_i64()
+                .or(config["hanging_root_vertical_span"].as_i64())
+                .unwrap_or(0) as i32;
+            let hanging_root_state_provider =
+                value_to_block_state_provider(&config["hanging_root_state_provider"]);
+            let hanging_root_placement_attempts = config["hanging_root_placement_attempts"]
+                .as_i64()
+                .unwrap_or(0) as i32;
+            let allowed_vertical_water_for_tree = config["allowed_vertical_water_for_tree"]
+                .as_i64()
+                .unwrap_or(0) as i32;
+            let allowed_tree_position = value_to_block_predicate(&config["allowed_tree_position"]);
+
+            quote! {
+                ConfiguredFeature::RootSystem(crate::generation::feature::features::root_system::RootSystemFeature {
+                    feature: Box::new(#feature),
+                    required_vertical_space_for_tree: #required_vertical_space_for_tree,
+                    root_radius: #root_radius,
+                    root_replaceable: #root_replaceable,
+                    root_state_provider: #root_state_provider,
+                    root_placement_attempts: #root_placement_attempts,
+                    root_column_max_height: #root_column_max_height,
+                    hanging_root_radius: #hanging_root_radius,
+                    hanging_roots_vertical_span: #hanging_roots_vertical_span,
+                    hanging_root_state_provider: #hanging_root_state_provider,
+                    hanging_root_placement_attempts: #hanging_root_placement_attempts,
+                    allowed_vertical_water_for_tree: #allowed_vertical_water_for_tree,
+                    allowed_tree_position: #allowed_tree_position,
+                })
+            }
         }
         "minecraft:multiface_growth" => {
             quote! { ConfiguredFeature::MultifaceGrowth(crate::generation::feature::features::multiface_growth::MultifaceGrowthFeature {}) }
@@ -652,7 +703,16 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { ConfiguredFeature::WeepingVines(crate::generation::feature::features::weeping_vines::WeepingVinesFeature {}) }
         }
         "minecraft:twisting_vines" => {
-            quote! { ConfiguredFeature::TwistingVines(crate::generation::feature::features::twisting_vines::TwistingVinesFeature {}) }
+            let spread_width = config["spread_width"].as_i64().unwrap_or(0) as i32;
+            let spread_height = config["spread_height"].as_i64().unwrap_or(0) as i32;
+            let max_height = config["max_height"].as_i64().unwrap_or(0) as i32;
+            quote! {
+                ConfiguredFeature::TwistingVines(crate::generation::feature::features::twisting_vines::TwistingVinesFeature {
+                    spread_width: #spread_width,
+                    spread_height: #spread_height,
+                    max_height: #max_height,
+                })
+            }
         }
         "minecraft:delta_feature" => {
             quote! { ConfiguredFeature::DeltaFeature(crate::generation::feature::features::delta_feature::DeltaFeatureFeature {}) }
@@ -670,7 +730,24 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             quote! { ConfiguredFeature::LargeDripstone(crate::generation::feature::features::drip_stone::large::LargeDripstoneFeature {}) }
         }
         "minecraft:sculk_patch" => {
-            quote! { ConfiguredFeature::SculkPatch(crate::generation::feature::features::sculk_patch::SculkPatchFeature {}) }
+            let charge_count = config["charge_count"].as_u64().unwrap() as i32;
+            let amount_per_charge = config["amount_per_charge"].as_u64().unwrap() as i32;
+            let spread_attempts = config["spread_attempts"].as_u64().unwrap() as i32;
+            let growth_rounds = config["growth_rounds"].as_u64().unwrap() as i32;
+            let spread_rounds = config["spread_rounds"].as_u64().unwrap() as i32;
+            let extra_rare_growths = value_to_int_provider(&config["extra_rare_growths"]);
+            let catalyst_chance = config["catalyst_chance"].as_f64().unwrap() as f32;
+            quote! {
+                ConfiguredFeature::SculkPatch(crate::generation::feature::features::sculk_patch::SculkPatchFeature {
+                    charge_count: #charge_count,
+                    amount_per_charge: #amount_per_charge,
+                    spread_attempts: #spread_attempts,
+                    growth_rounds: #growth_rounds,
+                    spread_rounds: #spread_rounds,
+                    extra_rare_growths: #extra_rare_growths,
+                    catalyst_chance: #catalyst_chance,
+                })
+            }
         }
         "minecraft:block_pile" => {
             quote! { ConfiguredFeature::BlockPile(crate::generation::feature::features::block_pile::BlockPileFeature {}) }
@@ -980,15 +1057,13 @@ fn value_to_tree_feature(config: &Value) -> TokenStream {
 }
 
 fn value_to_block_list(v: &Value) -> TokenStream {
-    if let Some(s) = v.as_str() {
-        if let Some(tag) = s.strip_prefix('#') {
-            let name = format!(
-                "MINECRAFT_{}",
-                tag.strip_prefix("minecraft:").unwrap_or(tag).to_uppercase()
-            );
-            let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-            return quote! { &pumpkin_data::tag::Block::#ident.1 };
-        }
+    if let Some(tag) = v.as_str().and_then(|s| s.strip_prefix('#')) {
+        let name = format!(
+            "MINECRAFT_{}",
+            tag.strip_prefix("minecraft:").unwrap_or(tag).to_uppercase()
+        );
+        let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+        return quote! { &pumpkin_data::tag::Block::#ident.1 };
     }
     let mut blocks = Vec::new();
     if let Some(arr) = v.as_array() {
@@ -1033,8 +1108,9 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
         }
         "minecraft:upwards_branching_trunk_placer" => {
             let extra_branch_steps = value_to_int_provider(&v["extra_branch_steps"]);
-            let place_branch_per_log_probability =
-                v["place_branch_per_log_probability"].as_f64().unwrap_or(0.0) as f32;
+            let place_branch_per_log_probability = v["place_branch_per_log_probability"]
+                .as_f64()
+                .unwrap_or(0.0) as f32;
             let extra_branch_length = value_to_int_provider(&v["extra_branch_length"]);
             let can_grow_through = value_to_block_list(&v["can_grow_through"]);
             quote! {
@@ -1052,7 +1128,8 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
             let branch_start_offset_v = &v["branch_start_offset_from_top"];
             let min = branch_start_offset_v["min_inclusive"].as_i64().unwrap_or(0) as i32;
             let max = branch_start_offset_v["max_inclusive"].as_i64().unwrap_or(0) as i32;
-            let branch_end_offset_from_top = value_to_int_provider(&v["branch_end_offset_from_top"]);
+            let branch_end_offset_from_top =
+                value_to_int_provider(&v["branch_end_offset_from_top"]);
             quote! {
                 TrunkType::Cherry(CherryTrunkPlacer {
                     branch_count: #branch_count,

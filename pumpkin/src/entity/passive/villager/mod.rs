@@ -11,6 +11,7 @@ use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
 use pumpkin_util::text::TextComponent;
@@ -268,7 +269,7 @@ impl VillagerEntity {
             .await;
     }
 
-    pub async fn open_trading_screen(&self, player: &Player) {
+    pub async fn open_trading_screen(&self, player: &Arc<Player>) {
         let self_weak = self.self_arc.lock().await;
         if let Some(self_arc) = self_weak.as_ref().and_then(std::sync::Weak::upgrade) {
             player.open_handled_screen(&*self_arc, None).await;
@@ -318,109 +319,138 @@ impl ScreenHandlerFactory for VillagerEntity {
 }
 
 impl NBTStorage for VillagerEntity {
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut pumpkin_nbt::pnbt::PNbtCompound,
-    ) -> crate::entity::NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
             let data = self.villager_data.lock().await;
-            nbt.put_int(data.r#type as i32);
-            nbt.put_int(data.profession as i32);
-            nbt.put_int(data.level);
+            let mut villager_data_nbt = NbtCompound::new();
+            villager_data_nbt.put_int("Type", data.r#type as i32);
+            villager_data_nbt.put_int("Profession", data.profession as i32);
+            villager_data_nbt.put_int("Level", data.level);
+            nbt.put_compound("VillagerData", villager_data_nbt);
 
-            nbt.put_int(self.food_level.load(Ordering::Relaxed));
-            nbt.put_int(self.xp.load(Ordering::Relaxed));
-            nbt.put_long(self.last_restock_time.load(Ordering::Relaxed));
-            nbt.put_int(self.restocks_today.load(Ordering::Relaxed));
+            nbt.put_int("FoodLevel", self.food_level.load(Ordering::Relaxed));
+            nbt.put_int("Xp", self.xp.load(Ordering::Relaxed));
+            nbt.put_long(
+                "LastRestock",
+                self.last_restock_time.load(Ordering::Relaxed),
+            );
+            nbt.put_int("RestocksToday", self.restocks_today.load(Ordering::Relaxed));
 
             // Inventory
             let inventory = self.inventory.lock().await;
-            nbt.put_int(inventory.len() as i32);
+            let mut inventory_list = Vec::new();
             for stack_mutex in inventory.iter() {
                 let stack = stack_mutex.lock().await;
-                stack.write_item_stack_pnbt(nbt);
-            }
-
-            // Gossips (Simplified: just save counts per UUID and type)
-            let gossips = self.gossips.lock().await;
-            nbt.put_int(gossips.len() as i32);
-            for (uuid, types) in gossips.iter() {
-                nbt.put_uuid(uuid);
-                nbt.put_int(types.len() as i32);
-                for (gtype, value) in types {
-                    nbt.put_int(*gtype as i32);
-                    nbt.put_int(*value);
+                if !stack.is_empty() {
+                    let mut item_nbt = NbtCompound::new();
+                    stack.write_item_stack(&mut item_nbt);
+                    inventory_list.push(pumpkin_nbt::tag::NbtTag::Compound(item_nbt));
                 }
             }
+            nbt.put("Inventory", pumpkin_nbt::tag::NbtTag::List(inventory_list));
+
+            // Gossips
+            let gossips = self.gossips.lock().await;
+            let mut gossip_list = Vec::new();
+            for (uuid, types) in gossips.iter() {
+                for (gtype, value) in types {
+                    let mut gossip_nbt = NbtCompound::new();
+                    let uuid_val = uuid.as_u128();
+                    gossip_nbt.put(
+                        "Target",
+                        pumpkin_nbt::tag::NbtTag::IntArray(vec![
+                            (uuid_val >> 96) as i32,
+                            ((uuid_val >> 64) & 0xFFFF_FFFF) as i32,
+                            ((uuid_val >> 32) & 0xFFFF_FFFF) as i32,
+                            (uuid_val & 0xFFFF_FFFF) as i32,
+                        ]),
+                    );
+                    gossip_nbt.put_int("Type", *gtype as i32);
+                    gossip_nbt.put_int("Value", *value);
+                    gossip_list.push(pumpkin_nbt::tag::NbtTag::Compound(gossip_nbt));
+                }
+            }
+            nbt.put("Gossips", pumpkin_nbt::tag::NbtTag::List(gossip_list));
         })
     }
 
-    fn read_nbt_non_mut<'a>(
-        &'a self,
-        nbt: &'a mut pumpkin_nbt::pnbt::PNbtCompound,
-    ) -> crate::entity::NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> crate::entity::NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            let mut data = self.villager_data.lock().await;
-            if let Ok(t) = nbt.get_int() {
-                data.r#type = VillagerType::try_from(t).unwrap_or(VillagerType::Plains);
-            }
-            if let Ok(p) = nbt.get_int() {
-                data.profession =
-                    VillagerProfession::try_from(p).unwrap_or(VillagerProfession::None);
-            }
-            if let Ok(l) = nbt.get_int() {
-                data.level = l;
+            self.mob_entity
+                .living_entity
+                .entity
+                .read_nbt_non_mut(nbt)
+                .await;
+            if let Some(villager_data_nbt) = nbt.get_compound("VillagerData") {
+                let mut data = self.villager_data.lock().await;
+                if let Some(t) = villager_data_nbt.get_int("Type") {
+                    data.r#type = VillagerType::try_from(t).unwrap_or(VillagerType::Plains);
+                }
+                if let Some(p) = villager_data_nbt.get_int("Profession") {
+                    data.profession =
+                        VillagerProfession::try_from(p).unwrap_or(VillagerProfession::None);
+                }
+                if let Some(l) = villager_data_nbt.get_int("Level") {
+                    data.level = l;
+                }
             }
 
-            if let Ok(food) = nbt.get_int() {
+            if let Some(food) = nbt.get_int("FoodLevel") {
                 self.food_level.store(food, Ordering::Relaxed);
             }
-            if let Ok(xp) = nbt.get_int() {
+            if let Some(xp) = nbt.get_int("Xp") {
                 self.xp.store(xp, Ordering::Relaxed);
             }
-            if let Ok(restock) = nbt.get_long() {
+            if let Some(restock) = nbt.get_long("LastRestock") {
                 self.last_restock_time.store(restock, Ordering::Relaxed);
             }
-            if let Ok(today) = nbt.get_int() {
+            if let Some(today) = nbt.get_int("RestocksToday") {
                 self.restocks_today.store(today, Ordering::Relaxed);
             }
 
             // Inventory
-            if let Ok(inv_len) = nbt.get_int() {
+            if let Some(inventory_list) = nbt.get_list("Inventory") {
                 let mut inventory = self.inventory.lock().await;
                 inventory.clear();
-                for _ in 0..inv_len {
-                    let stack =
-                        ItemStack::read_item_stack_pnbt(nbt).unwrap_or(ItemStack::EMPTY.clone());
-                    inventory.push(Arc::new(Mutex::new(stack)));
+                for tag in inventory_list {
+                    if let Some(item_compound) = tag.extract_compound()
+                        && let Some(stack) = ItemStack::read_item_stack(item_compound)
+                    {
+                        inventory.push(Arc::new(Mutex::new(stack)));
+                    }
                 }
             }
 
             // Gossips
-            if let Ok(gossip_len) = nbt.get_int() {
+            if let Some(gossip_list) = nbt.get_list("Gossips") {
                 let mut gossips = self.gossips.lock().await;
                 gossips.clear();
-                for _ in 0..gossip_len {
-                    if let Ok(uuid) = nbt.get_uuid()
-                        && let Ok(types_len) = nbt.get_int()
-                    {
-                        let mut types = HashMap::new();
-                        for _ in 0..types_len {
-                            if let (Ok(gtype), Ok(val)) = (nbt.get_int(), nbt.get_int()) {
-                                let gossip_type = match gtype {
-                                    0 => GossipType::MajorNegative,
-                                    1 => GossipType::MinorNegative,
-                                    2 => GossipType::MajorPositive,
-                                    3 => GossipType::MinorPositive,
-                                    4 => GossipType::Trading,
-                                    _ => continue,
-                                };
-                                types.insert(gossip_type, val);
-                            }
+                for tag in gossip_list {
+                    if let Some(gossip_nbt) = tag.extract_compound() {
+                        let uuid = gossip_nbt.get_int_array("Target").map(|uuid_array| {
+                            Uuid::from_u128(
+                                (uuid_array[0] as u128) << 96
+                                    | (uuid_array[1] as u128) << 64
+                                    | (uuid_array[2] as u128) << 32
+                                    | (uuid_array[3] as u128),
+                            )
+                        });
+                        if let (Some(uuid), Some(gtype), Some(val)) = (
+                            uuid,
+                            gossip_nbt.get_int("Type"),
+                            gossip_nbt.get_int("Value"),
+                        ) {
+                            let gossip_type = match gtype {
+                                0 => GossipType::MajorNegative,
+                                1 => GossipType::MinorNegative,
+                                2 => GossipType::MajorPositive,
+                                3 => GossipType::MinorPositive,
+                                4 => GossipType::Trading,
+                                _ => continue,
+                            };
+                            gossips.entry(uuid).or_default().insert(gossip_type, val);
                         }
-                        gossips.insert(uuid, types);
                     }
                 }
             }
@@ -435,9 +465,10 @@ impl Mob for VillagerEntity {
 
     fn mob_interact<'a>(
         &'a self,
-        player: &'a crate::entity::player::Player,
+        player: &'a Arc<Player>,
         _item_stack: &'a mut pumpkin_data::item_stack::ItemStack,
     ) -> crate::entity::EntityBaseFuture<'a, bool> {
+        let player = player.clone();
         Box::pin(async move {
             if self.get_entity().age.load(Ordering::Relaxed) < 0 {
                 self.set_unhappy().await;
@@ -451,7 +482,7 @@ impl Mob for VillagerEntity {
             }
             drop(offers);
 
-            self.open_trading_screen(player).await;
+            self.open_trading_screen(&player).await;
 
             true
         })

@@ -48,9 +48,10 @@ pub mod command {
 }
 
 pub use wit::pumpkin::plugin::{
-    block_entity, command as command_wit, common,
+    bedrock_packets, block_entity, boss_bar, command as command_wit, common,
     context::{Context, Server},
-    entity, gui, permission, player, scoreboard, server, text, world,
+    entity, entity_types, gui, i18n, java_packets, particles, permission, player, scoreboard,
+    server, text, world,
 };
 
 pub mod logging;

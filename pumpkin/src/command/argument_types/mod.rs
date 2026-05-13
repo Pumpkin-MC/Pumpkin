@@ -64,12 +64,18 @@ macro_rules! impl_copy_get {
     };
 }
 
-const EMPTY_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_RANGE_EMPTY);
-const SWAPPED_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_RANGE_SWAPPED);
-const INVALID_IDENTIFIER_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_ID_INVALID);
+const EMPTY_BOUNDS_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_RANGE_EMPTY,
+    translation::java::ARGUMENT_RANGE_EMPTY,
+);
+const SWAPPED_BOUNDS_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_RANGE_SWAPPED,
+    translation::java::ARGUMENT_RANGE_SWAPPED,
+);
+const INVALID_IDENTIFIER_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_ID_INVALID,
+    translation::java::ARGUMENT_ID_INVALID,
+);
 
 /// A trait to try getting a value from a [`StringReader`].
 pub trait FromStringReader: Sized {

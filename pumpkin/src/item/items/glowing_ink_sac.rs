@@ -1,7 +1,7 @@
 use std::sync::{Arc, atomic::Ordering};
 
+use crate::block::entities::{BlockEntity, sign::Text};
 use pumpkin_data::item::Item;
-use pumpkin_world::block::entities::{BlockEntity, sign::Text};
 
 use crate::{
     block::{UseWithItemArgs, registry::BlockActionResult},

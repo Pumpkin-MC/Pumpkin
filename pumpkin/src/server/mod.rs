@@ -11,8 +11,12 @@ use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
+use crate::world::WorldPortal;
 use crate::world::custom_bossbar::CustomBossbars;
-use crate::{command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World};
+use crate::{
+    command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
+    world::map::MapManager,
+};
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
@@ -22,6 +26,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
+use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
 use crate::command::CommandSender;
@@ -94,11 +99,15 @@ pub struct Server {
     pub dimensions: Vec<Dimension>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
+    /// Assigns unique IDs to maps.
+    map_id: AtomicI32,
     /// Mojang's public keys, used for chat session signing
     /// Pulled from Mojang API on startup
     pub mojang_public_keys: ArcSwap<Vec<RsaPublicKey>>,
     /// The server's custom bossbars
     pub bossbars: Mutex<CustomBossbars>,
+    /// Manages all maps on the server
+    pub map_manager: MapManager,
     /// The default gamemode when a player joins the server (reset every restart)
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
@@ -214,6 +223,7 @@ impl Server {
             ))),
             permission_registry,
             container_id: 0.into(),
+            map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions: vec![
                 Dimension::OVERWORLD,
@@ -228,6 +238,7 @@ impl Server {
             listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
+            map_manager: MapManager::new(),
             defaultgamemode,
             player_data_storage,
             white_list,
@@ -275,13 +286,14 @@ impl Server {
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                World::load(
-                    into_level(dim, &config, path, registry.clone(), seed, Some(pool)),
-                    l_info,
-                    dim,
-                    registry,
-                    weak,
-                )
+                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
+                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
+                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(
+                    world.clone(),
+                    tokio::runtime::Handle::current(),
+                ));
+                level.world_portal.store(Arc::new(Some(portal)));
+                world
             })
         };
 
@@ -294,9 +306,9 @@ impl Server {
         );
 
         let worlds_vec = vec![
-            Arc::new(overworld.expect("Overworld panicked")),
-            Arc::new(nether.expect("Nether panicked")),
-            Arc::new(end.expect("End panicked")),
+            overworld.expect("Overworld panicked"),
+            nether.expect("Nether panicked"),
+            end.expect("End panicked"),
         ];
         server.worlds.store(Arc::new(worlds_vec));
         if let Ok(k) = keys {
@@ -371,27 +383,26 @@ impl Server {
             let seed = server.level_info.load().world_gen_settings.seed;
 
             // TODO: gen_pool should be reused
-            let world = World::load(
-                pumpkin_world::dimension::into_level(
-                    dimension,
-                    &config,
-                    world_path,
-                    registry.clone(),
-                    seed,
-                    None,
-                ),
-                l_info,
-                dimension,
-                registry,
-                weak,
+            let level = pumpkin_world::dimension::into_level(
+                dimension.clone(),
+                &config,
+                world_path,
+                seed,
+                None,
             );
-            let world_arc = Arc::new(world);
+            let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+            let world = Arc::new(world);
+            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(
+                world.clone(),
+                tokio::runtime::Handle::current(),
+            ));
+            level.world_portal.store(Arc::new(Some(portal)));
             server.worlds.rcu(|worlds| {
                 let mut new_worlds = (**worlds).clone();
-                new_worlds.push(world_arc.clone());
+                new_worlds.push(world.clone());
                 new_worlds
             });
-            world_arc
+            world
         })
         .await
         .expect("World creation panicked")
@@ -431,13 +442,10 @@ impl Server {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
         let (world, nbt) =
-            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id).await {
-                let _version = data.get_int().unwrap_or(0);
-                if let Ok(dimension_key) = data.get_string() {
-                    if let Some(dimension) = Dimension::from_name(&dimension_key) {
+            if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
+                if let Some(dimension_key) = data.get_string("Dimension") {
+                    if let Some(dimension) = Dimension::from_name(dimension_key) {
                         let world = self.get_world_from_dimension(dimension);
-                        // Reset read position so player.read_nbt can read everything from start
-                        data.read_pos = 0;
                         (world, Some(data))
                     } else {
                         warn!("Invalid dimension key in player data: {dimension_key}");
@@ -447,18 +455,16 @@ impl Server {
                             .first()
                             .expect("Default world should exist")
                             .clone();
-                        data.read_pos = 0;
                         (default_world, Some(data))
                     }
                 } else {
-                    // Player data exists but doesn't have a dimension entry.
+                    // Player data exists but doesn't have a "Dimension" key.
                     let default_world = self
                         .worlds
                         .load()
                         .first()
                         .expect("Default world should exist")
                         .clone();
-                    data.read_pos = 0;
                     (default_world, Some(data))
                 }
             } else {
@@ -759,6 +765,17 @@ impl Server {
     /// Generates a new container id.
     pub fn new_container_id(&self) -> u32 {
         self.container_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// Generates a new map id.
+    pub fn next_map_id(&self) -> i32 {
+        let id = self.map_id.fetch_add(1, Ordering::SeqCst);
+        self.level_info.rcu(|level_info| {
+            let mut new_level_info = (**level_info).clone();
+            new_level_info.map_id = self.map_id.load(Ordering::SeqCst);
+            new_level_info
+        });
+        id
     }
 
     pub fn get_branding(&self) -> CPluginMessage<'_> {

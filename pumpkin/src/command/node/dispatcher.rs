@@ -16,7 +16,7 @@ use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::command::tree::Command;
 use futures::future;
-use pumpkin_data::translation::COMMAND_CONTEXT_HERE;
+use pumpkin_data::translation::java::COMMAND_CONTEXT_HERE;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
@@ -440,7 +440,7 @@ impl CommandDispatcher {
             }
 
             error_text = error_text.add_child(
-                TextComponent::translate(COMMAND_CONTEXT_HERE, &[])
+                TextComponent::translate_cross(COMMAND_CONTEXT_HERE, COMMAND_CONTEXT_HERE, &[])
                     .color(Color::Named(NamedColor::Red))
                     .italic(),
             );
@@ -490,14 +490,15 @@ impl CommandDispatcher {
         let mut futures = Vec::with_capacity(capacity);
 
         let context = context.build(truncated_input);
+        let mut provided_suggestions = Vec::new();
 
         for child in children {
-            let mut builder = SuggestionsBuilder::new(truncated_input, start);
+            let builder = SuggestionsBuilder::new(truncated_input, start);
 
-            let future: Pin<Box<dyn Future<Output = Suggestions> + Send>> =
+            let future: Option<Pin<Box<dyn Future<Output = Suggestions> + Send>>> =
                 match self.tree.classify_id(child) {
-                    NodeIdClassification::Root => Box::pin(async { Suggestions::empty() }),
-                    NodeIdClassification::Literal(literal_node_id) => Box::pin(async move {
+                    NodeIdClassification::Root => Some(Box::pin(async { Suggestions::empty() })),
+                    NodeIdClassification::Literal(literal_node_id) => Some(Box::pin(async move {
                         let node = &self.tree[literal_node_id];
                         if node
                             .meta
@@ -508,8 +509,8 @@ impl CommandDispatcher {
                         } else {
                             Suggestions::empty()
                         }
-                    }),
-                    NodeIdClassification::Command(command_node_id) => Box::pin(async move {
+                    })),
+                    NodeIdClassification::Command(command_node_id) => Some(Box::pin(async move {
                         let node = &self.tree[command_node_id];
                         if node
                             .meta
@@ -520,19 +521,27 @@ impl CommandDispatcher {
                         } else {
                             Suggestions::empty()
                         }
-                    }),
+                    })),
                     NodeIdClassification::Argument(argument_node_id) => {
                         let node = &self.tree[argument_node_id];
-                        node.meta
-                            .argument_type
-                            .list_suggestions(&context, &mut builder)
+                        if let Some(provider) = &node.meta.suggestion_provider {
+                            // For custom suggestions sent by the server, we simply
+                            // wait instead of adding the future to join.
+                            provided_suggestions.push(provider.suggest(&context, builder).await);
+                            None
+                        } else {
+                            Some(node.meta.argument_type.list_suggestions(&context, builder))
+                        }
                     }
                 };
 
-            futures.push(future);
+            if let Some(future) = future {
+                futures.push(future);
+            }
         }
 
-        let suggestions = future::join_all(futures).await;
+        let mut suggestions = future::join_all(futures).await;
+        suggestions.append(&mut provided_suggestions);
         Suggestions::merge(full_input, suggestions)
     }
 
@@ -649,6 +658,41 @@ impl CommandDispatcher {
 
         for fallback_command in self.fallback_dispatcher.commands.values() {
             if let Command::Tree(command_tree) = fallback_command
+                && let Some(permission) = self
+                    .fallback_dispatcher
+                    .permissions
+                    .get(&command_tree.names[0])
+                && source.has_permission(permission).await
+            {
+                let usage = command_tree.to_string();
+                for name in &command_tree.names {
+                    commands.insert(
+                        name,
+                        (
+                            command_tree.description.as_ref(),
+                            usage.clone().into_boxed_str(),
+                        ),
+                    );
+                }
+            }
+        }
+
+        commands
+    }
+
+    /// Gets the description and usage of commands from a specific plugin.
+    /// Only returns commands that the source has permission to use.
+    pub async fn get_all_permitted_commands_usage_by_plugin(
+        &self,
+        source: &CommandSource,
+        plugin_name: &str,
+    ) -> BTreeMap<&str, (&str, Box<str>)> {
+        let mut commands: BTreeMap<&str, (&str, Box<str>)> = BTreeMap::new();
+
+        for fallback_command in self.fallback_dispatcher.commands.values() {
+            if let Command::Tree(command_tree) = fallback_command
+                && let Some(source_name) = &command_tree.source
+                && source_name == plugin_name
                 && let Some(permission) = self
                     .fallback_dispatcher
                     .permissions

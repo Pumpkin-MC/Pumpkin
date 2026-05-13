@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use crate::block::entities::sign::SignBlockEntity;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::EnumVariants;
@@ -10,7 +11,6 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;

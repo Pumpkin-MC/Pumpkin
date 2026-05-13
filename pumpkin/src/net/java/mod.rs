@@ -8,9 +8,9 @@ use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::java::server::play::{
     SAttack, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SMoveVehicle,
-    SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
-    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SContainerButtonClick, SCookieResponse as SPCookieResponse, SCustomPayload, SInteract,
+    SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest,
+    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
     SRecipeBookSeenRecipe, SRenameItem, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
     SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
@@ -159,8 +159,16 @@ impl JavaClient {
         let crypt_key: [u8; 16] = shared_secret
             .try_into()
             .map_err(|_| EncryptionError::SharedWrongLength)?;
-        self.network_reader.lock().await.set_encryption(&crypt_key);
-        self.network_writer.lock().await.set_encryption(&crypt_key);
+        self.network_reader
+            .lock()
+            .await
+            .set_encryption(&crypt_key)
+            .map_err(|_| EncryptionError::AlreadyEncrypted)?;
+        self.network_writer
+            .lock()
+            .await
+            .set_encryption(&crypt_key)
+            .map_err(|_| EncryptionError::AlreadyEncrypted)?;
         Ok(())
     }
 
@@ -807,6 +815,11 @@ impl JavaClient {
             id if id == SClickSlot::to_id(version) => {
                 player
                     .on_slot_click(SClickSlot::read(payload, &version)?, server)
+                    .await;
+            }
+            id if id == SContainerButtonClick::to_id(version) => {
+                player
+                    .on_container_button_click(SContainerButtonClick::read(payload, &version)?)
                     .await;
             }
             id if id == SSetHeldItem::to_id(version) => {

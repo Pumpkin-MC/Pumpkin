@@ -8,6 +8,8 @@ use crate::server::Server;
 use crate::world::World;
 use args::ConsumedArgs;
 
+use crate::block::entities::BlockEntity;
+use crate::block::entities::command_block::CommandBlockEntity;
 use crate::command::context::command_source::CommandSource;
 use crate::entity::EntityBase;
 use dispatcher::CommandError;
@@ -21,8 +23,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
-use pumpkin_world::block::entities::BlockEntity;
-use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 
 pub mod args;
 pub mod argument_builder;
@@ -33,6 +33,8 @@ pub mod context;
 pub mod dispatcher;
 pub mod errors;
 pub mod node;
+pub mod parser;
+pub mod snbt;
 pub mod string_reader;
 pub mod suggestion;
 pub mod tree;

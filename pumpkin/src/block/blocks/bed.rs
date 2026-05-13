@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::entities::bed::BedBlockEntity;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::BedPart;
 use pumpkin_data::block_properties::BlockProperties;
@@ -11,7 +12,6 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::bed::BedBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::BlockFuture;
@@ -259,7 +259,11 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_OBSTRUCTED, []),
+                        &TextComponent::translate_cross(
+                            translation::java::BLOCK_MINECRAFT_BED_OBSTRUCTED,
+                            translation::java::BLOCK_MINECRAFT_BED_OBSTRUCTED,
+                            [],
+                        ),
                         true,
                     )
                     .await;
@@ -272,7 +276,11 @@ impl BlockBehaviour for BedBlock {
 
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_OCCUPIED, []),
+                        &TextComponent::translate_cross(
+                            translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
+                            translation::bedrock::TILE_BED_OCCUPIED,
+                            [],
+                        ),
                         true,
                     )
                     .await;
@@ -291,8 +299,9 @@ impl BlockBehaviour for BedBlock {
             {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate(
-                            translation::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
+                        &TextComponent::translate_cross(
+                            translation::java::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
+                            translation::java::BLOCK_MINECRAFT_BED_TOO_FAR_AWAY,
                             [],
                         ),
                         true,
@@ -305,16 +314,18 @@ impl BlockBehaviour for BedBlock {
             if args
                 .player
                 .set_respawn_point(
-                    args.world.dimension,
+                    args.world.dimension.clone(),
                     bed_head_pos,
                     args.player.get_entity().yaw.load(),
                     args.player.get_entity().pitch.load(),
+                    false,
                 )
                 .await
             {
                 args.player
-                    .send_system_message(&TextComponent::translate(
-                        translation::BLOCK_MINECRAFT_SET_SPAWN,
+                    .send_system_message(&TextComponent::translate_cross(
+                        translation::java::BLOCK_MINECRAFT_SET_SPAWN,
+                        translation::bedrock::TILE_BED_RESPAWNSET,
                         [],
                     ))
                     .await;
@@ -324,7 +335,11 @@ impl BlockBehaviour for BedBlock {
             if !can_sleep(args.world).await {
                 args.player
                     .send_system_message_raw(
-                        &TextComponent::translate(translation::BLOCK_MINECRAFT_BED_NO_SLEEP, []),
+                        &TextComponent::translate_cross(
+                            translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
+                            translation::java::BLOCK_MINECRAFT_BED_NO_SLEEP,
+                            [],
+                        ),
                         true,
                     )
                     .await;
@@ -343,8 +358,9 @@ impl BlockBehaviour for BedBlock {
                 {
                     args.player
                         .send_system_message_raw(
-                            &TextComponent::translate(
-                                translation::BLOCK_MINECRAFT_BED_NOT_SAFE,
+                            &TextComponent::translate_cross(
+                                translation::java::BLOCK_MINECRAFT_BED_NOT_SAFE,
+                                translation::java::BLOCK_MINECRAFT_BED_NOT_SAFE,
                                 [],
                             ),
                             true,

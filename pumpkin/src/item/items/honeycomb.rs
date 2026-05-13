@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::block::UseWithItemArgs;
+use crate::block::entities::BlockEntity;
+use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -17,8 +19,6 @@ use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::block::entities::BlockEntity;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 pub struct HoneyCombItem;

@@ -37,8 +37,9 @@ async fn kick_non_whitelisted_players(server: &Server) {
             player
                 .kick(
                     DisconnectReason::Kicked,
-                    TextComponent::translate(
-                        translation::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+                    TextComponent::translate_cross(
+                        translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
+                        translation::java::MULTIPLAYER_DISCONNECT_NOT_WHITELISTED,
                         &[],
                     ),
                 )
@@ -59,15 +60,17 @@ impl CommandExecutor for OnExecutor {
         Box::pin(async move {
             let previous = server.white_list.swap(true, Ordering::Relaxed);
             if previous {
-                Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_WHITELIST_ALREADYON,
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_WHITELIST_ALREADYON,
+                    translation::java::COMMANDS_WHITELIST_ALREADYON,
                     &[],
                 )))
             } else {
                 kick_non_whitelisted_players(server).await;
                 sender
-                    .send_message(TextComponent::translate(
-                        translation::COMMANDS_WHITELIST_ENABLED,
+                    .send_message(TextComponent::translate_cross(
+                        translation::java::COMMANDS_WHITELIST_ENABLED,
+                        translation::java::COMMANDS_WHITELIST_ENABLED,
                         &[],
                     ))
                     .await;
@@ -90,15 +93,17 @@ impl CommandExecutor for OffExecutor {
             let previous = server.white_list.swap(false, Ordering::Relaxed);
             if previous {
                 sender
-                    .send_message(TextComponent::translate(
-                        translation::COMMANDS_WHITELIST_DISABLED,
+                    .send_message(TextComponent::translate_cross(
+                        translation::java::COMMANDS_WHITELIST_DISABLED,
+                        translation::java::COMMANDS_WHITELIST_DISABLED,
                         &[],
                     ))
                     .await;
                 Ok(1)
             } else {
-                Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_WHITELIST_ALREADYOFF,
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_WHITELIST_ALREADYOFF,
+                    translation::java::COMMANDS_WHITELIST_ALREADYOFF,
                     &[],
                 )))
             }
@@ -119,8 +124,9 @@ impl CommandExecutor for ListExecutor {
             let whitelist = &server.data.whitelist_config.read().await.whitelist;
             if whitelist.is_empty() {
                 sender
-                    .send_message(TextComponent::translate(
-                        translation::COMMANDS_WHITELIST_NONE,
+                    .send_message(TextComponent::translate_cross(
+                        translation::java::COMMANDS_WHITELIST_NONE,
+                        translation::java::COMMANDS_WHITELIST_NONE,
                         [],
                     ))
                     .await;
@@ -136,8 +142,9 @@ impl CommandExecutor for ListExecutor {
             let names_len = names.len() as i32;
 
             sender
-                .send_message(TextComponent::translate(
-                    translation::COMMANDS_WHITELIST_LIST,
+                .send_message(TextComponent::translate_cross(
+                    translation::java::COMMANDS_WHITELIST_LIST,
+                    translation::java::COMMANDS_WHITELIST_LIST,
                     [
                         TextComponent::text(whitelist.len().to_string()),
                         TextComponent::text(names),
@@ -163,8 +170,9 @@ impl CommandExecutor for ReloadExecutor {
             *server.data.whitelist_config.write().await = WhitelistConfig::load();
             kick_non_whitelisted_players(server).await;
             sender
-                .send_message(TextComponent::translate(
-                    translation::COMMANDS_WHITELIST_RELOADED,
+                .send_message(TextComponent::translate_cross(
+                    translation::java::COMMANDS_WHITELIST_RELOADED,
+                    translation::java::COMMANDS_WHITELIST_RELOADED,
                     &[],
                 ))
                 .await;
@@ -204,8 +212,9 @@ impl CommandExecutor for AddExecutor {
                     .whitelist
                     .push(WhitelistEntry::new(profile.id, profile.name.clone()));
                 sender
-                    .send_message(TextComponent::translate(
-                        translation::COMMANDS_WHITELIST_ADD_SUCCESS,
+                    .send_message(TextComponent::translate_cross(
+                        translation::java::COMMANDS_WHITELIST_ADD_SUCCESS,
+                        translation::java::COMMANDS_WHITELIST_ADD_SUCCESS,
                         [TextComponent::text(profile.name.clone())],
                     ))
                     .await;
@@ -215,8 +224,9 @@ impl CommandExecutor for AddExecutor {
             whitelist.save();
 
             if successes == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_WHITELIST_ADD_FAILED,
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_WHITELIST_ADD_FAILED,
+                    translation::java::COMMANDS_WHITELIST_ADD_FAILED,
                     &[],
                 )))
             } else {
@@ -251,8 +261,9 @@ impl CommandExecutor for RemoveExecutor {
                 if let Some(i) = i {
                     whitelist.whitelist.remove(i);
                     sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_WHITELIST_REMOVE_SUCCESS,
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_WHITELIST_REMOVE_SUCCESS,
+                            translation::java::COMMANDS_WHITELIST_REMOVE_SUCCESS,
                             [TextComponent::text(player.name.clone())],
                         ))
                         .await;
@@ -266,8 +277,9 @@ impl CommandExecutor for RemoveExecutor {
             kick_non_whitelisted_players(server).await;
 
             if successes == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate(
-                    translation::COMMANDS_WHITELIST_REMOVE_FAILED,
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    translation::java::COMMANDS_WHITELIST_REMOVE_FAILED,
+                    translation::java::COMMANDS_WHITELIST_REMOVE_FAILED,
                     &[],
                 )))
             } else {

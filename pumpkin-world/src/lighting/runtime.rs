@@ -482,7 +482,10 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
                 // Bounds check for section index
-                let mut light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
+                let mut light_engine = chunk
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if section_index >= light_engine.block_light.len() {
                     return Err("Invalid section index".to_string());
                 }
@@ -509,7 +512,10 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
 
-                let light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
+                let light_engine = chunk
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 // Bounds check for section index (lock the light engine)
                 if section_index >= light_engine.sky_light.len() {
                     return 15;
@@ -536,7 +542,10 @@ impl DynamicLightEngine {
                 let section_index =
                     (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
                 // Bounds check for section index
-                let mut light_engine = chunk.light_engine.lock().unwrap_or_else(|e| e.into_inner());
+                let mut light_engine = chunk
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if section_index >= light_engine.sky_light.len() {
                     return Err("Invalid section index".to_string());
                 }

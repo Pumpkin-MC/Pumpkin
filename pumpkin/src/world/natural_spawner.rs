@@ -1,15 +1,16 @@
 use crate::entity::EntityBase;
-use crate::entity::r#type::from_type;
+use crate::entity::r#type::{check_spawn_rules, from_type};
 use crate::world::World;
 use arc_swap::ArcSwap;
 use pumpkin_data::biome::Spawner;
+use pumpkin_data::chunk::Biome;
 use pumpkin_data::entity::{EntityType, MobCategory, SpawnLocation};
 use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
 use pumpkin_data::{Block, BlockDirection, BlockState};
-use pumpkin_nbt::pnbt::PNbtCompound;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::get_section_cord;
@@ -20,6 +21,7 @@ use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomImpl, get_seed};
 use pumpkin_world::chunk::io::Dirtiable;
 use pumpkin_world::chunk::{ChunkData, ChunkHeightmapType};
+use pumpkin_world::generation::proto_chunk::GenerationCache;
 use rand::seq::IndexedRandom;
 use rand::{RngExt, rng};
 use std::fmt;
@@ -503,6 +505,126 @@ pub fn get_random_pos_within(
     BlockPos::new(x, y, z)
 }
 
+pub async fn spawn_mobs_for_chunk_generation(
+    world: &Arc<World>,
+    cache: &mut dyn GenerationCache,
+    biome: &'static Biome,
+    chunk_x: i32,
+    chunk_z: i32,
+) {
+    let mob_settings = &biome.spawners;
+    let creatures = &mob_settings.creature;
+
+    if creatures.is_empty() {
+        return;
+    }
+
+    let xo = chunk_x << 4;
+    let zo = chunk_z << 4;
+
+    while rand::random::<f32>() < biome.creature_spawn_probability {
+        let Some(spawner_data) = creatures.choose(&mut rand::rng()) else {
+            continue;
+        };
+
+        let count = spawner_data.min_count
+            + rand::random_range(0..(1 + spawner_data.max_count - spawner_data.min_count).max(1));
+        let entity_type = EntityType::from_name(
+            spawner_data
+                .r#type
+                .strip_prefix("minecraft:")
+                .unwrap_or(spawner_data.r#type),
+        )
+        .unwrap();
+
+        let mut x = xo + rand::random_range(0..16);
+        let mut z = zo + rand::random_range(0..16);
+        let start_x = x;
+        let start_z = z;
+
+        for _ in 0..count {
+            let mut success = false;
+
+            // Try 4 times to find a valid spot in the immediate area
+            for _ in 0..4 {
+                if success {
+                    break;
+                }
+
+                let pos = get_top_non_colliding_pos(world, cache, entity_type, x, z);
+
+                if is_spawn_position_ok_cache(cache, &pos, entity_type) {
+                    let spawn_pos_f64 = Vector3::new(
+                        f64::from(pos.0.x) + 0.5,
+                        f64::from(pos.0.y),
+                        f64::from(pos.0.z) + 0.5,
+                    );
+
+                    let entity = from_type(entity_type, spawn_pos_f64, world, Uuid::new_v4()).await;
+                    entity
+                        .get_entity()
+                        .set_rotation(rand::random::<f32>() * 360., 0.);
+                    world.spawn_entity(entity).await;
+                    success = true;
+                }
+
+                // Random jitter for the next mob in the group
+                x += rand::random_range(0..5) - rand::random_range(0..5);
+                z += rand::random_range(0..5) - rand::random_range(0..5);
+
+                // Keep group within the chunk bounds
+                if x < xo || x >= xo + 16 || z < zo || z >= zo + 16 {
+                    x = start_x;
+                    z = start_z;
+                }
+            }
+        }
+    }
+}
+
+pub fn get_top_non_colliding_pos(
+    world: &World,
+    cache: &dyn GenerationCache,
+    entity_type: &'static EntityType,
+    x: i32,
+    z: i32,
+) -> BlockPos {
+    let mut y = cache.get_top_y(&entity_type.spawn_restriction.heightmap, x, z);
+    let mut pos_vec = Vector3::new(x, y, z);
+    let min_y = world.min_y;
+
+    if world.dimension.has_ceiling {
+        loop {
+            y -= 1;
+            pos_vec.y = y;
+            // Use UFCS to avoid the ambiguity error from earlier
+            if GenerationCache::get_block_state(cache, &pos_vec)
+                .to_state()
+                .is_air()
+                || y <= min_y
+            {
+                break;
+            }
+        }
+
+        loop {
+            y -= 1;
+            pos_vec.y = y;
+            if !GenerationCache::get_block_state(cache, &pos_vec)
+                .to_state()
+                .is_air()
+                || y <= min_y
+            {
+                break;
+            }
+        }
+    }
+
+    let pos = BlockPos::new(x, y, z);
+
+    adjust_spawn_position_cache(cache, pos, entity_type)
+}
+
 pub async fn spawn_category_for_position(
     category: &'static MobCategory,
     world: &Arc<World>,
@@ -594,7 +716,7 @@ pub async fn spawn_category_for_position(
             entity.init_data_tracker().await;
             let base_entity = entity.get_entity();
             let packet = base_entity.create_spawn_packet();
-            let mut nbt = PNbtCompound::new();
+            let mut nbt = NbtCompound::new();
             entity.write_nbt(&mut nbt).await;
             // Keep the entity reference here so we don't have to "find" it later
             prepared_data.push((base_entity.entity_uuid, nbt, packet, entity.clone()));
@@ -718,6 +840,9 @@ pub async fn is_valid_spawn_position_for_type(
     if !is_spawn_position_ok(world, block_pos, entity_type).await {
         return false;
     }
+    if !check_spawn_rules(entity_type, world, block_pos).await {
+        return false;
+    }
     // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
     if !world
         .is_space_empty(BoundingBox::new_from_pos(
@@ -766,6 +891,69 @@ pub async fn is_spawn_position_ok(
         }
         SpawnLocation::Unrestricted => true,
     }
+}
+
+/// Cache-based version of `is_spawn_position_ok` used during world generation.
+pub fn is_spawn_position_ok_cache(
+    cache: &dyn GenerationCache,
+    block_pos: &BlockPos,
+    entity_type: &'static EntityType,
+) -> bool {
+    let pos_vec = block_pos.0;
+    let state = GenerationCache::get_block_state(cache, &pos_vec).to_state();
+
+    match entity_type.spawn_restriction.location {
+        SpawnLocation::InLava => {
+            // During generation, we check the block state's liquid property and tag
+            state.is_liquid() && Block::from_state_id(state.id).has_tag(&MINECRAFT_LAVA)
+        }
+        SpawnLocation::InWater => {
+            let above_pos = block_pos.up().0;
+            let above_state = GenerationCache::get_block_state(cache, &above_pos).to_state();
+
+            state.is_liquid()
+                && Block::from_state_id(state.id).has_tag(&MINECRAFT_WATER)
+                && !above_state.is_full_cube()
+        }
+        SpawnLocation::OnGround => {
+            let down_pos = block_pos.down().0;
+            let up_pos = block_pos.up().0;
+
+            let down = GenerationCache::get_block_state(cache, &down_pos).to_state();
+            let up = GenerationCache::get_block_state(cache, &up_pos).to_state();
+
+            // Logic: solid surface below and low enough light level (if applicable in generation)
+            let is_valid_spawn_below =
+                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+
+            if is_valid_spawn_below {
+                is_valid_empty_spawn_block(state) && is_valid_empty_spawn_block(up)
+            } else {
+                false
+            }
+        }
+        SpawnLocation::Unrestricted => true,
+    }
+}
+
+/// Cache-based version of `adjust_spawn_position` used during world generation.
+pub fn adjust_spawn_position_cache(
+    cache: &dyn GenerationCache,
+    pos: BlockPos,
+    entity_type: &'static EntityType,
+) -> BlockPos {
+    if matches!(
+        entity_type.spawn_restriction.location,
+        SpawnLocation::OnGround
+    ) {
+        let below = pos.down();
+        let state = GenerationCache::get_block_state(cache, &below.0).to_state();
+
+        if !state.is_full_cube() && !state.is_liquid() {
+            return below;
+        }
+    }
+    pos
 }
 
 pub async fn adjust_spawn_position(

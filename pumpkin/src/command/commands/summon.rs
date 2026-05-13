@@ -13,7 +13,7 @@ use pumpkin_data::translation;
 use pumpkin_util::{math::vector3::Vector3, text::TextComponent};
 use uuid::Uuid;
 
-use pumpkin_world::block::entities::BlockEntity;
+use crate::block::entities::BlockEntity;
 
 const NAMES: [&str; 1] = ["summon"];
 
@@ -68,8 +68,9 @@ impl CommandExecutor for Executor {
             let name = entity.get_display_name().await;
             world.spawn_entity(entity).await;
             sender
-                .send_message(TextComponent::translate(
-                    translation::COMMANDS_SUMMON_SUCCESS,
+                .send_message(TextComponent::translate_cross(
+                    translation::java::COMMANDS_SUMMON_SUCCESS,
+                    translation::bedrock::COMMANDS_SUMMON_SUCCESS,
                     [name],
                 ))
                 .await;

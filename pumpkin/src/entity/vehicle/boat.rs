@@ -185,7 +185,7 @@ impl EntityBase for BoatEntity {
 
     fn interact<'a>(
         &'a self,
-        player: &'a Player,
+        player: &'a Arc<Player>,
         _item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {

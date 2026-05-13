@@ -33,13 +33,17 @@ use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
 use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
 
+use crate::block::entities::command_block::CommandBlockEntity;
+use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
-use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
+use pumpkin_data::data_component_impl::{
+    BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -71,8 +75,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
-use pumpkin_world::block::entities::command_block::CommandBlockEntity;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
@@ -152,44 +154,57 @@ impl PumpkinError for ChatError {
         match self {
             Self::OversizedMessage => Some("Chat message too long".into()),
             Self::IllegalCharacters => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
+                    translation::java::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
                     [],
                 )
                 .get_text(),
             ),
             Self::UnsignedChat => Some(
-                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT, [])
-                    .get_text(),
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT,
+                    translation::java::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT,
+                    [],
+                )
+                .get_text(),
             ),
             Self::TooManyPendingChats => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                    translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
                     [],
                 )
                 .get_text(),
             ),
             Self::ChatValidationFailed => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
+                    translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
                     [],
                 )
                 .get_text(),
             ),
             Self::OutOfOrderChat => Some(
-                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT, [])
-                    .get_text(),
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT,
+                    translation::java::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT,
+                    [],
+                )
+                .get_text(),
             ),
             Self::ExpiredPublicKey => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
+                    translation::java::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
                     [],
                 )
                 .get_text(),
             ),
             Self::InvalidPublicKey => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
+                    translation::java::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
                     [],
                 )
                 .get_text(),
@@ -240,9 +255,14 @@ impl JavaClient {
                 change_game_mode.game_mode.to_str().to_lowercase()
             );
             player
-                .send_system_message(&TextComponent::translate(
-                    translation::COMMANDS_GAMEMODE_SUCCESS_SELF,
-                    [TextComponent::translate(gamemode_string, [])],
+                .send_system_message(&TextComponent::translate_cross(
+                    translation::java::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                    translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                    [TextComponent::translate_cross(
+                        gamemode_string.clone(),
+                        gamemode_string,
+                        [],
+                    )],
                 ))
                 .await;
         }
@@ -312,8 +332,9 @@ impl JavaClient {
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -426,8 +447,9 @@ impl JavaClient {
             || !packet.yaw.is_finite()
             || !packet.pitch.is_finite()
         {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -556,8 +578,9 @@ impl JavaClient {
             return;
         }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -1595,8 +1618,9 @@ impl JavaClient {
         }
 
         if entity_id.0 == player.entity_id() {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 [],
             ))
             .await;
@@ -1609,8 +1633,9 @@ impl JavaClient {
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
             .or_else(|| world.get_entity_by_id(entity_id.0));
         let Some(target) = target else {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 [],
             ))
             .await;
@@ -1684,10 +1709,7 @@ impl JavaClient {
                             }
 
                             if entity_id.0 == player.entity_id() {
-                                self.kick(TextComponent::translate(
-                                    translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                                    [],
-                                ))
+                                self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
                                 .await;
                                 return;
                             }
@@ -1737,10 +1759,7 @@ impl JavaClient {
                             player.entity_id(),
                             event.entity_id
                         );
-                        self.kick(TextComponent::translate(
-                            translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                            [],
-                        ))
+                        self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
                         .await;
                     }
                 }
@@ -2149,7 +2168,7 @@ impl JavaClient {
     #[expect(clippy::too_many_arguments)]
     async fn call_use_item_on(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         position: &BlockPos,
         cursor_pos: &Vector3<f32>,
         face: &BlockDirection,
@@ -2318,7 +2337,9 @@ impl JavaClient {
             }
         }
 
-        if held.get_data_component::<ConsumableImpl>().is_some() {
+        if held.get_data_component::<ConsumableImpl>().is_some()
+            || held.get_data_component::<BlocksAttacksImpl>().is_some()
+        {
             // If its food we want to make sure we can actually consume it
             if let Some(food) = held.get_data_component::<FoodImpl>() {
                 if player.abilities.lock().await.invulnerable
@@ -2492,7 +2513,7 @@ impl JavaClient {
 
     pub async fn handle_close_container(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         _server: &Server,
         _packet: SCloseContainer,
     ) {
@@ -2619,8 +2640,9 @@ impl JavaClient {
         if location.0.y + face.to_offset().y > world.get_top_y() {
             player
                 .send_system_message_raw(
-                    &TextComponent::translate(
-                        translation::BUILD_TOOHIGH,
+                    &TextComponent::translate_cross(
+                        translation::java::BUILD_TOOHIGH,
+                        translation::bedrock::BUILD_TOOHIGH,
                         vec![TextComponent::text((world.get_top_y()).to_string())],
                     )
                     .color_named(NamedColor::Red),

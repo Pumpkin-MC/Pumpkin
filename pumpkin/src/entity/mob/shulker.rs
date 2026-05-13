@@ -8,7 +8,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_nbt::pnbt::PNbtCompound;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CEntityPositionSync, Metadata};
 use pumpkin_util::math::position::BlockPos;
@@ -320,25 +320,25 @@ impl ShulkerEntity {
 }
 
 impl NBTStorage for ShulkerEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity.living_entity.write_nbt(nbt).await;
-            nbt.put_byte(self.attach_face.load(Ordering::Relaxed) as i8);
-            nbt.put_byte(self.peek_amount.load(Ordering::Relaxed) as i8);
-            nbt.put_byte(self.color.load(Ordering::Relaxed) as i8);
+            nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
+            nbt.put_byte("PeekAmount", self.peek_amount.load(Ordering::Relaxed) as i8);
+            nbt.put_byte("Color", self.color.load(Ordering::Relaxed) as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            if let Ok(face) = nbt.get_byte() {
+            if let Some(face) = nbt.get_byte("AttachFace") {
                 self.attach_face.store(face as u8, Ordering::Relaxed);
             }
-            if let Ok(peek) = nbt.get_byte() {
+            if let Some(peek) = nbt.get_byte("PeekAmount") {
                 self.peek_amount.store(peek as u8, Ordering::Relaxed);
             }
-            if let Ok(color) = nbt.get_byte() {
+            if let Some(color) = nbt.get_byte("Color") {
                 self.color.store(color as u8, Ordering::Relaxed);
             }
         })

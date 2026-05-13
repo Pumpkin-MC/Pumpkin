@@ -79,8 +79,9 @@ async fn ban_players(
     }
 
     if count == 0 {
-        Err(CommandError::CommandFailed(TextComponent::translate(
-            translation::COMMANDS_BAN_FAILED,
+        Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            translation::java::COMMANDS_BAN_FAILED,
+            translation::bedrock::COMMANDS_BAN_FAILED,
             [],
         )))
     } else {
@@ -123,8 +124,9 @@ async fn ban_profile(
 
     // Send messages
     sender
-        .send_message(TextComponent::translate(
-            translation::COMMANDS_BAN_SUCCESS,
+        .send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_BAN_SUCCESS,
+            translation::bedrock::COMMANDS_BAN_SUCCESS,
             [
                 TextComponent::text(profile.name.clone()),
                 TextComponent::text(reason),
@@ -136,7 +138,11 @@ async fn ban_profile(
         player
             .kick(
                 DisconnectReason::Kicked,
-                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_BANNED, []),
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_BANNED,
+                    translation::bedrock::DISCONNECTIONSCREEN_TITLE_BANNEDBYHOST,
+                    [],
+                ),
             )
             .await;
     }

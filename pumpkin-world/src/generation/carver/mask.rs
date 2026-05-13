@@ -16,7 +16,7 @@ impl CarvingMask {
         }
     }
 
-    fn get_bit_index(&self, x: i32, y: i32, z: i32) -> usize {
+    const fn get_bit_index(&self, x: i32, y: i32, z: i32) -> usize {
         // x: 0..16, z: 0..16, y: min_y..min_y+height
         let rel_x = x & 15;
         let rel_z = z & 15;

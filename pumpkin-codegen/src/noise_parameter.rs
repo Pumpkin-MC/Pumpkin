@@ -8,19 +8,22 @@ pub fn build() -> TokenStream {
     let json: BTreeMap<String, DoublePerlinNoiseParametersCodec> =
         serde_json::from_str(&fs::read_to_string("../assets/noise_parameters.json").unwrap())
             .expect("Failed to parse noise_parameters.json");
-    
+
     let mut variants = TokenStream::new();
     let mut match_variants = TokenStream::new();
 
     for (i, (raw_name, parameter)) in json.iter().enumerate() {
-        let name = raw_name.strip_prefix("minecraft:").unwrap().replace("/", "_");
+        let name = raw_name
+            .strip_prefix("minecraft:")
+            .unwrap()
+            .replace("/", "_");
         let name_ident = format_ident!("{}", name.to_uppercase());
-        
+
         // 1. MD5 Pre-calculation
         let hash = md5::compute(raw_name.as_bytes());
         let lo = u64::from_be_bytes(hash[0..8].try_into().unwrap());
         let hi = u64::from_be_bytes(hash[8..16].try_into().unwrap());
-        
+
         // 2. Amplitude Pre-calculation
         let amplitudes = &parameter.amplitudes;
         let mut min_octave = i32::MAX;
@@ -71,9 +74,9 @@ pub fn build() -> TokenStream {
             pub const COUNT: usize = #count;
 
             pub const fn new(
-                id: usize, 
-                first_octave: i32, 
-                amplitudes: &'static [f64], 
+                id: usize,
+                first_octave: i32,
+                amplitudes: &'static [f64],
                 lo: u64,
                 hi: u64,
                 amplitude: f64,

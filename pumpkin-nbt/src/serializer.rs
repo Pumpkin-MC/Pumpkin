@@ -266,7 +266,12 @@ impl<W: Write> ser::Serializer for &mut Serializer<W> {
 
     // Just skip serializing if value is none
     fn serialize_none(self) -> Result<()> {
-        Ok(())
+        match self.state {
+            State::FirstListElement { .. } | State::ListElement | State::CheckedListElement => Err(
+                Error::SerdeError("NBT lists do not support null/none values".to_string()),
+            ),
+            _ => Ok(()),
+        }
     }
 
     fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<()> {

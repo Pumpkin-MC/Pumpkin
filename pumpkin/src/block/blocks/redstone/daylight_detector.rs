@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use crate::block::entities::daylight_detector::DaylightDetectorBlockEntity;
 use pumpkin_data::{Block, block_properties::BlockProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::entities::daylight_detector::DaylightDetectorBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::{

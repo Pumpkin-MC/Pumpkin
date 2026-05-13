@@ -2,6 +2,7 @@ use std::sync::{Arc, atomic::Ordering};
 
 use pumpkin_macros::pumpkin_block;
 
+use crate::block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity;
 use crate::{
     block::{
         BlockBehaviour, BlockFuture, BlockHitResult, GetComparatorOutputArgs, NormalUseArgs,
@@ -20,10 +21,7 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
-use pumpkin_world::{
-    BlockStateId, block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity,
-    inventory::Inventory,
-};
+use pumpkin_world::{BlockStateId, inventory::Inventory};
 use tokio::sync::Mutex;
 
 #[pumpkin_block("minecraft:chiseled_bookshelf")]

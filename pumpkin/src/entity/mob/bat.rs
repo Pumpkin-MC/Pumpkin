@@ -3,13 +3,17 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::chunk::ChunkHeightmapType;
 use rand::RngExt;
 use tokio::sync::Mutex;
 
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
+use crate::world::World;
 
 const ROOSTING_FLAG: u8 = 1;
 const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
@@ -39,6 +43,31 @@ impl BatEntity {
         mob_arc
     }
 
+    pub async fn check_bat_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        if pos.0.y
+            >= world
+                .get_heightmap_height(ChunkHeightmapType::WorldSurface, pos.0.x, pos.0.z)
+                .await
+        {
+            return false;
+        }
+        if rand::random_bool(1.0) {
+            return false;
+        }
+        if world.get_max_local_raw_brightness(pos).await > rand::random_range(0..4) {
+            return false;
+        }
+        if world
+            .get_block(pos)
+            .await
+            .has_tag(&tag::Block::MINECRAFT_BATS_SPAWNABLE_ON)
+        {
+            return false;
+        }
+        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
+        true
+    }
+
     fn is_roosting(&self) -> bool {
         self.roosting.load(Relaxed)
     }
@@ -64,21 +93,19 @@ impl BatEntity {
     }
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
 impl NBTStorage for BatEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity.living_entity.write_nbt(nbt).await;
             let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
-            nbt.put_byte(flags as i8);
+            nbt.put_byte("BatFlags", flags as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            let flags = nbt.get_byte().unwrap_or(0) as u8;
+            let flags = nbt.get_byte("BatFlags").unwrap_or(0) as u8;
             let roosting = (flags & ROOSTING_FLAG) != 0;
             self.set_roosting(roosting).await;
         })

@@ -7,6 +7,8 @@ use crate::block::{
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 
+use crate::block::entities::dropper::DropperBlockEntity;
+use crate::block::entities::hopper::HopperBlockEntity;
 use pumpkin_data::block_properties::{BlockProperties, Facing};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::world::WorldEvent;
@@ -20,8 +22,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::dropper::DropperBlockEntity;
-use pumpkin_world::block::entities::hopper::HopperBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
@@ -47,7 +47,11 @@ impl ScreenHandlerFactory for DropperScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_DROPPER, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_DROPPER,
+            translation::bedrock::CONTAINER_DROPPER,
+            &[],
+        )
     }
 }
 

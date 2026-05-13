@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::entities::jukebox::JukeboxBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockFuture, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
@@ -19,7 +20,6 @@ use pumpkin_data::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::block::entities::jukebox::JukeboxBlockEntity;
 use pumpkin_world::world::BlockFlags;
 use rand::{RngExt, rng};
 

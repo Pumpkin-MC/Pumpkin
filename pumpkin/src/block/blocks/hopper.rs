@@ -8,6 +8,7 @@ use crate::block::{
 };
 use crate::world::World;
 
+use crate::block::entities::hopper::HopperBlockEntity;
 use pumpkin_data::block_properties::{BlockProperties, FacingHopper};
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::generic_container_screen_handler::create_hopper;
@@ -19,7 +20,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::hopper::HopperBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
@@ -43,7 +43,11 @@ impl ScreenHandlerFactory for HopperBlockScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_HOPPER, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_HOPPER,
+            translation::bedrock::CONTAINER_HOPPER,
+            &[],
+        )
     }
 }
 

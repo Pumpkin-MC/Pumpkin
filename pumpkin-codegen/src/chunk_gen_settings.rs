@@ -12,6 +12,7 @@ pub struct BlockStateCodecStruct {
     pub name: String,
     /// Optional block state properties (e.g., `{"facing": "north"}`).
     #[serde(rename = "Properties")]
+    #[allow(dead_code)]
     pub properties: Option<BTreeMap<String, String>>,
 }
 

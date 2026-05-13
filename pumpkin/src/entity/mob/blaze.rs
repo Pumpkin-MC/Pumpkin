@@ -6,14 +6,13 @@ use crate::entity::{
     Entity, NBTStorage,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
-        look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
     },
     mob::{Mob, MobEntity},
 };
 
 pub struct BlazeEntity {
-    entity: Arc<MobEntity>,
+    pub entity: Arc<MobEntity>,
 }
 
 impl BlazeEntity {
@@ -30,8 +29,16 @@ impl BlazeEntity {
             let mut target_selector = mob_arc.entity.target_selector.lock().await;
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            // TODO: BlazeShootFireballGoal
-            goal_selector.add_goal(4, Box::new(MeleeAttackGoal::new(1.0, false)));
+
+            goal_selector.add_goal(
+                4,
+                Box::new(
+                    crate::entity::ai::goal::blaze_attack::BlazeShootFireballGoal::new(
+                        Arc::downgrade(&mob_arc),
+                    ),
+                ),
+            );
+
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 8,
@@ -46,6 +53,26 @@ impl BlazeEntity {
         };
 
         mob_arc
+    }
+
+    pub const fn set_charged(&self, _charged: bool) {
+        // TODO:
+        // let flags = &self.entity.living_entity.entity.flags;
+
+        // let new_je_flags = if charged {
+        //     flags.fetch_or(1, Ordering::Relaxed) | 1
+        // } else {
+        //     flags.fetch_and(!1, Ordering::Relaxed) & !1
+        // };
+        // self.entity
+        //     .living_entity
+        //     .entity
+        //     .send_meta_data(&[Metadata::new(
+        //         TrackedData::FLAGS_ID,
+        //         MetaDataType::BYTE,
+        //         new_je_flags,
+        //     )])
+        //     .await;
     }
 }
 

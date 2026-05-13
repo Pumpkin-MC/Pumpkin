@@ -4,7 +4,7 @@ use crate::chunk::ChunkHeightmapType;
 use crate::generation::generator;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::{BlockAccessor, BlockRegistryExt};
+use crate::world::{BlockAccessor, WorldPortalExt};
 use crate::{BlockStateId, ProtoChunk};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::biome::Biome;
@@ -323,6 +323,24 @@ impl GenerationCache for Cache {
         }
     }
 
+    fn get_blending_data(
+        &self,
+        chunk_x: i32,
+        chunk_z: i32,
+    ) -> Option<&crate::generation::blender::blending_data::BlendingData> {
+        let dx = chunk_x - self.x;
+        let dz = chunk_z - self.z;
+
+        if dx < 0 || dx >= self.size || dz < 0 || dz >= self.size {
+            return None;
+        }
+
+        match &self.chunks[(dx * self.size + dz) as usize] {
+            Chunk::Proto(chunk) => chunk.blending_data.as_ref(),
+            Chunk::Level(data) => data.blending_data.as_ref(),
+        }
+    }
+
     fn is_air(&self, local_pos: &Vector3<i32>) -> bool {
         is_air(GenerationCache::get_block_state(self, local_pos).0)
     }
@@ -342,7 +360,7 @@ impl Cache {
         &mut self,
         stage: StagedChunkEnum,
         generator: &generator::VanillaGenerator,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         lighting_config: &LightingEngineConfig,
     ) {
         let mid = ((self.size * self.size) >> 1) as usize;
@@ -389,9 +407,12 @@ impl Cache {
                 // Engine's internal state is cleared by initialize_light() and will be dropped here
                 drop(engine);
             }
+            StagedChunkEnum::Spawn => {
+                ProtoChunk::spawn_mobs(self, block_registry);
+            }
             StagedChunkEnum::Full => {
                 let chunk = self.chunks[mid].get_proto_chunk_mut();
-                debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
+                debug_assert_eq!(chunk.stage, StagedChunkEnum::Spawn);
                 chunk.stage = StagedChunkEnum::Full;
                 self.chunks[mid].upgrade_to_level_chunk(&generator.dimension, lighting_config);
             }

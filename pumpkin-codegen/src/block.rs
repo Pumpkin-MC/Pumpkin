@@ -639,6 +639,7 @@ pub struct Block {
     pub hardness: f32,
     /// Blast resistance against explosions.
     pub blast_resistance: f32,
+    pub map_color: u8,
     /// Numeric ID of the corresponding item, if any.
     pub item_id: u16,
     /// Flammability data, present only if the block can catch fire.
@@ -668,6 +669,8 @@ impl ToTokens for Block {
         //let translation_key = LitStr::new(&self.translation_key, Span::call_site());
         let hardness = &self.hardness;
         let blast_resistance = &self.blast_resistance;
+        let map_color = &self.map_color;
+
         let item_id = LitInt::new(&self.item_id.to_string(), Span::call_site());
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
@@ -707,6 +710,7 @@ impl ToTokens for Block {
                 name: #name,
                 hardness: #hardness,
                 blast_resistance: #blast_resistance,
+                map_color: #map_color,
                 slipperiness: #slipperiness,
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,

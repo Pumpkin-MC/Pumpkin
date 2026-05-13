@@ -10,7 +10,7 @@ use crate::{
         block_state_provider::BlockStateProvider,
         feature::features::tree::{TreeFeature, TreeNode, trunk::TrunkPlacer},
     },
-    world::BlockRegistryExt,
+    world::WorldPortalExt,
 };
 
 pub struct DarkOakTrunkPlacer;
@@ -18,7 +18,7 @@ pub struct DarkOakTrunkPlacer;
 impl DarkOakTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,

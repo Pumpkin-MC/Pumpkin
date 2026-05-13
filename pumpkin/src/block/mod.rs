@@ -13,8 +13,10 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 pub mod blocks;
+pub mod entities;
 pub mod fluid;
 pub mod registry;
+pub mod viewer;
 
 use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
@@ -216,7 +218,7 @@ pub struct NormalUseArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub position: &'a BlockPos,
-    pub player: &'a Player,
+    pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
 }
 
@@ -225,7 +227,7 @@ pub struct UseWithItemArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
     pub position: &'a BlockPos,
-    pub player: &'a Player,
+    pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
     pub item_stack: &'a Arc<Mutex<ItemStack>>,
 }

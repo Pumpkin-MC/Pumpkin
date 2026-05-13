@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use crate::block::entities::{
+    PropertyDelegate, furnace_like_block_entity::ExperienceContainer, smoker::SmokerBlockEntity,
+};
 use pumpkin_data::{
     block_properties::{BlockProperties, FurnaceLikeProperties},
     screen::WindowType,
@@ -12,13 +15,7 @@ use pumpkin_inventory::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{
-    BlockStateId,
-    block::entities::{
-        PropertyDelegate, furnace_like_block_entity::ExperienceContainer, smoker::SmokerBlockEntity,
-    },
-    inventory::Inventory,
-};
+use pumpkin_world::{BlockStateId, inventory::Inventory};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -74,7 +71,11 @@ impl ScreenHandlerFactory for SmokerScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate(translation::CONTAINER_SMOKER, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_SMOKER,
+            translation::bedrock::TILE_SMOKER_NAME,
+            &[],
+        )
     }
 }
 #[pumpkin_block("minecraft:smoker")]

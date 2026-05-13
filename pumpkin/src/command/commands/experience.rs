@@ -58,7 +58,8 @@ impl Executor {
         };
 
         sender
-            .send_message(TextComponent::translate(
+            .send_message(TextComponent::translate_cross(
+                translation_key,
                 translation_key,
                 [
                     target.get_display_name().await,
@@ -87,7 +88,8 @@ impl Executor {
         };
 
         if targets.len() > 1 {
-            TextComponent::translate(
+            TextComponent::translate_cross(
+                format!("commands.experience.{mode_str}.{type_str}.success.multiple"),
                 format!("commands.experience.{mode_str}.{type_str}.success.multiple"),
                 [
                     TextComponent::text(amount.to_string()),
@@ -95,7 +97,8 @@ impl Executor {
                 ],
             )
         } else {
-            TextComponent::translate(
+            TextComponent::translate_cross(
+                format!("commands.experience.{mode_str}.{type_str}.success.single"),
                 format!("commands.experience.{mode_str}.{type_str}.success.single"),
                 [TextComponent::text(amount.to_string()), first_target_name],
             )
@@ -140,14 +143,16 @@ impl CommandExecutor for Executor {
 
             if self.mode == Mode::Query {
                 let target = targets.first().ok_or_else(|| {
-                    CommandError::CommandFailed(TextComponent::translate(
+                    CommandError::CommandFailed(TextComponent::translate_cross(
+                        "argument.player.unknown",
                         "argument.player.unknown",
                         [],
                     ))
                 })?;
 
                 if targets.len() > 1 {
-                    return Err(CommandError::CommandFailed(TextComponent::translate(
+                    return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                        "argument.player.toomany",
                         "argument.player.toomany",
                         [],
                     )));
@@ -166,7 +171,8 @@ impl CommandExecutor for Executor {
             }
 
             if successes == 0 {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.experience.set.points.invalid",
                     "commands.experience.set.points.invalid",
                     [],
                 )));

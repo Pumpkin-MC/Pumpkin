@@ -2,7 +2,7 @@ use pumpkin_data::{Block, BlockDirection, BlockState, block_properties::BlockPro
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct VinesFeature;
 
@@ -11,7 +11,7 @@ impl VinesFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str,

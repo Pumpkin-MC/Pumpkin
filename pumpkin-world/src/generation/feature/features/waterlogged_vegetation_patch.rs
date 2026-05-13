@@ -6,7 +6,7 @@ use pumpkin_util::{
 };
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 use pumpkin_data::BlockDirection;
 
 use super::vegetation_patch::VegetationPatchFeature;
@@ -20,7 +20,7 @@ impl WaterloggedVegetationPatchFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature_name: &str,
@@ -64,7 +64,7 @@ impl WaterloggedVegetationPatchFeature {
     fn place_ground_patch<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         origin: BlockPos,
         replaceable: &crate::generation::block_predicate::BlockPredicate,
@@ -98,7 +98,7 @@ impl WaterloggedVegetationPatchFeature {
     fn place_vegetation<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature_name: &str,

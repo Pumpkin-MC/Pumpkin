@@ -106,7 +106,7 @@ pub fn place_template(
                     if key != "x" && key != "y" && key != "z" && key != "id" {
                         block_entity_nbt
                             .child_tags
-                            .push((key.clone(), value.clone()));
+                            .insert(key.clone(), value.clone());
                     }
                 }
             }

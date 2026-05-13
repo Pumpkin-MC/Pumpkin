@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use crate::entity::mob::SunSensitive;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, NBTStorage,
     mob::{Mob, MobEntity},
 };
 
@@ -41,10 +40,4 @@ impl Mob for DrownedEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
     }
-
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        self.sun_sensitive_tick()
-    }
 }
-
-impl SunSensitive for DrownedEntity {}

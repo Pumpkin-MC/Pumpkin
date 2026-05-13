@@ -20,8 +20,7 @@ use std::{collections::HashMap, sync::atomic::AtomicI32};
 use tracing::warn;
 
 use super::experience_orb::ExperienceOrbEntity;
-use super::{Entity, NBTStorage};
-use super::{EntityBase, NBTStorageInit};
+use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
@@ -35,20 +34,21 @@ use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::{
-    DeathProtectionImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+    BlocksAttacksImpl, DeathProtectionImpl, EquipmentSlot, EquippableImpl, FoodImpl,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
-use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, translation};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
-use pumpkin_nbt::pnbt::PNbtCompound;
+use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    Animation, CEntityAnimation, CHurtAnimation, CSetPlayerInventory, CTakeItemEntity,
-    CUpdateMobEffect,
+    Animation, CEntityAnimation, CEntityStatus, CHurtAnimation, CSetPlayerInventory,
+    CTakeItemEntity, CUpdateMobEffect,
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
@@ -249,6 +249,17 @@ impl LivingEntity {
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
+    }
+
+    pub async fn is_blocking(&self) -> bool {
+        let item_in_use = self.item_in_use.lock().await;
+        if let Some(item) = item_in_use.as_ref()
+            && item.get_data_component::<BlocksAttacksImpl>().is_some()
+        {
+            let use_time = self.item_use_time.load(Ordering::Relaxed);
+            return item.get_max_use_time() - use_time >= 5;
+        }
+        false
     }
 
     pub async fn heal(&self, additional_health: f32) {
@@ -1243,7 +1254,8 @@ impl LivingEntity {
                 if let Some(cause) = cause
                     && source.is_some()
                 {
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        format!("death.attack.{}.player", damage_type.message_id),
                         format!("death.attack.{}.player", damage_type.message_id),
                         [
                             dyn_self.get_display_name().await,
@@ -1251,7 +1263,8 @@ impl LivingEntity {
                         ],
                     )
                 } else {
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
+                        format!("death.attack.{}", damage_type.message_id),
                         format!("death.attack.{}", damage_type.message_id),
                         [dyn_self.get_display_name().await],
                     )
@@ -1259,13 +1272,15 @@ impl LivingEntity {
             }
             DeathMessageType::FallVariants => {
                 //TODO
-                TextComponent::translate(
-                    translation::DEATH_FELL_ACCIDENT_GENERIC,
+                TextComponent::translate_cross(
+                    translation::java::DEATH_FELL_ACCIDENT_GENERIC,
+                    translation::bedrock::DEATH_FELL_ACCIDENT_GENERIC,
                     [dyn_self.get_display_name().await],
                 )
             }
             DeathMessageType::IntentionalGameDesign => TextComponent::text("[")
-                .add_child(TextComponent::translate(
+                .add_child(TextComponent::translate_cross(
+                    format!("death.attack.{}.message", damage_type.message_id),
                     format!("death.attack.{}.message", damage_type.message_id),
                     [dyn_self.get_display_name().await],
                 ))
@@ -1776,10 +1791,10 @@ impl LivingEntity {
 }
 
 impl NBTStorage for LivingEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
             self.entity.write_nbt(nbt).await;
-            nbt.put_float(self.health.load());
+            nbt.put("Health", NbtTag::Float(self.health.load()));
             // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
             let fall_distance = if self.dead.load(Relaxed) {
                 0.0
@@ -1787,13 +1802,19 @@ impl NBTStorage for LivingEntity {
                 self.fall_distance.load()
             };
             // Persist current absorption amount
-            nbt.put_float(self.absorption.load());
-            nbt.put_float(fall_distance);
+            nbt.put("AbsorptionAmount", NbtTag::Float(self.absorption.load()));
+            nbt.put("fall_distance", NbtTag::Float(fall_distance));
             {
                 let effects = self.active_effects.lock().await;
-                nbt.put_u32(effects.len() as u32);
-                for effect in effects.values() {
-                    effect.write_nbt(nbt).await;
+                if !effects.is_empty() {
+                    // Iterate effects and create Box<[NbtTag]>
+                    let mut effects_list = Vec::with_capacity(effects.len());
+                    for effect in effects.values() {
+                        let mut effect_nbt = pumpkin_nbt::compound::NbtCompound::new();
+                        effect.write_nbt(&mut effect_nbt).await;
+                        effects_list.push(NbtTag::Compound(effect_nbt));
+                    }
+                    nbt.put("active_effects", NbtTag::List(effects_list));
                 }
             }
             //TODO: write equipment
@@ -1801,20 +1822,20 @@ impl NBTStorage for LivingEntity {
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.entity.read_nbt_non_mut(nbt).await;
-            self.health.store(nbt.get_float().unwrap_or(0.0));
+            self.health.store(nbt.get_float("Health").unwrap_or(0.0));
 
             // Clamp any persisted absorption to the entity's configured max
-            let raw_abs = nbt.get_float().unwrap_or(0.0);
+            let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
             let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
             let clamped_abs = raw_abs.max(0.0).min(max_abs);
             self.absorption.store(clamped_abs);
 
             // Load fall distance, but if this entity is currently marked dead ensure we don't restore
             // a lethal fall distance that would immediately re-kill on spawn.
-            let fd = nbt.get_float().unwrap_or(0.0);
+            let fd = nbt.get_float("fall_distance").unwrap_or(0.0);
             if self.dead.load(Relaxed) {
                 self.fall_distance.store(0.0);
             } else {
@@ -1822,16 +1843,20 @@ impl NBTStorage for LivingEntity {
             }
             {
                 let mut active_effects = self.active_effects.lock().await;
-                let effects_len = nbt.get_u32().unwrap_or(0);
-                for _ in 0..effects_len {
-                    let effect = Effect::create_from_nbt(nbt).await;
-                    if effect.is_none() {
-                        warn!("Unable to read effect from nbt");
-                        continue;
+                let nbt_effects = nbt.get_list("active_effects");
+                if let Some(nbt_effects) = nbt_effects {
+                    for effect in nbt_effects {
+                        if let NbtTag::Compound(effect_nbt) = effect {
+                            let effect = Effect::create_from_nbt(&mut effect_nbt.clone()).await;
+                            if effect.is_none() {
+                                warn!("Unable to read effect from nbt");
+                                continue;
+                            }
+                            let mut effect = effect.unwrap();
+                            effect.blend = true; // TODO: change, is taken from effect give command
+                            active_effects.insert(effect.effect_type, effect);
+                        }
                     }
-                    let mut effect = effect.unwrap();
-                    effect.blend = true; // TODO: change, is taken from effect give command
-                    active_effects.insert(effect.effect_type, effect);
                 }
             }
         })
@@ -1913,6 +1938,88 @@ impl EntityBase for LivingEntity {
 
             // Total damage after reductions
             let effective_amount = amount * (1.0 - resistance_reduction);
+
+            // Check for shield blocking
+            if self.is_blocking().await
+                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_SHIELD)
+                && let Some(pos) = position
+            {
+                let player_pos = self.entity.pos.load();
+                let look_vec = Vector3::rotation_vector(0.0, self.entity.yaw.load() as f64);
+                let mut source_to_player = (player_pos - pos).normalize();
+                source_to_player.y = 0.0;
+
+                if source_to_player.dot(&look_vec) < 0.0 {
+                    world
+                        .play_sound(Sound::ItemShieldBlock, SoundCategory::Players, &player_pos)
+                        .await;
+
+                    if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+                        let held_item = attacker_player.inventory().held_item();
+                        let is_axe = held_item.lock().await.is_axe();
+                        if is_axe {
+                            let mut disable_chance = 0.25;
+                            let is_sprinting = attacker_player
+                                .living_entity
+                                .entity
+                                .sprinting
+                                .load(Ordering::Relaxed);
+                            if is_sprinting {
+                                disable_chance = 1.0;
+                            }
+
+                            if rand::random::<f32>() < disable_chance
+                                && let Some(victim_player) = caller.get_player()
+                            {
+                                victim_player
+                                    .start_cooldown("minecraft:shield".to_string(), 100)
+                                    .await;
+                                self.clear_active_hand().await;
+
+                                world
+                                    .broadcast_packet_all(&CEntityStatus::new(
+                                        self.entity.entity_id,
+                                        30,
+                                    ))
+                                    .await;
+                            }
+                        }
+                    }
+
+                    let active_hand = self.active_hand.lock().await;
+                    if let Some(hand) = *active_hand {
+                        let slot = if hand == Hand::Left {
+                            EquipmentSlot::MAIN_HAND
+                        } else {
+                            EquipmentSlot::OFF_HAND
+                        };
+
+                        let equipment_lock = self.entity_equipment.lock().await;
+                        let stack_arc = equipment_lock.get(&slot);
+                        let mut stack = stack_arc.lock().await;
+
+                        let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
+                        if stack.damage_item(durability_damage) == DamageResult::Broken {
+                            world
+                                .send_entity_status(
+                                    &self.entity,
+                                    crate::entity::equipment_break_status(&slot),
+                                )
+                                .await;
+                            *stack = ItemStack::EMPTY.clone();
+                            let broken_stack = stack.clone();
+                            drop(stack);
+                            drop(stack_arc);
+                            drop(equipment_lock);
+
+                            self.send_equipment_changes(&[(slot, broken_stack)]).await;
+                            self.clear_active_hand().await;
+                        }
+                    }
+
+                    return false;
+                }
+            }
 
             // Apply hurt cooldown logic
             let last_damage = self.last_damage_taken.load();
@@ -2139,6 +2246,71 @@ impl EntityBase for LivingEntity {
                             .hunger_manager
                             .eat(player, food.nutrition as u8, food.saturation)
                             .await;
+
+                        // Special food effects
+                        if item.item == &Item::GOLDEN_APPLE {
+                            self.add_effect(pumpkin_data::potion::Effect {
+                                effect_type: &pumpkin_data::effect::StatusEffect::REGENERATION,
+                                amplifier: 1,
+                                duration: 100,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            })
+                            .await;
+                            self.add_effect(pumpkin_data::potion::Effect {
+                                effect_type: &pumpkin_data::effect::StatusEffect::ABSORPTION,
+                                amplifier: 0,
+                                duration: 2400,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            })
+                            .await;
+                        } else if item.item == &Item::ENCHANTED_GOLDEN_APPLE {
+                            self.add_effect(pumpkin_data::potion::Effect {
+                                effect_type: &pumpkin_data::effect::StatusEffect::REGENERATION,
+                                amplifier: 1,
+                                duration: 400,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            })
+                            .await;
+                            self.add_effect(pumpkin_data::potion::Effect {
+                                effect_type: &pumpkin_data::effect::StatusEffect::ABSORPTION,
+                                amplifier: 3,
+                                duration: 2400,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            })
+                            .await;
+                            self.add_effect(pumpkin_data::potion::Effect {
+                                effect_type: &pumpkin_data::effect::StatusEffect::RESISTANCE,
+                                amplifier: 0,
+                                duration: 6000,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            })
+                            .await;
+                            self.add_effect(pumpkin_data::potion::Effect {
+                                effect_type: &pumpkin_data::effect::StatusEffect::FIRE_RESISTANCE,
+                                amplifier: 0,
+                                duration: 6000,
+                                ambient: false,
+                                show_particles: true,
+                                show_icon: true,
+                                blend: false,
+                            })
+                            .await;
+                        }
                     }
 
                     // Handle potion consumption

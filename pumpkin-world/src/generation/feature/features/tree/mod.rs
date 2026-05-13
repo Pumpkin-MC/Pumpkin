@@ -8,7 +8,7 @@ use trunk::TrunkPlacer;
 
 use crate::generation::proto_chunk::GenerationCache;
 use crate::generation::{block_state_provider::BlockStateProvider, feature::size::FeatureSize};
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub mod decorator;
 pub mod foliage;
@@ -35,7 +35,7 @@ impl TreeFeature {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         min_y: i8,
         height: u16,
@@ -78,7 +78,7 @@ impl TreeFeature {
     #[expect(clippy::too_many_arguments)]
     fn generate_main<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
