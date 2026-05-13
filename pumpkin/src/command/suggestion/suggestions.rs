@@ -188,6 +188,78 @@ impl SuggestionsBuilder {
         }
         true
     }
+
+    /// A helper method to suggest coordinate-related text.
+    pub fn suggest_3d_coordinates(
+        mut self,
+        suggestions: TextCoordinates,
+        validator: impl Fn(&str) -> bool,
+    ) -> Suggestions {
+        let input = self.remaining();
+        let coordinate = suggestions.get_coordinate();
+
+        if input.is_empty() {
+            let full = format!("{coordinate} {coordinate} {coordinate}");
+            if validator(&full) {
+                self = self.filter_and_suggest_one(coordinate.to_string());
+                self = self.filter_and_suggest_one(format!("{coordinate} {coordinate}"));
+                self = self.filter_and_suggest_one(full);
+            }
+        } else {
+            let mut split = input.split(' ');
+
+            match (split.next(), split.next(), split.next()) {
+                (Some(part1), None, None) => {
+                    let full = format!("{part1} {coordinate} {coordinate}");
+                    if validator(&full) {
+                        let partial = format!("{part1} {coordinate}");
+                        self = self.filter_and_suggest_one(partial);
+                        self = self.filter_and_suggest_one(full);
+                    }
+                }
+                (Some(part1), Some(part2), None) => {
+                    let full = format!("{part1} {part2} {coordinate}");
+                    if validator(&full) {
+                        self = self.filter_and_suggest_one(full);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        self.build()
+    }
+
+    /// A helper method to suggest coordinate-related text.
+    pub fn suggest_2d_coordinates(
+        mut self,
+        suggestions: TextCoordinates,
+        validator: impl Fn(&str) -> bool,
+    ) -> Suggestions {
+        let input = self.remaining();
+        let coordinate = suggestions.get_coordinate();
+
+        if input.is_empty() {
+            let full = format!("{coordinate} {coordinate}");
+            if validator(&full) {
+                self = self.filter_and_suggest_one(coordinate.to_string());
+                self = self.filter_and_suggest_one(full);
+            }
+        } else {
+            let mut split = input.split(' ');
+
+            if let Some(part) = split.next()
+                && split.next().is_none()
+            {
+                let full = format!("{part} {coordinate}");
+                if validator(&full) {
+                    self = self.filter_and_suggest_one(full);
+                }
+            }
+        }
+
+        self.build()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -360,5 +432,26 @@ impl Suggestions {
         }
 
         suggestions
+    }
+}
+
+/// Represents server-side only coordinate suggestions.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TextCoordinates {
+    /// Represents `^ ^ ^`.
+    Local,
+
+    /// Represents `~ ~ ~`.
+    Global,
+}
+
+impl TextCoordinates {
+    /// Get the symbol of a coordinate of this suggestion set.
+    #[must_use]
+    pub const fn get_coordinate(self) -> &'static str {
+        match self {
+            Self::Local => "^",
+            Self::Global => "~",
+        }
     }
 }

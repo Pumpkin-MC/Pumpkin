@@ -1,9 +1,12 @@
+use std::pin::Pin;
+
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::coordinates::Coordinates;
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::string_reader::StringReader;
+use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder, TextCoordinates};
 use crate::world::World;
 use pumpkin_data::translation;
 use pumpkin_util::math::position::BlockPos;
@@ -51,6 +54,26 @@ impl ArgumentType for BlockPosArgumentType {
 
     fn examples(&self) -> Vec<String> {
         examples!("1 3 5", "-3 ~24 ~-1", "80 80 80", "^ ^9 ^56")
+    }
+
+    fn list_suggestions<'a>(
+        &'a self,
+        _context: &'a CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
+        Box::pin(async move {
+            let remainder = builder.remaining();
+
+            let suggestioned_coordinates = if remainder.bytes().next() == Some(b'^') {
+                TextCoordinates::Local
+            } else {
+                TextCoordinates::Global
+            };
+
+            builder.suggest_3d_coordinates(suggestioned_coordinates, |value| {
+                self.parse(&mut StringReader::new(value)).is_ok()
+            })
+        })
     }
 }
 
