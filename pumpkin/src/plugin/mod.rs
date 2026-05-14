@@ -497,7 +497,7 @@ impl PluginManager {
         }
 
         let prompt = format!(
-            "\n{} [Y/n]: ",
+            "\n{} [y/N]: ",
             "Do you want to allow these permissions and load the plugin?".bold()
         );
 
