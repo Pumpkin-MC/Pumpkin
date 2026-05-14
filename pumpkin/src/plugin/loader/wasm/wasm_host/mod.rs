@@ -56,6 +56,12 @@ impl PluginRuntime {
         config.cache(Some(
             Cache::new(cache_config).expect("Failed to create cache"),
         ));
+
+        config.gc_support(true);
+        config.wasm_gc(true);
+        config.wasm_exceptions(true);
+        config.wasm_function_references(true);
+
         let engine = Engine::new(&config).map_err(PluginInitError::EngineCreationFailed)?;
 
         let linker = setup_linker(&engine).map_err(PluginInitError::LinkerSetupFailed)?;
