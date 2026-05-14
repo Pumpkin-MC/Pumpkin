@@ -70,11 +70,23 @@ impl<T: Encode> FieldEncode for T {
         Self: PartialEq,
     {
         if default == *self {
-            prefix.add_string_key_value_result(name, self.encode_start(ops))
-        } else {
             prefix
+        } else {
+            prefix.add_string_key_value_result(name, self.encode_start(ops))
         }
     }
+}
+
+/// A trait for something which can be added to a [`MapLike`] (usually with more than 1 field).
+///
+/// This is used mostly for encoding structures, and this trait is usually adapted to work with [`Encode`].
+pub trait MapEncode {
+    /// Encodes this value to a map by adding one or more fields.
+    fn map_encode<O: DynamicOps, B: StructBuilder<Value = O::Value>>(
+        &self,
+        ops: &'static O,
+        prefix: B,
+    ) -> B;
 }
 
 /// A trait for something that can be decoded from the value represented by a [`DynamicOps`].
@@ -98,7 +110,7 @@ pub trait FieldDecode: Sized {
     fn decode_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
     ) -> DataResult<Self>;
 
     /// Decodes a value of this type from a map by decoding one of its defaulted fields, whose:
@@ -111,7 +123,7 @@ pub trait FieldDecode: Sized {
     fn decode_defaulted_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
         default: Self,
         lenient: bool,
     ) -> DataResult<Self>;
@@ -121,7 +133,7 @@ impl<T: Decode> FieldDecode for T {
     fn decode_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
     ) -> DataResult<Self> {
         input.get_str(name).map_or_else(
             || DataResult::new_error(format!("No key {name} in map")),
@@ -132,11 +144,22 @@ impl<T: Decode> FieldDecode for T {
     fn decode_defaulted_field<O: DynamicOps>(
         name: &'static str,
         input: &impl MapLike<Value = O::Value>,
-        ops: &'static impl DynamicOps<Value = O::Value>,
+        ops: &'static O,
         default: Self,
         lenient: bool,
     ) -> DataResult<Self> {
         let decoded_option = Option::decode_optional_field::<O>(name, input, ops, lenient);
         decoded_option.map(|o| o.unwrap_or(default))
     }
+}
+
+/// A trait for something which can be decoded from a [`MapLike`] (usually with more than 1 field).
+///
+/// This is used mostly for encoding structures, and this trait is usually adapted to work with [`Decode`].
+pub trait MapDecode: Sized {
+    /// Decodes a value of this type from a map by decoding one or more fields.
+    fn map_decode<O: DynamicOps>(
+        input: impl MapLike<Value = O::Value>,
+        ops: &'static O,
+    ) -> DataResult<Self>;
 }
