@@ -13,10 +13,8 @@ use std::{
 
 use pumpkin_data::translation;
 use pumpkin_protocol::{ClientPacket, Property};
-use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
-use serde::{Deserialize, Deserializer};
 use pumpkin_util::{Hand, ProfileAction, text::TextComponent, version::MinecraftVersion};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use sha1::Digest;
 use sha2::Sha256;
 use tokio::task::JoinHandle;
