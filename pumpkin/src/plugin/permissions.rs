@@ -33,6 +33,11 @@ pub const NETWORK_LOOPBACK: &str = "network.loopback";
 /// **Warning:** This is a powerful permission and should only be granted to trusted plugins.
 pub const NETWORK_OUTBOUND: &str = "network.outbound";
 
+/// Allows the plugin to make outbound HTTP connections.
+///
+/// This is separate from `network.outbound`. This allows the use of `wasi:http`; the other allows the more powerful `wasi:sockets`.
+pub const HTTP_OUTBOUND: &str = "http.outbound";
+
 /// Allows the plugin to read files from the server's file system outside of its data folder.
 pub const FS_READ: &str = "fs.read";
 
@@ -89,6 +94,9 @@ pub fn get_permission_description(permission: &str) -> Option<&'static str> {
         }
         NETWORK_OUTBOUND => {
             Some("Allows the plugin to make outbound TCP/UDP connections. (POWERFUL)")
+        }
+        HTTP_OUTBOUND => {
+            Some("Allows the plugin to make outbound HTTP requests (through `wasi:http`)")
         }
         FS_READ => Some(
             "Allows the plugin to read files from the server's file system outside of its data folder.",

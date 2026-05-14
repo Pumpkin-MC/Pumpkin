@@ -21,8 +21,6 @@ pub enum PluginInitError {
     LinkerSetupFailed(wasmtime::Error),
     #[error("plugin API version mismatch")]
     ApiVersionMismatch,
-    #[error("failed to read payload for plugin")]
-    FailedToReadPayload(#[from] wasmparser::BinaryReaderError),
     #[error("failed to read plugin bytes")]
     FailedToReadPluginBytes(#[from] std::io::Error),
     #[error("plugin failed to load with error: {0}")]
@@ -94,6 +92,7 @@ impl PluginRuntime {
 fn setup_linker(engine: &Engine) -> wasmtime::Result<Linker<PluginHostState>> {
     let mut linker = Linker::<PluginHostState>::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)?;
     wit::v0_1::add_to_linker(&mut linker)?;
     Ok(linker)
 }
@@ -256,6 +255,10 @@ impl WasmPlugin {
             dir_perms,
             file_perms,
         )?;
+
+        if has_permission(permissions::HTTP_OUTBOUND) {
+            store.data_mut().wasi_http_hooks.allow_outbound = true;
+        }
 
         store.data_mut().permissions = filtered_permissions;
         store.data_mut().wasi_ctx = builder.build();
