@@ -51,7 +51,7 @@ pub struct BeaconBlock;
 impl BlockBehaviour for BeaconBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let block_entity = args.world.get_block_entity(args.position).await;
+            let block_entity = args.world.get_block_entity(args.position);
 
             // Extract the inventory from the entity
             let Some(inventory) = block_entity.and_then(BlockEntity::get_inventory) else {

@@ -82,15 +82,13 @@ impl Stepping for DestroyEggGoal {
             // NOTE: block_pos.0.to_f64() is assumed to be the correct way to get Vector3<f64>
             let pos_f64 = (block_pos.0).to_f64();
 
-            world
-                .play_sound_raw(
-                    Sound::EntityZombieDestroyEgg as u16,
-                    SoundCategory::Hostile,
-                    &pos_f64,
-                    0.7,
-                    random.mul_add(0.2, 0.9),
-                )
-                .await;
+            world.play_sound_raw(
+                Sound::EntityZombieDestroyEgg as u16,
+                SoundCategory::Hostile,
+                &pos_f64,
+                0.7,
+                random.mul_add(0.2, 0.9),
+            );
         })
     }
 
@@ -101,15 +99,13 @@ impl Stepping for DestroyEggGoal {
             // NOTE: block_pos.0.to_f64() is assumed to be the correct way to get Vector3<f64>
             let pos_f64 = (block_pos.0).to_f64();
 
-            world
-                .play_sound_raw(
-                    Sound::EntityTurtleEggBreak as u16,
-                    SoundCategory::Blocks,
-                    &pos_f64,
-                    0.7,
-                    random.mul_add(0.2, 0.9),
-                )
-                .await;
+            world.play_sound_raw(
+                Sound::EntityTurtleEggBreak as u16,
+                SoundCategory::Blocks,
+                &pos_f64,
+                0.7,
+                random.mul_add(0.2, 0.9),
+            );
         })
     }
 }

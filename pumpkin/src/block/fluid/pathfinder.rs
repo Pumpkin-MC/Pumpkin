@@ -18,9 +18,9 @@ pub struct PathNode {
 }
 
 /// Checks if a position has a hole (downward flow opportunity) below it.
-async fn is_hole(world: &Arc<World>, fluid: &Fluid, pos: &BlockPos) -> bool {
+fn is_hole(world: &Arc<World>, fluid: &Fluid, pos: &BlockPos) -> bool {
     let below_pos = pos.down();
-    let below_state = world.get_block_state(&below_pos).await;
+    let below_state = world.get_block_state(&below_pos);
     let below_block = Block::from_state_id(below_state.id);
     physics::can_be_replaced(below_state, below_block, fluid)
 }
@@ -47,7 +47,7 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
         BlockDirection::East,
     ] {
         let side_pos = block_pos.offset(direction.to_offset());
-        let side_state = world.get_block_state(&side_pos).await;
+        let side_state = world.get_block_state(&side_pos);
         let side_state_id = side_state.id;
         let side_block = Block::from_state_id(side_state.id);
 
@@ -70,7 +70,7 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
         let new_state_id = new_fluid_props.to_state_id(fluid);
 
         // Holes get distance 0
-        let slope_dist = if is_hole(world, fluid, &side_pos).await {
+        let slope_dist = if is_hole(world, fluid, &side_pos) {
             0
         } else {
             get_in_flow_down_distance_iterative(
@@ -80,7 +80,6 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
                 side_pos,
                 direction.opposite(),
             )
-            .await
         };
 
         // Clear results if we find a shorter path
@@ -116,7 +115,7 @@ pub async fn get_spread<T: FlowingFluid + Sync + ?Sized>(
 ///
 /// # Returns
 /// Distance to nearest hole, or 1000 if no hole found within search distance
-pub async fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized>(
+pub fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized>(
     fluid_impl: &T,
     world: &Arc<World>,
     fluid: &Fluid,
@@ -171,7 +170,7 @@ pub async fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized
 
         // Check for hole (downward flow opportunity)
         let below_pos = node.pos.down();
-        let below_state = world.get_block_state(&below_pos).await;
+        let below_state = world.get_block_state(&below_pos);
         let below_block = Block::from_state_id(below_state.id);
         if physics::can_be_replaced(below_state, below_block, fluid) {
             return node.distance;
@@ -189,14 +188,14 @@ pub async fn get_in_flow_down_distance_iterative<T: FlowingFluid + Sync + ?Sized
 
             let next_pos = node.pos.offset(direction.to_offset());
 
-            let next_state = world.get_block_state(&next_pos).await;
+            let next_state = world.get_block_state(&next_pos);
             let next_block = Block::from_state_id(next_state.id);
             if !physics::can_be_replaced(next_state, next_block, fluid) {
                 continue;
             }
 
             // Source blocks (including waterlogged) block horizontal pathfinding
-            let next_state_id = world.get_block_state_id(&next_pos).await;
+            let next_state_id = world.get_block_state_id(&next_pos);
             if fluid_impl
                 .get_effective_props(fluid, next_state_id)
                 .is_some_and(|p| p.level == Level::L8 && p.falling == Falling::False)

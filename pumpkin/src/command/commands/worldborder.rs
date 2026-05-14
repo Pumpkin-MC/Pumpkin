@@ -112,7 +112,7 @@ impl CommandExecutor for SetExecutor {
                 .await;
 
             let d = border.new_diameter;
-            border.set_diameter(world, distance, None).await;
+            border.set_diameter(world, distance, None);
 
             Ok((distance - d) as i32)
         })
@@ -186,9 +186,7 @@ impl CommandExecutor for SetTimeExecutor {
             }
 
             let d = border.new_diameter;
-            border
-                .set_diameter(world, distance, Some(i64::from(time) * 1000))
-                .await;
+            border.set_diameter(world, distance, Some(i64::from(time) * 1000));
 
             Ok((distance - d) as i32)
         })
@@ -237,7 +235,7 @@ impl CommandExecutor for AddExecutor {
                     [TextComponent::text(dist)],
                 ))
                 .await;
-            border.set_diameter(world, distance, None).await;
+            border.set_diameter(world, distance, None);
             Ok(distance_add as i32)
         })
     }
@@ -310,9 +308,7 @@ impl CommandExecutor for AddTimeExecutor {
                 }
             }
 
-            border
-                .set_diameter(world, distance, Some(i64::from(time) * 1000))
-                .await;
+            border.set_diameter(world, distance, Some(i64::from(time) * 1000));
 
             Ok(distance_add as i32)
         })
@@ -348,7 +344,7 @@ impl CommandExecutor for CenterExecutor {
                     ],
                 ))
                 .await;
-            border.set_center(world, x, y).await;
+            border.set_center(world, x, y);
             Ok(0)
         })
     }
@@ -486,7 +482,7 @@ impl CommandExecutor for WarningDistanceExecutor {
                     [TextComponent::text(distance.to_string())],
                 ))
                 .await;
-            border.set_warning_distance(world, distance).await;
+            border.set_warning_distance(world, distance);
             Ok(distance)
         })
     }
@@ -531,7 +527,7 @@ impl CommandExecutor for WarningTimeExecutor {
                     [TextComponent::text(time.to_string())],
                 ))
                 .await;
-            border.set_warning_delay(world, time).await;
+            border.set_warning_delay(world, time);
             Ok(time)
         })
     }

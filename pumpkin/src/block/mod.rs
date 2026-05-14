@@ -108,12 +108,12 @@ pub trait BlockBehaviour: Send + Sync {
         Box::pin(async {})
     }
 
-    fn can_place_at<'a>(&'a self, _args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { true })
+    fn can_place_at(&self, _args: CanPlaceAtArgs<'_>) -> bool {
+        true
     }
 
-    fn can_update_at<'a>(&'a self, _args: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { false })
+    fn can_update_at(&self, _args: CanUpdateAtArgs<'_>) -> bool {
+        false
     }
 
     /// onBlockAdded in source code

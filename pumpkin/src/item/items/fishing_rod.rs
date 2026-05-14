@@ -32,13 +32,11 @@ impl ItemBehaviour for FishingRodItem {
 
             if bobber_id == -1 {
                 // Cast
-                world
-                    .play_sound(
-                        Sound::EntityFishingBobberThrow,
-                        SoundCategory::Neutral,
-                        &player.position(),
-                    )
-                    .await;
+                world.play_sound(
+                    Sound::EntityFishingBobberThrow,
+                    SoundCategory::Neutral,
+                    &player.position(),
+                );
 
                 let bobber_entity = Entity::new(
                     world.clone(),
@@ -65,20 +63,18 @@ impl ItemBehaviour for FishingRodItem {
                     if let Some(bobber) =
                         bobber_base.cast_any().downcast_ref::<FishingBobberEntity>()
                     {
-                        let _result = bobber.reel_in(player).await;
+                        let _result = bobber.reel_in(player);
                         // TODO: give items
                     }
                     bobber_base.get_entity().remove().await;
                 }
                 player.fishing_bobber.store(-1, Ordering::Relaxed);
 
-                world
-                    .play_sound(
-                        Sound::EntityFishingBobberRetrieve,
-                        SoundCategory::Neutral,
-                        &player.position(),
-                    )
-                    .await;
+                world.play_sound(
+                    Sound::EntityFishingBobberRetrieve,
+                    SoundCategory::Neutral,
+                    &player.position(),
+                );
             }
         })
     }

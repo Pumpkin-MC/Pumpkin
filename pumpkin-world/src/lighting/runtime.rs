@@ -445,6 +445,50 @@ impl DynamicLightEngine {
         }
     }
 
+    pub fn get_block_light_level_sync(&self, level: &Level, position: &BlockPos) -> Option<u8> {
+        let (chunk_pos, relative) = position.chunk_and_chunk_relative_position();
+
+        level.read_chunk_sync(&chunk_pos, |chunk| {
+            let section_idx = (relative.y - chunk.section.min_y) as usize / 16;
+            let light_engine = chunk.light_engine.lock().ok()?;
+
+            light_engine
+                .block_light
+                .get(section_idx)?
+                .get(
+                    relative.x as usize,
+                    (relative.y - chunk.section.min_y) as usize % 16,
+                    relative.z as usize,
+                )
+                .into()
+        })?
+    }
+
+    pub fn get_sky_light_level_sync(&self, level: &Level, position: &BlockPos) -> u8 {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        level
+            .read_chunk_sync(&chunk_coordinate, |chunk| {
+                let section_index =
+                    (relative.y - chunk.section.min_y) as usize / BlockPalette::SIZE;
+
+                let light_engine = chunk
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                // Bounds check for section index (lock the light engine)
+                if section_index >= light_engine.sky_light.len() {
+                    return 15;
+                }
+
+                light_engine.sky_light[section_index].get(
+                    relative.x as usize,
+                    (relative.y - chunk.section.min_y) as usize % BlockPalette::SIZE,
+                    relative.z as usize,
+                )
+            })
+            .unwrap_or(0)
+    }
+
     pub async fn get_block_light_level(
         &self,
         level: &Arc<Level>,

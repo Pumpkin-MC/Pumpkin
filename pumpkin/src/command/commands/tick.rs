@@ -171,7 +171,7 @@ impl TickExecutor {
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         ticks: i32,
     ) {
-        if manager.step_game_if_paused(source.server(), ticks).await {
+        if manager.step_game_if_paused(source.server(), ticks) {
             source
                 .send_feedback(
                     TextComponent::translate_cross(
@@ -201,10 +201,7 @@ impl TickExecutor {
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         ticks: i32,
     ) {
-        if manager
-            .request_game_to_sprint(source.server(), i64::from(ticks))
-            .await
-        {
+        if manager.request_game_to_sprint(source.server(), i64::from(ticks)) {
             source
                 .send_feedback(
                     TextComponent::translate_cross(
@@ -233,7 +230,7 @@ impl TickExecutor {
         manager: &crate::server::tick_rate_manager::ServerTickRateManager,
         rate: f32,
     ) -> Result<i32, CommandSyntaxError> {
-        manager.set_tick_rate(source.server(), rate).await;
+        manager.set_tick_rate(source.server(), rate);
         source
             .send_feedback(
                 TextComponent::translate_cross(
@@ -261,7 +258,7 @@ impl CommandExecutor for TickExecutor {
                     Self::handle_set_tick_rate(source, manager, rate).await
                 }
                 SubCommand::Freeze(freeze) => {
-                    manager.set_frozen(server, freeze).await;
+                    manager.set_frozen(server, freeze);
                     let message_key = if freeze {
                         "commands.tick.status.frozen"
                     } else {
@@ -282,7 +279,7 @@ impl CommandExecutor for TickExecutor {
                     Ok(1)
                 }
                 SubCommand::StepStop => {
-                    if manager.stop_stepping(server).await {
+                    if manager.stop_stepping(server) {
                         source
                             .send_feedback(
                                 TextComponent::translate_cross(
@@ -315,7 +312,7 @@ impl CommandExecutor for TickExecutor {
                     Ok(1)
                 }
                 SubCommand::SprintStop => {
-                    if manager.stop_sprinting(server).await {
+                    if manager.stop_sprinting(server) {
                         source
                             .send_feedback(
                                 TextComponent::translate_cross(

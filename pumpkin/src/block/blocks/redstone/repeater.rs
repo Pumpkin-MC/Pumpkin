@@ -48,7 +48,7 @@ impl BlockBehaviour for RepeaterBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             if self
                 .is_locked(args.world, *args.position, state.id, args.block)
                 .await
@@ -116,7 +116,7 @@ impl BlockBehaviour for RepeaterBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let props = RepeaterProperties::from_state_id(state.id, args.block);
             self.on_use(props, args.world, *args.position, args.block)
                 .await;
@@ -150,10 +150,8 @@ impl BlockBehaviour for RepeaterBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.position)
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
@@ -181,7 +179,6 @@ impl BlockBehaviour for RepeaterBlock {
                     *args.neighbor_position,
                     BlockState::from_id(args.neighbor_state_id),
                 )
-                .await
             {
                 return Block::AIR.default_state.id;
             }

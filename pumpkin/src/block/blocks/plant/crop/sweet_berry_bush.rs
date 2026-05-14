@@ -32,7 +32,7 @@ pub struct SweetBerryBushBlock;
 impl BlockBehaviour for SweetBerryBushBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
             let mut props = NetherWartLikeProperties::from_state_id(state_id, args.block);
             match props.age {
                 2 | 3 => {
@@ -66,7 +66,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
             let props = NetherWartLikeProperties::from_state_id(state_id, &Block::SWEET_BERRY_BUSH);
             if props.age != 3 && args.item_stack.lock().await.get_item() == &Item::BONE_MEAL {
                 BlockActionResult::Pass
@@ -76,10 +76,8 @@ impl BlockBehaviour for SweetBerryBushBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -119,7 +117,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
                 entity.last_pos.load() - entity.pos.load()
             };
 
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
             let props = NetherWartLikeProperties::from_state_id(state_id, args.block);
             if props.age == 0 {
                 return;
@@ -153,20 +151,20 @@ impl PlantBlockBase for SweetBerryBushBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
             return Block::AIR.default_state.id;
         }
         block_state
     }
 
-    async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
+    fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down())
     }
 }
 
 impl CropBlockBase for SweetBerryBushBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos).await
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos)
     }
 
     fn max_age(&self) -> i32 {
@@ -185,10 +183,10 @@ impl CropBlockBase for SweetBerryBushBlock {
     }
 
     async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
-        let (block, state) = world.get_block_and_state_id(pos).await;
+        let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() {
-            let state_above = world.get_block_state(&pos.up()).await;
+            let state_above = world.get_block_state(&pos.up());
 
             if state_above.is_full_cube() || state_above.is_solid() {
                 return;

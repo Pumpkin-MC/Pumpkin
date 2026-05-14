@@ -60,15 +60,13 @@ impl ItemBehaviour for SplashPotionItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::EntityWitchThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityWitchThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
             let entity = Entity::new(world.clone(), position, &EntityType::SPLASH_POTION);
-            let splash = SplashPotionEntity::new_shot(entity, &player.living_entity.entity).await;
+            let splash = SplashPotionEntity::new_shot(entity, &player.living_entity.entity);
 
             // Copy the held item stack data into the projectile
             let main = player.inventory.held_item();
@@ -136,15 +134,13 @@ impl ItemBehaviour for LingeringPotionItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::EntityWitchThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityWitchThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
             let entity = Entity::new(world.clone(), position, &EntityType::LINGERING_POTION);
-            let ling = LingeringPotionEntity::new_shot(entity, &player.living_entity.entity).await;
+            let ling = LingeringPotionEntity::new_shot(entity, &player.living_entity.entity);
 
             // Copy the held item stack data into the projectile
             let main = player.inventory.held_item();

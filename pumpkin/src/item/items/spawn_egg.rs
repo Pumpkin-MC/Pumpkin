@@ -36,7 +36,7 @@ impl ItemBehaviour for SpawnEggItem {
             if let Some(entity_type) = entity_from_egg(item.item.id) {
                 let world = player.world();
 
-                if let Some(block_entity) = player.world().get_block_entity(&location).await
+                if let Some(block_entity) = player.world().get_block_entity(&location)
                     && let Some(spawner) = block_entity
                         .as_any()
                         .downcast_ref::<MobSpawnerBlockEntity>()
@@ -55,7 +55,7 @@ impl ItemBehaviour for SpawnEggItem {
                 // Create rotation like Vanilla
                 let yaw = wrap_degrees(rand::random::<f32>() * 360.0) % 360.0;
 
-                let mob = from_type(entity_type, pos, &world, Uuid::new_v4()).await;
+                let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
 
                 // Set the rotation
                 mob.get_entity().set_rotation(yaw, 0.0);

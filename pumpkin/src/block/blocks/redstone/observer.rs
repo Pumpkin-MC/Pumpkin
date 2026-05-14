@@ -28,7 +28,7 @@ impl BlockBehaviour for ObserverBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let mut props = ObserverLikeProperties::from_state_id(state.id, args.block);
 
             if props.powered {

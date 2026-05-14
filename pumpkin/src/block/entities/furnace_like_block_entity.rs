@@ -457,7 +457,7 @@ macro_rules! impl_block_entity_for_cooking {
                         let world = world.clone();
 
                         let (furnace_block, furnace_block_state) =
-                            world.get_block_and_state(&self.position).await;
+                            world.get_block_and_state(&self.position);
                         let mut props =
                             pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(
                                 furnace_block_state.id,

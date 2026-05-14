@@ -73,11 +73,9 @@ pub trait Segmented: BlockBehaviour {
         }
     }
 
-    fn can_update_at<'a>(&'a self, ctx: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let current_props = Self::Properties::from_state_id(ctx.state_id, ctx.block);
-            self.can_add_segment(&current_props)
-        })
+    fn can_update_at(&self, ctx: CanUpdateAtArgs<'_>) -> bool {
+        let current_props = Self::Properties::from_state_id(ctx.state_id, ctx.block);
+        self.can_add_segment(&current_props)
     }
 
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {

@@ -39,40 +39,34 @@ impl BoatEntity {
         }
     }
 
-    pub async fn set_paddles(&self, left: bool, right: bool) {
+    pub fn set_paddles(&self, left: bool, right: bool) {
         self.left_paddle_moving.store(left, Ordering::Relaxed);
         self.right_paddle_moving.store(right, Ordering::Relaxed);
 
-        self.entity
-            .send_meta_data(&[
-                Metadata::new(TrackedData::ID_PADDLE_LEFT, MetaDataType::BOOLEAN, left),
-                Metadata::new(TrackedData::ID_PADDLE_RIGHT, MetaDataType::BOOLEAN, right),
-            ])
-            .await;
+        self.entity.send_meta_data(&[
+            Metadata::new(TrackedData::ID_PADDLE_LEFT, MetaDataType::BOOLEAN, left),
+            Metadata::new(TrackedData::ID_PADDLE_RIGHT, MetaDataType::BOOLEAN, right),
+        ]);
     }
 
-    async fn send_wobble_metadata(&self) {
-        self.entity
-            .send_meta_data(&[
-                Metadata::new(
-                    TrackedData::ID_HURT,
-                    MetaDataType::INTEGER,
-                    VarInt(self.damage_wobble_ticks.load(Ordering::Relaxed)),
-                ),
-                Metadata::new(
-                    TrackedData::ID_HURTDIR,
-                    MetaDataType::INTEGER,
-                    VarInt(self.damage_wobble_side.load(Ordering::Relaxed)),
-                ),
-            ])
-            .await;
-        self.entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::ID_DAMAGE,
-                MetaDataType::FLOAT,
-                self.damage_wobble_strength.load(),
-            )])
-            .await;
+    fn send_wobble_metadata(&self) {
+        self.entity.send_meta_data(&[
+            Metadata::new(
+                TrackedData::ID_HURT,
+                MetaDataType::INTEGER,
+                VarInt(self.damage_wobble_ticks.load(Ordering::Relaxed)),
+            ),
+            Metadata::new(
+                TrackedData::ID_HURTDIR,
+                MetaDataType::INTEGER,
+                VarInt(self.damage_wobble_side.load(Ordering::Relaxed)),
+            ),
+        ]);
+        self.entity.send_meta_data(&[Metadata::new(
+            TrackedData::ID_DAMAGE,
+            MetaDataType::FLOAT,
+            self.damage_wobble_strength.load(),
+        )]);
     }
 
     async fn kill_and_drop_self(&self) {
@@ -129,7 +123,7 @@ impl EntityBase for BoatEntity {
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            self.send_wobble_metadata().await;
+            self.send_wobble_metadata();
         })
     }
 
@@ -165,7 +159,7 @@ impl EntityBase for BoatEntity {
             let new_strength = current_strength + amount * 10.0;
             self.damage_wobble_strength.store(new_strength);
 
-            self.send_wobble_metadata().await;
+            self.send_wobble_metadata();
 
             let is_creative = source
                 .and_then(|s| s.get_player())
@@ -224,7 +218,7 @@ impl EntityBase for BoatEntity {
 
     fn set_paddle_state(&self, left: bool, right: bool) -> EntityBaseFuture<'_, ()> {
         Box::pin(async move {
-            self.set_paddles(left, right).await;
+            self.set_paddles(left, right);
         })
     }
 

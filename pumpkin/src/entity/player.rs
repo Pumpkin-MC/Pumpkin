@@ -688,15 +688,13 @@ impl Player {
         *self.display_name.lock().await = display_name.clone();
         // Update the tab list for everyone
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateDisplayName(display_name.as_ref())],
+            }],
+        ));
     }
 
     pub async fn get_tab_list_name(&self) -> Option<TextComponent> {
@@ -706,57 +704,49 @@ impl Player {
     pub async fn set_tab_list_name(&self, name: Option<TextComponent>) {
         *self.tab_list_name.lock().await = name.clone();
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateDisplayName(name.as_ref())],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateDisplayName(name.as_ref())],
+            }],
+        ));
     }
 
-    pub async fn set_tab_list_order(&self, order: i32) {
+    pub fn set_tab_list_order(&self, order: i32) {
         self.tab_list_order.store(order, Ordering::Relaxed);
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateListOrder(VarInt(order))],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_LIST_PRIORITY.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateListOrder(VarInt(order))],
+            }],
+        ));
     }
 
-    pub async fn set_tab_list_latency(&self, latency: i32) {
+    pub fn set_tab_list_latency(&self, latency: i32) {
         self.tab_list_latency.store(latency, Ordering::Relaxed);
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_LATENCY.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateLatency(VarInt(latency))],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_LATENCY.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateLatency(VarInt(latency))],
+            }],
+        ));
     }
 
-    pub async fn set_tab_list_listed(&self, listed: bool) {
+    pub fn set_tab_list_listed(&self, listed: bool) {
         self.tab_list_listed.store(listed, Ordering::Relaxed);
         let world = self.world();
-        world
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                PlayerInfoFlags::UPDATE_LISTED.bits(),
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: self.gameprofile.id,
-                    actions: &[PlayerAction::UpdateListed(listed)],
-                }],
-            ))
-            .await;
+        world.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            PlayerInfoFlags::UPDATE_LISTED.bits(),
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: self.gameprofile.id,
+                actions: &[PlayerAction::UpdateListed(listed)],
+            }],
+        ));
     }
 
     /// Spawns a task associated with this player-client. All tasks spawned with this method are awaited
@@ -920,13 +910,11 @@ impl Player {
             )
             .await
         {
-            world
-                .play_sound(
-                    Sound::EntityPlayerAttackNodamage,
-                    SoundCategory::Players,
-                    &self.living_entity.entity.pos.load(),
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityPlayerAttackNodamage,
+                SoundCategory::Players,
+                &self.living_entity.entity.pos.load(),
+            );
             return;
         }
 
@@ -945,17 +933,15 @@ impl Player {
         if is_mace_smash {
             let fall_distance = self.living_entity.fall_distance.load();
             self.living_entity.fall_distance.store(0.0);
-            world
-                .play_sound(
-                    if fall_distance > 5.0 {
-                        Sound::ItemMaceSmashGroundHeavy
-                    } else {
-                        Sound::ItemMaceSmashGround
-                    },
-                    SoundCategory::Players,
-                    &pos,
-                )
-                .await;
+            world.play_sound(
+                if fall_distance > 5.0 {
+                    Sound::ItemMaceSmashGroundHeavy
+                } else {
+                    Sound::ItemMaceSmashGround
+                },
+                SoundCategory::Players,
+                &pos,
+            );
         }
 
         player_attack_sound(&pos, &world, attack_type).await;
@@ -977,7 +963,7 @@ impl Player {
             match attack_type {
                 AttackType::Knockback => knockback_strength += 1.0,
                 AttackType::Sweeping => {
-                    combat::spawn_sweep_particle(attacker_entity, &world, &pos).await;
+                    combat::spawn_sweep_particle(attacker_entity, &world, &pos);
 
                     let mut sweep_damage = 1.0;
                     if let Some(enchantments) = item_stack
@@ -1061,12 +1047,10 @@ impl Player {
 
         if slot_index == self.inventory.get_selected_slot() as usize {
             self.living_entity
-                .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)])
-                .await;
+                .send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)]);
         } else if slot_index == PlayerInventory::OFF_HAND_SLOT {
             self.living_entity
-                .send_equipment_changes(&[(EquipmentSlot::OFF_HAND, stack)])
-                .await;
+                .send_equipment_changes(&[(EquipmentSlot::OFF_HAND, stack)]);
         }
     }
 
@@ -1106,12 +1090,10 @@ impl Player {
             // Send the break status before clearing the slot so the client can
             // use the item texture for break particles.
             if result == pumpkin_data::item_stack::DamageResult::Broken {
-                self.world()
-                    .send_entity_status(
-                        &self.living_entity.entity,
-                        super::equipment_break_status(slot),
-                    )
-                    .await;
+                self.world().send_entity_status(
+                    &self.living_entity.entity,
+                    super::equipment_break_status(slot),
+                );
             }
 
             self.enqueue_slot_set_packet(&CSetPlayerInventory::new(
@@ -1121,8 +1103,7 @@ impl Player {
             .await;
 
             self.living_entity
-                .send_equipment_changes(&[(slot.clone(), updated_stack)])
-                .await;
+                .send_equipment_changes(&[(slot.clone(), updated_stack)]);
 
             return true;
         }
@@ -1218,13 +1199,13 @@ impl Player {
         let respawn_point = respawn_guard.as_ref()?;
         let world = self.world();
         let pos = &respawn_point.position;
-        let (block, state_id) = world.get_block_and_state_id(pos).await;
+        let (block, state_id) = world.get_block_and_state_id(pos);
 
         // If force is set (from /spawnpoint command), validate position is safe
         if respawn_point.force {
             // For forced spawn, check if both the block and block above allow mob spawn
-            let block_state = world.get_block_state(pos).await;
-            let above_state = world.get_block_state(&pos.up()).await;
+            let block_state = world.get_block_state(pos);
+            let above_state = world.get_block_state(&pos.up());
 
             // Check if blocks are passable (non-solid or air)
             let block_safe = block_state.is_air() || !block_state.is_solid();
@@ -1258,7 +1239,7 @@ impl Player {
             // Try positions around the bed based on facing direction
             // Vanilla tries multiple offset patterns; we use a simplified version
             if let Some(spawn_pos) =
-                Self::find_bed_spawn_position(&world, pos, facing, respawn_point.yaw).await
+                Self::find_bed_spawn_position(&world, pos, facing, respawn_point.yaw)
             {
                 return Some(CalculatedRespawnPoint {
                     position: spawn_pos,
@@ -1281,7 +1262,7 @@ impl Player {
             }
 
             // Try positions around the anchor
-            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos).await {
+            if let Some(spawn_pos) = Self::find_anchor_spawn_position(&world, pos) {
                 // Decrement charges after successful respawn position found
                 let new_charges = charges - 1;
                 let mut new_props = anchor_props;
@@ -1310,7 +1291,7 @@ impl Player {
     /// Find a valid spawn position around a bed.
     /// Vanilla uses a complex algorithm based on bed facing direction.
     /// We use a simplified version that tries cardinal directions first.
-    async fn find_bed_spawn_position(
+    fn find_bed_spawn_position(
         world: &Arc<crate::world::World>,
         bed_pos: &BlockPos,
         facing: HorizontalFacing,
@@ -1326,7 +1307,7 @@ impl Player {
                 bed_pos.0.z + dz,
             ));
 
-            if let Some(pos) = Self::find_respawn_pos(world, &check_pos).await {
+            if let Some(pos) = Self::find_respawn_pos(world, &check_pos) {
                 return Some(pos);
             }
 
@@ -1336,13 +1317,13 @@ impl Player {
                 bed_pos.0.y - 1,
                 bed_pos.0.z + dz,
             ));
-            if let Some(pos) = Self::find_respawn_pos(world, &check_pos_down).await {
+            if let Some(pos) = Self::find_respawn_pos(world, &check_pos_down) {
                 return Some(pos);
             }
         }
 
         // Try on the bed itself as last resort
-        if let Some(pos) = Self::find_respawn_pos(world, bed_pos).await {
+        if let Some(pos) = Self::find_respawn_pos(world, bed_pos) {
             return Some(pos);
         }
 
@@ -1377,7 +1358,7 @@ impl Player {
     }
 
     /// Find a valid spawn position around a respawn anchor.
-    async fn find_anchor_spawn_position(
+    fn find_anchor_spawn_position(
         world: &Arc<crate::world::World>,
         anchor_pos: &BlockPos,
     ) -> Option<Vector3<f64>> {
@@ -1402,7 +1383,7 @@ impl Player {
                     anchor_pos.0.z + dz,
                 ));
 
-                if let Some(pos) = Self::find_respawn_pos(world, &check_pos).await {
+                if let Some(pos) = Self::find_respawn_pos(world, &check_pos) {
                     return Some(pos);
                 }
             }
@@ -1410,26 +1391,23 @@ impl Player {
 
         // Also try directly above the anchor
         let above_pos = anchor_pos.up();
-        Self::find_respawn_pos(world, &above_pos).await
+        Self::find_respawn_pos(world, &above_pos)
     }
 
     /// Check if a position is valid for respawning (vanilla Dismounting.findRespawnPos logic).
     /// Returns the spawn position if valid, None otherwise.
-    async fn find_respawn_pos(
-        world: &Arc<crate::world::World>,
-        pos: &BlockPos,
-    ) -> Option<Vector3<f64>> {
-        let state = world.get_block_state(pos).await;
-        let below_state = world.get_block_state(&pos.down()).await;
+    fn find_respawn_pos(world: &Arc<crate::world::World>, pos: &BlockPos) -> Option<Vector3<f64>> {
+        let state = world.get_block_state(pos);
+        let below_state = world.get_block_state(&pos.down());
 
         // Check if block at position is invalid for spawn (e.g., inside solid block)
-        let block = world.get_block(pos).await;
+        let block = world.get_block(pos);
         if block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
             return None;
         }
 
         // Check if block above is also invalid
-        let above_block = world.get_block(&pos.up()).await;
+        let above_block = world.get_block(&pos.up());
         if above_block.has_tag(&tag::Block::MINECRAFT_INVALID_SPAWN_INSIDE) {
             return None;
         }
@@ -1460,28 +1438,26 @@ impl Player {
         );
 
         // Check if the space is empty (no block collisions)
-        if !world.is_space_empty(player_box).await {
+        if !world.is_space_empty(player_box) {
             return None;
         }
 
         Some(spawn_pos)
     }
 
-    pub async fn sleep(&self, bed_head_pos: BlockPos) {
+    pub fn sleep(&self, bed_head_pos: BlockPos) {
         // TODO: Stop riding
 
-        self.get_entity().set_pose(EntityPose::Sleeping).await;
+        self.get_entity().set_pose(EntityPose::Sleeping);
         self.living_entity
             .entity
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
-        self.get_entity()
-            .send_meta_data(&[Metadata::new(
-                TrackedData::SLEEPING_POS_ID,
-                MetaDataType::OPTIONAL_BLOCK_POS,
-                Some(bed_head_pos),
-            )])
-            .await;
-        self.get_entity().set_velocity(Vector3::default()).await;
+        self.get_entity().send_meta_data(&[Metadata::new(
+            TrackedData::SLEEPING_POS_ID,
+            MetaDataType::OPTIONAL_BLOCK_POS,
+            Some(bed_head_pos),
+        )]);
+        self.get_entity().set_velocity(Vector3::default());
 
         self.sleeping_since.store(Some(0));
     }
@@ -1533,7 +1509,7 @@ impl Player {
         false
     }
 
-    async fn can_fit_pose(&self, pose: EntityPose) -> bool {
+    fn can_fit_pose(&self, pose: EntityPose) -> bool {
         let entity = self.get_entity();
         let dimensions = Entity::get_entity_dimensions(pose);
         let position = entity.pos.load();
@@ -1542,12 +1518,11 @@ impl Player {
             .world
             .load()
             .is_space_empty(aabb.contract_all(1.0E-7))
-            .await
     }
 
     pub async fn update_player_pose(&self) {
         let entity = self.get_entity();
-        if !self.can_fit_pose(EntityPose::Swimming).await {
+        if !self.can_fit_pose(EntityPose::Swimming) {
             return;
         }
 
@@ -1568,17 +1543,17 @@ impl Player {
 
         let new_pose = if self.gamemode.load() == GameMode::Spectator
             || entity.has_vehicle().await
-            || self.can_fit_pose(desired_pose).await
+            || self.can_fit_pose(desired_pose)
         {
             desired_pose
-        } else if self.can_fit_pose(EntityPose::Crouching).await {
+        } else if self.can_fit_pose(EntityPose::Crouching) {
             EntityPose::Crouching
         } else {
             EntityPose::Swimming
         };
 
         if entity.pose.load() != new_pose {
-            entity.set_pose(new_pose).await;
+            entity.set_pose(new_pose);
         }
     }
 
@@ -1590,30 +1565,22 @@ impl Player {
             return;
         };
 
-        let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position).await;
+        let (bed, bed_state) = world.get_block_and_state_id(&respawn_point.position);
         BedBlock::set_occupied(false, &world, bed, &respawn_point.position, bed_state).await;
 
-        self.living_entity
-            .entity
-            .set_pose(EntityPose::Standing)
-            .await;
+        self.living_entity.entity.set_pose(EntityPose::Standing);
         self.living_entity.entity.set_pos(self.position());
-        self.living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::SLEEPING_POS_ID,
-                MetaDataType::OPTIONAL_BLOCK_POS,
-                None::<BlockPos>,
-            )])
-            .await;
+        self.living_entity.entity.send_meta_data(&[Metadata::new(
+            TrackedData::SLEEPING_POS_ID,
+            MetaDataType::OPTIONAL_BLOCK_POS,
+            None::<BlockPos>,
+        )]);
 
         let chunk_pos = self.living_entity.entity.chunk_pos.load();
-        world
-            .broadcast_to_chunk(
-                chunk_pos,
-                &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
-            )
-            .await;
+        world.broadcast_to_chunk(
+            chunk_pos,
+            &CEntityAnimation::new(self.entity_id().into(), Animation::LeaveBed),
+        );
 
         self.sleeping_since.store(None);
     }
@@ -1669,7 +1636,7 @@ impl Player {
         }
     }
 
-    pub async fn spawn_particle(
+    pub fn spawn_particle(
         &self,
         position: Vector3<f64>,
         offset: Vector3<f32>,
@@ -1677,18 +1644,16 @@ impl Player {
         particle_count: i32,
         particle: Particle,
     ) {
-        self.client
-            .enqueue_packet(&CParticle::new(
-                false,
-                false,
-                position,
-                offset,
-                max_speed,
-                particle_count,
-                VarInt(particle as i32),
-                &[],
-            ))
-            .await;
+        self.client.try_enqueue_packet(&CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            max_speed,
+            particle_count,
+            VarInt(particle as i32),
+            &[],
+        ));
     }
 
     pub async fn play_sound(
@@ -1844,7 +1809,7 @@ impl Player {
         if self.mining.load(Ordering::Relaxed) {
             let pos = self.mining_pos.lock().await;
             let world = self.world();
-            let state = world.get_block_state(&pos).await;
+            let state = world.get_block_state(&pos);
             // Is the block broken?
             if state.is_air() {
                 world
@@ -2123,7 +2088,7 @@ impl Player {
     }
 
     /// Updates the client of the player's current permission level.
-    pub async fn send_permission_lvl_update(&self) {
+    pub fn send_permission_lvl_update(&self) {
         let status = match self.permission_lvl.load() {
             PermissionLvl::Zero => EntityStatus::PermissionLevelAll,
             PermissionLvl::One => EntityStatus::PermissionLevelModerators,
@@ -2132,8 +2097,7 @@ impl Player {
             PermissionLvl::Four => EntityStatus::PermissionLevelOwners,
         };
         self.world()
-            .send_entity_status(&self.living_entity.entity, status)
-            .await;
+            .send_entity_status(&self.living_entity.entity, status);
     }
 
     /// Sets the player's difficulty level.
@@ -2156,7 +2120,7 @@ impl Player {
         command_dispatcher: &CommandDispatcher,
     ) {
         self.permission_lvl.store(lvl);
-        self.send_permission_lvl_update().await;
+        self.send_permission_lvl_update();
 
         if let ClientPlatform::Bedrock(_) = &self.client {
             client_suggestions::send_bedrock_commands_packet(self, server, command_dispatcher)
@@ -2274,7 +2238,7 @@ impl Player {
                         1,
                     )).await;
 
-                self.send_permission_lvl_update().await;
+                self.send_permission_lvl_update();
 
                 player.clone().request_teleport(position, yaw, pitch).await;
                 player.living_entity.entity.last_pos.store(position);
@@ -2378,7 +2342,7 @@ impl Player {
     }
 
     pub async fn heal(&self, additional_health: f32) {
-        self.living_entity.heal(additional_health).await;
+        self.living_entity.heal(additional_health);
         self.send_health().await;
     }
 
@@ -2432,7 +2396,7 @@ impl Player {
     }
 
     pub async fn set_health(&self, health: f32) {
-        self.living_entity.set_health(health).await;
+        self.living_entity.set_health(health);
         self.send_health().await;
     }
 
@@ -2581,7 +2545,7 @@ impl Player {
         }
 
         // Reset air supply & drowning ticks on death
-        self.breath_manager.reset(self).await;
+        self.breath_manager.reset(self);
 
         self.client
             .send_packet_now(&CCombatDeath::new(self.entity_id().into(), &death_msg))
@@ -2652,8 +2616,7 @@ impl Player {
                             uuid: self.gameprofile.id,
                             actions: &[PlayerAction::UpdateGameMode((gamemode as i32).into())],
                         }],
-                    ))
-                    .await;
+                    ));
 
                 match &self.client {
                     crate::net::ClientPlatform::Java(client) => {
@@ -2685,23 +2648,20 @@ impl Player {
     }
 
     /// Send the player's skin layers and used hand to all players.
-    pub async fn send_client_information(&self) {
+    pub fn send_client_information(&self) {
         let config = self.config.load();
-        self.living_entity
-            .entity
-            .send_meta_data(&[
-                Metadata::new(
-                    TrackedData::PLAYER_MODE_CUSTOMISATION,
-                    MetaDataType::BYTE,
-                    config.skin_parts,
-                ),
-                // Metadata::new(
-                //     TrackedData::DATA_MAIN_ARM_ID,
-                //     MetaDataType::ARM,
-                //     VarInt(config.main_hand as u8 as i32),
-                // ),
-            ])
-            .await;
+        self.living_entity.entity.send_meta_data(&[
+            Metadata::new(
+                TrackedData::PLAYER_MODE_CUSTOMISATION,
+                MetaDataType::BYTE,
+                config.skin_parts,
+            ),
+            // Metadata::new(
+            //     TrackedData::DATA_MAIN_ARM_ID,
+            //     MetaDataType::ARM,
+            //     VarInt(config.main_hand as u8 as i32),
+            // ),
+        ]);
     }
 
     pub async fn can_harvest(&self, state: &BlockState, block: &'static Block) -> bool {
@@ -2809,8 +2769,9 @@ impl Player {
         );
 
         // TODO: Merge stacks together
-        let item_entity =
-            Arc::new(ItemEntity::new_with_velocity(entity, item_stack, velocity, 40).await);
+        let item_entity = Arc::new(ItemEntity::new_with_velocity(
+            entity, item_stack, velocity, 40,
+        ));
         self.world().spawn_entity(item_entity).await;
     }
 
@@ -2852,7 +2813,7 @@ impl Player {
             (EquipmentSlot::MAIN_HAND, main_hand_item),
             (EquipmentSlot::OFF_HAND, off_hand_item),
         ];
-        self.living_entity.send_equipment_changes(equipment).await;
+        self.living_entity.send_equipment_changes(equipment);
         // todo this.player.stopUsingItem();
     }
 
@@ -2913,7 +2874,7 @@ impl Player {
                 let map_id = map_id_comp.id;
                 if let Some(map_data_arc) = server.map_manager.get_map(map_id) {
                     let mut map_data = map_data_arc.lock().await;
-                    map_data.update(self).await;
+                    map_data.update(self);
 
                     let tick_count = self.tick_counter.load(Ordering::Relaxed);
                     if map_data.dirty || tick_count % 10 == 0 {
@@ -3191,8 +3152,7 @@ impl Player {
         .await;
 
         self.living_entity
-            .send_equipment_changes(&[(equipment_slot, updated_stack)])
-            .await;
+            .send_equipment_changes(&[(equipment_slot, updated_stack)]);
 
         xp
     }
@@ -3613,7 +3573,7 @@ impl Player {
     }
 
     /// Swing the hand of the player
-    pub async fn swing_hand(&self, hand: Hand, all: bool) {
+    pub fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world();
         let entity_id = VarInt(self.entity_id());
         let chunk_pos = self.living_entity.entity.chunk_pos.load();
@@ -3625,11 +3585,9 @@ impl Player {
 
         let packet = CEntityAnimation::new(entity_id, animation);
         if all {
-            world.broadcast_to_chunk(chunk_pos, &packet).await;
+            world.broadcast_to_chunk(chunk_pos, &packet);
         } else {
-            world
-                .broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet)
-                .await;
+            world.broadcast_to_chunk_except(chunk_pos, &[self.get_entity().entity_uuid], &packet);
         }
     }
 
@@ -3704,7 +3662,7 @@ impl Player {
     }
 
     /// Returns the main non-air `BlockPos` underneath the player.
-    pub async fn get_supporting_block_pos(&self) -> Option<BlockPos> {
+    pub fn get_supporting_block_pos(&self) -> Option<BlockPos> {
         let entity = self.get_entity();
         let entity_pos = entity.pos.load();
         let aabb = entity.bounding_box.load();
@@ -3724,7 +3682,7 @@ impl Player {
 
         // Iterate through candidates
         for pos in BlockPos::iterate(min_pos, max_pos) {
-            let (_, state) = world.get_block_and_state(&pos).await;
+            let (_, state) = world.get_block_and_state(&pos);
 
             // Only consider physical blocks
             if state.is_air() {
@@ -3773,7 +3731,7 @@ impl Player {
             entity_pos.z.floor() as i32,
         );
 
-        let state = world.get_block_state(&fallback_pos).await;
+        let state = world.get_block_state(&fallback_pos);
         (!state.is_air()).then_some(fallback_pos)
     }
 
@@ -4121,7 +4079,7 @@ impl EntityBase for Player {
                                     entity.on_ground.load(Ordering::SeqCst),
                                 )
                             )
-                            .await;
+                            ;
                     }
                 }}
             } else {
@@ -4560,28 +4518,24 @@ impl InventoryPlayer for Player {
     ) -> PlayerFuture<'a, ()> {
         Box::pin(async move {
             let chunk_pos = self.living_entity.entity.chunk_pos.load();
-            self.world()
-                .broadcast_to_chunk_except(
-                    chunk_pos,
-                    &[self.get_entity().entity_uuid],
-                    &CSetEquipment::new(
-                        self.entity_id().into(),
-                        vec![(
-                            slot.discriminant(),
-                            ItemStackSerializer::from(stack.clone()),
-                        )],
-                    ),
-                )
-                .await;
+            self.world().broadcast_to_chunk_except(
+                chunk_pos,
+                &[self.get_entity().entity_uuid],
+                &CSetEquipment::new(
+                    self.entity_id().into(),
+                    vec![(
+                        slot.discriminant(),
+                        ItemStackSerializer::from(stack.clone()),
+                    )],
+                ),
+            );
 
             if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
-                self.world()
-                    .play_sound_event(
-                        equippable.equip_sound.clone(),
-                        SoundCategory::Players,
-                        &self.position(),
-                    )
-                    .await;
+                self.world().play_sound_event(
+                    &equippable.equip_sound,
+                    SoundCategory::Players,
+                    &self.position(),
+                );
             }
         })
     }

@@ -28,15 +28,13 @@ impl ItemBehaviour for SnowBallItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::EntitySnowballThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntitySnowballThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
             let entity = Entity::new(world.clone(), position, &EntityType::SNOWBALL);
-            let snowball = SnowballEntity::new_shot(entity, &player.living_entity.entity).await;
+            let snowball = SnowballEntity::new_shot(entity, &player.living_entity.entity);
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
             snowball.thrown.set_velocity_from(

@@ -122,19 +122,16 @@ impl BlockEntity for MobSpawnerBlockEntity {
                             + 0.5,
                     );
                     // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
-                    if !world
-                        .is_space_empty(BoundingBox::new_from_pos(
-                            spawn_pos.x,
-                            spawn_pos.y,
-                            spawn_pos.z,
-                            &EntityDimensions {
-                                width: entity_type.dimension[0],
-                                height: entity_type.dimension[1],
-                                eye_height: entity_type.eye_height,
-                            },
-                        ))
-                        .await
-                    {
+                    if !world.is_space_empty(BoundingBox::new_from_pos(
+                        spawn_pos.x,
+                        spawn_pos.y,
+                        spawn_pos.z,
+                        &EntityDimensions {
+                            width: entity_type.dimension[0],
+                            height: entity_type.dimension[1],
+                            eye_height: entity_type.eye_height,
+                        },
+                    )) {
                         continue;
                     }
                     let entity = crate::entity::r#type::from_type(
@@ -142,12 +139,9 @@ impl BlockEntity for MobSpawnerBlockEntity {
                         spawn_pos,
                         world,
                         uuid::Uuid::new_v4(),
-                    )
-                    .await;
+                    );
                     world.spawn_entity(entity).await;
-                    world
-                        .sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0)
-                        .await;
+                    world.sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0);
                     update_spawns = true;
                 }
                 if update_spawns {

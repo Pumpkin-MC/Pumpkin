@@ -48,9 +48,7 @@ impl CommandExecutor for Executor {
                     let processed_duration =
                         duration.unwrap_or_else(|| rand::random_range(12_000..=180_000));
 
-                    weather
-                        .set_weather_parameters(&world, processed_duration, 0, false, false)
-                        .await;
+                    weather.set_weather_parameters(&world, processed_duration, 0, false, false);
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_CLEAR,
@@ -63,9 +61,7 @@ impl CommandExecutor for Executor {
                     let processed_duration =
                         duration.unwrap_or_else(|| rand::random_range(12_000..=24_000));
 
-                    weather
-                        .set_weather_parameters(&world, 0, processed_duration, true, false)
-                        .await;
+                    weather.set_weather_parameters(&world, 0, processed_duration, true, false);
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_RAIN,
@@ -78,9 +74,7 @@ impl CommandExecutor for Executor {
                     let processed_duration =
                         duration.unwrap_or_else(|| rand::random_range(3_600..=15_600));
 
-                    weather
-                        .set_weather_parameters(&world, 0, processed_duration, true, true)
-                        .await;
+                    weather.set_weather_parameters(&world, 0, processed_duration, true, true);
                     sender
                         .send_message(TextComponent::translate_cross(
                             translation::java::COMMANDS_WEATHER_SET_THUNDER,

@@ -69,9 +69,7 @@ impl CommandExecutor for Executor {
                 }
             };
 
-            world
-                .spawn_particle(pos, delta, speed, count, *particle)
-                .await;
+            world.spawn_particle(pos, delta, speed, count, *particle);
 
             sender
                 .send_message(TextComponent::translate_cross(

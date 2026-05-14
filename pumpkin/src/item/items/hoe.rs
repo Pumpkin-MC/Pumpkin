@@ -57,7 +57,7 @@ impl ItemBehaviour for HoeItem {
                     if (block == &Block::GRASS_BLOCK
                         || block == &Block::DIRT_PATH
                         || block == &Block::DIRT)
-                        && world.get_block_state(&location.up()).await.is_air()
+                        && world.get_block_state(&location.up()).is_air()
                     {
                         future_block = &Block::FARMLAND;
                         changed = true;
@@ -89,9 +89,10 @@ impl ItemBehaviour for HoeItem {
                     };
                     let entity = Entity::new(world.clone(), location, &EntityType::ITEM);
                     // TODO: Merge stacks together
-                    let item_entity = Arc::new(
-                        ItemEntity::new(entity, ItemStack::new(1, &Item::HANGING_ROOTS)).await,
-                    );
+                    let item_entity = Arc::new(ItemEntity::new(
+                        entity,
+                        ItemStack::new(1, &Item::HANGING_ROOTS),
+                    ));
                     world.spawn_entity(item_entity).await;
                 }
 

@@ -58,7 +58,7 @@ impl BlockBehaviour for TripwireBlock {
             ]
             .map(async |dir| {
                 let current_pos = args.position.offset(dir.to_offset());
-                let state_id = args.world.get_block_state_id(&current_pos).await;
+                let state_id = args.world.get_block_state_id(&current_pos);
                 Self::should_connect_to(state_id, dir)
             });
 
@@ -132,7 +132,7 @@ impl BlockBehaviour for TripwireBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
 
             let mut props = TripwireProperties::from_state_id(state_id, args.block);
             if !props.powered {
@@ -163,7 +163,7 @@ impl BlockBehaviour for TripwireBlock {
             if args.moved || Block::from_state_id(args.old_state_id) == args.block {
                 return;
             }
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
             Self::update(args.world, args.position, state_id).await;
         })
     }
@@ -174,8 +174,7 @@ impl TripwireBlock {
         for dir in [BlockDirection::South, BlockDirection::West] {
             for i in 1..42 {
                 let current_pos = pos.offset_dir(dir.to_offset(), i);
-                let (current_block, current_state) =
-                    world.get_block_and_state_id(&current_pos).await;
+                let (current_block, current_state) = world.get_block_and_state_id(&current_pos);
                 if current_block == &Block::TRIPWIRE_HOOK {
                     let current_props =
                         TripwireHookProperties::from_state_id(current_state, &Block::TRIPWIRE_HOOK);

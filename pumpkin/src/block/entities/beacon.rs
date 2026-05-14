@@ -76,7 +76,7 @@ impl BeaconBlockEntity {
     }
 
     /// Replicates Java's `updateBase` logic
-    async fn update_base(&self, world: &Arc<World>) -> i32 {
+    fn update_base(&self, world: &Arc<World>) -> i32 {
         let mut levels = 0;
         let x = self.position.0.x;
         let y = self.position.0.y;
@@ -92,7 +92,7 @@ impl BeaconBlockEntity {
             for lx in (x - step)..=(x + step) {
                 for lz in (z - step)..=(z + step) {
                     let pos = BlockPos::new(lx, ly, lz);
-                    let block = world.get_block(&pos).await;
+                    let block = world.get_block(&pos);
                     if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEACON_BASE_BLOCKS) {
                         is_ok = false;
                         break;
@@ -245,7 +245,7 @@ impl BlockEntity for BeaconBlockEntity {
         Box::pin(async move {
             // Check properties every 80 ticks matching Java
             if world.get_time_of_day().await % 80 == 0 {
-                let levels = self.update_base(world).await;
+                let levels = self.update_base(world);
                 self.levels.store(levels, Ordering::Relaxed);
 
                 // TODO: Beam Section validation (scanning upward to heightmap to check for sky visibility)
