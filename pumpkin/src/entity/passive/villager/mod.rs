@@ -12,8 +12,7 @@ use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
+use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::inventory::SimpleInventory;
 use tokio::sync::Mutex;
@@ -45,12 +44,10 @@ pub struct VillagerEntity {
     pub inventory: Arc<Mutex<Vec<Arc<Mutex<ItemStack>>>>>,
     pub merchant_inventory: Arc<SimpleInventory>,
     pub offers: Mutex<Vec<pumpkin_protocol::java::client::play::MerchantOffer>>,
-    pub self_arc: Mutex<Option<Weak<Self>>>,
 }
 
 impl VillagerEntity {
-    #[expect(clippy::too_many_lines)]
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let villager_data = VillagerData {
             r#type: VillagerType::Plains,
@@ -74,17 +71,15 @@ impl VillagerEntity {
             inventory,
             merchant_inventory: Arc::new(SimpleInventory::new(3)),
             offers: Mutex::new(Vec::new()),
-            self_arc: Mutex::new(None),
         };
         let mob_arc = Arc::new(villager);
-        *mob_arc.self_arc.lock().await = Some(Arc::downgrade(&mob_arc));
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             // Villagers avoid threats
@@ -149,14 +144,11 @@ impl VillagerEntity {
         };
 
         // Send initial metadata
-        mob_arc
-            .get_entity()
-            .send_meta_data(&[Metadata::new(
-                TrackedData::VILLAGER_DATA,
-                MetaDataType::VILLAGER_DATA,
-                villager_data,
-            )])
-            .await;
+        mob_arc.get_entity().send_meta_data(&[Metadata::new(
+            TrackedData::VILLAGER_DATA,
+            MetaDataType::VILLAGER_DATA,
+            villager_data,
+        )]);
 
         mob_arc
     }
@@ -204,18 +196,16 @@ impl VillagerEntity {
         let mut villager_data = self.villager_data.lock().await;
         let old_profession = villager_data.profession;
         *villager_data = data;
-        self.get_entity()
-            .send_meta_data(&[Metadata::new(
-                TrackedData::VILLAGER_DATA,
-                MetaDataType::VILLAGER_DATA,
-                data,
-            )])
-            .await;
+        self.get_entity().send_meta_data(&[Metadata::new(
+            TrackedData::VILLAGER_DATA,
+            MetaDataType::VILLAGER_DATA,
+            data,
+        )]);
 
         if old_profession != data.profession {
             self.generate_trades(data.profession, data.level).await;
             if let Some(sound) = data.profession.work_sound() {
-                self.get_entity().play_sound(sound).await;
+                self.get_entity().play_sound(sound);
             }
         }
     }
@@ -257,38 +247,32 @@ impl VillagerEntity {
         }
     }
 
-    pub async fn set_unhappy(&self) {
+    pub fn set_unhappy(&self) {
         let entity = self.get_entity();
         entity
             .world
             .load()
-            .send_entity_status(entity, pumpkin_data::entity::EntityStatus::VillagerAngry)
-            .await;
-        entity
-            .play_sound(pumpkin_data::sound::Sound::EntityVillagerNo)
-            .await;
+            .send_entity_status(entity, pumpkin_data::entity::EntityStatus::VillagerAngry);
+        entity.play_sound(pumpkin_data::sound::Sound::EntityVillagerNo);
     }
 
-    pub async fn open_trading_screen(&self, player: &Arc<Player>) {
-        let self_weak = self.self_arc.lock().await;
-        if let Some(self_arc) = self_weak.as_ref().and_then(std::sync::Weak::upgrade) {
-            player.open_handled_screen(&*self_arc, None).await;
+    pub const fn open_trading_screen(&self, _player: &Arc<Player>) {
+        // let self_weak = self.self_arc.lock().await;
+        // if let Some(self_arc) = self_weak.as_ref().and_then(std::sync::Weak::upgrade) {
+        //     player.open_handled_screen(&*self_arc, None);
 
-            let offers = self.offers.lock().await;
-            let villager_data = self.villager_data.lock().await;
+        //     let offers = self.offers.lock().await;
+        //     let villager_data = self.villager_data.lock().await;
 
-            player
-                .client
-                .enqueue_packet(&CMerchantOffers::new(
-                    player.screen_handler_sync_id.load(Ordering::Relaxed).into(),
-                    offers.clone(),
-                    VarInt(villager_data.level),
-                    VarInt(self.xp.load(Ordering::Relaxed)),
-                    true,
-                    true,
-                ))
-                .await;
-        }
+        //     player.client.enqueue_packet(&CMerchantOffers::new(
+        //         player.screen_handler_sync_id.load(Ordering::Relaxed).into(),
+        //         offers.clone(),
+        //         VarInt(villager_data.level),
+        //         VarInt(self.xp.load(Ordering::Relaxed)),
+        //         true,
+        //         true,
+        //     ));
+        // }
     }
 }
 
@@ -471,18 +455,18 @@ impl Mob for VillagerEntity {
         let player = player.clone();
         Box::pin(async move {
             if self.get_entity().age.load(Ordering::Relaxed) < 0 {
-                self.set_unhappy().await;
+                self.set_unhappy();
                 return true;
             }
 
             let offers = self.offers.lock().await;
             if offers.is_empty() {
-                self.set_unhappy().await;
+                self.set_unhappy();
                 return true;
             }
             drop(offers);
 
-            self.open_trading_screen(&player).await;
+            self.open_trading_screen(&player);
 
             true
         })

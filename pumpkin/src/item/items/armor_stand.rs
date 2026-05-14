@@ -71,7 +71,7 @@ impl ItemBehaviour for ArmorStandItem {
                 ),
             );
 
-            if world.is_space_empty(bounding_box).await
+            if world.is_space_empty(bounding_box)
                 && world.get_entities_at_box(&bounding_box).is_empty()
             {
                 let (player_yaw, _) = player.rotation();
@@ -81,13 +81,11 @@ impl ItemBehaviour for ArmorStandItem {
 
                 entity.set_rotation(rotation, 0.0);
 
-                world
-                    .play_sound(
-                        Sound::EntityArmorStandPlace,
-                        SoundCategory::Blocks,
-                        &entity.pos.load(),
-                    )
-                    .await;
+                world.play_sound(
+                    Sound::EntityArmorStandPlace,
+                    SoundCategory::Blocks,
+                    &entity.pos.load(),
+                );
 
                 let armor_stand = ArmorStandEntity::new(entity);
 

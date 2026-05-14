@@ -60,7 +60,7 @@ impl BlockBehaviour for LecternBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(lectern_entity) =
                     block_entity.as_any().downcast_ref::<LecternBlockEntity>()
             {
@@ -70,7 +70,7 @@ impl BlockBehaviour for LecternBlock {
                     // Need to find a proper way to give items to player. For now skip.
 
                     let mut props = LecternLikeProperties::from_state_id(
-                        args.world.get_block_state(args.position).await.id,
+                        args.world.get_block_state(args.position).id,
                         args.block,
                     );
                     Self::update_lectern_state(
@@ -97,7 +97,7 @@ impl BlockBehaviour for LecternBlock {
 
             // Check if it's a book
             if item_stack.item.registry_key.contains("book")
-                && let Some(block_entity) = args.world.get_block_entity(args.position).await
+                && let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(lectern_entity) =
                     block_entity.as_any().downcast_ref::<LecternBlockEntity>()
                 && lectern_entity.book.lock().await.is_empty()
@@ -106,7 +106,7 @@ impl BlockBehaviour for LecternBlock {
                 lectern_entity.set_stack(0, book).await;
 
                 let mut props = LecternLikeProperties::from_state_id(
-                    args.world.get_block_state(args.position).await.id,
+                    args.world.get_block_state(args.position).id,
                     args.block,
                 );
                 Self::update_lectern_state(true, args.block, args.position, args.world, &mut props)
@@ -119,7 +119,7 @@ impl BlockBehaviour for LecternBlock {
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(lectern_entity) =
                     block_entity.as_any().downcast_ref::<LecternBlockEntity>()
             {
@@ -135,7 +135,7 @@ impl BlockBehaviour for LecternBlock {
                         ),
                         &EntityType::ITEM,
                     );
-                    let item_entity = ItemEntity::new(entity, book).await;
+                    let item_entity = ItemEntity::new(entity, book);
                     args.world.spawn_entity(Arc::new(item_entity)).await;
                 }
             }

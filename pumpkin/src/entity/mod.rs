@@ -160,13 +160,11 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
             let is_baby = entity.age.load(Ordering::Relaxed) < 0;
 
             if is_baby {
-                entity
-                    .send_meta_data(&[Metadata::new(
-                        TrackedData::BABY_ID,
-                        MetaDataType::BOOLEAN,
-                        true,
-                    )])
-                    .await;
+                entity.send_meta_data(&[Metadata::new(
+                    TrackedData::BABY_ID,
+                    MetaDataType::BOOLEAN,
+                    true,
+                )]);
             }
         })
     }
@@ -183,9 +181,7 @@ pub trait EntityBase: Send + Sync + NBTStorage + std::any::Any {
         Self: 'static,
     {
         Box::pin(async move {
-            self.get_entity()
-                .teleport(position, yaw, pitch, world)
-                .await;
+            self.get_entity().teleport(position, yaw, pitch, world);
         })
     }
 
@@ -653,13 +649,13 @@ impl Entity {
         }
     }
 
-    pub async fn add_velocity(&self, velocity: Vector3<f64>) {
-        self.set_velocity(self.velocity.load() + velocity).await;
+    pub fn add_velocity(&self, velocity: Vector3<f64>) {
+        self.set_velocity(self.velocity.load() + velocity);
     }
 
-    pub async fn set_velocity(&self, velocity: Vector3<f64>) {
+    pub fn set_velocity(&self, velocity: Vector3<f64>) {
         self.velocity.store(velocity);
-        self.send_velocity().await;
+        self.send_velocity();
     }
 
     /// Updates the world reference for this entity.
@@ -675,36 +671,31 @@ impl Entity {
     }
 
     /// Sets a custom name for the entity, typically used with nametags
-    pub async fn set_custom_name(&self, name: TextComponent) {
+    pub fn set_custom_name(&self, name: TextComponent) {
         self.custom_name.store(Arc::new(Some(name.clone())));
         self.send_meta_data(&[Metadata::new(
             TrackedData::CUSTOM_NAME,
             MetaDataType::OPTIONAL_TEXT_COMPONENT,
             Some(name),
-        )])
-        .await;
+        )]);
     }
 
-    pub async fn set_custom_name_visible(&self, visible: bool) {
+    pub fn set_custom_name_visible(&self, visible: bool) {
         self.custom_name_visible.store(visible, Ordering::Relaxed);
         self.send_meta_data(&[Metadata::new(
             TrackedData::CUSTOM_NAME_VISIBLE,
             MetaDataType::BOOLEAN,
             visible,
-        )])
-        .await;
+        )]);
     }
 
-    pub async fn send_velocity(&self) {
+    pub fn send_velocity(&self) {
         let velocity = self.velocity.load();
         let chunk_pos = self.chunk_pos.load();
-        self.world
-            .load()
-            .broadcast_to_chunk(
-                chunk_pos,
-                &CEntityVelocity::new(self.entity_id.into(), velocity),
-            )
-            .await;
+        self.world.load().broadcast_to_chunk(
+            chunk_pos,
+            &CEntityVelocity::new(self.entity_id.into(), velocity),
+        );
     }
 
     #[must_use]
@@ -788,7 +779,7 @@ impl Entity {
         self.yaw.store(yaw);
     }
 
-    pub async fn send_rotation(&self) {
+    pub fn send_rotation(&self) {
         let yaw = self.yaw.load();
         let pitch = self.pitch.load();
         let chunk_pos = self.chunk_pos.load();
@@ -805,23 +796,20 @@ impl Entity {
         self.last_sent_yaw.store(yaw, Relaxed);
         self.last_sent_pitch.store(pitch, Relaxed);
 
-        self.world
-            .load()
-            .broadcast_to_chunk(
-                chunk_pos,
-                &CUpdateEntityRot::new(
-                    self.entity_id.into(),
-                    yaw,
-                    pitch,
-                    self.on_ground.load(Relaxed),
-                ),
-            )
-            .await;
+        self.world.load().broadcast_to_chunk(
+            chunk_pos,
+            &CUpdateEntityRot::new(
+                self.entity_id.into(),
+                yaw,
+                pitch,
+                self.on_ground.load(Relaxed),
+            ),
+        );
 
-        self.send_head_rot(yaw).await;
+        self.send_head_rot(yaw);
     }
 
-    pub async fn send_head_rot(&self, head_yaw: u8) {
+    pub fn send_head_rot(&self, head_yaw: u8) {
         let chunk_pos = self.chunk_pos.load();
         if head_yaw == self.last_sent_head_yaw.load(Relaxed) {
             return;
@@ -830,8 +818,7 @@ impl Entity {
 
         self.world
             .load()
-            .broadcast_to_chunk(chunk_pos, &CHeadRot::new(self.entity_id.into(), head_yaw))
-            .await;
+            .broadcast_to_chunk(chunk_pos, &CHeadRot::new(self.entity_id.into(), head_yaw));
     }
 
     fn default_portal_cooldown(&self) -> u32 {
@@ -1015,14 +1002,14 @@ impl Entity {
 
     #[expect(dead_code)]
     fn tick_block_underneath(_caller: &Arc<dyn EntityBase>) {
-        // let world = self.world.read().await;
+        // let world = self.world.read();
 
-        // let (pos, block, state) = self.get_block_with_y_offset(0.2).await;
+        // let (pos, block, state) = self.get_block_with_y_offset(0.2);
 
         // world
         //     .block_registry
         //     .on_stepped_on(&world, caller.as_ref(), pos, block, state)
-        //     .await;
+        //     ;
 
         // TODO: Add this to on_stepped_on
 
@@ -1032,7 +1019,7 @@ impl Entity {
         if self.on_ground.load(Ordering::SeqCst) {
 
 
-            let (_pos, block, state) = self.get_block_with_y_offset(0.2).await;
+            let (_pos, block, state) = self.get_block_with_y_offset(0.2);
 
 
             if let Some(live) = living {
@@ -1050,7 +1037,7 @@ impl Entity {
                 {
 
 
-                    let _ = live.damage(1.0, DamageType::CAMPFIRE).await;
+                    let _ = live.damage(1.0, DamageType::CAMPFIRE);
 
 
                 }
@@ -1062,7 +1049,7 @@ impl Entity {
                 if block == Block::MAGMA_BLOCK {
 
 
-                    let _ = live.damage(1.0, DamageType::HOT_FLOOR).await;
+                    let _ = live.damage(1.0, DamageType::HOT_FLOOR);
 
 
                 }
@@ -1093,7 +1080,7 @@ impl Entity {
         let world = self.world.load();
 
         for pos in BlockPos::iterate(min, max) {
-            let (block, state) = world.get_block_and_state(&pos).await;
+            let (block, state) = world.get_block_and_state(&pos);
             if state.is_air() {
                 continue;
             }
@@ -1142,7 +1129,7 @@ impl Entity {
         suffocating
     }
 
-    pub async fn send_pos_rot(&self) {
+    pub fn send_pos_rot(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
         let chunk_pos = self.chunk_pos.load();
@@ -1174,46 +1161,37 @@ impl Entity {
 
         // Dynamically pick the most efficient packet
         if pos_changed && rot_changed {
-            self.world
-                .load()
-                .broadcast_to_chunk(
-                    chunk_pos,
-                    &CUpdateEntityPosRot::new(
-                        self.entity_id.into(),
-                        Vector3::new(converted.x, converted.y, converted.z),
-                        yaw,
-                        pitch,
-                        self.on_ground.load(Relaxed),
-                    ),
-                )
-                .await;
+            self.world.load().broadcast_to_chunk(
+                chunk_pos,
+                &CUpdateEntityPosRot::new(
+                    self.entity_id.into(),
+                    Vector3::new(converted.x, converted.y, converted.z),
+                    yaw,
+                    pitch,
+                    self.on_ground.load(Relaxed),
+                ),
+            );
         } else if pos_changed {
-            self.world
-                .load()
-                .broadcast_to_chunk(
-                    chunk_pos,
-                    &CUpdateEntityPos::new(
-                        self.entity_id.into(),
-                        Vector3::new(converted.x, converted.y, converted.z),
-                        self.on_ground.load(Relaxed),
-                    ),
-                )
-                .await;
+            self.world.load().broadcast_to_chunk(
+                chunk_pos,
+                &CUpdateEntityPos::new(
+                    self.entity_id.into(),
+                    Vector3::new(converted.x, converted.y, converted.z),
+                    self.on_ground.load(Relaxed),
+                ),
+            );
         } else if rot_changed {
-            self.world
-                .load()
-                .broadcast_to_chunk(
-                    chunk_pos,
-                    &CUpdateEntityRot::new(
-                        self.entity_id.into(),
-                        yaw,
-                        pitch,
-                        self.on_ground.load(Relaxed),
-                    ),
-                )
-                .await;
+            self.world.load().broadcast_to_chunk(
+                chunk_pos,
+                &CUpdateEntityRot::new(
+                    self.entity_id.into(),
+                    yaw,
+                    pitch,
+                    self.on_ground.load(Relaxed),
+                ),
+            );
         }
-        self.send_head_rot(yaw).await;
+        self.send_head_rot(yaw);
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {
@@ -1224,7 +1202,7 @@ impl Entity {
         old
     }
 
-    pub async fn send_pos(&self) {
+    pub fn send_pos(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
         let chunk_pos = self.chunk_pos.load();
@@ -1242,17 +1220,14 @@ impl Entity {
 
         self.last_sent_pos.store(new);
 
-        self.world
-            .load()
-            .broadcast_to_chunk(
-                chunk_pos,
-                &CUpdateEntityPos::new(
-                    self.entity_id.into(),
-                    Vector3::new(converted.x, converted.y, converted.z),
-                    self.on_ground.load(Relaxed),
-                ),
-            )
-            .await;
+        self.world.load().broadcast_to_chunk(
+            chunk_pos,
+            &CUpdateEntityPos::new(
+                self.entity_id.into(),
+                Vector3::new(converted.x, converted.y, converted.z),
+                self.on_ground.load(Relaxed),
+            ),
+        );
     }
 
     // updateWaterState() in yarn
@@ -1292,7 +1267,7 @@ impl Entity {
                 for z in min.0.z..=max.0.z {
                     let pos = BlockPos::new(x, y, z);
 
-                    let (fluid, state) = world.get_fluid_and_fluid_state(&pos).await;
+                    let (fluid, state) = world.get_fluid_and_fluid_state(&pos);
 
                     if fluid.id != Fluid::EMPTY.id {
                         let marginal_height =
@@ -1313,7 +1288,7 @@ impl Entity {
                                 continue;
                             }
 
-                            let mut fluid_velo = world.get_fluid_velocity(pos, fluid, state).await;
+                            let mut fluid_velo = world.get_fluid_velocity(pos, fluid, state);
 
                             if fluid_height[i] < 0.4 {
                                 fluid_velo = fluid_velo * fluid_height[i];
@@ -1408,7 +1383,7 @@ impl Entity {
         }
     }
 
-    async fn get_pos_with_y_offset(
+    fn get_pos_with_y_offset(
         &self,
         offset: f64,
     ) -> (
@@ -1418,11 +1393,7 @@ impl Entity {
     ) {
         if let Some(mut supporting_block) = self.supporting_block_pos.load() {
             if offset > 1.0e-5 {
-                let (block, state) = self
-                    .world
-                    .load()
-                    .get_block_and_state(&supporting_block)
-                    .await;
+                let (block, state) = self.world.load().get_block_and_state(&supporting_block);
 
                 // if let Some(props) = block.properties(state.id) {
                 //     let name = props.;
@@ -1453,16 +1424,16 @@ impl Entity {
         (block_pos, None, None)
     }
 
-    async fn get_block_with_y_offset(
+    fn get_block_with_y_offset(
         &self,
         offset: f64,
     ) -> (BlockPos, &'static Block, &'static BlockState) {
-        let (pos, block, state) = self.get_pos_with_y_offset(offset).await;
+        let (pos, block, state) = self.get_pos_with_y_offset(offset);
 
         if let (Some(b), Some(s)) = (block, state) {
             (pos, b, s)
         } else {
-            let (b, s) = self.world.load().get_block_and_state(&pos).await;
+            let (b, s) = self.world.load().get_block_and_state(&pos);
 
             (pos, b, s)
         }
@@ -1505,32 +1476,30 @@ impl Entity {
     }
 
     #[expect(clippy::float_cmp)]
-    async fn get_velocity_multiplier(&self) -> f32 {
-        let block = self.world.load().get_block(&self.block_pos.load()).await;
+    fn get_velocity_multiplier(&self) -> f32 {
+        let block = self.world.load().get_block(&self.block_pos.load());
 
         let multiplier = block.velocity_multiplier;
 
         if multiplier != 1.0 || block == &Block::WATER || block == &Block::BUBBLE_COLUMN {
             multiplier
         } else {
-            let (_pos, block, _state) = self.get_block_with_y_offset(0.500_001).await;
+            let (_pos, block, _state) = self.get_block_with_y_offset(0.500_001);
 
             block.velocity_multiplier
         }
     }
 
     #[expect(clippy::float_cmp)]
-    async fn get_jump_velocity_multiplier(&self) -> f32 {
+    fn get_jump_velocity_multiplier(&self) -> f32 {
         let f = self
             .world
             .load()
             .get_block(&self.block_pos.load())
-            .await
             .jump_velocity_multiplier;
 
         let g = self
             .get_block_with_y_offset(0.500_001)
-            .await
             .1
             .jump_velocity_multiplier;
 
@@ -1573,7 +1542,7 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        let velocity_multiplier = f64::from(self.get_velocity_multiplier().await);
+        let velocity_multiplier = f64::from(self.get_velocity_multiplier());
 
         self.velocity.store(final_move * velocity_multiplier);
 
@@ -1590,7 +1559,7 @@ impl Entity {
 
         if motion.y != final_move.y {
             let world = self.world.load();
-            let block = self.get_block_with_y_offset(0.2).await.1;
+            let block = self.get_block_with_y_offset(0.2).1;
             world
                 .block_registry
                 .update_entity_movement_after_fall_on(block, caller.as_ref())
@@ -1598,7 +1567,7 @@ impl Entity {
         }
     }
 
-    pub async fn push_out_of_blocks(&self, center_pos: Vector3<f64>) {
+    pub fn push_out_of_blocks(&self, center_pos: Vector3<f64>) {
         let block_pos = BlockPos::floored_v(center_pos);
 
         let delta = center_pos.sub(&block_pos.0.to_f64());
@@ -1618,7 +1587,6 @@ impl Entity {
                 .world
                 .load()
                 .get_block_state(&block_pos.offset(offset))
-                .await
                 .is_full_cube()
             {
                 continue;
@@ -1715,9 +1683,8 @@ impl Entity {
                             dest_result.calculate_exit_position(relative_pos, &dimensions)
                         },
                     );
-                    let final_pos = dest_result
-                        .find_open_position(&dest_world, base_pos, &dimensions)
-                        .await;
+                    let final_pos =
+                        dest_result.find_open_position(&dest_world, base_pos, &dimensions);
                     let yaw = dest_result.calculate_teleport_yaw(current_yaw, source_axis);
                     (final_pos, Some(yaw))
                 } else if let Some((build_pos, axis, is_fallback)) =
@@ -1737,9 +1704,8 @@ impl Entity {
                         height: 3,
                     };
                     let center_pos = new_portal.get_teleport_position();
-                    let final_pos = new_portal
-                        .find_open_position(&dest_world, center_pos, &dimensions)
-                        .await;
+                    let final_pos =
+                        new_portal.find_open_position(&dest_world, center_pos, &dimensions);
                     let yaw = new_portal.calculate_teleport_yaw(current_yaw, source_axis);
                     (final_pos, Some(yaw))
                 } else {
@@ -1843,9 +1809,7 @@ impl Entity {
                 &world,
                 &pos,
                 pumpkin_data::block_properties::HorizontalAxis::X,
-            )
-            .await
-                && portal.was_already_valid()
+            ) && portal.was_already_valid()
             {
                 new_manager.set_source_portal(SourcePortalInfo {
                     lower_corner: portal.lower_corner(),
@@ -1857,9 +1821,7 @@ impl Entity {
                 &world,
                 &pos,
                 pumpkin_data::block_properties::HorizontalAxis::Z,
-            )
-            .await
-                && portal.was_already_valid()
+            ) && portal.was_already_valid()
             {
                 new_manager.set_source_portal(SourcePortalInfo {
                     lower_corner: portal.lower_corner(),
@@ -1974,8 +1936,7 @@ impl Entity {
                 TrackedData::TICKS_FROZEN,
                 MetaDataType::INTEGER,
                 VarInt(new_frozen_ticks),
-            )])
-            .await;
+            )]);
         }
 
         // Vanilla parity: full-freeze damage is tick-phase based.
@@ -2222,8 +2183,7 @@ impl Entity {
             TrackedData::SHARED_FLAGS_ID,
             MetaDataType::BYTE,
             new_je_flags,
-        )])
-        .await;
+        )]);
 
         if let Some(bedrock_flag) = flag.to_bedrock() {
             let (key, index) = if bedrock_flag >= 64 {
@@ -2284,14 +2244,13 @@ impl Entity {
     }
 
     /// Plays sound at this entity's position with the entity's sound category
-    pub async fn play_sound(&self, sound: Sound) {
+    pub fn play_sound(&self, sound: Sound) {
         self.world
             .load()
-            .play_sound(sound, SoundCategory::Neutral, &self.pos.load())
-            .await;
+            .play_sound(sound, SoundCategory::Neutral, &self.pos.load());
     }
 
-    pub async fn send_meta_data<T: Serialize>(&self, meta: &[Metadata<T>]) {
+    pub fn send_meta_data<T: Serialize>(&self, meta: &[Metadata<T>]) {
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
         for player in world.players.load().iter() {
@@ -2306,25 +2265,20 @@ impl Entity {
                         m.write(&mut buf, &client.version.load()).unwrap();
                     }
                     buf.put_u8(255);
-                    player
-                        .client
-                        .enqueue_packet(&CSetEntityMetadata::new(self.entity_id.into(), buf.into()))
-                        .await;
+                    player.client.try_enqueue_packet(&CSetEntityMetadata::new(
+                        self.entity_id.into(),
+                        buf.into(),
+                    ));
                 }
             }
         }
     }
 
-    pub async fn set_pose(&self, pose: EntityPose) {
+    pub fn set_pose(&self, pose: EntityPose) {
         let dimension = Self::get_entity_dimensions(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
-        if self
-            .world
-            .load()
-            .is_space_empty(aabb.contract_all(1.0E-7))
-            .await
-        {
+        if self.world.load().is_space_empty(aabb.contract_all(1.0E-7)) {
             self.pose.store(pose);
             let dimension = Self::get_entity_dimensions(pose);
             self.bounding_box.store(aabb);
@@ -2334,8 +2288,7 @@ impl Entity {
                 TrackedData::POSE,
                 MetaDataType::ENTITY_POSE,
                 VarInt(pose),
-            )])
-            .await;
+            )]);
         }
     }
 
@@ -2396,7 +2349,7 @@ impl Entity {
             for y in blockpos.0.y..=blockpos1.0.y {
                 for z in blockpos.0.z..=blockpos1.0.z {
                     let pos = BlockPos::new(x, y, z);
-                    let (block, state) = world.get_block_and_state(&pos).await;
+                    let (block, state) = world.get_block_and_state(&pos);
                     let block_outlines = state.get_block_outline_shapes();
 
                     if state.outline_shapes.is_empty() {
@@ -2404,7 +2357,7 @@ impl Entity {
                             .block_registry
                             .on_entity_collision(block, &world, entity, &pos, state, server)
                             .await;
-                        let fluid = world.get_fluid(&pos).await;
+                        let fluid = world.get_fluid(&pos);
                         world
                             .block_registry
                             .on_entity_collision_fluid(fluid, entity)
@@ -2418,7 +2371,7 @@ impl Entity {
                                 .block_registry
                                 .on_entity_collision(block, &world, entity, &pos, state, server)
                                 .await;
-                            let fluid = world.get_fluid(&pos).await;
+                            let fluid = world.get_fluid(&pos);
                             world
                                 .block_registry
                                 .on_entity_collision_fluid(fluid, entity)
@@ -2431,7 +2384,7 @@ impl Entity {
         }
     }
 
-    async fn teleport(
+    fn teleport(
         &self,
         position: Vector3<f64>,
         yaw: Option<f32>,
@@ -2459,20 +2412,17 @@ impl Entity {
                 .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
         }
         let chunk_pos = self.chunk_pos.load();
-        self.world
-            .load()
-            .broadcast_to_chunk(
-                chunk_pos,
-                &CEntityPositionSync::new(
-                    self.entity_id.into(),
-                    position,
-                    Vector3::new(0.0, 0.0, 0.0),
-                    yaw.unwrap_or(self.yaw.load()),
-                    pitch.unwrap_or(self.pitch.load()),
-                    self.on_ground.load(Ordering::SeqCst),
-                ),
-            )
-            .await;
+        self.world.load().broadcast_to_chunk(
+            chunk_pos,
+            &CEntityPositionSync::new(
+                self.entity_id.into(),
+                position,
+                Vector3::new(0.0, 0.0, 0.0),
+                yaw.unwrap_or(self.yaw.load()),
+                pitch.unwrap_or(self.pitch.load()),
+                self.on_ground.load(Ordering::SeqCst),
+            ),
+        );
     }
 
     pub fn get_eye_pos(&self) -> Vector3<f64> {
@@ -2523,12 +2473,10 @@ impl Entity {
 
         let world = self.world.load();
         let chunk_pos = self.chunk_pos.load();
-        world
-            .broadcast_to_chunk(
-                chunk_pos,
-                &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
-            )
-            .await;
+        world.broadcast_to_chunk(
+            chunk_pos,
+            &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+        );
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2589,17 +2537,13 @@ impl Entity {
             let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
             if let Some(player) = passenger.get_player() {
                 player.client.enqueue_packet(&passengers_packet).await;
-                world
-                    .broadcast_to_chunk_except(
-                        chunk_pos,
-                        &[player.living_entity.entity.entity_uuid],
-                        &passengers_packet,
-                    )
-                    .await;
+                world.broadcast_to_chunk_except(
+                    chunk_pos,
+                    &[player.living_entity.entity.entity_uuid],
+                    &passengers_packet,
+                );
             } else {
-                world
-                    .broadcast_to_chunk(chunk_pos, &passengers_packet)
-                    .await;
+                world.broadcast_to_chunk(chunk_pos, &passengers_packet);
             }
 
             // Calculate dismount offset (vanilla getPassengerDismountOffset)
@@ -2626,7 +2570,7 @@ impl Entity {
                 target_z.floor() as i32,
             ));
 
-            let below_state_id = world.get_block_state_id(&below_pos).await;
+            let below_state_id = world.get_block_state_id(&below_pos);
             // Vanilla: isWater checks specifically for water fluid, not any fluid
             let is_water = Fluid::from_state_id(below_state_id)
                 .is_some_and(|f| f.id == Fluid::WATER.id || f.id == Fluid::FLOWING_WATER.id);
@@ -2640,7 +2584,7 @@ impl Entity {
                 // Vanilla tries two Y levels: at vehicle top and one block below
                 let mut candidates = Vec::new();
                 for pos in [&block_pos, &below_pos] {
-                    let height = world.get_dismount_height(pos).await;
+                    let height = world.get_dismount_height(pos);
                     // Vanilla: canDismountInBlock = !height.is_infinite() && height < 1.0
                     if height.is_finite() && height < 1.0 {
                         candidates.push(Vector3::new(
@@ -2663,7 +2607,7 @@ impl Entity {
                     for candidate in &candidates {
                         let bbox =
                             BoundingBox::new_from_pos(candidate.x, candidate.y, candidate.z, &dims);
-                        if world.is_space_empty(bbox).await {
+                        if world.is_space_empty(bbox) {
                             found = Some((*candidate, pose));
                             break 'outer;
                         }
@@ -2672,7 +2616,7 @@ impl Entity {
 
                 if let Some((pos, pose)) = found {
                     if pose != EntityPose::Standing {
-                        passenger_entity.set_pose(pose).await;
+                        passenger_entity.set_pose(pose);
                     }
                     pos
                 } else {
@@ -2716,12 +2660,10 @@ impl Entity {
         } else {
             // No passenger was removed, still need to broadcast the passenger list
             let world = self.world.load();
-            world
-                .broadcast_to_chunk(
-                    chunk_pos,
-                    &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
-                )
-                .await;
+            world.broadcast_to_chunk(
+                chunk_pos,
+                &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+            );
         }
     }
 
@@ -2871,7 +2813,7 @@ impl EntityBase for Entity {
             let block_pos = self.block_pos.load();
             if self.last_biome_update_pos.load() != block_pos {
                 let world = self.world.load();
-                let biome = world.level.get_rough_biome(&block_pos).await;
+                let biome = world.level.get_rough_biome(&block_pos);
                 self.current_biome.store(Arc::new(biome));
                 self.last_biome_update_pos.store(block_pos);
             }
@@ -2921,9 +2863,7 @@ impl EntityBase for Entity {
     ) -> TeleportFuture {
         // TODO: handle world change
         Box::pin(async move {
-            self.get_entity()
-                .teleport(position, yaw, pitch, world)
-                .await;
+            self.get_entity().teleport(position, yaw, pitch, world);
         })
     }
 

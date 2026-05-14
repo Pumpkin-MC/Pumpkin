@@ -52,7 +52,7 @@ impl JukeboxBlock {
     /// Drops the record from the jukebox - matches vanilla's `JukeboxBlockEntity.dropRecord()`
     /// Spawns item at (pos + 0.5, pos + 1.01, pos + 0.5) with horizontal random offset
     async fn drop_record(position: &BlockPos, world: &Arc<World>) {
-        if let Some(block_entity) = world.get_block_entity(position).await
+        if let Some(block_entity) = world.get_block_entity(position)
             && let Some(jukebox_entity) = block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
         {
             let record = jukebox_entity.clear_record().await;
@@ -67,7 +67,7 @@ impl JukeboxBlock {
 
                 let entity = Entity::new(world.clone(), spawn_pos, &EntityType::ITEM);
                 // Vanilla: setToDefaultPickupDelay() = 10 ticks
-                let item_entity = Arc::new(ItemEntity::new(entity, record).await);
+                let item_entity = Arc::new(ItemEntity::new(entity, record));
                 world.spawn_entity(item_entity).await;
             }
         }
@@ -76,16 +76,12 @@ impl JukeboxBlock {
     /// Stops the music and updates block state
     async fn stop_playing(block: &Block, position: &BlockPos, world: &Arc<World>) {
         Self::set_record_state(false, block, position, world).await;
-        world
-            .sync_world_event(WorldEvent::SoundStopJukeboxSong, *position, 0)
-            .await;
+        world.sync_world_event(WorldEvent::SoundStopJukeboxSong, *position, 0);
     }
 
     /// Starts playing music
-    async fn start_playing(position: &BlockPos, world: &Arc<World>, song_id: u32) {
-        world
-            .sync_world_event(WorldEvent::SoundPlayJukeboxSong, *position, song_id as i32)
-            .await;
+    fn start_playing(position: &BlockPos, world: &Arc<World>, song_id: u32) {
+        world.sync_world_event(WorldEvent::SoundPlayJukeboxSong, *position, song_id as i32);
     }
 }
 
@@ -102,7 +98,7 @@ impl BlockBehaviour for JukeboxBlock {
     /// Vanilla: `JukeboxBlock.onUse()` - drops record if present
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state_id = args.world.get_block_state(args.position).await.id;
+            let state_id = args.world.get_block_state(args.position).id;
 
             // Vanilla: if (state.get(HAS_RECORD) && world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv)
             if Self::has_record_state(args.block, state_id) {
@@ -125,7 +121,7 @@ impl BlockBehaviour for JukeboxBlock {
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
             let world = args.world;
-            let state_id = world.get_block_state(args.position).await.id;
+            let state_id = world.get_block_state(args.position).id;
 
             // Vanilla: if (state.get(HAS_RECORD)) return PASS_TO_DEFAULT_BLOCK_ACTION
             if Self::has_record_state(args.block, state_id) {
@@ -157,7 +153,7 @@ impl BlockBehaviour for JukeboxBlock {
             let record = item_stack.split_unless_creative(args.player.gamemode.load(), 1);
 
             // Vanilla: lv4.setStack(lv3)
-            if let Some(block_entity) = world.get_block_entity(args.position).await
+            if let Some(block_entity) = world.get_block_entity(args.position)
                 && let Some(jukebox_entity) =
                     block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
             {
@@ -170,7 +166,7 @@ impl BlockBehaviour for JukeboxBlock {
             Self::set_record_state(true, args.block, args.position, world).await;
 
             // Start playing the music (client-side audio)
-            Self::start_playing(args.position, world, jukebox_song.get_id()).await;
+            Self::start_playing(args.position, world, jukebox_song.get_id());
 
             // TODO: world.emitGameEvent(GameEvent.BLOCK_CHANGE, pos, ...)
             // TODO: player.incrementStat(Stats.PLAY_RECORD)
@@ -186,8 +182,7 @@ impl BlockBehaviour for JukeboxBlock {
             Self::drop_record(args.position, args.world).await;
             // Stop the music
             args.world
-                .sync_world_event(WorldEvent::SoundStopJukeboxSong, *args.position, 0)
-                .await;
+                .sync_world_event(WorldEvent::SoundStopJukeboxSong, *args.position, 0);
         })
     }
 
@@ -214,7 +209,7 @@ impl BlockBehaviour for JukeboxBlock {
     ) -> BlockFuture<'a, u8> {
         Box::pin(async move {
             // Vanilla: return world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv && lv.getManager().isPlaying() ? 15 : 0
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(jukebox_entity) =
                     block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
                 && jukebox_entity.is_playing()
@@ -233,7 +228,7 @@ impl BlockBehaviour for JukeboxBlock {
     ) -> BlockFuture<'a, Option<u8>> {
         Box::pin(async move {
             // Vanilla: return world.getBlockEntity(pos) instanceof JukeboxBlockEntity lv ? lv.getComparatorOutput() : 0
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(jukebox_entity) =
                     block_entity.as_any().downcast_ref::<JukeboxBlockEntity>()
             {

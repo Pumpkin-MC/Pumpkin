@@ -44,13 +44,11 @@ impl DyeItem {
         text.set_color(dye_color);
 
         args.world.update_block_entity(block_entity).await;
-        args.world
-            .play_block_sound(
-                pumpkin_data::sound::Sound::ItemDyeUse,
-                pumpkin_data::sound::SoundCategory::Blocks,
-                *args.position,
-            )
-            .await;
+        args.world.play_block_sound(
+            pumpkin_data::sound::Sound::ItemDyeUse,
+            pumpkin_data::sound::SoundCategory::Blocks,
+            *args.position,
+        );
         BlockActionResult::Success
     }
 }

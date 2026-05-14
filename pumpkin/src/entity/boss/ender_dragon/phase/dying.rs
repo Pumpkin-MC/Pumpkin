@@ -28,13 +28,11 @@ impl super::Phase for DyingPhase {
             let world = entity.world.load();
 
             if *t == 1 {
-                world
-                    .play_sound(
-                        Sound::EntityEnderDragonDeath,
-                        SoundCategory::Hostile,
-                        &entity.pos.load(),
-                    )
-                    .await;
+                world.play_sound(
+                    Sound::EntityEnderDragonDeath,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                );
             }
 
             if *t >= 180 && *t <= 200 {
@@ -42,19 +40,17 @@ impl super::Phase for DyingPhase {
                 let yo = (rand::random::<f32>() - 0.5) * 4.0;
                 let zo = (rand::random::<f32>() - 0.5) * 8.0;
                 let pos = entity.pos.load();
-                world
-                    .spawn_particle(
-                        Vector3::new(
-                            pos.x + xo as f64,
-                            pos.y + 2.0 + yo as f64,
-                            pos.z + zo as f64,
-                        ),
-                        Vector3::new(0.0, 0.0, 0.0),
-                        0.0,
-                        1,
-                        Particle::ExplosionEmitter,
-                    )
-                    .await;
+                world.spawn_particle(
+                    Vector3::new(
+                        pos.x + xo as f64,
+                        pos.y + 2.0 + yo as f64,
+                        pos.z + zo as f64,
+                    ),
+                    Vector3::new(0.0, 0.0, 0.0),
+                    0.0,
+                    1,
+                    Particle::ExplosionEmitter,
+                );
             }
 
             let xp_count = if let Some(ref fight_mutex) = world.dragon_fight

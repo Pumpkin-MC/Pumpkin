@@ -10,10 +10,10 @@ pub struct WitherSkeletonEntity {
 }
 
 impl WitherSkeletonEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity).await;
-        let zombie = Self { entity };
-        Arc::new(zombie)
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = SkeletonEntityBase::new(entity);
+        let skeleton = Self { entity };
+        Arc::new(skeleton)
     }
 }
 

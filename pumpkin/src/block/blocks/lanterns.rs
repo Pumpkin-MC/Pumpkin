@@ -38,7 +38,7 @@ impl BlockBehaviour for LanternBlock {
                 pumpkin_data::block_properties::LanternLikeProperties::default(args.block);
             props.r#waterlogged = args.replacing.water_source();
 
-            let block_up_state = args.world.get_block_state(&args.position.up()).await;
+            let block_up_state = args.world.get_block_state(&args.position.up());
             if block_up_state.is_center_solid(BlockDirection::Down) {
                 props.r#hanging = true;
             }
@@ -47,8 +47,8 @@ impl BlockBehaviour for LanternBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.world.unwrap(), args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.world.unwrap(), args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -56,7 +56,7 @@ impl BlockBehaviour for LanternBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
@@ -67,7 +67,7 @@ impl BlockBehaviour for LanternBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -76,25 +76,24 @@ impl BlockBehaviour for LanternBlock {
     }
 }
 
-async fn can_place_at(world: &World, position: &BlockPos) -> bool {
+fn can_place_at(world: &World, position: &BlockPos) -> bool {
     //idk why this don't update with .is_center_solid so this is a 'temporary patch'
     if world
         .get_block(&position.down())
-        .await
         .has_tag(&tag::Block::C_FENCE_GATES)
     {
         let fence_gate_props =
             pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(
-                world.get_block_state_id(&position.down()).await,
-                world.get_block(&position.down()).await,
+                world.get_block_state_id(&position.down()),
+                world.get_block(&position.down()),
             );
 
         if fence_gate_props.open {
             return false;
         }
     }
-    let (block_down, block_down_state) = world.get_block_and_state(&position.down()).await;
-    let block_up_state = world.get_block_state(&position.up()).await;
+    let (block_down, block_down_state) = world.get_block_and_state(&position.down());
+    let block_up_state = world.get_block_state(&position.up());
     block_down_state.is_center_solid(BlockDirection::Up)
         || block_up_state.is_center_solid(BlockDirection::Down)
         || block_down.has_tag(&tag::Block::MINECRAFT_UNSTABLE_BOTTOM_CENTER)

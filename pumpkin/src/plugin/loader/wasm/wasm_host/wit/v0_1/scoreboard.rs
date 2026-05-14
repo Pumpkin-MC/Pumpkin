@@ -47,8 +47,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .add_objective(&world, objective)
-            .await;
+            .add_objective(&world, objective);
         Ok(())
     }
 
@@ -62,8 +61,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .remove_objective(&world, &name)
-            .await;
+            .remove_objective(&world, &name);
         Ok(())
     }
 
@@ -126,11 +124,9 @@ impl scoreboard::HostScoreboard for PluginHostState {
             }
         };
 
-        world
-            .broadcast_packet_all(
-                &pumpkin_protocol::java::client::play::CDisplayObjective::new(slot, objective_name),
-            )
-            .await;
+        world.broadcast_packet_all(
+            &pumpkin_protocol::java::client::play::CDisplayObjective::new(slot, objective_name),
+        );
         Ok(())
     }
 
@@ -149,12 +145,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
             None,
             None,
         );
-        world
-            .scoreboard
-            .lock()
-            .await
-            .update_score(&world, score)
-            .await;
+        world.scoreboard.lock().await.update_score(&world, score);
         Ok(())
     }
 
@@ -169,8 +160,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .remove_score(&world, &entity_name, &objective_name)
-            .await;
+            .remove_score(&world, &entity_name, &objective_name);
         Ok(())
     }
 
@@ -182,7 +172,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
         let team = map_team_settings(name, &settings, self)?;
-        world.scoreboard.lock().await.add_team(&world, team).await;
+        world.scoreboard.lock().await.add_team(&world, team);
         Ok(())
     }
 
@@ -192,12 +182,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         name: String,
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
-        world
-            .scoreboard
-            .lock()
-            .await
-            .remove_team(&world, &name)
-            .await;
+        world.scoreboard.lock().await.remove_team(&world, &name);
         Ok(())
     }
 
@@ -209,12 +194,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
     ) -> wasmtime::Result<()> {
         let world = self.get_scoreboard_res(&res)?.provider.clone();
         let team = map_team_settings(name, &settings, self)?;
-        world
-            .scoreboard
-            .lock()
-            .await
-            .update_team(&world, team)
-            .await;
+        world.scoreboard.lock().await.update_team(&world, team);
         Ok(())
     }
 
@@ -229,8 +209,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .add_player_to_team(&world, &team_name, player_name)
-            .await;
+            .add_player_to_team(&world, &team_name, player_name);
         Ok(())
     }
 
@@ -245,8 +224,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
             .scoreboard
             .lock()
             .await
-            .remove_player_from_team(&world, &team_name, &player_name)
-            .await;
+            .remove_player_from_team(&world, &team_name, &player_name);
         Ok(())
     }
 

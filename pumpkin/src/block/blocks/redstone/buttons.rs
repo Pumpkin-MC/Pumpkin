@@ -28,7 +28,7 @@ use crate::block::{BlockBehaviour, NormalUseArgs};
 use crate::world::World;
 
 async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
-    let (block, state) = world.get_block_and_state_id(block_pos).await;
+    let (block, state) = world.get_block_and_state_id(block_pos);
 
     let mut button_props = ButtonLikeProperties::from_state_id(state, block);
     if !button_props.powered {
@@ -66,7 +66,7 @@ impl BlockBehaviour for ButtonBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let mut props = ButtonLikeProperties::from_state_id(state.id, args.block);
             props.powered = false;
             args.world
@@ -134,16 +134,13 @@ impl BlockBehaviour for ButtonBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            // Use the provided direction, or fallback to the current state's direction if missing
-            let direction = args
-                .direction
-                .unwrap_or_else(|| self.get_direction(args.state.id, args.block));
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        // Use the provided direction, or fallback to the current state's direction if missing
+        let direction = args
+            .direction
+            .unwrap_or_else(|| self.get_direction(args.state.id, args.block));
 
-            WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
-                .await
-        })
+        WallMountedBlock::can_place_at(self, args.block_accessor, args.position, direction)
     }
 
     fn get_state_for_neighbor_update<'a>(

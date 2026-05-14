@@ -13,7 +13,7 @@ pub struct PhantomEntity {
 }
 
 impl PhantomEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let phantom = Self { mob_entity };
         let mob_arc = Arc::new(phantom);
@@ -23,7 +23,7 @@ impl PhantomEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             // TODO: PhantomCircleAroundAnchorGoal, PhantomSweepAttackGoal
             goal_selector.add_goal(

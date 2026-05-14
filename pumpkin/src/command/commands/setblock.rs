@@ -83,7 +83,7 @@ impl CommandExecutor for Executor {
                     true
                 }
                 Mode::Keep => {
-                    let old_state = world.get_block_state(&pos).await;
+                    let old_state = world.get_block_state(&pos);
                     if old_state.is_air() {
                         world
                             .set_block_state(

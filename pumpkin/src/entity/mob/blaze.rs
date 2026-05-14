@@ -16,7 +16,7 @@ pub struct BlazeEntity {
 }
 
 impl BlazeEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let entity = Arc::new(MobEntity::new(entity));
         let zombie = Self { entity };
         let mob_arc = Arc::new(zombie);
@@ -25,8 +25,8 @@ impl BlazeEntity {
             Arc::downgrade(&mob_arc)
         };
         {
-            let mut goal_selector = mob_arc.entity.goals_selector.lock().await;
-            let mut target_selector = mob_arc.entity.target_selector.lock().await;
+            let mut goal_selector = mob_arc.entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
 

@@ -13,7 +13,7 @@ use bytes::Bytes;
 
 use pumpkin_data::translation;
 use pumpkin_protocol::{ClientPacket, Property};
-use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
+use pumpkin_util::{Hand, ProfileAction, text::TextComponent, version::MinecraftVersion};
 use serde::Deserialize;
 use sha1::Digest;
 use sha2::Sha256;
@@ -127,6 +127,21 @@ impl ClientPlatform {
         }
     }
 
+    pub fn version(&self) -> MinecraftVersion {
+        match self {
+            Self::Java(java) => java.version.load(),
+            // TODO
+            Self::Bedrock(_) => MinecraftVersion::V_1_21_7,
+        }
+    }
+
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet_data(packet_data),
+            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet_data(packet_data),
+        }
+    }
+
     pub async fn await_close_interrupt(&self) {
         match self {
             Self::Java(java) => java.await_close_interrupt().await,
@@ -148,6 +163,13 @@ impl ClientPlatform {
     pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
         match self {
             Self::Java(java) => java.enqueue_packet(packet).await,
+            Self::Bedrock(_) => (),
+        }
+    }
+
+    pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet(packet),
             Self::Bedrock(_) => (),
         }
     }

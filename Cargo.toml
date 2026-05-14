@@ -89,6 +89,13 @@ inherits = "release"
 debug = true
 strip = false
 
+[profile.dev]
+debug = "line-tables-only"
+debug-assertions = true
+overflow-checks = false
+split-debuginfo = "packed"
+opt-level = 0
+
 [workspace.dependencies]
 tokio = { version = "1.52", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
@@ -120,7 +127,7 @@ console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
-crossfire = { version = "3.1.10", features = ["compat"] }
+crossfire = { version = "3.1.12", features = ["compat"] }
 crypto-bigint = "0.7.3"
 dashmap = "6.1"
 ecdsa = "0.16.9"
@@ -180,8 +187,10 @@ notify = "8.2.0"
 
 wasmtime = "44.0"
 wasmtime-wasi = { version = "44.0", default-features = false, features = ["p2"] }
+wasmtime-wasi-http = "44.0"
+# needed for interacting with wasmtime-wasi-http - keep in sync
+hyper = { version = "^1.7", features = ["full"] }
 wit-bindgen = "0.57"
-wasmparser = "0.248"
 
 postcard = { version = "1.1", features = ["alloc"] }
 tracing-serde-structured = "0.4"

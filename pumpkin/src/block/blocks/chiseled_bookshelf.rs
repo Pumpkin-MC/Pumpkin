@@ -41,12 +41,12 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
 
             if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
                 if Self::is_slot_used(properties, slot) {
-                    if let Some(block_entity) = args.world.get_block_entity(args.position).await
+                    if let Some(block_entity) = args.world.get_block_entity(args.position)
                         && let Some(block_entity) = block_entity
                             .as_any()
                             .downcast_ref::<ChiseledBookshelfBlockEntity>()
@@ -75,7 +75,7 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
 
             if !args
@@ -90,7 +90,7 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
             if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
                 if Self::is_slot_used(properties, slot) {
                     return BlockActionResult::PassToDefaultBlockAction;
-                } else if let Some(block_entity) = args.world.get_block_entity(args.position).await
+                } else if let Some(block_entity) = args.world.get_block_entity(args.position)
                     && let Some(block_entity) = block_entity
                         .as_any()
                         .downcast_ref::<ChiseledBookshelfBlockEntity>()
@@ -125,7 +125,7 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
         args: GetComparatorOutputArgs<'a>,
     ) -> BlockFuture<'a, Option<u8>> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(block_entity) = block_entity
                     .as_any()
                     .downcast_ref::<ChiseledBookshelfBlockEntity>()
@@ -164,9 +164,7 @@ impl ChiseledBookshelfBlock {
             .await;
         entity.update_state(properties, world.clone(), slot).await;
 
-        world
-            .play_sound(sound, SoundCategory::Blocks, &position.to_centered_f64())
-            .await;
+        world.play_sound(sound, SoundCategory::Blocks, &position.to_centered_f64());
     }
 
     async fn try_remove_book(
@@ -195,9 +193,7 @@ impl ChiseledBookshelfBlock {
         }
         entity.update_state(properties, world.clone(), slot).await;
 
-        world
-            .play_sound(sound, SoundCategory::Blocks, &position.to_centered_f64())
-            .await;
+        world.play_sound(sound, SoundCategory::Blocks, &position.to_centered_f64());
     }
 
     fn get_slot_for_hit(hit: &BlockHitResult<'_>, facing: HorizontalFacing) -> Option<i8> {

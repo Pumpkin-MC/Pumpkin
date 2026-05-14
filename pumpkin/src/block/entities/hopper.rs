@@ -79,7 +79,7 @@ impl BlockEntity for HopperBlockEntity {
             if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
                 self.cooldown_time.store(0, Ordering::Relaxed);
                 let state = HopperLikeProperties::from_state_id(
-                    world.get_block_state(&self.position).await.id,
+                    world.get_block_state(&self.position).id,
                     &Block::HOPPER,
                 );
                 self.try_move_items(&state, world).await;
@@ -162,7 +162,7 @@ impl HopperBlockEntity {
     async fn suck_in_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
         let pos_up = &self.position.up();
-        if let Some(entity) = world.get_block_entity(pos_up).await
+        if let Some(entity) = world.get_block_entity(pos_up)
             && let Some(container) = entity.clone().get_inventory()
         {
             // TODO check WorldlyContainer
@@ -193,7 +193,7 @@ impl HopperBlockEntity {
             }
             return false;
         }
-        let (block, state) = world.get_block_and_state(pos_up).await;
+        let (block, state) = world.get_block_and_state(pos_up);
         if !(state.is_solid() && block.has_tag(&tag::Block::MINECRAFT_DOES_NOT_BLOCK_HOPPERS)) {
             // TODO getItemsAtAndAbove(level, hopper)
             return false;
@@ -204,9 +204,7 @@ impl HopperBlockEntity {
     async fn eject_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
 
-        if let Some(entity) = world
-            .get_block_entity(&self.position.offset(to_offset(&self.facing)))
-            .await
+        if let Some(entity) = world.get_block_entity(&self.position.offset(to_offset(&self.facing)))
             && let Some(container) = entity.get_inventory()
         {
             // TODO check WorldlyContainer

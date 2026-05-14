@@ -103,14 +103,11 @@ impl ItemBehaviour for CrossbowItem {
                         player.consume_arrow(slot).await;
                     }
 
-                    player
-                        .world()
-                        .play_sound(
-                            Sound::ItemCrossbowLoadingEnd,
-                            SoundCategory::Players,
-                            &player.position(),
-                        )
-                        .await;
+                    player.world().play_sound(
+                        Sound::ItemCrossbowLoadingEnd,
+                        SoundCategory::Players,
+                        &player.position(),
+                    );
                 }
             }
             player.living_entity.clear_active_hand().await;
@@ -145,13 +142,11 @@ impl CrossbowItem {
                     });
 
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::ItemCrossbowShoot,
-                    SoundCategory::Players,
-                    &player.position(),
-                )
-                .await;
+            world.play_sound(
+                Sound::ItemCrossbowShoot,
+                SoundCategory::Players,
+                &player.position(),
+            );
 
             let yaw = player.living_entity.entity.yaw.load();
             let pitch = player.living_entity.entity.pitch.load();
@@ -173,8 +168,7 @@ impl CrossbowItem {
                     };
 
                     let arrow =
-                        ArrowEntity::new_shot(arrow_entity, &player.living_entity.entity, pickup)
-                            .await;
+                        ArrowEntity::new_shot(arrow_entity, &player.living_entity.entity, pickup);
                     arrow.set_velocity_from_rotation(pitch, t_yaw, 0.0, 3.15, 1.0);
                     let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
                     world.spawn_entity(arrow_arc).await;

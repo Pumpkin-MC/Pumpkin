@@ -55,7 +55,7 @@ impl AvoidEntityGoal {
 
     /// Generates a random walkable position within a cone pointing away from the threat.
     /// Mirrors vanilla's `NoPenaltyTargeting.findFrom()`.
-    async fn find_flee_position(mob: &dyn Mob, threat_pos: &Vector3<f64>) -> Option<Vector3<f64>> {
+    fn find_flee_position(mob: &dyn Mob, threat_pos: &Vector3<f64>) -> Option<Vector3<f64>> {
         let entity = &mob.get_mob_entity().living_entity.entity;
         let mob_pos = entity.pos.load();
         let world = entity.world.load();
@@ -98,14 +98,12 @@ impl AvoidEntityGoal {
                 (mob_pos.z + dz) as i32,
             );
 
-            let block_at = world.get_block_state(&candidate).await;
-            let block_below = world
-                .get_block_state(&BlockPos::new(
-                    candidate.0.x,
-                    candidate.0.y - 1,
-                    candidate.0.z,
-                ))
-                .await;
+            let block_at = world.get_block_state(&candidate);
+            let block_below = world.get_block_state(&BlockPos::new(
+                candidate.0.x,
+                candidate.0.y - 1,
+                candidate.0.z,
+            ));
 
             if block_at.is_solid() || !block_below.is_solid() {
                 continue;
@@ -137,7 +135,7 @@ impl Goal for AvoidEntityGoal {
             };
 
             let threat_pos = target.get_entity().pos.load();
-            let flee_pos = Self::find_flee_position(mob, &threat_pos).await;
+            let flee_pos = Self::find_flee_position(mob, &threat_pos);
             let Some(pos) = flee_pos else {
                 return false;
             };
@@ -150,7 +148,7 @@ impl Goal for AvoidEntityGoal {
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            let navigator = mob.get_mob_entity().navigator.lock().await;
+            let navigator = mob.get_mob_entity().navigator.lock().unwrap();
             !navigator.is_idle()
         })
     }
@@ -159,7 +157,7 @@ impl Goal for AvoidEntityGoal {
         Box::pin(async move {
             if let Some(flee_pos) = self.flee_pos {
                 let mob_pos = mob.get_mob_entity().living_entity.entity.pos.load();
-                let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
                 navigator.set_progress(NavigatorGoal::new(mob_pos, flee_pos, self.slow_speed));
             }
         })
@@ -176,7 +174,7 @@ impl Goal for AvoidEntityGoal {
                 } else {
                     self.slow_speed
                 };
-                let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
                 navigator.set_speed(speed);
             }
         })

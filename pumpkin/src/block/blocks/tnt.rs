@@ -27,13 +27,11 @@ impl TNTBlock {
         let pos = entity.pos.load();
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
         world.spawn_entity(tnt).await;
-        world
-            .play_sound(
-                pumpkin_data::sound::Sound::EntityTntPrimed,
-                SoundCategory::Blocks,
-                &pos,
-            )
-            .await;
+        world.play_sound(
+            pumpkin_data::sound::Sound::EntityTntPrimed,
+            SoundCategory::Blocks,
+            &pos,
+        );
         world
             .set_block_state(location, 0, BlockFlags::NOTIFY_ALL)
             .await;
@@ -80,9 +78,7 @@ impl BlockBehaviour for TNTBlock {
         Box::pin(async move {
             let entity = Entity::new(args.world.clone(), args.position.to_f64(), &EntityType::TNT);
             let angle = rand::random::<f64>() * std::f64::consts::TAU;
-            entity
-                .set_velocity(Vector3::new(-angle.sin() * 0.02, 0.2, -angle.cos() * 0.02))
-                .await;
+            entity.set_velocity(Vector3::new(-angle.sin() * 0.02, 0.2, -angle.cos() * 0.02));
             let fuse = rand::rng().random_range(0..DEFAULT_FUSE / 4) + DEFAULT_FUSE / 8;
             let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, fuse));
             args.world.spawn_entity(tnt).await;

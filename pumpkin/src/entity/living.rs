@@ -181,7 +181,7 @@ impl LivingEntity {
         }
     }
 
-    pub async fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
+    pub fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
         let equipment: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
             .map(|(slot, stack)| {
@@ -191,18 +191,14 @@ impl LivingEntity {
                 )
             })
             .collect();
-        self.entity
-            .world
-            .load()
-            .broadcast_packet_except(
-                &[self.entity.entity_uuid],
-                &CSetEquipment::new(self.entity_id().into(), equipment),
-            )
-            .await;
+        self.entity.world.load().broadcast_packet_except(
+            &[self.entity.entity_uuid],
+            &CSetEquipment::new(self.entity_id().into(), equipment),
+        );
     }
 
     /// Picks up and Item entity or XP Orb
-    pub async fn pickup(&self, item: &Entity, stack_amount: u32) {
+    pub fn pickup(&self, item: &Entity, stack_amount: u32) {
         // TODO: Only nearby
         self.entity
             .world
@@ -211,8 +207,7 @@ impl LivingEntity {
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
                 stack_amount.try_into().unwrap(),
-            ))
-            .await;
+            ));
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
@@ -220,12 +215,11 @@ impl LivingEntity {
         self.item_use_time.store(duration, Ordering::Relaxed);
         *self.item_in_use.lock().await = Some(stack);
         *self.active_hand.lock().await = Some(hand);
-        self.set_living_flag(Self::USING_ITEM_FLAG, true).await;
-        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left)
-            .await;
+        self.set_living_flag(Self::USING_ITEM_FLAG, true);
+        self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
     }
 
-    async fn set_living_flag(&self, flag: u8, value: bool) {
+    fn set_living_flag(&self, flag: u8, value: bool) {
         let index = flag;
         let mut b = self.livings_flags.load(Ordering::Relaxed);
         if value {
@@ -234,13 +228,11 @@ impl LivingEntity {
             b &= !index;
         }
         self.livings_flags.store(b, Ordering::Relaxed);
-        self.entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::LIVING_ENTITY_FLAGS,
-                MetaDataType::BYTE,
-                b,
-            )])
-            .await;
+        self.entity.send_meta_data(&[Metadata::new(
+            TrackedData::LIVING_ENTITY_FLAGS,
+            MetaDataType::BYTE,
+            b,
+        )]);
     }
 
     pub async fn clear_active_hand(&self) {
@@ -248,7 +240,7 @@ impl LivingEntity {
         *self.active_hand.lock().await = None;
         self.item_use_time.store(0, Ordering::Relaxed);
 
-        self.set_living_flag(Self::USING_ITEM_FLAG, false).await;
+        self.set_living_flag(Self::USING_ITEM_FLAG, false);
     }
 
     pub async fn is_blocking(&self) -> bool {
@@ -262,25 +254,22 @@ impl LivingEntity {
         false
     }
 
-    pub async fn heal(&self, additional_health: f32) {
+    pub fn heal(&self, additional_health: f32) {
         assert!(additional_health > 0.0);
-        self.set_health(self.health.load() + additional_health)
-            .await;
+        self.set_health(self.health.load() + additional_health);
     }
 
-    pub async fn set_health(&self, health: f32) {
+    pub fn set_health(&self, health: f32) {
         // Clamp to [0, max_health]
         let max_health = self.get_max_health();
         let clamped = health.max(0.0).min(max_health);
         self.health.store(clamped);
         // tell everyone entities health changed
-        self.entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::HEALTH_ID,
-                MetaDataType::FLOAT,
-                clamped,
-            )])
-            .await;
+        self.entity.send_meta_data(&[Metadata::new(
+            TrackedData::HEALTH_ID,
+            MetaDataType::FLOAT,
+            clamped,
+        )]);
     }
 
     /// Returns the current maximum health for this entity
@@ -303,7 +292,7 @@ impl LivingEntity {
         // Clamp current health to new max if needed and send metadata update
         let current_health = self.health.load();
         if current_health > max_health {
-            self.set_health(max_health).await;
+            self.set_health(max_health);
         }
     }
 
@@ -331,8 +320,7 @@ impl LivingEntity {
         // Send absorption metadata for players (visual yellow hearts)
         if let Some(tracked_id) = self.player_absorption_id() {
             self.entity
-                .send_meta_data(&[Metadata::new(tracked_id, MetaDataType::FLOAT, new_abs)])
-                .await;
+                .send_meta_data(&[Metadata::new(tracked_id, MetaDataType::FLOAT, new_abs)]);
         }
     }
 
@@ -437,7 +425,7 @@ impl LivingEntity {
         // Apply instant effects immediately before storing
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
-            self.heal(heal_amount).await;
+            self.heal(heal_amount);
         } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
             if let Some(dyn_self) = self
@@ -539,7 +527,7 @@ impl LivingEntity {
             flag,
         );
 
-        self.entity.world.load().broadcast_packet_all(&packet).await;
+        self.entity.world.load().broadcast_packet_all(&packet);
     }
 
     pub async fn remove_effect(&self, effect_type: &'static StatusEffect) -> bool {
@@ -555,8 +543,7 @@ impl LivingEntity {
         self.entity
             .world
             .load()
-            .send_remove_mob_effect(&self.entity, effect_type)
-            .await;
+            .send_remove_mob_effect(&self.entity, effect_type);
 
         // Remove attribute modifiers, if any
         if !effect_type.attribute_modifiers.is_empty() {
@@ -596,7 +583,7 @@ impl LivingEntity {
             let new_max = self.get_max_health();
             if self.health.load() > new_max {
                 // Update local health and send both health and absorption metadata together
-                self.set_health(new_max.max(0.0)).await;
+                self.set_health(new_max.max(0.0));
             }
         }
 
@@ -623,9 +610,9 @@ impl LivingEntity {
         effects.get(&effect).cloned()
     }
 
-    pub async fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
+    pub fn is_in_fall_damage_resetting(&self) -> (bool, &Block) {
         let block_pos = self.entity.block_pos.load();
-        let block = self.entity.world.load().get_block(&block_pos).await;
+        let block = self.entity.world.load().get_block(&block_pos);
         (
             block.has_tag(&tag::Block::MINECRAFT_FALL_DAMAGE_RESETTING),
             block,
@@ -633,19 +620,19 @@ impl LivingEntity {
     }
 
     // Check if the entity is in water
-    pub async fn is_in_water(&self) -> bool {
+    pub fn is_in_water(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.load().get_block(&block_pos).await == &Block::WATER
+        self.entity.world.load().get_block(&block_pos) == &Block::WATER
     }
 
     // Check if the entity is in powder snow
-    pub async fn is_in_powder_snow(&self) -> bool {
+    pub fn is_in_powder_snow(&self) -> bool {
         let block_pos = self.entity.block_pos.load();
-        self.entity.world.load().get_block(&block_pos).await == &Block::POWDER_SNOW
+        self.entity.world.load().get_block(&block_pos) == &Block::POWDER_SNOW
     }
 
-    pub async fn should_prevent_fall_damage(&self) -> bool {
-        let (prevents, block) = self.is_in_fall_damage_resetting().await;
+    pub fn should_prevent_fall_damage(&self) -> bool {
+        let (prevents, block) = self.is_in_fall_damage_resetting();
 
         if block == &Block::SCAFFOLDING && !self.entity.sneaking.load(Ordering::Relaxed) {
             return false;
@@ -671,7 +658,7 @@ impl LivingEntity {
         prevents
     }
 
-    pub async fn should_prevent_fall_damage_in_area(&self) -> bool {
+    pub fn should_prevent_fall_damage_in_area(&self) -> bool {
         let world = self.entity.world.load();
         let block_pos = self.entity.block_pos.load().down();
         let entity_pos = self.entity.pos.load();
@@ -691,7 +678,7 @@ impl LivingEntity {
         // FIXME: it seems the java server checks all blocks around with a raycast and check if miss or hit,
         // then added to a collision checker to handle in the tick handler
         for pos in pos_iter {
-            let block = world.get_block(&pos).await;
+            let block = world.get_block(&pos);
 
             if Self::PREVENT_AREA_FALL_DAMAGE_BLOCKS.contains(&block) {
                 let block_center = Vector3::new(
@@ -728,7 +715,7 @@ impl LivingEntity {
         }
     }
 
-    pub async fn swing_hand(&self) {
+    pub fn swing_hand(&self) {
         // TODO: radius
         self.entity
             .world
@@ -736,8 +723,7 @@ impl LivingEntity {
             .broadcast_packet_all(&CEntityAnimation::new(
                 self.entity_id().into(),
                 Animation::SwingMainArm,
-            ))
-            .await;
+            ));
     }
 
     async fn tick_movement<'a>(&'a self, server: &'a Server, caller: &'a Arc<dyn EntityBase>) {
@@ -839,7 +825,6 @@ impl LivingEntity {
             let slipperiness = f64::from(
                 self.entity
                     .get_block_with_y_offset(0.500_001)
-                    .await
                     .1
                     .slipperiness,
             );
@@ -989,7 +974,6 @@ impl LivingEntity {
                 .world
                 .load()
                 .check_fluid_collision(self.entity.bounding_box.load().shift(velo))
-                .await
         {
             velo.y = 0.3;
 
@@ -1023,7 +1007,7 @@ impl LivingEntity {
 
         // let world = self.entity.world.read().await;
 
-        // let (block, state) = world.get_block_and_state(&pos).await;
+        // let (block, state) = world.get_block_and_state(&pos);
 
         // let name = block.properties(state.id).map(|props| props.name());
 
@@ -1045,7 +1029,7 @@ impl LivingEntity {
 
         //         pos.0.y -= 1;
 
-        //         let (down_block, down_state) = world.get_block_and_state(&pos).await;
+        //         let (down_block, down_state) = world.get_block_and_state(&pos);
 
         //         let is_ladder = down_block
         //             .properties(down_state.id)
@@ -1157,7 +1141,7 @@ impl LivingEntity {
 
     async fn get_jump_velocity(&self, mut strength: f64) -> f64 {
         strength *= self.get_attribute_value(&Attributes::JUMP_STRENGTH);
-        strength *= f64::from(self.entity.get_jump_velocity_multiplier().await);
+        strength *= f64::from(self.entity.get_jump_velocity_multiplier());
         if let Some(effect) = self.get_effect(&StatusEffect::JUMP_BOOST).await {
             strength += 0.1 * f64::from(effect.amplifier + 1);
         }
@@ -1175,16 +1159,14 @@ impl LivingEntity {
             let fall_distance = self.fall_distance.swap(0.0);
             if fall_distance <= 0.0
                 || dont_damage
-                || self.should_prevent_fall_damage().await
-                || self.should_prevent_fall_damage_in_area().await
+                || self.should_prevent_fall_damage()
+                || self.should_prevent_fall_damage_in_area()
                 || self.is_immune_to_fall_damage()
             {
                 return;
             }
             let world = self.entity.world.load();
-            let block = world
-                .get_block(&self.entity.get_pos_with_y_offset(0.2).await.0)
-                .await;
+            let block = world.get_block(&self.entity.get_pos_with_y_offset(0.2).0);
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block
@@ -1198,8 +1180,8 @@ impl LivingEntity {
                 self.handle_fall_damage(&*caller, fall_distance, 1.0).await;
             }
         } else if height_difference < 0.0 {
-            let new_fall_distance = if !self.should_prevent_fall_damage().await
-                && !self.should_prevent_fall_damage_in_area().await
+            let new_fall_distance = if !self.should_prevent_fall_damage()
+                && !self.should_prevent_fall_damage_in_area()
             {
                 let distance = self.fall_distance.load();
                 distance - (height_difference as f32)
@@ -1229,8 +1211,7 @@ impl LivingEntity {
             let check_damage = self.damage(caller, damage, DamageType::FALL).await; // Fall
             if check_damage {
                 self.entity
-                    .play_sound(Self::get_fall_sound(fall_distance as i32))
-                    .await;
+                    .play_sound(Self::get_fall_sound(fall_distance as i32));
             }
         }
     }
@@ -1307,9 +1288,7 @@ impl LivingEntity {
             self.jumping.store(false, Relaxed);
 
             // Plays the death sound
-            world
-                .send_entity_status(&self.entity, EntityStatus::Death)
-                .await;
+            world.send_entity_status(&self.entity, EntityStatus::Death);
             let params = LootContextParameters {
                 killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
                 ..Default::default()
@@ -1449,7 +1428,7 @@ impl LivingEntity {
             let current_health = self.health.load();
             let max_health = self.get_max_health();
             if current_health < max_health && current_health > 0.0 {
-                self.heal(1.0).await;
+                self.heal(1.0);
             }
         } else if effect_type == &StatusEffect::POISON {
             let current_health = self.health.load();
@@ -1511,12 +1490,11 @@ impl LivingEntity {
             // Clear the stack and use the totem of undying
             if stack.get_data_component::<DeathProtectionImpl>().is_some() {
                 stack.clear();
-                self.set_health(1.0).await;
+                self.set_health(1.0);
                 self.entity
                     .world
                     .load()
-                    .send_entity_status(&self.entity, EntityStatus::ProtectedFromDeath)
-                    .await;
+                    .send_entity_status(&self.entity, EntityStatus::ProtectedFromDeath);
 
                 // Set Absorption, Regeneration, and Fire Resistance effects
                 self.add_effect(Effect {
@@ -1604,9 +1582,7 @@ impl LivingEntity {
                 // Broadcast break status before clearing the slot.
                 if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
                     let world = self.entity.world.load();
-                    world
-                        .send_entity_status(&self.entity, super::equipment_break_status(&slot))
-                        .await;
+                    world.send_entity_status(&self.entity, super::equipment_break_status(&slot));
                 }
                 equipment_updates.push((slot.clone(), updated_stack.clone()));
                 if let Some(player) = caller.get_player() {
@@ -1621,7 +1597,7 @@ impl LivingEntity {
         }
 
         if !equipment_updates.is_empty() {
-            self.send_equipment_changes(&equipment_updates).await;
+            self.send_equipment_changes(&equipment_updates);
         }
     }
 
@@ -1670,17 +1646,15 @@ impl LivingEntity {
 
         // Restore to maximum health for this entity type
         let max_health = self.get_max_health();
-        self.set_health(max_health).await;
+        self.set_health(max_health);
         // Clear any absorption
         self.absorption.store(0.0);
         // Send health metadata
-        self.entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::HEALTH_ID,
-                MetaDataType::FLOAT,
-                max_health,
-            )])
-            .await;
+        self.entity.send_meta_data(&[Metadata::new(
+            TrackedData::HEALTH_ID,
+            MetaDataType::FLOAT,
+            max_health,
+        )]);
 
         self.reset_effects_and_attributes().await;
 
@@ -1756,8 +1730,7 @@ impl LivingEntity {
                     center,
                     &world,
                     Uuid::new_v4(),
-                )
-                .await;
+                );
 
                 silver.get_entity().set_pos(center);
                 silver.get_entity().velocity.store(Vector3::new(dx, dy, dz));
@@ -1765,9 +1738,7 @@ impl LivingEntity {
                 world.spawn_entity(silver).await;
 
                 // Play sound
-                world
-                    .play_sound(Sound::EntitySilverfishHurt, SoundCategory::Players, &center)
-                    .await;
+                world.play_sound(Sound::EntitySilverfishHurt, SoundCategory::Players, &center);
             }
         }
     }
@@ -1950,9 +1921,7 @@ impl EntityBase for LivingEntity {
                 source_to_player.y = 0.0;
 
                 if source_to_player.dot(&look_vec) < 0.0 {
-                    world
-                        .play_sound(Sound::ItemShieldBlock, SoundCategory::Players, &player_pos)
-                        .await;
+                    world.play_sound(Sound::ItemShieldBlock, SoundCategory::Players, &player_pos);
 
                     if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
                         let held_item = attacker_player.inventory().held_item();
@@ -1976,12 +1945,10 @@ impl EntityBase for LivingEntity {
                                     .await;
                                 self.clear_active_hand().await;
 
-                                world
-                                    .broadcast_packet_all(&CEntityStatus::new(
-                                        self.entity.entity_id,
-                                        30,
-                                    ))
-                                    .await;
+                                world.broadcast_packet_all(&CEntityStatus::new(
+                                    self.entity.entity_id,
+                                    30,
+                                ));
                             }
                         }
                     }
@@ -2000,19 +1967,17 @@ impl EntityBase for LivingEntity {
 
                         let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
                         if stack.damage_item(durability_damage) == DamageResult::Broken {
-                            world
-                                .send_entity_status(
-                                    &self.entity,
-                                    crate::entity::equipment_break_status(&slot),
-                                )
-                                .await;
+                            world.send_entity_status(
+                                &self.entity,
+                                crate::entity::equipment_break_status(&slot),
+                            );
                             *stack = ItemStack::EMPTY.clone();
                             let broken_stack = stack.clone();
                             drop(stack);
                             drop(stack_arc);
                             drop(equipment_lock);
 
-                            self.send_equipment_changes(&[(slot, broken_stack)]).await;
+                            self.send_equipment_changes(&[(slot, broken_stack)]);
                             self.clear_active_hand().await;
                         }
                     }
@@ -2048,32 +2013,26 @@ impl EntityBase for LivingEntity {
                     (src.z - tgt.z).atan2(src.x - tgt.x).to_degrees() as f32
                         - self.entity.yaw.load()
                 });
-                world
-                    .broadcast_packet_all(&CHurtAnimation::new(entity_id, hurt_yaw))
-                    .await;
+                world.broadcast_packet_all(&CHurtAnimation::new(entity_id, hurt_yaw));
             }
 
-            world
-                .broadcast_packet_all(&CDamageEvent::new(
-                    self.entity.entity_id.into(),
-                    damage_type.id.into(),
-                    source.map(|e| e.get_entity().entity_id.into()),
-                    cause.map(|e| e.get_entity().entity_id.into()),
-                    position,
-                ))
-                .await;
+            world.broadcast_packet_all(&CDamageEvent::new(
+                self.entity.entity_id.into(),
+                damage_type.id.into(),
+                source.map(|e| e.get_entity().entity_id.into()),
+                cause.map(|e| e.get_entity().entity_id.into()),
+                position,
+            ));
 
             // Try to spawn infested silverfish
             self.try_spawn_infested_silverfish().await;
 
             if play_sound {
-                world
-                    .play_sound(
-                        self.hurt_sound(),
-                        SoundCategory::Players,
-                        &self.entity.pos.load(),
-                    )
-                    .await;
+                world.play_sound(
+                    self.hurt_sound(),
+                    SoundCategory::Players,
+                    &self.entity.pos.load(),
+                );
 
                 if let Some(source) = source {
                     let source_pos = source.get_entity().pos.load();
@@ -2081,7 +2040,7 @@ impl EntityBase for LivingEntity {
                     let dx = source_pos.x - target_pos.x;
                     let dz = source_pos.z - target_pos.z;
                     self.entity.apply_knockback(0.4, dx, dz);
-                    self.entity.send_velocity().await;
+                    self.entity.send_velocity();
                 }
             }
 
@@ -2112,7 +2071,7 @@ impl EntityBase for LivingEntity {
             let new_health = self.health.load() - remaining;
             let clamped_health = new_health.max(0.0).min(max_h);
             if remaining > 0.0 {
-                self.set_health(clamped_health).await;
+                self.set_health(clamped_health);
 
                 // Track attacker for RevengeGoal (only after confirming damage)
                 if let Some(attacker) = cause.or(source) {
@@ -2179,22 +2138,19 @@ impl EntityBase for LivingEntity {
             let is_player = player.is_some();
 
             if !is_player {
-                self.entity.send_pos_rot().await;
+                self.entity.send_pos_rot();
             }
 
             // Fetch supporting blocks for players or other entities
-            let supporting_pos = if let Some(player) = caller.get_player() {
-                // Handles player movement and detection along block edges
-                player.get_supporting_block_pos().await
-            } else {
-                // Fast physics-based supporting block detection for server entities
-                self.entity.get_supporting_block_pos()
-            };
+            let supporting_pos = caller.get_player().map_or_else(
+                || self.entity.get_supporting_block_pos(),
+                super::player::Player::get_supporting_block_pos,
+            );
 
             // Notify the block under the entity each tick if a supporting block position is found
             if let Some(supporting) = supporting_pos {
                 let world = self.entity.world.load();
-                let (block, state) = world.get_block_and_state(&supporting).await;
+                let (block, state) = world.get_block_and_state(&supporting);
 
                 world
                     .block_registry
@@ -2211,8 +2167,7 @@ impl EntityBase for LivingEntity {
                 // Check slightly below supporting_pos for additional supporting blocks (blocks under carpets and the like)
                 if !block.is_solid() {
                     let below_supporting = supporting.down();
-                    let (below_block, below_state) =
-                        world.get_block_and_state(&below_supporting).await;
+                    let (below_block, below_state) = world.get_block_and_state(&below_supporting);
 
                     // If block is not air, notify it as well
                     world
@@ -2413,8 +2368,7 @@ impl EntityBase for LivingEntity {
                     self.entity
                         .world
                         .load()
-                        .send_entity_status(&self.entity, EntityStatus::Death)
-                        .await;
+                        .send_entity_status(&self.entity, EntityStatus::Death);
                     self.entity.remove().await;
                 }
             }

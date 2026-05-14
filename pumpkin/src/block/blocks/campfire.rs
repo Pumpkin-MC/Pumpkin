@@ -66,7 +66,7 @@ impl BlockBehaviour for CampfireBlock {
                 CampfireLikeProperties::from_state_id(args.block.default_state.id, args.block);
             props.waterlogged = is_replacing_water;
             props.signal_fire =
-                is_signal_fire_base_block(args.world.get_block(&args.position.down()).await);
+                is_signal_fire_base_block(args.world.get_block(&args.position.down()));
             props.lit = !is_replacing_water;
             props.facing = args.player.get_entity().get_horizontal_facing();
             props.to_state_id(args.block)
@@ -93,7 +93,7 @@ impl BlockBehaviour for CampfireBlock {
 
             if args.direction == BlockDirection::Down {
                 props.signal_fire =
-                    is_signal_fire_base_block(args.world.get_block(args.neighbor_position).await);
+                    is_signal_fire_base_block(args.world.get_block(args.neighbor_position));
             }
 
             props.to_state_id(args.block)

@@ -52,7 +52,7 @@ pub struct BrewingStandBlock;
 impl BlockBehaviour for BrewingStandBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.clone().get_inventory()
                 && let Some(pd) = block_entity.clone().to_property_delegate()
             {

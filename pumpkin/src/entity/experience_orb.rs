@@ -86,8 +86,7 @@ impl EntityBase for ExperienceOrbEntity {
                 .entity
                 .world
                 .load()
-                .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
-                .await;
+                .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7));
             // TODO: isSubmergedIn
             if !no_clip {
                 velo.y -= self.get_gravity();
@@ -116,7 +115,7 @@ impl EntityBase for ExperienceOrbEntity {
                 let mut delay = player.experience_pick_up_delay.lock().await;
                 if *delay == 0 {
                     *delay = 2;
-                    player.living_entity.pickup(&self.entity, 1).await;
+                    player.living_entity.pickup(&self.entity, 1);
                     let remaining = player.apply_mending_from_xp(self.amount as i32).await;
                     if remaining > 0 {
                         player.add_experience_points(remaining).await;

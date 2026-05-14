@@ -92,7 +92,7 @@ impl CandleCakeBlock {
             )
             .await;
 
-        let (block, state) = world.get_block_and_state_id(location).await;
+        let (block, state) = world.get_block_and_state_id(location);
 
         CakeBlock::consume_if_hungry(world, player, block, location, state).await
     }
@@ -122,7 +122,7 @@ impl BlockBehaviour for CandleCakeBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_place_at(args.world.as_ref(), args.position).await {
+            if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -135,7 +135,7 @@ impl BlockBehaviour for CandleCakeBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
@@ -145,7 +145,7 @@ impl BlockBehaviour for CandleCakeBlock {
     }
 }
 
-async fn can_place_at(world: &dyn BlockAccessor, position: &BlockPos) -> bool {
-    let state = world.get_block_state(&position.down()).await;
+fn can_place_at(world: &dyn BlockAccessor, position: &BlockPos) -> bool {
+    let state = world.get_block_state(&position.down());
     state.is_solid()
 }
