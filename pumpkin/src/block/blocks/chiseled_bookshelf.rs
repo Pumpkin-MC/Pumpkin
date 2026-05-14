@@ -116,7 +116,7 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let block_entity = ChiseledBookshelfBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(block_entity)).await;
+            args.world.add_block_entity(Arc::new(block_entity));
         })
     }
 

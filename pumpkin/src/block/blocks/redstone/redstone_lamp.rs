@@ -30,9 +30,12 @@ impl BlockBehaviour for RedstoneLamp {
 
             if is_lit != is_receiving_power {
                 if is_lit {
-                    args.world
-                        .schedule_block_tick(args.block, *args.position, 4, TickPriority::Normal)
-                        .await;
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        4,
+                        TickPriority::Normal,
+                    );
                 } else {
                     props.lit = !props.lit;
                     args.world

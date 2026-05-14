@@ -23,7 +23,7 @@ impl ItemBehaviour for GlowingInkSacItem {
 }
 
 impl GlowingInkSacItem {
-    pub async fn apply_to_sign(
+    pub fn apply_to_sign(
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
@@ -35,7 +35,7 @@ impl GlowingInkSacItem {
             return BlockActionResult::PassToDefaultBlockAction;
         }
 
-        args.world.update_block_entity(block_entity).await;
+        args.world.update_block_entity(block_entity);
         args.world.play_block_sound(
             pumpkin_data::sound::Sound::ItemGlowInkSacUse,
             pumpkin_data::sound::SoundCategory::Blocks,

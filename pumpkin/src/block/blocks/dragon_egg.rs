@@ -48,8 +48,7 @@ impl BlockBehaviour for DragonEggBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.world
-                .schedule_block_tick(args.block, *args.position, 5, TickPriority::Normal)
-                .await;
+                .schedule_block_tick(args.block, *args.position, 5, TickPriority::Normal);
         })
     }
 

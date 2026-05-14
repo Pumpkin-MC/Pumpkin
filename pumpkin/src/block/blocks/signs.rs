@@ -307,8 +307,7 @@ impl BlockBehaviour for SignBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.world
-                .add_block_entity(Arc::new(SignBlockEntity::empty(*args.position)))
-                .await;
+                .add_block_entity(Arc::new(SignBlockEntity::empty(*args.position)));
         })
     }
 
@@ -368,7 +367,7 @@ impl BlockBehaviour for SignBlock {
 
     fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 
@@ -467,6 +466,7 @@ impl BlockBehaviour for SignBlock {
     }
 
     /// Handles use with an item on the sign block.
+    #[expect(clippy::option_if_let_else)]
     fn use_with_item<'a>(
         &'a self,
         args: UseWithItemArgs<'a>,
@@ -507,27 +507,39 @@ impl BlockBehaviour for SignBlock {
                 return BlockActionResult::PassToDefaultBlockAction;
             };
 
-            let result = if let Some(honeycomb_item) =
-                pumpkin_item.as_any().downcast_ref::<HoneyCombItem>()
-            {
-                honeycomb_item
-                    .apply_to_sign(&args, &block_entity, sign_entity)
-                    .await
-            } else if let Some(g_ink_sac_item) =
-                pumpkin_item.as_any().downcast_ref::<GlowingInkSacItem>()
-            {
-                g_ink_sac_item
-                    .apply_to_sign(&args, &block_entity, text)
-                    .await
-            } else if let Some(ink_sac_item) = pumpkin_item.as_any().downcast_ref::<InkSacItem>() {
-                ink_sac_item.apply_to_sign(&args, &block_entity, text).await
-            } else if let Some(dye) = pumpkin_item.as_any().downcast_ref::<DyeItem>() {
-                let color_name = item.item.registry_key.strip_suffix("_dye").unwrap();
-                dye.apply_to_sign(&args, &block_entity, text, color_name)
-                    .await
-            } else {
-                BlockActionResult::PassToDefaultBlockAction
-            };
+            let result = pumpkin_item
+                .as_any()
+                .downcast_ref::<HoneyCombItem>()
+                .map_or_else(
+                    || {
+                        pumpkin_item
+                            .as_any()
+                            .downcast_ref::<GlowingInkSacItem>()
+                            .map_or_else(
+                                || {
+                                    if let Some(ink_sac_item) =
+                                        pumpkin_item.as_any().downcast_ref::<InkSacItem>()
+                                    {
+                                        ink_sac_item.apply_to_sign(&args, &block_entity, text)
+                                    } else if let Some(dye) =
+                                        pumpkin_item.as_any().downcast_ref::<DyeItem>()
+                                    {
+                                        let color_name =
+                                            item.item.registry_key.strip_suffix("_dye").unwrap();
+                                        dye.apply_to_sign(&args, &block_entity, text, color_name)
+                                    } else {
+                                        BlockActionResult::PassToDefaultBlockAction
+                                    }
+                                },
+                                |g_ink_sac_item| {
+                                    g_ink_sac_item.apply_to_sign(&args, &block_entity, text)
+                                },
+                            )
+                    },
+                    |honeycomb_item| {
+                        honeycomb_item.apply_to_sign(&args, &block_entity, sign_entity)
+                    },
+                );
 
             if result == BlockActionResult::Success {
                 if !args.player.has_infinite_materials() {

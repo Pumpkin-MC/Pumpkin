@@ -89,18 +89,16 @@ impl BlockBehaviour for RepeaterBlock {
                     )
                     .await;
                 if !should_be_powered {
-                    args.world
-                        .schedule_block_tick(
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        RedstoneGateBlock::get_update_delay_internal(
+                            self,
+                            props.to_state_id(args.block),
                             args.block,
-                            *args.position,
-                            RedstoneGateBlock::get_update_delay_internal(
-                                self,
-                                props.to_state_id(args.block),
-                                args.block,
-                            ),
-                            TickPriority::VeryHigh,
-                        )
-                        .await;
+                        ),
+                        TickPriority::VeryHigh,
+                    );
                 }
                 RedstoneGateBlock::update_target(
                     self,
@@ -240,16 +238,12 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
             let props = RepeaterProperties::from_state_id(state.id, block);
             let powered = props.powered;
 
-            // 💡 FIX 3: Trait method calls now return futures and must be awaited.
             // Note: The signature for has_power must be called without self, as it's a trait method.
             let has_power = RedstoneGateBlock::has_power(self, world, pos, state, block).await;
 
-            if powered != has_power && !world.is_block_tick_scheduled(&pos, block).await {
-                // 💡 FIX 4: is_target_not_aligned returns a Future and must be awaited.
+            if powered != has_power && !world.is_block_tick_scheduled(&pos, block) {
                 let priority =
-                    if RedstoneGateBlock::is_target_not_aligned(self, world, pos, state, block)
-                        .await
-                    {
+                    if RedstoneGateBlock::is_target_not_aligned(self, world, pos, state, block) {
                         TickPriority::ExtremelyHigh
                     } else if powered {
                         TickPriority::VeryHigh
@@ -257,15 +251,12 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
                         TickPriority::High
                     };
 
-                world
-                    .schedule_block_tick(
-                        block,
-                        pos,
-                        // 💡 FIX 5: get_update_delay_internal is not async and is called normally.
-                        RedstoneGateBlock::get_update_delay_internal(self, state.id, block),
-                        priority,
-                    )
-                    .await;
+                world.schedule_block_tick(
+                    block,
+                    pos,
+                    RedstoneGateBlock::get_update_delay_internal(self, state.id, block),
+                    priority,
+                );
             }
         })
     }

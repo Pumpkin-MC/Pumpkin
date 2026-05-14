@@ -29,8 +29,7 @@ impl BlockBehaviour for ChorusFlowerBlock {
         Box::pin(async move {
             if args.direction != BlockDirection::Up && !can_survive(args.world, args.position) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
             args.state_id
         })

@@ -31,9 +31,12 @@ impl FluidBehaviour for FlowingWater {
     ) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if old_state_id != state_id {
-                world
-                    .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
-                    .await;
+                world.schedule_fluid_tick(
+                    fluid,
+                    *block_pos,
+                    WATER_FLOW_SPEED,
+                    TickPriority::Normal,
+                );
             }
         })
     }
@@ -59,10 +62,13 @@ impl FluidBehaviour for FlowingWater {
     ) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             // Avoid rescheduling a fluid tick if one is already queued.
-            if !world.is_fluid_tick_scheduled(block_pos, fluid).await {
-                world
-                    .schedule_fluid_tick(fluid, *block_pos, WATER_FLOW_SPEED, TickPriority::Normal)
-                    .await;
+            if !world.is_fluid_tick_scheduled(block_pos, fluid) {
+                world.schedule_fluid_tick(
+                    fluid,
+                    *block_pos,
+                    WATER_FLOW_SPEED,
+                    TickPriority::Normal,
+                );
             }
         })
     }

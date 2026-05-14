@@ -45,9 +45,7 @@ async fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
         } else {
             30
         };
-        world
-            .schedule_block_tick(block, *block_pos, delay, TickPriority::Normal)
-            .await;
+        world.schedule_block_tick(block, *block_pos, delay, TickPriority::Normal);
         ButtonBlock::update_neighbors(world, block_pos, &button_props).await;
     }
 }

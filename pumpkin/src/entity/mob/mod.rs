@@ -184,7 +184,7 @@ impl MobEntity {
     }
 
     pub fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
-        let sky_light = world.get_sky_light_level_sync(pos);
+        let sky_light = world.get_sky_light_level(pos);
         if sky_light > rand::random_range(0..32) {
             return false;
         }
@@ -192,7 +192,7 @@ impl MobEntity {
         let dimension = &world.dimension;
         let block_light_limit = dimension.monster_spawn_block_light_limit;
 
-        let block_light = world.get_block_light_level_sync(pos).unwrap();
+        let block_light = world.get_block_light_level(pos).unwrap();
         if block_light_limit < 15 && block_light > block_light_limit {
             return false;
         }
@@ -307,7 +307,7 @@ impl MobEntity {
             .level
             .light_engine
             .get_sky_light_level(&world.level, &eye_block_pos.to_block_pos())
-            .await as f32
+            as f32
             / 15.0;
 
         if brightness <= 0.5 {

@@ -103,8 +103,7 @@ impl BlockBehaviour for BambooBlock {
         Box::pin(async move {
             if !<Self as PlantBlockBase>::can_place_at(self, args.world, args.position) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
             let neighbor_block = args.world.get_block(args.neighbor_position);
             if args.direction == BlockDirection::Up && neighbor_block == &Block::BAMBOO {

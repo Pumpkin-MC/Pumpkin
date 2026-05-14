@@ -39,8 +39,7 @@ impl BlockBehaviour for ChorusPlantBlock {
             if !can_survive(args.world, args.position) {
                 // Schedule delayed destruction so the whole plant cascades down.
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
                 return args.state_id;
             }
 

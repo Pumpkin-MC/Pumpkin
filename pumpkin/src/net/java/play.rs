@@ -769,10 +769,7 @@ impl JavaClient {
                 track_output: (command.flags & 0x1 != 0).into(),
                 success_count: AtomicU32::new(0),
             };
-            player
-                .world()
-                .add_block_entity(Arc::new(command_block))
-                .await;
+            player.world().add_block_entity(Arc::new(command_block));
 
             player
                 .send_system_message(&TextComponent::text(format!(
@@ -783,15 +780,12 @@ impl JavaClient {
 
             // The 0x4 flag means always active
             if command.flags & 0x4 != 0 && block_type != Block::CHAIN_COMMAND_BLOCK {
-                player
-                    .world()
-                    .schedule_block_tick(
-                        &block_type,
-                        pos,
-                        1,
-                        pumpkin_world::tick::TickPriority::Normal,
-                    )
-                    .await;
+                player.world().schedule_block_tick(
+                    &block_type,
+                    pos,
+                    1,
+                    pumpkin_world::tick::TickPriority::Normal,
+                );
             }
         }
     }
@@ -2228,7 +2222,7 @@ impl JavaClient {
             sign_data.line_4,
         ];
         *sign_entity.currently_editing_player.lock().await = None;
-        world.update_block_entity(&block_entity).await;
+        world.update_block_entity(&block_entity);
     }
 
     pub async fn handle_use_item(

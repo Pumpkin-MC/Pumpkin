@@ -33,8 +33,7 @@ impl BlockBehaviour for FallingBlock {
         Box::pin(async move {
             // TODO: make delay configurable
             args.world
-                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                .await;
+                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
         })
     }
     fn get_state_for_neighbor_update<'a>(
@@ -44,8 +43,7 @@ impl BlockBehaviour for FallingBlock {
         Box::pin(async move {
             // TODO: make delay configurable
             args.world
-                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                .await;
+                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
             args.state_id
         })
     }

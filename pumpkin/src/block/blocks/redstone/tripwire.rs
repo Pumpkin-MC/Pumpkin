@@ -43,8 +43,7 @@ impl BlockBehaviour for TripwireBlock {
             Self::update(args.world, args.position, state_id).await;
 
             args.world
-                .schedule_block_tick(args.block, *args.position, 10, TickPriority::Normal)
-                .await;
+                .schedule_block_tick(args.block, *args.position, 10, TickPriority::Normal);
         })
     }
 
@@ -151,9 +150,12 @@ impl BlockBehaviour for TripwireBlock {
                     .await;
                 Self::update(args.world, args.position, state_id).await;
             } else {
-                args.world
-                    .schedule_block_tick(args.block, *args.position, 10, TickPriority::Normal)
-                    .await;
+                args.world.schedule_block_tick(
+                    args.block,
+                    *args.position,
+                    10,
+                    TickPriority::Normal,
+                );
             }
         })
     }

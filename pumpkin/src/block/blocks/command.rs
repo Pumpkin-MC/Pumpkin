@@ -66,7 +66,7 @@ impl CommandBlock {
         command_entity.success_count.load(Ordering::Relaxed) > 0
     }
 
-    async fn update(
+    fn update(
         world: &World,
         block: &Block,
         command_block: &CommandBlockEntity,
@@ -87,9 +87,7 @@ impl CommandBlock {
         let props = CommandBlockLikeProperties::from_state_id(state_id, block);
 
         if !props.conditional {
-            world
-                .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
-                .await;
+            world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
             return;
         }
 
@@ -109,9 +107,7 @@ impl CommandBlock {
             .expect("behind should always be a command block");
 
         if behind_entity.success_count.load(Ordering::Relaxed) > 0 {
-            world
-                .schedule_block_tick(block, *pos, 1, TickPriority::Normal)
-                .await;
+            world.schedule_block_tick(block, *pos, 1, TickPriority::Normal);
         }
     }
 
@@ -226,7 +222,7 @@ impl BlockBehaviour for CommandBlock {
             let Some(block_entity) = args.world.get_block_entity(args.position) else {
                 return BlockActionResult::Pass;
             };
-            args.world.update_block_entity(&block_entity).await;
+            args.world.update_block_entity(&block_entity);
             BlockActionResult::SuccessServer
         })
     }
@@ -253,8 +249,7 @@ impl BlockBehaviour for CommandBlock {
                     command_entity,
                     args.position,
                     block_receives_redstone_power(args.world, args.position).await,
-                )
-                .await;
+                );
             }
         })
     }
@@ -304,8 +299,7 @@ impl BlockBehaviour for CommandBlock {
             let can_run = command_entity.powered.load(Ordering::Relaxed) || is_auto;
             if block == &Block::REPEATING_COMMAND_BLOCK && can_run {
                 args.world
-                    .schedule_block_tick(block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(block, *args.position, 1, TickPriority::Normal);
             }
         })
     }
@@ -332,7 +326,7 @@ impl BlockBehaviour for CommandBlock {
                 send_command_feedback,
                 args.block.id == Block::CHAIN_COMMAND_BLOCK.id,
             );
-            args.world.add_block_entity(Arc::new(entity)).await;
+            args.world.add_block_entity(Arc::new(entity));
         })
     }
 

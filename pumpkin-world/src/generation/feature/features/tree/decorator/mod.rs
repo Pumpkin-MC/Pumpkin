@@ -43,10 +43,11 @@ impl TreeDecorator {
         random: &mut RandomGenerator,
         root_positions: &[BlockPos],
         log_positions: &[BlockPos],
+        foliage_positions: &[BlockPos],
     ) {
         match self {
             Self::TrunkVine(decorator) => decorator.generate(chunk, random, log_positions),
-            Self::LeaveVine(_decorator) => {}
+            Self::LeaveVine(decorator) => decorator.generate(chunk, random, foliage_positions),
             Self::PaleMoss(_decorator) => {}
             Self::CreakingHeart(_decorator) => {}
             Self::Cocoa(_decorator) => {}

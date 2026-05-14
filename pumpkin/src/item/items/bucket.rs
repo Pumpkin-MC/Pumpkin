@@ -142,9 +142,7 @@ async fn try_pickup_bucket_item(
         world
             .set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
-        world
-            .schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal)
-            .await;
+        world.schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal);
         return Some(&Item::WATER_BUCKET);
     }
 
@@ -173,9 +171,7 @@ async fn try_pickup_bucket_item(
         world
             .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
-        world
-            .schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal)
-            .await;
+        world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
         return Some(&Item::WATER_BUCKET);
     }
 
@@ -239,9 +235,7 @@ async fn try_place_filled_bucket(
         world
             .set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
-        world
-            .schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal)
-            .await;
+        world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
         return true;
     }
 
@@ -256,9 +250,7 @@ async fn try_place_filled_bucket(
         world
             .set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS)
             .await;
-        world
-            .schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal)
-            .await;
+        world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
         return true;
     }
 

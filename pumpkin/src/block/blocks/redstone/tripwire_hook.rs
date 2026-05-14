@@ -217,14 +217,12 @@ impl TripwireHookBlock {
                 wire_attached |= (!current_wire_props.disarmed) && current_wire_props.powered;
                 wires_props[k as usize] = Some(current_wire_props);
                 if k == raw_wire_index {
-                    world
-                        .schedule_block_tick(
-                            &Block::TRIPWIRE_HOOK,
-                            start_hook_pos,
-                            10,
-                            TickPriority::Normal,
-                        )
-                        .await;
+                    world.schedule_block_tick(
+                        &Block::TRIPWIRE_HOOK,
+                        start_hook_pos,
+                        10,
+                        TickPriority::Normal,
+                    );
                     can_attach &= !current_wire_props.disarmed;
                 }
             } else {

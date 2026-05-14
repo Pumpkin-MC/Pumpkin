@@ -2293,7 +2293,7 @@ impl Entity {
     }
 
     /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
-    pub fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
+    pub async fn is_invulnerable_to(&self, damage_type: &DamageType) -> bool {
         // Nothing is immune to void or kill
         if matches!(
             *damage_type,
@@ -2308,9 +2308,7 @@ impl Entity {
         }
 
         // Specific type immunities
-        futures::executor::block_on(async {
-            self.damage_immunities.lock().await.contains(damage_type)
-        })
+        self.damage_immunities.lock().await.contains(damage_type)
     }
 
     /// Sets if the entity is invulnerable to a specific damage type

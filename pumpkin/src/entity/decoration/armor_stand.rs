@@ -359,7 +359,10 @@ impl EntityBase for ArmorStandEntity {
                 return false;
             }
 
-            if entity.is_invulnerable_to(&damage_type) || self.is_invisible() || self.is_marker() {
+            if entity.is_invulnerable_to(&damage_type).await
+                || self.is_invisible()
+                || self.is_marker()
+            {
                 return false;
             }
 

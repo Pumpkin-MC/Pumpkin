@@ -95,8 +95,7 @@ impl BlockBehaviour for LadderBlock {
                 props.facing.to_block_direction().opposite(),
             ) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
         })
     }

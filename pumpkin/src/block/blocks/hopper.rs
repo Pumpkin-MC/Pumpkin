@@ -90,9 +90,7 @@ impl BlockBehaviour for HopperBlock {
         Box::pin(async move {
             let props = HopperLikeProperties::from_state_id(args.state_id, args.block);
             let hopper_block_entity = HopperBlockEntity::new(*args.position, props.facing);
-            args.world
-                .add_block_entity(Arc::new(hopper_block_entity))
-                .await;
+            args.world.add_block_entity(Arc::new(hopper_block_entity));
             if Block::from_state_id(args.old_state_id) != Block::from_state_id(args.state_id) {
                 check_powered_state(args.world, args.position, args.state_id, args.block).await;
             }

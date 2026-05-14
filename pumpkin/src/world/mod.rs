@@ -1075,7 +1075,7 @@ impl World {
 
         let mut spawning_chunks = Vec::new();
         for pos in active_chunks.iter() {
-            if let Some(chunk) = self.level.try_get_chunk(pos) {
+            if let Some(chunk) = self.level.read_chunk_sync(pos, std::clone::Clone::clone) {
                 spawning_chunks.push((*pos, chunk));
             }
         }
@@ -1536,15 +1536,36 @@ impl World {
 
     /// Gets the y position of the first non air block from the top down
     pub fn get_top_block(&self, position: Vector2<i32>) -> i32 {
-        for y in (self.dimension.min_y..self.dimension.height).rev() {
-            let pos = BlockPos::new(position.x, y, position.y);
-            let block = self.get_block_state(&pos);
-            if block.is_air() {
-                continue;
-            }
-            return y;
-        }
-        self.dimension.min_y
+        let chunk_pos = Vector2::new(position.x >> 4, position.y >> 4);
+        let relative_x = (position.x & 15) as usize;
+        let relative_z = (position.y & 15) as usize;
+
+        self.level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                let height = chunk.heightmap.lock().unwrap().get(
+                    ChunkHeightmapType::WorldSurface,
+                    position.x,
+                    position.y,
+                    self.dimension.min_y,
+                );
+
+                if height >= self.dimension.min_y {
+                    return height;
+                }
+
+                for y in (self.dimension.min_y..self.dimension.min_y + self.dimension.height).rev()
+                {
+                    if let Some(block_id) = chunk
+                        .section
+                        .get_block_absolute_y(relative_x, y, relative_z)
+                        && !is_air(block_id)
+                    {
+                        return y;
+                    }
+                }
+                self.dimension.min_y
+            })
+            .unwrap_or(self.dimension.min_y)
     }
 
     pub fn get_heightmap_height(&self, height_map: ChunkHeightmapType, x: i32, z: i32) -> i32 {
@@ -1949,7 +1970,7 @@ impl World {
                 actions: &[
                     PlayerAction::AddPlayer {
                         name: &gameprofile.name,
-                        properties: &gameprofile.properties,
+                        properties: &gameprofile.properties.load(),
                     },
                     PlayerAction::UpdateGameMode(VarInt(gamemode as i32)),
                     PlayerAction::UpdateListed(true),
@@ -1972,19 +1993,25 @@ impl World {
         // Here, we send all the infos of players who already joined.
         let mut players_tab_list_names = Vec::new();
         {
-            let mut current_player_data = Vec::new();
             let players = self.players.load();
-            for player in players
+            let mut data_to_process = Vec::new();
+            for p in players
                 .iter()
                 .filter(|p| p.gameprofile.id != player.gameprofile.id)
             {
+                let props_guard = p.gameprofile.properties.load();
+                data_to_process.push((props_guard, p));
+            }
+
+            let mut current_player_data = Vec::new();
+            for (properties, player) in &data_to_process {
                 let chat_session = player.chat_session.lock().await;
                 let tab_list_name = player.get_tab_list_name().await;
 
                 let mut player_actions = vec![
                     PlayerAction::AddPlayer {
                         name: &player.gameprofile.name,
-                        properties: &player.gameprofile.properties,
+                        properties,
                     },
                     PlayerAction::UpdateListed(player.tab_list_listed.load(Ordering::Relaxed)),
                     PlayerAction::UpdateLatency(VarInt(
@@ -3245,7 +3272,7 @@ impl World {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let replaced_block_state_id = self
             .level
-            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+            .read_chunk_sync(&chunk_coordinate, |chunk| {
                 let replaced_block_state_id = chunk.set_block_absolute_y(
                     relative.x as usize,
                     relative.y,
@@ -3258,7 +3285,7 @@ impl World {
                 }
                 replaced_block_state_id
             })
-            .await;
+            .unwrap_or(Block::AIR.default_state.id);
 
         if replaced_block_state_id == block_state_id {
             return block_state_id;
@@ -3282,7 +3309,7 @@ impl World {
             && let Some(entity) = self.get_block_entity(position)
         {
             entity.on_block_replaced(self.clone(), *position).await;
-            self.remove_block_entity(position).await;
+            self.remove_block_entity(position);
         }
 
         // WorldChunk.java line 317
@@ -3377,49 +3404,25 @@ impl World {
         replaced_block_state_id
     }
 
-    pub fn is_thundering_sync(&self) -> bool {
-        self.weather.blocking_lock().thundering
-    }
-
-    pub fn get_block_light_level_sync(&self, position: &BlockPos) -> Option<u8> {
-        self.level
-            .light_engine
-            .get_block_light_level_sync(&self.level, position)
-    }
-
-    pub fn get_sky_light_level_sync(&self, position: &BlockPos) -> u8 {
-        self.level
-            .light_engine
-            .get_sky_light_level_sync(&self.level, position)
-    }
-
-    pub fn get_max_local_raw_brightness_sync(&self, pos: &BlockPos) -> u8 {
-        let sky_light = self.get_sky_light_level_sync(pos);
-        let block_light = self.get_block_light_level_sync(pos).unwrap_or(0);
+    pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
+        let sky_light = self.get_sky_light_level(pos);
+        let block_light = self.get_block_light_level(pos).unwrap_or(0);
         sky_light.max(block_light) // TODO: getSkyDarken
     }
 
-    pub async fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        let sky_light = self.get_sky_light_level(pos).await;
-        let block_light = self.get_block_light_level(pos).await.unwrap();
-        sky_light.max(block_light) // TODO: getSkyDarken
-    }
-
-    pub async fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
+    pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
         self.level
             .light_engine
             .get_block_light_level(&self.level, position)
-            .await
     }
 
-    pub async fn get_sky_light_level(&self, position: &BlockPos) -> u8 {
+    pub fn get_sky_light_level(&self, position: &BlockPos) -> u8 {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
-            .await
     }
 
-    pub async fn schedule_block_tick(
+    pub fn schedule_block_tick(
         &self,
         block: &Block,
         block_pos: BlockPos,
@@ -3427,11 +3430,10 @@ impl World {
         priority: TickPriority,
     ) {
         self.level
-            .schedule_block_tick(block, block_pos, delay, priority)
-            .await;
+            .schedule_block_tick(block, block_pos, delay, priority);
     }
 
-    pub async fn schedule_fluid_tick(
+    pub fn schedule_fluid_tick(
         &self,
         fluid: &Fluid,
         block_pos: BlockPos,
@@ -3439,16 +3441,15 @@ impl World {
         priority: TickPriority,
     ) {
         self.level
-            .schedule_fluid_tick(fluid, block_pos, delay, priority)
-            .await;
+            .schedule_fluid_tick(fluid, block_pos, delay, priority);
     }
 
-    pub async fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
-        self.level.is_block_tick_scheduled(block_pos, block).await
+    pub fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        self.level.is_block_tick_scheduled(block_pos, block)
     }
 
-    pub async fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
-        self.level.is_fluid_tick_scheduled(block_pos, fluid).await
+    pub fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
+        self.level.is_fluid_tick_scheduled(block_pos, fluid)
     }
 
     // Return new state
@@ -3664,10 +3665,11 @@ impl World {
         }
 
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let chunk = self.level.try_get_chunk(&chunk_coordinate)?;
-        chunk
-            .section
-            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+        self.level.read_chunk_sync(&chunk_coordinate, |chunk| {
+            chunk
+                .section
+                .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+        })?
     }
 
     #[must_use]
@@ -3929,7 +3931,7 @@ impl World {
             .map(|e| e.value().clone())
     }
 
-    pub async fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
+    pub fn add_block_entity(&self, block_entity: Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
@@ -3947,25 +3949,22 @@ impl World {
             );
         }
 
-        self.block_entities.insert(block_pos, block_entity.clone());
-        self.level
-            .get_or_fetch_chunk(chunk_pos, |chunk| {
-                chunk.mark_dirty(true);
-            })
-            .await;
+        self.block_entities.insert(block_pos, block_entity);
+        self.level.read_chunk_sync(&chunk_pos, |chunk| {
+            chunk.mark_dirty(true);
+        });
     }
 
-    pub async fn remove_block_entity(&self, block_pos: &BlockPos) {
+    pub fn remove_block_entity(&self, block_pos: &BlockPos) {
         if self.block_entities.remove(block_pos).is_some() {
             self.level
-                .get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+                .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
                     chunk.mark_dirty(true);
-                })
-                .await;
+                });
         }
     }
 
-    pub async fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
+    pub fn update_block_entity(&self, block_entity: &Arc<dyn BlockEntity>) {
         let block_pos = block_entity.get_position();
         let chunk_pos = block_pos.chunk_position();
         let block_entity_nbt = block_entity.chunk_data_nbt();
@@ -3982,11 +3981,9 @@ impl World {
                 ),
             );
         }
-        self.level
-            .get_or_fetch_chunk(chunk_pos, |chunk| {
-                chunk.mark_dirty(true);
-            })
-            .await;
+        self.level.read_chunk_sync(&chunk_pos, |chunk| {
+            chunk.mark_dirty(true);
+        });
     }
 
     fn intersects_aabb_with_direction(

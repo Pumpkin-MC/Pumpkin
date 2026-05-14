@@ -186,12 +186,13 @@ impl CommandSender {
             Self::CommandBlock(command_block, world) => {
                 let pos = command_block.get_position();
                 let (chunk_coordinate, relative) = pos.chunk_and_chunk_relative_position();
-                let chunk = world.level.try_get_chunk(&chunk_coordinate)?;
-                let state_id = chunk.section.get_block_absolute_y(
-                    relative.x as usize,
-                    relative.y,
-                    relative.z as usize,
-                )?;
+                let state_id = world.level.read_chunk_sync(&chunk_coordinate, |chunk| {
+                    chunk.section.get_block_absolute_y(
+                        relative.x as usize,
+                        relative.y,
+                        relative.z as usize,
+                    )
+                })??;
                 let block = Block::from_state_id(state_id);
                 if !CommandBlockLikeProperties::handles_block_id(block.id) {
                     return None;

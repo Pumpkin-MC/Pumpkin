@@ -1850,7 +1850,7 @@ impl EntityBase for LivingEntity {
             let mut amount = amount;
 
             // Check invulnerability before applying damage
-            if self.entity.is_invulnerable_to(&damage_type) {
+            if self.entity.is_invulnerable_to(&damage_type).await {
                 return false;
             }
 

@@ -57,7 +57,7 @@ impl BlockBehaviour for ComparatorBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let comparator = ComparatorBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(comparator)).await;
+            args.world.add_block_entity(Arc::new(comparator));
 
             RedstoneGateBlock::update_target(
                 self,
@@ -78,7 +78,7 @@ impl BlockBehaviour for ComparatorBlock {
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 
@@ -174,7 +174,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
         block: &'a Block,
     ) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if world.is_block_tick_scheduled(&pos, block).await {
+            if world.is_block_tick_scheduled(&pos, block) {
                 return;
             }
             let i = self.calculate_output_signal(world, pos, state, block).await;
@@ -187,20 +187,16 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                 || props.powered
                     != RedstoneGateBlock::has_power(self, world, pos, state, block).await
             {
-                world
-                    .schedule_block_tick(
-                        block,
-                        pos,
-                        RedstoneGateBlock::get_update_delay_internal(self, state.id, block),
-                        if RedstoneGateBlock::is_target_not_aligned(self, world, pos, state, block)
-                            .await
-                        {
-                            TickPriority::High
-                        } else {
-                            TickPriority::Normal
-                        },
-                    )
-                    .await;
+                world.schedule_block_tick(
+                    block,
+                    pos,
+                    RedstoneGateBlock::get_update_delay_internal(self, state.id, block),
+                    if RedstoneGateBlock::is_target_not_aligned(self, world, pos, state, block) {
+                        TickPriority::High
+                    } else {
+                        TickPriority::Normal
+                    },
+                );
             }
         })
     }

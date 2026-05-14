@@ -219,17 +219,15 @@ impl BlockBehaviour for PistonBlock {
                 .unwrap()
                 .to_facing();
 
-            world
-                .add_block_entity(Arc::new(PistonBlockEntity {
-                    position: *pos,
-                    facing: dir,
-                    pushed_block_state: BlockState::from_id(props.to_state_id(block)),
-                    current_progress: 0.0.into(),
-                    last_progress: 0.0.into(),
-                    extending: false,
-                    source: true,
-                }))
-                .await;
+            world.add_block_entity(Arc::new(PistonBlockEntity {
+                position: *pos,
+                facing: dir,
+                pushed_block_state: BlockState::from_id(props.to_state_id(block)),
+                current_progress: 0.0.into(),
+                last_progress: 0.0.into(),
+                extending: false,
+                source: true,
+            }));
 
             world.update_neighbors(pos, None).await;
             if sticky {
@@ -425,17 +423,15 @@ async fn move_piston(
             .await;
 
         if let Some(moved_state) = moved_block_states.get(moved_blocks.len() - 1 - index) {
-            world
-                .add_block_entity(Arc::new(PistonBlockEntity {
-                    position: target_pos,
-                    facing: dir.to_facing().to_block_direction(),
-                    pushed_block_state: moved_state,
-                    current_progress: 0.0.into(),
-                    last_progress: 0.0.into(),
-                    extending: extend,
-                    source: false,
-                }))
-                .await;
+            world.add_block_entity(Arc::new(PistonBlockEntity {
+                position: target_pos,
+                facing: dir.to_facing().to_block_direction(),
+                pushed_block_state: moved_state,
+                current_progress: 0.0.into(),
+                last_progress: 0.0.into(),
+                extending: extend,
+                source: false,
+            }));
         }
         affected_block_states.push(block_state);
     }
@@ -460,17 +456,15 @@ async fn move_piston(
         let mut props = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
         props.facing = dir.to_facing();
         props.r#type = pistion_type;
-        world
-            .add_block_entity(Arc::new(PistonBlockEntity {
-                position: extended_pos,
-                facing: dir.to_facing().to_block_direction(),
-                pushed_block_state: BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD)),
-                current_progress: 0.0.into(),
-                last_progress: 0.0.into(),
-                extending: true,
-                source: true,
-            }))
-            .await;
+        world.add_block_entity(Arc::new(PistonBlockEntity {
+            position: extended_pos,
+            facing: dir.to_facing().to_block_direction(),
+            pushed_block_state: BlockState::from_id(props.to_state_id(&Block::PISTON_HEAD)),
+            current_progress: 0.0.into(),
+            last_progress: 0.0.into(),
+            extending: true,
+            source: true,
+        }));
     }
 
     let air_state = Block::AIR.default_state.id;

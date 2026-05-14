@@ -21,14 +21,13 @@ impl BlockBehaviour for DaylightDetectorBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.world
-                .add_block_entity(Arc::new(DaylightDetectorBlockEntity::new(*args.position)))
-                .await;
+                .add_block_entity(Arc::new(DaylightDetectorBlockEntity::new(*args.position)));
         })
     }
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 

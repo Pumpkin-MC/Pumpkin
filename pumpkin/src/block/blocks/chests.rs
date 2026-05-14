@@ -96,7 +96,7 @@ async fn placed_chest_impl<E: BlockEntity + 'static>(
     create_entity: impl FnOnce(BlockPos) -> E,
 ) {
     let chest = create_entity(*args.position);
-    args.world.add_block_entity(Arc::new(chest)).await;
+    args.world.add_block_entity(Arc::new(chest));
 
     let chest_props = ChestLikeProperties::from_state_id(args.state_id, args.block);
     let connected_towards = match chest_props.r#type {

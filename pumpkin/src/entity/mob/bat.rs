@@ -51,7 +51,7 @@ impl BatEntity {
         if rand::random_bool(1.0) {
             return false;
         }
-        if world.get_max_local_raw_brightness_sync(pos) > rand::random_range(0..4) {
+        if world.get_max_local_raw_brightness(pos) > rand::random_range(0..4) {
             return false;
         }
         if world

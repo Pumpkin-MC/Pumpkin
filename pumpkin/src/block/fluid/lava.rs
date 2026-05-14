@@ -158,9 +158,7 @@ impl FluidBehaviour for FlowingLava {
                 && Self::receive_neighbor_fluids(world, fluid, block_pos).await
             {
                 let flow_speed = self.get_flow_speed(world);
-                world
-                    .schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal)
-                    .await;
+                world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
             }
         })
     }
@@ -187,9 +185,7 @@ impl FluidBehaviour for FlowingLava {
         Box::pin(async move {
             if Self::receive_neighbor_fluids(world, fluid, block_pos).await {
                 let flow_speed = self.get_flow_speed(world);
-                world
-                    .schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal)
-                    .await;
+                world.schedule_fluid_tick(fluid, *block_pos, flow_speed, TickPriority::Normal);
             }
         })
     }

@@ -143,7 +143,6 @@ impl BlockBehaviour for RedstoneTorchBlock {
             if args
                 .world
                 .is_block_tick_scheduled(args.position, args.block)
-                .await
             {
                 return;
             }
@@ -158,17 +157,23 @@ impl BlockBehaviour for RedstoneTorchBlock {
                     )
                     .await
                 {
-                    args.world
-                        .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                        .await;
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        2,
+                        TickPriority::Normal,
+                    );
                 }
             } else if args.block == &Block::REDSTONE_TORCH {
                 let props = RTorchProps::from_state_id(state.id, args.block);
                 if props.lit != should_be_lit(args.world, args.position, BlockDirection::Down).await
                 {
-                    args.world
-                        .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                        .await;
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        2,
+                        TickPriority::Normal,
+                    );
                 }
             }
         })

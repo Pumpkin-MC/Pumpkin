@@ -132,9 +132,7 @@ impl ComposterBlock {
             .set_block_state(location, props.to_state_id(block), BlockFlags::NOTIFY_ALL)
             .await;
         if level == 7 {
-            world
-                .schedule_block_tick(block, *location, 20, TickPriority::Normal)
-                .await;
+            world.schedule_block_tick(block, *location, 20, TickPriority::Normal);
         }
     }
 

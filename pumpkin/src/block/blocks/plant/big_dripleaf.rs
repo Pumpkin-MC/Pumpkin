@@ -178,14 +178,12 @@ async fn set_tilt_and_schedule_tick(
         Tilt::Full => 100,
     };
     if tick_delay != -1 {
-        world
-            .schedule_block_tick(
-                &Block::BIG_DRIPLEAF,
-                *pos,
-                tick_delay as u8,
-                pumpkin_world::tick::TickPriority::Normal,
-            )
-            .await;
+        world.schedule_block_tick(
+            &Block::BIG_DRIPLEAF,
+            *pos,
+            tick_delay as u8,
+            pumpkin_world::tick::TickPriority::Normal,
+        );
     }
 }
 fn play_tilt_sound(world: &Arc<World>, pos: &BlockPos, tilt_sound: Sound) {

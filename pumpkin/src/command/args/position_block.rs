@@ -157,7 +157,11 @@ impl BlockPosArgumentConsumer {
     ) -> Result<BlockPos, CommandError> {
         let pos = Self::find_arg(args, name)?;
 
-        if world.level.try_get_chunk(&pos.chunk_position()).is_none() {
+        if world
+            .level
+            .read_chunk_sync(&pos.chunk_position(), |_| ())
+            .is_none()
+        {
             return Err(CommandError::CommandFailed(TextComponent::translate_cross(
                 "argument.pos.unloaded",
                 "argument.pos.unloaded",

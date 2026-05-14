@@ -86,7 +86,7 @@ impl ItemBehaviour for HoneyCombItem {
 }
 
 impl HoneyCombItem {
-    pub async fn apply_to_sign(
+    pub fn apply_to_sign(
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
@@ -94,7 +94,7 @@ impl HoneyCombItem {
     ) -> BlockActionResult {
         sign_entity.is_waxed.store(true, Ordering::Relaxed);
 
-        args.world.update_block_entity(block_entity).await;
+        args.world.update_block_entity(block_entity);
         args.world
             .sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, *args.position, 0);
 

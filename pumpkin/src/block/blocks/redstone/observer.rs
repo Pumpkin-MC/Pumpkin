@@ -50,8 +50,7 @@ impl BlockBehaviour for ObserverBlock {
                     )
                     .await;
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
             }
 
             Self::update_neighbors(args.world, args.block, args.position, &props).await;
@@ -66,7 +65,7 @@ impl BlockBehaviour for ObserverBlock {
             let props = ObserverLikeProperties::from_state_id(args.state_id, args.block);
 
             if props.facing.to_block_direction() == args.direction && !props.powered {
-                Self::schedule_tick(args.world, args.position).await;
+                Self::schedule_tick(args.world, args.position);
             }
 
             args.state_id
@@ -112,7 +111,6 @@ impl BlockBehaviour for ObserverBlock {
                     && args
                         .world
                         .is_block_tick_scheduled(args.position, &Block::OBSERVER)
-                        .await
                 {
                     Self::update_neighbors(args.world, args.block, args.position, &props).await;
                 }
@@ -137,9 +135,7 @@ impl ObserverBlock {
             .await;
     }
 
-    async fn schedule_tick(world: &World, block_pos: &BlockPos) {
-        world
-            .schedule_block_tick(&Block::OBSERVER, *block_pos, 2, TickPriority::Normal)
-            .await;
+    fn schedule_tick(world: &World, block_pos: &BlockPos) {
+        world.schedule_block_tick(&Block::OBSERVER, *block_pos, 2, TickPriority::Normal);
     }
 }

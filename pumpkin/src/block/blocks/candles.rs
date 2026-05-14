@@ -149,8 +149,7 @@ impl BlockBehaviour for CandleBlock {
         Box::pin(async move {
             if !can_place_at(args.world, args.position) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
             args.state_id
         })

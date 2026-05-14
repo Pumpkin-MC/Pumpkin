@@ -42,7 +42,7 @@ impl ItemBehaviour for SpawnEggItem {
                         .downcast_ref::<MobSpawnerBlockEntity>()
                 {
                     spawner.set_entity_type(entity_type);
-                    world.update_block_entity(&block_entity).await;
+                    world.update_block_entity(&block_entity);
                     item.decrement_unless_creative(player.gamemode.load(), 1);
                     return;
                 }

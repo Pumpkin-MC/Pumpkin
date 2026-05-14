@@ -111,9 +111,7 @@ impl BlockBehaviour for DropperBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let dropper_block_entity = DropperBlockEntity::new(*args.position);
-            args.world
-                .add_block_entity(Arc::new(dropper_block_entity))
-                .await;
+            args.world.add_block_entity(Arc::new(dropper_block_entity));
         })
     }
 
@@ -127,8 +125,7 @@ impl BlockBehaviour for DropperBlock {
             );
             if powered && !props.triggered {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 4, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 4, TickPriority::Normal);
                 props.triggered = true;
                 args.world
                     .set_block_state(

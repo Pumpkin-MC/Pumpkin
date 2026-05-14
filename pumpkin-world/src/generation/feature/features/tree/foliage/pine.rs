@@ -1,6 +1,6 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::{
-    math::int_provider::IntProvider,
+    math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -23,10 +23,12 @@ impl PineFoliagePlacer {
         iradius: i32,
         offset: i32,
         foliage_provider: &BlockState,
-    ) {
+    ) -> Vec<BlockPos> {
+        let mut foliage_positions = Vec::new();
         let mut radius = 0;
         for y in (offset - foliage_height)..offset {
             FoliagePlacer::generate_square(
+                &mut foliage_positions,
                 self,
                 chunk,
                 random,
@@ -42,6 +44,7 @@ impl PineFoliagePlacer {
                 radius += 1;
             }
         }
+        foliage_positions
     }
 
     pub fn get_random_radius(

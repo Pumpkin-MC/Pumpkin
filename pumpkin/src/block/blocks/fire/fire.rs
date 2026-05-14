@@ -199,14 +199,12 @@ impl BlockBehaviour for FireBlock {
                 return;
             }
 
-            args.world
-                .schedule_block_tick(
-                    args.block,
-                    *args.position,
-                    Self::get_fire_tick_delay() as u8,
-                    TickPriority::Normal,
-                )
-                .await;
+            args.world.schedule_block_tick(
+                args.block,
+                *args.position,
+                Self::get_fire_tick_delay() as u8,
+                TickPriority::Normal,
+            );
         })
     }
 
@@ -255,14 +253,12 @@ impl BlockBehaviour for FireBlock {
             let (world, block, pos) = (args.world, args.block, args.position);
 
             // Schedule next tick first
-            world
-                .schedule_block_tick(
-                    block,
-                    *pos,
-                    Self::get_fire_tick_delay() as u8,
-                    TickPriority::Normal,
-                )
-                .await;
+            world.schedule_block_tick(
+                block,
+                *pos,
+                Self::get_fire_tick_delay() as u8,
+                TickPriority::Normal,
+            );
 
             // Check if fire can survive
             if !self.can_place_at(CanPlaceAtArgs {

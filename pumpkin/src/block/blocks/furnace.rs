@@ -117,9 +117,7 @@ impl BlockBehaviour for FurnaceBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let furnace_block_entity = FurnaceBlockEntity::new(*args.position);
-            args.world
-                .add_block_entity(Arc::new(furnace_block_entity))
-                .await;
+            args.world.add_block_entity(Arc::new(furnace_block_entity));
         })
     }
 
@@ -135,7 +133,7 @@ impl BlockBehaviour for FurnaceBlock {
                     ExperienceOrbEntity::spawn(args.world, pos, xp as u32).await;
                 }
             }
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 }

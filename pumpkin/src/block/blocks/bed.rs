@@ -116,7 +116,7 @@ impl BlockBehaviour for BedBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let bed_entity = BedBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(bed_entity)).await;
+            args.world.add_block_entity(Arc::new(bed_entity));
 
             let mut bed_head_props = BedProperties::default(args.block);
             bed_head_props.facing = BedProperties::from_state_id(args.state_id, args.block).facing;
@@ -132,7 +132,7 @@ impl BlockBehaviour for BedBlock {
                 .await;
 
             let bed_head_entity = BedBlockEntity::new(bed_head_pos);
-            args.world.add_block_entity(Arc::new(bed_head_entity)).await;
+            args.world.add_block_entity(Arc::new(bed_head_entity));
         })
     }
 

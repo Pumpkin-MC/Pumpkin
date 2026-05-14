@@ -25,7 +25,7 @@ impl PistonBlockEntity {
     pub async fn finish(&self, world: Arc<World>) {
         if self.last_progress.load() < 1.0 {
             let pos = self.position;
-            world.remove_block_entity(&pos).await;
+            world.remove_block_entity(&pos);
             if world.get_block(&pos) == &Block::MOVING_PISTON {
                 let state = if self.source {
                     Block::AIR.default_state.id
@@ -67,7 +67,7 @@ impl BlockEntity for PistonBlockEntity {
             self.last_progress.store(current_progress);
             if current_progress >= 1.0 {
                 let pos = self.position;
-                world.remove_block_entity(&pos).await;
+                world.remove_block_entity(&pos);
                 if world.get_block(&pos) == &Block::MOVING_PISTON {
                     if self.pushed_block_state.is_air() {
                         world

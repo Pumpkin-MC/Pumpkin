@@ -68,7 +68,7 @@ impl BlockBehaviour for BrewingStandBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let be = BrewingStandBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(be)).await;
+            args.world.add_block_entity(Arc::new(be));
         })
     }
 }

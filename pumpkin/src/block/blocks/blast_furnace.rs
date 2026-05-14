@@ -122,8 +122,7 @@ impl BlockBehaviour for BlastFurnaceBlock {
         Box::pin(async move {
             let blasting_furnace_block_entity = BlastingFurnaceBlockEntity::new(*args.position);
             args.world
-                .add_block_entity(Arc::new(blasting_furnace_block_entity))
-                .await;
+                .add_block_entity(Arc::new(blasting_furnace_block_entity));
         })
     }
 
@@ -139,7 +138,7 @@ impl BlockBehaviour for BlastFurnaceBlock {
                     ExperienceOrbEntity::spawn(args.world, pos, xp as u32).await;
                 }
             }
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 }

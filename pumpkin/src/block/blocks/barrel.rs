@@ -75,9 +75,7 @@ impl BlockBehaviour for BarrelBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let barrel_block_entity = BarrelBlockEntity::new(*args.position);
-            args.world
-                .add_block_entity(Arc::new(barrel_block_entity))
-                .await;
+            args.world.add_block_entity(Arc::new(barrel_block_entity));
         })
     }
 }

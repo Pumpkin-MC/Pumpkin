@@ -44,7 +44,7 @@ impl TreeFeature {
         pos: BlockPos,
     ) -> bool {
         // TODO
-        let log_positions = self.generate_main(
+        let (log_positions, foliage_positions) = self.generate_main(
             block_registry,
             chunk,
             min_y,
@@ -55,7 +55,7 @@ impl TreeFeature {
         );
 
         for decorator in &self.decorators {
-            decorator.generate(chunk, random, &[], &log_positions);
+            decorator.generate(chunk, random, &[], &log_positions, &foliage_positions);
         }
         true
     }
@@ -85,13 +85,13 @@ impl TreeFeature {
         _feature_name: &str, // This placed feature
         random: &mut RandomGenerator,
         pos: BlockPos,
-    ) -> Vec<BlockPos> {
+    ) -> (Vec<BlockPos>, Vec<BlockPos>) {
         let height = self.trunk_placer.get_height(random);
 
         let clipped_height = self.minimum_size.min_clipped_height;
-        let top = self.get_top(height, chunk, pos); // TODO: roots   
+        let top = self.get_top(height, chunk, pos); // TODO: roots
         if top < height && top < clipped_height.map_or(u32::MAX, |h| h as u32) {
-            return vec![];
+            return (vec![], vec![]);
         }
         let trunk_state = self.trunk_provider.get(random, pos);
 
@@ -112,17 +112,18 @@ impl TreeFeature {
         let base_height = height as i32 - foliage_height;
         let foliage_radius = self.foliage_placer.get_random_radius(random, base_height);
         let foliage_state = self.foliage_provider.get(random, pos);
+        let mut foliage_positions = Vec::new();
         for node in nodes {
-            self.foliage_placer.generate(
+            foliage_positions.extend(self.foliage_placer.generate(
                 chunk,
                 random,
                 &node,
                 foliage_height,
                 foliage_radius,
                 foliage_state,
-            );
+            ));
         }
-        logs
+        (logs, foliage_positions)
     }
 
     fn get_top<T: GenerationCache>(&self, height: u32, chunk: &T, init_pos: BlockPos) -> u32 {
