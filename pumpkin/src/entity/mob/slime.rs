@@ -19,7 +19,7 @@ pub struct SlimeEntity {
 }
 
 impl SlimeEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let slime = Self {
             entity: Arc::new(mob_entity),
@@ -31,8 +31,8 @@ impl SlimeEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.entity.goals_selector.lock().await;
-            let mut target_selector = mob_arc.entity.target_selector.lock().await;
+            let mut goal_selector = mob_arc.entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));

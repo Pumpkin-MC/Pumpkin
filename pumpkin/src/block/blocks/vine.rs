@@ -32,9 +32,7 @@ impl BlockBehaviour for VineBlock {
                     Some(args.player),
                     args.direction,
                     true,
-                )
-                .await
-                else {
+                ) else {
                     return Block::AIR.default_state.id;
                 };
                 let mut props = VineLikeProperties::from_state_id(state_id, args.block);
@@ -47,9 +45,7 @@ impl BlockBehaviour for VineBlock {
                 Some(args.player),
                 args.direction,
                 false,
-            )
-            .await
-            else {
+            ) else {
                 return Block::AIR.default_state.id;
             };
             let mut props = VineLikeProperties::default(args.block);
@@ -57,17 +53,14 @@ impl BlockBehaviour for VineBlock {
             props.to_state_id(args.block)
         })
     }
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            can_place_vine_at(
-                args.block_accessor,
-                args.position,
-                args.direction,
-                args.player,
-                false,
-            )
-            .await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_vine_at(
+            args.block_accessor,
+            args.position,
+            args.direction,
+            args.player,
+            false,
+        )
     }
     fn get_state_for_neighbor_update<'a>(
         &'a self,
@@ -80,10 +73,9 @@ impl BlockBehaviour for VineBlock {
             for old_dir in old_directions {
                 let support_block = args
                     .world
-                    .get_block(&args.position.offset(old_dir.to_offset()))
-                    .await;
+                    .get_block(&args.position.offset(old_dir.to_offset()));
                 if !supports_vine(support_block)
-                    && !is_top_block_full_vine(args.world, args.position).await
+                    && !is_top_block_full_vine(args.world, args.position)
                 {
                     new_directions.remove(&old_dir);
                 }
@@ -100,26 +92,23 @@ impl BlockBehaviour for VineBlock {
             new_props.to_state_id(args.block)
         })
     }
-    fn can_update_at<'a>(&'a self, args: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            get_accurate_direction(
-                args.world,
-                args.position,
-                Some(args.player),
-                args.direction,
-                true,
-            )
-            .await
-            .0
-            .is_some()
-        })
+    fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
+        get_accurate_direction(
+            args.world,
+            args.position,
+            Some(args.player),
+            args.direction,
+            true,
+        )
+        .0
+        .is_some()
     }
     fn use_with_item<'a>(
         &'a self,
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let mut props = VineLikeProperties::from_state_id(state.id, args.block);
 
             let item_lock = args.item_stack.lock().await;
@@ -135,9 +124,7 @@ impl BlockBehaviour for VineBlock {
                 Some(args.player),
                 BlockDirection::Down,
                 true,
-            )
-            .await
-            else {
+            ) else {
                 return BlockActionResult::Fail;
             };
             vine_direction_mapper(accurate_dir, &mut props);
@@ -186,7 +173,7 @@ pub fn get_nearest_looking_directions(
     }
     directions
 }
-async fn can_place_vine_at(
+fn can_place_vine_at(
     block_accessor: &dyn BlockAccessor,
     block_pos: &BlockPos,
     click_direction_wrapper: Option<BlockDirection>,
@@ -196,21 +183,20 @@ async fn can_place_vine_at(
     let Some(click_direction) = click_direction_wrapper else {
         return false;
     };
-    let (Some(direction), _) = get_accurate_direction(
+    let (direction, _) = get_accurate_direction(
         block_accessor,
         block_pos,
         player_wrapper,
         click_direction,
         replacing,
-    )
-    .await
-    else {
+    );
+    let Some(direction) = direction else {
         return false;
     };
+
     let support_pos = block_pos.offset(direction.to_offset());
-    let (support_block, _support_block_state) =
-        block_accessor.get_block_and_state(&support_pos).await;
-    if !supports_vine(support_block) && !is_top_block_full_vine(block_accessor, block_pos).await {
+    let (support_block, _support_block_state) = block_accessor.get_block_and_state(&support_pos);
+    if !supports_vine(support_block) && !is_top_block_full_vine(block_accessor, block_pos) {
         return false;
     }
     true
@@ -224,16 +210,14 @@ const fn supports_vine(support_block: &Block) -> bool {
 //returns (accurate direction, boolean)
 // true if this direction is for hanging vine
 // false if it is not
-async fn get_accurate_direction(
+fn get_accurate_direction(
     block_accessor: &dyn BlockAccessor,
     block_pos: &BlockPos,
     player_wrapper: Option<&Player>,
     click_direction: BlockDirection,
     replacing: bool,
 ) -> (Option<BlockDirection>, bool) {
-    let clicked_block = block_accessor
-        .get_block(&block_pos.offset(click_direction.to_offset()))
-        .await;
+    let clicked_block = block_accessor.get_block(&block_pos.offset(click_direction.to_offset()));
     if !replacing && clicked_block == &Block::VINE && click_direction != BlockDirection::Up {
         return (None, false);
     }
@@ -241,8 +225,7 @@ async fn get_accurate_direction(
     if click_direction != BlockDirection::Down && supports_vine(clicked_block) {
         return (Some(click_direction), false);
     }
-    let (replacing_block, replacing_block_state) =
-        block_accessor.get_block_and_state(block_pos).await;
+    let (replacing_block, replacing_block_state) = block_accessor.get_block_and_state(block_pos);
     let already_active_directions = if replacing_block == &Block::VINE {
         let props = VineLikeProperties::from_state_id(replacing_block_state.id, replacing_block);
         get_vine_block_directions(props)
@@ -255,10 +238,10 @@ async fn get_accurate_direction(
             if dir != BlockDirection::Down && !already_active_directions.contains(&dir) {
                 let support_pos = block_pos.offset(dir.to_offset());
                 let (support_block, _support_block_state) =
-                    block_accessor.get_block_and_state(&support_pos).await;
+                    block_accessor.get_block_and_state(&support_pos);
                 if !supports_vine(support_block) {
                     //handler for hanging vine
-                    if is_top_block_full_vine(block_accessor, block_pos).await {
+                    if is_top_block_full_vine(block_accessor, block_pos) {
                         if dir == BlockDirection::Up {
                             continue;
                         }
@@ -280,8 +263,8 @@ async fn get_accurate_direction(
     }
     (None, false)
 }
-async fn is_top_block_full_vine(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    let (top_block, top_block_state) = block_accessor.get_block_and_state(&block_pos.up()).await;
+fn is_top_block_full_vine(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    let (top_block, top_block_state) = block_accessor.get_block_and_state(&block_pos.up());
     if top_block != &Block::VINE {
         return false;
     }

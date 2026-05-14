@@ -34,7 +34,7 @@ impl BlockBehaviour for ComparatorBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let props = ComparatorLikeProperties::from_state_id(state.id, args.block);
             self.on_use(props, args.world, *args.position, args.block)
                 .await;
@@ -50,10 +50,8 @@ impl BlockBehaviour for ComparatorBlock {
         Box::pin(async move { true })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        RedstoneGateBlock::can_place_at(self, args.block_accessor, *args.position)
     }
 
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
@@ -96,7 +94,6 @@ impl BlockBehaviour for ComparatorBlock {
                     *args.neighbor_position,
                     BlockState::from_id(args.neighbor_state_id),
                 )
-                .await
             {
                 return Block::AIR.default_state.id;
             }
@@ -126,7 +123,7 @@ impl BlockBehaviour for ComparatorBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             self.update(args.world, *args.position, state, args.block)
                 .await;
         })
@@ -156,7 +153,7 @@ impl RedstoneGateBlockProperties for ComparatorLikeProperties {
 impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
     fn get_output_level<'a>(&'a self, world: &'a World, pos: BlockPos) -> BlockFuture<'a, u8> {
         Box::pin(async move {
-            if let Some(blockentity) = world.get_block_entity(&pos).await
+            if let Some(blockentity) = world.get_block_entity(&pos)
                 && blockentity.resource_location() == ComparatorBlockEntity::ID
             {
                 let comparator = blockentity
@@ -249,7 +246,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
             let props = ComparatorLikeProperties::from_state_id(state.id, block);
             let facing = props.facing;
             let source_pos = pos.offset(facing.to_offset());
-            let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
+            let (source_block, source_state) = world.get_block_and_state(&source_pos);
 
             // Note: .get_comparator_output is assumed to be an async method returning Option<u8>
             if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(source_block.id)
@@ -267,7 +264,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
 
             if redstone_level < 15 && source_state.is_solid_block() {
                 let source_pos = source_pos.offset(facing.to_offset());
-                let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
+                let (source_block, source_state) = world.get_block_and_state(&source_pos);
 
                 // Note: self.get_attached_itemframe_level is assumed to be an async method
                 let itemframe_level = Self::get_attached_itemframe_level(world, facing, source_pos);
@@ -365,7 +362,7 @@ impl ComparatorBlock {
     async fn update(&self, world: &Arc<World>, pos: BlockPos, state: &BlockState, block: &Block) {
         let future_level = i32::from(self.calculate_output_signal(world, pos, state, block).await);
         let mut now_level = 0;
-        if let Some(blockentity) = world.get_block_entity(&pos).await
+        if let Some(blockentity) = world.get_block_entity(&pos)
             && blockentity.resource_location() == ComparatorBlockEntity::ID
         {
             let comparator = blockentity

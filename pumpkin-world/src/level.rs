@@ -711,20 +711,6 @@ impl Level {
         RawBlockState(id.unwrap_or(Block::VOID_AIR.default_state.id))
     }
 
-    pub async fn get_rough_biome(self: &Arc<Self>, position: &BlockPos) -> &'static Biome {
-        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let id = self
-            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
-                chunk.section.get_rough_biome_absolute_y(
-                    relative.x as usize,
-                    relative.y,
-                    relative.z as usize,
-                )
-            })
-            .await;
-        Biome::from_id(id.unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
-    }
-
     pub async fn set_block_state(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -798,6 +784,18 @@ impl Level {
         self.loaded_chunks.get(coordinates).map(|x| f(x.value()))
     }
 
+    pub fn get_rough_biome(&self, position: &BlockPos) -> &'static Biome {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let id = self.read_chunk_sync(&chunk_coordinate, |chunk| {
+            chunk.section.get_rough_biome_absolute_y(
+                relative.x as usize,
+                relative.y,
+                relative.z as usize,
+            )
+        });
+        Biome::from_id(id.flatten().unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
+    }
+
     pub fn read_entity_chunk_sync<R, F: Fn(&SyncEntityChunk) -> R>(
         &self,
         coordinates: &Vector2<i32>,
@@ -806,6 +804,12 @@ impl Level {
         self.loaded_entity_chunks
             .get(coordinates)
             .map(|x| f(x.value()))
+    }
+
+    pub fn get_entity_chunk_sync(&self, pos: &Vector2<i32>) -> Option<SyncEntityChunk> {
+        self.loaded_entity_chunks
+            .get(pos)
+            .map(|x| x.value().clone())
     }
 
     pub async fn get_or_fetch_entity_chunk<R, F: Fn(&SyncEntityChunk) -> R>(

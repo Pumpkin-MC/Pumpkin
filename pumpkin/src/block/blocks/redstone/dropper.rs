@@ -89,7 +89,7 @@ const fn to_data3d(facing: Facing) -> i32 {
 impl BlockBehaviour for DropperBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
@@ -122,7 +122,7 @@ impl BlockBehaviour for DropperBlock {
             let powered = block_receives_redstone_power(args.world, args.position).await
                 || block_receives_redstone_power(args.world, &args.position.up()).await;
             let mut props = DispenserLikeProperties::from_state_id(
-                args.world.get_block_state(args.position).await.id,
+                args.world.get_block_state(args.position).id,
                 args.block,
             );
             if powered && !props.triggered {
@@ -152,25 +152,21 @@ impl BlockBehaviour for DropperBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await {
+            if let Some(block_entity) = args.world.get_block_entity(args.position) {
                 let dropper = block_entity
                     .as_any()
                     .downcast_ref::<DropperBlockEntity>()
                     .unwrap();
                 if let Some(mut item) = dropper.get_random_slot().await {
                     let props = DispenserLikeProperties::from_state_id(
-                        args.world.get_block_state(args.position).await.id,
+                        args.world.get_block_state(args.position).id,
                         args.block,
                     );
-                    if let Some(entity) = args
-                        .world
-                        .get_block_entity(
-                            &args
-                                .position
-                                .offset(props.facing.to_block_direction().to_offset()),
-                        )
-                        .await
-                        && let Some(container) = entity.get_inventory()
+                    if let Some(entity) = args.world.get_block_entity(
+                        &args
+                            .position
+                            .offset(props.facing.to_block_direction().to_offset()),
+                    ) && let Some(container) = entity.get_inventory()
                     {
                         // TODO check WorldlyContainer
                         let mut is_full = true;
@@ -210,24 +206,23 @@ impl BlockBehaviour for DropperBlock {
                         triangle(&mut rng(), 0.2, 0.017_227_5 * 6.),
                         triangle(&mut rng(), facing.z * rd, 0.017_227_5 * 6.),
                     );
-                    let item_entity = Arc::new(
-                        ItemEntity::new_with_velocity(entity, drop_item, velocity, 40).await,
-                    );
+                    let item_entity = Arc::new(ItemEntity::new_with_velocity(
+                        entity, drop_item, velocity, 40,
+                    ));
                     args.world.spawn_entity(item_entity).await;
-                    args.world
-                        .sync_world_event(WorldEvent::SoundDispenserDispense, *args.position, 0)
-                        .await;
-                    args.world
-                        .sync_world_event(
-                            WorldEvent::SoundDispenserProjectileLaunch,
-                            *args.position,
-                            to_data3d(props.facing),
-                        )
-                        .await;
+                    args.world.sync_world_event(
+                        WorldEvent::SoundDispenserDispense,
+                        *args.position,
+                        0,
+                    );
+                    args.world.sync_world_event(
+                        WorldEvent::SoundDispenserProjectileLaunch,
+                        *args.position,
+                        to_data3d(props.facing),
+                    );
                 } else {
                     args.world
-                        .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0)
-                        .await;
+                        .sync_world_event(WorldEvent::SoundDispenserFail, *args.position, 0);
                 }
             }
         })

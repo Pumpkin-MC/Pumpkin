@@ -33,13 +33,11 @@ impl ItemBehaviour for WindChargeItem {
 
             // TODO: Implement Cooldown to throw the item
 
-            world
-                .play_sound(
-                    Sound::EntityWindChargeThrow,
-                    pumpkin_data::sound::SoundCategory::Neutral,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityWindChargeThrow,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &position,
+            );
 
             let entity = Entity::new(world.clone(), position, &EntityType::WIND_CHARGE);
 

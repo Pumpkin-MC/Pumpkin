@@ -302,7 +302,7 @@ impl CommandSender {
             Self::CommandBlock(command_entity, world) => {
                 let pos = command_entity.position;
 
-                let (block, state_id) = world.get_block_and_state_id(&pos).await;
+                let (block, state_id) = world.get_block_and_state_id(&pos);
                 let command_block_props =
                     CommandBlockLikeProperties::from_state_id(state_id, block);
                 let facing = command_block_props.facing;

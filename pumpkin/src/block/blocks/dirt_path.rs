@@ -32,7 +32,7 @@ impl BlockBehaviour for DirtPathBlock {
 
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 return Block::DIRT.default_state.id;
             }
 
@@ -45,9 +45,7 @@ impl BlockBehaviour for DirtPathBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if args.direction == BlockDirection::Up
-                && !can_place_at(args.world, args.position).await
-            {
+            if args.direction == BlockDirection::Up && !can_place_at(args.world, args.position) {
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
@@ -56,12 +54,12 @@ impl BlockBehaviour for DirtPathBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 }
 
-async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&block_pos.up()).await;
+fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    let state = world.get_block_state(&block_pos.up());
     !state.is_solid() // TODO: add fence gate block
 }

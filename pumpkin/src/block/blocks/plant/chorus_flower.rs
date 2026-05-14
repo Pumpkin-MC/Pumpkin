@@ -18,8 +18,8 @@ use crate::block::{
 pub struct ChorusFlowerBlock;
 
 impl BlockBehaviour for ChorusFlowerBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_survive(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_survive(args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -27,8 +27,7 @@ impl BlockBehaviour for ChorusFlowerBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if args.direction != BlockDirection::Up && !can_survive(args.world, args.position).await
-            {
+            if args.direction != BlockDirection::Up && !can_survive(args.world, args.position) {
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
@@ -39,7 +38,7 @@ impl BlockBehaviour for ChorusFlowerBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_survive(args.world.as_ref(), args.position).await {
+            if !can_survive(args.world.as_ref(), args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -48,8 +47,8 @@ impl BlockBehaviour for ChorusFlowerBlock {
     }
 }
 
-async fn can_survive(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-    let block_below = block_accessor.get_block(&pos.down()).await;
+fn can_survive(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+    let block_below = block_accessor.get_block(&pos.down());
 
     if block_below == &Block::CHORUS_PLANT
         || block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_FLOWER)
@@ -65,7 +64,7 @@ async fn can_survive(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool
     // Exactly one horizontal neighbor must be a chorus plant stem.
     let mut plant_count = 0u32;
     for dir in BlockDirection::horizontal() {
-        let neighbor = block_accessor.get_block(&pos.offset(dir.to_offset())).await;
+        let neighbor = block_accessor.get_block(&pos.offset(dir.to_offset()));
         if neighbor == &Block::CHORUS_PLANT {
             plant_count += 1;
             if plant_count > 1 {

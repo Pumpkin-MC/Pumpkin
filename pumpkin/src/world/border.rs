@@ -59,56 +59,45 @@ impl Worldborder {
             .await;
     }
 
-    pub async fn set_center(&mut self, world: &World, x: f64, z: f64) {
+    pub fn set_center(&mut self, world: &World, x: f64, z: f64) {
         self.center_x = x;
         self.center_z = z;
 
-        world
-            .broadcast_packet_all(&CSetBorderCenter::new(self.center_x, self.center_z))
-            .await;
+        world.broadcast_packet_all(&CSetBorderCenter::new(self.center_x, self.center_z));
     }
 
-    pub async fn set_diameter(&mut self, world: &World, diameter: f64, speed: Option<i64>) {
+    pub fn set_diameter(&mut self, world: &World, diameter: f64, speed: Option<i64>) {
         self.old_diameter = self.new_diameter;
         self.new_diameter = diameter;
 
         match speed {
             Some(speed) => {
-                world
-                    .broadcast_packet_all(&CSetBorderLerpSize::new(
-                        self.old_diameter,
-                        self.new_diameter,
-                        speed.into(),
-                    ))
-                    .await;
+                world.broadcast_packet_all(&CSetBorderLerpSize::new(
+                    self.old_diameter,
+                    self.new_diameter,
+                    speed.into(),
+                ));
             }
             None => {
-                world
-                    .broadcast_packet_all(&CSetBorderSize::new(self.new_diameter))
-                    .await;
+                world.broadcast_packet_all(&CSetBorderSize::new(self.new_diameter));
             }
         }
     }
 
-    pub async fn add_diameter(&mut self, world: &World, offset: f64, speed: Option<i64>) {
-        self.set_diameter(world, self.new_diameter + offset, speed)
-            .await;
+    pub fn add_diameter(&mut self, world: &World, offset: f64, speed: Option<i64>) {
+        self.set_diameter(world, self.new_diameter + offset, speed);
     }
 
-    pub async fn set_warning_delay(&mut self, world: &World, delay: i32) {
+    pub fn set_warning_delay(&mut self, world: &World, delay: i32) {
         self.warning_time = delay;
 
-        world
-            .broadcast_packet_all(&CSetBorderWarningDelay::new(self.warning_time.into()))
-            .await;
+        world.broadcast_packet_all(&CSetBorderWarningDelay::new(self.warning_time.into()));
     }
 
-    pub async fn set_warning_distance(&mut self, world: &World, distance: i32) {
+    pub fn set_warning_distance(&mut self, world: &World, distance: i32) {
         self.warning_blocks = distance;
 
-        world
-            .broadcast_packet_all(&CSetBorderWarningDistance::new(self.warning_blocks.into()))
-            .await;
+        world.broadcast_packet_all(&CSetBorderWarningDistance::new(self.warning_blocks.into()));
     }
 
     #[must_use]

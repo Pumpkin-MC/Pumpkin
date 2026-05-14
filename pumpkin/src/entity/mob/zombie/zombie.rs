@@ -1,6 +1,6 @@
-use crate::entity::NBTStorage;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::{Entity, NBTStorage};
 use std::sync::Arc;
 
 pub struct ZombieEntity {
@@ -8,8 +8,8 @@ pub struct ZombieEntity {
 }
 
 impl ZombieEntity {
-    pub async fn new(entity: crate::entity::Entity) -> Arc<Self> {
-        let entity = ZombieEntityBase::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = ZombieEntityBase::new(entity);
         let zombie = Self { entity };
         Arc::new(zombie)
     }

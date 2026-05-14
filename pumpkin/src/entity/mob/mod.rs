@@ -25,7 +25,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub mod bat;
@@ -64,11 +63,11 @@ pub mod zombified_piglin;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
-    pub goals_selector: Mutex<GoalSelector>,
-    pub target_selector: Mutex<GoalSelector>,
-    pub navigator: Mutex<Navigator>,
-    pub target: Mutex<Option<Arc<dyn EntityBase>>>,
-    pub look_control: Mutex<LookControl>,
+    pub goals_selector: std::sync::Mutex<GoalSelector>,
+    pub target_selector: std::sync::Mutex<GoalSelector>,
+    pub navigator: std::sync::Mutex<Navigator>,
+    pub target: tokio::sync::Mutex<Option<Arc<dyn EntityBase>>>,
+    pub look_control: std::sync::Mutex<LookControl>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
@@ -90,11 +89,11 @@ impl MobEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             living_entity: LivingEntity::new(entity),
-            goals_selector: Mutex::new(GoalSelector::default()),
-            target_selector: Mutex::new(GoalSelector::default()),
-            navigator: Mutex::new(Navigator::default()),
-            target: Mutex::new(None),
-            look_control: Mutex::new(LookControl::default()),
+            goals_selector: std::sync::Mutex::new(GoalSelector::default()),
+            target_selector: std::sync::Mutex::new(GoalSelector::default()),
+            navigator: std::sync::Mutex::new(Navigator::default()),
+            target: tokio::sync::Mutex::new(None),
+            look_control: std::sync::Mutex::new(LookControl::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
@@ -120,11 +119,11 @@ impl MobEntity {
         }
     }
 
-    pub async fn set_attacking(&self, attacking: bool) {
-        self.set_mob_flag(Self::ATTACKING_FLAG, attacking).await;
+    pub fn set_attacking(&self, attacking: bool) {
+        self.set_mob_flag(Self::ATTACKING_FLAG, attacking);
     }
 
-    async fn set_mob_flag(&self, flag: u8, value: bool) {
+    fn set_mob_flag(&self, flag: u8, value: bool) {
         let old_b = self.mob_flags.load(Ordering::Relaxed);
 
         let new_b = if value { old_b | flag } else { old_b & !flag };
@@ -132,14 +131,11 @@ impl MobEntity {
         if new_b != old_b {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
-            self.living_entity
-                .entity
-                .send_meta_data(&[Metadata::new(
-                    TrackedData::MOB_FLAGS_ID,
-                    MetaDataType::BYTE,
-                    new_b,
-                )])
-                .await;
+            self.living_entity.entity.send_meta_data(&[Metadata::new(
+                TrackedData::MOB_FLAGS_ID,
+                MetaDataType::BYTE,
+                new_b,
+            )]);
         }
     }
 
@@ -187,8 +183,8 @@ impl MobEntity {
         true
     }
 
-    pub async fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos) -> bool {
-        let sky_light = world.get_sky_light_level(pos).await;
+    pub fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
+        let sky_light = world.get_sky_light_level_sync(pos);
         if sky_light > rand::random_range(0..32) {
             return false;
         }
@@ -196,12 +192,12 @@ impl MobEntity {
         let dimension = &world.dimension;
         let block_light_limit = dimension.monster_spawn_block_light_limit;
 
-        let block_light = world.get_block_light_level(pos).await.unwrap();
+        let block_light = world.get_block_light_level_sync(pos).unwrap();
         if block_light_limit < 15 && block_light > block_light_limit {
             return false;
         }
 
-        let current_brightness = if world.is_thundering().await {
+        let current_brightness = if is_thundering {
             (sky_light - 10).max(block_light)
         } else {
             sky_light.max(block_light)
@@ -212,12 +208,12 @@ impl MobEntity {
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
 
-    pub async fn check_monster_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
         if world.level_info.load().difficulty == Difficulty::Peaceful {
             return false;
         }
 
-        if !Self::is_dark_enough_to_spawn(world, pos).await {
+        if !Self::is_dark_enough_to_spawn(world, pos, is_thundering) {
             return false;
         }
 
@@ -328,9 +324,7 @@ impl MobEntity {
         }
 
         let pos = entity.pos.load();
-        let top_y = world
-            .get_top_block(Vector2::new(pos.x as i32, pos.z as i32))
-            .await;
+        let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32));
         if (entity.get_eye_y() as i32) < top_y {
             return false;
         }
@@ -463,39 +457,56 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             self.mob_tick(caller).await;
 
-            // AI runs before physics (vanilla order: goals → navigator → look → physics)
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
-            if (age + mob_entity.living_entity.entity.entity_id) % 2 != 0 && age > 1 {
-                mob_entity
-                    .target_selector
-                    .lock()
-                    .await
-                    .tick_goals(self, false)
-                    .await;
-                mob_entity
-                    .goals_selector
-                    .lock()
-                    .await
-                    .tick_goals(self, false)
-                    .await;
+            let entity_id = mob_entity.living_entity.entity.entity_id;
+
+            // 1. "Take" selectors out of the mutexes
+            let mut target_selector = {
+                let mut guard = mob_entity.target_selector.lock().unwrap();
+                std::mem::take(&mut *guard)
+            };
+            let mut goals_selector = {
+                let mut guard = mob_entity.goals_selector.lock().unwrap();
+                std::mem::take(&mut *guard)
+            };
+
+            // 2. Perform AI logic (No locks held, so .await is safe!)
+            if (age + entity_id) % 2 != 0 && age > 1 {
+                target_selector.tick_goals(self, false).await;
+                goals_selector.tick_goals(self, false).await;
             } else {
-                mob_entity.target_selector.lock().await.tick(self).await;
-                mob_entity.goals_selector.lock().await.tick(self).await;
+                target_selector.tick(self).await;
+                goals_selector.tick(self).await;
             }
 
-            let mut navigator = mob_entity.navigator.lock().await;
-            navigator.tick(&mob_entity.living_entity).await;
-            drop(navigator);
+            // 3. "Put back" selectors
+            {
+                *mob_entity.target_selector.lock().unwrap() = target_selector;
+                *mob_entity.goals_selector.lock().unwrap() = goals_selector;
+            };
 
-            let mut look_control = mob_entity.look_control.lock().await;
-            look_control.tick(self);
-            drop(look_control);
+            // 4. Repeat for Navigator
+            let mut navigator = {
+                let mut guard = mob_entity.navigator.lock().unwrap();
+                std::mem::take(&mut *guard)
+            };
+
+            navigator.tick(&mob_entity.living_entity).await;
+
+            {
+                *mob_entity.navigator.lock().unwrap() = navigator;
+            };
+
+            // Look Control is synchronous, so we can just use a normal block
+            {
+                let mut look_control = mob_entity.look_control.lock().unwrap();
+                look_control.tick(self);
+            };
 
             mob_entity.living_entity.tick(caller, server).await;
-
             self.post_tick().await;
 
-            // Send rotation packets after look_control finalizes head_yaw and pitch
+            // --- Packet logic remains the same ---
             let entity = &mob_entity.living_entity.entity;
             let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
             let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
@@ -507,23 +518,19 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
                 let world = entity.world.load();
-                world
-                    .broadcast_packet_all(&CUpdateEntityRot::new(
-                        entity.entity_id.into(),
-                        yaw,
-                        pitch,
-                        entity.on_ground.load(Relaxed),
-                    ))
-                    .await;
+                world.broadcast_packet_all(&CUpdateEntityRot::new(
+                    entity.entity_id.into(),
+                    yaw,
+                    pitch,
+                    entity.on_ground.load(Relaxed),
+                ));
                 mob_entity.last_sent_yaw.store(yaw, Relaxed);
                 mob_entity.last_sent_pitch.store(pitch, Relaxed);
             }
 
             if head_yaw.abs_diff(last_head_yaw) >= 1 {
                 let world = entity.world.load();
-                world
-                    .broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw))
-                    .await;
+                world.broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw));
                 mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
             }
         })
@@ -656,7 +663,7 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
     fn is_navigation<'a>(&'a self) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
         Box::pin(async {
-            let navigator = self.get_mob_entity().navigator.lock().await;
+            let navigator = self.get_mob_entity().navigator.lock().unwrap();
             !navigator.is_idle()
         })
     }

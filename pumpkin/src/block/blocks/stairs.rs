@@ -44,8 +44,7 @@ impl BlockBehaviour for StairBlock {
                 args.position,
                 stair_props.facing,
                 stair_props.half,
-            )
-            .await;
+            );
 
             stair_props.to_state_id(args.block)
         })
@@ -53,7 +52,7 @@ impl BlockBehaviour for StairBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
             let mut stair_props = StairsProperties::from_state_id(state_id, args.block);
 
             let new_shape = compute_stair_shape(
@@ -61,8 +60,7 @@ impl BlockBehaviour for StairBlock {
                 args.position,
                 stair_props.facing,
                 stair_props.half,
-            )
-            .await;
+            );
 
             if stair_props.shape != new_shape {
                 stair_props.shape = new_shape;
@@ -78,7 +76,7 @@ impl BlockBehaviour for StairBlock {
     }
 }
 
-async fn compute_stair_shape(
+fn compute_stair_shape(
     world: &World,
     block_pos: &BlockPos,
     facing: HorizontalFacing,
@@ -88,7 +86,6 @@ async fn compute_stair_shape(
         world,
         &block_pos.offset(facing.rotate_clockwise().to_offset()),
     )
-    .await
     .is_some_and(|other_stair_props| {
         other_stair_props.half == half && other_stair_props.facing == facing
     });
@@ -97,7 +94,6 @@ async fn compute_stair_shape(
         world,
         &block_pos.offset(facing.rotate_counter_clockwise().to_offset()),
     )
-    .await
     .is_some_and(|other_stair_props| {
         other_stair_props.half == half && other_stair_props.facing == facing
     });
@@ -107,7 +103,7 @@ async fn compute_stair_shape(
     }
 
     if let Some(other_stair_props) =
-        get_stair_properties_if_exists(world, &block_pos.offset(facing.to_offset())).await
+        get_stair_properties_if_exists(world, &block_pos.offset(facing.to_offset()))
         && other_stair_props.half == half
     {
         if !left_locked && other_stair_props.facing == facing.rotate_clockwise() {
@@ -119,7 +115,6 @@ async fn compute_stair_shape(
 
     if let Some(other_stair_props) =
         get_stair_properties_if_exists(world, &block_pos.offset(facing.opposite().to_offset()))
-            .await
         && other_stair_props.half == half
     {
         if !right_locked && other_stair_props.facing == facing.rotate_clockwise() {
@@ -132,11 +127,8 @@ async fn compute_stair_shape(
     StairsShape::Straight
 }
 
-async fn get_stair_properties_if_exists(
-    world: &World,
-    block_pos: &BlockPos,
-) -> Option<StairsProperties> {
-    let (block, block_state) = world.get_block_and_state_id(block_pos).await;
+fn get_stair_properties_if_exists(world: &World, block_pos: &BlockPos) -> Option<StairsProperties> {
+    let (block, block_state) = world.get_block_and_state_id(block_pos);
     block
         .has_tag(&tag::Block::MINECRAFT_STAIRS)
         .then(|| StairsProperties::from_state_id(block_state, block))

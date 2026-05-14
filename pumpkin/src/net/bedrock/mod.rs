@@ -264,6 +264,25 @@ impl BedrockClient {
         }
     }
 
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Err(err) = self.outgoing_packet_queue_send.try_send(packet_data) {
+            match err {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    debug!(
+                        "Failed to add packet to the outgoing packet queue for client: channel full"
+                    );
+                }
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                    if !self.is_closed() {
+                        error!(
+                            "Failed to add packet to the outgoing packet queue for client: channel closed"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     pub fn write_raw_packet<P: BClientPacket>(
         packet: &P,
         mut write: impl Write,

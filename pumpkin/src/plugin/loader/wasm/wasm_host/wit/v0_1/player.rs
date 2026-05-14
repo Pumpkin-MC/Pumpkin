@@ -372,7 +372,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         order: i32,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.set_tab_list_order(order).await;
+        player.set_tab_list_order(order);
         Ok(())
     }
 
@@ -382,7 +382,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         latency: i32,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.set_tab_list_latency(latency).await;
+        player.set_tab_list_latency(latency);
         Ok(())
     }
 
@@ -392,7 +392,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         listed: bool,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.set_tab_list_listed(listed).await;
+        player.set_tab_list_listed(listed);
         Ok(())
     }
 
@@ -892,7 +892,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             config.skin_parts = mask;
             player.config.store(Arc::new(config));
         };
-        player.send_client_information().await;
+        player.send_client_information();
         Ok(())
     }
 

@@ -55,8 +55,8 @@ impl EntityBase for TNTEntity {
             }
 
             if entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-                entity.send_pos_rot().await;
-                entity.send_velocity().await;
+                entity.send_pos_rot();
+                entity.send_velocity();
             }
 
             // FIX: Prevent fuse underflow (vanilla parity)
@@ -83,23 +83,20 @@ impl EntityBase for TNTEntity {
             let pos: f64 = rand::random::<f64>() * TAU;
 
             self.entity
-                .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02))
-                .await;
+                .set_velocity(Vector3::new(-pos.sin() * 0.02, 0.2, -pos.cos() * 0.02));
 
-            self.entity
-                .send_meta_data(&[
-                    Metadata::new(
-                        TrackedData::FUSE_ID,
-                        MetaDataType::INTEGER,
-                        VarInt(self.fuse.load(Relaxed) as i32),
-                    ),
-                    Metadata::new(
-                        TrackedData::BLOCK_STATE_ID,
-                        MetaDataType::BLOCK_STATE,
-                        VarInt(i32::from(Block::TNT.default_state.id)),
-                    ),
-                ])
-                .await;
+            self.entity.send_meta_data(&[
+                Metadata::new(
+                    TrackedData::FUSE_ID,
+                    MetaDataType::INTEGER,
+                    VarInt(self.fuse.load(Relaxed) as i32),
+                ),
+                Metadata::new(
+                    TrackedData::BLOCK_STATE_ID,
+                    MetaDataType::BLOCK_STATE,
+                    VarInt(i32::from(Block::TNT.default_state.id)),
+                ),
+            ]);
         })
     }
 

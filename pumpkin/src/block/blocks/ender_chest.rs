@@ -74,11 +74,11 @@ impl BlockBehaviour for EnderChestBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if is_chest_blocked(args.world, args.position).await {
+            if is_chest_blocked(args.world, args.position) {
                 return BlockActionResult::Success;
             }
 
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(block_entity) = block_entity
                     .as_any()
                     .downcast_ref::<EnderChestBlockEntity>()
@@ -108,13 +108,13 @@ impl BlockBehaviour for EnderChestBlock {
     }
 }
 
-async fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
+fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
     // TODO: Block opening when a cat is sitting on top.
-    has_block_on_top(world, block_pos).await
+    has_block_on_top(world, block_pos)
 }
-async fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
+fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();
-    let above_state = world.get_block_state(&above_pos).await;
+    let above_state = world.get_block_state(&above_pos);
     above_state.is_solid_block()
 }
 impl EnderChestBlock {

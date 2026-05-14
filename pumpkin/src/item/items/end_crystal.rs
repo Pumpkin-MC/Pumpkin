@@ -35,7 +35,7 @@ impl ItemBehaviour for EndCrystalItem {
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
             let world = player.world();
-            let block = world.get_block(&location).await;
+            let block = world.get_block(&location);
             if block != &Block::OBSIDIAN && block != &Block::BEDROCK {
                 return;
             }
@@ -43,7 +43,7 @@ impl ItemBehaviour for EndCrystalItem {
             let location = location.up();
             let location_vec = location.0.to_f64();
 
-            if !world.get_block_state(&location).await.is_air()
+            if !world.get_block_state(&location).is_air()
                 || !world
                     .get_entities_at_box(&BoundingBox::new(
                         Vector3::new(location_vec.x, location_vec.y, location_vec.z),
@@ -57,7 +57,7 @@ impl ItemBehaviour for EndCrystalItem {
             let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::END_CRYSTAL);
             let end_crystal = Arc::new(EndCrystalEntity::new(entity));
             world.spawn_entity(end_crystal.clone()).await;
-            end_crystal.set_show_bottom(false).await;
+            end_crystal.set_show_bottom(false);
             item.decrement_unless_creative(player.gamemode.load(), 1);
         })
     }

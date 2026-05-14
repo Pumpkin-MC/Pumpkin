@@ -59,7 +59,7 @@ impl CommandExecutor for DifficultySetExecutor {
                 }
             }
 
-            server.set_difficulty(difficulty, true).await;
+            server.set_difficulty(difficulty, true);
 
             context
                 .source

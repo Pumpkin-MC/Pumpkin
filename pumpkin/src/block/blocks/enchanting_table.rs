@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
-use pumpkin_data::translation;
+use pumpkin_data::{Block, translation};
 use pumpkin_inventory::enchanting::enchanting_screen_handler::EnchantingTableScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -25,37 +25,28 @@ impl BlockBehaviour for EnchantingTableBlock {
             for off_z in -1..=1 {
                 for off_x in -1..=1 {
                     if (off_z != 0 || off_x != 0)
-                        && args.world.get_block_state(&args.position.add(off_x, 0, off_z)).await.id == 0 // Air
-                        && args.world.get_block_state(&args.position.add(off_x, 1, off_z)).await.id == 0
+                        && args.world.get_block_state(&args.position.add(off_x, 0, off_z)).id == 0 // Air
+                        && args.world.get_block_state(&args.position.add(off_x, 1, off_z)).id == 0
                     // Air
                     {
                         for off_y in 0..=1 {
-                            if self
-                                .is_bookshelf(
-                                    args.world,
-                                    &args.position.add(off_x * 2, off_y, off_z * 2),
-                                )
-                                .await
-                            {
+                            if Self::is_bookshelf(
+                                args.world,
+                                &args.position.add(off_x * 2, off_y, off_z * 2),
+                            ) {
                                 bookshelf_count += 1;
                             }
                             if off_x != 0 && off_z != 0 {
-                                if self
-                                    .is_bookshelf(
-                                        args.world,
-                                        &args.position.add(off_x * 2, off_y, off_z),
-                                    )
-                                    .await
-                                {
+                                if Self::is_bookshelf(
+                                    args.world,
+                                    &args.position.add(off_x * 2, off_y, off_z),
+                                ) {
                                     bookshelf_count += 1;
                                 }
-                                if self
-                                    .is_bookshelf(
-                                        args.world,
-                                        &args.position.add(off_x, off_y, off_z * 2),
-                                    )
-                                    .await
-                                {
+                                if Self::is_bookshelf(
+                                    args.world,
+                                    &args.position.add(off_x, off_y, off_z * 2),
+                                ) {
                                     bookshelf_count += 1;
                                 }
                             }
@@ -80,10 +71,10 @@ impl BlockBehaviour for EnchantingTableBlock {
 }
 
 impl EnchantingTableBlock {
-    async fn is_bookshelf(&self, world: &Arc<crate::world::World>, pos: &BlockPos) -> bool {
-        let state = world.get_block_state(pos).await;
+    fn is_bookshelf(world: &Arc<crate::world::World>, pos: &BlockPos) -> bool {
+        let state = world.get_block_state(pos);
         let block = pumpkin_data::Block::from_state_id(state.id);
-        block.name == "bookshelf"
+        block == &Block::BOOKSHELF
     }
 }
 

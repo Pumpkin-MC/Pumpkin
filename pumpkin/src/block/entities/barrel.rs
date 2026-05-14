@@ -101,7 +101,7 @@ impl ViewerCountListener for BarrelBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockBarrelOpen).await;
+            self.play_sound(world, Sound::BlockBarrelOpen);
             self.set_open(world, true).await;
         })
     }
@@ -112,7 +112,7 @@ impl ViewerCountListener for BarrelBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockBarrelClose).await;
+            self.play_sound(world, Sound::BlockBarrelClose);
             self.set_open(world, false).await;
         })
     }
@@ -133,7 +133,7 @@ impl BarrelBlockEntity {
     }
 
     async fn set_open(&self, world: &Arc<World>, open: bool) {
-        let state = world.get_block_state(&self.position).await;
+        let state = world.get_block_state(&self.position);
         let mut properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
 
         properties.open = open;
@@ -148,10 +148,10 @@ impl BarrelBlockEntity {
             .await;
     }
 
-    async fn play_sound(&self, world: &Arc<World>, sound: Sound) {
+    fn play_sound(&self, world: &Arc<World>, sound: Sound) {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
-        let state = world.get_block_state(&self.position).await;
+        let state = world.get_block_state(&self.position);
         let properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
         let direction = properties.facing.to_block_direction().to_offset();
         let position = Vector3::new(
@@ -159,15 +159,13 @@ impl BarrelBlockEntity {
             self.position.0.y as f64 + 0.5 + direction.y as f64 / 2.0,
             self.position.0.z as f64 + 0.5 + direction.z as f64 / 2.0,
         );
-        world
-            .play_sound_fine(
-                sound,
-                SoundCategory::Blocks,
-                &position,
-                0.5,
-                rng.next_f32() * 0.1 + 0.9,
-            )
-            .await;
+        world.play_sound_fine(
+            sound,
+            SoundCategory::Blocks,
+            &position,
+            0.5,
+            rng.next_f32() * 0.1 + 0.9,
+        );
     }
 }
 

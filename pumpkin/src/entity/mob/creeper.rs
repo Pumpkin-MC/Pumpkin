@@ -41,7 +41,7 @@ pub struct CreeperEntity {
 }
 
 impl CreeperEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let entity = Self {
             mob_entity,
@@ -60,8 +60,8 @@ impl CreeperEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
@@ -84,7 +84,7 @@ impl CreeperEntity {
         mob_arc
     }
 
-    pub async fn set_fuse_speed(&self, speed: i32) {
+    pub fn set_fuse_speed(&self, speed: i32) {
         self.fuse_speed.store(speed, Ordering::Relaxed);
         self.mob_entity
             .living_entity
@@ -93,8 +93,7 @@ impl CreeperEntity {
                 TrackedData::FUSE_ID,
                 MetaDataType::INTEGER,
                 VarInt(speed),
-            )])
-            .await;
+            )]);
     }
 
     async fn explode(&self) {
@@ -169,7 +168,7 @@ impl Mob for CreeperEntity {
             );
 
             if self.ignited.load(Ordering::Relaxed) {
-                self.set_fuse_speed(1).await;
+                self.set_fuse_speed(1);
             }
 
             let fuse_speed = self.fuse_speed.load(Ordering::Relaxed);
@@ -177,15 +176,13 @@ impl Mob for CreeperEntity {
 
             if fuse_speed > 0 && current == 0 {
                 let world = entity.world.load();
-                world
-                    .play_sound_fine(
-                        Sound::EntityCreeperPrimed,
-                        SoundCategory::Hostile,
-                        &entity.pos.load(),
-                        1.0,
-                        0.5,
-                    )
-                    .await;
+                world.play_sound_fine(
+                    Sound::EntityCreeperPrimed,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                    1.0,
+                    0.5,
+                );
             }
 
             let fuse_time = self.fuse_time.load(Ordering::Relaxed);
@@ -213,24 +210,20 @@ impl Mob for CreeperEntity {
             let world = entity.world.load();
             let pos = entity.pos.load();
 
-            world
-                .play_sound_fine(
-                    Sound::ItemFlintandsteelUse,
-                    SoundCategory::Hostile,
-                    &pos,
-                    1.0,
-                    rand::random::<f32>() * 0.4 + 0.8,
-                )
-                .await;
+            world.play_sound_fine(
+                Sound::ItemFlintandsteelUse,
+                SoundCategory::Hostile,
+                &pos,
+                1.0,
+                rand::random::<f32>() * 0.4 + 0.8,
+            );
 
             self.ignited.store(true, Ordering::Relaxed);
-            entity
-                .send_meta_data(&[Metadata::new(
-                    TrackedData::IS_IGNITED,
-                    MetaDataType::BOOLEAN,
-                    true,
-                )])
-                .await;
+            entity.send_meta_data(&[Metadata::new(
+                TrackedData::IS_IGNITED,
+                MetaDataType::BOOLEAN,
+                true,
+            )]);
 
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.

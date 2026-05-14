@@ -75,15 +75,13 @@ impl BlockEntity for BellBlockEntity {
                 && self.raiders_hear_bell()
             {
                 self.resonating.store(true);
-                world
-                    .play_sound_fine(
-                        Sound::BlockBellResonate,
-                        SoundCategory::Blocks,
-                        &self.position.to_f64(),
-                        1.0,
-                        1.0,
-                    )
-                    .await;
+                world.play_sound_fine(
+                    Sound::BlockBellResonate,
+                    SoundCategory::Blocks,
+                    &self.position.to_f64(),
+                    1.0,
+                    1.0,
+                );
             }
 
             if self.resonating.load() {

@@ -36,13 +36,11 @@ impl GlowingInkSacItem {
         }
 
         args.world.update_block_entity(block_entity).await;
-        args.world
-            .play_block_sound(
-                pumpkin_data::sound::Sound::ItemGlowInkSacUse,
-                pumpkin_data::sound::SoundCategory::Blocks,
-                *args.position,
-            )
-            .await;
+        args.world.play_block_sound(
+            pumpkin_data::sound::Sound::ItemGlowInkSacUse,
+            pumpkin_data::sound::SoundCategory::Blocks,
+            *args.position,
+        );
         BlockActionResult::Success
     }
 }

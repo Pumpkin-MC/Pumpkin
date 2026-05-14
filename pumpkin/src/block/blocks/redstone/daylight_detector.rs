@@ -39,7 +39,7 @@ impl BlockBehaviour for DaylightDetectorBlock {
                 return BlockActionResult::Pass;
             }
 
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let props = DaylightDetectorProperties::from_state_id(state.id, args.block);
 
             self.update_inverted(props, args.world, args.position, args.block)

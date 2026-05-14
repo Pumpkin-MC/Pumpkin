@@ -48,13 +48,13 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                     let skull1_pos = arm1.up();
                     let skull2_pos = arm2.up();
 
-                    if is_soul_block(world.get_block(&top_middle).await)
-                        && is_soul_block(world.get_block(&base).await)
-                        && is_soul_block(world.get_block(&arm1).await)
-                        && is_soul_block(world.get_block(&arm2).await)
-                        && is_skull(world.get_block(&center_skull_pos).await)
-                        && is_skull(world.get_block(&skull1_pos).await)
-                        && is_skull(world.get_block(&skull2_pos).await)
+                    if is_soul_block(world.get_block(&top_middle))
+                        && is_soul_block(world.get_block(&base))
+                        && is_soul_block(world.get_block(&arm1))
+                        && is_soul_block(world.get_block(&arm2))
+                        && is_skull(world.get_block(&center_skull_pos))
+                        && is_skull(world.get_block(&skull1_pos))
+                        && is_skull(world.get_block(&skull2_pos))
                     {
                         let pattern = [
                             center_skull_pos,
@@ -74,13 +74,11 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                                     BlockFlags::NOTIFY_ALL,
                                 )
                                 .await;
-                            world
-                                .sync_world_event(
-                                    WorldEvent::ParticlesDestroyBlock,
-                                    p,
-                                    Block::SOUL_SAND.default_state.id.into(),
-                                )
-                                .await;
+                            world.sync_world_event(
+                                WorldEvent::ParticlesDestroyBlock,
+                                p,
+                                Block::SOUL_SAND.default_state.id.into(),
+                            );
                         }
 
                         let entity = Entity::new(
@@ -88,7 +86,7 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                             top_middle.to_centered_f64(),
                             &EntityType::WITHER,
                         );
-                        let wither = WitherEntity::new(entity).await;
+                        let wither = WitherEntity::new(entity);
                         world.spawn_entity(wither).await;
                         return;
                     }

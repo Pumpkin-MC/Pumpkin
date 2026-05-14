@@ -33,7 +33,7 @@ pub struct PigEntity {
 }
 
 impl PigEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let pig = Self { mob_entity };
         let mob_arc = Arc::new(pig);
@@ -43,7 +43,7 @@ impl PigEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
@@ -92,22 +92,18 @@ impl Mob for PigEntity {
                 let world = entity.world.load();
                 let pos = entity.pos.load();
 
-                world
-                    .spawn_particle(
-                        pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                        Vector3::new(0.5, 0.5, 0.5),
-                        1.0,
-                        7,
-                        Particle::Heart,
-                    )
-                    .await;
-                world
-                    .play_sound(
-                        Sound::EntityPigAmbient,
-                        SoundCategory::Neutral,
-                        &entity.pos.load(),
-                    )
-                    .await;
+                world.spawn_particle(
+                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
+                    Vector3::new(0.5, 0.5, 0.5),
+                    1.0,
+                    7,
+                    Particle::Heart,
+                );
+                world.play_sound(
+                    Sound::EntityPigAmbient,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                );
                 return true;
             }
             false

@@ -7,10 +7,8 @@ use pumpkin_world::BlockStateId;
 pub struct NetherSproutsBlock;
 
 impl BlockBehaviour for NetherSproutsBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
     fn get_state_for_neighbor_update<'a>(
         &'a self,
@@ -28,12 +26,12 @@ impl BlockBehaviour for NetherSproutsBlock {
     }
 }
 impl PlantBlockBase for NetherSproutsBlock {
-    async fn can_plant_on_top(
+    fn can_plant_on_top(
         &self,
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
-        let block = block_accessor.get_block(pos).await;
+        let block = block_accessor.get_block(pos);
         block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_NETHER_SPROUTS)
     }
 }

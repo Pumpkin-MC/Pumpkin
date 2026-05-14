@@ -34,7 +34,7 @@ pub struct SheepEntity {
 }
 
 impl SheepEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let sheep = Self {
             mob_entity,
@@ -47,7 +47,7 @@ impl SheepEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
@@ -78,7 +78,7 @@ impl SheepEntity {
         (self.get_packed_byte() & 0x10) != 0
     }
 
-    async fn set_packed_and_sync(&self, byte: u8) {
+    fn set_packed_and_sync(&self, byte: u8) {
         self.color_and_sheared.store(byte, Ordering::Relaxed);
         self.mob_entity
             .living_entity
@@ -87,22 +87,21 @@ impl SheepEntity {
                 TrackedData::WOOL_ID,
                 MetaDataType::BYTE,
                 byte as i8,
-            )])
-            .await;
+            )]);
     }
 
-    pub async fn set_color(&self, color: u8) {
+    pub fn set_color(&self, color: u8) {
         let byte = (self.get_packed_byte() & 0xF0) | (color & 0x0F);
-        self.set_packed_and_sync(byte).await;
+        self.set_packed_and_sync(byte);
     }
 
-    pub async fn set_sheared(&self, sheared: bool) {
+    pub fn set_sheared(&self, sheared: bool) {
         let byte = if sheared {
             self.get_packed_byte() | 0x10
         } else {
             self.get_packed_byte() & !0x10
         };
-        self.set_packed_and_sync(byte).await;
+        self.set_packed_and_sync(byte);
     }
 }
 
@@ -137,7 +136,7 @@ impl Mob for SheepEntity {
 
     fn on_eating_grass(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {
-            self.set_sheared(false).await;
+            self.set_sheared(false);
         })
     }
 
@@ -156,22 +155,18 @@ impl Mob for SheepEntity {
                 let world = entity.world.load();
                 let pos = entity.pos.load();
 
-                world
-                    .spawn_particle(
-                        pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                        Vector3::new(0.5, 0.5, 0.5),
-                        1.0,
-                        7,
-                        Particle::Heart,
-                    )
-                    .await;
-                world
-                    .play_sound(
-                        Sound::EntitySheepAmbient,
-                        SoundCategory::Neutral,
-                        &entity.pos.load(),
-                    )
-                    .await;
+                world.spawn_particle(
+                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
+                    Vector3::new(0.5, 0.5, 0.5),
+                    1.0,
+                    7,
+                    Particle::Heart,
+                );
+                world.play_sound(
+                    Sound::EntitySheepAmbient,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                );
                 return true;
             }
             false

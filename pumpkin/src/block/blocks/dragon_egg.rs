@@ -19,11 +19,11 @@ impl DragonEggBlock {
             let z = pos.0.z + rng().random_range(-16..16);
             let test_pos = BlockPos::new(x, y, z);
 
-            let state = world.get_block_state(&test_pos).await;
-            let below_state = world.get_block_state(&test_pos.down()).await;
+            let state = world.get_block_state(&test_pos);
+            let below_state = world.get_block_state(&test_pos.down());
 
             if state.is_air() && !below_state.is_air() {
-                let current_state = world.get_block_state(pos).await;
+                let current_state = world.get_block_state(pos);
                 world
                     .set_block_state(
                         &test_pos,
