@@ -2667,7 +2667,7 @@ impl JavaClient {
 
         let (final_block_pos, final_face, replacing) =
             if let Some(replacing) = replace_clicked_block {
-                (clicked_block_pos, face, replacing)
+                (clicked_block_pos, face.opposite(), replacing)
             } else {
                 let block_pos = BlockPos(location.0 + face.to_offset());
                 let (previous_block, previous_block_state) = world.get_block_and_state(&block_pos);
