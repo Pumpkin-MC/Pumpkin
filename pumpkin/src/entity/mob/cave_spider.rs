@@ -10,8 +10,8 @@ pub struct CaveSpiderEntity {
 }
 
 impl CaveSpiderEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let spider = SpiderEntity::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let spider = SpiderEntity::new(entity);
         Arc::new(Self { spider })
     }
 }

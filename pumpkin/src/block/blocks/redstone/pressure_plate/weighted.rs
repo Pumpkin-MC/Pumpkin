@@ -77,7 +77,7 @@ impl BlockBehaviour for WeightedPressurePlateBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !Self::can_pressure_plate_place_at(args.world, args.position).await {
+            if !Self::can_pressure_plate_place_at(args.world, args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::NOTIFY_ALL)
                     .await;
@@ -85,10 +85,8 @@ impl BlockBehaviour for WeightedPressurePlateBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            Self::can_pressure_plate_place_at(args.world.unwrap(), args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        Self::can_pressure_plate_place_at(args.world.unwrap(), args.position)
     }
 }
 

@@ -36,14 +36,12 @@ pub struct ItemEntity {
 }
 
 impl ItemEntity {
-    pub async fn new(entity: Entity, item_stack: ItemStack) -> Self {
-        entity
-            .set_velocity(Vector3::new(
-                rand::random::<f64>().mul_add(0.2, -0.1),
-                0.2,
-                rand::random::<f64>().mul_add(0.2, -0.1),
-            ))
-            .await;
+    pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
+        entity.velocity.store(Vector3::new(
+            rand::random::<f64>().mul_add(0.2, -0.1),
+            0.2,
+            rand::random::<f64>().mul_add(0.2, -0.1),
+        ));
         entity.yaw.store(rand::random::<f32>() * 360.0);
 
         // Set fire immunity for certain items
@@ -64,13 +62,13 @@ impl ItemEntity {
         }
     }
 
-    pub async fn new_with_velocity(
+    pub fn new_with_velocity(
         entity: Entity,
         item_stack: ItemStack,
         velocity: Vector3<f64>,
         pickup_delay: u8,
     ) -> Self {
-        entity.set_velocity(velocity).await;
+        entity.velocity.store(velocity);
         entity.yaw.store(rand::random::<f32>() * 360.0);
 
         // Set fire immunity for certain items
@@ -242,7 +240,7 @@ impl ItemEntity {
         velo
     }
 
-    async fn update_no_clip_and_push_out(&self) {
+    fn update_no_clip_and_push_out(&self) {
         let entity = &self.entity;
         let pos = entity.pos.load();
         let bounding_box = entity.bounding_box.load();
@@ -250,19 +248,16 @@ impl ItemEntity {
         let no_clip = !entity
             .world
             .load()
-            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7))
-            .await;
+            .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7));
 
         entity.no_clip.store(no_clip, Ordering::Relaxed);
 
         if no_clip {
-            entity
-                .push_out_of_blocks(Vector3::new(
-                    pos.x,
-                    f64::midpoint(bounding_box.min.y, bounding_box.max.y),
-                    pos.z,
-                ))
-                .await;
+            entity.push_out_of_blocks(Vector3::new(
+                pos.x,
+                f64::midpoint(bounding_box.min.y, bounding_box.max.y),
+                pos.z,
+            ));
         }
     }
 
@@ -300,7 +295,7 @@ impl ItemEntity {
 
         let mut velo = entity.velocity.load();
         if on_ground {
-            let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).await.1;
+            let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).1;
             friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
         }
 
@@ -360,8 +355,8 @@ impl ItemEntity {
             || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
 
         if velocity_dirty {
-            entity.send_pos_rot().await;
-            entity.send_velocity().await;
+            entity.send_pos_rot();
+            entity.send_velocity();
         }
     }
 }
@@ -383,7 +378,7 @@ impl EntityBase for ItemEntity {
                 .velocity
                 .store(self.apply_fluid_drag_or_gravity(original_velo));
 
-            self.update_no_clip_and_push_out().await;
+            self.update_no_clip_and_push_out();
 
             let move_velo = entity.velocity.load(); // In case push_out_of_blocks modifies it
 
@@ -404,13 +399,11 @@ impl EntityBase for ItemEntity {
 
     fn init_data_tracker(&self) -> EntityBaseFuture<'_, ()> {
         Box::pin(async {
-            self.entity
-                .send_meta_data(&[Metadata::new(
-                    TrackedData::ITEM,
-                    MetaDataType::ITEM_STACK,
-                    &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
-                )])
-                .await;
+            self.entity.send_meta_data(&[Metadata::new(
+                TrackedData::ITEM,
+                MetaDataType::ITEM_STACK,
+                &ItemStackSerializer::from(self.item_stack.lock().await.clone()),
+            )]);
         })
     }
 

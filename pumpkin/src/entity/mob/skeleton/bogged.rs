@@ -9,8 +9,8 @@ pub struct BoggedSkeletonEntity {
 }
 
 impl BoggedSkeletonEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = SkeletonEntityBase::new(entity);
         let bogged = Self { entity };
         Arc::new(bogged)
     }

@@ -56,7 +56,7 @@ impl Goal for PickUpBlockGoal {
             let world = entity.world.load();
             let target_pos = BlockPos::new(bx, by, bz);
 
-            let block = world.get_block(&target_pos).await;
+            let block = world.get_block(&target_pos);
 
             if !block.has_tag(&tag::Block::MINECRAFT_ENDERMAN_HOLDABLE) {
                 return;
@@ -71,7 +71,7 @@ impl Goal for PickUpBlockGoal {
             let block_center = Vector3::new(bx as f64 + 0.5, by as f64 + 0.5, bz as f64 + 0.5);
             if let Some((hit_pos, _)) = world
                 .raycast(enderman_center, block_center, async |block_pos, w| {
-                    let state = w.get_block_state(block_pos).await;
+                    let state = w.get_block_state(block_pos);
                     state.is_solid()
                 })
                 .await
@@ -86,9 +86,7 @@ impl Goal for PickUpBlockGoal {
             world
                 .set_block_state(&target_pos, 0, BlockFlags::NOTIFY_ALL)
                 .await;
-            self.enderman
-                .set_carried_block(Some(default_state_id))
-                .await;
+            self.enderman.set_carried_block(Some(default_state_id));
         })
     }
 

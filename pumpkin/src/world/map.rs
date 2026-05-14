@@ -79,7 +79,7 @@ impl MapData {
         }
     }
 
-    pub async fn update(&mut self, player: &Player) {
+    pub fn update(&mut self, player: &Player) {
         let world = player.world();
         let scale = 1 << self.scale;
         let center_x = self.center_x;
@@ -109,10 +109,8 @@ impl MapData {
                 let world_x = (img_x as i32 - 64) * scale + center_x;
                 let world_z = (img_z as i32 - 64) * scale + center_z;
 
-                let top_y = world.get_top_block(Vector2::new(world_x, world_z)).await;
-                let block = world
-                    .get_block(&BlockPos::new(world_x, top_y, world_z))
-                    .await;
+                let top_y = world.get_top_block(Vector2::new(world_x, world_z));
+                let block = world.get_block(&BlockPos::new(world_x, top_y, world_z));
 
                 let color_base = block.map_color;
 

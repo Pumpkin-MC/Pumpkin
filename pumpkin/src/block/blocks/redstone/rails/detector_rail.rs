@@ -49,7 +49,7 @@ impl BlockBehaviour for DetectorRailBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_rail_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_rail_at(args.block_accessor, args.position)
     }
 }

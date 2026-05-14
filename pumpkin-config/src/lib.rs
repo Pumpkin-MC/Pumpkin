@@ -45,6 +45,26 @@ use player_data::PlayerDataConfig;
 use resource_pack::ResourcePackConfig;
 use world::LevelConfig;
 
+#[derive(Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct PumpkinConfig {
+    #[serde(flatten)]
+    pub basic: BasicConfiguration,
+    #[serde(flatten)]
+    pub advanced: AdvancedConfiguration,
+}
+
+impl LoadConfiguration for PumpkinConfig {
+    fn get_path() -> &'static Path {
+        Path::new("pumpkin.toml")
+    }
+
+    fn validate(&self) {
+        self.basic.validate();
+        self.advanced.validate();
+    }
+}
+
 /// Advanced configuration for optional and feature-specific server settings.
 ///
 /// Allows enabling/disabling features, customizing behaviour, and
@@ -179,6 +199,38 @@ impl BasicConfiguration {
     pub fn get_world_path(&self) -> PathBuf {
         PathBuf::from(&self.default_level_name)
     }
+
+    pub fn validate(&self) {
+        let min = NonZeroU8::new(2).unwrap();
+        let max = NonZeroU8::new(64).unwrap();
+
+        assert!(
+            self.view_distance.ge(&min),
+            "View distance must be at least 2"
+        );
+        assert!(
+            self.view_distance.le(&max),
+            "View distance must be less than 64"
+        );
+        if self.online_mode {
+            assert!(
+                self.encryption,
+                "When online mode is enabled, encryption must be enabled"
+            );
+        }
+        if self.allow_chat_reports {
+            assert!(
+                self.online_mode,
+                "When allow_chat_reports is enabled, online_mode must be enabled"
+            );
+        }
+    }
+}
+
+impl AdvancedConfiguration {
+    pub const fn validate(&self) {
+        //self.resource_pack.validate();
+    }
 }
 
 /// Trait for loading and validating configuration from a TOML file.
@@ -311,46 +363,4 @@ pub trait LoadConfiguration {
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);
-}
-
-impl LoadConfiguration for AdvancedConfiguration {
-    fn get_path() -> &'static Path {
-        Path::new("features.toml")
-    }
-
-    fn validate(&self) {
-        //self.resource_pack.validate();
-    }
-}
-
-impl LoadConfiguration for BasicConfiguration {
-    fn get_path() -> &'static Path {
-        Path::new("configuration.toml")
-    }
-
-    fn validate(&self) {
-        let min = NonZeroU8::new(2).unwrap();
-        let max = NonZeroU8::new(64).unwrap();
-
-        assert!(
-            self.view_distance.ge(&min),
-            "View distance must be at least 2"
-        );
-        assert!(
-            self.view_distance.le(&max),
-            "View distance must be less than 64"
-        );
-        if self.online_mode {
-            assert!(
-                self.encryption,
-                "When online mode is enabled, encryption must be enabled"
-            );
-        }
-        if self.allow_chat_reports {
-            assert!(
-                self.online_mode,
-                "When allow_chat_reports is enabled, online_mode must be enabled"
-            );
-        }
-    }
 }

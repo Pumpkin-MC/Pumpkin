@@ -52,7 +52,7 @@ impl Weather {
         }
     }
 
-    pub async fn set_weather_parameters(
+    pub fn set_weather_parameters(
         &mut self,
         world: &World,
         clear_time: i32,
@@ -70,18 +70,14 @@ impl Weather {
 
         if was_raining != raining {
             if was_raining {
-                world
-                    .broadcast_packet_all(&CGameEvent::new(GameEvent::EndRaining, 0.0))
-                    .await;
+                world.broadcast_packet_all(&CGameEvent::new(GameEvent::EndRaining, 0.0));
             } else {
-                world
-                    .broadcast_packet_all(&CGameEvent::new(GameEvent::BeginRaining, 0.0))
-                    .await;
+                world.broadcast_packet_all(&CGameEvent::new(GameEvent::BeginRaining, 0.0));
             }
         }
     }
 
-    pub async fn tick_weather(&mut self, world: &World) {
+    pub fn tick_weather(&mut self, world: &World) {
         if !self.weather_cycle_enabled {
             self.advance_weather_cycle();
         }
@@ -104,21 +100,17 @@ impl Weather {
 
         // Broadcast level changes if needed
         if (self.old_rain_level - self.rain_level).abs() > f32::EPSILON {
-            world
-                .broadcast_packet_all(&CGameEvent::new(
-                    GameEvent::RainLevelChange,
-                    self.rain_level,
-                ))
-                .await;
+            world.broadcast_packet_all(&CGameEvent::new(
+                GameEvent::RainLevelChange,
+                self.rain_level,
+            ));
         }
 
         if (self.old_thunder_level - self.thunder_level).abs() > f32::EPSILON {
-            world
-                .broadcast_packet_all(&CGameEvent::new(
-                    GameEvent::ThunderLevelChange,
-                    self.thunder_level,
-                ))
-                .await;
+            world.broadcast_packet_all(&CGameEvent::new(
+                GameEvent::ThunderLevelChange,
+                self.thunder_level,
+            ));
         }
     }
 
@@ -158,8 +150,8 @@ impl Weather {
         }
     }
 
-    pub async fn reset_weather_cycle(&mut self, world: &World) {
-        self.set_weather_parameters(world, 0, 0, false, false).await;
+    pub fn reset_weather_cycle(&mut self, world: &World) {
+        self.set_weather_parameters(world, 0, 0, false, false);
     }
 }
 

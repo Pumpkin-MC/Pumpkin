@@ -56,7 +56,7 @@ impl ItemBehaviour for HoneyCombItem {
                     && block.has_tag(&tag::Block::MINECRAFT_DOORS)
                 {
                     // get block state of the old log.
-                    let door_information = world.get_block_state_id(&location).await;
+                    let door_information = world.get_block_state_id(&location);
                     // get the log properties
                     let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
                     // create new properties for the new log.
@@ -96,8 +96,7 @@ impl HoneyCombItem {
 
         args.world.update_block_entity(block_entity).await;
         args.world
-            .sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, *args.position, 0)
-            .await;
+            .sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, *args.position, 0);
 
         BlockActionResult::Success
     }

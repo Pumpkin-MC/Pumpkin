@@ -20,8 +20,8 @@ pub struct LingeringPotionEntity {
 }
 
 impl LingeringPotionEntity {
-    pub async fn new(entity: Entity) -> Self {
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0)).await;
+    pub fn new(entity: Entity) -> Self {
+        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         let thrown = ThrownItemEntity {
             entity,
             owner_id: None,
@@ -38,12 +38,9 @@ impl LingeringPotionEntity {
         }
     }
 
-    pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+    pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
         let thrown = ThrownItemEntity::new(entity, shooter);
-        thrown
-            .entity
-            .set_velocity(Vector3::new(0.0, 0.1, 0.0))
-            .await;
+        thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         Self {
             thrown,
             item_stack: RwLock::new(ItemStack::new(
@@ -68,15 +65,13 @@ impl EntityBase for LingeringPotionEntity {
             let stack = self.item_stack.read().await;
 
             // Sync the item stack so the client renders the correct potion type
-            entity
-                .send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::TrackedData::ITEM_STACK,
-                    pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
-                    &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
-                        stack.clone(),
-                    ),
-                )])
-                .await;
+            entity.send_meta_data(&[pumpkin_protocol::java::client::play::Metadata::new(
+                pumpkin_data::tracked_data::TrackedData::ITEM_STACK,
+                pumpkin_data::meta_data_type::MetaDataType::ITEM_STACK,
+                &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
+                    stack.clone(),
+                ),
+            )]);
         })
     }
 
@@ -114,9 +109,7 @@ impl EntityBase for LingeringPotionEntity {
             extinguish_fire_if_water_potion(&world, hit_pos, &stack).await;
 
             // Play impact particles
-            world
-                .send_entity_status(self.get_entity(), EntityStatus::Death)
-                .await;
+            world.send_entity_status(self.get_entity(), EntityStatus::Death);
 
             // Read stored item stack and compute potion effects
             let stack = self.item_stack.read().await.clone();
@@ -177,9 +170,7 @@ impl EntityBase for LingeringPotionEntity {
                 hit_pos.y.floor() as i32,
                 hit_pos.z.floor() as i32,
             ));
-            world
-                .broadcast_packet_all(&CWorldEvent::new(event_id, block_pos, color, false))
-                .await;
+            world.broadcast_packet_all(&CWorldEvent::new(event_id, block_pos, color, false));
 
             // Spawn and configure an `AreaEffectCloud` entity
             let cloud_entity = crate::entity::Entity::from_uuid(

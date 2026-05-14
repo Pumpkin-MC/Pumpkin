@@ -59,7 +59,7 @@ type HopperLikeProperties = pumpkin_data::block_properties::HopperLikeProperties
 impl BlockBehaviour for HopperBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
@@ -104,7 +104,7 @@ impl BlockBehaviour for HopperBlock {
             check_powered_state(
                 args.world,
                 args.position,
-                args.world.get_block_state_id(args.position).await,
+                args.world.get_block_state_id(args.position),
                 args.block,
             )
             .await;

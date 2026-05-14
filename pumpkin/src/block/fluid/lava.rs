@@ -86,9 +86,7 @@ impl FlowingLava {
             return;
         }
 
-        let fire_state_id = FireBlock
-            .get_state_for_position(world.as_ref(), &Block::FIRE, pos)
-            .await;
+        let fire_state_id = FireBlock.get_state_for_position(world.as_ref(), &Block::FIRE, pos);
         world
             .set_block_state(pos, fire_state_id, BlockFlags::NOTIFY_ALL)
             .await;
@@ -102,13 +100,12 @@ impl FlowingLava {
         // Logic to determine if we should replace the fluid with any of (cobble, obsidian, stone, etc.)
         let below_is_soul_soil = world
             .get_block(&block_pos.offset(BlockDirection::Down.to_offset()))
-            .await
             == &Block::SOUL_SOIL;
-        let is_still = world.get_block_state_id(block_pos).await == Block::LAVA.default_state.id;
+        let is_still = world.get_block_state_id(block_pos) == Block::LAVA.default_state.id;
 
         for dir in BlockDirection::all() {
             let neighbor_pos = block_pos.offset(dir.to_offset());
-            if world.get_block(&neighbor_pos).await == &Block::WATER {
+            if world.get_block(&neighbor_pos) == &Block::WATER {
                 if dir == BlockDirection::Down {
                     return true;
                 }
@@ -124,12 +121,10 @@ impl FlowingLava {
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
-                world
-                    .sync_world_event(WorldEvent::LavaFizz, *block_pos, 0)
-                    .await;
+                world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
             }
-            if below_is_soul_soil && world.get_block(&neighbor_pos).await == &Block::BLUE_ICE {
+            if below_is_soul_soil && world.get_block(&neighbor_pos) == &Block::BLUE_ICE {
                 world
                     .set_block_state(
                         block_pos,
@@ -137,9 +132,7 @@ impl FlowingLava {
                         BlockFlags::NOTIFY_NEIGHBORS,
                     )
                     .await;
-                world
-                    .sync_world_event(WorldEvent::LavaFizz, *block_pos, 0)
-                    .await;
+                world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
             }
         }
@@ -326,7 +319,7 @@ impl FlowingFluid for FlowingLava {
         state_id: BlockStateId,
     ) {
         let new_props = FlowingFluidProperties::from_state_id(state_id, fluid);
-        let current_state_id = world.get_block_state_id(pos).await;
+        let current_state_id = world.get_block_state_id(pos);
         let block = Block::from_state_id(current_state_id);
 
         if new_props.level == Level::L8 && new_props.falling == Falling::True {
@@ -335,7 +328,7 @@ impl FlowingFluid for FlowingLava {
                 world
                     .set_block_state(pos, Block::STONE.default_state.id, BlockFlags::NOTIFY_ALL)
                     .await;
-                world.sync_world_event(WorldEvent::LavaFizz, *pos, 0).await;
+                world.sync_world_event(WorldEvent::LavaFizz, *pos, 0);
                 return;
             }
         }

@@ -191,9 +191,7 @@ impl BrewingStandBlockEntity {
             self.position.0.y as f64 + 0.5,
             self.position.0.z as f64 + 0.5,
         );
-        world
-            .play_sound(Sound::BlockBrewingStandBrew, SoundCategory::Blocks, &pos)
-            .await;
+        world.play_sound(Sound::BlockBrewingStandBrew, SoundCategory::Blocks, &pos);
 
         // Mark dirty to trigger update
         self.mark_dirty();
@@ -486,7 +484,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             if needs_update {
                 // Update the block state properties for the brewing stand to reflect bottle presence
                 let world = world.clone();
-                let (block, state) = world.get_block_and_state(&self.position).await;
+                let (block, state) = world.get_block_and_state(&self.position);
                 // Use generated block properties helper to produce a new state id with the bits set
                 let mut props =
                     pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(

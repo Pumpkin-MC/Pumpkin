@@ -53,7 +53,7 @@ impl SpongeBlock {
                 }
 
                 visited.insert(next_pos);
-                let (block, _state) = world.get_block_and_state(&next_pos).await;
+                let (block, _state) = world.get_block_and_state(&next_pos);
 
                 // Only add to queue if it's water.
                 // This prevents "jumping" through air or solid blocks.
@@ -80,9 +80,7 @@ impl SpongeBlock {
                 )
                 .await;
 
-            world
-                .play_block_sound(Sound::BlockSpongeAbsorb, SoundCategory::Blocks, *position)
-                .await;
+            world.play_block_sound(Sound::BlockSpongeAbsorb, SoundCategory::Blocks, *position);
 
             true
         }
@@ -124,27 +122,23 @@ impl BlockBehaviour for WetSpongeBlock {
                     .await;
 
                 // Play dry sound and spawn smoke particles
-                args.world
-                    .play_block_sound(
-                        Sound::BlockWetSpongeDries,
-                        SoundCategory::Blocks,
-                        *args.position,
-                    )
-                    .await;
+                args.world.play_block_sound(
+                    Sound::BlockWetSpongeDries,
+                    SoundCategory::Blocks,
+                    *args.position,
+                );
 
-                args.world
-                    .spawn_particle(
-                        Vector3::new(
-                            args.position.0.x as f64 + 0.5,
-                            args.position.0.y as f64 + 1.0,
-                            args.position.0.z as f64 + 0.5,
-                        ),
-                        Vector3::new(0.25, 0.0, 0.25),
-                        0.01,
-                        16,
-                        Particle::Cloud,
-                    )
-                    .await;
+                args.world.spawn_particle(
+                    Vector3::new(
+                        args.position.0.x as f64 + 0.5,
+                        args.position.0.y as f64 + 1.0,
+                        args.position.0.z as f64 + 0.5,
+                    ),
+                    Vector3::new(0.25, 0.0, 0.25),
+                    0.01,
+                    16,
+                    Particle::Cloud,
+                );
             }
         })
     }

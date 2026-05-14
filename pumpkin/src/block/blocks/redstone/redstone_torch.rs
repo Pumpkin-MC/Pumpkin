@@ -48,7 +48,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
             let location = args.position;
 
             if args.direction == BlockDirection::Down {
-                let support_block = world.get_block_state(&location.down()).await;
+                let support_block = world.get_block_state(&location.down());
                 if support_block.is_center_solid(BlockDirection::Up) {
                     return block.default_state.id;
                 }
@@ -67,7 +67,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
                     directions[0] = face;
                 }
             } else if directions[0] == Facing::Down {
-                let support_block = world.get_block_state(&location.down()).await;
+                let support_block = world.get_block_state(&location.down());
                 if support_block.is_center_solid(BlockDirection::Up) {
                     return block.default_state.id;
                 }
@@ -76,7 +76,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
             for dir in directions {
                 if dir != Facing::Up
                     && dir != Facing::Down
-                    && can_place_at(world, location, dir.to_block_direction()).await
+                    && can_place_at(world, location, dir.to_block_direction())
                 {
                     let mut torch_props = RWallTorchProps::default(&Block::REDSTONE_WALL_TORCH);
                     torch_props.facing = dir
@@ -88,7 +88,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
                 }
             }
 
-            let support_block = world.get_block_state(&location.down()).await;
+            let support_block = world.get_block_state(&location.down());
             if support_block.is_center_solid(BlockDirection::Up) {
                 block.default_state.id
             } else {
@@ -97,22 +97,17 @@ impl BlockBehaviour for RedstoneTorchBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let support_block = args
-                .block_accessor
-                .get_block_state(&args.position.down())
-                .await;
-            if support_block.is_center_solid(BlockDirection::Up) {
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let support_block = args.block_accessor.get_block_state(&args.position.down());
+        if support_block.is_center_solid(BlockDirection::Up) {
+            return true;
+        }
+        for dir in BlockDirection::horizontal() {
+            if can_place_at(args.block_accessor, args.position, dir) {
                 return true;
             }
-            for dir in BlockDirection::horizontal() {
-                if can_place_at(args.block_accessor, args.position, dir).await {
-                    return true;
-                }
-            }
-            false
-        })
+        }
+        false
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -128,12 +123,11 @@ impl BlockBehaviour for RedstoneTorchBlock {
                         args.position,
                         props.facing.to_block_direction().opposite(),
                     )
-                    .await
                 {
                     return 0;
                 }
             } else if args.direction == BlockDirection::Down {
-                let support_block = args.world.get_block_state(&args.position.down()).await;
+                let support_block = args.world.get_block_state(&args.position.down());
                 if !support_block.is_center_solid(BlockDirection::Up) {
                     return 0;
                 }
@@ -144,7 +138,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
 
             if args
                 .world
@@ -231,7 +225,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             if args.block == &Block::REDSTONE_WALL_TORCH {
                 let mut props = RWallTorchProps::from_state_id(state.id, args.block);
                 let should_be_lit_now = should_be_lit(
@@ -285,7 +279,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
 
 pub async fn should_be_lit(world: &World, pos: &BlockPos, face: BlockDirection) -> bool {
     let other_pos = pos.offset(face.to_offset());
-    let (block, state) = world.get_block_and_state(&other_pos).await;
+    let (block, state) = world.get_block_and_state(&other_pos);
     get_redstone_power(block, state, world, &other_pos, face).await == 0
 }
 
@@ -296,13 +290,8 @@ pub async fn update_neighbors(world: &Arc<World>, pos: &BlockPos) {
     }
 }
 
-async fn can_place_at(
-    world: &dyn BlockAccessor,
-    block_pos: &BlockPos,
-    facing: BlockDirection,
-) -> bool {
+fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos, facing: BlockDirection) -> bool {
     world
         .get_block_state(&block_pos.offset(facing.to_offset()))
-        .await
         .is_side_solid(facing.opposite())
 }

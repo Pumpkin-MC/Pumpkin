@@ -110,8 +110,7 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
         position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, position, Sound::BlockShulkerBoxOpen)
-                .await;
+            Self::play_sound(world, position, Sound::BlockShulkerBoxOpen);
             // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_OPEN, this.pos);
         })
     }
@@ -122,8 +121,7 @@ impl ViewerCountListener for ShulkerBoxBlockEntity {
         position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, position, Sound::BlockShulkerBoxClose)
-                .await;
+            Self::play_sound(world, position, Sound::BlockShulkerBoxClose);
             // TODO: this.world.emitGameEvent(player, GameEvent.CONTAINER_CLOSE, this.pos);
         })
     }
@@ -158,18 +156,16 @@ impl ShulkerBoxBlockEntity {
         }
     }
 
-    async fn play_sound(&self, world: &Arc<World>, position: &BlockPos, sound: Sound) {
+    fn play_sound(world: &Arc<World>, position: &BlockPos, sound: Sound) {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
-        world
-            .play_sound_fine(
-                sound,
-                SoundCategory::Blocks,
-                &position.to_centered_f64(),
-                0.5,
-                rng.next_f32() * 0.1 + 0.9,
-            )
-            .await;
+        world.play_sound_fine(
+            sound,
+            SoundCategory::Blocks,
+            &position.to_centered_f64(),
+            0.5,
+            rng.next_f32() * 0.1 + 0.9,
+        );
     }
 }
 

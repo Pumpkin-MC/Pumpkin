@@ -272,6 +272,13 @@ impl JavaClient {
         self.enqueue_packet_data(buf.into()).await;
     }
 
+    pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+        let mut buf = Vec::new();
+        let writer = &mut buf;
+        self.write_packet(packet, writer).unwrap();
+        self.try_enqueue_packet_data(buf.into());
+    }
+
     /// Queues a clientbound packet to be sent to the connected client. Queued chunks are sent
     /// in-order to the client
     ///
@@ -290,6 +297,30 @@ impl JavaClient {
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id, err
                 );
+            }
+        }
+    }
+
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Err(err) = self
+            .outgoing_packet_queue_send
+            .try_send(OutgoingPacket::normal(packet_data))
+        {
+            match err {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    debug!(
+                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
+                        self.id
+                    );
+                }
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                    if !self.close_token.is_cancelled() {
+                        error!(
+                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
+                            self.id
+                        );
+                    }
+                }
             }
         }
     }

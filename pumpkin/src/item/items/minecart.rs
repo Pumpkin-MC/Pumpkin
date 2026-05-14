@@ -64,7 +64,7 @@ impl ItemBehaviour for MinecartItem {
             if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
                 return;
             }
-            let state_id = world.get_block_state_id(&location).await;
+            let state_id = world.get_block_state_id(&location);
             let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
                 PoweredRailLikeProperties::from_state_id(state_id, block)
                     .shape

@@ -12,8 +12,8 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 pub struct CarpetBlock;
 
 impl BlockBehaviour for CarpetBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -21,7 +21,7 @@ impl BlockBehaviour for CarpetBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
@@ -32,7 +32,7 @@ impl BlockBehaviour for CarpetBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_place_at(args.world.as_ref(), args.position).await {
+            if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -45,8 +45,8 @@ impl BlockBehaviour for CarpetBlock {
 pub struct MossCarpetBlock;
 
 impl BlockBehaviour for MossCarpetBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -54,7 +54,7 @@ impl BlockBehaviour for MossCarpetBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
@@ -65,7 +65,7 @@ impl BlockBehaviour for MossCarpetBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_place_at(args.world.as_ref(), args.position).await {
+            if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -78,8 +78,8 @@ impl BlockBehaviour for MossCarpetBlock {
 pub struct PaleMossCarpetBlock;
 
 impl BlockBehaviour for PaleMossCarpetBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -87,7 +87,7 @@ impl BlockBehaviour for PaleMossCarpetBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
                     .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
                     .await;
@@ -98,7 +98,7 @@ impl BlockBehaviour for PaleMossCarpetBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_place_at(args.world.as_ref(), args.position).await {
+            if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -107,6 +107,6 @@ impl BlockBehaviour for PaleMossCarpetBlock {
     }
 }
 
-async fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    !is_air(block_accessor.get_block_state_id(&block_pos.down()).await)
+fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    !is_air(block_accessor.get_block_state_id(&block_pos.down()))
 }

@@ -32,32 +32,23 @@ impl BlockMetadata for TallPlantBlock {
 }
 
 impl BlockBehaviour for TallPlantBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let up_pos = args.position.up();
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let up_pos = args.position.up();
 
-            let upper_state = args.block_accessor.get_block_state(&up_pos).await;
-            let Some(world) = args.world else {
-                return <Self as PlantBlockBase>::can_place_at(
-                    self,
-                    args.block_accessor,
-                    args.position,
-                )
-                .await
-                    && upper_state.is_air();
-            };
-
-            if up_pos.0.y > world.get_top_y() {
-                return false;
-            }
+        let upper_state = args.block_accessor.get_block_state(&up_pos);
+        let Some(world) = args.world else {
             return <Self as PlantBlockBase>::can_place_at(
                 self,
                 args.block_accessor,
                 args.position,
-            )
-            .await
-                && upper_state.is_air();
-        })
+            ) && upper_state.is_air();
+        };
+
+        if up_pos.0.y > world.get_top_y() {
+            return false;
+        }
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
+            && upper_state.is_air()
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -71,14 +62,11 @@ impl BlockBehaviour for TallPlantBlock {
                 DoubleBlockHalf::Upper => (args.position.down_height(2), args.position.down()),
                 DoubleBlockHalf::Lower => (args.position.down(), args.position.up()),
             };
-            if !<Self as PlantBlockBase>::can_place_at(self, args.world, &support_block_pos.up())
-                .await
-            {
+            if !<Self as PlantBlockBase>::can_place_at(self, args.world, &support_block_pos.up()) {
                 return Block::AIR.default_state.id;
             }
 
-            let (other_block, other_state_id) =
-                args.world.get_block_and_state_id(&other_block_pos).await;
+            let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_block_pos);
             if Self::ids().contains(&other_block.id) {
                 let other_props =
                     TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
@@ -117,8 +105,7 @@ impl BlockBehaviour for TallPlantBlock {
                 DoubleBlockHalf::Upper => args.position.down(),
                 DoubleBlockHalf::Lower => args.position.up(),
             };
-            let (other_block, other_state_id) =
-                args.world.get_block_and_state_id(&other_block_pos).await;
+            let (other_block, other_state_id) = args.world.get_block_and_state_id(&other_block_pos);
             if Self::ids().contains(&other_block.id) {
                 let other_props =
                     TallSeagrassLikeProperties::from_state_id(other_state_id, other_block);
