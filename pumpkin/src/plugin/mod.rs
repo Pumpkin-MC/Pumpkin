@@ -468,7 +468,10 @@ impl PluginManager {
 
     /// Ask the server owner if they allow the permissions requested by a plugin
     #[expect(clippy::print_stdout)]
-    fn ask_permission_confirmation(metadata: &PluginMetadata) -> (bool, std::time::Duration) {
+    async fn ask_permission_confirmation(
+        &self,
+        metadata: &PluginMetadata,
+    ) -> (bool, std::time::Duration) {
         use colored::Colorize;
         use rustyline::DefaultEditor;
 
@@ -477,6 +480,31 @@ impl PluginManager {
         }
 
         let start_time = std::time::Instant::now();
+
+        // Check if the plugin is whitlisted or not
+        if let Some(server) = self.server.read().await.as_ref() {
+            let plugin_config = &server.advanced_config.plugins;
+
+            for req_perm in &metadata.permissions {
+                if plugin_config.blocked_permissions.contains(req_perm) {
+                    error!(
+                        "Plugin {} requested blocked permission: {}",
+                        metadata.name, req_perm
+                    );
+                    return (false, std::time::Duration::ZERO);
+                }
+            }
+
+            let is_whitelisted = plugin_config
+                .whitelist
+                .iter()
+                .any(|p| p.name == metadata.name && p.version == metadata.version);
+
+            if is_whitelisted {
+                debug!("Plugin {} is whitelisted, skipping prompt.", metadata.name);
+                return (true, std::time::Duration::ZERO);
+            }
+        }
 
         println!(
             "\n{} \"{}\" ({}) requests the following permissions:",
@@ -746,7 +774,7 @@ impl PluginManager {
         for name in sorted_names {
             if let Some((instance, metadata, loader_data, loader, path)) = plugins_map.remove(&name)
             {
-                let (allowed, wait_time) = Self::ask_permission_confirmation(&metadata);
+                let (allowed, wait_time) = self.ask_permission_confirmation(&metadata).await;
                 total_wait_time += wait_time;
 
                 if !allowed {
@@ -784,7 +812,7 @@ impl PluginManager {
             if loader.can_load(path) {
                 let (instance, metadata, loader_data) = loader.load(path).await?;
 
-                let (allowed, _wait_time) = Self::ask_permission_confirmation(&metadata);
+                let (allowed, _wait_time) = self.ask_permission_confirmation(&metadata).await;
                 if !allowed {
                     warn!(
                         "Permission denied for plugin \"{}\", skipping loading.",
