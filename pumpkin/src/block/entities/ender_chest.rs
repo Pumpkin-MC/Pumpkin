@@ -67,7 +67,7 @@ impl ViewerCountListener for EnderChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestOpen).await;
+            self.play_sound(world, Sound::BlockEnderChestOpen);
         })
     }
 
@@ -77,7 +77,7 @@ impl ViewerCountListener for EnderChestBlockEntity {
         _position: &'a BlockPos,
     ) -> ViewerFuture<'a, ()> {
         Box::pin(async move {
-            self.play_sound(world, Sound::BlockEnderChestClose).await;
+            self.play_sound(world, Sound::BlockEnderChestClose);
         })
     }
 
@@ -113,17 +113,15 @@ impl EnderChestBlockEntity {
         self.viewers.clone()
     }
 
-    async fn play_sound(&self, world: &Arc<World>, sound: Sound) {
+    fn play_sound(&self, world: &Arc<World>, sound: Sound) {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
-        world
-            .play_sound_fine(
-                sound,
-                SoundCategory::Blocks,
-                &self.position.to_centered_f64(),
-                0.5,
-                rng.next_f32() * 0.1 + 0.9,
-            )
-            .await;
+        world.play_sound_fine(
+            sound,
+            SoundCategory::Blocks,
+            &self.position.to_centered_f64(),
+            0.5,
+            rng.next_f32() * 0.1 + 0.9,
+        );
     }
 }

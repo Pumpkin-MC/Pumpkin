@@ -10,8 +10,8 @@ pub struct SkeletonEntity {
 }
 
 impl SkeletonEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = SkeletonEntityBase::new(entity);
         let skeleton = Self { entity };
         Arc::new(skeleton)
     }

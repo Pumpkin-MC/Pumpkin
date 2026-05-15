@@ -62,7 +62,7 @@ impl DaylightDetectorBlockEntity {
     pub async fn update_power(world: &Arc<World>, block_pos: &BlockPos) {
         use std::f32::consts::PI;
 
-        let (block, state) = world.get_block_and_state(block_pos).await;
+        let (block, state) = world.get_block_and_state(block_pos);
         let mut props = DaylightDetectorProperties::from_state_id(state.id, block);
 
         let level = world.level.clone();
@@ -97,10 +97,7 @@ impl DaylightDetectorBlockEntity {
             0 // full daylight
         };
 
-        let sky_light_level = level
-            .light_engine
-            .get_sky_light_level(&level, block_pos)
-            .await;
+        let sky_light_level = level.light_engine.get_sky_light_level(&level, block_pos);
 
         let mut power = sky_light_level - ambient_darkness;
 

@@ -20,14 +20,23 @@ macro_rules! impl_block_entity_for_chest {
             {
                 use pumpkin_world::inventory::Inventory;
 
+                // Read deferred loot-table fields first.
+                let loot_table_key = nbt.get_string("LootTable").map(|s| s.to_string());
+                let loot_table_seed = nbt.get_long("LootTableSeed").unwrap_or(0);
+
                 let chest = Self {
                     position,
                     items: std::array::from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
+                    loot_table: StdMutex::new(loot_table_key),
+                    loot_table_seed,
                 };
 
-                chest.read_data(nbt, &chest.items);
+                // Only read saved items when there is no pending loot table.
+                if chest.loot_table.lock().unwrap().is_none() {
+                    chest.read_data(nbt, &chest.items);
+                }
 
                 chest
             }
@@ -38,8 +47,24 @@ macro_rules! impl_block_entity_for_chest {
             ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
                 use pumpkin_world::inventory::Inventory;
 
-                // Write inventory data to NBT
-                self.write_inventory_nbt(nbt, true)
+                Box::pin(async move {
+                    // Clone the loot table key without holding the lock across an await.
+                    let loot_table_key = {
+                        let guard = self.loot_table.lock().unwrap();
+                        guard.clone()
+                    };
+
+                    if let Some(key) = loot_table_key {
+                        // Persist deferred loot: write the key and seed; skip items.
+                        nbt.put_string("LootTable", key);
+                        if self.loot_table_seed != 0 {
+                            nbt.put_long("LootTableSeed", self.loot_table_seed);
+                        }
+                    } else {
+                        // Loot has already been generated, so persist the actual items.
+                        self.write_inventory_nbt(nbt, true).await;
+                    }
+                })
             }
 
             fn tick<'a>(
@@ -72,6 +97,15 @@ macro_rules! impl_block_entity_for_chest {
 
             fn as_any(&self) -> &dyn std::any::Any {
                 self
+            }
+
+            fn take_loot_table(&self) -> Option<(String, i64)> {
+                let mut guard = self.loot_table.lock().unwrap();
+                guard.take().map(|key| (key, self.loot_table_seed))
+            }
+
+            fn has_loot_table(&self) -> bool {
+                self.loot_table.lock().unwrap().is_some()
             }
         }
     };
@@ -264,6 +298,7 @@ macro_rules! impl_chest_helper_methods {
             #[must_use]
             pub fn new(position: pumpkin_util::math::position::BlockPos) -> Self {
                 use std::array::from_fn;
+                use std::sync::Mutex as StdMutex;
                 use std::sync::atomic::AtomicBool;
 
                 Self {
@@ -271,6 +306,8 @@ macro_rules! impl_chest_helper_methods {
                     items: from_fn(|_| Arc::new(Mutex::new(ItemStack::EMPTY.clone()))),
                     dirty: AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
+                    loot_table: StdMutex::new(None),
+                    loot_table_seed: 0,
                 }
             }
 
@@ -283,7 +320,7 @@ macro_rules! impl_chest_helper_methods {
                     pumpkin_util::random::get_seed(),
                 );
 
-                let (block, state) = world.get_block_and_state(&self.position).await;
+                let (block, state) = world.get_block_and_state(&self.position);
                 let properties = pumpkin_data::block_properties::ChestLikeProperties::from_state_id(
                     state.id, block,
                 );
@@ -309,15 +346,13 @@ macro_rules! impl_chest_helper_methods {
                     }
                 };
 
-                world
-                    .play_sound_fine(
-                        sound,
-                        pumpkin_data::sound::SoundCategory::Blocks,
-                        &position,
-                        0.5,
-                        pumpkin_util::random::RandomImpl::next_f32(&mut rng) * 0.1 + 0.9,
-                    )
-                    .await;
+                world.play_sound_fine(
+                    sound,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    &position,
+                    0.5,
+                    pumpkin_util::random::RandomImpl::next_f32(&mut rng) * 0.1 + 0.9,
+                );
             }
         }
     };

@@ -308,29 +308,24 @@ impl EntityBase for ShulkerBulletEntity {
             let entity = &self.entity;
             let world = entity.world.load();
             let pos = entity.pos.load();
-            world
-                .play_sound_fine(
-                    Sound::EntityShulkerBulletHit,
-                    SoundCategory::Hostile,
-                    &pos,
-                    1.0,
-                    1.0,
-                )
-                .await;
-            world
-                .spawn_particle(
-                    pos,
-                    Vector3::new(0.2, 0.2, 0.2),
-                    0.0,
-                    2,
-                    Particle::Explosion,
-                )
-                .await;
+            world.play_sound_fine(
+                Sound::EntityShulkerBulletHit,
+                SoundCategory::Hostile,
+                &pos,
+                1.0,
+                1.0,
+            );
+            world.spawn_particle(
+                pos,
+                Vector3::new(0.2, 0.2, 0.2),
+                0.0,
+                2,
+                Particle::Explosion,
+            );
             entity.remove().await;
             true
         })
     }
-
     #[allow(clippy::too_many_lines)]
     fn tick<'a>(
         &'a self,
@@ -349,24 +344,20 @@ impl EntityBase for ShulkerBulletEntity {
                     let entity = &self.entity;
                     let world = entity.world.load();
                     let pos = entity.pos.load();
-                    world
-                        .play_sound_fine(
-                            Sound::EntityShulkerBulletHit,
-                            SoundCategory::Hostile,
-                            &pos,
-                            1.0,
-                            1.0,
-                        )
-                        .await;
-                    world
-                        .spawn_particle(
-                            pos,
-                            Vector3::new(0.2, 0.2, 0.2),
-                            0.0,
-                            2,
-                            Particle::Explosion,
-                        )
-                        .await;
+                    world.play_sound_fine(
+                        Sound::EntityShulkerBulletHit,
+                        SoundCategory::Hostile,
+                        &pos,
+                        1.0,
+                        1.0,
+                    );
+                    world.spawn_particle(
+                        pos,
+                        Vector3::new(0.2, 0.2, 0.2),
+                        0.0,
+                        2,
+                        Particle::Explosion,
+                    );
                     entity.remove().await;
                 }
                 return;
@@ -435,44 +426,36 @@ impl EntityBase for ShulkerBulletEntity {
             entity.set_pos(new_pos);
 
             // Broadcast position and velocity
-            world
-                .broadcast_packet_all(&CEntityPositionSync::new(
-                    entity.entity_id.into(),
-                    new_pos,
-                    vel,
-                    entity.yaw.load(),
-                    entity.pitch.load(),
-                    false,
-                ))
-                .await;
-            world
-                .broadcast_packet_all(&CEntityVelocity::new(entity.entity_id.into(), vel))
-                .await;
+            world.broadcast_packet_all(&CEntityPositionSync::new(
+                entity.entity_id.into(),
+                new_pos,
+                vel,
+                entity.yaw.load(),
+                entity.pitch.load(),
+                false,
+            ));
+            world.broadcast_packet_all(&CEntityVelocity::new(entity.entity_id.into(), vel));
 
             // Check for block collisions
             let new_bp = entity.block_pos.load();
-            let state = world.get_block_state(&new_bp).await;
+            let state = world.get_block_state(&new_bp);
             if !state.is_air() && state.is_solid() {
                 if !self.has_hit.swap(true, Ordering::SeqCst) {
                     let pos = entity.pos.load();
-                    world
-                        .play_sound_fine(
-                            Sound::EntityShulkerBulletHit,
-                            SoundCategory::Hostile,
-                            &pos,
-                            1.0,
-                            1.0,
-                        )
-                        .await;
-                    world
-                        .spawn_particle(
-                            pos,
-                            Vector3::new(0.2, 0.2, 0.2),
-                            0.0,
-                            2,
-                            Particle::Explosion,
-                        )
-                        .await;
+                    world.play_sound_fine(
+                        Sound::EntityShulkerBulletHit,
+                        SoundCategory::Hostile,
+                        &pos,
+                        1.0,
+                        1.0,
+                    );
+                    world.spawn_particle(
+                        pos,
+                        Vector3::new(0.2, 0.2, 0.2),
+                        0.0,
+                        2,
+                        Particle::Explosion,
+                    );
                     entity.remove().await;
                 }
                 return;
@@ -545,15 +528,13 @@ impl EntityBase for ShulkerBulletEntity {
                 }
 
                 let pos = entity.pos.load();
-                world
-                    .spawn_particle(
-                        pos,
-                        Vector3::new(0.2, 0.2, 0.2),
-                        0.0,
-                        2,
-                        Particle::Explosion,
-                    )
-                    .await;
+                world.spawn_particle(
+                    pos,
+                    Vector3::new(0.2, 0.2, 0.2),
+                    0.0,
+                    2,
+                    Particle::Explosion,
+                );
                 entity.remove().await;
                 break;
             }

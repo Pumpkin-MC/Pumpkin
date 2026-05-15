@@ -44,7 +44,7 @@ impl ItemBehaviour for ShovelItem {
                 || block == &Block::PODZOL
                 || block == &Block::MYCELIUM)
                 && face != BlockDirection::Down
-                && world.get_block_state(&location.up()).await.is_air()
+                && world.get_block_state(&location.up()).is_air()
             {
                 world
                     .set_block_state(
@@ -59,13 +59,11 @@ impl ItemBehaviour for ShovelItem {
             };
             if block == &Block::CAMPFIRE || block == &Block::SOUL_CAMPFIRE {
                 let mut campfire_props = CampfireLikeProperties::from_state_id(
-                    world.get_block_state(&location).await.id,
+                    world.get_block_state(&location).id,
                     block,
                 );
                 if campfire_props.lit {
-                    world
-                        .sync_world_event(WorldEvent::SoundExtinguishFire, location, 0)
-                        .await;
+                    world.sync_world_event(WorldEvent::SoundExtinguishFire, location, 0);
 
                     campfire_props.lit = false;
                     world

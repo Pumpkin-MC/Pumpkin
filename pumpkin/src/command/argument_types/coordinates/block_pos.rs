@@ -132,7 +132,11 @@ impl BlockPosArgumentType {
         world: &World,
     ) -> Result<BlockPos, CommandSyntaxError> {
         let pos = Self::get_block_pos(context, name)?;
-        if world.level.try_get_chunk(&pos.chunk_position()).is_none() {
+        if world
+            .level
+            .read_chunk_sync(&pos.chunk_position(), |_| ())
+            .is_none()
+        {
             Err(NOT_LOADED_ERROR_TYPE.create_without_context())
         } else if !world.is_in_build_limit(pos) {
             Err(OUT_OF_WORLD_ERROR_TYPE.create_without_context())

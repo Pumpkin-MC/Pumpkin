@@ -47,7 +47,7 @@ impl FishingBobberEntity {
         }
     }
 
-    pub async fn reel_in(&self, player: &Player) -> i32 {
+    pub fn reel_in(&self, player: &Player) -> i32 {
         let world = self.entity.world.load();
         let hooked_id = self.hooked_entity_id.load(Ordering::Relaxed);
 
@@ -61,7 +61,7 @@ impl FishingBobberEntity {
                 delta
                     .multiply(0.1, 0.1, 0.1)
                     .add_raw(0.0, delta.length().sqrt() * 0.08, 0.0);
-            hooked.get_entity().add_velocity(motion).await;
+            hooked.get_entity().add_velocity(motion);
             return 1;
         }
 
@@ -72,13 +72,11 @@ impl FishingBobberEntity {
             let _item_stack = ItemStack::new(1, &Item::COD);
             // player.inventory().add_item(item_stack).await; // Need public add_item
 
-            world
-                .play_sound(
-                    Sound::EntityExperienceOrbPickup,
-                    SoundCategory::Neutral,
-                    &player.position(),
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityExperienceOrbPickup,
+                SoundCategory::Neutral,
+                &player.position(),
+            );
             return 1;
         }
 
@@ -120,15 +118,13 @@ impl FishingBobberEntity {
             if bite > 0 {
                 self.bite_countdown.store(bite - 1, Ordering::Relaxed);
                 if bite % 5 == 0 {
-                    world
-                        .spawn_particle(
-                            entity.pos.load(),
-                            Vector3::new(0.1f32, 0.1f32, 0.1f32),
-                            0.0,
-                            5,
-                            pumpkin_data::particle::Particle::Bubble,
-                        )
-                        .await;
+                    world.spawn_particle(
+                        entity.pos.load(),
+                        Vector3::new(0.1f32, 0.1f32, 0.1f32),
+                        0.0,
+                        5,
+                        pumpkin_data::particle::Particle::Bubble,
+                    );
                 }
             } else {
                 let wait = self.wait_countdown.load(Ordering::Relaxed);
@@ -140,13 +136,11 @@ impl FishingBobberEntity {
                     self.wait_countdown
                         .store(rand::random::<i32>().abs() % 600 + 100, Ordering::Relaxed);
 
-                    world
-                        .play_sound(
-                            Sound::EntityFishingBobberSplash,
-                            SoundCategory::Neutral,
-                            &entity.pos.load(),
-                        )
-                        .await;
+                    world.play_sound(
+                        Sound::EntityFishingBobberSplash,
+                        SoundCategory::Neutral,
+                        &entity.pos.load(),
+                    );
                 }
             }
         } else {
@@ -205,13 +199,11 @@ impl FishingBobberEntity {
             if ebb.intersects(&search_box) {
                 self.hooked_entity_id
                     .store(cand.get_entity().entity_id, Ordering::Relaxed);
-                entity
-                    .send_meta_data(&[Metadata::new(
-                        TrackedData::HOOKED_ENTITY,
-                        MetaDataType::INT,
-                        cand.get_entity().entity_id + 1,
-                    )])
-                    .await;
+                entity.send_meta_data(&[Metadata::new(
+                    TrackedData::HOOKED_ENTITY,
+                    MetaDataType::INT,
+                    cand.get_entity().entity_id + 1,
+                )]);
                 return;
             }
         }

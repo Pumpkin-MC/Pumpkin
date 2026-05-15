@@ -64,7 +64,7 @@ impl CommandExecutor for Executor {
                     (w.clone(), pos)
                 }
             };
-            let entity = from_type(entity_type, pos, &world, Uuid::new_v4()).await;
+            let entity = from_type(entity_type, pos, &world, Uuid::new_v4());
             let name = entity.get_display_name().await;
             world.spawn_entity(entity).await;
             sender

@@ -32,30 +32,22 @@ pub trait RedstoneGateBlockProperties {
 }
 
 pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlockProperties> {
-    // 💡 Converted async fn to fn returning BlockFuture
-    fn can_place_at<'a>(
-        &'a self,
-        world: &'a dyn BlockAccessor,
-        pos: BlockPos,
-    ) -> BlockFuture<'a, bool>
+    fn can_place_at(&self, world: &dyn BlockAccessor, pos: BlockPos) -> bool
     where
         Self: Send + Sync,
     {
-        Box::pin(async move {
-            let under_pos = pos.down();
-            let under_state = world.get_block_state(&under_pos).await;
-            self.can_place_above(world, under_pos, under_state).await
-        })
+        let under_pos = pos.down();
+        let under_state = world.get_block_state(&under_pos);
+        self.can_place_above(world, under_pos, under_state)
     }
 
-    // 💡 Converted async fn to fn returning BlockFuture
-    fn can_place_above<'a>(
-        &'a self,
-        _world: &'a dyn BlockAccessor,
+    fn can_place_above(
+        &self,
+        _world: &dyn BlockAccessor,
         _pos: BlockPos,
-        state: &'a BlockState,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async { state.is_side_solid(BlockDirection::Up) })
+        state: &BlockState,
+    ) -> bool {
+        state.is_side_solid(BlockDirection::Up)
     }
 
     fn get_weak_redstone_power<'a>(&'a self, args: GetRedstonePowerArgs<'a>) -> BlockFuture<'a, u8>
@@ -82,7 +74,6 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         Box::pin(async move { self.get_weak_redstone_power(args).await })
     }
 
-    // 💡 Converted async fn to fn returning BlockFuture
     fn get_output_level<'a>(&'a self, world: &'a World, pos: BlockPos) -> BlockFuture<'a, u8>;
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()>
@@ -90,8 +81,8 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         Self: Send + Sync,
     {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
-            if RedstoneGateBlock::can_place_at(self, args.world.as_ref(), *args.position).await {
+            let state = args.world.get_block_state(args.position);
+            if RedstoneGateBlock::can_place_at(self, args.world.as_ref(), *args.position) {
                 self.update_powered(args.world, *args.position, state, args.block)
                     .await;
                 return;
@@ -111,7 +102,6 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         })
     }
 
-    // 💡 Converted async fn to fn returning BlockFuture
     fn update_powered<'a>(
         &'a self,
         world: &'a World,
@@ -120,7 +110,6 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         block: &'a Block,
     ) -> BlockFuture<'a, ()>;
 
-    // 💡 Converted async fn to fn returning BlockFuture
     fn has_power<'a>(
         &'a self,
         world: &'a World,
@@ -134,7 +123,6 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         Box::pin(async move { self.get_power(world, pos, state, block).await > 0 })
     }
 
-    // 💡 Converted async fn to fn returning BlockFuture
     fn get_power<'a>(
         &'a self,
         world: &'a World,
@@ -148,7 +136,6 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         Box::pin(async move { get_power::<T>(world, pos, state.id, block).await })
     }
 
-    // 💡 Converted async fn to fn returning BlockFuture
     fn get_max_input_level_sides<'a>(
         &'a self,
         world: &'a World,
@@ -170,7 +157,6 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         })
     }
 
-    // 💡 Converted async fn to fn returning BlockFuture
     fn update_target<'a>(
         &'a self,
         world: &'a Arc<World>,
@@ -189,7 +175,6 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         })
     }
 
-    // 💡 Converted async fn to fn returning BlockFuture
     fn on_place<'a>(
         &'a self,
         player: &'a Player,
@@ -223,8 +208,7 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
             .await
             {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
         })
     }
@@ -248,30 +232,26 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         })
     }
 
-    // 💡 Converted async fn to fn returning BlockFuture
     fn is_target_not_aligned<'a>(
         &'a self,
         world: &'a dyn BlockAccessor,
         pos: BlockPos,
         state: &'a BlockState,
         block: &'a Block,
-    ) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let props = T::from_state_id(state.id, block);
-            let facing = props.get_facing().opposite();
-            let (target_block, target_state) = world
-                .get_block_and_state(&pos.offset(facing.to_offset()))
-                .await;
-            if target_block == &Block::COMPARATOR {
-                let props = ComparatorLikeProperties::from_state_id(target_state.id, target_block);
-                props.facing != facing
-            } else if target_block == &Block::REPEATER {
-                let props = RepeaterLikeProperties::from_state_id(target_state.id, target_block);
-                props.facing != facing
-            } else {
-                false
-            }
-        })
+    ) -> bool {
+        let props = T::from_state_id(state.id, block);
+        let facing = props.get_facing().opposite();
+        let (target_block, target_state) =
+            world.get_block_and_state(&pos.offset(facing.to_offset()));
+        if target_block == &Block::COMPARATOR {
+            let props = ComparatorLikeProperties::from_state_id(target_state.id, target_block);
+            props.facing != facing
+        } else if target_block == &Block::REPEATER {
+            let props = RepeaterLikeProperties::from_state_id(target_state.id, target_block);
+            props.facing != facing
+        } else {
+            false
+        }
     }
 
     fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u8;
@@ -286,7 +266,7 @@ pub async fn get_power<T: BlockProperties + RedstoneGateBlockProperties + Send>(
     let props = T::from_state_id(state_id, block);
     let facing = props.get_facing();
     let source_pos = pos.offset(facing.to_offset());
-    let (source_block, source_state) = world.get_block_and_state(&source_pos).await;
+    let (source_block, source_state) = world.get_block_and_state(&source_pos);
     let source_level = get_redstone_power(
         source_block,
         source_state,
@@ -314,7 +294,7 @@ async fn get_power_on_side(
     only_gate: bool,
 ) -> u8 {
     let side_pos = pos.offset(side.to_block_direction().to_offset());
-    let (side_block, side_state) = world.get_block_and_state(&side_pos).await;
+    let (side_block, side_state) = world.get_block_and_state(&side_pos);
     if !only_gate || is_diode(side_block) {
         world
             .block_registry

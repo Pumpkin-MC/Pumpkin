@@ -42,7 +42,7 @@ pub async fn toggle_fence_gate(
     block_pos: &BlockPos,
     player: &Player,
 ) -> BlockStateId {
-    let (block, state) = world.get_block_and_state_id(block_pos).await;
+    let (block, state) = world.get_block_and_state_id(block_pos);
 
     let mut fence_gate_props = FenceGateProperties::from_state_id(state, block);
     if fence_gate_props.open {
@@ -60,14 +60,12 @@ pub async fn toggle_fence_gate(
         fence_gate_props.open = true;
     }
 
-    world
-        .play_block_sound_expect(
-            player,
-            get_sound(block, fence_gate_props.open),
-            SoundCategory::Blocks,
-            *block_pos,
-        )
-        .await;
+    world.play_block_sound_expect(
+        player,
+        get_sound(block, fence_gate_props.open),
+        SoundCategory::Blocks,
+        *block_pos,
+    );
 
     world
         .set_block_state(
@@ -101,7 +99,7 @@ impl BlockBehaviour for FenceGateBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let fence_props = is_in_wall(&args).await;
+            let fence_props = is_in_wall(&args);
             fence_props.to_state_id(args.block)
         })
     }
@@ -116,7 +114,7 @@ impl BlockBehaviour for FenceGateBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let block_state = args.world.get_block_state(args.position).await;
+            let block_state = args.world.get_block_state(args.position);
             let mut fence_gate_props =
                 FenceGateProperties::from_state_id(block_state.id, args.block);
             let powered = block_receives_redstone_power(args.world, args.position).await;
@@ -130,13 +128,11 @@ impl BlockBehaviour for FenceGateBlock {
             if powered != fence_gate_props.open {
                 fence_gate_props.open = powered;
 
-                args.world
-                    .play_block_sound(
-                        get_sound(args.block, powered),
-                        SoundCategory::Blocks,
-                        *args.position,
-                    )
-                    .await;
+                args.world.play_block_sound(
+                    get_sound(args.block, powered),
+                    SoundCategory::Blocks,
+                    *args.position,
+                );
             }
 
             args.world
@@ -150,7 +146,7 @@ impl BlockBehaviour for FenceGateBlock {
     }
 }
 
-async fn is_in_wall(args: &GetStateForNeighborUpdateArgs<'_>) -> FenceGateProperties {
+fn is_in_wall(args: &GetStateForNeighborUpdateArgs<'_>) -> FenceGateProperties {
     let mut fence_props = FenceGateProperties::from_state_id(args.state_id, args.block);
 
     let side_offset_left = args
@@ -165,8 +161,8 @@ async fn is_in_wall(args: &GetStateForNeighborUpdateArgs<'_>) -> FenceGateProper
         args.neighbor_position == &side_offset_left || args.neighbor_position == &side_offset_right;
 
     if neighbor_on_side {
-        let neighbor_right = args.world.get_block(&side_offset_right).await;
-        let neighbor_left = args.world.get_block(&side_offset_left).await;
+        let neighbor_right = args.world.get_block(&side_offset_right);
+        let neighbor_left = args.world.get_block(&side_offset_left);
 
         fence_props.in_wall = neighbor_left.has_tag(&tag::Block::MINECRAFT_WALLS)
             || neighbor_right.has_tag(&tag::Block::MINECRAFT_WALLS);

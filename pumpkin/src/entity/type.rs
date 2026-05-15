@@ -116,7 +116,7 @@ use pumpkin_data::item_stack::ItemStack;
 use std::sync::atomic::AtomicBool;
 
 #[expect(clippy::too_many_lines)]
-pub async fn from_type(
+pub fn from_type(
     entity_type: &'static EntityType,
     position: Vector3<f64>,
     world: &Arc<World>,
@@ -126,94 +126,94 @@ pub async fn from_type(
 
     let mob: Arc<dyn EntityBase> = match entity_type.id {
         // Zombie
-        id if id == EntityType::ZOMBIE.id => ZombieEntity::new(entity).await,
-        id if id == EntityType::DROWNED.id => DrownedEntity::new(entity).await,
-        id if id == EntityType::HUSK.id => HuskEntity::new(entity).await,
-        id if id == EntityType::ZOMBIE_VILLAGER.id => ZombieVillagerEntity::new(entity).await,
-        id if id == EntityType::ZOMBIFIED_PIGLIN.id => ZombifiedPiglinEntity::new(entity).await,
+        id if id == EntityType::ZOMBIE.id => ZombieEntity::new(entity),
+        id if id == EntityType::DROWNED.id => DrownedEntity::new(entity),
+        id if id == EntityType::HUSK.id => HuskEntity::new(entity),
+        id if id == EntityType::ZOMBIE_VILLAGER.id => ZombieVillagerEntity::new(entity),
+        id if id == EntityType::ZOMBIFIED_PIGLIN.id => ZombifiedPiglinEntity::new(entity),
 
         // Skeleton
-        id if id == EntityType::SKELETON.id => SkeletonEntity::new(entity).await,
-        id if id == EntityType::BOGGED.id => BoggedSkeletonEntity::new(entity).await,
-        id if id == EntityType::PARCHED.id => ParchedSkeletonEntity::new(entity).await,
-        id if id == EntityType::WITHER_SKELETON.id => WitherSkeletonEntity::new(entity).await,
-        id if id == EntityType::STRAY.id => StraySkeletonEntity::new(entity).await,
+        id if id == EntityType::SKELETON.id => SkeletonEntity::new(entity),
+        id if id == EntityType::BOGGED.id => BoggedSkeletonEntity::new(entity),
+        id if id == EntityType::PARCHED.id => ParchedSkeletonEntity::new(entity),
+        id if id == EntityType::WITHER_SKELETON.id => WitherSkeletonEntity::new(entity),
+        id if id == EntityType::STRAY.id => StraySkeletonEntity::new(entity),
 
-        id if id == EntityType::BAT.id => BatEntity::new(entity).await,
-        id if id == EntityType::CREEPER.id => CreeperEntity::new(entity).await,
-        id if id == EntityType::ENDERMAN.id => EndermanEntity::new(entity).await,
+        id if id == EntityType::BAT.id => BatEntity::new(entity),
+        id if id == EntityType::CREEPER.id => CreeperEntity::new(entity),
+        id if id == EntityType::ENDERMAN.id => EndermanEntity::new(entity),
 
-        id if id == EntityType::BLAZE.id => BlazeEntity::new(entity).await,
-        id if id == EntityType::SPIDER.id => SpiderEntity::new(entity).await,
-        id if id == EntityType::CAVE_SPIDER.id => CaveSpiderEntity::new(entity).await,
-        id if id == EntityType::GHAST.id => GhastEntity::new(entity).await,
-        id if id == EntityType::MAGMA_CUBE.id => MagmaCubeEntity::new(entity).await,
-        id if id == EntityType::PHANTOM.id => PhantomEntity::new(entity).await,
-        id if id == EntityType::WITCH.id => WitchEntity::new(entity).await,
-        id if id == EntityType::PIGLIN.id => PiglinEntity::new(entity).await,
-        id if id == EntityType::PIGLIN_BRUTE.id => PiglinBruteEntity::new(entity).await,
-        id if id == EntityType::PILLAGER.id => PillagerEntity::new(entity).await,
-        id if id == EntityType::VINDICATOR.id => VindicatorEntity::new(entity).await,
-        id if id == EntityType::EVOKER.id => EvokerEntity::new(entity).await,
-        id if id == EntityType::RAVAGER.id => RavagerEntity::new(entity).await,
-        id if id == EntityType::GUARDIAN.id => GuardianEntity::new(entity).await,
-        id if id == EntityType::ELDER_GUARDIAN.id => ElderGuardianEntity::new(entity).await,
-        id if id == EntityType::WARDEN.id => WardenEntity::new(entity).await,
-        id if id == EntityType::HOGLIN.id => HoglinEntity::new(entity).await,
-        id if id == EntityType::ZOGLIN.id => ZoglinEntity::new(entity).await,
-        id if id == EntityType::BREEZE.id => BreezeEntity::new(entity).await,
-        id if id == EntityType::CREAKING.id => CreakingEntity::new(entity).await,
-        id if id == EntityType::ILLUSIONER.id => IllusionerEntity::new(entity).await,
-        id if id == EntityType::VEX.id => VexEntity::new(entity).await,
-        id if id == EntityType::ENDERMITE.id => EndermiteEntity::new(entity).await,
-        id if id == EntityType::GIANT.id => GiantEntity::new(entity).await,
+        id if id == EntityType::BLAZE.id => BlazeEntity::new(entity),
+        id if id == EntityType::SPIDER.id => SpiderEntity::new(entity),
+        id if id == EntityType::CAVE_SPIDER.id => CaveSpiderEntity::new(entity),
+        id if id == EntityType::GHAST.id => GhastEntity::new(entity),
+        id if id == EntityType::MAGMA_CUBE.id => MagmaCubeEntity::new(entity),
+        id if id == EntityType::PHANTOM.id => PhantomEntity::new(entity),
+        id if id == EntityType::WITCH.id => WitchEntity::new(entity),
+        id if id == EntityType::PIGLIN.id => PiglinEntity::new(entity),
+        id if id == EntityType::PIGLIN_BRUTE.id => PiglinBruteEntity::new(entity),
+        id if id == EntityType::PILLAGER.id => PillagerEntity::new(entity),
+        id if id == EntityType::VINDICATOR.id => VindicatorEntity::new(entity),
+        id if id == EntityType::EVOKER.id => EvokerEntity::new(entity),
+        id if id == EntityType::RAVAGER.id => RavagerEntity::new(entity),
+        id if id == EntityType::GUARDIAN.id => GuardianEntity::new(entity),
+        id if id == EntityType::ELDER_GUARDIAN.id => ElderGuardianEntity::new(entity),
+        id if id == EntityType::WARDEN.id => WardenEntity::new(entity),
+        id if id == EntityType::HOGLIN.id => HoglinEntity::new(entity),
+        id if id == EntityType::ZOGLIN.id => ZoglinEntity::new(entity),
+        id if id == EntityType::BREEZE.id => BreezeEntity::new(entity),
+        id if id == EntityType::CREAKING.id => CreakingEntity::new(entity),
+        id if id == EntityType::ILLUSIONER.id => IllusionerEntity::new(entity),
+        id if id == EntityType::VEX.id => VexEntity::new(entity),
+        id if id == EntityType::ENDERMITE.id => EndermiteEntity::new(entity),
+        id if id == EntityType::GIANT.id => GiantEntity::new(entity),
 
-        id if id == EntityType::CAT.id => CatEntity::new(entity).await,
-        id if id == EntityType::CHICKEN.id => ChickenEntity::new(entity).await,
-        id if id == EntityType::COW.id => CowEntity::new(entity).await,
-        id if id == EntityType::PIG.id => PigEntity::new(entity).await,
-        id if id == EntityType::SHEEP.id => SheepEntity::new(entity).await,
-        id if id == EntityType::WOLF.id => WolfEntity::new(entity).await,
-        id if id == EntityType::FOX.id => FoxEntity::new(entity).await,
-        id if id == EntityType::RABBIT.id => RabbitEntity::new(entity).await,
-        id if id == EntityType::TURTLE.id => TurtleEntity::new(entity).await,
-        id if id == EntityType::VILLAGER.id => VillagerEntity::new(entity).await,
-        id if id == EntityType::SQUID.id => SquidEntity::new(entity).await,
-        id if id == EntityType::HORSE.id => HorseEntity::new(entity).await,
-        id if id == EntityType::DONKEY.id => DonkeyEntity::new(entity).await,
-        id if id == EntityType::MULE.id => MuleEntity::new(entity).await,
-        id if id == EntityType::ZOMBIE_HORSE.id => ZombieHorseEntity::new(entity).await,
-        id if id == EntityType::SKELETON_HORSE.id => SkeletonHorseEntity::new(entity).await,
-        id if id == EntityType::LLAMA.id => LlamaEntity::new(entity).await,
-        id if id == EntityType::TRADER_LLAMA.id => TraderLlamaEntity::new(entity).await,
-        id if id == EntityType::WANDERING_TRADER.id => WanderingTraderEntity::new(entity).await,
-        id if id == EntityType::ALLAY.id => AllayEntity::new(entity).await,
-        id if id == EntityType::ARMADILLO.id => ArmadilloEntity::new(entity).await,
-        id if id == EntityType::AXOLOTL.id => AxolotlEntity::new(entity).await,
-        id if id == EntityType::BEE.id => BeeEntity::new(entity).await,
-        id if id == EntityType::CAMEL.id => CamelEntity::new(entity).await,
-        id if id == EntityType::FROG.id => FrogEntity::new(entity).await,
-        id if id == EntityType::GOAT.id => GoatEntity::new(entity).await,
-        id if id == EntityType::MOOSHROOM.id => MooshroomEntity::new(entity).await,
-        id if id == EntityType::OCELOT.id => OcelotEntity::new(entity).await,
-        id if id == EntityType::PANDA.id => PandaEntity::new(entity).await,
-        id if id == EntityType::PARROT.id => ParrotEntity::new(entity).await,
-        id if id == EntityType::POLAR_BEAR.id => PolarBearEntity::new(entity).await,
-        id if id == EntityType::SNIFFER.id => SnifferEntity::new(entity).await,
-        id if id == EntityType::STRIDER.id => StriderEntity::new(entity).await,
-        id if id == EntityType::GLOW_SQUID.id => GlowSquidEntity::new(entity).await,
-        id if id == EntityType::COD.id => CodEntity::new(entity).await,
-        id if id == EntityType::SALMON.id => SalmonEntity::new(entity).await,
-        id if id == EntityType::PUFFERFISH.id => PufferfishEntity::new(entity).await,
-        id if id == EntityType::TROPICAL_FISH.id => TropicalFishEntity::new(entity).await,
-        id if id == EntityType::TADPOLE.id => TadpoleEntity::new(entity).await,
-        id if id == EntityType::DOLPHIN.id => DolphinEntity::new(entity).await,
+        id if id == EntityType::CAT.id => CatEntity::new(entity),
+        id if id == EntityType::CHICKEN.id => ChickenEntity::new(entity),
+        id if id == EntityType::COW.id => CowEntity::new(entity),
+        id if id == EntityType::PIG.id => PigEntity::new(entity),
+        id if id == EntityType::SHEEP.id => SheepEntity::new(entity),
+        id if id == EntityType::WOLF.id => WolfEntity::new(entity),
+        id if id == EntityType::FOX.id => FoxEntity::new(entity),
+        id if id == EntityType::RABBIT.id => RabbitEntity::new(entity),
+        id if id == EntityType::TURTLE.id => TurtleEntity::new(entity),
+        id if id == EntityType::VILLAGER.id => VillagerEntity::new(entity),
+        id if id == EntityType::SQUID.id => SquidEntity::new(entity),
+        id if id == EntityType::HORSE.id => HorseEntity::new(entity),
+        id if id == EntityType::DONKEY.id => DonkeyEntity::new(entity),
+        id if id == EntityType::MULE.id => MuleEntity::new(entity),
+        id if id == EntityType::ZOMBIE_HORSE.id => ZombieHorseEntity::new(entity),
+        id if id == EntityType::SKELETON_HORSE.id => SkeletonHorseEntity::new(entity),
+        id if id == EntityType::LLAMA.id => LlamaEntity::new(entity),
+        id if id == EntityType::TRADER_LLAMA.id => TraderLlamaEntity::new(entity),
+        id if id == EntityType::WANDERING_TRADER.id => WanderingTraderEntity::new(entity),
+        id if id == EntityType::ALLAY.id => AllayEntity::new(entity),
+        id if id == EntityType::ARMADILLO.id => ArmadilloEntity::new(entity),
+        id if id == EntityType::AXOLOTL.id => AxolotlEntity::new(entity),
+        id if id == EntityType::BEE.id => BeeEntity::new(entity),
+        id if id == EntityType::CAMEL.id => CamelEntity::new(entity),
+        id if id == EntityType::FROG.id => FrogEntity::new(entity),
+        id if id == EntityType::GOAT.id => GoatEntity::new(entity),
+        id if id == EntityType::MOOSHROOM.id => MooshroomEntity::new(entity),
+        id if id == EntityType::OCELOT.id => OcelotEntity::new(entity),
+        id if id == EntityType::PANDA.id => PandaEntity::new(entity),
+        id if id == EntityType::PARROT.id => ParrotEntity::new(entity),
+        id if id == EntityType::POLAR_BEAR.id => PolarBearEntity::new(entity),
+        id if id == EntityType::SNIFFER.id => SnifferEntity::new(entity),
+        id if id == EntityType::STRIDER.id => StriderEntity::new(entity),
+        id if id == EntityType::GLOW_SQUID.id => GlowSquidEntity::new(entity),
+        id if id == EntityType::COD.id => CodEntity::new(entity),
+        id if id == EntityType::SALMON.id => SalmonEntity::new(entity),
+        id if id == EntityType::PUFFERFISH.id => PufferfishEntity::new(entity),
+        id if id == EntityType::TROPICAL_FISH.id => TropicalFishEntity::new(entity),
+        id if id == EntityType::TADPOLE.id => TadpoleEntity::new(entity),
+        id if id == EntityType::DOLPHIN.id => DolphinEntity::new(entity),
 
-        id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity).await,
-        id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity).await,
+        id if id == EntityType::SNOW_GOLEM.id => SnowGolemEntity::new(entity),
+        id if id == EntityType::IRON_GOLEM.id => IronGolemEntity::new(entity),
 
-        id if id == EntityType::WITHER.id => WitherEntity::new(entity).await,
-        id if id == EntityType::ENDER_DRAGON.id => EnderDragonEntity::new(entity).await,
+        id if id == EntityType::WITHER.id => WitherEntity::new(entity),
+        id if id == EntityType::ENDER_DRAGON.id => EnderDragonEntity::new(entity),
 
         id if id == EntityType::AREA_EFFECT_CLOUD.id => {
             crate::entity::area_effect_cloud::AreaEffectCloudEntity::new(entity)
@@ -221,12 +221,12 @@ pub async fn from_type(
         id if id == EntityType::ARMOR_STAND.id => Arc::new(ArmorStandEntity::new(entity)),
         id if id == EntityType::PAINTING.id => Arc::new(PaintingEntity::new(entity)),
         id if id == EntityType::END_CRYSTAL.id => Arc::new(EndCrystalEntity::new(entity)),
-        id if id == EntityType::ENDER_PEARL.id => Arc::new(EnderPearlEntity::new(entity).await),
-        id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity).await),
-        id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity).await),
-        id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity).await,
-        id if id == EntityType::SLIME.id => SlimeEntity::new(entity).await,
-        id if id == EntityType::SHULKER.id => ShulkerEntity::new(entity).await,
+        id if id == EntityType::ENDER_PEARL.id => Arc::new(EnderPearlEntity::new(entity)),
+        id if id == EntityType::SNOWBALL.id => Arc::new(SnowballEntity::new(entity)),
+        id if id == EntityType::EGG.id => Arc::new(EggEntity::new(entity)),
+        id if id == EntityType::SILVERFISH.id => SilverfishEntity::new(entity),
+        id if id == EntityType::SLIME.id => SlimeEntity::new(entity),
+        id if id == EntityType::SHULKER.id => ShulkerEntity::new(entity),
         id if id == EntityType::SHULKER_BULLET.id => {
             // Shulker bullets are normally spawned by ShulkerEntity directly;
             // when loaded from the world we create a no-target bullet at the given position.
@@ -238,7 +238,7 @@ pub async fn from_type(
         id if id == EntityType::EXPERIENCE_ORB.id => Arc::new(ExperienceOrbEntity::new(entity, 1)),
         id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(entity, 4.0, 80)),
         id if id == EntityType::ITEM.id => {
-            Arc::new(ItemEntity::new(entity, ItemStack::new(1, &Item::AIR)).await)
+            Arc::new(ItemEntity::new(entity, ItemStack::new(1, &Item::AIR)))
         }
         id if id == EntityType::ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::SPECTRAL_ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
@@ -262,13 +262,9 @@ pub async fn from_type(
             };
             Arc::new(WindChargeEntity::new(thrown))
         }
-        id if id == EntityType::FIREWORK_ROCKET.id => {
-            Arc::new(FireworkRocketEntity::new(entity).await)
-        }
-        id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity).await),
-        id if id == EntityType::LINGERING_POTION.id => {
-            Arc::new(LingeringPotionEntity::new(entity).await)
-        }
+        id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
+        id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
+        id if id == EntityType::LINGERING_POTION.id => Arc::new(LingeringPotionEntity::new(entity)),
         id if id == EntityType::EYE_OF_ENDER.id => Arc::new(EyeOfEnder::new(entity)),
         id if id == EntityType::ACACIA_BOAT.id
             || id == EntityType::ACACIA_CHEST_BOAT.id
@@ -306,10 +302,11 @@ pub async fn from_type(
     mob
 }
 
-pub async fn check_spawn_rules(
+pub fn check_spawn_rules(
     entity_type: &'static EntityType,
     world: &World,
     pos: &BlockPos,
+    is_thundering: bool,
 ) -> bool {
     let id = entity_type.id;
 
@@ -334,10 +331,10 @@ pub async fn check_spawn_rules(
         || id == EntityType::VINDICATOR.id
         || id == EntityType::WARDEN.id
     {
-        return mob::MobEntity::check_monster_spawn_rules(world, pos).await;
+        return mob::MobEntity::check_monster_spawn_rules(world, pos, is_thundering);
     }
     if id == EntityType::BAT.id {
-        return bat::BatEntity::check_bat_spawn_rules(world, pos).await;
+        return bat::BatEntity::check_bat_spawn_rules(world, pos);
     }
 
     // TODO

@@ -60,7 +60,6 @@ impl BlockBehaviour for NetherPortalBlock {
             if is_horizontal_and_different
                 || args.neighbor_state_id == args.state_id
                 || NetherPortal::get_on_axis(args.world, args.position, state_axis)
-                    .await
                     .is_some_and(|e| e.was_already_valid())
             {
                 return args.state_id;

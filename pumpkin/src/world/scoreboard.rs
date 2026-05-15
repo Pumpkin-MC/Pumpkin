@@ -22,7 +22,7 @@ pub struct Scoreboard {
 }
 
 impl Scoreboard {
-    pub async fn add_objective(&mut self, world: &World, objective: ScoreboardObjective<'static>) {
+    pub fn add_objective(&mut self, world: &World, objective: ScoreboardObjective<'static>) {
         if self.objectives.contains_key(objective.name) {
             warn!(
                 "Tried to create an objective which already exists: {}",
@@ -30,26 +30,22 @@ impl Scoreboard {
             );
             return;
         }
-        world
-            .broadcast_packet_all(&CUpdateObjectives::new(
-                objective.name.to_string(),
-                pumpkin_protocol::java::client::play::Mode::Add,
-                objective.display_name.clone(),
-                objective.render_type,
-                objective.number_format.clone(),
-            ))
-            .await;
-        world
-            .broadcast_packet_all(&CDisplayObjective::new(
-                ScoreboardDisplaySlot::Sidebar,
-                objective.name.to_string(),
-            ))
-            .await;
+        world.broadcast_packet_all(&CUpdateObjectives::new(
+            objective.name.to_string(),
+            pumpkin_protocol::java::client::play::Mode::Add,
+            objective.display_name.clone(),
+            objective.render_type,
+            objective.number_format.clone(),
+        ));
+        world.broadcast_packet_all(&CDisplayObjective::new(
+            ScoreboardDisplaySlot::Sidebar,
+            objective.name.to_string(),
+        ));
         self.objectives
             .insert(objective.name.to_string(), objective);
     }
 
-    pub async fn remove_objective(&mut self, world: &World, name: &str) {
+    pub fn remove_objective(&mut self, world: &World, name: &str) {
         if !self.objectives.contains_key(name) {
             warn!(
                 "Tried to remove an objective which does not exist: {}",
@@ -57,20 +53,18 @@ impl Scoreboard {
             );
             return;
         }
-        world
-            .broadcast_packet_all(&CUpdateObjectives::new(
-                name.to_string(),
-                pumpkin_protocol::java::client::play::Mode::Remove,
-                TextComponent::empty(),
-                pumpkin_protocol::java::client::play::RenderType::Integer,
-                None,
-            ))
-            .await;
+        world.broadcast_packet_all(&CUpdateObjectives::new(
+            name.to_string(),
+            pumpkin_protocol::java::client::play::Mode::Remove,
+            TextComponent::empty(),
+            pumpkin_protocol::java::client::play::RenderType::Integer,
+            None,
+        ));
         self.objectives.remove(name);
         self.scores.remove(name);
     }
 
-    pub async fn update_score(&mut self, world: &World, score: ScoreboardScore<'static>) {
+    pub fn update_score(&mut self, world: &World, score: ScoreboardScore<'static>) {
         if !self.objectives.contains_key(score.objective_name) {
             warn!(
                 "Tried to place a score into an objective which does not exist: {}",
@@ -78,15 +72,13 @@ impl Scoreboard {
             );
             return;
         }
-        world
-            .broadcast_packet_all(&CUpdateScore::new(
-                score.entity_name.to_string(),
-                score.objective_name.to_string(),
-                score.value,
-                score.display_name.clone(),
-                score.number_format.clone(),
-            ))
-            .await;
+        world.broadcast_packet_all(&CUpdateScore::new(
+            score.entity_name.to_string(),
+            score.objective_name.to_string(),
+            score.value,
+            score.display_name.clone(),
+            score.number_format.clone(),
+        ));
 
         self.scores
             .entry(score.objective_name.to_string())
@@ -94,20 +86,18 @@ impl Scoreboard {
             .insert(score.entity_name.to_string(), score);
     }
 
-    pub async fn remove_score(&mut self, world: &World, entity_name: &str, objective_name: &str) {
-        world
-            .broadcast_packet_all(&CUpdateScore::new_remove(
-                entity_name.to_string(),
-                objective_name.to_string(),
-            ))
-            .await;
+    pub fn remove_score(&mut self, world: &World, entity_name: &str, objective_name: &str) {
+        world.broadcast_packet_all(&CUpdateScore::new_remove(
+            entity_name.to_string(),
+            objective_name.to_string(),
+        ));
 
         if let Some(objective_scores) = self.scores.get_mut(objective_name) {
             objective_scores.remove(entity_name);
         }
     }
 
-    pub async fn add_team(&mut self, world: &World, team: Team) {
+    pub fn add_team(&mut self, world: &World, team: Team) {
         if self.teams.contains_key(&team.name) {
             warn!(
                 "Tried to create Team which does already exist, {}",
@@ -126,19 +116,17 @@ impl Scoreboard {
             player_suffix: &team.player_suffix,
         };
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: team.name.clone(),
-                method: TeamMethod::Create,
-                parameters: Some(parameters),
-                players: team.players.clone(),
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: team.name.clone(),
+            method: TeamMethod::Create,
+            parameters: Some(parameters),
+            players: team.players.clone(),
+        });
 
         self.teams.insert(team.name.clone(), team);
     }
 
-    pub async fn update_team(&mut self, world: &World, team: Team) {
+    pub fn update_team(&mut self, world: &World, team: Team) {
         if !self.teams.contains_key(&team.name) {
             warn!("Tried to update Team which does not exist, {}", team.name);
             return;
@@ -154,37 +142,33 @@ impl Scoreboard {
             player_suffix: &team.player_suffix,
         };
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: team.name.clone(),
-                method: TeamMethod::Update,
-                parameters: Some(parameters),
-                players: Vec::new(),
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: team.name.clone(),
+            method: TeamMethod::Update,
+            parameters: Some(parameters),
+            players: Vec::new(),
+        });
 
         self.teams.insert(team.name.clone(), team);
     }
 
-    pub async fn remove_team(&mut self, world: &World, name: &str) {
+    pub fn remove_team(&mut self, world: &World, name: &str) {
         if !self.teams.contains_key(name) {
             warn!("Tried to remove Team which does not exist, {}", name);
             return;
         }
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: name.to_string(),
-                method: TeamMethod::Remove,
-                parameters: None,
-                players: Vec::new(),
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: name.to_string(),
+            method: TeamMethod::Remove,
+            parameters: None,
+            players: Vec::new(),
+        });
 
         self.teams.remove(name);
     }
 
-    pub async fn add_player_to_team(&mut self, world: &World, team_name: &str, player: String) {
+    pub fn add_player_to_team(&mut self, world: &World, team_name: &str, player: String) {
         let Some(team) = self.teams.get_mut(team_name) else {
             warn!(
                 "Tried to add player to Team which does not exist, {}",
@@ -197,19 +181,17 @@ impl Scoreboard {
             return;
         }
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: team_name.to_string(),
-                method: TeamMethod::AddPlayers,
-                parameters: None,
-                players: vec![player.clone()],
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: team_name.to_string(),
+            method: TeamMethod::AddPlayers,
+            parameters: None,
+            players: vec![player.clone()],
+        });
 
         team.players.push(player);
     }
 
-    pub async fn remove_player_from_team(&mut self, world: &World, team_name: &str, player: &str) {
+    pub fn remove_player_from_team(&mut self, world: &World, team_name: &str, player: &str) {
         let Some(team) = self.teams.get_mut(team_name) else {
             warn!(
                 "Tried to remove player from Team which does not exist, {}",
@@ -222,14 +204,12 @@ impl Scoreboard {
             return;
         }
 
-        world
-            .broadcast_packet_all(&CSetPlayerTeam {
-                team_name: team_name.to_string(),
-                method: TeamMethod::RemovePlayers,
-                parameters: None,
-                players: vec![player.to_string()],
-            })
-            .await;
+        world.broadcast_packet_all(&CSetPlayerTeam {
+            team_name: team_name.to_string(),
+            method: TeamMethod::RemovePlayers,
+            parameters: None,
+            players: vec![player.to_string()],
+        });
 
         team.players.retain(|p| p != player);
     }

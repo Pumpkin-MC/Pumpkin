@@ -13,8 +13,10 @@ use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use crate::net::authentication::lookup_profile_by_name;
 use crate::net::{GameProfile, offline_uuid};
 use crate::server::Server;
+use arc_swap::ArcSwap;
 use pumpkin_data::translation;
 use std::pin::Pin;
+use std::sync::Arc;
 use uuid::Uuid;
 
 pub const UNKNOWN_PLAYER_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
@@ -175,7 +177,7 @@ impl GameProfileResult {
         GameProfile {
             id: uuid,
             name,
-            properties: vec![],
+            properties: ArcSwap::new(Arc::new(vec![])),
             profile_actions: None,
         }
     }

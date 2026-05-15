@@ -116,7 +116,7 @@ struct DestroyFiller;
 impl Filler for DestroyFiller {
     async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position).await)
+            && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }
@@ -144,7 +144,7 @@ struct HollowFiller;
 impl Filler for HollowFiller {
     async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position).await)
+            && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }
@@ -170,7 +170,7 @@ impl Filler for HollowFiller {
 struct KeepFiller;
 impl Filler for KeepFiller {
     async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
-        let (old_block, old_state) = context.world.get_block_and_state(&block_position).await;
+        let (old_block, old_state) = context.world.get_block_and_state(&block_position);
         if old_state.is_air() {
             if let Some(filter) = &context.option_filter
                 && not_in_filter(filter, old_block)
@@ -199,7 +199,7 @@ impl Filler for OutlineFiller {
             return FillerResult::DidNotPlaceBlock;
         }
         if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position).await)
+            && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }
@@ -219,7 +219,7 @@ struct ReplaceFiller;
 impl Filler for ReplaceFiller {
     async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position).await)
+            && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }
@@ -239,7 +239,7 @@ struct StrictFiller;
 impl Filler for StrictFiller {
     async fn execute_for_pos(context: &Context, block_position: BlockPos) -> FillerResult {
         if let Some(filter) = &context.option_filter
-            && not_in_filter(filter, context.world.get_block(&block_position).await)
+            && not_in_filter(filter, context.world.get_block(&block_position))
         {
             return FillerResult::DidNotPlaceBlock;
         }

@@ -199,40 +199,36 @@ impl ArmorStandEntity {
             .drop_stack(&entity.block_pos.load(), armor_stand_item)
             .await;
 
-        self.on_break(entity).await;
+        Self::on_break(entity);
     }
 
-    async fn on_break(&self, entity: &Entity) {
+    fn on_break(entity: &Entity) {
         let world = entity.world.load();
-        world
-            .play_sound(
-                Sound::EntityArmorStandBreak,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            )
-            .await;
+        world.play_sound(
+            Sound::EntityArmorStandBreak,
+            SoundCategory::Neutral,
+            &entity.pos.load(),
+        );
 
         // TODO: Implement equipment slots and make them drop all of their stored items.
     }
 
     /// Spawns break particles at the armor stand's position.
     // TODO: use oak plank block particles like vanilla (requires block state data in particle system)
-    async fn spawn_break_particles(&self, entity: &Entity) {
+    fn spawn_break_particles(entity: &Entity) {
         let world = entity.world.load();
         let pos = entity.pos.load();
         let width = entity.width();
         let height = entity.height();
 
         // Spawn particles similar to vanilla: 10 particles with offset based on entity size
-        world
-            .spawn_particle(
-                Vector3::new(pos.x, pos.y + f64::from(height) * 0.6666, pos.z),
-                Vector3::new(width / 4.0, height / 4.0, width / 4.0),
-                0.05,
-                10,
-                Particle::Poof,
-            )
-            .await;
+        world.spawn_particle(
+            Vector3::new(pos.x, pos.y + f64::from(height) * 0.6666, pos.z),
+            Vector3::new(width / 4.0, height / 4.0, width / 4.0),
+            0.05,
+            10,
+            Particle::Poof,
+        );
     }
 }
 
@@ -363,7 +359,10 @@ impl EntityBase for ArmorStandEntity {
                 return false;
             }
 
-            if entity.is_invulnerable_to(&damage_type) || self.is_invisible() || self.is_marker() {
+            if entity.is_invulnerable_to(&damage_type).await
+                || self.is_invisible()
+                || self.is_marker()
+            {
                 return false;
             }
 
@@ -373,7 +372,7 @@ impl EntityBase for ArmorStandEntity {
                 || damage_type == DamageType::BAD_RESPAWN_POINT;
 
             if is_explosion {
-                self.on_break(entity).await;
+                Self::on_break(entity);
                 entity.kill(caller).await;
                 return false;
             }
@@ -403,7 +402,7 @@ impl EntityBase for ArmorStandEntity {
                 if !player.abilities.lock().await.allow_modify_world {
                     return false;
                 } else if player.is_creative() {
-                    self.spawn_break_particles(entity).await;
+                    Self::spawn_break_particles(entity);
                     entity.kill(caller).await;
                     return true;
                 }
@@ -412,26 +411,20 @@ impl EntityBase for ArmorStandEntity {
             let time = world.level_time.lock().await.query_gametime();
 
             if time - self.last_hit_time.load(Ordering::Relaxed) > 5 && !always_kills {
-                world
-                    .send_entity_status(entity, EntityStatus::ArmorstandWobble)
-                    .await;
-                world
-                    .play_sound(
-                        Sound::EntityArmorStandHit,
-                        SoundCategory::Neutral,
-                        &entity.block_pos.load().to_f64(),
-                    )
-                    .await;
+                world.send_entity_status(entity, EntityStatus::ArmorstandWobble);
+                world.play_sound(
+                    Sound::EntityArmorStandHit,
+                    SoundCategory::Neutral,
+                    &entity.block_pos.load().to_f64(),
+                );
                 self.last_hit_time.store(time, Ordering::Relaxed);
             } else {
-                self.spawn_break_particles(entity).await;
-                world
-                    .play_sound(
-                        Sound::EntityArmorStandBreak,
-                        SoundCategory::Neutral,
-                        &entity.block_pos.load().to_f64(),
-                    )
-                    .await;
+                Self::spawn_break_particles(entity);
+                world.play_sound(
+                    Sound::EntityArmorStandBreak,
+                    SoundCategory::Neutral,
+                    &entity.block_pos.load().to_f64(),
+                );
                 self.break_and_drop_items().await;
                 entity.kill(caller).await;
             }

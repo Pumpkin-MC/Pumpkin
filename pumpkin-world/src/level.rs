@@ -697,41 +697,27 @@ impl Level {
         }
     }
 
-    pub async fn get_block_state(self: &Arc<Self>, position: &BlockPos) -> RawBlockState {
+    pub fn get_block_state(&self, position: &BlockPos) -> RawBlockState {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let id = self
-            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
+            .read_chunk_sync(&chunk_coordinate, |chunk| {
                 chunk.section.get_block_absolute_y(
                     relative.x as usize,
                     relative.y,
                     relative.z as usize,
                 )
             })
-            .await;
+            .flatten();
         RawBlockState(id.unwrap_or(Block::VOID_AIR.default_state.id))
     }
 
-    pub async fn get_rough_biome(self: &Arc<Self>, position: &BlockPos) -> &'static Biome {
-        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        let id = self
-            .get_or_fetch_chunk(chunk_coordinate, |chunk| {
-                chunk.section.get_rough_biome_absolute_y(
-                    relative.x as usize,
-                    relative.y,
-                    relative.z as usize,
-                )
-            })
-            .await;
-        Biome::from_id(id.unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
-    }
-
-    pub async fn set_block_state(
-        self: &Arc<Self>,
+    pub fn set_block_state(
+        &self,
         position: &BlockPos,
         block_state_id: BlockStateId,
     ) -> BlockStateId {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
-        self.get_or_fetch_chunk(chunk_coordinate, |chunk| {
+        self.read_chunk_sync(&chunk_coordinate, |chunk| {
             let replaced_block_state_id = chunk.set_block_absolute_y(
                 relative.x as usize,
                 relative.y,
@@ -743,7 +729,7 @@ impl Level {
             }
             replaced_block_state_id
         })
-        .await
+        .unwrap_or(Block::VOID_AIR.default_state.id)
     }
 
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
@@ -798,6 +784,18 @@ impl Level {
         self.loaded_chunks.get(coordinates).map(|x| f(x.value()))
     }
 
+    pub fn get_rough_biome(&self, position: &BlockPos) -> &'static Biome {
+        let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
+        let id = self.read_chunk_sync(&chunk_coordinate, |chunk| {
+            chunk.section.get_rough_biome_absolute_y(
+                relative.x as usize,
+                relative.y,
+                relative.z as usize,
+            )
+        });
+        Biome::from_id(id.flatten().unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
+    }
+
     pub fn read_entity_chunk_sync<R, F: Fn(&SyncEntityChunk) -> R>(
         &self,
         coordinates: &Vector2<i32>,
@@ -806,6 +804,12 @@ impl Level {
         self.loaded_entity_chunks
             .get(coordinates)
             .map(|x| f(x.value()))
+    }
+
+    pub fn get_entity_chunk_sync(&self, pos: &Vector2<i32>) -> Option<SyncEntityChunk> {
+        self.loaded_entity_chunks
+            .get(pos)
+            .map(|x| x.value().clone())
     }
 
     pub async fn get_or_fetch_entity_chunk<R, F: Fn(&SyncEntityChunk) -> R>(
@@ -827,8 +831,8 @@ impl Level {
         self.loaded_entity_chunks.try_get(&coordinates).try_unwrap()
     }
 
-    pub async fn schedule_block_tick(
-        self: &Arc<Self>,
+    pub fn schedule_block_tick(
+        &self,
         block: &Block,
         block_pos: BlockPos,
         delay: u8,
@@ -843,15 +847,18 @@ impl Level {
         };
 
         let chunk_pos = block_pos.chunk_position();
-        self.get_or_fetch_chunk(chunk_pos, |chunk| {
-            chunk.block_ticks.schedule_tick(&scheduled_tick, tick_order);
-        })
-        .await;
-        self.chunks_with_scheduled_ticks.insert(chunk_pos);
+        if self
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                chunk.block_ticks.schedule_tick(&scheduled_tick, tick_order);
+            })
+            .is_some()
+        {
+            self.chunks_with_scheduled_ticks.insert(chunk_pos);
+        }
     }
 
-    pub async fn schedule_fluid_tick(
-        self: &Arc<Self>,
+    pub fn schedule_fluid_tick(
+        &self,
         fluid: &Fluid,
         block_pos: BlockPos,
         delay: u8,
@@ -866,32 +873,27 @@ impl Level {
         };
 
         let chunk_pos = block_pos.chunk_position();
-        self.get_or_fetch_chunk(chunk_pos, |chunk| {
-            chunk.fluid_ticks.schedule_tick(&scheduled_tick, tick_order);
-        })
-        .await;
-        self.chunks_with_scheduled_ticks.insert(chunk_pos);
+        if self
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                chunk.fluid_ticks.schedule_tick(&scheduled_tick, tick_order);
+            })
+            .is_some()
+        {
+            self.chunks_with_scheduled_ticks.insert(chunk_pos);
+        }
     }
 
-    pub async fn is_block_tick_scheduled(
-        self: &Arc<Self>,
-        block_pos: &BlockPos,
-        block: &Block,
-    ) -> bool {
-        self.get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+    pub fn is_block_tick_scheduled(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        self.read_chunk_sync(&block_pos.chunk_position(), |chunk| {
             chunk.block_ticks.is_scheduled(*block_pos, block)
         })
-        .await
+        .unwrap_or(false)
     }
 
-    pub async fn is_fluid_tick_scheduled(
-        self: &Arc<Self>,
-        block_pos: &BlockPos,
-        fluid: &Fluid,
-    ) -> bool {
-        self.get_or_fetch_chunk(block_pos.chunk_position(), |chunk| {
+    pub fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
+        self.read_chunk_sync(&block_pos.chunk_position(), |chunk| {
             chunk.fluid_ticks.is_scheduled(*block_pos, fluid)
         })
-        .await
+        .unwrap_or(false)
     }
 }

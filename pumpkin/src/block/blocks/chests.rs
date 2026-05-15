@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use crate::block::entities::BlockEntity;
 use crate::block::entities::chest::ChestBlockEntity;
-use futures::future::join;
 use pumpkin_data::block_properties::{
     BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing,
 };
+use pumpkin_data::chest_loot_table::get_chest_loot_table;
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::{Block, BlockDirection, translation};
 use pumpkin_inventory::double::DoubleInventory;
@@ -15,6 +15,7 @@ use pumpkin_inventory::screen_handler::{
     BoxFuture, InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
+use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
@@ -28,6 +29,7 @@ use crate::block::{
 };
 use crate::entity::EntityBase;
 use crate::world::World;
+use crate::world::loot::fill_chest_inventory;
 use crate::{
     block::{BlockBehaviour, registry::BlockActionResult},
     entity::player::Player,
@@ -75,7 +77,7 @@ impl ScreenHandlerFactory for ChestScreenFactory {
 // Shared chest behavior implementations
 const LID_ANIMATION_EVENT_TYPE: u8 = 1;
 
-async fn on_place_chest_impl(args: OnPlaceArgs<'_>) -> BlockStateId {
+fn on_place_chest_impl(args: &OnPlaceArgs<'_>) -> BlockStateId {
     let mut chest_props = ChestLikeProperties::default(args.block);
     chest_props.waterlogged = args.replacing.water_source();
 
@@ -85,8 +87,7 @@ async fn on_place_chest_impl(args: OnPlaceArgs<'_>) -> BlockStateId {
         args.block,
         args.position,
         args.direction,
-    )
-    .await;
+    );
     chest_props.facing = facing;
     chest_props.r#type = r#type;
 
@@ -98,7 +99,7 @@ async fn placed_chest_impl<E: BlockEntity + 'static>(
     create_entity: impl FnOnce(BlockPos) -> E,
 ) {
     let chest = create_entity(*args.position);
-    args.world.add_block_entity(Arc::new(chest)).await;
+    args.world.add_block_entity(Arc::new(chest));
 
     let chest_props = ChestLikeProperties::from_state_id(args.state_id, args.block);
     let connected_towards = match chest_props.r#type {
@@ -114,9 +115,7 @@ async fn placed_chest_impl<E: BlockEntity + 'static>(
         chest_props.facing,
         connected_towards,
         ChestType::Single,
-    )
-    .await
-    {
+    ) {
         neighbor_props.r#type = chest_props.r#type.opposite();
 
         args.world
@@ -130,11 +129,29 @@ async fn placed_chest_impl<E: BlockEntity + 'static>(
 }
 
 async fn normal_use_chest_impl(args: NormalUseArgs<'_>) -> BlockActionResult {
-    let (state, first_chest) = join(
-        args.world.get_block_state_id(args.position),
-        args.world.get_block_entity(args.position),
-    )
-    .await;
+    let state = args.world.get_block_state_id(args.position);
+    let first_chest = args.world.get_block_entity(args.position);
+
+    // Spectators cannot open chests with a pending loot table.
+    // The loot is only generated on first open by a non-spectator.
+    let player_is_spectator = args.player.gamemode.load() == GameMode::Spectator;
+    if player_is_spectator
+        && let Some(ref entity) = first_chest
+        && entity.has_loot_table()
+    {
+        return BlockActionResult::Success;
+    }
+
+    // Unpack deferred loot table on first open (non-spectator only).
+    if let Some(ref entity) = first_chest
+        && let Some((loot_key, seed)) = entity.take_loot_table()
+        && let Some(table) = get_chest_loot_table(&loot_key)
+        && let Some(inv) = entity.clone().get_inventory()
+    {
+        fill_chest_inventory(&inv, table, seed).await;
+        // Mark the block entity dirty so the generated items persist.
+        inv.mark_dirty();
+    }
 
     let Some(first_inventory) = first_chest.and_then(BlockEntity::get_inventory) else {
         return BlockActionResult::Fail;
@@ -147,13 +164,13 @@ async fn normal_use_chest_impl(args: NormalUseArgs<'_>) -> BlockActionResult {
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
 
-    if is_chest_blocked(args.world, args.position).await {
+    if is_chest_blocked(args.world, args.position) {
         return BlockActionResult::Success;
     }
 
     if let Some(direction) = connected_towards {
         let neighbor_pos = args.position.offset(direction.to_offset());
-        if is_chest_blocked(args.world, &neighbor_pos).await {
+        if is_chest_blocked(args.world, &neighbor_pos) {
             return BlockActionResult::Success;
         }
     }
@@ -162,7 +179,6 @@ async fn normal_use_chest_impl(args: NormalUseArgs<'_>) -> BlockActionResult {
         && let Some(second_inventory) = args
             .world
             .get_block_entity(&args.position.offset(direction.to_offset()))
-            .await
             .and_then(BlockEntity::get_inventory)
     {
         // Vanilla: chestType == ChestType.RIGHT ? DoubleBlockProperties.Type.FIRST : DoubleBlockProperties.Type.SECOND;
@@ -197,9 +213,7 @@ async fn broken_chest_impl(args: BrokenArgs<'_>) {
         chest_props.facing,
         connected_towards,
         chest_props.r#type.opposite(),
-    )
-    .await
-    {
+    ) {
         neighbor_props.r#type = ChestType::Single;
 
         args.world
@@ -217,7 +231,7 @@ pub struct ChestBlock;
 
 impl BlockBehaviour for ChestBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(on_place_chest_impl(args))
+        Box::pin(async move { on_place_chest_impl(&args) })
     }
 
     fn on_synced_block_event<'a>(
@@ -246,7 +260,7 @@ pub struct CopperChestBlock;
 
 impl BlockBehaviour for CopperChestBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(on_place_chest_impl(args))
+        Box::pin(async move { on_place_chest_impl(&args) })
     }
 
     fn on_synced_block_event<'a>(
@@ -270,7 +284,7 @@ impl BlockBehaviour for CopperChestBlock {
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let current_state_id = args.world.get_block_state_id(args.position).await;
+            let current_state_id = args.world.get_block_state_id(args.position);
             let chest_props = ChestLikeProperties::from_state_id(current_state_id, args.block);
 
             // Only oxidize LEFT or SINGLE chests (not RIGHT) to prevent double oxidation
@@ -279,7 +293,7 @@ impl BlockBehaviour for CopperChestBlock {
             }
 
             // Only oxidize if no players are viewing the chest
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(chest_entity) = block_entity.as_any().downcast_ref::<ChestBlockEntity>()
                 && chest_entity.get_viewer_count() > 0
             {
@@ -355,7 +369,7 @@ async fn try_oxidize_copper_chest(
 
     // Scan neighbors in 4-block Manhattan distance to calculate oxidation chance
     let (same_level_count, higher_level_count) =
-        count_neighbor_oxidation_levels(world, position, current_level).await;
+        count_neighbor_oxidation_levels(world, position, current_level);
 
     // If we found any neighbors at a LOWER level, oxidation is blocked
     // (This is handled in count_neighbor_oxidation_levels by returning early)
@@ -380,7 +394,7 @@ async fn try_oxidize_copper_chest(
 
 /// Count copper blocks at same and higher oxidation levels within 4-block Manhattan distance.
 /// Returns (same, higher) counts, or (0, 0) if a lower-level neighbor was found (blocking oxidation).
-async fn count_neighbor_oxidation_levels(
+fn count_neighbor_oxidation_levels(
     world: &Arc<World>,
     center: &BlockPos,
     current_level: u8,
@@ -405,7 +419,7 @@ async fn count_neighbor_oxidation_levels(
                     center.0.z + dz,
                 ));
 
-                let neighbor_block = world.get_block(&neighbor_pos).await;
+                let neighbor_block = world.get_block(&neighbor_pos);
 
                 if let Some(neighbor_level) = get_oxidation_level(neighbor_block) {
                     match neighbor_level.cmp(&current_level) {
@@ -434,7 +448,7 @@ pub struct TrappedChestBlock;
 
 impl BlockBehaviour for TrappedChestBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(on_place_chest_impl(args))
+        Box::pin(async move { on_place_chest_impl(&args) })
     }
 
     fn on_synced_block_event<'a>(
@@ -473,7 +487,7 @@ impl BlockBehaviour for TrappedChestBlock {
 
             // Get viewer count from this chest
             let viewer_count = if let Some(block_entity) =
-                args.world.get_block_entity(args.position).await
+                args.world.get_block_entity(args.position)
                 && let Some(trapped_chest) = block_entity
                     .as_any()
                     .downcast_ref::<TrappedChestBlockEntity>()
@@ -503,7 +517,7 @@ impl BlockBehaviour for TrappedChestBlock {
     }
 }
 
-async fn compute_chest_props(
+fn compute_chest_props(
     world: &World,
     player: &Player,
     block: &Block,
@@ -518,9 +532,8 @@ async fn compute_chest_props(
             return (ChestType::Single, chest_facing);
         };
 
-        let (clicked_block, clicked_block_state) = world
-            .get_block_and_state_id(&block_pos.offset(face.to_offset()))
-            .await;
+        let (clicked_block, clicked_block_state) =
+            world.get_block_and_state_id(&block_pos.offset(face.to_offset()));
 
         if clicked_block == block {
             let clicked_props =
@@ -548,7 +561,6 @@ async fn compute_chest_props(
         chest_facing.rotate_clockwise(),
         ChestType::Single,
     )
-    .await
     .is_some()
     {
         (ChestType::Left, chest_facing)
@@ -560,7 +572,6 @@ async fn compute_chest_props(
         chest_facing.rotate_counter_clockwise(),
         ChestType::Single,
     )
-    .await
     .is_some()
     {
         (ChestType::Right, chest_facing)
@@ -569,7 +580,7 @@ async fn compute_chest_props(
     }
 }
 
-async fn get_chest_properties_if_can_connect(
+fn get_chest_properties_if_can_connect(
     world: &World,
     block: &Block,
     block_pos: &BlockPos,
@@ -577,9 +588,8 @@ async fn get_chest_properties_if_can_connect(
     direction: HorizontalFacing,
     wanted_type: ChestType,
 ) -> Option<ChestLikeProperties> {
-    let (neighbor_block, neighbor_block_state) = world
-        .get_block_and_state_id(&block_pos.offset(direction.to_offset()))
-        .await;
+    let (neighbor_block, neighbor_block_state) =
+        world.get_block_and_state_id(&block_pos.offset(direction.to_offset()));
 
     if neighbor_block != block {
         return None;
@@ -593,13 +603,13 @@ async fn get_chest_properties_if_can_connect(
     None
 }
 
-async fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
+fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
     // TODO: Block opening when a cat is sitting on top.
-    has_block_on_top(world, block_pos).await
+    has_block_on_top(world, block_pos)
 }
-async fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
+fn has_block_on_top(world: &World, block_pos: &BlockPos) -> bool {
     let above_pos = block_pos.up();
-    let above_state = world.get_block_state(&above_pos).await;
+    let above_state = world.get_block_state(&above_pos);
     above_state.is_solid_block()
 }
 

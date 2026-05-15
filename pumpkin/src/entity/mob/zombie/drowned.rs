@@ -11,13 +11,13 @@ pub struct DrownedEntity {
 }
 
 impl DrownedEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = ZombieEntityBase::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = ZombieEntityBase::new(entity);
         let zombie = Self { entity };
         let mob_arc = Arc::new(zombie);
         // Fix duplicated since already in ZombieEntity::new()
         {
-            //let mut target_selector = mob_arc.entity.mob_entity.target_selector.lock().await;
+            //let mut target_selector = mob_arc.entity.mob_entity.target_selector.lock().unwrap();
 
             // TODO
             // target_selector.add_goal(

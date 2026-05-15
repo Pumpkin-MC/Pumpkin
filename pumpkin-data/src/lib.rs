@@ -1,5 +1,9 @@
 #![allow(unused_imports)]
 
+#[rustfmt::skip]
+#[path = "generated/chest_loot.rs"]
+pub mod chest_loot_table;
+
 #[cfg(feature = "item")]
 #[rustfmt::skip]
 #[path = "generated/item.rs"]

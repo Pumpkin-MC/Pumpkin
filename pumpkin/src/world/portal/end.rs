@@ -16,15 +16,15 @@ impl EndPortal {
 
     pub async fn get_new_portal(world: &Arc<World>, pos: BlockPos) {
         let mid_pos = Self::get_mid_pos(world, pos);
-        if let Some(mid_pos) = mid_pos.await
-            && Self::is_valid_portal(world, mid_pos).await
+        if let Some(mid_pos) = mid_pos
+            && Self::is_valid_portal(world, mid_pos)
         {
             Self::create_portal(world, mid_pos).await;
         }
     }
 
-    async fn get_mid_pos(world: &World, pos: BlockPos) -> Option<BlockPos> {
-        let (block, state) = world.get_block_and_state_id(&pos).await;
+    fn get_mid_pos(world: &World, pos: BlockPos) -> Option<BlockPos> {
+        let (block, state) = world.get_block_and_state_id(&pos);
         if block != &Self::FRAME_BLOCK {
             return None;
         }
@@ -34,8 +34,8 @@ impl EndPortal {
         let left_pos = pos.offset_dir(facing_dir.rotate_clockwise().to_offset(), 1);
         let right_pos = pos.offset_dir(facing_dir.rotate_counter_clockwise().to_offset(), 1);
 
-        let left_block = world.get_block(&left_pos).await;
-        let right_block = world.get_block(&right_pos).await;
+        let left_block = world.get_block(&left_pos);
+        let right_block = world.get_block(&right_pos);
 
         let offset = match (left_block.id, right_block.id) {
             (Self::FRAME_BLOCK_ID, Self::FRAME_BLOCK_ID) => 0, // Middle block
@@ -50,16 +50,16 @@ impl EndPortal {
         )
     }
 
-    async fn is_valid_portal(world: &World, pos: BlockPos) -> bool {
+    fn is_valid_portal(world: &World, pos: BlockPos) -> bool {
         for dir in BlockDirection::horizontal() {
             let facing = dir.to_horizontal_facing().unwrap();
             let mid_pos = pos.offset_dir(dir.to_offset(), 2);
             let left_pos = mid_pos.offset_dir(facing.rotate_clockwise().to_offset(), 1);
             let right_pos = mid_pos.offset_dir(facing.rotate_counter_clockwise().to_offset(), 1);
 
-            let (mid_block, mid_state) = world.get_block_and_state_id(&mid_pos).await;
-            let (left_block, left_state) = world.get_block_and_state_id(&left_pos).await;
-            let (right_block, right_state) = world.get_block_and_state_id(&right_pos).await;
+            let (mid_block, mid_state) = world.get_block_and_state_id(&mid_pos);
+            let (left_block, left_state) = world.get_block_and_state_id(&left_pos);
+            let (right_block, right_state) = world.get_block_and_state_id(&right_pos);
 
             if left_block.id != Self::FRAME_BLOCK_ID
                 || mid_block.id != Self::FRAME_BLOCK_ID
