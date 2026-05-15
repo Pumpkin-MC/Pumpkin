@@ -443,7 +443,7 @@ impl HostEntity for PluginHostState {
                     let pos = *pos;
                     let world = w.clone();
                     async move {
-                        let block = world.get_block_state(&pos).await;
+                        let block = world.get_block_state(&pos);
                         !block.is_air()
                     }
                 },

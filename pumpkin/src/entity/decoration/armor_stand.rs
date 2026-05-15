@@ -199,153 +199,107 @@ impl ArmorStandEntity {
             .drop_stack(&entity.block_pos.load(), armor_stand_item)
             .await;
 
-        self.on_break(entity).await;
+        Self::on_break(entity);
     }
 
-    async fn on_break(&self, entity: &Entity) {
+    fn on_break(entity: &Entity) {
         let world = entity.world.load();
-        world
-            .play_sound(
-                Sound::EntityArmorStandBreak,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            )
-            .await;
+        world.play_sound(
+            Sound::EntityArmorStandBreak,
+            SoundCategory::Neutral,
+            &entity.pos.load(),
+        );
 
         // TODO: Implement equipment slots and make them drop all of their stored items.
     }
 
     /// Spawns break particles at the armor stand's position.
     // TODO: use oak plank block particles like vanilla (requires block state data in particle system)
-    async fn spawn_break_particles(&self, entity: &Entity) {
+    fn spawn_break_particles(entity: &Entity) {
         let world = entity.world.load();
         let pos = entity.pos.load();
         let width = entity.width();
         let height = entity.height();
 
         // Spawn particles similar to vanilla: 10 particles with offset based on entity size
-        world
-            .spawn_particle(
-                Vector3::new(pos.x, pos.y + f64::from(height) * 0.6666, pos.z),
-                Vector3::new(width / 4.0, height / 4.0, width / 4.0),
-                0.05,
-                10,
-                Particle::Poof,
-            )
-            .await;
+        world.spawn_particle(
+            Vector3::new(pos.x, pos.y + f64::from(height) * 0.6666, pos.z),
+            Vector3::new(width / 4.0, height / 4.0, width / 4.0),
+            0.05,
+            10,
+            Particle::Poof,
+        );
     }
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
 impl NBTStorage for ArmorStandEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.living_entity.write_nbt(nbt).await;
             let disabled_slots = self.disabled_slots.load(Ordering::Relaxed);
             // ...
 
-            nbt.put_bool(self.is_invisible());
-            nbt.put_bool(self.is_small());
-            nbt.put_bool(self.should_show_arms());
-            nbt.put_int(disabled_slots);
-            nbt.put_bool(!self.should_show_base_plate());
-            nbt.put_bool(self.is_marker());
+            nbt.put_bool("Invisible", self.is_invisible());
+            nbt.put_bool("Small", self.is_small());
+            nbt.put_bool("ShowArms", self.should_show_arms());
+            nbt.put_int("DisabledSlots", disabled_slots);
+            nbt.put_bool("NoBasePlate", !self.should_show_base_plate());
+            if self.is_marker() {
+                nbt.put_bool("Marker", true);
+            }
 
-            let pose = self.pack_rotation();
-            nbt.put_f32(pose.head.pitch);
-            nbt.put_f32(pose.head.yaw);
-            nbt.put_f32(pose.head.roll);
-            nbt.put_f32(pose.body.pitch);
-            nbt.put_f32(pose.body.yaw);
-            nbt.put_f32(pose.body.roll);
-            nbt.put_f32(pose.left_arm.pitch);
-            nbt.put_f32(pose.left_arm.yaw);
-            nbt.put_f32(pose.left_arm.roll);
-            nbt.put_f32(pose.right_arm.pitch);
-            nbt.put_f32(pose.right_arm.yaw);
-            nbt.put_f32(pose.right_arm.roll);
-            nbt.put_f32(pose.left_leg.pitch);
-            nbt.put_f32(pose.left_leg.yaw);
-            nbt.put_f32(pose.left_leg.roll);
-            nbt.put_f32(pose.right_leg.pitch);
-            nbt.put_f32(pose.right_leg.yaw);
-            nbt.put_f32(pose.right_leg.roll);
+            nbt.put("Pose", self.pack_rotation());
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
             self.living_entity.read_nbt_non_mut(nbt).await;
             let mut flags = 0u8;
             // ...
 
-            let invisible = nbt.get_bool().unwrap_or(false);
-            if invisible {
+            if let Some(invisible) = nbt.get_bool("Invisible")
+                && invisible
+            {
                 self.get_entity().set_invisible(invisible).await;
             }
 
-            if nbt.get_bool().unwrap_or(false) {
+            if let Some(small) = nbt.get_bool("Small")
+                && small
+            {
                 flags |= ArmorStandFlags::Small as u8;
             }
 
-            if nbt.get_bool().unwrap_or(false) {
+            if let Some(show_arms) = nbt.get_bool("ShowArms")
+                && show_arms
+            {
                 flags |= ArmorStandFlags::ShowArms as u8;
             }
 
-            let disabled_slots = nbt.get_int().unwrap_or(0);
-            self.disabled_slots.store(disabled_slots, Ordering::Relaxed);
+            if let Some(disabled_slots) = nbt.get_int("DisabledSlots") {
+                self.disabled_slots.store(disabled_slots, Ordering::Relaxed);
+            }
 
-            let no_base_plate = nbt.get_bool().unwrap_or(false);
-            if !no_base_plate {
+            if let Some(no_base_plate) = nbt.get_bool("NoBasePlate") {
+                if !no_base_plate {
+                    flags |= ArmorStandFlags::HideBasePlate as u8;
+                }
+            } else {
                 flags |= ArmorStandFlags::HideBasePlate as u8;
             }
 
-            if nbt.get_bool().unwrap_or(false) {
+            if let Some(marker) = nbt.get_bool("Marker")
+                && marker
+            {
                 flags |= ArmorStandFlags::Marker as u8;
             }
 
             self.armor_stand_flags.store(flags, Ordering::Relaxed);
 
-            let head = EulerAngle::new(
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-            );
-            let body = EulerAngle::new(
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-            );
-            let left_arm = EulerAngle::new(
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-            );
-            let right_arm = EulerAngle::new(
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-            );
-            let left_leg = EulerAngle::new(
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-            );
-            let right_leg = EulerAngle::new(
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-                nbt.get_f32().unwrap_or(0.0),
-            );
-
-            self.unpack_rotation(&PackedRotation {
-                head,
-                body,
-                left_arm,
-                right_arm,
-                left_leg,
-                right_leg,
-            });
+            if let Some(pose_tag) = nbt.get("Pose") {
+                let packed: PackedRotation = pose_tag.clone().into();
+                self.unpack_rotation(&packed);
+            }
         })
     }
 }
@@ -405,7 +359,10 @@ impl EntityBase for ArmorStandEntity {
                 return false;
             }
 
-            if entity.is_invulnerable_to(&damage_type) || self.is_invisible() || self.is_marker() {
+            if entity.is_invulnerable_to(&damage_type).await
+                || self.is_invisible()
+                || self.is_marker()
+            {
                 return false;
             }
 
@@ -415,7 +372,7 @@ impl EntityBase for ArmorStandEntity {
                 || damage_type == DamageType::BAD_RESPAWN_POINT;
 
             if is_explosion {
-                self.on_break(entity).await;
+                Self::on_break(entity);
                 entity.kill(caller).await;
                 return false;
             }
@@ -445,7 +402,7 @@ impl EntityBase for ArmorStandEntity {
                 if !player.abilities.lock().await.allow_modify_world {
                     return false;
                 } else if player.is_creative() {
-                    self.spawn_break_particles(entity).await;
+                    Self::spawn_break_particles(entity);
                     entity.kill(caller).await;
                     return true;
                 }
@@ -454,26 +411,20 @@ impl EntityBase for ArmorStandEntity {
             let time = world.level_time.lock().await.query_gametime();
 
             if time - self.last_hit_time.load(Ordering::Relaxed) > 5 && !always_kills {
-                world
-                    .send_entity_status(entity, EntityStatus::ArmorstandWobble)
-                    .await;
-                world
-                    .play_sound(
-                        Sound::EntityArmorStandHit,
-                        SoundCategory::Neutral,
-                        &entity.block_pos.load().to_f64(),
-                    )
-                    .await;
+                world.send_entity_status(entity, EntityStatus::ArmorstandWobble);
+                world.play_sound(
+                    Sound::EntityArmorStandHit,
+                    SoundCategory::Neutral,
+                    &entity.block_pos.load().to_f64(),
+                );
                 self.last_hit_time.store(time, Ordering::Relaxed);
             } else {
-                self.spawn_break_particles(entity).await;
-                world
-                    .play_sound(
-                        Sound::EntityArmorStandBreak,
-                        SoundCategory::Neutral,
-                        &entity.block_pos.load().to_f64(),
-                    )
-                    .await;
+                Self::spawn_break_particles(entity);
+                world.play_sound(
+                    Sound::EntityArmorStandBreak,
+                    SoundCategory::Neutral,
+                    &entity.block_pos.load().to_f64(),
+                );
                 self.break_and_drop_items().await;
                 entity.kill(caller).await;
             }

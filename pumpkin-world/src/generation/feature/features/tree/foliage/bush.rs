@@ -1,5 +1,8 @@
 use pumpkin_data::BlockState;
-use pumpkin_util::random::{RandomGenerator, RandomImpl};
+use pumpkin_util::{
+    math::position::BlockPos,
+    random::{RandomGenerator, RandomImpl},
+};
 
 use super::{FoliagePlacer, LeaveValidator};
 use crate::generation::feature::features::tree::TreeNode;
@@ -20,10 +23,12 @@ impl BushFoliagePlacer {
         radius: i32,
         offset: i32,
         foliage_provider: &BlockState,
-    ) {
+    ) -> Vec<BlockPos> {
+        let mut foliage_positions = Vec::new();
         for y in (offset - foliage_height..=offset).rev() {
             let radius = radius + node.foliage_radius - 1 - y;
             FoliagePlacer::generate_square(
+                &mut foliage_positions,
                 self,
                 chunk,
                 random,
@@ -34,6 +39,7 @@ impl BushFoliagePlacer {
                 foliage_provider,
             );
         }
+        foliage_positions
     }
 
     pub const fn get_random_height(&self, _random: &mut RandomGenerator) -> i32 {

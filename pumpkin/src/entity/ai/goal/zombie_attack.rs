@@ -37,7 +37,7 @@ impl Goal for ZombieAttackGoal {
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
             self.melee_attack_goal.stop(mob).await;
-            mob.get_mob_entity().set_attacking(false).await;
+            mob.get_mob_entity().set_attacking(false);
         })
     }
 
@@ -48,9 +48,9 @@ impl Goal for ZombieAttackGoal {
             if self.ticks >= 5
                 && self.melee_attack_goal.cooldown < self.melee_attack_goal.get_max_cooldown() / 2
             {
-                mob.get_mob_entity().set_attacking(true).await;
+                mob.get_mob_entity().set_attacking(true);
             } else {
-                mob.get_mob_entity().set_attacking(false).await;
+                mob.get_mob_entity().set_attacking(false);
             }
         })
     }

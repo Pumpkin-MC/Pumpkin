@@ -151,7 +151,7 @@ impl Goal for LookAtEntityGoal {
                 } else {
                     target_entity.get_eye_y()
                 };
-                mob_entity.look_control.lock().await.look_at(
+                mob_entity.look_control.lock().unwrap().look_at(
                     mob,
                     target_pos.x,
                     look_y,

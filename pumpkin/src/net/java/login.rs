@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use pumpkin_data::translation;
 use pumpkin_protocol::{
     ConnectionState, KnownPack, Label, Link, LinkType,
@@ -10,6 +11,7 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
+use std::sync::Arc;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -81,7 +83,7 @@ impl JavaClient {
             let profile = GameProfile {
                 id,
                 name: login_start.name,
-                properties: vec![],
+                properties: ArcSwap::new(Arc::new(vec![])),
                 profile_actions: None,
             };
 
@@ -210,7 +212,8 @@ impl JavaClient {
     }
 
     async fn finish_login(&self, profile: &GameProfile) {
-        let packet = CLoginSuccess::new(&profile.id, &profile.name, &profile.properties, false);
+        let props = profile.properties.load();
+        let packet = CLoginSuccess::new(&profile.id, &profile.name, &props, false);
         self.send_packet_now(&packet).await;
     }
 
@@ -257,7 +260,7 @@ impl JavaClient {
             }
         }
         // Validate textures
-        for property in &profile.properties {
+        for property in profile.properties.load().iter() {
             authentication::validate_textures(
                 property,
                 &server.advanced_config.networking.authentication.textures,

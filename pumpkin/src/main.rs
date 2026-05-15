@@ -27,7 +27,7 @@ use pumpkin::{
 };
 use pumpkin::{LoggerOption, PumpkinServer, SHOULD_STOP, STOP_INTERRUPT, stop_server};
 
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, LoadConfiguration};
+use pumpkin_config::{LoadConfiguration, PumpkinConfig};
 use pumpkin_util::text::{
     TextComponent,
     color::{Color, NamedColor},
@@ -75,14 +75,12 @@ async fn main() {
     let time = Instant::now();
 
     let exec_dir = std::env::current_dir().unwrap();
-    let config_dir = exec_dir.join("config");
 
-    let basic_config = BasicConfiguration::load(&config_dir);
-    let advanced_config = AdvancedConfiguration::load(&config_dir);
+    let config = PumpkinConfig::load(&exec_dir);
 
     let vanilla_data = VanillaData::load();
 
-    pumpkin::init_logger(&advanced_config);
+    pumpkin::init_logger(&config.advanced);
 
     info!(
         "{}",
@@ -120,7 +118,7 @@ async fn main() {
             .expect("Unable to setup signal handlers");
     });
 
-    let pumpkin_server = PumpkinServer::new(basic_config, advanced_config, vanilla_data).await;
+    let pumpkin_server = PumpkinServer::new(config.basic, config.advanced, vanilla_data).await;
     let plugin_wait_time = pumpkin_server.init_plugins().await;
 
     let time_elapsed = time.elapsed().saturating_sub(plugin_wait_time);

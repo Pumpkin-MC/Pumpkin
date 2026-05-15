@@ -70,23 +70,19 @@ const NO_SLEEP_IDS: &[u16] = &[
 pub struct BedBlock;
 
 impl BlockBehaviour for BedBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            if let Some(player) = args.player {
-                let facing = player.living_entity.entity.get_horizontal_facing();
-                return args
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        if let Some(player) = args.player {
+            let facing = player.living_entity.entity.get_horizontal_facing();
+            return args
+                .block_accessor
+                .get_block_state(args.position)
+                .replaceable()
+                && args
                     .block_accessor
-                    .get_block_state(args.position)
-                    .await
-                    .replaceable()
-                    && args
-                        .block_accessor
-                        .get_block_state(&args.position.offset(facing.to_offset()))
-                        .await
-                        .replaceable();
-            }
-            false
-        })
+                    .get_block_state(&args.position.offset(facing.to_offset()))
+                    .replaceable();
+        }
+        false
     }
 
     fn on_landed_upon<'a>(&'a self, args: OnLandedUponArgs<'a>) -> BlockFuture<'a, ()> {
@@ -120,7 +116,7 @@ impl BlockBehaviour for BedBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let bed_entity = BedBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(bed_entity)).await;
+            args.world.add_block_entity(Arc::new(bed_entity));
 
             let mut bed_head_props = BedProperties::default(args.block);
             bed_head_props.facing = BedProperties::from_state_id(args.state_id, args.block).facing;
@@ -136,7 +132,7 @@ impl BlockBehaviour for BedBlock {
                 .await;
 
             let bed_head_entity = BedBlockEntity::new(bed_head_pos);
-            args.world.add_block_entity(Arc::new(bed_head_entity)).await;
+            args.world.add_block_entity(Arc::new(bed_head_entity));
         })
     }
 
@@ -150,7 +146,7 @@ impl BlockBehaviour for BedBlock {
                 args.position.offset(bed_props.facing.to_offset())
             };
 
-            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos).await;
+            let neighbor_block_id = args.world.get_block_state_id(&other_half_pos);
             if neighbor_block_id != args.block.id {
                 args.world.update_neighbors(&other_half_pos, None).await;
                 return;
@@ -180,7 +176,7 @@ impl BlockBehaviour for BedBlock {
             // If the block is being replaced with air (i.e., broken), the `broken` callback
             // will handle breaking the other half with the correct drop flags. Only handle it here
             // if the block is being replaced with something else (e.g., piston movement).
-            let new_state_id = args.world.get_block_state_id(args.position).await;
+            let new_state_id = args.world.get_block_state_id(args.position);
             let new_block = Block::from_state_id(new_state_id);
             if new_block == &Block::AIR {
                 return;
@@ -194,7 +190,7 @@ impl BlockBehaviour for BedBlock {
                 args.position.offset(bed_props.facing.to_offset())
             };
 
-            let (other_block, other_state) = args.world.get_block_and_state(&other_half_pos).await;
+            let (other_block, other_state) = args.world.get_block_and_state(&other_half_pos);
             if other_block == args.block {
                 let other_props = BedProperties::from_state_id(other_state.id, other_block);
                 if other_props.part != bed_props.part {
@@ -213,7 +209,7 @@ impl BlockBehaviour for BedBlock {
     #[expect(clippy::too_many_lines)]
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
             let bed_props = BedProperties::from_state_id(state_id, args.block);
 
             let (bed_head_pos, bed_foot_pos) = if bed_props.part == BedPart::Head {
@@ -246,16 +242,8 @@ impl BlockBehaviour for BedBlock {
             }
 
             // Make sure the bed is not obstructed
-            if args
-                .world
-                .get_block_state(&bed_head_pos.up())
-                .await
-                .is_solid()
-                || args
-                    .world
-                    .get_block_state(&bed_foot_pos.up())
-                    .await
-                    .is_solid()
+            if args.world.get_block_state(&bed_head_pos.up()).is_solid()
+                || args.world.get_block_state(&bed_foot_pos.up()).is_solid()
             {
                 args.player
                     .send_system_message_raw(
@@ -370,7 +358,7 @@ impl BlockBehaviour for BedBlock {
                 }
             }
 
-            args.player.sleep(bed_head_pos).await;
+            args.player.sleep(bed_head_pos);
             Self::set_occupied(true, args.world, args.block, args.position, state_id).await;
 
             BlockActionResult::SuccessServer

@@ -1297,7 +1297,10 @@ fn value_to_tree_decorator(v: &Value) -> TokenStream {
     let type_str = v["type"].as_str().unwrap_or("");
     match type_str {
         "minecraft:trunk_vine" => quote! { TreeDecorator::TrunkVine(TrunkVineTreeDecorator) },
-        "minecraft:leave_vine" => quote! { TreeDecorator::LeaveVine(LeavesVineTreeDecorator {}) },
+        "minecraft:leave_vine" => {
+            let prob = v["probability"].as_f64().unwrap_or(0.0) as f32;
+            quote! { TreeDecorator::LeaveVine(LeavesVineTreeDecorator { probability: #prob }) }
+        }
         "minecraft:cocoa" => quote! { TreeDecorator::Cocoa(CocoaTreeDecorator {}) },
         "minecraft:beehive" => {
             let prob = v["probability"].as_f64().unwrap_or(0.0) as f32;

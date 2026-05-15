@@ -283,7 +283,7 @@ macro_rules! impl_chest_helper_methods {
                     pumpkin_util::random::get_seed(),
                 );
 
-                let (block, state) = world.get_block_and_state(&self.position).await;
+                let (block, state) = world.get_block_and_state(&self.position);
                 let properties = pumpkin_data::block_properties::ChestLikeProperties::from_state_id(
                     state.id, block,
                 );
@@ -309,15 +309,13 @@ macro_rules! impl_chest_helper_methods {
                     }
                 };
 
-                world
-                    .play_sound_fine(
-                        sound,
-                        pumpkin_data::sound::SoundCategory::Blocks,
-                        &position,
-                        0.5,
-                        pumpkin_util::random::RandomImpl::next_f32(&mut rng) * 0.1 + 0.9,
-                    )
-                    .await;
+                world.play_sound_fine(
+                    sound,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    &position,
+                    0.5,
+                    pumpkin_util::random::RandomImpl::next_f32(&mut rng) * 0.1 + 0.9,
+                );
             }
         }
     };

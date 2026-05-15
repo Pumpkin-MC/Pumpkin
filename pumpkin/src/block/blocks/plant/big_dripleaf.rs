@@ -50,7 +50,7 @@ impl BlockBehaviour for BigDripleafBlock {
     }
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             if block_receives_redstone_power(args.world, args.position).await {
                 reset_tilt(state.id, args.world, args.position).await;
             } else {
@@ -82,17 +82,13 @@ impl BlockBehaviour for BigDripleafBlock {
         })
     }
     //TODO: onProjectileHit
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let (support_block, support_block_state_id) = args
-                .world
-                .get_block_and_state_id(&args.position.down())
-                .await;
+            let (support_block, support_block_state_id) =
+                args.world.get_block_and_state_id(&args.position.down());
             let facing = if support_block == &Block::BIG_DRIPLEAF {
                 get_dripleaf_facing_dir(support_block_state_id)
             } else {
@@ -128,7 +124,7 @@ impl BlockBehaviour for BigDripleafBlock {
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             if block_receives_redstone_power(args.world, args.position).await {
-                let state_id = args.world.get_block_state_id(args.position).await;
+                let state_id = args.world.get_block_state_id(args.position);
                 reset_tilt(state_id, args.world, args.position).await;
             }
         })
@@ -138,8 +134,7 @@ impl BlockBehaviour for BigDripleafBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let support_pos = args.position.down();
-            let (support_block, support_state_id) =
-                args.world.get_block_and_state_id(&support_pos).await;
+            let (support_block, support_state_id) = args.world.get_block_and_state_id(&support_pos);
             if support_block == &Block::BIG_DRIPLEAF {
                 let old_dripleaf_props = BigDripleafLikeProperties::from_state_id(
                     support_state_id,
@@ -175,7 +170,7 @@ async fn set_tilt_and_schedule_tick(
 ) {
     set_tilt(state_id, world, pos, tilt).await;
     if let Some(tilt_sound) = sound_wrapper {
-        play_tilt_sound(world, pos, tilt_sound).await;
+        play_tilt_sound(world, pos, tilt_sound);
     }
     let tick_delay = match tilt {
         Tilt::None => -1,
@@ -183,29 +178,25 @@ async fn set_tilt_and_schedule_tick(
         Tilt::Full => 100,
     };
     if tick_delay != -1 {
-        world
-            .schedule_block_tick(
-                &Block::BIG_DRIPLEAF,
-                *pos,
-                tick_delay as u8,
-                pumpkin_world::tick::TickPriority::Normal,
-            )
-            .await;
+        world.schedule_block_tick(
+            &Block::BIG_DRIPLEAF,
+            *pos,
+            tick_delay as u8,
+            pumpkin_world::tick::TickPriority::Normal,
+        );
     }
 }
-async fn play_tilt_sound(world: &Arc<World>, pos: &BlockPos, tilt_sound: Sound) {
+fn play_tilt_sound(world: &Arc<World>, pos: &BlockPos, tilt_sound: Sound) {
     let pitch = rand::rng().random_range(0.8f32..1.2f32);
     let v = pos.as_vector3();
     let position = Vector3::new(v.x as f64, v.y as f64, v.z as f64);
-    world
-        .play_sound_fine(tilt_sound, SoundCategory::Blocks, &position, 1f32, pitch)
-        .await;
+    world.play_sound_fine(tilt_sound, SoundCategory::Blocks, &position, 1f32, pitch);
 }
 async fn reset_tilt(state_id: BlockStateId, world: &Arc<World>, pos: &BlockPos) {
     set_tilt(state_id, world, pos, Tilt::None).await;
     let props = BigDripleafLikeProperties::from_state_id(state_id, &Block::BIG_DRIPLEAF);
     if props.tilt != Tilt::None {
-        play_tilt_sound(world, pos, Sound::BlockBigDripleafTiltUp).await;
+        play_tilt_sound(world, pos, Sound::BlockBigDripleafTiltUp);
     }
 }
 async fn set_tilt(state_id: BlockStateId, world: &Arc<World>, pos: &BlockPos, new_tilt: Tilt) {
@@ -234,8 +225,8 @@ fn is_dripleaf_waterlogged(state_id: BlockStateId) -> bool {
     dripleaf_props.waterlogged
 }
 impl PlantBlockBase for BigDripleafBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let support_block = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let support_block = block_accessor.get_block(pos);
         can_plant_dripleaf_on_top(support_block)
     }
     async fn get_state_for_neighbor_update(
@@ -244,7 +235,7 @@ impl PlantBlockBase for BigDripleafBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
             if is_dripleaf_waterlogged(block_state) {
                 return Block::WATER.default_state.id;
             }

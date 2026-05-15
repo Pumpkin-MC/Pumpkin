@@ -75,6 +75,7 @@ pub trait LeaveValidator {
 impl FoliagePlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate_square<T: LeaveValidator, T2: GenerationCache>(
+        foliage_positions: &mut Vec<BlockPos>,
         validator: &T,
         chunk: &mut T2,
         random: &mut RandomGenerator,
@@ -92,7 +93,9 @@ impl FoliagePlacer {
                     continue;
                 }
                 let pos = BlockPos(center_pos.0.add(&Vector3::new(x, y, z)));
-                Self::place_foliage_block(chunk, pos, foliage_provider);
+                if Self::place_foliage_block(chunk, pos, foliage_provider) {
+                    foliage_positions.push(pos);
+                }
             }
         }
     }
@@ -105,7 +108,7 @@ impl FoliagePlacer {
         foliage_height: i32,
         radius: i32,
         foliage_provider: &BlockState,
-    ) {
+    ) -> Vec<BlockPos> {
         let offset = self.offset.get(random);
         self.r#type.generate(
             chunk,
@@ -115,7 +118,7 @@ impl FoliagePlacer {
             radius,
             offset,
             foliage_provider,
-        );
+        )
     }
 
     pub fn get_random_radius(&self, random: &mut RandomGenerator, base_height: i32) -> i32 {
@@ -147,6 +150,7 @@ impl FoliagePlacer {
     }
 
     fn try_place_extension<T: GenerationCache>(
+        foliage_positions: &mut Vec<BlockPos>,
         chunk: &mut T,
         random: &mut RandomGenerator,
         chance: f32,
@@ -157,12 +161,17 @@ impl FoliagePlacer {
         if pos.manhattan_distance(log_pos) >= 7 || random.next_f32() > chance {
             false
         } else {
-            Self::place_foliage_block(chunk, pos, foliage_provider)
+            let placed = Self::place_foliage_block(chunk, pos, foliage_provider);
+            if placed {
+                foliage_positions.push(pos);
+            }
+            placed
         }
     }
 
     #[expect(clippy::too_many_arguments)]
     pub fn generate_square_with_hanging_leaves<T: LeaveValidator, T2: GenerationCache>(
+        foliage_positions: &mut Vec<BlockPos>,
         validator: &T,
         chunk: &mut T2,
         random: &mut RandomGenerator,
@@ -175,6 +184,7 @@ impl FoliagePlacer {
         hanging_leaves_extension_chance: f32,
     ) {
         Self::generate_square(
+            foliage_positions,
             validator,
             chunk,
             random,
@@ -213,6 +223,7 @@ impl FoliagePlacer {
                 let leaves_above = Self::is_set(chunk, pos.up(), foliage_provider);
                 if leaves_above
                     && Self::try_place_extension(
+                        foliage_positions,
                         chunk,
                         random,
                         hanging_leaves_chance,
@@ -222,6 +233,7 @@ impl FoliagePlacer {
                     )
                 {
                     Self::try_place_extension(
+                        foliage_positions,
                         chunk,
                         random,
                         hanging_leaves_extension_chance,
@@ -261,7 +273,7 @@ impl FoliageType {
         radius: i32,
         offset: i32,
         foliage_provider: &BlockState,
-    ) {
+    ) -> Vec<BlockPos> {
         match self {
             Self::Blob(blob) => blob.generate(
                 chunk,

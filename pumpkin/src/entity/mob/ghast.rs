@@ -14,7 +14,7 @@ pub struct GhastEntity {
 }
 
 impl GhastEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let ghast = Self {
             mob_entity,
@@ -29,7 +29,7 @@ impl GhastEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(7, Box::new(GhastLookGoal::new(mob_weak.clone())));
         };
@@ -94,7 +94,7 @@ impl Goal for GhastLookGoal {
                 let target_pos = target.get_entity().pos.load();
 
                 if mob_pos.squared_distance_to_vec(&target_pos) < 4096.0 {
-                    let mut look_control = mob_entity.look_control.lock().await;
+                    let mut look_control = mob_entity.look_control.lock().unwrap();
                     look_control.look_at(mob, target_pos.x, target_pos.y, target_pos.z);
                 }
             } else {

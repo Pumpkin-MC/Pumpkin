@@ -59,7 +59,7 @@ impl BlockBehaviour for PoweredRailBlock {
             self.update_powered_state(args.world, args.block, args.position)
                 .await;
 
-            let final_state_id = args.world.get_block_state_id(args.position).await;
+            let final_state_id = args.world.get_block_state_id(args.position);
             let rail_props = RailProperties::new(final_state_id, args.block);
 
             self.update_connected_rails(args.world, args.position, &rail_props, true, 0)
@@ -70,8 +70,7 @@ impl BlockBehaviour for PoweredRailBlock {
             for direction in rail_props.directions() {
                 let neighbor_pos = args.position.offset(direction.to_offset());
 
-                if let Some(neighbor_rail) =
-                    self.find_rail_at_position(args.world, &neighbor_pos).await
+                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &neighbor_pos)
                 {
                     self.update_powered_state_internal(
                         args.world,
@@ -99,7 +98,7 @@ impl BlockBehaviour for PoweredRailBlock {
                 }
 
                 let up_pos = neighbor_pos.up();
-                if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &up_pos).await {
+                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &up_pos) {
                     self.update_powered_state_internal(args.world, neighbor_rail.0, &up_pos, false)
                         .await;
                     self.update_connected_rails(args.world, &up_pos, &neighbor_rail.1, true, 0)
@@ -109,8 +108,7 @@ impl BlockBehaviour for PoweredRailBlock {
                 }
 
                 let down_pos = neighbor_pos.down();
-                if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &down_pos).await
-                {
+                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &down_pos) {
                     self.update_powered_state_internal(
                         args.world,
                         neighbor_rail.0,
@@ -139,7 +137,7 @@ impl BlockBehaviour for PoweredRailBlock {
             self.update_powered_state(args.world, args.block, args.position)
                 .await;
 
-            let state_id = args.world.get_block_state_id(args.position).await;
+            let state_id = args.world.get_block_state_id(args.position);
             let rail_props = RailProperties::new(state_id, args.block);
 
             self.update_connected_rails(args.world, args.position, &rail_props, true, 0)
@@ -169,8 +167,7 @@ impl BlockBehaviour for PoweredRailBlock {
             for direction in directions {
                 let neighbor_pos = args.position.offset(direction.to_offset());
 
-                if let Some(neighbor_rail) =
-                    self.find_rail_at_position(args.world, &neighbor_pos).await
+                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &neighbor_pos)
                 {
                     self.update_powered_state(args.world, neighbor_rail.0, &neighbor_pos)
                         .await;
@@ -193,7 +190,7 @@ impl BlockBehaviour for PoweredRailBlock {
                 }
 
                 let up_pos = neighbor_pos.up();
-                if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &up_pos).await {
+                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &up_pos) {
                     self.update_powered_state(args.world, neighbor_rail.0, &up_pos)
                         .await;
                     self.update_connected_rails(args.world, &up_pos, &neighbor_rail.1, true, 0)
@@ -203,8 +200,7 @@ impl BlockBehaviour for PoweredRailBlock {
                 }
 
                 let down_pos = neighbor_pos.down();
-                if let Some(neighbor_rail) = self.find_rail_at_position(args.world, &down_pos).await
-                {
+                if let Some(neighbor_rail) = Self::find_rail_at_position(args.world, &down_pos) {
                     self.update_powered_state(args.world, neighbor_rail.0, &down_pos)
                         .await;
                     self.update_connected_rails(args.world, &down_pos, &neighbor_rail.1, true, 0)
@@ -216,8 +212,8 @@ impl BlockBehaviour for PoweredRailBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_rail_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_rail_at(args.block_accessor, args.position)
     }
 }
 
@@ -328,12 +324,12 @@ impl PoweredRailBlock {
         distance: u8,
         expected_shape: pumpkin_data::block_properties::RailShape,
     ) -> bool {
-        let block = world.get_block(pos).await;
+        let block = world.get_block(pos);
         if *block != Block::POWERED_RAIL {
             return false;
         }
 
-        let state_id = world.get_block_state_id(pos).await;
+        let state_id = world.get_block_state_id(pos);
         let rail_props = RailProperties::new(state_id, block);
         let rail_shape = rail_props.shape();
 
@@ -385,7 +381,7 @@ impl PoweredRailBlock {
         pos: &BlockPos,
         propagate: bool,
     ) {
-        let state_id = world.get_block_state_id(pos).await;
+        let state_id = world.get_block_state_id(pos);
         let mut rail_props = RailProperties::new(state_id, block);
         let current_powered = rail_props.is_powered();
 
@@ -517,12 +513,12 @@ impl PoweredRailBlock {
         distance: u8,
         expected_shape: pumpkin_data::block_properties::RailShape,
     ) {
-        let block = world.get_block(pos).await;
+        let block = world.get_block(pos);
         if *block != Block::POWERED_RAIL {
             return;
         }
 
-        let state_id = world.get_block_state_id(pos).await;
+        let state_id = world.get_block_state_id(pos);
         let rail_props = RailProperties::new(state_id, block);
         let rail_shape = rail_props.shape();
 
@@ -551,18 +547,15 @@ impl PoweredRailBlock {
         }
     }
 
-    async fn find_rail_at_position(
-        &self,
+    fn find_rail_at_position(
         world: &World,
         pos: &BlockPos,
     ) -> Option<(&'static Block, RailProperties)> {
-        let block = world.get_block(pos).await;
-        if *block == Block::POWERED_RAIL {
-            let state_id = world.get_block_state_id(pos).await;
+        let block = world.get_block(pos);
+        (*block == Block::POWERED_RAIL).then(|| {
+            let state_id = world.get_block_state_id(pos);
             let rail_props = RailProperties::new(state_id, block);
-            Some((block, rail_props))
-        } else {
-            None
-        }
+            (block, rail_props)
+        })
     }
 }

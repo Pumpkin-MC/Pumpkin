@@ -33,13 +33,11 @@ impl BlockBehaviour for CopperBulbBlock {
             let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
             if is_receiving_power {
                 props.lit = true;
-                args.world
-                    .play_block_sound(
-                        Sound::BlockCopperBulbTurnOn,
-                        SoundCategory::Blocks,
-                        *args.position,
-                    )
-                    .await;
+                args.world.play_block_sound(
+                    Sound::BlockCopperBulbTurnOn,
+                    SoundCategory::Blocks,
+                    *args.position,
+                );
                 props.powered = true;
             }
             props.to_state_id(args.block)
@@ -48,23 +46,21 @@ impl BlockBehaviour for CopperBulbBlock {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let mut props = CopperBulbLikeProperties::from_state_id(state.id, args.block);
             let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
             if props.powered != is_receiving_power {
                 if !props.powered {
                     props.lit = !props.lit;
-                    args.world
-                        .play_block_sound(
-                            if props.lit {
-                                Sound::BlockCopperBulbTurnOn
-                            } else {
-                                Sound::BlockCopperBulbTurnOff
-                            },
-                            SoundCategory::Blocks,
-                            *args.position,
-                        )
-                        .await;
+                    args.world.play_block_sound(
+                        if props.lit {
+                            Sound::BlockCopperBulbTurnOn
+                        } else {
+                            Sound::BlockCopperBulbTurnOff
+                        },
+                        SoundCategory::Blocks,
+                        *args.position,
+                    );
                 }
                 props.powered = is_receiving_power;
                 args.world

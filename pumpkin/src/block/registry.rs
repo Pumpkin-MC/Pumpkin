@@ -553,7 +553,7 @@ impl BlockRegistry {
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub async fn can_place_at(
+    pub fn can_place_at(
         &self,
         server: Option<&Server>,
         world: Option<&World>,
@@ -567,25 +567,23 @@ impl BlockRegistry {
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .can_place_at(CanPlaceAtArgs {
-                    server,
-                    world,
-                    block_accessor,
-                    block,
-                    state,
-                    position,
-                    direction,
-                    player,
-                    use_item_on,
-                })
-                .await;
+            return pumpkin_block.can_place_at(CanPlaceAtArgs {
+                server,
+                world,
+                block_accessor,
+                block,
+                state,
+                position,
+                direction,
+                player,
+                use_item_on,
+            });
         }
         true
     }
 
     #[expect(clippy::too_many_arguments)]
-    pub async fn can_update_at(
+    pub fn can_update_at(
         &self,
         world: &World,
         block: &Block,
@@ -597,17 +595,15 @@ impl BlockRegistry {
     ) -> bool {
         let pumpkin_block = self.get_pumpkin_block(block.id);
         if let Some(pumpkin_block) = pumpkin_block {
-            return pumpkin_block
-                .can_update_at(CanUpdateAtArgs {
-                    world,
-                    block,
-                    state_id,
-                    position,
-                    direction,
-                    player,
-                    use_item_on,
-                })
-                .await;
+            return pumpkin_block.can_update_at(CanUpdateAtArgs {
+                world,
+                block,
+                state_id,
+                position,
+                direction,
+                player,
+                use_item_on,
+            });
         }
         false
     }
@@ -796,10 +792,10 @@ impl BlockRegistry {
         block: &Block,
         flags: BlockFlags,
     ) {
-        let state_id = world.get_block_state_id(position).await;
+        let state_id = world.get_block_state_id(position);
         for direction in BlockDirection::all() {
             let neighbor_pos = position.offset(direction.to_offset());
-            let neighbor_state_id = world.get_block_state_id(&neighbor_pos).await;
+            let neighbor_state_id = world.get_block_state_id(&neighbor_pos);
             let pumpkin_block = self.get_pumpkin_block(block.id);
             if let Some(pumpkin_block) = pumpkin_block {
                 let new_state = pumpkin_block

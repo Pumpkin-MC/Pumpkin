@@ -288,10 +288,7 @@ impl Server {
                 );
                 let level = into_level(dim.clone(), &config, path, seed, Some(pool));
                 let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
-                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(
-                    world.clone(),
-                    tokio::runtime::Handle::current(),
-                ));
+                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
                 level.world_portal.store(Arc::new(Some(portal)));
                 world
             })
@@ -392,10 +389,7 @@ impl Server {
             );
             let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
             let world = Arc::new(world);
-            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(
-                world.clone(),
-                tokio::runtime::Handle::current(),
-            ));
+            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
             level.world_portal.store(Arc::new(Some(portal)));
             server.worlds.rcu(|worlds| {
                 let mut new_worlds = (**worlds).clone();
@@ -442,13 +436,10 @@ impl Server {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
         let (world, nbt) =
-            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id).await {
-                let _version = data.get_int().unwrap_or(0);
-                if let Ok(dimension_key) = data.get_string() {
-                    if let Some(dimension) = Dimension::from_name(&dimension_key) {
+            if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
+                if let Some(dimension_key) = data.get_string("Dimension") {
+                    if let Some(dimension) = Dimension::from_name(dimension_key) {
                         let world = self.get_world_from_dimension(dimension);
-                        // Reset read position so player.read_nbt can read everything from start
-                        data.read_pos = 0;
                         (world, Some(data))
                     } else {
                         warn!("Invalid dimension key in player data: {dimension_key}");
@@ -458,18 +449,16 @@ impl Server {
                             .first()
                             .expect("Default world should exist")
                             .clone();
-                        data.read_pos = 0;
                         (default_world, Some(data))
                     }
                 } else {
-                    // Player data exists but doesn't have a dimension entry.
+                    // Player data exists but doesn't have a "Dimension" key.
                     let default_world = self
                         .worlds
                         .load()
                         .first()
                         .expect("Default world should exist")
                         .clone();
-                    data.read_pos = 0;
                     (default_world, Some(data))
                 }
             } else {
@@ -565,9 +554,9 @@ impl Server {
     /// # Arguments
     ///
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
-    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
+    pub fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.load().iter() {
-            world.broadcast_packet_all(packet).await;
+            world.broadcast_packet_all(packet);
         }
     }
 
@@ -627,7 +616,7 @@ impl Server {
     /// # Note
     ///
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
-    pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
+    pub fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
         let current_info = self.level_info.load();
         if current_info.difficulty_locked && !force_update {
             return;
@@ -649,8 +638,7 @@ impl Server {
             world.set_difficulty(difficulty);
         }
 
-        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked))
-            .await;
+        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked));
     }
 
     /// Searches for a player by their username across all worlds.

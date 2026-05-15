@@ -45,7 +45,6 @@ interface java-packets {
     text-filtering: bool,
     server-listing: bool,
   }
-  record s-client-tick-end {  }
   record s-close-container {
     window-id: s32,
   }
@@ -125,7 +124,6 @@ interface java-packets {
   record s-player-input {
     input: u8,
   }
-  record s-player-loaded {  }
   record s-player-position {
     position: tuple<f64, f64, f64>,
     collision: u8,
@@ -245,8 +243,6 @@ interface java-packets {
   record c-chunk-batch-end {
     batch-size: s32,
   }
-  record c-chunk-batch-start {  }
-  record c-chunk-data {  }
   record c-clear-title {
     reset: bool,
   }
@@ -370,7 +366,6 @@ interface java-packets {
     data: s32,
     disable-relative-volume: bool,
   }
-  record c-light-update {  }
   record c-login {
     entity-id: s32,
     is-hardcore: bool,
@@ -717,7 +712,7 @@ interface java-packets {
     s-click-slot(s-click-slot),
     s-client-command(s-client-command),
     s-client-information-play(s-client-information-play),
-    s-client-tick-end(s-client-tick-end),
+    s-client-tick-end,
     s-close-container(s-close-container),
     s-command-suggestion(s-command-suggestion),
     s-confirm-teleport(s-confirm-teleport),
@@ -737,7 +732,7 @@ interface java-packets {
     s-player-command(s-player-command),
     s-set-player-ground(s-set-player-ground),
     s-player-input(s-player-input),
-    s-player-loaded(s-player-loaded),
+    s-player-loaded,
     s-player-position(s-player-position),
     s-player-position-rotation(s-player-position-rotation),
     s-player-rotation(s-player-rotation),
@@ -766,8 +761,8 @@ interface java-packets {
     c-center-chunk(c-center-chunk),
     c-change-difficulty(c-change-difficulty),
     c-chunk-batch-end(c-chunk-batch-end),
-    c-chunk-batch-start(c-chunk-batch-start),
-    c-chunk-data(c-chunk-data),
+    c-chunk-batch-start,
+    c-chunk-data,
     c-clear-title(c-clear-title),
     c-close-container(c-close-container),
     c-combat-death(c-combat-death),
@@ -793,7 +788,7 @@ interface java-packets {
     c-item-cooldown(c-item-cooldown),
     c-keep-alive(c-keep-alive),
     c-level-event(c-level-event),
-    c-light-update(c-light-update),
+    c-light-update,
     c-login(c-login),
     c-map-item-data(c-map-item-data),
     c-merchant-offers(c-merchant-offers),

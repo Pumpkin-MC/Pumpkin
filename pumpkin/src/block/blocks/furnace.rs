@@ -85,7 +85,7 @@ pub struct FurnaceBlock;
 impl BlockBehaviour for FurnaceBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.clone().get_inventory()
                 && let Some(property_delegate) = block_entity.clone().to_property_delegate()
                 && let Some(experience_container) = block_entity.to_experience_container()
@@ -117,16 +117,14 @@ impl BlockBehaviour for FurnaceBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let furnace_block_entity = FurnaceBlockEntity::new(*args.position);
-            args.world
-                .add_block_entity(Arc::new(furnace_block_entity))
-                .await;
+            args.world.add_block_entity(Arc::new(furnace_block_entity));
         })
     }
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             // Extract and drop accumulated XP as orbs before removing the block entity
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(experience_container) = block_entity.to_experience_container()
             {
                 let xp = experience_container.extract_experience();
@@ -135,7 +133,7 @@ impl BlockBehaviour for FurnaceBlock {
                     ExperienceOrbEntity::spawn(args.world, pos, xp as u32).await;
                 }
             }
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 }

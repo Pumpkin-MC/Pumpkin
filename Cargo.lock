@@ -886,9 +886,9 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "crossfire"
-version = "3.1.10"
+version = "3.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebed7d0a3a92ebc771f880516a5eecef5942a0fc67855dc4f30e719b04c77ac5"
+checksum = "72bdfcf389b100bb85fcf39ad434f67b617813cf0608095c905b79f6b2194aea"
 dependencies = [
  "crossbeam-utils",
  "futures-core",
@@ -1539,8 +1539,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "foldhash 0.2.0",
- "serde",
- "serde_core",
 ]
 
 [[package]]
@@ -2838,6 +2836,7 @@ dependencies = [
  "flate2",
  "futures",
  "hmac 0.13.0",
+ "hyper",
  "libloading",
  "notify",
  "num-bigint",
@@ -2874,9 +2873,9 @@ dependencies = [
  "tracing-subscriber",
  "ureq",
  "uuid",
- "wasmparser 0.248.0",
  "wasmtime",
  "wasmtime-wasi",
+ "wasmtime-wasi-http",
 ]
 
 [[package]]
@@ -2953,14 +2952,12 @@ version = "0.1.0-dev+26.1"
 dependencies = [
  "bytes",
  "cesu8",
- "criterion",
  "flate2",
  "pumpkin-codecs",
  "serde",
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -3932,6 +3929,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-rustls"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
+dependencies = [
+ "rustls",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-stream"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4246,7 +4253,7 @@ dependencies = [
  "serde_json",
  "ureq-proto",
  "utf8-zero",
- "webpki-roots",
+ "webpki-roots 1.0.7",
 ]
 
 [[package]]
@@ -4529,10 +4536,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa4439c5eee9df71ee0c6efb37f63b1fcb1fec38f85f5142c54e7ed05d33091a"
 dependencies = [
  "bitflags",
- "hashbrown 0.17.1",
  "indexmap",
  "semver",
- "serde",
 ]
 
 [[package]]
@@ -4833,6 +4838,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-wasi-http"
+version = "44.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fff8f34bf2e8526278f0a0fe79e2b6387e1d932fda8783ab13a13bdc79b79159"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "rustls",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-io",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
 name = "wasmtime-wasi-io"
 version = "44.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4865,6 +4893,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75cd9e510603909748e6ebab89f27cd04472c1d9d85a3c88a7a6fc51a1a7934"
 dependencies = [
  "wast",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.7",
 ]
 
 [[package]]

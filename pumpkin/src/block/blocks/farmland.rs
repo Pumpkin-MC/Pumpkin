@@ -43,7 +43,7 @@ impl BlockBehaviour for FarmlandBlock {
 
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 return Block::DIRT.default_state.id;
             }
             args.block.default_state.id
@@ -55,25 +55,22 @@ impl BlockBehaviour for FarmlandBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if args.direction == BlockDirection::Up
-                && !can_place_at(args.world, args.position).await
-            {
+            if args.direction == BlockDirection::Up && !can_place_at(args.world, args.position) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
             args.state_id
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             // TODO: add rain check. Remember to check which one is most optimized.
-            if is_water_nearby(args.world, args.position).await {
+            if is_water_nearby(args.world, args.position) {
                 let mut props = FarmlandProperties::default(args.block);
                 props.moisture = 7;
                 args.world
@@ -84,13 +81,12 @@ impl BlockBehaviour for FarmlandBlock {
                     )
                     .await;
             } else {
-                let state_id = args.world.get_block_state_id(args.position).await;
+                let state_id = args.world.get_block_state_id(args.position);
                 let mut props = FarmlandProperties::from_state_id(state_id, args.block);
                 if props.moisture == 0 {
                     if !args
                         .world
                         .get_block(&args.position.up())
-                        .await
                         .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
                     {
                         //TODO push entities up
@@ -117,12 +113,12 @@ impl BlockBehaviour for FarmlandBlock {
     }
 }
 
-async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&block_pos.up()).await;
+fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    let state = world.get_block_state(&block_pos.up());
     !state.is_solid() // TODO: add fence gate block
 }
 
-async fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
+fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
     for dx in -4..=4 {
         for dy in 0..=1 {
             for dz in -4..=4 {
@@ -132,7 +128,7 @@ async fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
                     z: dz,
                 });
                 //TODO this should use tag water. It does not seem to work rn.
-                if world.get_block(&check_pos).await == &Block::WATER {
+                if world.get_block(&check_pos) == &Block::WATER {
                     return true;
                 }
             }

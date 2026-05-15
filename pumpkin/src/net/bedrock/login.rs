@@ -2,6 +2,7 @@ use crate::{
     net::{ClientPlatform, DisconnectReason, GameProfile, PlayerConfig, bedrock::BedrockClient},
     server::Server,
 };
+use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::{
     client::{
         network_settings::CNetworkSettings, play_status::CPlayStatus,
@@ -173,7 +174,7 @@ impl BedrockClient {
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
             name: under_score_name,
-            properties: Vec::new(),
+            properties: ArcSwap::new(Arc::new(Vec::new())),
             profile_actions: None,
         };
 

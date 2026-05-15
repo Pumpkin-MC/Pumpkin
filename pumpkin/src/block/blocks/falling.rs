@@ -33,8 +33,7 @@ impl BlockBehaviour for FallingBlock {
         Box::pin(async move {
             // TODO: make delay configurable
             args.world
-                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                .await;
+                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
         })
     }
     fn get_state_for_neighbor_update<'a>(
@@ -44,19 +43,18 @@ impl BlockBehaviour for FallingBlock {
         Box::pin(async move {
             // TODO: make delay configurable
             args.world
-                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal)
-                .await;
+                .schedule_block_tick(args.block, *args.position, 2, TickPriority::Normal);
             args.state_id
         })
     }
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let (block, state) = args.world.get_block_and_state(&args.position.down()).await;
+            let (block, state) = args.world.get_block_and_state(&args.position.down());
             if !Self::can_fall_through(state, block) || args.position.0.y < args.world.min_y {
                 return;
             }
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             FallingEntity::replace_spawn(args.world, *args.position, state.id).await;
         })
     }

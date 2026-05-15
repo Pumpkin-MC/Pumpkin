@@ -549,7 +549,9 @@ impl GenerationSchedule {
                         }
                         let sc = Arc::strong_count(&chunk);
                         if sc == 1 {
-                            chunks.push((pos, Chunk::Level(chunk)));
+                            if chunk.is_dirty() {
+                                chunks.push((pos, Chunk::Level(chunk)));
+                            }
                             self.chunk_map.remove(&pos);
                         } else {
                             warn!(

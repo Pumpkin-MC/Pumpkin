@@ -74,7 +74,7 @@ impl BreedGoal {
         mate.set_breeding_cooldown(6000);
 
         let parent_pos = entity.pos.load();
-        let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4()).await;
+        let baby = from_type(entity.entity_type, parent_pos, &world, Uuid::new_v4());
         baby.get_entity().set_age(-24000);
         world.spawn_entity(baby).await;
     }
@@ -117,7 +117,7 @@ impl Goal for BreedGoal {
         Box::pin(async {
             self.mate = None;
             self.timer = 0;
-            let mut navigator = mob.get_mob_entity().navigator.lock().await;
+            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
             navigator.stop();
         })
     }
@@ -131,15 +131,18 @@ impl Goal for BreedGoal {
             let mob_entity = mob.get_mob_entity();
             let mate_pos = mate.get_entity().pos.load();
 
-            let mut look_control = mob_entity.look_control.lock().await;
-            look_control.look_at_entity(mob, mate);
-            drop(look_control);
+            {
+                let mut look_control = mob_entity.look_control.lock().unwrap();
+                look_control.look_at_entity(mob, mate);
+            };
 
             let my_pos = mob.get_entity().pos.load();
             let dist_sq = my_pos.squared_distance_to_vec(&mate_pos);
 
-            let mut navigator = mob_entity.navigator.lock().await;
-            navigator.set_progress(NavigatorGoal::new(my_pos, mate_pos, self.speed));
+            {
+                let mut navigator = mob_entity.navigator.lock().unwrap();
+                navigator.set_progress(NavigatorGoal::new(my_pos, mate_pos, self.speed));
+            };
 
             self.timer += 1;
 

@@ -13,6 +13,7 @@ use pumpkin_nbt::{compound::NbtCompound, nbt_long_array};
 use rustc_hash::FxHashMap;
 use tokio::sync::Mutex;
 use tracing::debug;
+use uuid::Uuid;
 
 use crate::{
     chunk::{
@@ -79,8 +80,9 @@ impl ChunkData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_data = pumpkin_nbt::from_pnbt::<ChunkNbt>(chunk_data)
-            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+        let chunk_data =
+            pumpkin_nbt::from_bytes_unnamed::<ChunkNbt>(std::io::Cursor::new(chunk_data))
+                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_data.x_pos != position.x || chunk_data.z_pos != position.y {
             return Err(ChunkParsingError::ErrorDeserializingChunk(format!(
@@ -221,8 +223,9 @@ impl ChunkData {
             light_correct: is_light_correct,
         };
 
-        let result =
-            pumpkin_nbt::to_pnbt(&nbt_ref).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        let mut result = Vec::new();
+        pumpkin_nbt::to_bytes_unnamed(&nbt_ref, &mut result)
+            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
 
         Ok(result.into())
     }
@@ -271,8 +274,9 @@ impl ChunkEntityData {
         chunk_data: &[u8],
         position: Vector2<i32>,
     ) -> Result<Self, ChunkParsingError> {
-        let chunk_entity_data = pumpkin_nbt::from_pnbt::<EntityNbt>(chunk_data)
-            .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
+        let chunk_entity_data =
+            pumpkin_nbt::from_bytes_unnamed::<EntityNbt>(std::io::Cursor::new(chunk_data))
+                .map_err(|e| ChunkParsingError::ErrorDeserializingChunk(e.to_string()))?;
 
         if chunk_entity_data.position[0] != position.x
             || chunk_entity_data.position[1] != position.y
@@ -286,16 +290,27 @@ impl ChunkEntityData {
             )));
         }
         let mut map = FxHashMap::default();
-        for mut entity_nbt in chunk_entity_data.entities {
-            let uuid = {
-                let _id = entity_nbt.get_string().ok();
-                entity_nbt.get_uuid().ok()
-            };
-            entity_nbt.read_pos = 0;
-
-            let Some(uuid) = uuid else {
+        for entity_nbt in chunk_entity_data.entities {
+            let uuid = if let Some(uuid) = entity_nbt.get_int_array("UUID") {
+                if uuid.len() != 4 {
+                    debug!(
+                        "Entity in chunk {},{} has invalid UUID array length {}: {:?}",
+                        position.x,
+                        position.y,
+                        uuid.len(),
+                        entity_nbt
+                    );
+                    continue;
+                }
+                Uuid::from_u128(
+                    (uuid[0] as u128) << 96
+                        | (uuid[1] as u128) << 64
+                        | (uuid[2] as u128) << 32
+                        | (uuid[3] as u128),
+                )
+            } else {
                 debug!(
-                    "Entity in chunk {},{} is missing UUID or ID: {:?}",
+                    "Entity in chunk {},{} is missing UUID: {:?}",
                     position.x, position.y, entity_nbt
                 );
                 continue;
@@ -319,8 +334,9 @@ impl ChunkEntityData {
             entities: self.data.lock().await.values().cloned().collect(),
         };
 
-        let result =
-            pumpkin_nbt::to_pnbt(&nbt).map_err(ChunkSerializingError::ErrorSerializingChunk)?;
+        let mut result = Vec::new();
+        pumpkin_nbt::to_bytes_unnamed(&nbt, &mut result)
+            .map_err(ChunkSerializingError::ErrorSerializingChunk)?;
         Ok(result.into())
     }
 }
@@ -478,7 +494,6 @@ struct ChunkNbt {
     light_correct: bool,
 }
 
-// Used ONLY for saving (to_bytes). Borrows data, zero clones.
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct ChunkNbtRef<'a> {
@@ -503,12 +518,10 @@ struct ChunkNbtRef<'a> {
     light_correct: bool,
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 struct EntityNbt {
     data_version: i32,
     position: [i32; 2],
-    entities: Vec<PNbtCompound>,
+    entities: Vec<NbtCompound>,
 }
