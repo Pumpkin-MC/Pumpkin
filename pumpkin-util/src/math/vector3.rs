@@ -1,10 +1,12 @@
 use bytes::BufMut;
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
-use num_traits::{Float, Num};
-
 use super::position::BlockPos;
 use super::vector2::Vector2;
+use crate::math::vector_codec_impl;
+use num_traits::{Float, Num};
+use pumpkin_codecs::codec::list::validate_fixed_size;
+use pumpkin_codecs::{DataResult, Decode, DynamicOps, Encode, FlatTryFrom};
 
 /// A 3-dimensional vector with components of type `T`.
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Default)]
@@ -763,6 +765,8 @@ impl serde::Serialize for Vector3<i32> {
         serializer.serialize_bytes(&buf)
     }
 }
+
+vector_codec_impl!(Vector3<T>, 3, x, y, z);
 
 /// Packs a chunk position vector into a single 64-bit integer.
 ///

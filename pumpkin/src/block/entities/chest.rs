@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::{Arc, Mutex as StdMutex, atomic::AtomicBool};
 
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item_stack::ItemStack;
@@ -18,6 +18,12 @@ pub struct ChestBlockEntity {
 
     // Viewer
     viewers: ViewerCountTracker,
+
+    /// Pending loot-table key (e.g. `"minecraft:chests/simple_dungeon"`).
+    /// Set during world generation; cleared when items are generated on first open.
+    pub loot_table: StdMutex<Option<String>>,
+    /// Seed used for deterministic loot generation, paired with `loot_table`.
+    pub loot_table_seed: i64,
 }
 
 impl ChestBlockEntity {

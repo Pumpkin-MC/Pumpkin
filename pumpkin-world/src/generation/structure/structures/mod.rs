@@ -405,6 +405,47 @@ impl StructurePiece {
         //     world.mark_block_for_post_processing(&block_pos);
         // }
     }
+
+    /// Places a chest with a deferred loot table at the given local coordinates.
+    ///
+    /// Returns `true` if the chest was placed (i.e., the position is within the bounding box),
+    /// `false` otherwise.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_chest(
+        &self,
+        chunk: &mut ProtoChunk,
+        bb: &BlockBox,
+        random: &mut RandomGenerator,
+        x: i32,
+        y: i32,
+        z: i32,
+        loot_table: &str,
+    ) -> bool {
+        use pumpkin_nbt::compound::NbtCompound;
+
+        let world_pos = self.offset_pos(x, y, z);
+        if !bb.contains_pos(&world_pos) {
+            return false;
+        }
+
+        chunk.set_block_state(
+            world_pos.x,
+            world_pos.y,
+            world_pos.z,
+            Block::CHEST.default_state,
+        );
+
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:chest".to_string());
+        nbt.put_int("x", world_pos.x);
+        nbt.put_int("y", world_pos.y);
+        nbt.put_int("z", world_pos.z);
+        nbt.put_string("LootTable", loot_table.to_string());
+        nbt.put_long("LootTableSeed", random.next_i64());
+        chunk.add_block_entity(nbt);
+
+        true
+    }
 }
 
 impl StructurePieceBase for StructurePiece {

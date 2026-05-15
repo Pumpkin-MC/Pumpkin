@@ -99,7 +99,10 @@ where
 mod test {
     use crate::codec::*;
     use crate::json_ops::JsonOps;
-    use crate::{assert_decode, assert_encode_success};
+    use crate::{
+        FlatTryFrom, assert_decode, assert_encode_success, comap_flat_map_codec_impl,
+        flat_xmap_codec_impl,
+    };
     use serde_json::json;
     use std::collections::HashMap;
     use std::fmt::{Display, Formatter};
@@ -140,31 +143,24 @@ mod test {
             }
         }
 
-        impl Encode for StringInteger {
-            fn encode<O: DynamicOps>(
-                &self,
-                ops: &'static O,
-                prefix: O::Value,
-            ) -> DataResult<O::Value> {
+        impl From<&StringInteger> for String {
+            fn from(value: &StringInteger) -> Self {
                 // This will always succeed.
-                self.0.to_string().encode(ops, prefix)
+                value.0.to_string()
             }
         }
 
-        impl Decode for StringInteger {
-            fn decode<O: DynamicOps>(
-                input: O::Value,
-                ops: &'static O,
-            ) -> DataResult<(Self, O::Value)> {
-                String::decode(input, ops).flat_map(|s| {
-                    // Try to parse an integer.
-                    s.0.parse().map_or_else(
-                        |_| DataResult::new_error("Could not parse String"),
-                        |i| DataResult::new_success((Self(i), s.1)),
-                    )
-                })
+        impl FlatTryFrom<String> for StringInteger {
+            fn flat_try_from(value: String) -> DataResult<Self> {
+                // Try to parse an integer.
+                value.parse().map_or_else(
+                    |_| DataResult::new_error("Could not parse String"),
+                    |i| DataResult::new_success(Self(i)),
+                )
             }
         }
+
+        comap_flat_map_codec_impl!(String => StringInteger, StringInteger::flat_try_from, String::from);
 
         let mut map = HashMap::<StringInteger, bool>::new();
 
@@ -198,40 +194,30 @@ mod test {
         #[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Hash)]
         struct Letter(String);
 
-        fn check_letter(string: String) -> DataResult<Letter> {
-            // Try to parse a single letter.
-            if string.len() == 1 {
-                DataResult::new_success(Letter(string))
-            } else {
-                DataResult::new_error(format!("Not a letter: {string}"))
-            }
-        }
-
         impl Display for Letter {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
                 write!(f, "{}", self.0)
             }
         }
 
-        impl Encode for Letter {
-            fn encode<O: DynamicOps>(
-                &self,
-                ops: &'static O,
-                prefix: O::Value,
-            ) -> DataResult<O::Value> {
-                // This will always succeed.
-                check_letter(self.0.clone()).flat_map(|l| l.0.encode(ops, prefix))
+        impl FlatTryFrom<String> for Letter {
+            fn flat_try_from(value: String) -> DataResult<Self> {
+                // Try to parse a single letter.
+                if value.len() == 1 {
+                    DataResult::new_success(Self(value))
+                } else {
+                    DataResult::new_error(format!("Not a letter: {value}"))
+                }
             }
         }
 
-        impl Decode for Letter {
-            fn decode<O: DynamicOps>(
-                input: O::Value,
-                ops: &'static O,
-            ) -> DataResult<(Self, O::Value)> {
-                String::decode(input, ops).flat_map(|(s, v)| check_letter(s).map(|l| (l, v)))
+        impl FlatTryFrom<&Letter> for String {
+            fn flat_try_from(value: &Letter) -> DataResult<Self> {
+                Letter::flat_try_from(value.0.clone()).map(|l| l.0)
             }
         }
+
+        flat_xmap_codec_impl!(String => Letter, Letter::flat_try_from, String::flat_try_from);
 
         type LetterData = HashMap<Letter, u64>;
 
