@@ -1,7 +1,7 @@
 use crate::generation::proto_chunk::GenerationCache;
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BlockProperties, EnumVariants, Integer1To4, SeaPickleLikeProperties},
+    block_properties::{BlockProperties, SeaPickleLikeProperties},
 };
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
@@ -32,7 +32,7 @@ impl SeaPickleFeature {
                 continue;
             }
             let mut props = SeaPickleLikeProperties::default(&Block::SEA_PICKLE);
-            props.pickles = Integer1To4::from_index(random.next_bounded_i32(4) as u16); // TODO: vanilla adds + 1, but this can crash
+            props.pickles = (random.next_bounded_i32(4) as u8) + 1;
             let pos = BlockPos::new(pos.0.x + x, y, pos.0.z + z);
             chunk.set_block_state(
                 &pos.0,

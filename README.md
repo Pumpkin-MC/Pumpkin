@@ -48,9 +48,9 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Lighting
   - [x] Entity Spawning
   - [x] Bossbar
-  - [x] Chunk Loading (Vanilla, Linear)
+  - [x] Chunk Loading (Vanilla, Linear, Pump)
   - [Chunk Generation](https://github.com/Pumpkin-MC/Pumpkin/issues/36)
-  - [x] Chunk Saving (Vanilla, Linear)
+  - [x] Chunk Saving (Vanilla, Linear, Pump)
   - [Redstone](https://github.com/Pumpkin-MC/Pumpkin/issues/1402)
   - [x] Liquid Physics
   - ...

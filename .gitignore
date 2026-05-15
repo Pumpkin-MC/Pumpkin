@@ -107,8 +107,7 @@ crash-reports/
 data/*
 
 # project's configurations
-configuration.toml
-features.toml
+pumpkin.toml
 
 
 *.local.nbt

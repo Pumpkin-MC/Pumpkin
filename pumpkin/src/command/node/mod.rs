@@ -9,6 +9,7 @@ use crate::command::context::command_source::CommandSource;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::node::attached::NodeId;
 use crate::command::node::detached::GlobalNodeId;
+use crate::command::suggestion::provider::SuggestionProvider;
 use std::borrow::Cow;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -218,16 +219,19 @@ impl CommandNodeMetadata {
 pub struct ArgumentNodeMetadata {
     pub name: Cow<'static, str>,
     pub argument_type: Arc<dyn AnyArgumentType>,
+    pub suggestion_provider: Option<Arc<dyn SuggestionProvider>>,
 }
 
 impl ArgumentNodeMetadata {
     pub fn new(
         name: impl Into<Cow<'static, str>>,
         argument_type: Arc<dyn AnyArgumentType>,
+        suggestion_provider: Option<Arc<dyn SuggestionProvider>>,
     ) -> Self {
         Self {
             name: name.into(),
             argument_type,
+            suggestion_provider,
         }
     }
 }

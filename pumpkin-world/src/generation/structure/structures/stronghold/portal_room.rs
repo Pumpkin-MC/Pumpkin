@@ -4,18 +4,16 @@ use pumpkin_data::{
         BlockProperties, EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
         OakStairsLikeProperties,
     },
-    entity::EntityType,
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
     BlockDirection,
-    math::{block_box::BlockBox, position::BlockPos},
+    math::block_box::BlockBox,
     random::{RandomGenerator, RandomImpl},
 };
 
 use crate::{
     ProtoChunk,
-    block::entities::mob_spawner::MobSpawnerBlockEntity,
     generation::structure::{
         piece::StructurePieceType,
         structures::{
@@ -358,10 +356,18 @@ impl StructurePieceBase for PortalRoomPiece {
                 self.spawner_placed = true;
                 let spawner = Block::SPAWNER.default_state;
                 inner.add_block(chunk, spawner, 5, 3, 6, &box_limit);
-                let spawner_block_entity =
-                    MobSpawnerBlockEntity::new(BlockPos(pos), Some(&EntityType::SILVERFISH));
                 let mut entity_nbt = NbtCompound::new();
-                spawner_block_entity.write_nbt(&mut entity_nbt);
+                entity_nbt.put_string("id", "minecraft:mob_spawner".to_string());
+                entity_nbt.put_int("x", pos.x);
+                entity_nbt.put_int("y", pos.y);
+                entity_nbt.put_int("z", pos.z);
+
+                let mut spawn_entry = NbtCompound::new();
+                let mut entity_nbt_inner = NbtCompound::new();
+                entity_nbt_inner.put_string("id", "minecraft:silverfish".to_string());
+                spawn_entry.put_compound("entity", entity_nbt_inner);
+                entity_nbt.put_compound("SpawnData", spawn_entry);
+
                 chunk.add_block_entity(entity_nbt);
             }
         }

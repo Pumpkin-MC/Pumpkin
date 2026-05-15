@@ -1,12 +1,14 @@
 use pumpkin_data::{
-    BlockState,
-    chunk::{Biome, DoublePerlinNoiseParameters},
-    chunk_gen_settings::{ColumnNoiseCache, CompiledSurfaceRule, SurfaceInstruction},
+    chunk::Biome,
+    chunk_gen_settings::{
+        AboveYMaterialCondition, MaterialCondition, NoiseThresholdMaterialCondition,
+        NotMaterialCondition, StoneDepthMaterialCondition, VerticalGradientMaterialCondition,
+        WaterMaterialCondition,
+    },
 };
 use pumpkin_util::{
     math::{lerp2, vertical_surface_type::VerticalSurfaceType},
     random::{RandomImpl, xoroshiro128::XoroshiroSplitter},
-    y_offset::YOffset,
 };
 
 use terrain::SurfaceTerrainBuilder;
@@ -24,6 +26,7 @@ use super::{
     },
 };
 
+pub mod rule;
 pub mod terrain;
 
 pub struct MaterialRuleContext<'a> {
@@ -49,7 +52,6 @@ pub struct MaterialRuleContext<'a> {
     pub stone_depth_above: i32,
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
-    pub noise_cache: ColumnNoiseCache,
 }
 
 impl<'a> MaterialRuleContext<'a> {
@@ -86,7 +88,6 @@ impl<'a> MaterialRuleContext<'a> {
             stone_depth_below: 0,
             stone_depth_above: 0,
             sea_level,
-            noise_cache: ColumnNoiseCache::new(),
         }
     }
 
@@ -134,233 +135,110 @@ impl<'a> MaterialRuleContext<'a> {
     }
 }
 
-pub fn evaluate_surface_rule(
-    rule: &CompiledSurfaceRule,
+#[expect(clippy::similar_names)]
+pub fn test_condition(
+    condition: &MaterialCondition,
     chunk: &mut ProtoChunk,
-    ctx: &mut MaterialRuleContext,
-    sampler: &mut SurfaceHeightEstimateSampler,
-) -> Option<&'static BlockState> {
-    let instrs = &rule.instructions;
-    let mut pc = 0usize;
-    let x = ctx.block_pos_x;
-    let z = ctx.block_pos_z;
-    let deriver = ctx.random_deriver;
-    while pc < instrs.len() {
-        match &instrs[pc] {
-            SurfaceInstruction::PlaceBlock { state } => return Some(state),
-
-            SurfaceInstruction::PlaceBadlands => {
-                return Some(get_badlands_block(ctx));
-            }
-
-            SurfaceInstruction::TestBiome { biome_is, skip } => {
-                if !biome_is.iter().any(|b| std::ptr::eq(*b, ctx.biome)) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestNoiseAbove { noise, min, skip } => {
-                let v = ctx
-                    .noise_cache
-                    .get(noise, || sample_noise(noise, deriver, x, z));
-                if v < *min {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestNoiseRange {
-                noise,
-                min,
-                max,
-                skip,
-            } => {
-                let v = ctx
-                    .noise_cache
-                    .get(noise, || sample_noise(noise, deriver, x, z));
-                if v < *min || v > *max {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestVerticalGradient {
-                random_lo,
-                random_hi,
-                true_at_and_below,
-                false_at_and_above,
-                skip,
-            } => {
-                if !test_vertical_gradient(
-                    ctx,
-                    *random_lo,
-                    *random_hi,
-                    true_at_and_below,
-                    false_at_and_above,
-                ) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestYAbove {
-                anchor,
-                surface_depth_multiplier,
-                add_stone_depth,
-                skip,
-            } => {
-                if !test_y_above(ctx, anchor, *surface_depth_multiplier, *add_stone_depth) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestWater {
-                offset,
-                surface_depth_multiplier,
-                add_stone_depth,
-                skip,
-            } => {
-                if !test_water(ctx, *offset, *surface_depth_multiplier, *add_stone_depth) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestStoneDepth {
-                offset,
-                add_surface_depth,
-                secondary_depth_range,
-                surface_type,
-                skip,
-            } => {
-                if !test_stone_depth(
-                    ctx,
-                    *offset,
-                    *add_surface_depth,
-                    *secondary_depth_range,
-                    surface_type,
-                ) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestAbovePreliminarySurface { skip } => {
-                if !test_above_preliminary_surface(ctx, sampler) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestHole { skip } => {
-                if !test_hole(ctx) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestSteep { skip } => {
-                if !test_steep(ctx, chunk) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestTemperature { skip } => {
-                if !test_temperature(ctx) {
-                    pc += *skip as usize;
-                }
-            }
-
-            SurfaceInstruction::TestNot { inner, skip } => {
-                let passed = eval_single_instruction(inner, chunk, ctx, sampler);
-                if passed {
-                    pc += *skip as usize;
-                }
-            }
-        }
-        pc += 1;
-    }
-    None
-}
-
-#[inline]
-fn eval_single_instruction(
-    instr: &SurfaceInstruction,
-    chunk: &mut ProtoChunk,
-    ctx: &mut MaterialRuleContext,
-    sampler: &mut SurfaceHeightEstimateSampler,
+    context: &mut MaterialRuleContext,
+    surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
 ) -> bool {
-    let x = ctx.block_pos_x;
-    let z = ctx.block_pos_z;
-    let deriver = ctx.random_deriver;
-    match instr {
-        SurfaceInstruction::TestBiome { biome_is, .. } => {
-            biome_is.iter().any(|b| std::ptr::eq(*b, ctx.biome))
+    match condition {
+        MaterialCondition::Biome(biome) => BiomeMaterialCondition::test(biome.biome_is, context),
+        MaterialCondition::NoiseThreshold(noise_threshold) => {
+            test_noise_threshold(noise_threshold, context)
         }
-        SurfaceInstruction::TestNoiseAbove { noise, min, .. } => {
-            ctx.noise_cache
-                .get(noise, || sample_noise(noise, deriver, x, z))
-                >= *min
+        MaterialCondition::VerticalGradient(vertical_gradient) => {
+            test_vertical_gradient(vertical_gradient, context)
         }
-        SurfaceInstruction::TestNoiseRange {
-            noise, min, max, ..
-        } => {
-            let v = ctx
-                .noise_cache
-                .get(noise, || sample_noise(noise, deriver, x, z));
-            v >= *min && v <= *max
+        MaterialCondition::YAbove(above_y) => test_above_y_material(above_y, context),
+        MaterialCondition::Water(water) => test_water_material(water, context),
+        MaterialCondition::Temperature => {
+            let temperature = context.biome.weather.compute_temperature(
+                context.block_pos_x as f64,
+                context.block_pos_y,
+                context.block_pos_z as f64,
+                context.sea_level,
+            );
+            temperature < 0.15f32
         }
-        SurfaceInstruction::TestHole { .. } => test_hole(ctx),
-        SurfaceInstruction::TestSteep { .. } => test_steep(ctx, chunk),
-        SurfaceInstruction::TestTemperature { .. } => test_temperature(ctx),
-        SurfaceInstruction::TestYAbove {
-            anchor,
-            surface_depth_multiplier,
-            add_stone_depth,
-            ..
-        } => test_y_above(ctx, anchor, *surface_depth_multiplier, *add_stone_depth),
-        SurfaceInstruction::TestWater {
-            offset,
-            surface_depth_multiplier,
-            add_stone_depth,
-            ..
-        } => test_water(ctx, *offset, *surface_depth_multiplier, *add_stone_depth),
-        SurfaceInstruction::TestAbovePreliminarySurface { .. } => {
-            test_above_preliminary_surface(ctx, sampler)
+        MaterialCondition::Steep => {
+            let local_x = context.block_pos_x & 15;
+            let local_z = context.block_pos_z & 15;
+
+            let local_z_sub = 0.max(local_z - 1);
+            let local_z_add = 15.min(local_z + 1);
+
+            let sub_height = chunk.top_block_height_exclusive(local_x, local_z_sub);
+            let add_height = chunk.top_block_height_exclusive(local_x, local_z_add);
+
+            if add_height >= sub_height + 4 {
+                true
+            } else {
+                let local_x_sub = 0.max(local_x - 1);
+                let local_x_add = 15.min(local_x + 1);
+
+                let sub_height = chunk.top_block_height_exclusive(local_x_sub, local_z);
+                let add_height = chunk.top_block_height_exclusive(local_x_add, local_z);
+
+                sub_height >= add_height + 4
+            }
         }
-        _ => false,
+        MaterialCondition::Not(not) => {
+            test_not_material(not, chunk, context, surface_height_estimate_sampler)
+        }
+        MaterialCondition::Hole(_hole) => HoleMaterialCondition::test(context),
+        MaterialCondition::AbovePreliminarySurface(_above) => {
+            SurfaceMaterialCondition::test(context, surface_height_estimate_sampler)
+        }
+        MaterialCondition::StoneDepth(stone_depth) => test_stone_depth(stone_depth, context),
     }
 }
 
-#[inline]
-pub fn get_badlands_block(context: &MaterialRuleContext) -> &'static BlockState {
-    context.terrain_builder.get_terracotta_block(
-        context.block_pos_x,
-        context.block_pos_y,
-        context.block_pos_z,
-    )
+pub struct HoleMaterialCondition;
+
+impl HoleMaterialCondition {
+    pub const fn test(context: &MaterialRuleContext) -> bool {
+        context.run_depth <= 0
+    }
 }
 
-#[inline]
-pub const fn test_hole(context: &MaterialRuleContext) -> bool {
-    context.run_depth <= 0
-}
-
-pub const fn test_y_above(
+pub const fn test_above_y_material(
+    condition: &AboveYMaterialCondition,
     context: &MaterialRuleContext,
-    anchor: &YOffset,
-    surface_depth_multiplier: i32,
-    add_stone_depth: bool,
 ) -> bool {
     context.block_pos_y
-        + if add_stone_depth {
+        + if condition.add_stone_depth {
             context.stone_depth_above
         } else {
             0
         }
-        >= anchor.get_y(context.min_y as i16, context.height)
-            + context.run_depth * surface_depth_multiplier
+        >= condition.anchor.get_y(context.min_y as i16, context.height)
+            + context.run_depth * condition.surface_depth_multiplier
 }
 
-#[inline]
-pub fn test_above_preliminary_surface(
+pub fn test_not_material(
+    condition: &NotMaterialCondition,
+    chunk: &mut ProtoChunk,
     context: &mut MaterialRuleContext,
     surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
 ) -> bool {
-    context.block_pos_y >= estimate_surface_height(context, surface_height_estimate_sampler)
+    !test_condition(
+        condition.invert,
+        chunk,
+        context,
+        surface_height_estimate_sampler,
+    )
+}
+
+pub struct SurfaceMaterialCondition;
+
+impl SurfaceMaterialCondition {
+    pub fn test(
+        context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+    ) -> bool {
+        context.block_pos_y >= estimate_surface_height(context, surface_height_estimate_sampler)
+    }
 }
 
 pub fn estimate_surface_height(
@@ -405,33 +283,41 @@ pub fn estimate_surface_height(
     context.surface_min_y
 }
 
-pub fn sample_noise(
-    parameters: &DoublePerlinNoiseParameters,
-    random_deriver: &XoroshiroSplitter,
-    x: i32,
-    z: i32,
-) -> f64 {
-    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(random_deriver, parameters);
-    sampler.sample(x as f64, 0.0, z as f64)
+pub struct BiomeMaterialCondition;
+
+impl BiomeMaterialCondition {
+    pub fn test(biome_is: &[&'static Biome], context: &MaterialRuleContext) -> bool {
+        biome_is.contains(&context.biome)
+    }
+}
+
+pub fn test_noise_threshold(
+    condition: &NoiseThresholdMaterialCondition,
+    context: &mut MaterialRuleContext,
+) -> bool {
+    // TODO: we want to cache these
+    let sampler = DoublePerlinNoiseBuilder::get_noise_sampler_for_id(
+        context.random_deriver,
+        &condition.noise,
+    );
+    let value = sampler.sample(context.block_pos_x as f64, 0.0, context.block_pos_z as f64);
+    value >= condition.min_threshold && value <= condition.max_threshold
 }
 
 pub fn test_stone_depth(
+    condition: &StoneDepthMaterialCondition,
     context: &mut MaterialRuleContext,
-    offset: i32,
-    add_surface_depth: bool,
-    secondary_depth_range: i32,
-    surface_type: &VerticalSurfaceType,
 ) -> bool {
-    let stone_depth = match surface_type {
+    let stone_depth = match &condition.surface_type {
         VerticalSurfaceType::Ceiling => context.stone_depth_below,
         VerticalSurfaceType::Floor => context.stone_depth_above,
     };
-    let depth = if add_surface_depth {
+    let depth = if condition.add_surface_depth {
         context.run_depth
     } else {
         0
     };
-    let depth_range = if secondary_depth_range == 0 {
+    let depth_range = if condition.secondary_depth_range == 0 {
         0
     } else {
         pumpkin_util::math::map(
@@ -439,37 +325,40 @@ pub fn test_stone_depth(
             -1.0,
             1.0,
             0.0,
-            secondary_depth_range as f64,
+            condition.secondary_depth_range as f64,
         ) as i32
     };
-    stone_depth <= 1 + offset + depth + depth_range
+    stone_depth <= 1 + condition.offset + depth + depth_range
 }
 
-pub const fn test_water(
+pub const fn test_water_material(
+    condition: &WaterMaterialCondition,
     context: &MaterialRuleContext,
-    offset: i32,
-    surface_depth_multiplier: i32,
-    add_stone_depth: bool,
 ) -> bool {
     context.fluid_height == i32::MIN
         || context.block_pos_y
-            + (if add_stone_depth {
+            + (if condition.add_stone_depth {
                 context.stone_depth_above
             } else {
                 0
             })
-            >= context.fluid_height + offset + context.run_depth * surface_depth_multiplier
+            >= context.fluid_height
+                + condition.offset
+                + context.run_depth * condition.surface_depth_multiplier
 }
 
+// random_deriver: ThreadLocal<RefCell<LruCache<usize, RandomDeriver>>>,
+
 pub fn test_vertical_gradient(
+    condition: &VerticalGradientMaterialCondition,
     context: &MaterialRuleContext,
-    random_lo: u64,
-    random_hi: u64,
-    true_at_and_below: &YOffset,
-    false_at_and_above: &YOffset,
 ) -> bool {
-    let true_at = true_at_and_below.get_y(context.min_y as i16, context.height);
-    let false_at = false_at_and_above.get_y(context.min_y as i16, context.height);
+    let true_at = condition
+        .true_at_and_below
+        .get_y(context.min_y as i16, context.height);
+    let false_at = condition
+        .false_at_and_above
+        .get_y(context.min_y as i16, context.height);
 
     let block_y = context.block_pos_y;
     if block_y <= true_at {
@@ -480,42 +369,9 @@ pub fn test_vertical_gradient(
     }
     let splitter = context
         .random_deriver
-        .from_lo_and_hi(random_lo, random_hi)
+        .from_lo_and_hi(condition.random_lo, condition.random_hi)
         .next_splitter();
     let mapped = pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
     let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
     random.next_f32() < mapped
-}
-
-pub fn test_steep(context: &MaterialRuleContext, chunk: &ProtoChunk) -> bool {
-    let local_x = context.block_pos_x & 15;
-    let local_z = context.block_pos_z & 15;
-
-    let local_z_sub = 0.max(local_z - 1);
-    let local_z_add = 15.min(local_z + 1);
-
-    let sub_height = chunk.top_block_height_exclusive(local_x, local_z_sub);
-    let add_height = chunk.top_block_height_exclusive(local_x, local_z_add);
-
-    if add_height >= sub_height + 4 {
-        true
-    } else {
-        let local_x_sub = 0.max(local_x - 1);
-        let local_x_add = 15.min(local_x + 1);
-
-        let sub_height = chunk.top_block_height_exclusive(local_x_sub, local_z);
-        let add_height = chunk.top_block_height_exclusive(local_x_add, local_z);
-
-        sub_height >= add_height + 4
-    }
-}
-
-pub fn test_temperature(context: &MaterialRuleContext) -> bool {
-    let temperature = context.biome.weather.compute_temperature(
-        context.block_pos_x as f64,
-        context.block_pos_y,
-        context.block_pos_z as f64,
-        context.sea_level,
-    );
-    temperature < 0.15f32
 }

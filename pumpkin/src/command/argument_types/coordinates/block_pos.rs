@@ -8,12 +8,18 @@ use crate::world::World;
 use pumpkin_data::translation;
 use pumpkin_util::math::position::BlockPos;
 
-pub const NOT_LOADED_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_UNLOADED);
-pub const OUT_OF_WORLD_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_OUTOFWORLD);
-pub const OUT_OF_BOUNDS_ERROR_TYPE: CommandErrorType<0> =
-    CommandErrorType::new(translation::ARGUMENT_POS_OUTOFBOUNDS);
+pub const NOT_LOADED_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS_UNLOADED,
+    translation::java::ARGUMENT_POS_UNLOADED,
+);
+pub const OUT_OF_WORLD_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS_OUTOFWORLD,
+    translation::java::ARGUMENT_POS_OUTOFWORLD,
+);
+pub const OUT_OF_BOUNDS_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::ARGUMENT_POS_OUTOFBOUNDS,
+    translation::java::ARGUMENT_POS_OUTOFBOUNDS,
+);
 
 /// An argument type for a 3-dimensional vector representing a block position.
 ///
@@ -103,7 +109,11 @@ impl BlockPosArgumentType {
         world: &World,
     ) -> Result<BlockPos, CommandSyntaxError> {
         let pos = Self::get_block_pos(context, name)?;
-        if world.level.try_get_chunk(&pos.chunk_position()).is_none() {
+        if world
+            .level
+            .read_chunk_sync(&pos.chunk_position(), |_| ())
+            .is_none()
+        {
             Err(NOT_LOADED_ERROR_TYPE.create_without_context())
         } else if !world.is_in_build_limit(pos) {
             Err(OUT_OF_WORLD_ERROR_TYPE.create_without_context())

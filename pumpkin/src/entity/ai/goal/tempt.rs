@@ -91,7 +91,7 @@ impl Goal for TemptGoal {
                 let mob_entity = mob.get_mob_entity();
                 let player_pos = player.living_entity.entity.pos.load();
 
-                mob_entity.look_control.lock().await.look_at(
+                mob_entity.look_control.lock().unwrap().look_at(
                     mob,
                     player_pos.x,
                     player.living_entity.entity.get_eye_y(),
@@ -100,7 +100,7 @@ impl Goal for TemptGoal {
 
                 let mob_pos = mob_entity.living_entity.entity.pos.load();
                 if mob_pos.squared_distance_to_vec(&player_pos) > STOP_DISTANCE * STOP_DISTANCE {
-                    let mut navigator = mob_entity.navigator.lock().await;
+                    let mut navigator = mob_entity.navigator.lock().unwrap();
                     navigator.set_progress(NavigatorGoal::new(mob_pos, player_pos, self.speed));
                 }
             }

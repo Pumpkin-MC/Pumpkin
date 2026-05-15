@@ -204,7 +204,7 @@ impl DragonFight {
     async fn scan_state(&mut self, world: &Arc<World>) {
         info!("Scanning End fight state...");
 
-        let has_active_portal = self.has_active_exit_portal(world).await;
+        let has_active_portal = Self::has_active_exit_portal(world);
 
         if has_active_portal {
             info!("Exit portal found – dragon has been killed previously.");
@@ -259,13 +259,13 @@ impl DragonFight {
 
     /// Checks whether a `END_PORTAL` block exists within an 8-chunk radius
     /// of the origin, matching vanilla's `hasActiveExitPortal`.
-    async fn has_active_exit_portal(&self, world: &Arc<World>) -> bool {
+    fn has_active_exit_portal(world: &Arc<World>) -> bool {
         for cx in -8i32..=8 {
             for cz in -8i32..=8 {
                 let bx = cx * 16;
                 let bz = cz * 16;
                 for y in 30i32..=80 {
-                    if world.get_block(&BlockPos::new(bx, y, bz)).await == &Block::END_PORTAL {
+                    if world.get_block(&BlockPos::new(bx, y, bz)) == &Block::END_PORTAL {
                         return true;
                     }
                 }
@@ -299,8 +299,7 @@ impl DragonFight {
         let uuid = Uuid::new_v4();
         let position = Vector3::new(0.5, DRAGON_SPAWN_Y, 0.5);
         let dragon =
-            crate::entity::r#type::from_type(&EntityType::ENDER_DRAGON, position, world, uuid)
-                .await;
+            crate::entity::r#type::from_type(&EntityType::ENDER_DRAGON, position, world, uuid);
 
         world.spawn_entity(dragon).await;
         self.dragon_uuid = Some(uuid);
@@ -363,7 +362,7 @@ impl DragonFight {
         }
 
         // Spawn a new end gateway.
-        self.spawn_new_gateway(world).await;
+        self.spawn_new_gateway(world);
 
         self.previously_killed = true;
         self.dragon_killed = true;
@@ -466,7 +465,7 @@ impl DragonFight {
             for dx in -4i32..=4 {
                 for dz in -4i32..=4 {
                     let pos = BlockPos::new(loc.0.x + dx, loc.0.y + dy, loc.0.z + dz);
-                    let block = world.get_block(&pos).await;
+                    let block = world.get_block(&pos);
                     if block == &Block::BEDROCK || block == &Block::END_PORTAL {
                         world
                             .set_block_state(
@@ -537,7 +536,7 @@ impl DragonFight {
 
     /// Spawn the next end gateway, consuming one index from `pending_gateways`.
     /// Matches vanilla `spawnNewGateway`.
-    async fn spawn_new_gateway(&mut self, world: &Arc<World>) {
+    fn spawn_new_gateway(&mut self, world: &Arc<World>) {
         let Some(idx) = self.pending_gateways.pop() else {
             return;
         };
@@ -547,9 +546,7 @@ impl DragonFight {
         let z = (GATEWAY_DISTANCE * angle.sin()).floor() as i32;
         let pos = BlockPos::new(x, GATEWAY_Y, z);
 
-        world
-            .sync_world_event(WorldEvent::AnimationEndGatewaySpawn, pos, 0)
-            .await;
+        world.sync_world_event(WorldEvent::AnimationEndGatewaySpawn, pos, 0);
         info!("Spawned end gateway #{} at {:?}.", idx, pos);
     }
 
@@ -575,7 +572,7 @@ impl DragonFight {
             // Find the top of the spike by scanning down from y=115 for bedrock.
             let mut crystal_y = 78i32;
             for y in (70..=115i32).rev() {
-                if world.get_block(&BlockPos::new(cx, y, cz)).await == &Block::BEDROCK {
+                if world.get_block(&BlockPos::new(cx, y, cz)) == &Block::BEDROCK {
                     crystal_y = y + 1;
                     break;
                 }
@@ -587,7 +584,7 @@ impl DragonFight {
                 &EntityType::END_CRYSTAL,
             );
             let crystal = Arc::new(EndCrystalEntity::new(entity));
-            crystal.set_show_bottom(true).await;
+            crystal.set_show_bottom(true);
             world.spawn_entity(crystal).await;
         }
         info!("Spawned end crystals on spike tops.");
@@ -600,10 +597,10 @@ impl DragonFight {
     pub async fn spawn_exit_portal(&mut self, world: &Arc<World>, active: bool) {
         // Determine location once and cache it.
         if self.portal_location.is_none() {
-            let top_y = world.get_top_block(Vector2::new(0, 0)).await;
+            let top_y = world.get_top_block(Vector2::new(0, 0));
             let mut portal_y = top_y;
             while portal_y > 63 {
-                if world.get_block(&BlockPos::new(0, portal_y, 0)).await != &Block::BEDROCK {
+                if world.get_block(&BlockPos::new(0, portal_y, 0)) != &Block::BEDROCK {
                     break;
                 }
                 portal_y -= 1;
@@ -622,7 +619,11 @@ impl DragonFight {
     fn make_bossbar(&self) -> Bossbar {
         Bossbar {
             uuid: self.bossbar_uuid,
-            title: TextComponent::translate("entity.minecraft.ender_dragon", []),
+            title: TextComponent::translate_cross(
+                "entity.minecraft.ender_dragon",
+                "entity.minecraft.ender_dragon",
+                [],
+            ),
             health: 1.0,
             color: BossbarColor::Pink,
             division: BossbarDivisions::NoDivision,

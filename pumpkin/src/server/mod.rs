@@ -11,8 +11,12 @@ use crate::plugin::PluginManager;
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
+use crate::world::WorldPortal;
 use crate::world::custom_bossbar::CustomBossbars;
-use crate::{command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World};
+use crate::{
+    command::node::dispatcher::CommandDispatcher, entity::player::Player, world::World,
+    world::map::MapManager,
+};
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
@@ -22,6 +26,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::{PermissionManager, PermissionRegistry};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
+use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
 use crate::command::CommandSender;
@@ -33,8 +38,6 @@ use pumpkin_storage::world_info::{LevelData, WorldInfoStorage};
 use pumpkin_storage::{StorageError, VanillaStorage};
 use pumpkin_util::Difficulty;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::lock::LevelLocker;
-use pumpkin_world::lock::anvil::AnvilLevelLocker;
 use rand::seq::{IndexedRandom, SliceRandom};
 use rsa::RsaPublicKey;
 use std::collections::HashSet;
@@ -75,6 +78,8 @@ pub struct Server {
 
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
+    /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
+    pub bedrock_oidc_keys: OnceCell<(String, pumpkin_util::jwt::Jwks)>,
     /// Manages server status information.
     listing: Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -91,11 +96,15 @@ pub struct Server {
     pub dimensions: Vec<Dimension>,
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
+    /// Assigns unique IDs to maps.
+    map_id: AtomicI32,
     /// Mojang's public keys, used for chat session signing
     /// Pulled from Mojang API on startup
     pub mojang_public_keys: ArcSwap<Vec<RsaPublicKey>>,
     /// The server's custom bossbars
     pub bossbars: Mutex<CustomBossbars>,
+    /// Manages all maps on the server
+    pub map_manager: MapManager,
     /// The default gamemode when a player joins the server (reset every restart)
     pub defaultgamemode: Mutex<DefaultGamemode>,
     /// Manages player data storage
@@ -121,9 +130,6 @@ pub struct Server {
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
     world_info_storage: Arc<dyn WorldInfoStorage>,
-    // Gets unlocked when dropped
-    // TODO: Make this a trait
-    _locker: Arc<Option<AnvilLevelLocker>>,
 }
 
 impl Server {
@@ -160,16 +166,6 @@ impl Server {
                 }
             }
         }
-        let locker = match AnvilLevelLocker::lock(&world_path) {
-            Ok(l) => Some(l),
-            Err(err) => {
-                warn!(
-                    "Could not lock the level file. Data corruption is possible if the world is accessed by multiple processes simultaneously. Error: {err}"
-                );
-                None
-            }
-        };
-
         let level_info = match level_info {
             Ok(data) => data,
             Err(err) => {
@@ -223,6 +219,7 @@ impl Server {
             ))),
             permission_registry,
             container_id: 0.into(),
+            map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
             dimensions: vec![
                 Dimension::OVERWORLD,
@@ -233,9 +230,11 @@ impl Server {
             block_registry: block_registry.clone(),
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
+            bedrock_oidc_keys: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
             bossbars: Mutex::new(CustomBossbars::new()),
+            map_manager: MapManager::new(),
             defaultgamemode,
             player_data_storage,
             white_list,
@@ -250,7 +249,6 @@ impl Server {
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
             world_info_storage,
             level_info,
-            _locker: Arc::new(locker),
         };
         let server = Arc::new(server);
 
@@ -284,13 +282,11 @@ impl Server {
                         .color_named(NamedColor::DarkGreen)
                         .to_pretty_console()
                 );
-                World::load(
-                    into_level(dim, &config, path, registry.clone(), seed, Some(pool)),
-                    l_info,
-                    dim,
-                    registry,
-                    weak,
-                )
+                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
+                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
+                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+                level.world_portal.store(Arc::new(Some(portal)));
+                world
             })
         };
 
@@ -303,9 +299,9 @@ impl Server {
         );
 
         let worlds_vec = vec![
-            Arc::new(overworld.expect("Overworld panicked")),
-            Arc::new(nether.expect("Nether panicked")),
-            Arc::new(end.expect("End panicked")),
+            overworld.expect("Overworld panicked"),
+            nether.expect("Nether panicked"),
+            end.expect("End panicked"),
         ];
         server.worlds.store(Arc::new(worlds_vec));
         if let Ok(k) = keys {
@@ -313,6 +309,23 @@ impl Server {
         }
 
         info!("All worlds loaded successfully.");
+
+        if server.basic_config.online_mode {
+            let server_clone = server.clone();
+            tokio::spawn(async move {
+                server_clone
+                    .bedrock_oidc_keys
+                    .get_or_init(|| async {
+                        tokio::task::block_in_place(|| {
+                            pumpkin_util::jwt::fetch_oidc_jwks().unwrap_or_else(|e| {
+                                error!("Failed to fetch Bedrock OIDC keys: {e}");
+                                (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                            })
+                        })
+                    })
+                    .await;
+            });
+        }
         server
     }
 
@@ -363,27 +376,23 @@ impl Server {
             let seed = server.level_info.load().world_gen_settings.seed;
 
             // TODO: gen_pool should be reused
-            let world = World::load(
-                pumpkin_world::dimension::into_level(
-                    dimension,
-                    &config,
-                    world_path,
-                    registry.clone(),
-                    seed,
-                    None,
-                ),
-                l_info,
-                dimension,
-                registry,
-                weak,
+            let level = pumpkin_world::dimension::into_level(
+                dimension.clone(),
+                &config,
+                world_path,
+                seed,
+                None,
             );
-            let world_arc = Arc::new(world);
+            let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+            let world = Arc::new(world);
+            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+            level.world_portal.store(Arc::new(Some(portal)));
             server.worlds.rcu(|worlds| {
                 let mut new_worlds = (**worlds).clone();
-                new_worlds.push(world_arc.clone());
+                new_worlds.push(world.clone());
                 new_worlds
             });
-            world_arc
+            world
         })
         .await
         .expect("World creation panicked")
@@ -423,13 +432,10 @@ impl Server {
         let gamemode = self.defaultgamemode.lock().await.gamemode;
 
         let (world, nbt) =
-            if let Ok(Some(mut data)) = self.player_data_storage.load_data(&profile.id).await {
-                let _version = data.get_int().unwrap_or(0);
-                if let Ok(dimension_key) = data.get_string() {
-                    if let Some(dimension) = Dimension::from_name(&dimension_key) {
+            if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
+                if let Some(dimension_key) = data.get_string("Dimension") {
+                    if let Some(dimension) = Dimension::from_name(dimension_key) {
                         let world = self.get_world_from_dimension(dimension);
-                        // Reset read position so player.read_nbt can read everything from start
-                        data.read_pos = 0;
                         (world, Some(data))
                     } else {
                         warn!("Invalid dimension key in player data: {dimension_key}");
@@ -439,18 +445,16 @@ impl Server {
                             .first()
                             .expect("Default world should exist")
                             .clone();
-                        data.read_pos = 0;
                         (default_world, Some(data))
                     }
                 } else {
-                    // Player data exists but doesn't have a dimension entry.
+                    // Player data exists but doesn't have a "Dimension" key.
                     let default_world = self
                         .worlds
                         .load()
                         .first()
                         .expect("Default world should exist")
                         .clone();
-                    data.read_pos = 0;
                     (default_world, Some(data))
                 }
             } else {
@@ -543,9 +547,9 @@ impl Server {
     /// # Arguments
     ///
     /// * `packet`: A reference to the packet to be broadcast. The packet must implement the `ClientPacket` trait.
-    pub async fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
+    pub fn broadcast_packet_all<P: ClientPacket>(&self, packet: &P) {
         for world in self.worlds.load().iter() {
-            world.broadcast_packet_all(packet).await;
+            world.broadcast_packet_all(packet);
         }
     }
 
@@ -605,7 +609,7 @@ impl Server {
     /// # Note
     ///
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
-    pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
+    pub fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
         let current_info = self.level_info.load();
         if current_info.difficulty_locked && !force_update {
             return;
@@ -627,8 +631,7 @@ impl Server {
             world.set_difficulty(difficulty);
         }
 
-        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked))
-            .await;
+        self.broadcast_packet_all(&CChangeDifficulty::new(difficulty as u8, locked));
     }
 
     /// Searches for a player by their username across all worlds.
@@ -748,6 +751,17 @@ impl Server {
     /// Generates a new container id.
     pub fn new_container_id(&self) -> u32 {
         self.container_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// Generates a new map id.
+    pub fn next_map_id(&self) -> i32 {
+        let id = self.map_id.fetch_add(1, Ordering::SeqCst);
+        self.level_info.rcu(|level_info| {
+            let mut new_level_info = (**level_info).clone();
+            new_level_info.map_id = self.map_id.load(Ordering::SeqCst);
+            new_level_info
+        });
+        id
     }
 
     pub fn get_branding(&self) -> CPluginMessage<'_> {

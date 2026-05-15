@@ -1,0 +1,853 @@
+package pumpkin:plugin@0.1.0;
+
+interface java-packets {
+  record s-attack {
+    entity-id: s32,
+  }
+  record s-change-game-mode {
+    game-mode: string,
+  }
+  record s-chat-command {
+    command: string,
+  }
+  record s-chat-message {
+    message: string,
+    timestamp: s64,
+    salt: s64,
+    signature: option<list<string>>,
+    message-count: s32,
+    acknowledged: list<string>,
+    checksum: u8,
+  }
+  record s-chunk-batch {
+    chunks-per-tick: f32,
+  }
+  record s-click-slot {
+    sync-id: s32,
+    revision: s32,
+    slot: s32,
+    button: u8,
+    mode: string,
+    length-of-array: s32,
+    array-of-changed-slots: list<string>,
+    carried-item: string,
+  }
+  record s-client-command {
+    action-id: s32,
+  }
+  record s-client-information-play {
+    locale: string,
+    view-distance: u8,
+    chat-mode: s32,
+    chat-colors: bool,
+    skin-parts: u8,
+    main-hand: s32,
+    text-filtering: bool,
+    server-listing: bool,
+  }
+  record s-close-container {
+    window-id: s32,
+  }
+  record s-command-suggestion {
+    id: s32,
+    command: string,
+  }
+  record s-confirm-teleport {
+    teleport-id: s32,
+  }
+  record s-container-button-click {
+    window-id: s32,
+    button-id: s32,
+  }
+  record s-cookie-response {
+    key: string,
+    payload: option<list<string>>,
+  }
+  record s-custom-payload {
+    channel: string,
+    data: list<string>,
+  }
+  record s-interact {
+    entity-id: s32,
+    r-type: s32,
+    target-position: option<tuple<f64, f64, f64>>,
+    hand: option<s32>,
+    sneaking: bool,
+  }
+  record s-keep-alive {
+    keep-alive-id: s64,
+  }
+  record s-move-vehicle {
+    x: f64,
+    y: f64,
+    z: f64,
+    yaw: f32,
+    pitch: f32,
+  }
+  record s-paddle-boat {
+    left-paddle: bool,
+    right-paddle: bool,
+  }
+  record s-pick-item-from-block {
+    pos: tuple<s32, s32, s32>,
+    include-data: bool,
+  }
+  record s-pick-item-from-entity {
+    id: s32,
+    include-data: bool,
+  }
+  record s-play-ping-request {
+    payload: s64,
+  }
+  record s-place-recipe {
+    container-id: u8,
+    recipe-display-id: s32,
+    use-max-items: bool,
+  }
+  record s-player-abilities {
+    %flags: u8,
+  }
+  record s-player-action {
+    status: s32,
+    position: tuple<s32, s32, s32>,
+    face: u8,
+    sequence: s32,
+  }
+  record s-player-command {
+    entity-id: s32,
+    action: string,
+    jump-boost: s32,
+  }
+  record s-set-player-ground {
+    on-ground: bool,
+  }
+  record s-player-input {
+    input: u8,
+  }
+  record s-player-position {
+    position: tuple<f64, f64, f64>,
+    collision: u8,
+  }
+  record s-player-position-rotation {
+    position: tuple<f64, f64, f64>,
+    yaw: f32,
+    pitch: f32,
+    collision: u8,
+  }
+  record s-player-rotation {
+    yaw: f32,
+    pitch: f32,
+    ground: bool,
+  }
+  record s-player-session {
+    session-id: string,
+    expires-at: s64,
+    public-key: list<string>,
+    key-signature: list<string>,
+  }
+  record s-recipe-book-change-settings {
+    book-type: s32,
+    is-open: bool,
+    is-filtering: bool,
+  }
+  record s-recipe-book-seen-recipe {
+    recipe-display-id: s32,
+  }
+  record s-rename-item {
+    item-name: string,
+  }
+  record s-select-trade {
+    selected-slot: s32,
+  }
+  record s-set-beacon {
+    primary-effect: option<s32>,
+    secondary-effect: option<s32>,
+  }
+  record s-set-command-block {
+    pos: tuple<s32, s32, s32>,
+    command: string,
+    mode: s32,
+    %flags: u8,
+  }
+  record s-set-creative-slot {
+    slot: s32,
+    clicked-item: string,
+  }
+  record s-set-held-item {
+    slot: s32,
+  }
+  record s-swing-arm {
+    hand: s32,
+  }
+  record s-update-sign {
+    location: tuple<s32, s32, s32>,
+    is-front-text: bool,
+    line-1: string,
+    line-2: string,
+    line-3: string,
+    line-4: string,
+  }
+  record s-use-item {
+    hand: s32,
+    sequence: s32,
+    yaw: f32,
+    pitch: f32,
+  }
+  record s-use-item-on {
+    hand: s32,
+    position: tuple<s32, s32, s32>,
+    face: s32,
+    cursor-pos: tuple<f64, f64, f64>,
+    inside-block: bool,
+    is-against-world-border: bool,
+    sequence: s32,
+  }
+  record c-acknowledge-block-change {
+    sequence-id: s32,
+  }
+  record c-action-bar {
+    action-bar: string,
+  }
+  record c-set-block-destroy-stage {
+    entity-id: s32,
+    location: tuple<s32, s32, s32>,
+    destroy-stage: u8,
+  }
+  record c-block-entity-data {
+    location: tuple<s32, s32, s32>,
+    r-type: s32,
+    nbt-data: list<string>,
+  }
+  record c-block-event {
+    location: tuple<s32, s32, s32>,
+    action-id: u8,
+    action-parameter: u8,
+    block-type: s32,
+  }
+  record c-block-update {
+    location: tuple<s32, s32, s32>,
+    state-id: s32,
+  }
+  record c-boss-event {
+    uuid: string,
+    action: string,
+  }
+  record c-center-chunk {
+    chunk-x: s32,
+    chunk-z: s32,
+  }
+  record c-change-difficulty {
+    difficulty: u8,
+    locked: bool,
+  }
+  record c-chunk-batch-end {
+    batch-size: s32,
+  }
+  record c-clear-title {
+    reset: bool,
+  }
+  record c-close-container {
+    sync-id: s32,
+  }
+  record c-combat-death {
+    player-id: s32,
+    message: string,
+  }
+  record c-command-suggestions {
+    id: s32,
+    start: s32,
+    length: s32,
+    matches: list<string>,
+  }
+  record c-commands {
+    nodes: list<string>,
+    root-node-index: s32,
+  }
+  record c-play-cookie-request {
+    key: string,
+  }
+  record c-custom-payload {
+    channel: string,
+    data: string,
+  }
+  record c-damage-event {
+    entity-id: s32,
+    source-type-id: s32,
+    source-cause-id: s32,
+    source-direct-id: s32,
+    source-position: option<tuple<f64, f64, f64>>,
+  }
+  record c-play-disconnect {
+    reason: string,
+  }
+  record c-disguised-chat-message {
+    message: string,
+    chat-type: s32,
+    sender-name: string,
+    target-name: option<string>,
+  }
+  record c-display-objective {
+    position: s32,
+    score-name: string,
+  }
+  record c-entity-animation {
+    entity-id: s32,
+    animation: u8,
+  }
+  record c-set-entity-metadata {
+    entity-id: s32,
+    metadata: list<string>,
+  }
+  record c-entity-position-sync {
+    entity-id: s32,
+    position: tuple<f64, f64, f64>,
+    delta: tuple<f64, f64, f64>,
+    yaw: f32,
+    pitch: f32,
+    on-ground: bool,
+  }
+  record c-entity-sound-effect {
+    sound-event: string,
+    sound-category: s32,
+    entity-id: s32,
+    volume: f32,
+    pitch: f32,
+    seed: s64,
+  }
+  record c-entity-status {
+    entity-id: s32,
+    entity-status: u8,
+  }
+  record c-entity-velocity {
+    entity-id: s32,
+    velocity: string,
+  }
+  record c-explosion {
+    center: tuple<f64, f64, f64>,
+    radius: f32,
+    block-count: s32,
+    knockback: option<tuple<f64, f64, f64>>,
+    particle: s32,
+    sound: string,
+    block-particles-pool-size: s32,
+  }
+  record c-game-event {
+    event: u8,
+    value: f32,
+  }
+  record c-head-rot {
+    entity-id: s32,
+    head-yaw: u8,
+  }
+  record c-hurt-animation {
+    entity-id: s32,
+    yaw: f32,
+  }
+  record c-initialize-world-border {
+    x: f64,
+    z: f64,
+    old-diameter: f64,
+    new-diameter: f64,
+    speed: string,
+    portal-teleport-boundary: s32,
+    warning-blocks: s32,
+    warning-time: s32,
+  }
+  record c-item-cooldown {
+    group: string,
+    cooldown: s32,
+  }
+  record c-keep-alive {
+    keep-alive-id: s64,
+  }
+  record c-level-event {
+    event: s32,
+    location: tuple<s32, s32, s32>,
+    data: s32,
+    disable-relative-volume: bool,
+  }
+  record c-login {
+    entity-id: s32,
+    is-hardcore: bool,
+    dimension-names: list<string>,
+    max-players: s32,
+    view-distance: s32,
+    simulated-distance: s32,
+    reduced-debug-info: bool,
+    enabled-respawn-screen: bool,
+    limited-crafting: bool,
+    dimension: string,
+    hashed-seed: s64,
+    game-mode: u8,
+    previous-gamemode: u8,
+    debug: bool,
+    is-flat: bool,
+    death-dimension-name: option<string>,
+    portal-cooldown: s32,
+    sealevel: s32,
+    enforce-secure-chat: bool,
+  }
+  record c-map-item-data {
+    map-id: s32,
+    scale: u8,
+    locked: bool,
+    icons: option<string>,
+    data: option<string>,
+  }
+  record c-merchant-offers {
+    window-id: s32,
+    offers: list<string>,
+    villager-level: s32,
+    experience: s32,
+    is-regular-villager: bool,
+    can-restock: bool,
+  }
+  record c-multi-block-update {
+    chunk-section: s64,
+    updates: list<string>,
+  }
+  record c-open-screen {
+    sync-id: s32,
+    window-type: s32,
+    window-title: string,
+  }
+  record c-open-sign-editor {
+    location: tuple<s32, s32, s32>,
+    is-front-text: bool,
+  }
+  record c-particle {
+    force-spawn: bool,
+    important: bool,
+    position: tuple<f64, f64, f64>,
+    offset: tuple<f64, f64, f64>,
+    max-speed: f32,
+    particle-count: s32,
+    particle-id: s32,
+    data: string,
+  }
+  record c-ping-response {
+    payload: s64,
+  }
+  record c-player-abilities {
+    %flags: u8,
+    flying-speed: f32,
+    field-of-view: f32,
+  }
+  record c-player-chat-message {
+    global-index: s32,
+    sender: string,
+    index: s32,
+    message-signature: option<list<string>>,
+    message: string,
+    timestamp: s64,
+    salt: s64,
+    previous-messages: list<string>,
+    unsigned-content: option<string>,
+    filter-type: string,
+    chat-type: s32,
+    sender-name: string,
+    target-name: option<string>,
+  }
+  record c-player-info-update {
+    actions: u8,
+    players: string,
+  }
+  record c-player-position {
+    teleport-id: s32,
+    position: tuple<f64, f64, f64>,
+    delta: tuple<f64, f64, f64>,
+    yaw: f32,
+    pitch: f32,
+    relatives: list<string>,
+  }
+  record c-remove-player-info {
+    players: string,
+  }
+  record c-player-spawn-position {
+    dimension-name: string,
+    location: tuple<s32, s32, s32>,
+    yaw: f32,
+    pitch: f32,
+  }
+  record c-recipe-book-add {
+    replace: bool,
+  }
+  record c-recipe-book-settings {
+    crafting-open: bool,
+    crafting-filtering: bool,
+    furnace-open: bool,
+    furnace-filtering: bool,
+    blast-furnace-open: bool,
+    blast-furnace-filtering: bool,
+    smoker-open: bool,
+    smoker-filtering: bool,
+  }
+  record c-remove-entities {
+    entity-ids: string,
+  }
+  record c-remove-mob-effect {
+    entity-id: s32,
+    effect-id: s32,
+  }
+  record c-reset-score {
+    entity-name: string,
+    objective-name: option<string>,
+  }
+  record c-respawn {
+    dimension-type: s32,
+    dimension-name: string,
+    hashed-seed: s64,
+    game-mode: u8,
+    previous-gamemode: u8,
+    debug: bool,
+    is-flat: bool,
+    death-dimension-name: option<string>,
+    portal-cooldown: s32,
+    sealevel: s32,
+    data-kept: u8,
+  }
+  record c-play-server-links {
+    links: string,
+  }
+  record c-set-border-center {
+    x: f64,
+    z: f64,
+  }
+  record c-set-border-lerp-size {
+    old-diameter: f64,
+    new-diameter: f64,
+    speed: string,
+  }
+  record c-set-border-size {
+    diameter: f64,
+  }
+  record c-set-border-warning-delay {
+    warning-time: s32,
+  }
+  record c-set-border-warning-distance {
+    warning-blocks: s32,
+  }
+  record c-set-container-content {
+    window-id: s32,
+    state-id: s32,
+    slot-data: string,
+    carried-item: string,
+  }
+  record c-set-container-property {
+    window-id: s32,
+    property: s32,
+    value: s32,
+  }
+  record c-set-container-slot {
+    window-id: u8,
+    state-id: s32,
+    slot: s32,
+    slot-data: string,
+  }
+  record c-set-cursor-item {
+    stack: string,
+  }
+  record c-set-equipment {
+    entity-id: s32,
+    equipment: list<string>,
+  }
+  record c-set-experience {
+    progress: f32,
+    level: s32,
+    total-experience: s32,
+  }
+  record c-set-health {
+    health: f32,
+    food: s32,
+    food-saturation: f32,
+  }
+  record c-set-passengers {
+    entity-id: s32,
+    passengers: string,
+  }
+  record c-set-player-inventory {
+    slot: s32,
+    item: string,
+  }
+  record c-set-player-team {
+    team-name: string,
+    method: string,
+    parameters: option<string>,
+    players: list<string>,
+  }
+  record c-update-time {
+    game-time: s64,
+    clock-updates: list<string>,
+  }
+  record c-title-text {
+    title: string,
+  }
+  record c-title-animation {
+    fade-in-ticks: s32,
+    stay-ticks: s32,
+    fade-out-ticks: s32,
+  }
+  record c-sound-effect {
+    sound-event: string,
+    sound-category: s32,
+    position: tuple<f64, f64, f64>,
+    volume: f32,
+    pitch: f32,
+    seed: f64,
+  }
+  record c-spawn-entity {
+    entity-id: s32,
+    entity-uuid: string,
+    r-type: s32,
+    position: tuple<f64, f64, f64>,
+    velocity: string,
+    pitch: u8,
+    yaw: u8,
+    head-yaw: u8,
+    data: s32,
+  }
+  record c-stop-sound {
+    sound-id: option<string>,
+    category: option<string>,
+  }
+  record c-store-cookie {
+    key: string,
+    payload: string,
+  }
+  record c-subtitle {
+    subtitle: string,
+  }
+  record c-system-chat-message {
+    content: string,
+    overlay: bool,
+  }
+  record c-tab-list {
+    header: string,
+    footer: string,
+  }
+  record c-take-item-entity {
+    entity-id: s32,
+    collector-entity-id: s32,
+    stack-amount: s32,
+  }
+  record c-teleport-entity {
+    entity-id: s32,
+    position: tuple<f64, f64, f64>,
+    delta: tuple<f64, f64, f64>,
+    yaw: f32,
+    pitch: f32,
+    relatives: string,
+    on-ground: bool,
+  }
+  record c-ticking-state {
+    tick-rate: f32,
+    is-frozen: bool,
+  }
+  record c-ticking-step {
+    tick-steps: s32,
+  }
+  record c-transfer {
+    host: string,
+    port: s32,
+  }
+  record c-unload-chunk {
+    z: s32,
+    x: s32,
+  }
+  record c-update-attributes {
+    entity-id: s32,
+    properties: list<string>,
+  }
+  record c-update-entity-pos {
+    entity-id: s32,
+    delta: tuple<f64, f64, f64>,
+    on-ground: bool,
+  }
+  record c-update-entity-pos-rot {
+    entity-id: s32,
+    delta: tuple<f64, f64, f64>,
+    yaw: u8,
+    pitch: u8,
+    on-ground: bool,
+  }
+  record c-update-entity-rot {
+    entity-id: s32,
+    yaw: u8,
+    pitch: u8,
+    on-ground: bool,
+  }
+  record c-update-mob-effect {
+    entity-id: s32,
+    effect-id: s32,
+    amplifier: s32,
+    duration: s32,
+    %flags: u8,
+  }
+  record c-update-objectives {
+    objective-name: string,
+    mode: u8,
+    display-name: string,
+    render-type: s32,
+    number-format: option<string>,
+  }
+  record c-update-score {
+    entity-name: string,
+    objective-name: string,
+    value: s32,
+    display-name: option<string>,
+    number-format: option<string>,
+  }
+  record c-world-event {
+    event: s32,
+    location: tuple<s32, s32, s32>,
+    data: s32,
+    disable-relative-volume: bool,
+  }
+  variant serverbound-packet {
+    s-attack(s-attack),
+    s-change-game-mode(s-change-game-mode),
+    s-chat-command(s-chat-command),
+    s-chat-message(s-chat-message),
+    s-chunk-batch(s-chunk-batch),
+    s-click-slot(s-click-slot),
+    s-client-command(s-client-command),
+    s-client-information-play(s-client-information-play),
+    s-client-tick-end,
+    s-close-container(s-close-container),
+    s-command-suggestion(s-command-suggestion),
+    s-confirm-teleport(s-confirm-teleport),
+    s-container-button-click(s-container-button-click),
+    s-cookie-response(s-cookie-response),
+    s-custom-payload(s-custom-payload),
+    s-interact(s-interact),
+    s-keep-alive(s-keep-alive),
+    s-move-vehicle(s-move-vehicle),
+    s-paddle-boat(s-paddle-boat),
+    s-pick-item-from-block(s-pick-item-from-block),
+    s-pick-item-from-entity(s-pick-item-from-entity),
+    s-play-ping-request(s-play-ping-request),
+    s-place-recipe(s-place-recipe),
+    s-player-abilities(s-player-abilities),
+    s-player-action(s-player-action),
+    s-player-command(s-player-command),
+    s-set-player-ground(s-set-player-ground),
+    s-player-input(s-player-input),
+    s-player-loaded,
+    s-player-position(s-player-position),
+    s-player-position-rotation(s-player-position-rotation),
+    s-player-rotation(s-player-rotation),
+    s-player-session(s-player-session),
+    s-recipe-book-change-settings(s-recipe-book-change-settings),
+    s-recipe-book-seen-recipe(s-recipe-book-seen-recipe),
+    s-rename-item(s-rename-item),
+    s-select-trade(s-select-trade),
+    s-set-beacon(s-set-beacon),
+    s-set-command-block(s-set-command-block),
+    s-set-creative-slot(s-set-creative-slot),
+    s-set-held-item(s-set-held-item),
+    s-swing-arm(s-swing-arm),
+    s-update-sign(s-update-sign),
+    s-use-item(s-use-item),
+    s-use-item-on(s-use-item-on),
+  }
+  variant clientbound-packet {
+    c-acknowledge-block-change(c-acknowledge-block-change),
+    c-action-bar(c-action-bar),
+    c-set-block-destroy-stage(c-set-block-destroy-stage),
+    c-block-entity-data(c-block-entity-data),
+    c-block-event(c-block-event),
+    c-block-update(c-block-update),
+    c-boss-event(c-boss-event),
+    c-center-chunk(c-center-chunk),
+    c-change-difficulty(c-change-difficulty),
+    c-chunk-batch-end(c-chunk-batch-end),
+    c-chunk-batch-start,
+    c-chunk-data,
+    c-clear-title(c-clear-title),
+    c-close-container(c-close-container),
+    c-combat-death(c-combat-death),
+    c-command-suggestions(c-command-suggestions),
+    c-commands(c-commands),
+    c-play-cookie-request(c-play-cookie-request),
+    c-custom-payload(c-custom-payload),
+    c-damage-event(c-damage-event),
+    c-play-disconnect(c-play-disconnect),
+    c-disguised-chat-message(c-disguised-chat-message),
+    c-display-objective(c-display-objective),
+    c-entity-animation(c-entity-animation),
+    c-set-entity-metadata(c-set-entity-metadata),
+    c-entity-position-sync(c-entity-position-sync),
+    c-entity-sound-effect(c-entity-sound-effect),
+    c-entity-status(c-entity-status),
+    c-entity-velocity(c-entity-velocity),
+    c-explosion(c-explosion),
+    c-game-event(c-game-event),
+    c-head-rot(c-head-rot),
+    c-hurt-animation(c-hurt-animation),
+    c-initialize-world-border(c-initialize-world-border),
+    c-item-cooldown(c-item-cooldown),
+    c-keep-alive(c-keep-alive),
+    c-level-event(c-level-event),
+    c-light-update,
+    c-login(c-login),
+    c-map-item-data(c-map-item-data),
+    c-merchant-offers(c-merchant-offers),
+    c-multi-block-update(c-multi-block-update),
+    c-open-screen(c-open-screen),
+    c-open-sign-editor(c-open-sign-editor),
+    c-particle(c-particle),
+    c-ping-response(c-ping-response),
+    c-player-abilities(c-player-abilities),
+    c-player-chat-message(c-player-chat-message),
+    c-player-info-update(c-player-info-update),
+    c-player-position(c-player-position),
+    c-remove-player-info(c-remove-player-info),
+    c-player-spawn-position(c-player-spawn-position),
+    c-recipe-book-add(c-recipe-book-add),
+    c-recipe-book-settings(c-recipe-book-settings),
+    c-remove-entities(c-remove-entities),
+    c-remove-mob-effect(c-remove-mob-effect),
+    c-reset-score(c-reset-score),
+    c-respawn(c-respawn),
+    c-play-server-links(c-play-server-links),
+    c-set-border-center(c-set-border-center),
+    c-set-border-lerp-size(c-set-border-lerp-size),
+    c-set-border-size(c-set-border-size),
+    c-set-border-warning-delay(c-set-border-warning-delay),
+    c-set-border-warning-distance(c-set-border-warning-distance),
+    c-set-container-content(c-set-container-content),
+    c-set-container-property(c-set-container-property),
+    c-set-container-slot(c-set-container-slot),
+    c-set-cursor-item(c-set-cursor-item),
+    c-set-equipment(c-set-equipment),
+    c-set-experience(c-set-experience),
+    c-set-health(c-set-health),
+    c-set-passengers(c-set-passengers),
+    c-set-player-inventory(c-set-player-inventory),
+    c-set-player-team(c-set-player-team),
+    c-update-time(c-update-time),
+    c-title-text(c-title-text),
+    c-title-animation(c-title-animation),
+    c-sound-effect(c-sound-effect),
+    c-spawn-entity(c-spawn-entity),
+    c-stop-sound(c-stop-sound),
+    c-store-cookie(c-store-cookie),
+    c-subtitle(c-subtitle),
+    c-system-chat-message(c-system-chat-message),
+    c-tab-list(c-tab-list),
+    c-take-item-entity(c-take-item-entity),
+    c-teleport-entity(c-teleport-entity),
+    c-ticking-state(c-ticking-state),
+    c-ticking-step(c-ticking-step),
+    c-transfer(c-transfer),
+    c-unload-chunk(c-unload-chunk),
+    c-update-attributes(c-update-attributes),
+    c-update-entity-pos(c-update-entity-pos),
+    c-update-entity-pos-rot(c-update-entity-pos-rot),
+    c-update-entity-rot(c-update-entity-rot),
+    c-update-mob-effect(c-update-mob-effect),
+    c-update-objectives(c-update-objectives),
+    c-update-score(c-update-score),
+    c-world-event(c-world-event),
+  }
+}

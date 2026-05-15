@@ -27,17 +27,6 @@ macro_rules! create_number_impl {
 /// - [`DynamicOps::get_long_list`]
 #[macro_export]
 macro_rules! impl_get_list {
-    (box $target:expr, $input:expr, $ty:literal) => {
-        $target.get_iter($input).flat_map(|iter| {
-            // We want all elements in the iterator to be numbers.
-            iter.map(|e| $target.get_number(&e).into_result().map(Into::into))
-                .collect::<Option<Vec<_>>>()
-                .map_or_else(
-                    || DataResult::new_error(concat!("Some elements are not ", $ty)),
-                    |v| DataResult::new_success(v.into_boxed_slice()),
-                )
-        })
-    };
     ($target:expr, $input:expr, $ty:literal) => {
         $target.get_iter($input).flat_map(|iter| {
             // We want all elements in the iterator to be numbers.
@@ -128,13 +117,13 @@ pub trait DynamicOps {
 
     /// Gets a `Box<[u8]>` (byte buffer) from a generic value represented by this `DynamicOps`.
     /// This is the equivalent of DFU's `getByteBuffer()` function.
-    fn get_byte_buffer(&self, input: Self::Value) -> DataResult<Box<[u8]>> {
-        impl_get_list!(box self, input, "bytes")
+    fn get_byte_list(&self, input: Self::Value) -> DataResult<Vec<i8>> {
+        impl_get_list!(self, input, "bytes")
     }
 
     /// Creates a byte buffer that can be represented by this `DynamicOps` using a [`Vec<u8>`].
-    fn create_byte_buffer(&self, buffer: Vec<u8>) -> Self::Value {
-        self.create_list(buffer.iter().map(|b| self.create_byte(*b as i8)))
+    fn create_byte_list(&self, vec: Vec<i8>) -> Self::Value {
+        self.create_list(vec.into_iter().map(|b| self.create_byte(b)))
     }
 
     /// Gets a [`Vec<i32>`] (`int` list) from a generic value represented by this `DynamicOps`.

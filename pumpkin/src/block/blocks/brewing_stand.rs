@@ -6,17 +6,17 @@ use crate::block::{
     {BlockBehaviour, NormalUseArgs},
 };
 
+use crate::block::entities::brewing_stand::BrewingStandBlockEntity;
 use pumpkin_data::translation;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{BoxFuture, ScreenHandlerFactory, SharedScreenHandler};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::block::entities::brewing_stand::BrewingStandBlockEntity;
 use pumpkin_world::inventory::Inventory;
 
 struct BrewingScreenFactory(
     Arc<dyn Inventory>,
-    Arc<dyn pumpkin_world::block::entities::PropertyDelegate>,
+    Arc<dyn crate::block::entities::PropertyDelegate>,
 );
 
 impl ScreenHandlerFactory for BrewingScreenFactory {
@@ -38,7 +38,11 @@ impl ScreenHandlerFactory for BrewingScreenFactory {
     }
 
     fn get_display_name(&self) -> TextComponent {
-        TextComponent::translate(translation::CONTAINER_BREWING, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_BREWING,
+            translation::bedrock::CONTAINER_BREWING,
+            &[],
+        )
     }
 }
 
@@ -48,7 +52,7 @@ pub struct BrewingStandBlock;
 impl BlockBehaviour for BrewingStandBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.clone().get_inventory()
                 && let Some(pd) = block_entity.clone().to_property_delegate()
             {
@@ -64,7 +68,7 @@ impl BlockBehaviour for BrewingStandBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let be = BrewingStandBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(be)).await;
+            args.world.add_block_entity(Arc::new(be));
         })
     }
 }

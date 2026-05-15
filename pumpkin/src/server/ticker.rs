@@ -22,7 +22,7 @@ impl Ticker {
                 server.tick().await;
 
                 if manager.end_sprint_tick_work() {
-                    manager.finish_tick_sprint(server).await;
+                    manager.finish_tick_sprint(server);
                 }
             } else {
                 server.tick().await;

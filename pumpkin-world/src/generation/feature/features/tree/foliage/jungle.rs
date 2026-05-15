@@ -1,5 +1,8 @@
 use pumpkin_data::BlockState;
-use pumpkin_util::random::{RandomGenerator, RandomImpl};
+use pumpkin_util::{
+    math::position::BlockPos,
+    random::{RandomGenerator, RandomImpl},
+};
 
 use super::{FoliagePlacer, LeaveValidator};
 use crate::generation::feature::features::tree::TreeNode;
@@ -20,7 +23,8 @@ impl JungleFoliagePlacer {
         radius: i32,
         offset: i32,
         foliage_provider: &BlockState,
-    ) {
+    ) -> Vec<BlockPos> {
+        let mut foliage_positions = Vec::new();
         let height = if node.giant_trunk {
             foliage_height
         } else {
@@ -29,6 +33,7 @@ impl JungleFoliagePlacer {
         for y in (offset - height..=offset).rev() {
             let radius = radius + node.foliage_radius + 1 - y;
             FoliagePlacer::generate_square(
+                &mut foliage_positions,
                 self,
                 chunk,
                 random,
@@ -39,6 +44,7 @@ impl JungleFoliagePlacer {
                 foliage_provider,
             );
         }
+        foliage_positions
     }
     pub const fn get_random_height(
         &self,

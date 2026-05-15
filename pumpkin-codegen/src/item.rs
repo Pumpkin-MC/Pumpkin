@@ -62,6 +62,13 @@ pub struct ItemComponents {
     pub damage_resistant: Option<DamageResistantComponent>,
     #[serde(rename = "minecraft:weapon")]
     pub weapon: Option<WeaponComponent>,
+    #[serde(rename = "minecraft:enchantable")]
+    pub enchantable: Option<EnchantableComponent>,
+}
+
+#[derive(Deserialize)]
+pub struct EnchantableComponent {
+    pub value: i32,
 }
 
 impl ToTokens for ItemComponents {
@@ -84,6 +91,7 @@ impl ToTokens for ItemComponents {
 
         let TextContent::Translate {
             translate: text,
+            bedrock_translate: _,
             with: _,
         } = *self.item_name.clone().0.content
         else {
@@ -571,6 +579,11 @@ impl ToTokens for ItemComponents {
                 can_be_sheared: #can_be_sheared,
                 shearing_sound: #shearing_sound
             }), });
+        }
+
+        if let Some(enchantable) = &self.enchantable {
+            let value = LitInt::new(&enchantable.value.to_string(), Span::call_site());
+            tokens.extend(quote! { (Enchantable, &EnchantableImpl { value: #value }), });
         }
     }
 }

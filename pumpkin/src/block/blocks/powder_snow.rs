@@ -96,7 +96,7 @@ impl BlockBehaviour for PowderSnowBlock {
                     Sound::EntityGenericBigFall
                 };
 
-                living.entity.play_sound(sound).await;
+                living.entity.play_sound(sound);
             }
         })
     }

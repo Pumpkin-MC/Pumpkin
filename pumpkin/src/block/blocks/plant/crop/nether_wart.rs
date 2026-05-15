@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, EnumVariants, Integer0To3, NetherWartLikeProperties},
+    block_properties::{BlockProperties, NetherWartLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
@@ -25,10 +25,8 @@ use crate::{
 pub struct NetherWartBlock;
 
 impl BlockBehaviour for NetherWartBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -54,19 +52,19 @@ impl BlockBehaviour for NetherWartBlock {
 }
 
 impl PlantBlockBase for NetherWartBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = block_accessor.get_block(pos);
         block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_NETHER_WART)
     }
 
-    async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down()).await
+    fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, &block_pos.down())
     }
 }
 
 impl CropBlockBase for NetherWartBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos).await
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos)
     }
 
     fn max_age(&self) -> i32 {
@@ -75,17 +73,17 @@ impl CropBlockBase for NetherWartBlock {
 
     fn get_age(&self, state: u16, block: &Block) -> i32 {
         let props = NetherWartLikeProperties::from_state_id(state, block);
-        i32::from(props.age.to_index())
+        i32::from(props.age)
     }
 
     fn state_with_age(&self, block: &Block, state: u16, age: i32) -> BlockStateId {
         let mut props = NetherWartLikeProperties::from_state_id(state, block);
-        props.age = Integer0To3::from_index(age as u16);
+        props.age = age as u8;
         props.to_state_id(block)
     }
 
     async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
-        let (block, state) = world.get_block_and_state_id(pos).await;
+        let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() && rand::rng().random_range(0..=10) == 0 {
             world

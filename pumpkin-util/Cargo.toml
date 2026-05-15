@@ -27,6 +27,10 @@ base64.workspace = true
 p384 = { workspace = true, features = ["ecdsa"] }
 thiserror.workspace = true
 ecdsa.workspace = true
+rsa.workspace = true
+sha2.workspace = true
+crypto-bigint.workspace = true
+ureq.workspace = true
 
 [lints]
 workspace = true

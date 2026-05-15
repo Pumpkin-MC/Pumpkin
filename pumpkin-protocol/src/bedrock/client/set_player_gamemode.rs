@@ -1,9 +1,9 @@
-use crate::{codec::var_int::VarInt, serial::PacketWrite};
+use crate::serial::PacketWrite;
 use pumpkin_macros::packet;
+use pumpkin_util::GameMode;
 
 #[derive(PacketWrite)]
 #[packet(62)]
 pub struct CSetPlayerGamemode {
-    // https://mojang.github.io/bedrock-protocol-docs/html/SetPlayerGameTypePacket.html
-    pub gamemode: VarInt,
+    pub gamemode: GameMode,
 }

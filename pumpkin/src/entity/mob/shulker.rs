@@ -8,7 +8,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::meta_data_type::MetaDataType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data::TrackedData;
-use pumpkin_nbt::pnbt::PNbtCompound;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{CEntityPositionSync, Metadata};
 use pumpkin_util::math::position::BlockPos;
@@ -64,7 +64,7 @@ pub struct ShulkerEntity {
 }
 
 impl ShulkerEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let shulker = Self {
             mob_entity,
@@ -81,8 +81,8 @@ impl ShulkerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(
                 1,
@@ -107,60 +107,52 @@ impl ShulkerEntity {
             .unwrap_or(DEFAULT_ATTACH_FACE)
     }
 
-    async fn set_attach_face(&self, face: BlockDirection) {
+    fn set_attach_face(&self, face: BlockDirection) {
         self.attach_face.store(face as u8, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::ATTACH_FACE_ID,
-                MetaDataType::DIRECTION,
-                VarInt(face as i32),
-            )])
-            .await;
+        entity.send_meta_data(&[Metadata::new(
+            TrackedData::ATTACH_FACE_ID,
+            MetaDataType::DIRECTION,
+            VarInt(face as i32),
+        )]);
     }
 
     pub fn get_raw_peek(&self) -> u8 {
         self.peek_amount.load(Ordering::Relaxed)
     }
 
-    pub async fn set_raw_peek(&self, amount: u8) {
+    pub fn set_raw_peek(&self, amount: u8) {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
 
         if amount == 0 {
             // Closed from open state
-            world
-                .play_sound_fine(
-                    Sound::EntityShulkerClose,
-                    SoundCategory::Hostile,
-                    &pos,
-                    1.0,
-                    1.0,
-                )
-                .await;
+            world.play_sound_fine(
+                Sound::EntityShulkerClose,
+                SoundCategory::Hostile,
+                &pos,
+                1.0,
+                1.0,
+            );
         } else if self.peek_amount.load(Ordering::Relaxed) == 0 {
             // Opened from closed state
-            world
-                .play_sound_fine(
-                    Sound::EntityShulkerOpen,
-                    SoundCategory::Hostile,
-                    &pos,
-                    1.0,
-                    1.0,
-                )
-                .await;
+            world.play_sound_fine(
+                Sound::EntityShulkerOpen,
+                SoundCategory::Hostile,
+                &pos,
+                1.0,
+                1.0,
+            );
         }
 
         self.peek_amount.store(amount, Ordering::Relaxed);
 
-        entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::PEEK_ID,
-                MetaDataType::BYTE,
-                amount,
-            )])
-            .await;
+        entity.send_meta_data(&[Metadata::new(
+            TrackedData::PEEK_ID,
+            MetaDataType::BYTE,
+            amount,
+        )]);
     }
 
     pub fn is_closed(&self) -> bool {
@@ -190,12 +182,12 @@ impl ShulkerEntity {
 
     /// Returns `Some(direction)` if the neighbour block in that direction from
     /// `pos` is solid (the shulker can attach there).
-    async fn find_attachable_face(&self, pos: &BlockPos) -> Option<BlockDirection> {
+    fn find_attachable_face(&self, pos: &BlockPos) -> Option<BlockDirection> {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         for dir in BlockDirection::all() {
             let neighbour = pos.offset_direction(dir);
-            let state = world.get_block_state(&neighbour).await;
+            let state = world.get_block_state(&neighbour);
             if state.is_solid() {
                 return Some(dir);
             }
@@ -205,27 +197,27 @@ impl ShulkerEntity {
 
     /// Check whether the shulker can stay where it is.
     /// The block at `pos` must be free (air) and the block in the `face` direction from `pos` must be solid.
-    async fn can_stay_at(&self, pos: &BlockPos, face: BlockDirection) -> bool {
+    fn can_stay_at(&self, pos: &BlockPos, face: BlockDirection) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
 
         // Shulker's own block must not be occupied
-        let own_state = world.get_block_state(pos).await;
+        let own_state = world.get_block_state(pos);
         if !own_state.is_air() {
             return false;
         }
 
         // The block the shulker is attached to must still be solid
         let neighbour = pos.offset_direction(face);
-        let state = world.get_block_state(&neighbour).await;
+        let state = world.get_block_state(&neighbour);
         state.is_solid()
     }
 
     /// Try to find a new attachment point, cascading to a random teleport.
     async fn find_new_attachment(&self) {
         let pos = self.mob_entity.living_entity.entity.block_pos.load();
-        if let Some(dir) = self.find_attachable_face(&pos).await {
-            self.set_attach_face(dir).await;
+        if let Some(dir) = self.find_attachable_face(&pos) {
+            self.set_attach_face(dir);
         } else {
             self.teleport_somewhere().await;
         }
@@ -257,46 +249,42 @@ impl ShulkerEntity {
             let candidate = BlockPos::new(base_pos.0.x + dx, base_pos.0.y + dy, base_pos.0.z + dz);
 
             // Target block must be air and there must be an attachable adjacent solid face.
-            let candidate_state = world.get_block_state(&candidate).await;
+            let candidate_state = world.get_block_state(&candidate);
             if !candidate_state.is_air() {
                 continue;
             }
 
-            if let Some(dir) = self.find_attachable_face(&candidate).await {
+            if let Some(dir) = self.find_attachable_face(&candidate) {
                 let new_pos = Vector3::new(
                     f64::from(candidate.0.x) + 0.5,
                     f64::from(candidate.0.y),
                     f64::from(candidate.0.z) + 0.5,
                 );
 
-                self.set_attach_face(dir).await;
+                self.set_attach_face(dir);
                 entity.set_pos(new_pos);
 
-                world
-                    .broadcast_packet_all(&CEntityPositionSync::new(
-                        entity.entity_id.into(),
-                        new_pos,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        entity.yaw.load(),
-                        entity.pitch.load(),
-                        entity.on_ground.load(Ordering::Relaxed),
-                    ))
-                    .await;
+                world.broadcast_packet_all(&CEntityPositionSync::new(
+                    entity.entity_id.into(),
+                    new_pos,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    entity.yaw.load(),
+                    entity.pitch.load(),
+                    entity.on_ground.load(Ordering::Relaxed),
+                ));
 
                 entity.last_sent_pos.store(new_pos);
 
-                world
-                    .play_sound_fine(
-                        Sound::EntityShulkerTeleport,
-                        SoundCategory::Hostile,
-                        &new_pos,
-                        1.0,
-                        1.0,
-                    )
-                    .await;
+                world.play_sound_fine(
+                    Sound::EntityShulkerTeleport,
+                    SoundCategory::Hostile,
+                    &new_pos,
+                    1.0,
+                    1.0,
+                );
 
                 // Close the shulker and drop the current target after teleport.
-                self.set_raw_peek(0).await;
+                self.set_raw_peek(0);
                 self.mob_entity.target.lock().await.take();
 
                 return true;
@@ -320,29 +308,25 @@ impl ShulkerEntity {
 }
 
 impl NBTStorage for ShulkerEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
-            nbt.put_byte(self.attach_face.load(Ordering::Relaxed) as i8);
-            nbt.put_byte(self.peek_amount.load(Ordering::Relaxed) as i8);
-            nbt.put_byte(self.color.load(Ordering::Relaxed) as i8);
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
+            nbt.put_byte("PeekAmount", self.peek_amount.load(Ordering::Relaxed) as i8);
+            nbt.put_byte("Color", self.color.load(Ordering::Relaxed) as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
-            if let Ok(face) = nbt.get_byte() {
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            if let Some(face) = nbt.get_byte("AttachFace") {
                 self.attach_face.store(face as u8, Ordering::Relaxed);
             }
-            if let Ok(peek) = nbt.get_byte() {
+            if let Some(peek) = nbt.get_byte("PeekAmount") {
                 self.peek_amount.store(peek as u8, Ordering::Relaxed);
             }
-            if let Ok(color) = nbt.get_byte() {
+            if let Some(color) = nbt.get_byte("Color") {
                 self.color.store(color as u8, Ordering::Relaxed);
             }
         })
@@ -374,7 +358,7 @@ impl Mob for ShulkerEntity {
             // Ensure the current attachment face still has a solid block behind it.
             let pos = entity.block_pos.load();
             let face = self.get_attach_face();
-            if !self.can_stay_at(&pos, face).await {
+            if !self.can_stay_at(&pos, face) {
                 self.find_new_attachment().await;
             }
         })
@@ -456,13 +440,13 @@ impl Goal for ShulkerAttackGoal {
     fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             self.attack_cooldown.store(20, Ordering::Relaxed);
-            self.shulker.set_raw_peek(100).await;
+            self.shulker.set_raw_peek(100);
         })
     }
 
     fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
-            self.shulker.set_raw_peek(0).await;
+            self.shulker.set_raw_peek(0);
         })
     }
 
@@ -518,15 +502,13 @@ impl Goal for ShulkerAttackGoal {
                 // Shoot sound (random pitch)
                 let pitch = 1.0
                     + (mob.get_random().random::<f32>() - mob.get_random().random::<f32>()) * 0.2;
-                world
-                    .play_sound_fine(
-                        Sound::EntityShulkerShoot,
-                        SoundCategory::Hostile,
-                        &shulker_pos,
-                        2.0,
-                        pitch,
-                    )
-                    .await;
+                world.play_sound_fine(
+                    Sound::EntityShulkerShoot,
+                    SoundCategory::Hostile,
+                    &shulker_pos,
+                    2.0,
+                    pitch,
+                );
             }
         })
     }
@@ -558,7 +540,7 @@ impl Goal for ShulkerPeekGoal {
             }
             let pos = mob.get_mob_entity().living_entity.entity.block_pos.load();
             let face = self.shulker.get_attach_face();
-            self.shulker.can_stay_at(&pos, face).await
+            self.shulker.can_stay_at(&pos, face)
         })
     }
 
@@ -573,7 +555,7 @@ impl Goal for ShulkerPeekGoal {
         Box::pin(async move {
             let duration = 20 * (1 + mob.get_random().random_range(0..3));
             self.peek_time.store(duration, Ordering::Relaxed);
-            self.shulker.set_raw_peek(30).await;
+            self.shulker.set_raw_peek(30);
         })
     }
 
@@ -581,7 +563,7 @@ impl Goal for ShulkerPeekGoal {
         Box::pin(async move {
             let has_target = self.shulker.mob_entity.target.lock().await.is_some();
             if !has_target {
-                self.shulker.set_raw_peek(0).await;
+                self.shulker.set_raw_peek(0);
             }
         })
     }

@@ -11,6 +11,7 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
     tracked_data::TrackedData,
 };
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
 
 use crate::entity::{
@@ -40,7 +41,7 @@ pub struct CreeperEntity {
 }
 
 impl CreeperEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let entity = Self {
             mob_entity,
@@ -59,8 +60,8 @@ impl CreeperEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
 
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
             goal_selector.add_goal(2, Box::new(CreeperIgniteGoal::new(mob_arc.clone())));
@@ -83,7 +84,7 @@ impl CreeperEntity {
         mob_arc
     }
 
-    pub async fn set_fuse_speed(&self, speed: i32) {
+    pub fn set_fuse_speed(&self, speed: i32) {
         self.fuse_speed.store(speed, Ordering::Relaxed);
         self.mob_entity
             .living_entity
@@ -92,8 +93,7 @@ impl CreeperEntity {
                 TrackedData::FUSE_ID,
                 MetaDataType::INTEGER,
                 VarInt(speed),
-            )])
-            .await;
+            )]);
     }
 
     async fn explode(&self) {
@@ -116,34 +116,36 @@ impl CreeperEntity {
     }
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
 impl NBTStorage for CreeperEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
-            nbt.put_bool(self.charged.load(Ordering::Relaxed));
-            nbt.put_short(self.fuse_time.load(Ordering::Relaxed) as i16);
-            nbt.put_byte(self.explosion_radius.load(Ordering::Relaxed) as i8);
-            nbt.put_bool(self.ignited.load(Ordering::Relaxed));
+            self.mob_entity.living_entity.write_nbt(nbt).await;
+            nbt.put_bool("powered", self.charged.load(Ordering::Relaxed));
+            nbt.put_short("Fuse", self.fuse_time.load(Ordering::Relaxed) as i16);
+            nbt.put_byte(
+                "ExplosionRadius",
+                self.explosion_radius.load(Ordering::Relaxed) as i8,
+            );
+            nbt.put_bool("ignited", self.ignited.load(Ordering::Relaxed));
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
-            self.charged
-                .store(nbt.get_bool().unwrap_or(false), Ordering::Relaxed);
-            self.fuse_time
-                .store(i32::from(nbt.get_short().unwrap_or(30)), Ordering::Relaxed);
-            self.explosion_radius
-                .store(i32::from(nbt.get_byte().unwrap_or(3)), Ordering::Relaxed);
-            self.ignited
-                .store(nbt.get_bool().unwrap_or(false), Ordering::Relaxed);
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            if let Some(powered) = nbt.get_bool("powered") {
+                self.charged.store(powered, Ordering::Relaxed);
+            }
+            if let Some(fuse) = nbt.get_short("Fuse") {
+                self.fuse_time.store(i32::from(fuse), Ordering::Relaxed);
+            }
+            if let Some(radius) = nbt.get_byte("ExplosionRadius") {
+                self.explosion_radius
+                    .store(i32::from(radius), Ordering::Relaxed);
+            }
+            if let Some(ignited) = nbt.get_bool("ignited") {
+                self.ignited.store(ignited, Ordering::Relaxed);
+            }
         })
     }
 }
@@ -166,7 +168,7 @@ impl Mob for CreeperEntity {
             );
 
             if self.ignited.load(Ordering::Relaxed) {
-                self.set_fuse_speed(1).await;
+                self.set_fuse_speed(1);
             }
 
             let fuse_speed = self.fuse_speed.load(Ordering::Relaxed);
@@ -174,15 +176,13 @@ impl Mob for CreeperEntity {
 
             if fuse_speed > 0 && current == 0 {
                 let world = entity.world.load();
-                world
-                    .play_sound_fine(
-                        Sound::EntityCreeperPrimed,
-                        SoundCategory::Hostile,
-                        &entity.pos.load(),
-                        1.0,
-                        0.5,
-                    )
-                    .await;
+                world.play_sound_fine(
+                    Sound::EntityCreeperPrimed,
+                    SoundCategory::Hostile,
+                    &entity.pos.load(),
+                    1.0,
+                    0.5,
+                );
             }
 
             let fuse_time = self.fuse_time.load(Ordering::Relaxed);
@@ -198,7 +198,7 @@ impl Mob for CreeperEntity {
 
     fn mob_interact<'a>(
         &'a self,
-        player: &'a Player,
+        player: &'a Arc<Player>,
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
@@ -210,24 +210,20 @@ impl Mob for CreeperEntity {
             let world = entity.world.load();
             let pos = entity.pos.load();
 
-            world
-                .play_sound_fine(
-                    Sound::ItemFlintandsteelUse,
-                    SoundCategory::Hostile,
-                    &pos,
-                    1.0,
-                    rand::random::<f32>() * 0.4 + 0.8,
-                )
-                .await;
+            world.play_sound_fine(
+                Sound::ItemFlintandsteelUse,
+                SoundCategory::Hostile,
+                &pos,
+                1.0,
+                rand::random::<f32>() * 0.4 + 0.8,
+            );
 
             self.ignited.store(true, Ordering::Relaxed);
-            entity
-                .send_meta_data(&[Metadata::new(
-                    TrackedData::IS_IGNITED,
-                    MetaDataType::BOOLEAN,
-                    true,
-                )])
-                .await;
+            entity.send_meta_data(&[Metadata::new(
+                TrackedData::IS_IGNITED,
+                MetaDataType::BOOLEAN,
+                true,
+            )]);
 
             if player.gamemode.load() != pumpkin_util::GameMode::Creative {
                 // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.

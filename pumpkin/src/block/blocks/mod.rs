@@ -15,9 +15,11 @@ pub mod shulker_box;
 pub mod blast_furnace;
 pub mod brewing_stand;
 pub mod crafting_table;
+pub mod enchanting_table;
 pub mod furnace;
 pub mod grindstone;
 pub mod smoker;
+pub mod stonecutter;
 
 // Redstone & mechanisms
 pub mod command; // command block / redstone control
@@ -78,6 +80,7 @@ pub mod vine;
 // Terrain / environment / physics
 pub mod cobweb;
 pub mod dirt_path;
+pub mod dragon_egg;
 pub mod falling;
 pub mod infested;
 pub mod powder_snow;
@@ -95,3 +98,5 @@ pub mod tnt;
 
 // Misc / abstract
 pub mod abstract_wall_mounting;
+
+pub mod beacon;

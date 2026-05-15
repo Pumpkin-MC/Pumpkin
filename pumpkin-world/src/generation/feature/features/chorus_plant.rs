@@ -1,7 +1,7 @@
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
-        BlockProperties, BrownMushroomBlockLikeProperties, ChorusFlowerLikeProperties, Integer0To5,
+        BlockProperties, BrownMushroomBlockLikeProperties, ChorusFlowerLikeProperties,
     },
     tag,
 };
@@ -100,9 +100,7 @@ fn set_chorus_plant<T: GenerationCache>(chunk: &mut T, pos: &BlockPos) {
 
 /// Places a dead chorus flower (age 5) at `pos`.
 fn place_dead_flower<T: GenerationCache>(chunk: &mut T, pos: &BlockPos) {
-    let props = ChorusFlowerLikeProperties {
-        age: Integer0To5::L5,
-    };
+    let props = ChorusFlowerLikeProperties { age: 5 };
     let state_id = props.to_state_id(&Block::CHORUS_FLOWER);
     chunk.set_block_state(&pos.0, pumpkin_data::BlockState::from_id(state_id));
 }

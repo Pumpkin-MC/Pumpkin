@@ -49,7 +49,7 @@ impl BegGoal {
         mob_pos.squared_distance_to_vec(&player_pos)
     }
 
-    async fn set_begging(mob: &dyn Mob, begging: bool) {
+    fn set_begging(mob: &dyn Mob, begging: bool) {
         mob.get_mob_entity()
             .living_entity
             .entity
@@ -57,8 +57,7 @@ impl BegGoal {
                 TrackedData::INTERESTED_ID,
                 MetaDataType::BOOLEAN,
                 begging,
-            )])
-            .await;
+            )]);
     }
 }
 
@@ -103,7 +102,7 @@ impl Goal for BegGoal {
 
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            Self::set_begging(mob, true).await;
+            Self::set_begging(mob, true);
             let ticks = 40 + mob.get_random().random_range(0..40);
             self.timer = self.get_tick_count(ticks);
         })
@@ -111,7 +110,7 @@ impl Goal for BegGoal {
 
     fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async {
-            Self::set_begging(mob, false).await;
+            Self::set_begging(mob, false);
             self.target = None;
         })
     }
@@ -120,7 +119,7 @@ impl Goal for BegGoal {
         Box::pin(async {
             if let Some(player) = &self.target {
                 let player_pos = player.living_entity.entity.get_eye_pos();
-                let mut look_control = mob.get_mob_entity().look_control.lock().await;
+                let mut look_control = mob.get_mob_entity().look_control.lock().unwrap();
                 look_control.look_at_with_range(
                     player_pos.x,
                     player_pos.y,

@@ -402,7 +402,11 @@ pub(crate) fn parse_target_selector_with_context(
     parse_target_selector(raw_arg.value).map_err(|error| {
         syntax_error_for_arg_with_cursor(
             raw_arg,
-            TextComponent::translate(translation::ARGUMENT_ENTITY_INVALID, []),
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_ENTITY_INVALID,
+                translation::java::ARGUMENT_ENTITY_INVALID,
+                [],
+            ),
             error.cursor,
         )
     })
@@ -415,7 +419,11 @@ pub(crate) fn ensure_player_only_selector(
     if selector.includes_entities() {
         Err(syntax_error_for_arg_with_cursor(
             raw_arg,
-            TextComponent::translate(translation::ARGUMENT_PLAYER_ENTITIES, []),
+            TextComponent::translate_cross(
+                translation::java::ARGUMENT_PLAYER_ENTITIES,
+                translation::java::ARGUMENT_PLAYER_ENTITIES,
+                [],
+            ),
             0,
         ))
     } else {
@@ -483,7 +491,7 @@ mod test {
             pumpkin_util::text::TextContent::Translate { translate, .. } => translate.as_ref(),
             _ => "",
         };
-        assert_eq!(translate_key, translation::ARGUMENT_PLAYER_ENTITIES);
+        assert_eq!(translate_key, translation::java::ARGUMENT_PLAYER_ENTITIES);
         assert_eq!(error.context.unwrap().cursor, 4);
     }
 }

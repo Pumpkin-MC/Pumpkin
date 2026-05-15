@@ -3,7 +3,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::world::BlockFlags;
+use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
@@ -236,7 +236,7 @@ pub struct EnderDragonEntity {
 }
 
 impl EnderDragonEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         entity.no_clip.store(true, Ordering::Relaxed);
         let base_id = entity.entity_id;
         let dragon_uuid = entity.entity_uuid;
@@ -254,9 +254,7 @@ impl EnderDragonEntity {
                 &EntityType::ENDER_DRAGON,
             );
             let part = Arc::new(EnderDragonPart::new(part_entity, dragon_uuid));
-            world
-                .add_entity_silent(part.clone() as Arc<dyn EntityBase>)
-                .await;
+            // TODO: world.add_entity_silent(part.clone() as Arc<dyn EntityBase>);
             parts.push(part);
         }
 
@@ -348,7 +346,8 @@ impl EnderDragonEntity {
                     + (20.0 * ((multiplier as f32) * std::f32::consts::TAU / 4.0).sin()) as i32;
             }
 
-            let height = world.get_motion_blocking_height(node_x, node_z).await;
+            let height =
+                world.get_heightmap_height(ChunkHeightmapType::MotionBlocking, node_x, node_z);
             let node_y = 73.max(height + y_adjustment);
             nodes[i] = Some(DragonNode::new(node_x as f64, node_y as f64, node_z as f64));
         }
@@ -575,7 +574,7 @@ impl EnderDragonEntity {
                     .living_entity
                     .entity
                     .apply_knockback(4.0, xd / dd, zd / dd);
-                player.living_entity.entity.send_velocity().await;
+                player.living_entity.entity.send_velocity();
 
                 if !self.phase.lock().await.is_sitting() {
                     player.damage(self, 5.0, DamageType::MOB_ATTACK).await;
@@ -584,7 +583,7 @@ impl EnderDragonEntity {
         }
     }
 
-    async fn tick_crystal_healing(&self) {
+    fn tick_crystal_healing(&self) {
         let world = self.mob_entity.living_entity.entity.world.load();
         let pos = self.mob_entity.living_entity.entity.pos.load();
 
@@ -605,7 +604,7 @@ impl EnderDragonEntity {
         if let Some(_crystal) = nearest_crystal {
             let living = &self.mob_entity.living_entity;
             if living.health.load() < living.get_max_health() {
-                living.heal(1.0).await;
+                living.heal(1.0);
             }
         }
     }
@@ -623,7 +622,7 @@ impl EnderDragonEntity {
         let max = bbox.max_block_pos();
 
         for pos in BlockPos::iterate(min, max) {
-            let block = world.get_block(&pos).await;
+            let block = world.get_block(&pos);
             if block != &Block::BEDROCK
                 && block != &Block::END_STONE
                 && block != &Block::OBSIDIAN
@@ -637,7 +636,8 @@ impl EnderDragonEntity {
     }
 
     async fn tick_parts(&self) {
-        let history = self.flight_history.lock().await;
+        let history: tokio::sync::MutexGuard<'_, DragonFlightHistory> =
+            self.flight_history.lock().await;
         let p5 = history.get(5);
         let p10 = history.get(10);
         let p0 = history.get(0);
@@ -710,7 +710,7 @@ impl EnderDragonEntity {
         }
 
         for part in &self.parts {
-            part.entity.send_pos_rot().await;
+            part.entity.send_pos_rot();
         }
     }
 
@@ -726,7 +726,7 @@ impl EnderDragonEntity {
         };
 
         self.tick_growl().await;
-        self.tick_crystal_healing().await;
+        self.tick_crystal_healing();
 
         {
             let world = self.mob_entity.living_entity.entity.world.load();
@@ -769,7 +769,7 @@ impl EnderDragonEntity {
             .await;
         }
 
-        self.mob_entity.living_entity.entity.send_pos_rot().await;
+        self.mob_entity.living_entity.entity.send_pos_rot();
         self.tick_parts().await;
     }
 

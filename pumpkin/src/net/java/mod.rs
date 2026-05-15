@@ -8,12 +8,12 @@ use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_protocol::java::server::play::{
     SAttack, SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
     SClientInformationPlay, SClientTickEnd, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-    SCookieResponse as SPCookieResponse, SCustomPayload, SInteract, SKeepAlive, SMoveVehicle,
-    SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest, SPlayerAbilities,
-    SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+    SContainerButtonClick, SCookieResponse as SPCookieResponse, SCustomPayload, SInteract,
+    SKeepAlive, SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlaceRecipe, SPlayPingRequest,
+    SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
     SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SRecipeBookChangeSettings,
-    SRecipeBookSeenRecipe, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-    SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+    SRecipeBookSeenRecipe, SRenameItem, SSelectTrade, SSetCommandBlock, SSetCreativeSlot,
+    SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
@@ -159,8 +159,16 @@ impl JavaClient {
         let crypt_key: [u8; 16] = shared_secret
             .try_into()
             .map_err(|_| EncryptionError::SharedWrongLength)?;
-        self.network_reader.lock().await.set_encryption(&crypt_key);
-        self.network_writer.lock().await.set_encryption(&crypt_key);
+        self.network_reader
+            .lock()
+            .await
+            .set_encryption(&crypt_key)
+            .map_err(|_| EncryptionError::AlreadyEncrypted)?;
+        self.network_writer
+            .lock()
+            .await
+            .set_encryption(&crypt_key)
+            .map_err(|_| EncryptionError::AlreadyEncrypted)?;
         Ok(())
     }
 
@@ -264,6 +272,13 @@ impl JavaClient {
         self.enqueue_packet_data(buf.into()).await;
     }
 
+    pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+        let mut buf = Vec::new();
+        let writer = &mut buf;
+        self.write_packet(packet, writer).unwrap();
+        self.try_enqueue_packet_data(buf.into());
+    }
+
     /// Queues a clientbound packet to be sent to the connected client. Queued chunks are sent
     /// in-order to the client
     ///
@@ -282,6 +297,30 @@ impl JavaClient {
                     "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id, err
                 );
+            }
+        }
+    }
+
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Err(err) = self
+            .outgoing_packet_queue_send
+            .try_send(OutgoingPacket::normal(packet_data))
+        {
+            match err {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    debug!(
+                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
+                        self.id
+                    );
+                }
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                    if !self.close_token.is_cancelled() {
+                        error!(
+                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
+                            self.id
+                        );
+                    }
+                }
             }
         }
     }
@@ -809,6 +848,11 @@ impl JavaClient {
                     .on_slot_click(SClickSlot::read(payload, &version)?, server)
                     .await;
             }
+            id if id == SContainerButtonClick::to_id(version) => {
+                player
+                    .on_container_button_click(SContainerButtonClick::read(payload, &version)?)
+                    .await;
+            }
             id if id == SSetHeldItem::to_id(version) => {
                 self.handle_set_held_item(player, SSetHeldItem::read(payload, &version)?)
                     .await;
@@ -887,8 +931,17 @@ impl JavaClient {
                 )
                 .await;
             }
+            id if id == SRenameItem::to_id(version) => {
+                player
+                    .on_rename_item(SRenameItem::read(payload, &version)?)
+                    .await;
+            }
             id if id == SPlaceRecipe::to_id(version) => {
                 self.handle_place_recipe(player, SPlaceRecipe::read(payload, &version)?)
+                    .await;
+            }
+            id if id == SSelectTrade::to_id(version) => {
+                self.handle_select_trade(player, SSelectTrade::read(payload, &version)?)
                     .await;
             }
             _ => {

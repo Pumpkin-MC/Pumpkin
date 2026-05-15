@@ -4,10 +4,11 @@ use crate::codec::var_int::VarInt;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
-    ConsumableImpl, ConsumeAnimation, ConsumeEffect, DamageImpl, DataComponentImpl,
+    ConsumableImpl, ConsumeAnimation, ConsumeEffect, CustomNameImpl, DamageImpl, DataComponentImpl,
     EnchantmentsImpl, EquipmentSlot, EquippableImpl, FireworkExplosionImpl, FireworkExplosionShape,
-    FireworksImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, MaxStackSizeImpl, PotionContentsImpl,
-    SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl, get,
+    FireworksImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, MapIdImpl, MaxStackSizeImpl,
+    PotionContentsImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl, UnbreakableImpl,
+    UseCooldownImpl, get,
 };
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -30,15 +31,16 @@ pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::Sound
 }
 
 #[must_use]
-pub fn proto_to_data_sound(id_or: &crate::IdOr<crate::SoundEvent>) -> IdOr<SoundEvent> {
+pub fn proto_to_data_sound(id_or: &crate::IdOr<crate::SoundEvent>) -> Option<IdOr<SoundEvent>> {
     match id_or {
         crate::IdOr::Id(id) => {
-            IdOr::Id(Sound::from_name(Sound::NAMES[*id as usize]).expect("Invalid sound id"))
+            let name = Sound::NAMES.get(*id as usize)?;
+            Some(IdOr::Id(Sound::from_name(name)?))
         }
-        crate::IdOr::Value(sound) => IdOr::Value(SoundEvent {
+        crate::IdOr::Value(sound) => Some(IdOr::Value(SoundEvent {
             sound_name: sound.sound_name.clone(),
             range: sound.range,
-        }),
+        })),
     }
 }
 
@@ -167,14 +169,12 @@ fn serialize_status_effects<T: SerializeStruct>(
     seq.serialize_field::<VarInt>("", &VarInt(effects.len() as i32))?;
 
     for effect in effects {
-        seq.serialize_field::<VarInt>(
-            "",
-            &VarInt(
-                StatusEffect::from_minecraft_name(&effect.effect_id)
-                    .unwrap()
-                    .registry_id() as i32,
-            ),
-        )?;
+        let effect_id = StatusEffect::from_minecraft_name(&effect.effect_id)
+            .ok_or_else(|| {
+                serde::ser::Error::custom(format!("Invalid status effect: {}", effect.effect_id))
+            })?
+            .registry_id();
+        seq.serialize_field::<VarInt>("", &VarInt(effect_id as i32))?;
         // Effect parameters
         seq.serialize_field::<VarInt>("", &VarInt::from(effect.amplifier))?;
         seq.serialize_field::<VarInt>("", &VarInt::from(effect.duration))?;
@@ -221,9 +221,10 @@ fn deserialize_consume_effect<'a, A: SeqAccess<'a>>(
                 .ok_or(de::Error::custom(
                     "No sound IdOr<SoundEvent> in ConsumeEffect",
                 ))?;
-            Ok(ConsumeEffect::PlaySound(proto_to_data_sound(
-                &proto_sound_event,
-            )))
+            Ok(ConsumeEffect::PlaySound(
+                proto_to_data_sound(&proto_sound_event)
+                    .ok_or(de::Error::custom("Invalid sound in ConsumeEffect"))?,
+            ))
         }
         _ => Err(de::Error::custom("Invalid effect_type in ConsumeEffect")),
     }
@@ -346,6 +347,19 @@ impl DataComponentCodec<Self> for ItemModelImpl {
     }
 }
 
+impl DataComponentCodec<Self> for CustomNameImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<String>("", &self.name)
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let name = seq
+            .next_element::<String>()?
+            .ok_or(de::Error::custom("No CustomNameImpl name string!"))?;
+        Ok(Self { name })
+    }
+}
+
 impl DataComponentCodec<Self> for ConsumableImpl {
     fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
         seq.serialize_field::<f32>("", &self.consume_seconds)?;
@@ -385,7 +399,8 @@ impl DataComponentCodec<Self> for ConsumableImpl {
             "No ConsumableImpl consume_particles bool!",
         ))?;
 
-        let sound_event = proto_to_data_sound(&proto_sound_event);
+        let sound_event = proto_to_data_sound(&proto_sound_event)
+            .ok_or(de::Error::custom("Invalid sound in ConsumableImpl"))?;
         let effects_len = seq
             .next_element::<VarInt>()?
             .ok_or(de::Error::custom("No array_len VarInt in ConsumableImpl"))?
@@ -447,7 +462,8 @@ impl DataComponentCodec<Self> for EquippableImpl {
                 .ok_or(de::Error::custom(
                     "No EquippableImpl equip_sound IdOr<SoundEvent>!",
                 ))?,
-        );
+        )
+        .ok_or(de::Error::custom("Invalid sound in EquippableImpl"))?;
         let asset_id =
             seq.next_element::<Option<Cow<'static, str>>>()?
                 .ok_or(de::Error::custom(
@@ -488,7 +504,10 @@ impl DataComponentCodec<Self> for EquippableImpl {
                 .ok_or(de::Error::custom(
                     "No EquippableImpl shearing_sound IdOr<SoundEvent>!",
                 ))?,
-        );
+        )
+        .ok_or(de::Error::custom(
+            "Invalid shearing sound in EquippableImpl",
+        ))?;
 
         Ok(Self {
             slot,
@@ -820,9 +839,12 @@ pub fn deserialize<'a, A: SeqAccess<'a>>(
         DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::CustomName => Ok(CustomNameImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         _ => Err(serde::de::Error::custom(format!("{id:?} (TODO)"))),
     }
 }
@@ -840,9 +862,48 @@ pub fn serialize<T: SerializeStruct>(
         DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
         DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
         DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
+        DataComponent::CustomName => get::<CustomNameImpl>(value).serialize(seq),
         DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
         DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
+        DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
+        DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         _ => todo!("{} not yet implemented", id.to_name()),
+    }
+}
+
+impl DataComponentCodec<Self> for MapIdImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<VarInt>("", &VarInt::from(self.id))
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let id = seq
+            .next_element::<VarInt>()?
+            .ok_or(de::Error::custom("No MapId VarInt!"))?
+            .0;
+        Ok(Self { id })
+    }
+}
+
+impl DataComponentCodec<Self> for UseCooldownImpl {
+    fn serialize<T: SerializeStruct>(&self, seq: &mut T) -> Result<(), T::Error> {
+        seq.serialize_field::<f32>("", &self.seconds)?;
+        seq.serialize_field::<Option<String>>("", &self.cooldown_group)
+    }
+
+    fn deserialize<'a, A: SeqAccess<'a>>(seq: &mut A) -> Result<Self, A::Error> {
+        let seconds = seq
+            .next_element::<f32>()?
+            .ok_or(de::Error::custom("No UseCooldownImpl seconds float!"))?;
+        let cooldown_group = seq
+            .next_element::<Option<String>>()?
+            .ok_or(de::Error::custom(
+                "No UseCooldownImpl cooldown_group optional string!",
+            ))?;
+        Ok(Self {
+            seconds,
+            cooldown_group,
+        })
     }
 }

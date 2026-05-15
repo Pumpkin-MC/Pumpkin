@@ -2,6 +2,7 @@ use crate::command::args::GetCloned;
 use crate::command::args::gamemode::GamemodeArgumentConsumer;
 
 use crate::TextComponent;
+use pumpkin_data::translation;
 
 use crate::command::args::players::PlayersArgumentConsumer;
 
@@ -54,29 +55,34 @@ impl CommandExecutor for TargetExecutor {
                     let gamemode_string = format!("{gamemode:?}").to_lowercase();
                     let gamemode_string = format!("gameMode.{gamemode_string}");
                     // Checking if the target was the sender of this command.
+                    let gamemode_comp = TextComponent::translate_cross(
+                        gamemode_string.clone(),
+                        gamemode_string.clone(),
+                        [],
+                    );
                     if sender.as_player().as_ref() == Some(target) {
                         target
-                            .send_system_message(&TextComponent::translate(
-                                "commands.gamemode.success.self",
-                                [TextComponent::translate(gamemode_string, [])],
+                            .send_system_message(&TextComponent::translate_cross(
+                                translation::java::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                                translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                                [gamemode_comp],
                             ))
                             .await;
                     } else {
                         if server.level_info.load().game_rules.send_command_feedback {
                             target
-                                .send_system_message(&TextComponent::translate(
-                                    "gameMode.changed",
-                                    [TextComponent::translate(gamemode_string.clone(), [])],
+                                .send_system_message(&TextComponent::translate_cross(
+                                    translation::java::GAMEMODE_CHANGED,
+                                    translation::bedrock::GAMEMODE_CHANGED,
+                                    [gamemode_comp.clone()],
                                 ))
                                 .await;
                         }
                         sender
-                            .send_message(TextComponent::translate(
-                                "commands.gamemode.success.other",
-                                [
-                                    target.get_display_name().await,
-                                    TextComponent::translate(gamemode_string, []),
-                                ],
+                            .send_message(TextComponent::translate_cross(
+                                translation::java::COMMANDS_GAMEMODE_SUCCESS_OTHER,
+                                translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_OTHER,
+                                [target.get_display_name().await, gamemode_comp],
                             ))
                             .await;
                     }

@@ -8,21 +8,23 @@ use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::meta_data_type::MetaDataType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data::TrackedData;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
+use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::random::xoroshiro128::Xoroshiro;
+use pumpkin_util::random::{RandomGenerator, get_seed};
 use rand::RngExt;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 pub mod bat;
@@ -61,11 +63,11 @@ pub mod zombified_piglin;
 
 pub struct MobEntity {
     pub living_entity: LivingEntity,
-    pub goals_selector: Mutex<GoalSelector>,
-    pub target_selector: Mutex<GoalSelector>,
-    pub navigator: Mutex<Navigator>,
-    pub target: Mutex<Option<Arc<dyn EntityBase>>>,
-    pub look_control: Mutex<LookControl>,
+    pub goals_selector: std::sync::Mutex<GoalSelector>,
+    pub target_selector: std::sync::Mutex<GoalSelector>,
+    pub navigator: std::sync::Mutex<Navigator>,
+    pub target: tokio::sync::Mutex<Option<Arc<dyn EntityBase>>>,
+    pub look_control: std::sync::Mutex<LookControl>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
@@ -87,11 +89,11 @@ impl MobEntity {
     pub fn new(entity: Entity) -> Self {
         Self {
             living_entity: LivingEntity::new(entity),
-            goals_selector: Mutex::new(GoalSelector::default()),
-            target_selector: Mutex::new(GoalSelector::default()),
-            navigator: Mutex::new(Navigator::default()),
-            target: Mutex::new(None),
-            look_control: Mutex::new(LookControl::default()),
+            goals_selector: std::sync::Mutex::new(GoalSelector::default()),
+            target_selector: std::sync::Mutex::new(GoalSelector::default()),
+            navigator: std::sync::Mutex::new(Navigator::default()),
+            target: tokio::sync::Mutex::new(None),
+            look_control: std::sync::Mutex::new(LookControl::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
@@ -117,11 +119,11 @@ impl MobEntity {
         }
     }
 
-    pub async fn set_attacking(&self, attacking: bool) {
-        self.set_mob_flag(Self::ATTACKING_FLAG, attacking).await;
+    pub fn set_attacking(&self, attacking: bool) {
+        self.set_mob_flag(Self::ATTACKING_FLAG, attacking);
     }
 
-    async fn set_mob_flag(&self, flag: u8, value: bool) {
+    fn set_mob_flag(&self, flag: u8, value: bool) {
         let old_b = self.mob_flags.load(Ordering::Relaxed);
 
         let new_b = if value { old_b | flag } else { old_b & !flag };
@@ -129,14 +131,11 @@ impl MobEntity {
         if new_b != old_b {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
-            self.living_entity
-                .entity
-                .send_meta_data(&[Metadata::new(
-                    TrackedData::MOB_FLAGS_ID,
-                    MetaDataType::BYTE,
-                    new_b,
-                )])
-                .await;
+            self.living_entity.entity.send_meta_data(&[Metadata::new(
+                TrackedData::MOB_FLAGS_ID,
+                MetaDataType::BYTE,
+                new_b,
+            )]);
         }
     }
 
@@ -181,6 +180,44 @@ impl MobEntity {
             }
         }
 
+        true
+    }
+
+    pub fn is_dark_enough_to_spawn(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
+        let sky_light = world.get_sky_light_level(pos);
+        if sky_light > rand::random_range(0..32) {
+            return false;
+        }
+
+        let dimension = &world.dimension;
+        let block_light_limit = dimension.monster_spawn_block_light_limit;
+
+        let block_light = world.get_block_light_level(pos).unwrap();
+        if block_light_limit < 15 && block_light > block_light_limit {
+            return false;
+        }
+
+        let current_brightness = if is_thundering {
+            (sky_light - 10).max(block_light)
+        } else {
+            sky_light.max(block_light)
+        };
+
+        // TODO
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
+        current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
+    }
+
+    pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
+        if world.level_info.load().difficulty == Difficulty::Peaceful {
+            return false;
+        }
+
+        if !Self::is_dark_enough_to_spawn(world, pos, is_thundering) {
+            return false;
+        }
+
+        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
         true
     }
 
@@ -239,6 +276,66 @@ impl MobEntity {
         );
 
         base_box.expand(attack_range, 0.0, attack_range)
+    }
+
+    pub async fn tick_sun_burn(&self) {
+        if !self
+            .living_entity
+            .entity
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
+        {
+            return;
+        }
+        if !self.is_sun_burn_tick().await {
+            return;
+        }
+        self.apply_sun_burn();
+    }
+
+    async fn is_sun_burn_tick(&self) -> bool {
+        let entity = &self.living_entity.entity;
+
+        let world_arc = entity.world.load();
+        let world = world_arc.as_ref();
+
+        // TODO: gate behind EnvironmentAttributes::MONSTERS_BURN once implemented.
+
+        // Vanilla: getLightLevelDependentMagicValue() — sky light at eye pos, scaled 0–1.
+        let eye_block_pos = entity.get_eye_pos();
+        let brightness = world
+            .level
+            .light_engine
+            .get_sky_light_level(&world.level, &eye_block_pos.to_block_pos())
+            as f32
+            / 15.0;
+
+        if brightness <= 0.5 {
+            return false;
+        }
+
+        let is_in_non_burnable = entity.touching_water.load(Relaxed)
+            || world.weather.lock().await.raining
+            || entity.is_in_powder_snow()
+            || entity.was_in_powder_snow.load(Relaxed);
+
+        if is_in_non_burnable {
+            return false;
+        }
+
+        let pos = entity.pos.load();
+        let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32));
+        if (entity.get_eye_y() as i32) < top_y {
+            return false;
+        }
+
+        let mut rng = rand::rng();
+        rng.random::<f32>() * 30.0 < (brightness - 0.4) * 2.0
+    }
+
+    fn apply_sun_burn(&self) {
+        let entity = &self.living_entity.entity;
+        entity.set_on_fire_for(8.0);
     }
 }
 
@@ -322,7 +419,7 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_interact<'a>(
         &'a self,
-        _player: &'a Player,
+        _player: &'a Arc<Player>,
         _item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async { false })
@@ -335,6 +432,10 @@ pub trait Mob: EntityBase + Send + Sync {
     fn is_sitting(&self) -> bool {
         false
     }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        self.get_entity().entity_type.experience_reward
+    }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn tick<'a>(
@@ -344,6 +445,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             let mob_entity = self.get_mob_entity();
+            mob_entity.tick_sun_burn().await;
 
             if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
                 mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
@@ -355,39 +457,56 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             self.mob_tick(caller).await;
 
-            // AI runs before physics (vanilla order: goals → navigator → look → physics)
             let age = mob_entity.living_entity.entity.age.load(Relaxed);
-            if (age + mob_entity.living_entity.entity.entity_id) % 2 != 0 && age > 1 {
-                mob_entity
-                    .target_selector
-                    .lock()
-                    .await
-                    .tick_goals(self, false)
-                    .await;
-                mob_entity
-                    .goals_selector
-                    .lock()
-                    .await
-                    .tick_goals(self, false)
-                    .await;
+            let entity_id = mob_entity.living_entity.entity.entity_id;
+
+            // 1. "Take" selectors out of the mutexes
+            let mut target_selector = {
+                let mut guard = mob_entity.target_selector.lock().unwrap();
+                std::mem::take(&mut *guard)
+            };
+            let mut goals_selector = {
+                let mut guard = mob_entity.goals_selector.lock().unwrap();
+                std::mem::take(&mut *guard)
+            };
+
+            // 2. Perform AI logic (No locks held, so .await is safe!)
+            if (age + entity_id) % 2 != 0 && age > 1 {
+                target_selector.tick_goals(self, false).await;
+                goals_selector.tick_goals(self, false).await;
             } else {
-                mob_entity.target_selector.lock().await.tick(self).await;
-                mob_entity.goals_selector.lock().await.tick(self).await;
+                target_selector.tick(self).await;
+                goals_selector.tick(self).await;
             }
 
-            let mut navigator = mob_entity.navigator.lock().await;
-            navigator.tick(&mob_entity.living_entity).await;
-            drop(navigator);
+            // 3. "Put back" selectors
+            {
+                *mob_entity.target_selector.lock().unwrap() = target_selector;
+                *mob_entity.goals_selector.lock().unwrap() = goals_selector;
+            };
 
-            let mut look_control = mob_entity.look_control.lock().await;
-            look_control.tick(self);
-            drop(look_control);
+            // 4. Repeat for Navigator
+            let mut navigator = {
+                let mut guard = mob_entity.navigator.lock().unwrap();
+                std::mem::take(&mut *guard)
+            };
+
+            navigator.tick(&mob_entity.living_entity).await;
+
+            {
+                *mob_entity.navigator.lock().unwrap() = navigator;
+            };
+
+            // Look Control is synchronous, so we can just use a normal block
+            {
+                let mut look_control = mob_entity.look_control.lock().unwrap();
+                look_control.tick(self);
+            };
 
             mob_entity.living_entity.tick(caller, server).await;
-
             self.post_tick().await;
 
-            // Send rotation packets after look_control finalizes head_yaw and pitch
+            // --- Packet logic remains the same ---
             let entity = &mob_entity.living_entity.entity;
             let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
             let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
@@ -399,23 +518,19 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
             if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
                 let world = entity.world.load();
-                world
-                    .broadcast_packet_all(&CUpdateEntityRot::new(
-                        entity.entity_id.into(),
-                        yaw,
-                        pitch,
-                        entity.on_ground.load(Relaxed),
-                    ))
-                    .await;
+                world.broadcast_packet_all(&CUpdateEntityRot::new(
+                    entity.entity_id.into(),
+                    yaw,
+                    pitch,
+                    entity.on_ground.load(Relaxed),
+                ));
                 mob_entity.last_sent_yaw.store(yaw, Relaxed);
                 mob_entity.last_sent_pitch.store(pitch, Relaxed);
             }
 
             if head_yaw.abs_diff(last_head_yaw) >= 1 {
                 let world = entity.world.load();
-                world
-                    .broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw))
-                    .await;
+                world.broadcast_packet_all(&CHeadRot::new(entity.entity_id.into(), head_yaw));
                 mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
             }
         })
@@ -459,7 +574,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn interact<'a>(
         &'a self,
-        player: &'a Player,
+        player: &'a Arc<Player>,
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move { self.mob_interact(player, item_stack).await })
@@ -511,6 +626,23 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_y_velocity_drag(&self) -> Option<f64> {
         self.get_mob_y_velocity_drag()
     }
+
+    fn get_experience_reward(&self, _killer: Option<&dyn EntityBase>) -> u32 {
+        if self
+            .get_entity()
+            .age
+            .load(std::sync::atomic::Ordering::Relaxed)
+            < 0
+        {
+            return 0;
+        }
+        // TODO: apply enchantment processing like in vanilla
+        Mob::get_base_experience_reward(self)
+    }
+
+    fn get_base_experience_reward(&self) -> u32 {
+        Mob::get_base_experience_reward(self)
+    }
 }
 
 #[expect(dead_code)]
@@ -531,7 +663,7 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
     fn is_navigation<'a>(&'a self) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
         Box::pin(async {
-            let navigator = self.get_mob_entity().navigator.lock().await;
+            let navigator = self.get_mob_entity().navigator.lock().unwrap();
             !navigator.is_idle()
         })
     }
@@ -555,68 +687,5 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
     fn get_follow_leash_speed(&self) -> f32 {
         1.0
-    }
-}
-
-pub trait SunSensitive: Mob + Send + Sync {
-    fn sun_sensitive_tick(&self) -> EntityBaseFuture<'_, ()> {
-        Box::pin(async {
-            let mob = self.get_mob_entity();
-            let entity = &mob.living_entity.entity;
-
-            if !entity.is_alive()
-                || entity.touching_water.load(Relaxed)
-                || entity.is_in_powder_snow()
-            {
-                return;
-            }
-
-            let world_arc = entity.world.load();
-            let world = world_arc.as_ref();
-
-            if world.level_time.lock().await.is_night() {
-                return;
-            }
-            if world.weather.lock().await.raining {
-                return;
-            }
-
-            let pos = entity.pos.load();
-            let top_y = world
-                .get_top_block(Vector2::new(pos.x as i32, pos.z as i32))
-                .await;
-            if (entity.get_eye_y() as i32) < top_y {
-                return;
-            }
-
-            let brightness = world
-                .level
-                .light_engine
-                .get_sky_light_level(&world.level, &pos.to_block_pos())
-                .await as f32
-                / 15.0;
-
-            if brightness < 0.5 {
-                return;
-            }
-
-            let damage_amount = {
-                let mut rng = self.get_random();
-                if rng.random::<f32>() * 30.0 >= (brightness - 0.4) * 2.0 {
-                    return;
-                }
-                rng.random_range(0..=1i32)
-            };
-
-            let equipment = mob.living_entity.entity_equipment.lock().await;
-            let head_slot = equipment.get(&EquipmentSlot::HEAD);
-            let mut head_item = head_slot.lock().await;
-            if head_item.is_empty() {
-                entity.set_on_fire_for(8.0);
-            } else {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
-                let _ = head_item.damage_item(damage_amount);
-            }
-        })
     }
 }

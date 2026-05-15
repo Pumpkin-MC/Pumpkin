@@ -25,6 +25,7 @@ use crate::{
     },
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_protocol::Property;
 use pumpkin_util::permission::PermissionLvl;
 
 pub fn player_from_resource(
@@ -313,6 +314,33 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn get_tab_list_name(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::text::TextComponent>>> {
+        let player = player_from_resource(self, &player)?;
+        let tab_list_name = player.get_tab_list_name().await;
+        tab_list_name.map_or_else(
+            || Ok(None),
+            |name| {
+                self.add_text_component(name)
+                    .map(Some)
+                    .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
+            },
+        )
+    }
+
+    async fn set_tab_list_name(
+        &mut self,
+        player: Resource<Player>,
+        name: Option<wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>>,
+    ) -> wasmtime::Result<()> {
+        let name = name.map(|n| text_component_from_resource(self, &n));
+        let player = player_from_resource(self, &player)?;
+        player.set_tab_list_name(name).await;
+        Ok(())
+    }
+
     async fn send_system_message(
         &mut self,
         player: Resource<Player>,
@@ -344,7 +372,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         order: i32,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.set_tab_list_order(order).await;
+        player.set_tab_list_order(order);
         Ok(())
     }
 
@@ -354,7 +382,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         latency: i32,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.set_tab_list_latency(latency).await;
+        player.set_tab_list_latency(latency);
         Ok(())
     }
 
@@ -364,7 +392,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         listed: bool,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        player.set_tab_list_listed(listed).await;
+        player.set_tab_list_listed(listed);
         Ok(())
     }
 
@@ -773,12 +801,33 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player
             .gameprofile
             .properties
+            .load()
             .iter()
             .find(|p| p.name == "textures")
             .map(|p| PlayerSkin {
                 value: p.value.clone(),
                 signature: p.signature.clone(),
             }))
+    }
+
+    async fn set_skin(
+        &mut self,
+        player: Resource<Player>,
+        skin: PlayerSkin,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let mut properties = (**player.gameprofile.properties.load()).clone();
+
+        properties.retain(|p| p.name != "textures");
+        properties.push(Property {
+            name: "textures".into(),
+            value: skin.value,
+            signature: skin.signature,
+        });
+
+        player.gameprofile.properties.store(Arc::new(properties));
+
+        Ok(())
     }
 
     async fn get_skin_parts(&mut self, player: Resource<Player>) -> wasmtime::Result<SkinParts> {
@@ -843,7 +892,53 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             config.skin_parts = mask;
             player.config.store(Arc::new(config));
         };
-        player.send_client_information().await;
+        player.send_client_information();
+        Ok(())
+    }
+
+    async fn send_java_packet(
+        &mut self,
+        player: Resource<Player>,
+        packet: pumpkin::plugin::java_packets::ClientboundPacket,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_java_packet(
+            &packet, player.client.java().version.load(),
+        ) {
+            player.client.java().send_packet_now_data(bytes).await;
+        }
+        Ok(())
+    }
+
+    async fn send_bedrock_packet(
+        &mut self,
+        player: Resource<Player>,
+        packet: pumpkin::plugin::bedrock_packets::ClientboundPacket,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_bedrock_packet(
+            &packet,
+        ) {
+            player.client.send_packet_now_data(bytes).await;
+        }
+        Ok(())
+    }
+
+    async fn send_custom_payload(
+        &mut self,
+        player: Resource<Player>,
+        channel: String,
+        data: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if let crate::net::ClientPlatform::Java(_) = player.client {
+            player
+                .client
+                .send_packet_now(&pumpkin_protocol::java::client::play::CCustomPayload::new(
+                    &channel, &data,
+                ))
+                .await;
+        }
         Ok(())
     }
 

@@ -161,7 +161,9 @@ impl ProtoNode<'_> {
                     ..
                 } => {
                     // suggestion type
-                    let suggestion_type = &override_suggestion_type.expect("ProtoNode::FLAG_HAS_SUGGESTION_TYPE should only be set if override_suggestion_type is not `None`.");
+                    let suggestion_type = override_suggestion_type.as_ref().ok_or_else(|| {
+                        WritingError::Message("ProtoNode::FLAG_HAS_SUGGESTION_TYPE set but override_suggestion_type is None".into())
+                    })?;
                     write.write_string(suggestion_type.resource_location())?;
                 }
                 _ => unimplemented!(

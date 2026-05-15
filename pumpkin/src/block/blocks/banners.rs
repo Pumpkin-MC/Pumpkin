@@ -21,13 +21,13 @@ impl BlockBehaviour for BannerBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: crate::block::CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: crate::block::CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_place_at(args.world.as_ref(), args.position).await {
+            if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -40,17 +40,16 @@ impl BlockBehaviour for BannerBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
             args.state_id
         })
     }
 }
 
-async fn can_place_at(world: &dyn BlockAccessor, position: &BlockPos) -> bool {
-    let state = world.get_block_state(&position.down()).await;
+fn can_place_at(world: &dyn BlockAccessor, position: &BlockPos) -> bool {
+    let state = world.get_block_state(&position.down());
     state.is_solid()
 }

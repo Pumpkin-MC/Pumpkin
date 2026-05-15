@@ -5,7 +5,7 @@ use pumpkin_util::{
 };
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub struct EndPlatformFeature;
 
@@ -14,7 +14,7 @@ impl EndPlatformFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str, // This placed feature

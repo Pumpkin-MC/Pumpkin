@@ -137,10 +137,7 @@ impl GenerationSchedule {
         }
 
         let max_in_flight = if gen_pool.is_some() {
-            (thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1)
-                * 4) as u16
+            (thread::available_parallelism().map_or(1, std::num::NonZero::get) * 4) as u16
         } else {
             gen_thread_count as u16
         };
@@ -552,7 +549,9 @@ impl GenerationSchedule {
                         }
                         let sc = Arc::strong_count(&chunk);
                         if sc == 1 {
-                            chunks.push((pos, Chunk::Level(chunk)));
+                            if chunk.is_dirty() {
+                                chunks.push((pos, Chunk::Level(chunk)));
+                            }
                             self.chunk_map.remove(&pos);
                         } else {
                             warn!(
@@ -721,14 +720,14 @@ impl GenerationSchedule {
                         Chunk::Level(chunk) => {
                             let mut holder = self.chunk_map.remove(&new_pos).unwrap();
                             if new_pos == pos {
-                                if holder.current_stage != StagedChunkEnum::Lighting {
+                                if holder.current_stage != StagedChunkEnum::Spawn {
                                     warn!(
                                         "receive_chunk(Level): holder at {:?} for pos {:?} expected {:?}; aligning",
                                         holder.current_stage,
                                         new_pos,
-                                        StagedChunkEnum::Lighting
+                                        StagedChunkEnum::Spawn
                                     );
-                                    holder.current_stage = StagedChunkEnum::Lighting;
+                                    holder.current_stage = StagedChunkEnum::Spawn;
                                 }
                                 self.drop_node(holder.tasks[StagedChunkEnum::Full as usize]);
                                 holder.tasks[StagedChunkEnum::Full as usize] = NodeKey::null();

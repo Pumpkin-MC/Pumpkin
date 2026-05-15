@@ -464,11 +464,4 @@ impl DataComponent {
             Self::ShulkerColor => "minecraft:shulker/color",
         }
     }
-    pub fn try_from_u8(v: u8) -> Option<Self> {
-        if v <= 106 {
-            Some(unsafe { std::mem::transmute::<u8, Self>(v) })
-        } else {
-            None
-        }
-    }
 }

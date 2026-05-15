@@ -1,11 +1,14 @@
 pub mod play;
+use crossbeam::atomic::AtomicCell;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap, HashSet},
     io::{Cursor, Error, Write},
+    net::{Ipv4Addr, SocketAddrV4},
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
     },
+    time::UNIX_EPOCH,
 };
 
 use tracing::{debug, error, warn};
@@ -16,18 +19,22 @@ use pumpkin_protocol::{
     BClientPacket, PacketDecodeError, RawPacket,
     bedrock::{
         MTU, RAKNET_ACK, RAKNET_GAME_PACKET, RAKNET_NACK, RakReliability, SubClient,
-        ack::Ack,
-        client::disconnect_player::CDisconnectPlayer,
+        ack::Acknowledge,
+        client::{
+            disconnect_player::CDisconnectPlayer, raknet::connection::CConnectionRequestAccepted,
+        },
         frame_set::{Frame, FrameSet},
         packet_decoder::UDPNetworkDecoder,
         packet_encoder::UDPNetworkEncoder,
         server::{
+            animate::SAnimate,
             client_cache_status::SClientCacheStatus,
             command_request::SCommandRequest,
             container_close::SContainerClose,
             interaction::SInteraction,
             loading_screen::SLoadingScreen,
             login::SLogin,
+            player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput,
             raknet::{
                 connection::{
@@ -39,6 +46,7 @@ use pumpkin_protocol::{
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_response::SResourcePackResponse,
+            set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             text::SText,
         },
     },
@@ -73,7 +81,7 @@ pub struct BedrockClient {
     tasks: TaskTracker,
     outgoing_packet_queue_send: Sender<Bytes>,
     /// A queue of serialized packets to send to the network
-    outgoing_packet_queue_recv: Option<Receiver<Bytes>>,
+    outgoing_packet_queue_recv: Mutex<Option<Receiver<Bytes>>>,
 
     /// The packet encoder for outgoing packets.
     network_writer: Arc<Mutex<UDPNetworkEncoder>>,
@@ -88,9 +96,17 @@ pub struct BedrockClient {
     output_ordered_index: AtomicU32,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
+    last_seen: Arc<AtomicCell<std::time::Instant>>,
     /// Store Fragments until the packet is complete
     compounds: Arc<Mutex<HashMap<u16, Vec<Option<Frame>>>>>,
     //input_sequence_number: AtomicU32,
+    received_sequences: Mutex<HashSet<u32>>,
+    pending_acks: Mutex<Vec<u32>>,
+    #[allow(clippy::type_complexity)]
+    unacked_outgoing_frames: Mutex<HashMap<u32, (u8, Vec<u8>, std::time::Instant)>>,
+    expected_order_index: Mutex<HashMap<u8, u32>>,
+    highest_sequence_index: Mutex<HashMap<u8, u32>>,
+    ordered_queues: Mutex<HashMap<u8, BTreeMap<u32, Frame>>>,
 }
 
 impl BedrockClient {
@@ -110,7 +126,7 @@ impl BedrockClient {
             network_reader: Mutex::new(UDPNetworkDecoder::new()),
             tasks: TaskTracker::new(),
             outgoing_packet_queue_send: send,
-            outgoing_packet_queue_recv: Some(recv),
+            outgoing_packet_queue_recv: Mutex::new(Some(recv)),
             _use_frame_sets: AtomicBool::new(false),
             output_sequence_number: AtomicU32::new(0),
             output_reliable_number: AtomicU32::new(0),
@@ -119,61 +135,93 @@ impl BedrockClient {
             output_ordered_index: AtomicU32::new(0),
             compounds: Arc::new(Mutex::new(HashMap::new())),
             close_token: CancellationToken::new(),
+            last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
+            received_sequences: Mutex::new(HashSet::new()),
+            pending_acks: Mutex::new(Vec::new()),
+            unacked_outgoing_frames: Mutex::new(HashMap::new()),
+            expected_order_index: Mutex::new(HashMap::new()),
+            highest_sequence_index: Mutex::new(HashMap::new()),
+            ordered_queues: Mutex::new(HashMap::new()),
             //input_sequence_number: AtomicU32::new(0),
         }
     }
 
-    pub fn start_outgoing_packet_task(&mut self) {
-        let Some(mut packet_receiver) = self.outgoing_packet_queue_recv.take() else {
-            error!(
-                "Outgoing packet receiver was already taken for {}",
-                self.address
-            );
-            return;
-        };
-        let close_token = self.close_token.clone();
-        let writer = self.network_writer.clone();
-        let addr = self.address;
-        let socket = self.socket.clone();
+    pub fn start_outgoing_packet_task(self: &Arc<Self>) {
+        let client = self.clone();
         self.spawn_task(async move {
-            while !close_token.is_cancelled() {
-                let recv_result = tokio::select! {
-                    () = close_token.cancelled() => {
-                        None
-                    },
-                    recv_result = packet_receiver.recv() => {
-                        recv_result
+            let mut packet_receiver = {
+                let mut guard = client.outgoing_packet_queue_recv.lock().await;
+                guard
+                    .take()
+                    .expect("Outgoing packet receiver was already taken")
+            };
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+
+            while !client.close_token.is_cancelled() {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        // Check for timeout (10 seconds)
+                        if client.last_seen.load().elapsed() > std::time::Duration::from_secs(10) {
+                            debug!("Bedrock client {} timed out", client.address);
+                            client.close().await;
+                            break;
+                        }
+
+                        // Flush ACKs
+                        let mut pending = client.pending_acks.lock().await;
+                        if !pending.is_empty() {
+                            let ack = Acknowledge::new(pending.clone());
+                            pending.clear();
+                            let _ = client.send_acknowledgement(&ack, RAKNET_ACK).await;
+                        }
+
+                        // Check retransmission
+                        let now = std::time::Instant::now();
+                        let mut resend = Vec::new();
+                        {
+                            let unacked = client.unacked_outgoing_frames.lock().await;
+                            for (seq, (id, data, timestamp)) in unacked.iter() {
+                                if now.duration_since(*timestamp) > std::time::Duration::from_secs(1) {
+                                    resend.push((*seq, *id, data.clone()));
+                                }
+                            }
+                        }
+
+                        for (seq, id, data) in resend {
+                             debug!("Resending reliable sequence {} (ID: {})", seq, id);
+                             // Update timestamp
+                             if let Some(entry) = client.unacked_outgoing_frames.lock().await.get_mut(&seq) {
+                                 entry.2 = now;
+                             }
+                             if let Err(err) = client.network_writer.lock().await.write_packet(&data, client.address, &client.socket).await {
+                                 warn!("Failed to resend packet for sequence {}: {}", seq, err);
+                             }
+                        }
                     }
-                };
+                    recv_result = packet_receiver.recv() => {
+                        let Some(packet_data) = recv_result else {
+                            break;
+                        };
 
-                let Some(packet_data) = recv_result else {
-                    break;
-                };
-
-                if let Err(err) = writer
-                    .lock()
-                    .await
-                    .write_packet(&packet_data, addr, &socket)
-                    .await
-                {
-                    // It is expected that the packet will fail if we are closed
-                    if !close_token.is_cancelled() {
-                        warn!("Failed to send packet to client: {err}",);
-                        // We now need to close the connection to the client since the stream is in an
-                        // unknown state
-                        close_token.cancel();
-                        break;
+                        if let Err(err) = client.network_writer
+                            .lock()
+                            .await
+                            .write_packet(&packet_data, client.address, &client.socket)
+                            .await
+                            && !client.close_token.is_cancelled() {
+                                warn!("Failed to send packet to client: {err}",);
+                                client.close_token.cancel();
+                                break;
+                            }
                     }
                 }
             }
         });
     }
 
-    pub async fn process_packet(self: &Arc<Self>, server: &Arc<Server>, packet: Cursor<Vec<u8>>) {
-        let packet = self.get_packet_payload(packet).await;
-        if let Some(packet) = packet
-            && let Err(error) = self.handle_packet_payload(server, packet).await
-        {
+    pub async fn process_packet(self: &Arc<Self>, server: &Arc<Server>, packet: Vec<u8>) {
+        self.last_seen.store(std::time::Instant::now());
+        if let Err(error) = self.handle_packet_payload(server, packet).await {
             error!(
                 "Failed to handle packet payload for {}: {}",
                 self.address, error
@@ -212,6 +260,25 @@ impl BedrockClient {
             // This is expected to fail if we are closed
             if !self.is_closed() {
                 error!("Failed to add packet to the outgoing packet queue for client: {err}");
+            }
+        }
+    }
+
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        if let Err(err) = self.outgoing_packet_queue_send.try_send(packet_data) {
+            match err {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    debug!(
+                        "Failed to add packet to the outgoing packet queue for client: channel full"
+                    );
+                }
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                    if !self.is_closed() {
+                        error!(
+                            "Failed to add packet to the outgoing packet queue for client: channel closed"
+                        );
+                    }
+                }
             }
         }
     }
@@ -260,7 +327,7 @@ impl BedrockClient {
         let mut packet_buf = Vec::new();
         match self.write_game_packet(packet, &mut packet_buf).await {
             Ok(()) => {
-                self.send_framed_packet_data(packet_buf, RakReliability::Unreliable)
+                self.send_framed_packet_data(packet_buf, RakReliability::ReliableOrdered)
                     .await;
             }
             Err(err) => error!("Failed to write game packet: {err}"),
@@ -356,12 +423,20 @@ impl BedrockClient {
     }
 
     pub async fn send_frame_set(&self, mut frame_set: FrameSet, id: u8) {
-        frame_set.sequence = u24(self.output_sequence_number.fetch_add(1, Ordering::Relaxed));
-        let mut frame_set_buf = Vec::new();
+        let sequence = self.output_sequence_number.fetch_add(1, Ordering::Relaxed);
+        frame_set.sequence = u24(sequence);
 
+        let mut frame_set_buf = Vec::new();
         if let Err(err) = frame_set.write_packet_data(&mut frame_set_buf, id) {
             error!("Failed to write frame set data: {err}");
             return;
+        }
+
+        if frame_set.frames.iter().any(|f| f.reliability.is_reliable()) {
+            self.unacked_outgoing_frames.lock().await.insert(
+                sequence,
+                (id, frame_set_buf.clone(), std::time::Instant::now()),
+            );
         }
 
         if let Err(err) = self
@@ -378,10 +453,13 @@ impl BedrockClient {
     }
 
     pub async fn close(&self) {
+        if self.is_closed() {
+            return;
+        }
         self.close_token.cancel();
+        self.be_clients.lock().await.remove(&self.address);
         self.tasks.close();
         self.tasks.wait().await;
-        self.be_clients.lock().await.remove(&self.address);
 
         if let Some(player) = self.player.lock().await.as_ref() {
             player.remove().await;
@@ -392,9 +470,9 @@ impl BedrockClient {
         self.close_token.is_cancelled()
     }
 
-    pub async fn send_ack(&self, ack: &Ack) -> Result<(), Error> {
+    pub async fn send_acknowledgement(&self, ack: &Acknowledge, id: u8) -> Result<(), Error> {
         let mut packet_buf = Vec::new();
-        ack.write(&mut packet_buf)?;
+        ack.write(&mut packet_buf, id)?;
 
         if let Err(err) = self
             .network_writer
@@ -403,7 +481,7 @@ impl BedrockClient {
             .write_packet(&packet_buf, self.address, &self.socket)
             .await
         {
-            warn!("Failed to send ACK to {}: {err}", self.address);
+            warn!("Failed to send acknowledgement to {}: {err}", self.address);
             self.close().await;
             return Err(err);
         }
@@ -413,18 +491,18 @@ impl BedrockClient {
     pub async fn handle_packet_payload(
         self: &Arc<Self>,
         server: &Arc<Server>,
-        packet: Bytes,
+        packet: Vec<u8>,
     ) -> Result<(), Error> {
         let reader = &mut Cursor::new(packet);
 
         match u8::read(reader)? {
             RAKNET_ACK => {
-                Self::handle_ack(&Ack::read(reader)?);
+                self.handle_ack(&Acknowledge::read(reader)?).await;
             }
             RAKNET_NACK => {
-                debug!("received nack, client is missing packets");
+                self.handle_nack(&Acknowledge::read(reader)?).await;
             }
-            0x80..0x8d => {
+            0x80..=0x8d => {
                 self.handle_frame_set(server, FrameSet::read(reader)?)
                     .await?;
             }
@@ -435,16 +513,53 @@ impl BedrockClient {
         Ok(())
     }
 
-    const fn handle_ack(_ack: &Ack) {}
+    async fn handle_ack(&self, ack: &Acknowledge) {
+        let mut unacked = self.unacked_outgoing_frames.lock().await;
+        for seq in &ack.sequences {
+            unacked.remove(seq);
+        }
+    }
+
+    async fn handle_nack(&self, nack: &Acknowledge) {
+        debug!("Received NACK for sequences: {:?}", nack.sequences);
+        let unacked = self.unacked_outgoing_frames.lock().await;
+        for seq in &nack.sequences {
+            if let Some((_id, data, _timestamp)) = unacked.get(seq)
+                && let Err(err) = self
+                    .network_writer
+                    .lock()
+                    .await
+                    .write_packet(data, self.address, &self.socket)
+                    .await
+            {
+                warn!("Failed to resend packet for sequence {}: {}", seq, err);
+            }
+        }
+    }
 
     async fn handle_frame_set(
         self: &Arc<Self>,
         server: &Arc<Server>,
         frame_set: FrameSet,
     ) -> Result<(), Error> {
-        // TODO: Send all ACKs in short intervals in batches
-        self.send_ack(&Ack::new(vec![frame_set.sequence.0])).await?;
-        // TODO
+        let sequence = frame_set.sequence.0;
+
+        {
+            let mut received = self.received_sequences.lock().await;
+            if received.contains(&sequence) {
+                debug!("Received duplicate RakNet sequence: {}", sequence);
+                return Ok(());
+            }
+            received.insert(sequence);
+            // Limit the size of received sequences to avoid memory leak
+            if received.len() > 4096 {
+                // This is a very simple way to clear it, ideally we'd use a sliding window
+                received.clear();
+            }
+        }
+
+        self.pending_acks.lock().await.push(sequence);
+
         for frame in frame_set.frames {
             self.handle_frame(server, frame).await?;
         }
@@ -501,10 +616,87 @@ impl BedrockClient {
             frame.split_size = 0;
         }
 
-        let mut payload = Cursor::new(frame.payload);
-        let id = u8::read(&mut payload)?;
-        self.handle_raknet_packet(server, i32::from(id), payload)
-            .await
+        // Handling Sequencing
+        if frame.reliability.is_sequenced() {
+            let mut highest_sequenced = self.highest_sequence_index.lock().await;
+            let current_highest = highest_sequenced.entry(frame.order_channel).or_insert(0);
+            if frame.sequence_index < *current_highest {
+                return Ok(());
+            }
+            *current_highest = frame.sequence_index;
+        }
+
+        // Handling Ordering
+        if frame.reliability.is_ordered() {
+            let mut expected_order = self.expected_order_index.lock().await;
+            let expected = expected_order.entry(frame.order_channel).or_insert(0);
+
+            if frame.order_index == *expected {
+                *expected += 1;
+                self.process_frame_payload(server, frame.payload).await?;
+
+                // Check for queued frames
+                let mut ordered_queues = self.ordered_queues.lock().await;
+                if let Some(queue) = ordered_queues.get_mut(&frame.order_channel) {
+                    while let Some(next_frame) = queue.remove(expected) {
+                        *expected += 1;
+                        self.process_frame_payload(server, next_frame.payload)
+                            .await?;
+                    }
+                }
+            } else if frame.order_index > *expected {
+                let mut ordered_queues = self.ordered_queues.lock().await;
+                let queue = ordered_queues
+                    .entry(frame.order_channel)
+                    .or_insert_with(BTreeMap::new);
+                queue.insert(frame.order_index, frame);
+            }
+            // If frame.order_index < *expected, it's an old frame, discard it.
+        } else {
+            self.process_frame_payload(server, frame.payload).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn process_frame_payload(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+        payload: Vec<u8>,
+    ) -> Result<(), Error> {
+        if payload.is_empty() {
+            return Ok(());
+        }
+        let id = payload[0];
+
+        if id == RAKNET_GAME_PACKET as u8 {
+            // Decompress the batch
+            let decompressed_payload = self
+                .get_packet_payload(payload)
+                .await
+                .ok_or_else(|| Error::other("Failed to decompress game packet batch"))?;
+
+            // Loop through the decompressed buffer to extract ALL batched packets
+            let mut cursor = Cursor::new(decompressed_payload);
+
+            while (cursor.position() as usize) < cursor.get_ref().len() {
+                let game_packet = self
+                    .network_reader
+                    .lock()
+                    .await
+                    .get_game_packet(&mut cursor)
+                    .map_err(|e| Error::other(e.to_string()))?;
+
+                self.handle_game_packet(server, game_packet).await?;
+            }
+        } else {
+            // It's an internal RakNet message (like SConnectedPing)
+            let mut cursor = Cursor::new(payload);
+            let _id = u8::read(&mut cursor)?; // consume ID byte
+            self.handle_raknet_packet(i32::from(id), cursor).await?;
+        }
+
+        Ok(())
     }
 
     async fn handle_game_packet(
@@ -512,34 +704,44 @@ impl BedrockClient {
         server: &Arc<Server>,
         packet: RawPacket,
     ) -> Result<(), Error> {
+        let packet_id = packet.id;
         let payload = &mut Cursor::new(&packet.payload);
-        match packet.id {
+        let result = match packet.id {
             SRequestNetworkSettings::PACKET_ID => {
-                self.handle_request_network_settings(SRequestNetworkSettings::read(payload)?)
-                    .await;
+                self.handle_request_network_settings(
+                    SRequestNetworkSettings::read(payload)?,
+                    server,
+                )
+                .await;
+                Ok(())
             }
             SLogin::PACKET_ID => {
                 self.handle_login(SLogin::read(payload)?, server).await;
+                Ok(())
             }
             SClientCacheStatus::PACKET_ID => {
                 // TODO
+                Ok(())
             }
             SResourcePackResponse::PACKET_ID => {
-                self.handle_resource_pack_response(SResourcePackResponse::read(payload)?)
+                self.handle_resource_pack_response(SResourcePackResponse::read(payload)?, server)
                     .await;
+                Ok(())
             }
             _ => {
                 let player_lock = self.player.lock().await;
                 if let Some(player) = player_lock.as_ref() {
-                    return self.handle_play_packet(player, server, packet).await;
+                    self.handle_play_packet(player, server, packet).await
+                } else {
+                    debug!(
+                        "Received game packet {} before player was initialized",
+                        packet.id
+                    );
+                    Ok(())
                 }
-                debug!(
-                    "Received game packet {} before player was initialized",
-                    packet.id
-                );
             }
-        }
-        Ok(())
+        };
+        result.map_err(|e| Error::new(e.kind(), format!("Game packet {packet_id}: {e}")))
     }
 
     pub async fn handle_play_packet(
@@ -551,13 +753,8 @@ impl BedrockClient {
         let reader = &mut &packet.payload[..];
         match packet.id {
             SPlayerAuthInput::PACKET_ID => {
-                self.player_pos_update(player, SPlayerAuthInput::read(reader)?, server)
+                self.handle_player_auth_input(player, SPlayerAuthInput::read(reader)?, server)
                     .await;
-            }
-            SLoadingScreen::PACKET_ID => {
-                if SLoadingScreen::read(reader)?.is_loading_done() {
-                    player.set_client_loaded(true);
-                }
             }
             SRequestChunkRadius::PACKET_ID => {
                 self.handle_request_chunk_radius(player, SRequestChunkRadius::read(reader)?)
@@ -579,6 +776,22 @@ impl BedrockClient {
                 self.handle_chat_command(player, server, SCommandRequest::read(reader)?)
                     .await;
             }
+            SSetLocalPlayerAsInitialized::PACKET_ID => {
+                self.handle_set_local_player_as_initialized(
+                    player,
+                    &SSetLocalPlayerAsInitialized::read(reader)?,
+                );
+            }
+            SPlayerAction::PACKET_ID => {
+                self.handle_player_action(player, server, SPlayerAction::read(reader)?)
+                    .await;
+            }
+            SAnimate::PACKET_ID => {
+                self.handle_animate(player, server, &SAnimate::read(reader)?);
+            }
+            SLoadingScreen::PACKET_ID => {
+                // Ignore for now
+            }
             _ => {
                 warn!("Bedrock: Received Unknown Game packet: {}", packet.id);
             }
@@ -588,14 +801,26 @@ impl BedrockClient {
 
     async fn handle_raknet_packet(
         self: &Arc<Self>,
-        server: &Arc<Server>,
         packet_id: i32,
         mut payload: Cursor<Vec<u8>>,
     ) -> Result<(), Error> {
         let reader = &mut payload;
         match packet_id {
-            // The client sends this multiple times and some arrive after we already made the connection
-            SConnectionRequest::PACKET_ID => (),
+            SConnectionRequest::PACKET_ID => {
+                let request = SConnectionRequest::read(reader)?;
+
+                self.send_framed_packet(
+                    &CConnectionRequestAccepted::new(
+                        self.address,
+                        0,
+                        [SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 19132)); 10],
+                        request.time,
+                        UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+                    ),
+                    RakReliability::Unreliable,
+                )
+                .await;
+            }
             SNewIncomingConnection::PACKET_ID => {
                 self.handle_new_incoming_connection(&SNewIncomingConnection::read(reader)?);
             }
@@ -605,17 +830,6 @@ impl BedrockClient {
             }
             SDisconnect::PACKET_ID => {
                 self.close().await;
-            }
-
-            RAKNET_GAME_PACKET => {
-                let game_packet = self
-                    .network_reader
-                    .lock()
-                    .await
-                    .get_game_packet(payload)
-                    .map_err(|e| Error::other(e.to_string()))?;
-
-                self.handle_game_packet(server, game_packet).await?;
             }
             _ => {
                 warn!("Bedrock: Received Unknown RakNet Online packet: {packet_id}");
@@ -668,7 +882,7 @@ impl BedrockClient {
         self.close_token.cancelled().await;
     }
 
-    pub async fn get_packet_payload(&self, packet: Cursor<Vec<u8>>) -> Option<Bytes> {
+    pub async fn get_packet_payload(&self, packet: Vec<u8>) -> Option<Vec<u8>> {
         let mut network_reader = self.network_reader.lock().await;
         tokio::select! {
             () = self.await_close_interrupt() => {

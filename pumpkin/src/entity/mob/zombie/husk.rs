@@ -11,8 +11,8 @@ pub struct HuskEntity {
 }
 
 impl HuskEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = ZombieEntityBase::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = ZombieEntityBase::new(entity);
         let zombie = Self { entity };
         Arc::new(zombie)
     }
