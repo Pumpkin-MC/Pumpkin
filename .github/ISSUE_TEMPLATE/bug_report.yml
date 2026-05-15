@@ -20,7 +20,7 @@ body:
     validations:
       required: true
   - type: input
-    id: systemversion
+    id: serverversion
     attributes:
       label: "Server Software Version/Commit"
       description: "What Server Software Version/Commit are you using?. (Tip: Use the /pumpkin command)" 
