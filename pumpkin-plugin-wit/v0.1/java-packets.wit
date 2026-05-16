@@ -1,6 +1,7 @@
 package pumpkin:plugin@0.1.0;
 
 interface java-packets {
+  use uuid.{ uuid };
   record s-attack {
     entity-id: s32,
   }
