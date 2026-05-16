@@ -31,7 +31,8 @@ impl CommandExecutor for Executor {
             };
 
             let Ok(ip) = IpAddr::from_str(target) else {
-                return Err(CommandError::CommandFailed(TextComponent::translate(
+                return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.pardonip.invalid",
                     "commands.pardonip.invalid",
                     [],
                 )));
@@ -43,14 +44,16 @@ impl CommandExecutor for Executor {
             {
                 lock.banned_ips.remove(idx);
                 sender
-                    .send_message(TextComponent::translate(
+                    .send_message(TextComponent::translate_cross(
+                        "commands.pardonip.success",
                         "commands.pardonip.success",
                         [TextComponent::text(ip.to_string())],
                     ))
                     .await;
                 Ok(1)
             } else {
-                Err(CommandError::CommandFailed(TextComponent::translate(
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.pardonip.failed",
                     "commands.pardonip.failed",
                     [],
                 )))

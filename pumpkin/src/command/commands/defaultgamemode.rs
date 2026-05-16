@@ -44,9 +44,14 @@ impl CommandExecutor for DefaultGamemodeExecutor {
             let gamemode_string = format!("gameMode.{gamemode_string}");
 
             sender
-                .send_message(TextComponent::translate(
+                .send_message(TextComponent::translate_cross(
                     "commands.defaultgamemode.success",
-                    [TextComponent::translate(gamemode_string, [])],
+                    "commands.defaultgamemode.success",
+                    [TextComponent::translate_cross(
+                        gamemode_string.clone(),
+                        gamemode_string,
+                        [],
+                    )],
                 ))
                 .await;
 

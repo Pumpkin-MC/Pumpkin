@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::LOGIN_HELLO;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use serde::Serialize;
 
 use crate::{
@@ -18,7 +18,7 @@ pub struct SLoginStart {
 }
 
 impl ServerPacket for SLoginStart {
-    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             name: read.get_string_bounded(16)?,
             uuid: read.get_uuid()?,

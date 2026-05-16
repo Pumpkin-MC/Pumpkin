@@ -1,0 +1,155 @@
+/// Provides types and utilities for displaying rich dialogs to Java Edition players.
+/// These dialogs support various layouts, body elements (text and items), 
+/// and interactive inputs (checkboxes, text fields, sliders).
+interface java-dialogs {
+    use text.{text-component};
+    use common.{item-stack};
+
+    /// Represents the layout and button configuration of a dialog.
+    enum dialog-type {
+        /// A simple dialog with a single "OK" button.
+        notice,
+        /// A dialog with "Yes" and "No" buttons.
+        confirmation,
+        /// A scrollable list of custom buttons.
+        multi-action,
+        /// A list of buttons that open other registered dialogs.
+        dialog-list,
+        /// A dedicated menu for displaying server-related links.
+        server-links,
+    }
+
+    /// Represents an element in the main content area of a dialog.
+    variant dialog-body {
+        /// A simple text message.
+        plain-message(text-component),
+        /// A visual item display.
+        item(item-stack),
+    }
+
+    /// Represents an interactive input control in a dialog.
+    variant dialog-input {
+        /// A checkbox for true/false states.
+        %bool(dialog-input-bool),
+        /// A simple string input field.
+        %text(dialog-input-text),
+        /// A slider for numerical input within a range.
+        number-range(dialog-input-number-range),
+        /// A multiple-choice selection button.
+        single-option(dialog-input-single-option),
+    }
+
+    /// A checkbox input control.
+    record dialog-input-bool {
+        label: text-component,
+        default-value: bool,
+    }
+
+    /// A text field input control.
+    record dialog-input-text {
+        label: text-component,
+        placeholder: text-component,
+        default-value: string,
+    }
+
+    /// A numerical range slider input control.
+    record dialog-input-number-range {
+        label: text-component,
+        min-value: f32,
+        max-value: f32,
+        initial-value: f32,
+        step: f32,
+        label-format: option<string>,
+    }
+
+    /// A multiple-choice selection input control.
+    record dialog-input-single-option {
+        label: text-component,
+        options: list<text-component>,
+        initial-index: u32,
+    }
+
+    /// Defines what happens after a dialog is closed.
+    enum after-action {
+        /// Returns the player to the previous screen (e.g., keeping an inventory open).
+        peek,
+        /// Closes all open screens.
+        pop,
+    }
+
+    /// Represents a clickable button in a dialog.
+    record action-button {
+        text: text-component,
+        tooltip: option<text-component>,
+        width: option<u32>,
+        action: action,
+    }
+
+    /// Represents an action triggered by a button click.
+    variant action {
+        /// Opens an external URL.
+        open-url(string),
+        /// Triggers a custom server-side callback with an ID and optional payload.
+        custom-click(custom-click-action),
+    }
+
+    /// Represents a custom server-side action.
+    record custom-click-action {
+        /// A unique identifier for the action (sent back to the server).
+        id: string,
+        /// Optional binary data to send with the action.
+        payload: option<list<u8>>,
+    }
+
+    /// Represents a link displayed in a Java Edition dialog.
+    record link {
+        /// The label to display for the link.
+        label: link-label,
+        /// The URL the link points to.
+        url: string,
+    }
+
+    /// The label for a link, which can be a built-in type or custom text.
+    variant link-label {
+        /// A built-in link type with a predefined icon/label.
+        built-in(link-type),
+        /// A custom text component label.
+        custom(text-component),
+    }
+
+    /// Built-in link types recognized by the Java Edition client.
+    enum link-type {
+        bug-report,
+        community-guidelines,
+        support,
+        status,
+        feedback,
+        community,
+        website,
+        forums,
+        news,
+        announcements,
+    }
+
+    /// Represents a dialog shown to a Java Edition player.
+    record dialog {
+        /// The main title of the dialog.
+        title: text-component,
+        /// The layout type of the dialog.
+        %type: dialog-type,
+        /// A list of body elements to display in the main area.
+        body: list<dialog-body>,
+        /// A list of interactive input controls.
+        inputs: list<dialog-input>,
+        /// A list of clickable buttons (for multi-action and other types).
+        buttons: list<action-button>,
+        /// A list of links (primarily for server-links type).
+        links: list<link>,
+        /// What to do after the dialog is closed.
+        after-action: option<after-action>,
+        /// Whether the player can exit the dialog using the Esc key.
+        can-close-with-escape: bool,
+        /// The text shown on buttons that link to/open this dialog.
+        external-title: option<text-component>,
+    }
+}

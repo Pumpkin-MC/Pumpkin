@@ -34,7 +34,12 @@ impl PacketWrite for CLevelChunk<'_> {
         let mut chunk_data = Vec::new();
         let data_write = &mut chunk_data;
 
-        let block_sections = self.chunk.section.block_sections.read().unwrap();
+        let block_sections = self
+            .chunk
+            .section
+            .block_sections
+            .read()
+            .map_err(|_| Error::other("block_sections read lock poisoned"))?;
         let min_y_section = (self.chunk.section.min_y >> 4) as i8;
 
         for (i, block_palette) in block_sections.iter().enumerate() {

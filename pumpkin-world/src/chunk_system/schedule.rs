@@ -137,10 +137,7 @@ impl GenerationSchedule {
         }
 
         let max_in_flight = if gen_pool.is_some() {
-            (thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1)
-                * 4) as u16
+            (thread::available_parallelism().map_or(1, std::num::NonZero::get) * 4) as u16
         } else {
             gen_thread_count as u16
         };
@@ -552,7 +549,9 @@ impl GenerationSchedule {
                         }
                         let sc = Arc::strong_count(&chunk);
                         if sc == 1 {
-                            chunks.push((pos, Chunk::Level(chunk)));
+                            if chunk.is_dirty() {
+                                chunks.push((pos, Chunk::Level(chunk)));
+                            }
                             self.chunk_map.remove(&pos);
                         } else {
                             warn!(
@@ -587,42 +586,42 @@ impl GenerationSchedule {
         }
     }
 
-    fn save_all_chunk(&self, save_proto_chunk: bool) {
+    fn save_all_chunk(&mut self, save_proto_chunk: bool) {
         let mut chunks = Vec::with_capacity(self.chunk_map.len());
-        for (pos, holder) in &self.chunk_map {
-            if let Some(chunk) = &holder.chunk {
-                match chunk {
-                    Chunk::Level(sync_chunk) => {
-                        if sync_chunk.is_dirty() {
-                            chunks.push((*pos, Chunk::Level(sync_chunk.clone())));
-                        }
-                    }
-                    Chunk::Proto(proto) => {
-                        if save_proto_chunk {
-                            chunks.push((*pos, Chunk::Proto(proto.clone())));
-                        }
-                    }
+
+        for (pos, holder) in self.chunk_map.iter_mut() {
+            if let Some(chunk) = holder.chunk.take() {
+                let should_save = match &chunk {
+                    Chunk::Level(sync_chunk) => sync_chunk.is_dirty(),
+                    Chunk::Proto(_) => save_proto_chunk,
+                };
+
+                if should_save {
+                    chunks.push((*pos, chunk));
+                } else {
+                    holder.chunk = Some(chunk);
                 }
             }
         }
+
         if chunks.is_empty() {
             return;
         }
+
         info!(
             "Saving {} chunks (collected from {} holders)...",
             chunks.len(),
             self.chunk_map.len()
         );
+
         let mut data = self.io_lock.0.lock().unwrap();
-        for (pos, _chunk) in &chunks {
+        for (pos, _) in &chunks {
             *data.entry(*pos).or_insert(0) += 1;
         }
         drop(data);
+
         if let Err(e) = self.io_write.send(chunks) {
-            error!(
-                "Failed to send chunks to io write thread during unload (may have shut down): {:?}",
-                e
-            );
+            error!("Failed to send chunks to io write thread: {:?}", e);
         }
     }
 
@@ -721,14 +720,14 @@ impl GenerationSchedule {
                         Chunk::Level(chunk) => {
                             let mut holder = self.chunk_map.remove(&new_pos).unwrap();
                             if new_pos == pos {
-                                if holder.current_stage != StagedChunkEnum::Lighting {
+                                if holder.current_stage != StagedChunkEnum::Spawn {
                                     warn!(
                                         "receive_chunk(Level): holder at {:?} for pos {:?} expected {:?}; aligning",
                                         holder.current_stage,
                                         new_pos,
-                                        StagedChunkEnum::Lighting
+                                        StagedChunkEnum::Spawn
                                     );
-                                    holder.current_stage = StagedChunkEnum::Lighting;
+                                    holder.current_stage = StagedChunkEnum::Spawn;
                                 }
                                 self.drop_node(holder.tasks[StagedChunkEnum::Full as usize]);
                                 holder.tasks[StagedChunkEnum::Full as usize] = NodeKey::null();

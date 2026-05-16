@@ -8,7 +8,7 @@ use crate::enchantments::Enchantment;
 use crate::entity_type::EntityType;
 use crate::fluid::Fluid;
 use crate::item::Item;
-use crate::{biome::Biome, version::MinecraftVersion};
+use crate::{biome::Biome, version::JavaMinecraftVersion};
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
@@ -66,7 +66,7 @@ impl ToTokens for EnumCreator {
 }
 
 /// The newest protocol version whose tag data is served as the latest-version fallback.
-const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
 
 /// Generates the `TokenStream` for the `Tag` type, `RegistryKey` enum, all per-version tag
 /// modules, and the `Taggable` trait with its lookup helpers.
@@ -75,17 +75,17 @@ pub(crate) fn build() -> TokenStream {
 
     // Watch specific tag versions
     let assets = [
-        (MinecraftVersion::V_1_20_5, "1_21_2_tags.json"),
+        (JavaMinecraftVersion::V_1_20_5, "1_21_2_tags.json"),
         // TODO: upload 1_21_tags.json
-        (MinecraftVersion::V_1_21, "1_21_2_tags.json"),
-        (MinecraftVersion::V_1_21_2, "1_21_2_tags.json"),
-        (MinecraftVersion::V_1_21_4, "1_21_4_tags.json"),
-        (MinecraftVersion::V_1_21_5, "1_21_5_tags.json"),
-        (MinecraftVersion::V_1_21_6, "1_21_6_tags.json"),
-        (MinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
-        (MinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
-        (MinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
-        (MinecraftVersion::V_26_1, "26_1_tags.json"),
+        (JavaMinecraftVersion::V_1_21, "1_21_2_tags.json"),
+        (JavaMinecraftVersion::V_1_21_2, "1_21_2_tags.json"),
+        (JavaMinecraftVersion::V_1_21_4, "1_21_4_tags.json"),
+        (JavaMinecraftVersion::V_1_21_5, "1_21_5_tags.json"),
+        (JavaMinecraftVersion::V_1_21_6, "1_21_6_tags.json"),
+        (JavaMinecraftVersion::V_1_21_7, "1_21_7_tags.json"),
+        (JavaMinecraftVersion::V_1_21_9, "1_21_9_tags.json"),
+        (JavaMinecraftVersion::V_1_21_11, "1_21_11_tags.json"),
+        (JavaMinecraftVersion::V_26_1, "26_1_tags.json"),
     ];
 
     // --- Load Global Assets ---
@@ -245,7 +245,7 @@ pub(crate) fn build() -> TokenStream {
     .to_token_stream();
 
     quote! {
-        use pumpkin_util::version::MinecraftVersion;
+        use pumpkin_util::version::JavaMinecraftVersion;
 
         pub type Tag = (&'static [&'static str], &'static [u16]);
 
@@ -265,7 +265,7 @@ pub(crate) fn build() -> TokenStream {
             get_latest_map(tag_category).and_then(|m| m.get(tag)).map(|t| t.1)
         }
 
-        pub fn get_registry_key_tags(version: MinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+        pub fn get_registry_key_tags(version: JavaMinecraftVersion, tag_category: RegistryKey) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
             match version {
                 #(#match_get_map),*,
                 _ => get_latest_map(tag_category)

@@ -36,7 +36,11 @@ impl CommandExecutor for Executor {
 
             let reason = match args.get(&ARG_REASON) {
                 Some(Arg::Msg(r)) => TextComponent::text(r.clone()),
-                _ => TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_KICKED, []),
+                _ => TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_KICKED,
+                    translation::java::MULTIPLAYER_DISCONNECT_KICKED,
+                    [],
+                ),
             };
 
             for target in targets {

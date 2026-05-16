@@ -19,7 +19,7 @@ pub struct LayeredSnowBlock;
 impl BlockBehaviour for LayeredSnowBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 return Block::AIR.default_state.id;
             }
             let mut props = SnowLikeProperties::default(args.block);
@@ -44,10 +44,10 @@ impl BlockBehaviour for LayeredSnowBlock {
                 } else {
                     args.position
                 };
-                if !can_place_at(args.world.as_ref(), pos).await {
+                if !can_place_at(args.world.as_ref(), pos) {
                     return BlockActionResult::Pass;
                 }
-                let (block, state_id) = args.world.get_block_and_state_id(pos).await;
+                let (block, state_id) = args.world.get_block_and_state_id(pos);
 
                 if block != &Block::SNOW {
                     return BlockActionResult::Pass;
@@ -78,7 +78,7 @@ impl BlockBehaviour for LayeredSnowBlock {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_place_at(args.world.as_ref(), args.position).await {
+            if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -91,17 +91,16 @@ impl BlockBehaviour for LayeredSnowBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
             args.state_id
         })
     }
 }
 
-async fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool {
-    let state = block_accessor.get_block_state(&position.down()).await;
+fn can_place_at(block_accessor: &dyn BlockAccessor, position: &BlockPos) -> bool {
+    let state = block_accessor.get_block_state(&position.down());
     state.is_side_solid(BlockDirection::Up)
 }

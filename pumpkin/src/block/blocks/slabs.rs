@@ -40,19 +40,17 @@ impl BlockBehaviour for SlabBlock {
         })
     }
 
-    fn can_update_at<'a>(&'a self, args: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let slab_props = SlabProperties::from_state_id(args.state_id, args.block);
+    fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
+        let slab_props = SlabProperties::from_state_id(args.state_id, args.block);
 
-            slab_props.r#type
-                == match args.direction {
-                    BlockDirection::Up => SlabType::Bottom,
-                    BlockDirection::Down => SlabType::Top,
-                    _ => match args.use_item_on.cursor_pos.y {
-                        0.0..0.5 => SlabType::Top,
-                        _ => SlabType::Bottom,
-                    },
-                }
-        })
+        slab_props.r#type
+            == match args.direction {
+                BlockDirection::Up => SlabType::Bottom,
+                BlockDirection::Down => SlabType::Top,
+                _ => match args.use_item_on.cursor_pos.y {
+                    0.0..0.5 => SlabType::Top,
+                    _ => SlabType::Bottom,
+                },
+            }
     }
 }

@@ -51,7 +51,7 @@ impl Goal for WanderAroundGoal {
 
     fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
         Box::pin(async move {
-            let navigator = mob.get_mob_entity().navigator.lock().await;
+            let navigator = mob.get_mob_entity().navigator.lock().unwrap();
             !navigator.is_idle()
         })
     }
@@ -60,7 +60,7 @@ impl Goal for WanderAroundGoal {
         Box::pin(async move {
             if let Some(target) = self.target {
                 let pos = mob.get_mob_entity().living_entity.entity.pos.load();
-                let mut navigator = mob.get_mob_entity().navigator.lock().await;
+                let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
                 navigator.set_progress(NavigatorGoal::new(pos, target, self.speed));
             }
         })

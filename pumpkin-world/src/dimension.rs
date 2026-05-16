@@ -3,13 +3,13 @@ use std::{path::PathBuf, sync::Arc};
 use pumpkin_config::world::LevelConfig;
 use pumpkin_data::dimension::Dimension;
 
-use crate::{level::Level, world::BlockRegistryExt};
+use crate::level::Level;
 
+#[must_use]
 pub fn into_level(
     dimension: Dimension,
     level_config: &LevelConfig,
     mut base_directory: PathBuf,
-    block_registry: Arc<dyn BlockRegistryExt>,
     seed: i64,
     gen_pool: Option<Arc<rayon::ThreadPool>>,
 ) -> Arc<Level> {
@@ -19,12 +19,5 @@ pub fn into_level(
     } else if dimension == Dimension::THE_END {
         base_directory.push("DIM1");
     }
-    Level::from_root_folder(
-        level_config,
-        base_directory,
-        block_registry,
-        seed,
-        dimension,
-        gen_pool,
-    )
+    Level::from_root_folder(level_config, base_directory, seed, dimension, gen_pool)
 }

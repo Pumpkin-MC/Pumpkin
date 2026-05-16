@@ -3,13 +3,17 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::sound::Sound;
+use pumpkin_data::tag::{self, Taggable};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_world::chunk::ChunkHeightmapType;
 use rand::RngExt;
 use tokio::sync::Mutex;
 
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
+use crate::world::World;
 
 const ROOSTING_FLAG: u8 = 1;
 const CLOSE_PLAYER_DISTANCE: f64 = 4.0;
@@ -24,7 +28,7 @@ pub struct BatEntity {
 }
 
 impl BatEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let bat = Self {
             mob_entity,
@@ -34,22 +38,42 @@ impl BatEntity {
         };
         let mob_arc = Arc::new(bat);
 
-        mob_arc.set_roosting_metadata(true).await;
+        Self::set_roosting_metadata(true);
 
         mob_arc
+    }
+
+    pub fn check_bat_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        if pos.0.y >= world.get_heightmap_height(ChunkHeightmapType::WorldSurface, pos.0.x, pos.0.z)
+        {
+            return false;
+        }
+        if rand::random_bool(1.0) {
+            return false;
+        }
+        if world.get_max_local_raw_brightness(pos) > rand::random_range(0..4) {
+            return false;
+        }
+        if world
+            .get_block(pos)
+            .has_tag(&tag::Block::MINECRAFT_BATS_SPAWNABLE_ON)
+        {
+            return false;
+        }
+        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
+        true
     }
 
     fn is_roosting(&self) -> bool {
         self.roosting.load(Relaxed)
     }
 
-    async fn set_roosting(&self, roosting: bool) {
+    fn set_roosting(&self, roosting: bool) {
         self.roosting.store(roosting, Relaxed);
-        self.set_roosting_metadata(roosting).await;
+        Self::set_roosting_metadata(roosting);
     }
 
-    #[expect(clippy::unused_async)]
-    async fn set_roosting_metadata(&self, _roosting: bool) {
+    const fn set_roosting_metadata(_roosting: bool) {
         // TODO
         // let flags: u8 = if roosting { ROOSTING_FLAG } else { 0 };
         // self.mob_entity
@@ -64,27 +88,21 @@ impl BatEntity {
     }
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
 impl NBTStorage for BatEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity.living_entity.entity.write_nbt(nbt).await;
+            self.mob_entity.living_entity.write_nbt(nbt).await;
             let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
-            nbt.put_byte(flags as i8);
+            nbt.put_byte("BatFlags", flags as i8);
         })
     }
 
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.mob_entity
-                .living_entity
-                .entity
-                .read_nbt_non_mut(nbt)
-                .await;
-            let flags = nbt.get_byte().unwrap_or(0) as u8;
+            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
+            let flags = nbt.get_byte("BatFlags").unwrap_or(0) as u8;
             let roosting = (flags & ROOSTING_FLAG) != 0;
-            self.set_roosting(roosting).await;
+            self.set_roosting(roosting);
         })
     }
 }
@@ -106,11 +124,11 @@ impl Mob for BatEntity {
             if chance <= 0 {
                 self.ambient_sound_chance
                     .store(MIN_AMBIENT_SOUND_DELAY, Relaxed);
-                entity.play_sound(Sound::EntityBatAmbient).await;
+                entity.play_sound(Sound::EntityBatAmbient);
             }
 
             if self.is_roosting() {
-                let above_state = world.get_block_state(&above_pos).await;
+                let above_state = world.get_block_state(&above_pos);
                 if above_state.is_solid_block() {
                     let rotate_head = {
                         let mut rng = rand::rng();
@@ -126,16 +144,16 @@ impl Mob for BatEntity {
                         .get_closest_player(pos, CLOSE_PLAYER_DISTANCE)
                         .is_some()
                     {
-                        self.set_roosting(false).await;
+                        self.set_roosting(false);
                     }
                 } else {
-                    self.set_roosting(false).await;
+                    self.set_roosting(false);
                 }
             } else {
                 let mut hanging_pos = self.hanging_position.lock().await;
 
                 if let Some(hp) = *hanging_pos {
-                    let hp_state = world.get_block_state(&hp).await;
+                    let hp_state = world.get_block_state(&hp);
                     if !hp_state.is_air() || hp.0.y <= world.dimension.min_y {
                         *hanging_pos = None;
                     }
@@ -167,7 +185,7 @@ impl Mob for BatEntity {
                 if should_pick_new {
                     // Pre-validate: only accept targets in air (avoids water, lava, hazards)
                     if let Some(target) = new_target {
-                        let target_state = world.get_block_state(&target).await;
+                        let target_state = world.get_block_state(&target);
                         if target_state.is_air() && target.0.y > world.dimension.min_y {
                             *hanging_pos = Some(target);
                         } else {
@@ -199,9 +217,9 @@ impl Mob for BatEntity {
                 drop(hanging_pos);
 
                 if try_roost {
-                    let above_state = world.get_block_state(&above_pos).await;
+                    let above_state = world.get_block_state(&above_pos);
                     if above_state.is_solid_block() {
-                        self.set_roosting(true).await;
+                        self.set_roosting(true);
                     }
                 }
             }
@@ -235,7 +253,7 @@ impl Mob for BatEntity {
     ) -> EntityBaseFuture<'a, ()> {
         Box::pin(async move {
             if self.is_roosting() {
-                self.set_roosting(false).await;
+                self.set_roosting(false);
             }
         })
     }

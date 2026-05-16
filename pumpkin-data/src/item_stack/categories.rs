@@ -50,28 +50,24 @@ impl ItemStack {
     /// Test-only predicates: identify 2-durability tools (axes/pickaxes/shovels/hoes).
     /// In production, durability cost is data-driven via the `Weapon` component.
     /// These helpers exist only to validate item categorization in tests.
-    #[cfg(test)]
     #[inline]
     #[must_use]
     pub fn is_axe(&self) -> bool {
         self.item.has_tag(&tag::Item::MINECRAFT_AXES)
     }
 
-    #[cfg(test)]
     #[inline]
     #[must_use]
     pub fn is_pickaxe(&self) -> bool {
         self.item.has_tag(&tag::Item::MINECRAFT_PICKAXES)
     }
 
-    #[cfg(test)]
     #[inline]
     #[must_use]
     pub fn is_shovel(&self) -> bool {
         self.item.has_tag(&tag::Item::MINECRAFT_SHOVELS)
     }
 
-    #[cfg(test)]
     #[inline]
     #[must_use]
     pub fn is_hoe(&self) -> bool {

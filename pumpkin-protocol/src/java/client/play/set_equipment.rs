@@ -3,7 +3,7 @@ use std::io::Write;
 use crate::{WritingError, ser::NetworkWriteExt};
 use pumpkin_data::packet::clientbound::PLAY_SET_EQUIPMENT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket,
@@ -33,7 +33,7 @@ impl ClientPacket for CSetEquipment {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 

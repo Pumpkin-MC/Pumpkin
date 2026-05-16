@@ -3,7 +3,7 @@ use std::io::Read;
 use crate::{ReadingError, ServerPacket, VarInt, ser::NetworkReadExt};
 use pumpkin_data::packet::serverbound::LOGIN_CUSTOM_QUERY_ANSWER;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_PAYLOAD_SIZE: usize = 1_048_576;
 
@@ -14,7 +14,7 @@ pub struct SLoginPluginResponse {
 }
 
 impl ServerPacket for SLoginPluginResponse {
-    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             message_id: read.get_var_int()?,
             data: read.get_option(|v| v.read_remaining_to_boxed_slice(MAX_PAYLOAD_SIZE))?,

@@ -141,7 +141,8 @@ impl CommandExecutor for Executor {
 
             // Send appropriate message based on results
             if players_who_heard == 0 {
-                Err(CommandError::CommandFailed(TextComponent::translate(
+                Err(CommandError::CommandFailed(TextComponent::translate_cross(
+                    "commands.playsound.failed",
                     "commands.playsound.failed",
                     [],
                 )))
@@ -149,8 +150,9 @@ impl CommandExecutor for Executor {
                 let sound_name = sound.to_name();
                 if players_who_heard == 1 {
                     sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
+                            translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
                             [
                                 TextComponent::text(sound_name),
                                 targets[0].get_display_name().await,
@@ -159,8 +161,9 @@ impl CommandExecutor for Executor {
                         .await;
                 } else {
                     sender
-                        .send_message(TextComponent::translate(
-                            translation::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
+                        .send_message(TextComponent::translate_cross(
+                            translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
+                            translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
                             [
                                 TextComponent::text(sound_name),
                                 TextComponent::text(players_who_heard.to_string()),

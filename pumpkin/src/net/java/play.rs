@@ -33,13 +33,17 @@ use crate::plugin::player::player_move::PlayerMoveEvent;
 use crate::plugin::player::player_toggle_flight_event::PlayerToggleFlightEvent;
 use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
 
+use crate::block::entities::command_block::CommandBlockEntity;
+use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{World, chunker};
 use pumpkin_data::block_properties::{
     BlockProperties, CommandBlockLikeProperties, WaterLikeProperties,
 };
-use pumpkin_data::data_component_impl::{ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl};
+use pumpkin_data::data_component_impl::{
+    BlocksAttacksImpl, ConsumableImpl, EquipmentSlot, EquippableImpl, FoodImpl,
+};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -71,8 +75,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degrees};
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::{GameMode, text::TextComponent};
-use pumpkin_world::block::entities::command_block::CommandBlockEntity;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::world::BlockFlags;
 use tokio::sync::Mutex;
 
@@ -152,44 +154,57 @@ impl PumpkinError for ChatError {
         match self {
             Self::OversizedMessage => Some("Chat message too long".into()),
             Self::IllegalCharacters => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
+                    translation::java::MULTIPLAYER_DISCONNECT_ILLEGAL_CHARACTERS,
                     [],
                 )
                 .get_text(),
             ),
             Self::UnsignedChat => Some(
-                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT, [])
-                    .get_text(),
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT,
+                    translation::java::MULTIPLAYER_DISCONNECT_UNSIGNED_CHAT,
+                    [],
+                )
+                .get_text(),
             ),
             Self::TooManyPendingChats => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
+                    translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
                     [],
                 )
                 .get_text(),
             ),
             Self::ChatValidationFailed => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
+                    translation::java::MULTIPLAYER_DISCONNECT_CHAT_VALIDATION_FAILED,
                     [],
                 )
                 .get_text(),
             ),
             Self::OutOfOrderChat => Some(
-                TextComponent::translate(translation::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT, [])
-                    .get_text(),
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT,
+                    translation::java::MULTIPLAYER_DISCONNECT_OUT_OF_ORDER_CHAT,
+                    [],
+                )
+                .get_text(),
             ),
             Self::ExpiredPublicKey => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
+                    translation::java::MULTIPLAYER_DISCONNECT_EXPIRED_PUBLIC_KEY,
                     [],
                 )
                 .get_text(),
             ),
             Self::InvalidPublicKey => Some(
-                TextComponent::translate(
-                    translation::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
+                TextComponent::translate_cross(
+                    translation::java::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
+                    translation::java::MULTIPLAYER_DISCONNECT_INVALID_PUBLIC_KEY_SIGNATURE,
                     [],
                 )
                 .get_text(),
@@ -240,9 +255,14 @@ impl JavaClient {
                 change_game_mode.game_mode.to_str().to_lowercase()
             );
             player
-                .send_system_message(&TextComponent::translate(
-                    translation::COMMANDS_GAMEMODE_SUCCESS_SELF,
-                    [TextComponent::translate(gamemode_string, [])],
+                .send_system_message(&TextComponent::translate_cross(
+                    translation::java::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                    translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_SELF,
+                    [TextComponent::translate_cross(
+                        gamemode_string.clone(),
+                        gamemode_string,
+                        [],
+                    )],
                 ))
                 .await;
         }
@@ -261,9 +281,7 @@ impl JavaClient {
     }
 
     /// Returns whether syncing the position was needed
-    #[expect(clippy::too_many_arguments)]
-    async fn sync_position(
-        &self,
+    fn sync_position(
         player: &Arc<Player>,
         world: &World,
         pos: Vector3<f64>,
@@ -280,19 +298,17 @@ impl JavaClient {
             return false;
         }
         // Sync position with all other players.
-        world
-            .broadcast_packet_except(
-                &[player.gameprofile.id],
-                &CEntityPositionSync::new(
-                    entity_id.into(),
-                    pos,
-                    Vector3::new(0.0, 0.0, 0.0),
-                    yaw,
-                    pitch,
-                    on_ground,
-                ),
-            )
-            .await;
+        world.broadcast_packet_except(
+            &[player.gameprofile.id],
+            &CEntityPositionSync::new(
+                entity_id.into(),
+                pos,
+                Vector3::new(0.0, 0.0, 0.0),
+                yaw,
+                pitch,
+                on_ground,
+            ),
+        );
         true
     }
 
@@ -312,8 +328,9 @@ impl JavaClient {
         // y = feet Y
         let position = packet.position;
         if position.x.is_nan() || position.y.is_nan() || position.z.is_nan() {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -353,7 +370,7 @@ impl JavaClient {
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
-                if !self.sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0).await {
+                if !Self::sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0) {
                     // Send the new position to all other players.
                     world
                         .broadcast_packet_except(
@@ -368,7 +385,7 @@ impl JavaClient {
                                 packet.collision & FLAG_ON_GROUND != 0,
                             ),
                         )
-                        .await;
+                        ;
                 }
 
                 // Only process fall damage if player is alive
@@ -426,8 +443,9 @@ impl JavaClient {
             || !packet.yaw.is_finite()
             || !packet.pitch.is_finite()
         {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -475,9 +493,8 @@ impl JavaClient {
                 let world = entity.world.load_full();
 
                 // TODO: Warn when player moves to quickly
-                if !self
-                    .sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
-                    .await
+                if !Self::
+                    sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
                 {
                     // Send the new position to all other players.
                     world
@@ -495,7 +512,7 @@ impl JavaClient {
                                 (packet.collision & FLAG_ON_GROUND) != 0,
                             ),
                         )
-                        .await;
+                        ;
                 }
 
                 world
@@ -503,7 +520,7 @@ impl JavaClient {
                         &[player.gameprofile.id],
                         &CHeadRot::new(entity_id.into(), yaw as u8),
                     )
-                    .await;
+                   ;
                 // Only process fall damage if player is alive
                 if !player.abilities.lock().await.flying
                     && player.living_entity.health.load() > 0.0
@@ -556,8 +573,9 @@ impl JavaClient {
             return;
         }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
             ))
             .await;
@@ -578,13 +596,9 @@ impl JavaClient {
         let world = entity.world.load_full();
         let packet =
             CUpdateEntityRot::new(entity_id.into(), yaw as u8, pitch as u8, rotation.ground);
-        world
-            .broadcast_packet_except(&[player.gameprofile.id], &packet)
-            .await;
+        world.broadcast_packet_except(&[player.gameprofile.id], &packet);
         let packet = CHeadRot::new(entity_id.into(), yaw as u8);
-        world
-            .broadcast_packet_except(&[player.gameprofile.id], &packet)
-            .await;
+        world.broadcast_packet_except(&[player.gameprofile.id], &packet);
     }
 
     pub async fn handle_chat_command(
@@ -646,7 +660,7 @@ impl JavaClient {
         }
 
         let world = player.world();
-        let block = world.get_block(&pick_item.pos).await;
+        let block = world.get_block(&pick_item.pos);
 
         if block.item_id == 0 {
             // Invalid block id (blocks such as tall seagrass)
@@ -700,7 +714,7 @@ impl JavaClient {
             return;
         }
         let pos = command.pos;
-        if let Some(block_entity) = player.world().get_block_entity(&pos).await {
+        if let Some(block_entity) = player.world().get_block_entity(&pos) {
             if block_entity.resource_location() != CommandBlockEntity::ID {
                 warn!("Client tried to change Command block but not Command block entity found");
                 return;
@@ -712,8 +726,8 @@ impl JavaClient {
                 return;
             };
 
-            let block = player.world().get_block(&pos).await;
-            let old_state_id = player.world().get_block_state_id(&pos).await;
+            let block = player.world().get_block(&pos);
+            let old_state_id = player.world().get_block_state_id(&pos);
             let mut props = CommandBlockLikeProperties::from_state_id(old_state_id, block);
 
             let block_type = match command_block_mode {
@@ -755,10 +769,7 @@ impl JavaClient {
                 track_output: (command.flags & 0x1 != 0).into(),
                 success_count: AtomicU32::new(0),
             };
-            player
-                .world()
-                .add_block_entity(Arc::new(command_block))
-                .await;
+            player.world().add_block_entity(Arc::new(command_block));
 
             player
                 .send_system_message(&TextComponent::text(format!(
@@ -769,15 +780,12 @@ impl JavaClient {
 
             // The 0x4 flag means always active
             if command.flags & 0x4 != 0 && block_type != Block::CHAIN_COMMAND_BLOCK {
-                player
-                    .world()
-                    .schedule_block_tick(
-                        &block_type,
-                        pos,
-                        1,
-                        pumpkin_world::tick::TickPriority::Normal,
-                    )
-                    .await;
+                player.world().schedule_block_tick(
+                    &block_type,
+                    pos,
+                    1,
+                    pumpkin_world::tick::TickPriority::Normal,
+                );
             }
         }
     }
@@ -1216,7 +1224,7 @@ impl JavaClient {
                     .eye_position()
                     .add(&(Vector3::rotation_vector(f64::from(pitch), f64::from(yaw)) * 4.5)),
                 async |pos, world| {
-                    let block = world.get_block(pos).await;
+                    let block = world.get_block(pos);
                     block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
                 },
             )
@@ -1226,7 +1234,7 @@ impl JavaClient {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::LeftClickBlock,
-                player.world().get_block(&hit_pos).await,
+                player.world().get_block(&hit_pos),
                 Some(hit_pos),
             )
         } else {
@@ -1239,7 +1247,7 @@ impl JavaClient {
             server;
             event;
             'after: {
-                player.swing_hand(hand, false).await;
+                player.swing_hand(hand, false);
             }
         }}
     }
@@ -1406,20 +1414,18 @@ impl JavaClient {
             session.key_signature.clone(),
         );
 
-        server
-            .broadcast_packet_all(&CPlayerInfoUpdate::new(
-                0x02,
-                &[pumpkin_protocol::java::client::play::Player {
-                    uuid: player.gameprofile.id,
-                    actions: &[PlayerAction::InitializeChat(Some(InitChat {
-                        session_id: session.session_id,
-                        expires_at: session.expires_at,
-                        public_key: session.public_key.clone(),
-                        signature: session.key_signature.clone(),
-                    }))],
-                }],
-            ))
-            .await;
+        server.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            0x02,
+            &[pumpkin_protocol::java::client::play::Player {
+                uuid: player.gameprofile.id,
+                actions: &[PlayerAction::InitializeChat(Some(InitChat {
+                    session_id: session.session_id,
+                    expires_at: session.expires_at,
+                    public_key: session.public_key.clone(),
+                    signature: session.key_signature.clone(),
+                }))],
+            }],
+        ));
     }
 
     /// Runs vanilla checks for a valid player session
@@ -1538,7 +1544,7 @@ impl JavaClient {
                     "Player {} ({}) updated their skin.",
                     player.gameprofile.name, self.id,
                 );
-                player.send_client_information().await;
+                player.send_client_information();
             }
         } else {
             self.kick(TextComponent::text("Invalid hand or chat type"))
@@ -1595,8 +1601,9 @@ impl JavaClient {
         }
 
         if entity_id.0 == player.entity_id() {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 [],
             ))
             .await;
@@ -1609,8 +1616,9 @@ impl JavaClient {
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
             .or_else(|| world.get_entity_by_id(entity_id.0));
         let Some(target) = target else {
-            self.kick(TextComponent::translate(
-                translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+            self.kick(TextComponent::translate_cross(
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
+                translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 [],
             ))
             .await;
@@ -1621,13 +1629,11 @@ impl JavaClient {
                 return;
             }
             if config.protect_creative && player_victim.gamemode.load() == GameMode::Creative {
-                world
-                    .play_sound(
-                        Sound::EntityPlayerAttackNodamage,
-                        SoundCategory::Players,
-                        &player_victim.position(),
-                    )
-                    .await;
+                world.play_sound(
+                    Sound::EntityPlayerAttackNodamage,
+                    SoundCategory::Players,
+                    &player_victim.position(),
+                );
                 return;
             }
         }
@@ -1684,10 +1690,7 @@ impl JavaClient {
                             }
 
                             if entity_id.0 == player.entity_id() {
-                                self.kick(TextComponent::translate(
-                                    translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                                    [],
-                                ))
+                                self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
                                 .await;
                                 return;
                             }
@@ -1705,7 +1708,7 @@ impl JavaClient {
                                             SoundCategory::Players,
                                             &player_victim.position(),
                                         )
-                                        .await;
+                                        ;
                                     return;
                                 }
                             }
@@ -1737,10 +1740,7 @@ impl JavaClient {
                             player.entity_id(),
                             event.entity_id
                         );
-                        self.kick(TextComponent::translate(
-                            translation::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
-                            [],
-                        ))
+                        self.kick(TextComponent::translate_cross(translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED, [],))
                         .await;
                     }
                 }
@@ -1773,7 +1773,7 @@ impl JavaClient {
                     let position = player_action.position;
                     let entity = &player.living_entity.entity;
                     let world = entity.world.load_full();
-                    let (block, state) = world.get_block_and_state(&position).await;
+                    let (block, state) = world.get_block_and_state(&position);
 
                     let inventory = player.inventory();
                     let held = inventory.held_item();
@@ -1819,7 +1819,7 @@ impl JavaClient {
                         let speed = block::calc_block_breaking(player, state, block).await;
                         // Instant break
                         if speed >= 1.0 {
-                            let broken_state = world.get_block_state(&position).await;
+                            let broken_state = world.get_block_state(&position);
                             let new_state = world
                                 .break_block(
                                     &position,
@@ -1884,7 +1884,7 @@ impl JavaClient {
                     player.mining.store(false, Ordering::Relaxed);
                     world.set_block_breaking(entity, location, -1).await;
 
-                    let (block, state) = world.get_block_and_state(&location).await;
+                    let (block, state) = world.get_block_and_state(&location);
                     let block_drop = player.gamemode.load() != GameMode::Creative
                         && player.can_harvest(state, block).await;
 
@@ -1965,7 +1965,7 @@ impl JavaClient {
     }
 
     async fn sync_block_state_to_client(&self, world: &World, position: BlockPos) {
-        let synced_state_id = world.get_block_state_id(&position).await;
+        let synced_state_id = world.get_block_state_id(&position);
         self.send_packet_now(&CBlockUpdate::new(
             position,
             VarInt(i32::from(synced_state_id)),
@@ -2055,7 +2055,7 @@ impl JavaClient {
 
         let entity = &player.living_entity.entity;
         let world = entity.world.load_full();
-        let block = world.get_block(&position).await;
+        let block = world.get_block(&position);
 
         let sneaking = player.living_entity.entity.sneaking.load(Ordering::Relaxed);
 
@@ -2077,7 +2077,7 @@ impl JavaClient {
                 // TODO: Trigger ANY_BLOCK_USE Criteria
 
                 if matches!(result, BlockActionResult::SuccessServer) {
-                    player.swing_hand(hand, true).await;
+                    player.swing_hand(hand, true);
                 }
                 return Ok(());
             }
@@ -2135,8 +2135,7 @@ impl JavaClient {
             };
             player
                 .world()
-                .send_entity_status(&player.living_entity.entity, equipment_break_status(slot))
-                .await;
+                .send_entity_status(&player.living_entity.entity, equipment_break_status(slot));
         }
 
         if !after.are_equal(&before) {
@@ -2149,7 +2148,7 @@ impl JavaClient {
     #[expect(clippy::too_many_arguments)]
     async fn call_use_item_on(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         position: &BlockPos,
         cursor_pos: &Vector3<f32>,
         face: &BlockDirection,
@@ -2200,7 +2199,7 @@ impl JavaClient {
 
     pub async fn handle_sign_update(&self, player: &Player, sign_data: SUpdateSign) {
         let world = player.living_entity.entity.world.load_full();
-        let Some(block_entity) = world.get_block_entity(&sign_data.location).await else {
+        let Some(block_entity) = world.get_block_entity(&sign_data.location) else {
             return;
         };
         let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
@@ -2223,7 +2222,7 @@ impl JavaClient {
             sign_data.line_4,
         ];
         *sign_entity.currently_editing_player.lock().await = None;
-        world.update_block_entity(&block_entity).await;
+        world.update_block_entity(&block_entity);
     }
 
     pub async fn handle_use_item(
@@ -2259,7 +2258,7 @@ impl JavaClient {
                         * 4.5),
                 ),
                 async |pos, world| {
-                    let block = world.get_block(pos).await;
+                    let block = world.get_block(pos);
                     block != &Block::AIR && block != &Block::WATER && block != &Block::LAVA
                 },
             )
@@ -2269,7 +2268,7 @@ impl JavaClient {
             PlayerInteractEvent::new(
                 player,
                 InteractAction::RightClickBlock,
-                player.world().get_block(&hit_pos).await,
+                player.world().get_block(&hit_pos),
                 Some(hit_pos),
             )
         } else {
@@ -2278,9 +2277,9 @@ impl JavaClient {
         self.prepare_hand_item_for_use(player, hand, &item_in_hand)
             .await;
 
-        let item_for_use = {
+        let (item_for_use, stack_for_use) = {
             let held = item_in_hand.lock().await;
-            held.item
+            (held.item, held.clone())
         };
 
         if !self
@@ -2294,7 +2293,7 @@ impl JavaClient {
             server;
             event;
             'after: {
-                server.item_registry.on_use(item_for_use, player).await;
+                server.item_registry.on_use(&stack_for_use, player).await;
             }
         }}
     }
@@ -2307,7 +2306,20 @@ impl JavaClient {
     ) {
         let inventory = player.inventory();
         let mut held = item_in_hand.lock().await;
-        if held.get_data_component::<ConsumableImpl>().is_some() {
+
+        if let Some(cooldown) = held.get_use_cooldown() {
+            let group = cooldown
+                .cooldown_group
+                .clone()
+                .unwrap_or_else(|| held.item.registry_key.to_string());
+            if player.is_on_cooldown(&group).await {
+                return;
+            }
+        }
+
+        if held.get_data_component::<ConsumableImpl>().is_some()
+            || held.get_data_component::<BlocksAttacksImpl>().is_some()
+        {
             // If its food we want to make sure we can actually consume it
             if let Some(food) = held.get_data_component::<FoodImpl>() {
                 if player.abilities.lock().await.invulnerable
@@ -2401,7 +2413,7 @@ impl JavaClient {
         inv.set_selected_slot(slot);
         let stack = inv.held_item().lock().await.clone();
         let equipment = &[(EquipmentSlot::MAIN_HAND, stack)];
-        player.living_entity.send_equipment_changes(equipment).await;
+        player.living_entity.send_equipment_changes(equipment);
     }
 
     pub async fn handle_set_creative_slot(
@@ -2448,7 +2460,7 @@ impl JavaClient {
                     let slot = packet.slot - 36;
                     if player.inventory().get_selected_slot() == slot as u8 {
                         let equipment = &[(EquipmentSlot::MAIN_HAND, item_stack.clone())];
-                        player.living_entity.send_equipment_changes(equipment).await;
+                        player.living_entity.send_equipment_changes(equipment);
                     }
                 }
             }
@@ -2481,7 +2493,7 @@ impl JavaClient {
 
     pub async fn handle_close_container(
         &self,
-        player: &Player,
+        player: &Arc<Player>,
         _server: &Server,
         _packet: SCloseContainer,
     ) {
@@ -2608,8 +2620,9 @@ impl JavaClient {
         if location.0.y + face.to_offset().y > world.get_top_y() {
             player
                 .send_system_message_raw(
-                    &TextComponent::translate(
-                        translation::BUILD_TOOHIGH,
+                    &TextComponent::translate_cross(
+                        translation::java::BUILD_TOOHIGH,
+                        translation::bedrock::BUILD_TOOHIGH,
                         vec![TextComponent::text((world.get_top_y()).to_string())],
                     )
                     .color_named(NamedColor::Red),
@@ -2619,8 +2632,7 @@ impl JavaClient {
             return Err(BlockPlacingError::BlockOutOfWorld);
         }
 
-        let (clicked_block, clicked_block_state) =
-            world.get_block_and_state(&clicked_block_pos).await;
+        let (clicked_block, clicked_block_state) = world.get_block_and_state(&clicked_block_pos);
 
         let replace_clicked_block = if clicked_block == block {
             world
@@ -2634,7 +2646,6 @@ impl JavaClient {
                     &use_item_on,
                     player,
                 )
-                .await
                 .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
         } else if clicked_block_state.replaceable() {
             if clicked_block == &Block::WATER {
@@ -2653,8 +2664,7 @@ impl JavaClient {
                 (clicked_block_pos, face, replacing)
             } else {
                 let block_pos = BlockPos(location.0 + face.to_offset());
-                let (previous_block, previous_block_state) =
-                    world.get_block_and_state(&block_pos).await;
+                let (previous_block, previous_block_state) = world.get_block_and_state(&block_pos);
 
                 let replace_previous_block = if previous_block == block {
                     world
@@ -2668,7 +2678,6 @@ impl JavaClient {
                             &use_item_on,
                             player,
                         )
-                        .await
                         .then_some(BlockIsReplacing::Itself(previous_block_state.id))
                 } else {
                     previous_block_state.replaceable().then(|| {
@@ -2693,21 +2702,17 @@ impl JavaClient {
                 }
             };
 
-        if !server
-            .block_registry
-            .can_place_at(
-                Some(server),
-                Some(&*world),
-                &*world,
-                Some(player),
-                block,
-                block.default_state,
-                &final_block_pos,
-                Some(final_face),
-                Some(&use_item_on),
-            )
-            .await
-        {
+        if !server.block_registry.can_place_at(
+            Some(server),
+            Some(&*world),
+            &*world,
+            Some(player),
+            block,
+            block.default_state,
+            &final_block_pos,
+            Some(final_face),
+            Some(&use_item_on),
+        ) {
             return Ok(false);
         }
 

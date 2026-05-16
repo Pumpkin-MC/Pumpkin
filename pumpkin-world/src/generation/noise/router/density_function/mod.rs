@@ -43,7 +43,6 @@ pub trait StaticIndependentChunkNoiseFunctionComponentImpl: NoiseFunctionCompone
     }
 }
 
-#[derive(Clone)]
 pub struct Wrapper {
     pub input_index: usize,
     pub wrapper_type: WrapperType,

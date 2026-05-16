@@ -10,8 +10,8 @@ pub struct MagmaCubeEntity {
 }
 
 impl MagmaCubeEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let slime = SlimeEntity::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let slime = SlimeEntity::new(entity);
         Arc::new(Self { slime })
     }
 }

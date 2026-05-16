@@ -39,15 +39,17 @@ async fn send_damage_result(
     target_name: TextComponent,
 ) -> Result<i32, CommandError> {
     if !success {
-        return Err(CommandError::CommandFailed(TextComponent::translate(
-            translation::COMMANDS_DAMAGE_INVULNERABLE,
+        return Err(CommandError::CommandFailed(TextComponent::translate_cross(
+            translation::java::COMMANDS_DAMAGE_INVULNERABLE,
+            translation::java::COMMANDS_DAMAGE_INVULNERABLE,
             [],
         )));
     }
 
     sender
-        .send_message(TextComponent::translate(
-            translation::COMMANDS_DAMAGE_SUCCESS,
+        .send_message(TextComponent::translate_cross(
+            translation::java::COMMANDS_DAMAGE_SUCCESS,
+            translation::bedrock::COMMANDS_DAMAGE_SUCCESS,
             [TextComponent::text(amount.to_string()), target_name],
         ))
         .await;

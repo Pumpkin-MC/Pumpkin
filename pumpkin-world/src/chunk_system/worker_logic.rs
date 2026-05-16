@@ -229,14 +229,11 @@ pub fn run_generation(
     level: &Level,
     _settings: &GenerationSettings,
 ) -> RecvChunk {
+    let portal = level.world_portal.load_full();
+    let portal_ref = portal.as_deref().expect("Portal should be initialized");
     // Run generation with panic catching
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        cache.advance(
-            stage,
-            &level.world_gen,
-            level.block_registry.as_ref(),
-            &level.lighting_config,
-        );
+        cache.advance(stage, &level.world_gen, portal_ref, &level.lighting_config);
         cache // Return cache on success
     }));
 

@@ -7,7 +7,7 @@ use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage,
+    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
@@ -16,6 +16,7 @@ use crate::entity::{
     mob::{Mob, MobEntity},
     player::Player,
 };
+use pumpkin_nbt::compound::NbtCompound;
 
 const PIG_FOOD: &[&Item] = &[
     &Item::CARROT,
@@ -32,7 +33,7 @@ pub struct PigEntity {
 }
 
 impl PigEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let pig = Self { mob_entity };
         let mob_arc = Arc::new(pig);
@@ -42,7 +43,7 @@ impl PigEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.25));
@@ -61,7 +62,15 @@ impl PigEntity {
     }
 }
 
-impl NBTStorage for PigEntity {}
+impl NBTStorage for PigEntity {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
+        self.mob_entity.living_entity.write_nbt(nbt)
+    }
+
+    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
+        self.mob_entity.living_entity.read_nbt_non_mut(nbt)
+    }
+}
 
 impl Mob for PigEntity {
     fn get_mob_entity(&self) -> &MobEntity {
@@ -70,7 +79,7 @@ impl Mob for PigEntity {
 
     fn mob_interact<'a>(
         &'a self,
-        player: &'a Player,
+        player: &'a Arc<Player>,
         item_stack: &'a mut ItemStack,
     ) -> EntityBaseFuture<'a, bool> {
         Box::pin(async move {
@@ -83,22 +92,18 @@ impl Mob for PigEntity {
                 let world = entity.world.load();
                 let pos = entity.pos.load();
 
-                world
-                    .spawn_particle(
-                        pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
-                        Vector3::new(0.5, 0.5, 0.5),
-                        1.0,
-                        7,
-                        Particle::Heart,
-                    )
-                    .await;
-                world
-                    .play_sound(
-                        Sound::EntityPigAmbient,
-                        SoundCategory::Neutral,
-                        &entity.pos.load(),
-                    )
-                    .await;
+                world.spawn_particle(
+                    pos + Vector3::new(0.0, f64::from(entity.height()), 0.0),
+                    Vector3::new(0.5, 0.5, 0.5),
+                    1.0,
+                    7,
+                    Particle::Heart,
+                );
+                world.play_sound(
+                    Sound::EntityPigAmbient,
+                    SoundCategory::Neutral,
+                    &entity.pos.load(),
+                );
                 return true;
             }
             false

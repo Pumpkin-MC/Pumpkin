@@ -20,7 +20,6 @@ use crate::{
 };
 
 /// Straight exterior bridge segment (5 × 10 × 19).
-#[derive(Clone)]
 pub struct BridgePiece {
     pub piece: NetherFortressPiece,
 }
@@ -147,9 +146,5 @@ impl StructurePieceBase for BridgePiece {
         p.fill_with_outline(
             chunk, &bb, false, 4, 1, 17, 4, 4, 17, fence_west, fence_west,
         );
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

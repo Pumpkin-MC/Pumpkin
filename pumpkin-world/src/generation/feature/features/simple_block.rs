@@ -4,7 +4,7 @@ use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 use crate::generation::proto_chunk::GenerationCache;
 use crate::{
     generation::block_state_provider::BlockStateProvider,
-    world::{BlockAccessor, BlockRegistryExt},
+    world::{BlockAccessor, WorldPortalExt},
 };
 
 pub struct SimpleBlockFeature {
@@ -15,7 +15,7 @@ pub struct SimpleBlockFeature {
 impl SimpleBlockFeature {
     pub fn generate<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &mut T,
         random: &mut RandomGenerator,
         pos: BlockPos,

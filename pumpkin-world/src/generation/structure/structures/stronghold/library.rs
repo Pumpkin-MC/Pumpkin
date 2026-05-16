@@ -19,7 +19,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct LibraryPiece {
     pub piece: StrongholdPiece,
     pub tall: bool,
@@ -236,9 +235,5 @@ impl StructurePieceBase for LibraryPiece {
         //     inner.add_block(chunk, &Block::AIR.default_state, 12, 9, 1, &box_limit); // Clear space above top chest
         //     inner.add_chest(chunk, &box_limit, random, 12, 8, 1, "stronghold_library");
         // }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
     }
 }

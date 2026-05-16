@@ -28,6 +28,7 @@ pumpkin-world.workspace = true
 pumpkin-data.workspace = true
 pumpkin-protocol.workspace = true
 pumpkin-macros.workspace = true
+pumpkin-codecs.workspace = true
 
 dashmap.workspace = true
 crossbeam.workspace = true
@@ -51,6 +52,8 @@ notify.workspace = true
 serde.workspace = true
 serde_repr.workspace = true
 serde_json.workspace = true
+
+colored.workspace = true
 
 bytes.workspace = true
 
@@ -89,7 +92,7 @@ rustc-hash.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 
 # System details & Rustc version
-sysinfo = "0.38"
+sysinfo = "0.39"
 rustc_version_runtime = "0.3"
 
 flate2.workspace = true
@@ -97,7 +100,8 @@ console-subscriber = { workspace = true, optional = true }
 
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
-wasmparser = { workspace = true }
+wasmtime-wasi-http = { workspace = true }
+hyper = { workspace = true }
 
 ordered-float = "5.3.0"
 
@@ -111,7 +115,6 @@ tempfile.workspace = true
 
 [features]
 console-subscriber = ["dep:console-subscriber"]
-tokio_taskdump = ["pumpkin-world/tokio_taskdump"]
 
 [lints]
 workspace = true

@@ -96,7 +96,7 @@ impl ItemBehaviour for BoatItem {
 
             // Vanilla: raycast with FluidHandling.ANY - stops on water/lava surface or solid blocks
             let checker = async |pos: &BlockPos, world_inner: &Arc<World>| {
-                let state_id = world_inner.get_block_state_id(pos).await;
+                let state_id = world_inner.get_block_state_id(pos);
 
                 // Air doesn't stop the raycast
                 if state_id == Block::AIR.id {
@@ -158,7 +158,7 @@ impl ItemBehaviour for BoatItem {
             let boat_box = BoundingBox::new_from_pos(hit_vec.x, hit_vec.y, hit_vec.z, &dimensions);
 
             // Vanilla: if (!world.isSpaceEmpty(lv7, lv7.getBoundingBox())) return FAIL
-            if !world.is_space_empty(boat_box).await {
+            if !world.is_space_empty(boat_box) {
                 return;
             }
 

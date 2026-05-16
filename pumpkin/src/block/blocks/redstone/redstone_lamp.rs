@@ -23,16 +23,19 @@ impl BlockBehaviour for RedstoneLamp {
 
     fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let mut props = RedstoneLampProperties::from_state_id(state.id, args.block);
             let is_lit = props.lit;
             let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;
 
             if is_lit != is_receiving_power {
                 if is_lit {
-                    args.world
-                        .schedule_block_tick(args.block, *args.position, 4, TickPriority::Normal)
-                        .await;
+                    args.world.schedule_block_tick(
+                        args.block,
+                        *args.position,
+                        4,
+                        TickPriority::Normal,
+                    );
                 } else {
                     props.lit = !props.lit;
                     args.world
@@ -49,7 +52,7 @@ impl BlockBehaviour for RedstoneLamp {
 
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            let state = args.world.get_block_state(args.position).await;
+            let state = args.world.get_block_state(args.position);
             let mut props = RedstoneLampProperties::from_state_id(state.id, args.block);
             let is_lit = props.lit;
             let is_receiving_power = block_receives_redstone_power(args.world, args.position).await;

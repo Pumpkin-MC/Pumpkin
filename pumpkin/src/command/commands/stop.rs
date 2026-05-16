@@ -22,8 +22,12 @@ impl CommandExecutor for StopCommandExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(translation::COMMANDS_STOP_STOPPING, [])
-                        .color_named(NamedColor::Red),
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_STOP_STOPPING,
+                        translation::bedrock::COMMANDS_STOP_START,
+                        [],
+                    )
+                    .color_named(NamedColor::Red),
                     true,
                 )
                 .await;

@@ -45,21 +45,29 @@ impl EntityMetadata {
         self.0.insert(key, value);
     }
 
-    pub fn set_flag(&mut self, key: u32, index: u8) {
+    pub fn set_flag(&mut self, key: u32, index: u8, value: bool) {
         if key == entity_data_key::PLAYER_FLAGS {
             let current_value = match self.0.get(&key) {
                 Some(MetadataValue::Byte(v)) => *v,
                 _ => 0,
             };
-            self.0
-                .insert(key, MetadataValue::Byte(current_value | (1i8 << index)));
+            let new_value = if value {
+                current_value | (1i8 << index)
+            } else {
+                current_value & !(1i8 << index)
+            };
+            self.0.insert(key, MetadataValue::Byte(new_value));
         } else {
             let current_value = match self.0.get(&key) {
                 Some(MetadataValue::Long(v)) => *v,
                 _ => 0,
             };
-            self.0
-                .insert(key, MetadataValue::Long(current_value | (1i64 << index)));
+            let new_value = if value {
+                current_value | (1i64 << index)
+            } else {
+                current_value & !(1i64 << index)
+            };
+            self.0.insert(key, MetadataValue::Long(new_value));
         }
     }
 }

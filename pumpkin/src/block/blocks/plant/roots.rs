@@ -18,10 +18,8 @@ impl BlockMetadata for RootsBlock {
 }
 
 impl BlockBehaviour for RootsBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -41,8 +39,8 @@ impl BlockBehaviour for RootsBlock {
 }
 
 impl PlantBlockBase for RootsBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block_below = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block_below = block_accessor.get_block(pos);
         if block_below == &Block::WARPED_ROOTS {
             block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_WARPED_ROOTS)
         } else {
@@ -50,8 +48,7 @@ impl PlantBlockBase for RootsBlock {
         }
     }
 
-    async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
         self.can_plant_on_top(block_accessor, &block_pos.down())
-            .await
     }
 }

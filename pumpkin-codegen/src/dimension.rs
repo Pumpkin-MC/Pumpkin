@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, fs};
 
+use crate::placed_feature::value_to_int_provider;
 use heck::ToShoutySnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -36,6 +37,8 @@ pub struct Dimension {
     pub logical_height: i32,
     /// Tag key for blocks that act as infinite burn sources (e.g. `"minecraft:infiniburn_overworld"`).
     pub infiniburn: String,
+    pub monster_spawn_light_level: serde_json::Value,
+    pub monster_spawn_block_light_limit: u8,
     /// Fixed day-time value in this dimension, or `None` if time progresses normally.
     #[serde(rename = "fixed_time")]
     pub fixed_time: Option<i64>,
@@ -46,26 +49,6 @@ pub struct Dimension {
     #[serde(default)]
     pub timelines: Option<String>,
 }
-
-// #[derive(Clone, PartialEq, Deserialize)]
-// #[serde(untagged)]
-// pub enum MonsterSpawnLightLevel {
-//     Int(i32),
-//     Tagged(MonsterSpawnLightLevelTagged),
-// }
-
-// #[derive(Clone, PartialEq, Deserialize)]
-// pub struct MonsterSpawnLightLevelTagged {
-//     min_inclusive: i32,
-//     max_inclusive: i32,
-//     r#type: String,
-// }
-
-// impl From<i32> for MonsterSpawnLightLevel {
-//     fn from(value: i32) -> Self {
-//         Self::Int(value)
-//     }
-// }
 
 /// Generates the `TokenStream` for the `Dimension` struct, its constants, and `from_name` lookup.
 pub fn build() -> TokenStream {
@@ -113,6 +96,9 @@ pub fn build() -> TokenStream {
             quote! { None }
         };
 
+        let monster_spawn_light_level = value_to_int_provider(&dim.monster_spawn_light_level);
+
+        let monster_spawn_block_light_limit = dim.monster_spawn_block_light_limit;
         let ambient_light = dim.ambient_light;
         let coordinate_scale = dim.coordinate_scale;
         let height = dim.height;
@@ -174,6 +160,8 @@ pub fn build() -> TokenStream {
                 logical_height: #logical_height,
                 infiniburn: #infiniburn,
                 ambient_light: #ambient_light,
+                monster_spawn_light_level: #monster_spawn_light_level,
+                monster_spawn_block_light_limit: #monster_spawn_block_light_limit,
                 sky_color: #sky_color_literal,
                 fog_color: #fog_color_literal,
                 cloud_color: #cloud_color_literal,
@@ -187,7 +175,13 @@ pub fn build() -> TokenStream {
     }
 
     quote!(
-        #[derive(Debug, Clone, Copy)]
+        use pumpkin_util::math::int_provider::{
+            BiasedToBottomIntProvider, ClampedIntProvider, TrapezoidIntProvider, ClampedNormalIntProvider,
+            ConstantIntProvider, IntProvider, NormalIntProvider, UniformIntProvider,
+            WeightedEntry, WeightedListIntProvider,
+        };
+
+        #[derive(Debug, Clone)]
         pub struct Dimension {
             pub id: u8,
             pub minecraft_name: &'static str,
@@ -200,6 +194,8 @@ pub fn build() -> TokenStream {
             pub logical_height: i32,
             pub infiniburn: &'static str,
             pub ambient_light: f32,
+            pub monster_spawn_light_level: IntProvider,
+            pub monster_spawn_block_light_limit: u8,
             pub sky_color: Option<i32>,
             pub fog_color: Option<i32>,
             pub cloud_color: Option<i32>,

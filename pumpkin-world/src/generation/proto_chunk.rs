@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
@@ -42,6 +41,7 @@ use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
+use crate::generation::section_coords::section_to_block;
 use crate::generation::structure::lazily_generate_structure;
 use crate::generation::structure::placement::should_generate_structure;
 use crate::generation::structure::structures::{
@@ -54,7 +54,7 @@ use crate::{
     block::RawBlockState,
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
-    world::{BlockAccessor, BlockRegistryExt},
+    world::{BlockAccessor, WorldPortalExt},
 };
 use pumpkin_data::tag::get_tag_ids;
 use pumpkin_nbt::compound::NbtCompound;
@@ -85,6 +85,11 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32;
     fn is_air(&self, local_pos: &Vector3<i32>) -> bool;
     fn get_biome_for_terrain_gen(&self, x: i32, y: i32, z: i32) -> &'static Biome;
+    fn get_blending_data(
+        &self,
+        chunk_x: i32,
+        chunk_z: i32,
+    ) -> Option<&crate::generation::blender::blending_data::BlendingData>;
 }
 
 const AIR_BLOCK: Block = Block::AIR;
@@ -145,7 +150,6 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 /// 12. full: Generation is done and a chunk can now be loaded. The proto-chunk is now converted to a level chunk and all block updates deferred in the above steps are executed.
 ///
-#[derive(Clone)]
 pub struct ProtoChunk {
     pub x: i32,
     pub z: i32,
@@ -157,10 +161,10 @@ pub struct ProtoChunk {
     /// HEIGHTMAPS
     ///
     /// Top block that is not air
-    pub flat_surface_height_map: Box<[i16]>,
-    flat_ocean_floor_height_map: Box<[i16]>,
-    pub flat_motion_blocking_height_map: Box<[i16]>,
-    pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
+    pub flat_surface_height_map: [i16; CHUNK_AREA],
+    flat_ocean_floor_height_map: [i16; CHUNK_AREA],
+    pub flat_motion_blocking_height_map: [i16; CHUNK_AREA],
+    pub flat_motion_blocking_no_leaves_height_map: [i16; CHUNK_AREA],
     structure_starts: FxHashMap<StructureKeys, StructureInstance>,
 
     // Height of the chunk for indexing
@@ -169,6 +173,7 @@ pub struct ProtoChunk {
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
     pub carving_mask: crate::generation::carver::mask::CarvingMask,
+    pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     /// Block entities pending creation when the chunk is finalized.
     /// These are created from structure templates during world generation.
     pub pending_block_entities: Vec<NbtCompound>,
@@ -208,7 +213,7 @@ impl ProtoChunk {
         let height = dimension.logical_height as u16;
         let section_count = (height as usize) / 16;
 
-        let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
+        let default_heightmap = [i16::MIN; CHUNK_AREA];
         Self {
             x,
             z,
@@ -222,9 +227,9 @@ impl ProtoChunk {
                     * biome_coords::from_block(height as i32) as usize
             ]
             .into_boxed_slice(),
-            flat_surface_height_map: default_heightmap.clone(),
-            flat_ocean_floor_height_map: default_heightmap.clone(),
-            flat_motion_blocking_height_map: default_heightmap.clone(),
+            flat_surface_height_map: default_heightmap,
+            flat_ocean_floor_height_map: default_heightmap,
+            flat_motion_blocking_height_map: default_heightmap,
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: FxHashMap::default(),
             height,
@@ -251,6 +256,7 @@ impl ProtoChunk {
                 height as i32,
                 dimension.min_y,
             ),
+            blending_data: None,
             pending_block_entities: Vec::new(),
         }
     }
@@ -262,6 +268,7 @@ impl ProtoChunk {
         let mut proto_chunk = Self::new(chunk_data.x, chunk_data.z, generator);
 
         proto_chunk.light = chunk_data.light_engine.lock().unwrap().clone();
+        proto_chunk.blending_data = chunk_data.blending_data.clone();
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data.heightmap.lock().unwrap();
@@ -648,11 +655,11 @@ impl ProtoChunk {
         generator: &super::generator::VanillaGenerator,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
-        let dimension = generator.dimension;
+        let dimension = &generator.dimension;
         // Instantiate ONLY the supplier we actually need
-        let active_supplier = if dimension == Dimension::THE_END {
+        let active_supplier = if dimension == &Dimension::THE_END {
             ActiveSupplier::End(TheEndBiomeSupplier)
-        } else if dimension == Dimension::THE_NETHER {
+        } else if dimension == &Dimension::THE_NETHER {
             ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
         } else {
             ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
@@ -663,7 +670,8 @@ impl ProtoChunk {
             ActiveSupplier::Nether(s) => s,
             ActiveSupplier::Overworld(s) => s,
         };
-        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
+        let blender = Blender::empty();
+        let biome_supplier = blender.get_biome_supplier(base_supplier);
         let min_y = self.bottom_y();
         let bottom_section = section_coords::block_to_section(min_y as i32);
         let top_section = section_coords::block_to_section(min_y as i32 + self.height() as i32 - 1);
@@ -766,6 +774,23 @@ impl ProtoChunk {
             }
             noise_sampler.swap_buffers();
         }
+    }
+
+    pub fn spawn_mobs<T: GenerationCache>(cache: &mut T, block_registry: &dyn WorldPortalExt) {
+        let chunk = cache.get_center_chunk();
+        debug_assert_eq!(chunk.stage, StagedChunkEnum::Lighting);
+
+        let biome = chunk.get_terrain_gen_biome(
+            section_to_block(chunk.x),
+            chunk.bottom_y() as i32 + chunk.height() as i32 - 1,
+            section_to_block(chunk.z),
+        );
+        let x = chunk.x;
+        let z = chunk.z;
+
+        block_registry.spawn_mobs_for_chunk_generation(cache, biome, x, z);
+
+        cache.get_center_chunk_mut().stage = StagedChunkEnum::Spawn;
     }
 
     #[must_use]
@@ -934,7 +959,7 @@ impl ProtoChunk {
     /// 2. Then, using the second file, we determine **how** to generate the feature.
     pub fn generate_features_and_structure<T: GenerationCache>(
         cache: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         random_config: &GlobalRandomConfig,
     ) {
         let (center_x, center_z, min_y, height, biomes_in_chunk) = {
@@ -1087,6 +1112,7 @@ impl ProtoChunk {
         }
     }
 
+    #[must_use]
     pub fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
         let mut allowed_biomes = Vec::new();
         for entry in set.structures {
@@ -1135,9 +1161,7 @@ impl ProtoChunk {
             }
 
             let mut candidates = set.structures.to_vec();
-            let mut random: RandomGenerator =
-                RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed));
-            let carver_seed = get_carver_seed(&mut random, seed, self.x, self.z);
+            let carver_seed = get_carver_seed(seed, self.x, self.z);
             let mut random: RandomGenerator =
                 RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
 
@@ -1219,7 +1243,8 @@ impl ProtoChunk {
             ActiveSupplier::Nether(s) => s,
             ActiveSupplier::Overworld(s) => s,
         };
-        let biome_supplier = Blender::NO_BLEND.get_biome_supplier(base_supplier);
+        let blender = Blender::empty();
+        let biome_supplier = blender.get_biome_supplier(base_supplier);
         // Use an empty offset sampler since we are querying arbitrary world coordinates
         let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(0, 0, 0);
         let mut multi_noise_sampler =
@@ -1335,34 +1360,20 @@ impl ProtoChunk {
 }
 
 impl BlockAccessor for ProtoChunk {
-    fn get_block<'a>(
-        &'a self,
-        position: &'a BlockPos,
-    ) -> Pin<Box<dyn Future<Output = &'static Block> + Send + 'a>> {
-        Box::pin(async move { self.get_block_state(&position.0).to_block() })
+    fn get_block(&self, position: &BlockPos) -> &'static Block {
+        self.get_block_state(&position.0).to_block()
     }
 
-    fn get_block_state<'a>(
-        &'a self,
-        position: &'a BlockPos,
-    ) -> Pin<Box<dyn Future<Output = &'static BlockState> + Send + 'a>> {
-        Box::pin(async move { self.get_block_state(&position.0).to_state() })
+    fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
+        self.get_block_state(&position.0).to_state()
     }
 
-    fn get_block_state_id<'a>(
-        &'a self,
-        position: &'a BlockPos,
-    ) -> Pin<Box<dyn Future<Output = BlockStateId> + Send + 'a>> {
-        Box::pin(async move { self.get_block_state(&position.0).0 })
+    fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
+        self.get_block_state(&position.0).0
     }
 
-    fn get_block_and_state<'a>(
-        &'a self,
-        position: &'a BlockPos,
-    ) -> Pin<Box<dyn Future<Output = (&'static Block, &'static BlockState)> + Send + 'a>> {
-        Box::pin(async move {
-            let id = self.get_block_state(&position.0);
-            BlockState::from_id_with_block(id.0)
-        })
+    fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState) {
+        let id = self.get_block_state(&position.0);
+        BlockState::from_id_with_block(id.0)
     }
 }

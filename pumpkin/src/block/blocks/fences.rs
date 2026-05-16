@@ -28,7 +28,7 @@ impl BlockBehaviour for FenceBlock {
             let mut fence_props = FenceProperties::default(args.block);
             fence_props.waterlogged = args.replacing.water_source();
 
-            compute_fence_state(fence_props, args.world, args.block, args.position).await
+            compute_fence_state(fence_props, args.world, args.block, args.position)
         })
     }
 
@@ -38,12 +38,12 @@ impl BlockBehaviour for FenceBlock {
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let fence_props = FenceProperties::from_state_id(args.state_id, args.block);
-            compute_fence_state(fence_props, args.world, args.block, args.position).await
+            compute_fence_state(fence_props, args.world, args.block, args.position)
         })
     }
 }
 
-pub async fn compute_fence_state(
+pub fn compute_fence_state(
     mut fence_props: FenceProperties,
     world: &World,
     block: &Block,
@@ -51,7 +51,7 @@ pub async fn compute_fence_state(
 ) -> u16 {
     for direction in BlockDirection::horizontal() {
         let other_block_pos = block_pos.offset(direction.to_offset());
-        let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos).await;
+        let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos);
 
         let connected = connects_to(block, other_block, other_block_state, direction);
         match direction {

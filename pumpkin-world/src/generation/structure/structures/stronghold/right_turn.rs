@@ -19,7 +19,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct RightTurnPiece {
     pub piece: StrongholdPiece,
 }
@@ -142,9 +141,5 @@ impl StructurePieceBase for RightTurnPiece {
         } else {
             inner.fill_with_outline(chunk, &box_limit, false, 0, 1, 1, 0, 3, 3, air, air);
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
     }
 }

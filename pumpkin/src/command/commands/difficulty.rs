@@ -12,7 +12,7 @@ const DESCRIPTION: &str = "Query or change the difficulty of the world.";
 const PERMISSION: &str = "minecraft:command.difficulty";
 
 const FAILURE_ERROR_TYPE: CommandErrorType<1> =
-    CommandErrorType::new("commands.difficulty.failure");
+    CommandErrorType::new("commands.difficulty.failure", "commands.difficulty.failure");
 
 struct DifficultyQueryExecutor;
 
@@ -24,9 +24,14 @@ impl CommandExecutor for DifficultyQueryExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
                         "commands.difficulty.query",
-                        [TextComponent::translate(difficulty.translation_key(), [])],
+                        "commands.difficulty.query",
+                        [TextComponent::translate_cross(
+                            difficulty.translation_key(),
+                            difficulty.translation_key(),
+                            [],
+                        )],
                     ),
                     false,
                 )
@@ -54,14 +59,19 @@ impl CommandExecutor for DifficultySetExecutor {
                 }
             }
 
-            server.set_difficulty(difficulty, true).await;
+            server.set_difficulty(difficulty, true);
 
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
+                    TextComponent::translate_cross(
                         "commands.difficulty.success",
-                        [TextComponent::translate(difficulty.translation_key(), [])],
+                        "commands.difficulty.success",
+                        [TextComponent::translate_cross(
+                            difficulty.translation_key(),
+                            difficulty.translation_key(),
+                            [],
+                        )],
                     ),
                     true,
                 )

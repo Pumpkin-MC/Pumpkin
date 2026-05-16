@@ -9,7 +9,7 @@ use pumpkin_data::recipes::{
     RecipeIngredientTypes, RecipeResultStruct,
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket, VarInt, WritingError, codec::item_stack_seralizer::ItemStackSerializer,
@@ -63,28 +63,28 @@ impl CRecipeBookAdd {
     }
 }
 
-fn item_id_versioned(item: &Item, version: MinecraftVersion) -> i32 {
+fn item_id_versioned(item: &Item, version: JavaMinecraftVersion) -> i32 {
     remap_item_id_for_version(item.id, version) as i32
 }
 
-fn slot_display_item_type(version: MinecraftVersion) -> i32 {
-    if version >= MinecraftVersion::V_26_1 {
+fn slot_display_item_type(version: JavaMinecraftVersion) -> i32 {
+    if version >= JavaMinecraftVersion::V_26_1 {
         SLOT_DISPLAY_ITEM_26_1
     } else {
         SLOT_DISPLAY_ITEM_LEGACY
     }
 }
 
-fn slot_display_composite_type(version: MinecraftVersion) -> i32 {
-    if version >= MinecraftVersion::V_26_1 {
+fn slot_display_composite_type(version: JavaMinecraftVersion) -> i32 {
+    if version >= JavaMinecraftVersion::V_26_1 {
         SLOT_DISPLAY_COMPOSITE_26_1
     } else {
         SLOT_DISPLAY_COMPOSITE_LEGACY
     }
 }
 
-fn slot_display_item_stack_type(version: MinecraftVersion) -> i32 {
-    if version >= MinecraftVersion::V_26_1 {
+fn slot_display_item_stack_type(version: JavaMinecraftVersion) -> i32 {
+    if version >= JavaMinecraftVersion::V_26_1 {
         SLOT_DISPLAY_ITEM_STACK_26_1
     } else {
         SLOT_DISPLAY_ITEM_STACK_LEGACY
@@ -94,7 +94,7 @@ fn slot_display_item_stack_type(version: MinecraftVersion) -> i32 {
 fn write_item_slot_display(
     write: &mut impl Write,
     item: &Item,
-    version: MinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     write.write_var_int(&VarInt(slot_display_item_type(version)))?;
     write.write_var_int(&VarInt(item_id_versioned(item, version)))?;
@@ -105,10 +105,11 @@ fn write_item_stack_slot_display(
     write: &mut impl Write,
     item: &Item,
     count: u8,
-    version: MinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     write.write_var_int(&VarInt(slot_display_item_stack_type(version)))?;
-    let static_item = Item::from_id(item.id).expect("item id must exist");
+    let static_item = Item::from_id(item.id)
+        .ok_or_else(|| WritingError::Message(format!("item id {} must exist", item.id)))?;
     ItemStackSerializer::from(ItemStack::new(count, static_item))
         .write_with_version(write, &version)
 }
@@ -126,7 +127,7 @@ fn write_any_fuel_slot_display(write: &mut impl Write) -> Result<(), WritingErro
 fn write_ingredient_slot_display(
     write: &mut impl Write,
     ingredient: &RecipeIngredientTypes,
-    version: MinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     match ingredient {
         RecipeIngredientTypes::Simple(id) => {
@@ -177,7 +178,7 @@ fn write_ingredient_slot_display(
 fn write_ingredient_holderset(
     write: &mut impl Write,
     ingredient: Option<&RecipeIngredientTypes>,
-    version: MinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     match ingredient {
         // Empty ingredient slot -> direct list of 0 items -> VarInt(0 + 1) = VarInt(1)
@@ -222,7 +223,7 @@ fn write_ingredient_holderset(
 fn write_crafting_requirements(
     write: &mut impl Write,
     slots: &[Option<&RecipeIngredientTypes>],
-    version: MinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     write.write_bool(true)?; // present
     write.write_var_int(&VarInt(slots.len() as i32))?;
@@ -235,7 +236,7 @@ fn write_crafting_requirements(
 fn write_result_slot_display(
     write: &mut impl Write,
     result: &RecipeResultStruct,
-    version: MinecraftVersion,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
     let key = result.id.strip_prefix("minecraft:").unwrap_or(result.id);
     if let Some(item) = Item::from_registry_key(key) {
@@ -247,7 +248,10 @@ fn write_result_slot_display(
 }
 
 fn write_optional_var_int(write: &mut impl Write, value: Option<i32>) -> Result<(), WritingError> {
-    let encoded = value.map_or(0, |v| v.checked_add(1).expect("group id overflow"));
+    let encoded = value.map_or(Ok(0), |v| {
+        v.checked_add(1)
+            .ok_or_else(|| WritingError::Message(format!("group id {v} overflow")))
+    })?;
     write.write_var_int(&VarInt(encoded))?;
     Ok(())
 }
@@ -292,7 +296,7 @@ const fn crafting_category(cat: &RecipeCategoryTypes) -> i32 {
 fn write_entry(
     write: &mut impl Write,
     display_id: i32,
-    version: MinecraftVersion,
+    version: JavaMinecraftVersion,
     group_id: Option<i32>,
     flags: u8,
     crafting_table: &Item,
@@ -463,18 +467,21 @@ impl ClientPacket for CRecipeBookAdd {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
         // Station items (these IDs are stable across all versions we support)
-        let crafting_table =
-            Item::from_registry_key("crafting_table").expect("crafting_table item must exist");
-        let furnace = Item::from_registry_key("furnace").expect("furnace item must exist");
-        let blast_furnace =
-            Item::from_registry_key("blast_furnace").expect("blast_furnace item must exist");
-        let smoker = Item::from_registry_key("smoker").expect("smoker item must exist");
-        let campfire = Item::from_registry_key("campfire").expect("campfire item must exist");
+        let crafting_table = Item::from_registry_key("crafting_table")
+            .ok_or_else(|| WritingError::Message("crafting_table item must exist".into()))?;
+        let furnace = Item::from_registry_key("furnace")
+            .ok_or_else(|| WritingError::Message("furnace item must exist".into()))?;
+        let blast_furnace = Item::from_registry_key("blast_furnace")
+            .ok_or_else(|| WritingError::Message("blast_furnace item must exist".into()))?;
+        let smoker = Item::from_registry_key("smoker")
+            .ok_or_else(|| WritingError::Message("smoker item must exist".into()))?;
+        let campfire = Item::from_registry_key("campfire")
+            .ok_or_else(|| WritingError::Message("campfire item must exist".into()))?;
 
         // First pass - count and skip CraftingSpecial and CraftingDecoratedPot entries.
         let crafting_count: usize = RECIPES_CRAFTING

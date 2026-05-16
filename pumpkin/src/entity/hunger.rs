@@ -4,6 +4,7 @@ use super::{EntityBase, NBTStorage, NBTStorageInit, player::Player};
 use crate::entity::NbtFuture;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::damage::DamageType;
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
 
 const MAX_FOOD: u8 = 20;
@@ -174,24 +175,26 @@ impl HungerManager {
     }
 }
 
-use pumpkin_nbt::pnbt::PNbtCompound;
-
 impl NBTStorage for HungerManager {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async {
-            nbt.put_int(self.level.load().into());
-            nbt.put_float(self.saturation.load());
-            nbt.put_float(self.exhaustion.load());
-            nbt.put_int(self.tick_timer.load() as i32);
+            nbt.put_int("foodLevel", self.level.load().into());
+            nbt.put_float("foodSaturationLevel", self.saturation.load());
+            nbt.put_float("foodExhaustionLevel", self.exhaustion.load());
+            nbt.put_int("foodTickTimer", self.tick_timer.load() as i32);
         })
     }
 
-    fn read_nbt<'a>(&'a mut self, nbt: &'a mut PNbtCompound) -> NbtFuture<'a, ()> {
+    fn read_nbt<'a>(&'a mut self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
         Box::pin(async move {
-            self.level.store(nbt.get_int().unwrap_or(20) as u8);
-            self.saturation.store(nbt.get_float().unwrap_or(5.0));
-            self.exhaustion.store(nbt.get_float().unwrap_or(0.0));
-            self.tick_timer.store(nbt.get_int().unwrap_or(0) as u32);
+            self.level
+                .store(nbt.get_int("foodLevel").unwrap_or(20) as u8);
+            self.saturation
+                .store(nbt.get_float("foodSaturationLevel").unwrap_or(5.0));
+            self.exhaustion
+                .store(nbt.get_float("foodExhaustionLevel").unwrap_or(0.0));
+            self.tick_timer
+                .store(nbt.get_int("foodTickTimer").unwrap_or(0) as u32);
         })
     }
 }

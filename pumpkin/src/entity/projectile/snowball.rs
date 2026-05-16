@@ -15,9 +15,9 @@ pub struct SnowballEntity {
 }
 
 impl SnowballEntity {
-    pub async fn new(entity: Entity) -> Self {
+    pub fn new(entity: Entity) -> Self {
         // Keep the velocity initialization
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0)).await;
+        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
 
         // Initialize without owner
         let thrown = ThrownItemEntity {
@@ -30,12 +30,9 @@ impl SnowballEntity {
         Self { thrown }
     }
 
-    pub async fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+    pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
         let thrown = ThrownItemEntity::new(entity, shooter);
-        thrown
-            .entity
-            .set_velocity(Vector3::new(0.0, 0.1, 0.0))
-            .await;
+        thrown.entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
         Self { thrown }
     }
 }
@@ -72,9 +69,7 @@ impl EntityBase for SnowballEntity {
             let world = self.get_entity().world.load();
 
             // Always send particle status regardless of what was hit
-            world
-                .send_entity_status(self.get_entity(), EntityStatus::Death)
-                .await;
+            world.send_entity_status(self.get_entity(), EntityStatus::Death);
 
             // Handle entity-specific damage
             if let ProjectileHit::Entity { ref entity, .. } = hit {

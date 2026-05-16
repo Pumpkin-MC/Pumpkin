@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::CONFIG_CUSTOM_PAYLOAD;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{resource_location::ResourceLocation, version::MinecraftVersion};
+use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
 
 use crate::{ReadingError, ServerPacket, ser::NetworkReadExt};
 
@@ -23,7 +23,7 @@ pub struct SPluginMessage {
 }
 
 impl ServerPacket for SPluginMessage {
-    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             channel: read.get_string()?,
             data: read.read_remaining_to_boxed_slice(MAX_PAYLOAD_SIZE)?,

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 mod biome;
-mod blender;
+pub mod blender;
 mod block_predicate;
 mod block_state_provider;
 pub mod carver;
