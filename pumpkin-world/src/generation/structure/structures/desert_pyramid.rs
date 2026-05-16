@@ -62,7 +62,6 @@ impl StructureGenerator for DesertPyramidGenerator {
     }
 }
 
-#[derive(Clone)]
 pub struct DesertPyramidPiece {
     piece: StructurePiece,
     height_adjusted: bool,
@@ -446,10 +445,6 @@ impl DesertPyramidPiece {
 }
 
 impl StructurePieceBase for DesertPyramidPiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece
     }

@@ -12,7 +12,6 @@ pub struct SpringFeatureFeature {
     pub valid_blocks: BlockWrapper,
 }
 
-#[derive(Clone)]
 pub enum BlockWrapper {
     Single(String),
     Multi(Vec<String>),

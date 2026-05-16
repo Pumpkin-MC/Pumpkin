@@ -3,6 +3,8 @@ interface server {
     use common.{game-mode};
     use %world.{%world};
     use text.{text-component};
+    use uuid.{uuid};
+    use recipe.{recipe-manager};
 
     /// Represents the difficulty setting of a Minecraft server.
     enum difficulty {
@@ -64,7 +66,7 @@ interface server {
         get-player-by-name: func(name: string) -> option<player>;
 
         /// Searches for a player by their UUID string.
-        get-player-by-uuid: func(id: string) -> option<player>;
+        get-player-by-uuid: func(id: uuid) -> option<player>;
 
         /// Returns a list of all worlds on this server.
         get-all-worlds: func() -> list<%world>;
@@ -113,5 +115,8 @@ interface server {
 
         /// Returns the server's default gamemode.
         get-default-gamemode: func() -> game-mode;
+
+        /// Returns the recipe manager to register custom recipes.
+        get-recipe-manager: func() -> recipe-manager;
     }
 }

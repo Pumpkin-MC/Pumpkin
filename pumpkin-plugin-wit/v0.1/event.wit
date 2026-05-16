@@ -1,10 +1,12 @@
 interface event {
-    use common.{block-position, game-mode, hand, item-stack, position, click-type};
+    use common.{block-position, game-mode, hand, position, click-type};
+    use item-stack.{item-stack};
     use player.{player};
     use text.{text-component};
     use %world.{%world};
     use java-packets.{serverbound-packet as java-serverbound-packet, clientbound-packet as java-clientbound-packet};
     use bedrock-packets.{serverbound-packet as bedrock-serverbound-packet, clientbound-packet as bedrock-clientbound-packet};
+    use uuid.{uuid};
 
     variant serverbound-packet {
         java(java-serverbound-packet),
@@ -127,9 +129,9 @@ interface event {
 
     record player-fish-event-data {
         player: player,
-        caught-uuid: option<string>,
+        caught-uuid: option<uuid>,
         caught-type: string,
-        hook-uuid: string,
+        hook-uuid: uuid,
         state: player-fish-state,
         hand: hand,
         exp-to-drop: s32,
@@ -138,7 +140,7 @@ interface event {
 
     record player-egg-throw-event-data {
         player: player,
-        egg-uuid: string,
+        egg-uuid: uuid,
         hatching: bool,
         num-hatches: u8,
         hatching-type: string,
@@ -258,6 +260,19 @@ interface event {
         can-build: bool,
         cancelled: bool
     }
+
+    record bedrock-form-response-event-data {
+        player: player,
+        form-id: u32,
+        response-data: option<string>,
+    }
+
+    record custom-click-action-event-data {
+        player: player,
+        id: string,
+        payload: option<list<u8>>,
+    }
+
     record server-command-event-data {
         command: string,
         cancelled: bool
@@ -321,6 +336,8 @@ interface event {
         block-can-build-event,
         block-grow-event,
         block-place-event,
+        bedrock-form-response-event,
+        custom-click-action-event,
         server-command-event,
         spawn-change-event,
         server-broadcast-event,
@@ -358,6 +375,8 @@ interface event {
         block-can-build-event(block-can-build-event-data),
         block-grow-event(block-grow-event-data),
         block-place-event(block-place-event-data),
+        bedrock-form-response-event(bedrock-form-response-event-data),
+        custom-click-action-event(custom-click-action-event-data),
         server-command-event(server-command-event-data),
         spawn-change-event(spawn-change-event-data),
         server-broadcast-event(server-broadcast-event-data),

@@ -9,10 +9,12 @@ use crate::plugin::loader::wasm::wasm_host::{
         entity::Host,
         entity_types,
         text::TextComponent,
+        uuid::Uuid,
         world::{
             BlockPos as WitBlockPos, Entity, HostEntity, RaycastResult as WitRaycastResult, World,
         },
     },
+    wit::v0_1::uuid::UuidExt,
     wit::v0_1::world::to_wasm_block_direction,
 };
 use pumpkin_data::entity::EntityPose as InternalEntityPose;
@@ -60,9 +62,9 @@ impl HostEntity for PluginHostState {
         Ok(entity.get_entity().entity_id as u32)
     }
 
-    async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<String> {
+    async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Uuid> {
         let entity = entity_from_resource(self, &entity)?;
-        Ok(entity.get_entity().entity_uuid.to_string())
+        Ok(Uuid::to_wit(&entity.get_entity().entity_uuid))
     }
 
     async fn get_type(
@@ -70,32 +72,23 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
     ) -> wasmtime::Result<entity_types::EntityType> {
         let entity = entity_from_resource(self, &entity)?;
-        let name = entity.get_entity().entity_type.resource_name.to_string();
-        // Standard WIT enum mapping: kebab-case
-        let _wit_name = name.replace('_', "-");
-        // We need to find the variant in the generated enum.
-        // Since we don't have a direct mapping function yet, we use debug format or similar if available,
-        // but for now let's just use the fact that it's an enum.
-        // Actually, the easiest way is to use the generated `from_name` or similar if we added it,
-        // but here we are returning it TO the guest.
+        let original_name = entity.get_entity().entity_type.resource_name;
 
-        // Wait, I need to CONSTRUCT the EntityType enum.
-        // I can't easily do it by string unless I have a mapping.
-        // But wit-bindgen generates the enum.
+        let mut names: Vec<String> = serde_json::from_str::<
+            std::collections::BTreeMap<String, serde_json::Value>,
+        >(&std::fs::read_to_string("assets/entities.json")?)?
+        .keys()
+        .cloned()
+        .collect();
+        names.sort();
 
-        // Let's assume there is a way to construct it.
-        // Actually, I can use the fact that it's a simple enum.
-        // I'll use a hack for now if I don't have a better way, but wait!
-        // I can just use `serde_json` to parse the string into the enum if it implements Deserialize!
-        // Or just a match.
+        let index = names
+            .iter()
+            .position(|n| n == original_name)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown entity type: {original_name}")))?;
 
-        // Better: let's see if pumpkin_data has a way.
-        // For now, I'll just return a placeholder or implement a basic match for the most common ones
-        // OR better: use the generated code.
-
-        Err(wasmtime::Error::msg(
-            "get_type implementation pending full enum mapping",
-        ))
+        // Safety: The WIT enum is generated from the sorted keys of assets/entities.json.
+        Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
     }
 
     async fn get_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {

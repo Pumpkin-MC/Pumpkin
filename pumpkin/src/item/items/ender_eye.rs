@@ -62,16 +62,14 @@ impl ItemBehaviour for EnderEyeItem {
 
             let new_state_id = block.from_properties(&props).to_state_id(block);
             world
-                .set_block_state(&location, new_state_id, BlockFlags::empty())
+                .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS)
                 .await;
-
+            // Consume one item.
+            item.decrement(1);
             world.sync_world_event(WorldEvent::EndPortalFrameFill, location, 0);
 
             // Try to complete the portal.
             EndPortal::get_new_portal(&world, location).await;
-
-            // Consume one item.
-            item.decrement(1);
         })
     }
 

@@ -14,7 +14,10 @@ pub fn build() -> String {
         "plugin",
         Some(Version::new(0, 1, 0)),
     ));
+
     let mut interface = Interface::new("java-packets");
+
+    interface.use_type("uuid", "uuid", None);
 
     let mut serverbound_variant = Variant::empty();
     let mut clientbound_variant = Variant::empty();
@@ -81,6 +84,23 @@ fn parse_packet_file(path: &Path, interface: &mut Interface, variant: &mut Varia
 
             if let Fields::Named(fields) = s.fields {
                 for field in fields.named {
+                    let type_name = match &field.ty {
+                        syn::Type::Path(p) => p.path.segments.last().unwrap().ident.to_string(),
+                        syn::Type::Reference(r) => match &*r.elem {
+                            syn::Type::Slice(s) => match &*s.elem {
+                                syn::Type::Path(p) => p.path.segments.last().unwrap().ident.to_string(),
+                                _ => String::new(),
+                            },
+                            syn::Type::Path(p) => p.path.segments.last().unwrap().ident.to_string(),
+                            _ => String::new(),
+                        },
+                        _ => String::new(),
+                    };
+
+                    if type_name == "DynamicRecipe" {
+                        continue;
+                    }
+
                     let field_name = field.ident.as_ref().unwrap().to_string().to_kebab_case();
                     let field_type = map_type(&field.ty);
                     fields_list.push(Field::new(field_name, field_type));

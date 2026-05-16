@@ -586,42 +586,42 @@ impl GenerationSchedule {
         }
     }
 
-    fn save_all_chunk(&self, save_proto_chunk: bool) {
+    fn save_all_chunk(&mut self, save_proto_chunk: bool) {
         let mut chunks = Vec::with_capacity(self.chunk_map.len());
-        for (pos, holder) in &self.chunk_map {
-            if let Some(chunk) = &holder.chunk {
-                match chunk {
-                    Chunk::Level(sync_chunk) => {
-                        if sync_chunk.is_dirty() {
-                            chunks.push((*pos, Chunk::Level(sync_chunk.clone())));
-                        }
-                    }
-                    Chunk::Proto(proto) => {
-                        if save_proto_chunk {
-                            chunks.push((*pos, Chunk::Proto(proto.clone())));
-                        }
-                    }
+
+        for (pos, holder) in self.chunk_map.iter_mut() {
+            if let Some(chunk) = holder.chunk.take() {
+                let should_save = match &chunk {
+                    Chunk::Level(sync_chunk) => sync_chunk.is_dirty(),
+                    Chunk::Proto(_) => save_proto_chunk,
+                };
+
+                if should_save {
+                    chunks.push((*pos, chunk));
+                } else {
+                    holder.chunk = Some(chunk);
                 }
             }
         }
+
         if chunks.is_empty() {
             return;
         }
+
         info!(
             "Saving {} chunks (collected from {} holders)...",
             chunks.len(),
             self.chunk_map.len()
         );
+
         let mut data = self.io_lock.0.lock().unwrap();
-        for (pos, _chunk) in &chunks {
+        for (pos, _) in &chunks {
             *data.entry(*pos).or_insert(0) += 1;
         }
         drop(data);
+
         if let Err(e) = self.io_write.send(chunks) {
-            error!(
-                "Failed to send chunks to io write thread during unload (may have shut down): {:?}",
-                e
-            );
+            error!("Failed to send chunks to io write thread: {:?}", e);
         }
     }
 

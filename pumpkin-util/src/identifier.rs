@@ -1,5 +1,6 @@
 use std::{borrow::Cow, fmt::Display};
 
+use pumpkin_codecs::{DataResult, FlatTryFrom, comap_flat_map_codec_impl};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -382,9 +383,23 @@ impl<'de> Deserialize<'de> for Identifier {
     }
 }
 
+comap_flat_map_codec_impl!(String => Identifier, Identifier::flat_try_from, ToString::to_string);
+
+impl FlatTryFrom<String> for Identifier {
+    fn flat_try_from(value: String) -> DataResult<Self> {
+        Self::parse(&value).map_or_else(
+            |_| DataResult::new_error(format!("Not a valid resource location: {value}")),
+            DataResult::new_success,
+        )
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::identifier::{Identifier, IdentifierError};
+    use pumpkin_codecs::json_ops::JsonOps;
+    use pumpkin_codecs::{assert_decode, assert_encode_success};
+    use serde_json::json;
 
     #[test]
     fn new() -> Result<(), IdentifierError> {
@@ -415,5 +430,29 @@ mod test {
         assert!(Identifier::parse("1234+567:89").is_err());
 
         Ok(())
+    }
+
+    #[test]
+    fn codec() {
+        assert_encode_success!(
+            Identifier::from_static("abc", "def"),
+            JsonOps,
+            json!("abc:def")
+        );
+        assert_encode_success!(
+            Identifier::from_static("", "no_namespace"),
+            JsonOps,
+            json!(":no_namespace")
+        );
+        assert_encode_success!(
+            Identifier::vanilla_static("example"),
+            JsonOps,
+            json!("minecraft:example")
+        );
+
+        assert_decode!(Identifier, json!("abc:def"), JsonOps, is_success);
+        assert_decode!(Identifier, json!("vanilla"), JsonOps, is_success);
+        assert_decode!(Identifier, json!("2 + 3"), JsonOps, is_error);
+        assert_decode!(Identifier, json!("a._b-c:/4_-/5.9"), JsonOps, is_success);
     }
 }

@@ -4,6 +4,10 @@ use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 
 use crate::plugin::api::gui::PluginScreenHandler;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::forms::Form;
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::{
+    Action, AfterAction, Dialog, DialogBody, DialogInput, LinkLabel, LinkType,
+};
 use crate::{
     entity::{EntityBase, player::TitleMode},
     net::DisconnectReason,
@@ -19,14 +23,445 @@ use crate::{
             pumpkin::{
                 self,
                 plugin::player::{Player, PlayerSkin, SkinParts},
+                plugin::uuid::Uuid,
                 plugin::world::World,
             },
+            uuid::UuidExt,
         },
     },
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_protocol::Property;
+use pumpkin_protocol::bedrock::client::modal_form_request::CModalFormRequest;
+use pumpkin_protocol::java::client::dialog::{
+    ActionButton as ProtocolActionButton, Dialog as ProtocolDialog, DialogAction,
+    DialogBody as ProtocolDialogBody, DialogInput as ProtocolDialogInput, DialogLink, DialogNBT,
+};
 use pumpkin_util::permission::PermissionLvl;
+use pumpkin_util::translation::Locale;
+use std::str::FromStr;
+
+use pumpkin_protocol::bedrock::client::set_actor_data::{
+    CSetActorData, EntityMetadata, MetadataValue, PropertySyncData, entity_data_key,
+};
+use pumpkin_protocol::codec::var_ulong::VarULong;
+use pumpkin_util::version::{BedrockMinecraftVersion, JavaMinecraftVersion};
+
+use pumpkin_protocol::ser::ReadingError;
+use pumpkin_protocol::ser::deserializer::Deserializer;
+use serde::de::SeqAccess;
+
+pub(crate) struct WitSeqAccess<'a> {
+    pub(crate) deserializer: &'a mut Deserializer<&'a [u8]>,
+}
+
+impl<'de> SeqAccess<'de> for WitSeqAccess<'_> {
+    type Error = ReadingError;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
+    where
+        T: serde::de::DeserializeSeed<'de>,
+    {
+        let val = seed.deserialize(&mut *self.deserializer)?;
+        Ok(Some(val))
+    }
+}
+
+const fn to_wasm_java_version(
+    version: JavaMinecraftVersion,
+) -> pumpkin::plugin::player::JavaMinecraftVersion {
+    match version {
+        JavaMinecraftVersion::V_1_7_2 => pumpkin::plugin::player::JavaMinecraftVersion::V172,
+        JavaMinecraftVersion::V_1_7_6 => pumpkin::plugin::player::JavaMinecraftVersion::V176,
+        JavaMinecraftVersion::V_1_8 => pumpkin::plugin::player::JavaMinecraftVersion::V18,
+        JavaMinecraftVersion::V_1_9 => pumpkin::plugin::player::JavaMinecraftVersion::V19,
+        JavaMinecraftVersion::V_1_9_1 => pumpkin::plugin::player::JavaMinecraftVersion::V191,
+        JavaMinecraftVersion::V_1_9_2 => pumpkin::plugin::player::JavaMinecraftVersion::V192,
+        JavaMinecraftVersion::V_1_9_3 => pumpkin::plugin::player::JavaMinecraftVersion::V193,
+        JavaMinecraftVersion::V_1_10 => pumpkin::plugin::player::JavaMinecraftVersion::V110,
+        JavaMinecraftVersion::V_1_11 => pumpkin::plugin::player::JavaMinecraftVersion::V111,
+        JavaMinecraftVersion::V_1_11_1 => pumpkin::plugin::player::JavaMinecraftVersion::V1111,
+        JavaMinecraftVersion::V_1_12 => pumpkin::plugin::player::JavaMinecraftVersion::V112,
+        JavaMinecraftVersion::V_1_12_1 => pumpkin::plugin::player::JavaMinecraftVersion::V1121,
+        JavaMinecraftVersion::V_1_12_2 => pumpkin::plugin::player::JavaMinecraftVersion::V1122,
+        JavaMinecraftVersion::V_1_13 => pumpkin::plugin::player::JavaMinecraftVersion::V113,
+        JavaMinecraftVersion::V_1_13_1 => pumpkin::plugin::player::JavaMinecraftVersion::V1131,
+        JavaMinecraftVersion::V_1_13_2 => pumpkin::plugin::player::JavaMinecraftVersion::V1132,
+        JavaMinecraftVersion::V_1_14 => pumpkin::plugin::player::JavaMinecraftVersion::V114,
+        JavaMinecraftVersion::V_1_14_1 => pumpkin::plugin::player::JavaMinecraftVersion::V1141,
+        JavaMinecraftVersion::V_1_14_2 => pumpkin::plugin::player::JavaMinecraftVersion::V1142,
+        JavaMinecraftVersion::V_1_14_3 => pumpkin::plugin::player::JavaMinecraftVersion::V1143,
+        JavaMinecraftVersion::V_1_14_4 => pumpkin::plugin::player::JavaMinecraftVersion::V1144,
+        JavaMinecraftVersion::V_1_15 => pumpkin::plugin::player::JavaMinecraftVersion::V115,
+        JavaMinecraftVersion::V_1_15_1 => pumpkin::plugin::player::JavaMinecraftVersion::V1151,
+        JavaMinecraftVersion::V_1_15_2 => pumpkin::plugin::player::JavaMinecraftVersion::V1152,
+        JavaMinecraftVersion::V_1_16 => pumpkin::plugin::player::JavaMinecraftVersion::V116,
+        JavaMinecraftVersion::V_1_16_1 => pumpkin::plugin::player::JavaMinecraftVersion::V1161,
+        JavaMinecraftVersion::V_1_16_2 => pumpkin::plugin::player::JavaMinecraftVersion::V1162,
+        JavaMinecraftVersion::V_1_16_3 => pumpkin::plugin::player::JavaMinecraftVersion::V1163,
+        JavaMinecraftVersion::V_1_16_4 => pumpkin::plugin::player::JavaMinecraftVersion::V1164,
+        JavaMinecraftVersion::V_1_17 => pumpkin::plugin::player::JavaMinecraftVersion::V117,
+        JavaMinecraftVersion::V_1_17_1 => pumpkin::plugin::player::JavaMinecraftVersion::V1171,
+        JavaMinecraftVersion::V_1_18 => pumpkin::plugin::player::JavaMinecraftVersion::V118,
+        JavaMinecraftVersion::V_1_18_2 => pumpkin::plugin::player::JavaMinecraftVersion::V1182,
+        JavaMinecraftVersion::V_1_19 => pumpkin::plugin::player::JavaMinecraftVersion::V119,
+        JavaMinecraftVersion::V_1_19_1 => pumpkin::plugin::player::JavaMinecraftVersion::V1191,
+        JavaMinecraftVersion::V_1_19_3 => pumpkin::plugin::player::JavaMinecraftVersion::V1193,
+        JavaMinecraftVersion::V_1_19_4 => pumpkin::plugin::player::JavaMinecraftVersion::V1194,
+        JavaMinecraftVersion::V_1_20 => pumpkin::plugin::player::JavaMinecraftVersion::V120,
+        JavaMinecraftVersion::V_1_20_2 => pumpkin::plugin::player::JavaMinecraftVersion::V1202,
+        JavaMinecraftVersion::V_1_20_3 => pumpkin::plugin::player::JavaMinecraftVersion::V1203,
+        JavaMinecraftVersion::V_1_20_5 => pumpkin::plugin::player::JavaMinecraftVersion::V1205,
+        JavaMinecraftVersion::V_1_21 => pumpkin::plugin::player::JavaMinecraftVersion::V121,
+        JavaMinecraftVersion::V_1_21_2 => pumpkin::plugin::player::JavaMinecraftVersion::V1212,
+        JavaMinecraftVersion::V_1_21_4 => pumpkin::plugin::player::JavaMinecraftVersion::V1214,
+        JavaMinecraftVersion::V_1_21_5 => pumpkin::plugin::player::JavaMinecraftVersion::V1215,
+        JavaMinecraftVersion::V_1_21_6 => pumpkin::plugin::player::JavaMinecraftVersion::V1216,
+        JavaMinecraftVersion::V_1_21_7 => pumpkin::plugin::player::JavaMinecraftVersion::V1217,
+        JavaMinecraftVersion::V_1_21_9 => pumpkin::plugin::player::JavaMinecraftVersion::V1219,
+        JavaMinecraftVersion::V_1_21_11 => pumpkin::plugin::player::JavaMinecraftVersion::V12111,
+        JavaMinecraftVersion::V_26_1 => pumpkin::plugin::player::JavaMinecraftVersion::V261,
+        JavaMinecraftVersion::Unknown => pumpkin::plugin::player::JavaMinecraftVersion::Unknown,
+    }
+}
+
+const fn to_wasm_bedrock_version(
+    version: BedrockMinecraftVersion,
+) -> pumpkin::plugin::player::BedrockMinecraftVersion {
+    match version {
+        BedrockMinecraftVersion::V_1_21 => pumpkin::plugin::player::BedrockMinecraftVersion::V121,
+        BedrockMinecraftVersion::V_1_26_20 => {
+            pumpkin::plugin::player::BedrockMinecraftVersion::V12620
+        }
+        BedrockMinecraftVersion::Unknown => {
+            pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
+        }
+    }
+}
+
+const fn to_wasm_chat_mode(
+    mode: &crate::entity::player::ChatMode,
+) -> pumpkin::plugin::player::ChatMode {
+    match mode {
+        crate::entity::player::ChatMode::Enabled => pumpkin::plugin::player::ChatMode::Enabled,
+        crate::entity::player::ChatMode::CommandsOnly => {
+            pumpkin::plugin::player::ChatMode::CommandsOnly
+        }
+        crate::entity::player::ChatMode::Hidden => pumpkin::plugin::player::ChatMode::Hidden,
+    }
+}
+
+const fn to_wasm_bedrock_device_os(os: i32) -> pumpkin::plugin::player::BedrockDeviceOs {
+    match os {
+        1 => pumpkin::plugin::player::BedrockDeviceOs::Android,
+        2 => pumpkin::plugin::player::BedrockDeviceOs::Ios,
+        3 => pumpkin::plugin::player::BedrockDeviceOs::Osx,
+        4 => pumpkin::plugin::player::BedrockDeviceOs::Amazon,
+        5 => pumpkin::plugin::player::BedrockDeviceOs::GearVr,
+        6 => pumpkin::plugin::player::BedrockDeviceOs::HoloLens,
+        7 => pumpkin::plugin::player::BedrockDeviceOs::Windows10,
+        8 => pumpkin::plugin::player::BedrockDeviceOs::Win32,
+        9 => pumpkin::plugin::player::BedrockDeviceOs::Dedicated,
+        10 => pumpkin::plugin::player::BedrockDeviceOs::TvOs,
+        11 => pumpkin::plugin::player::BedrockDeviceOs::Playstation,
+        12 => pumpkin::plugin::player::BedrockDeviceOs::Nintendo,
+        13 => pumpkin::plugin::player::BedrockDeviceOs::Xbox,
+        14 => pumpkin::plugin::player::BedrockDeviceOs::WindowsPhone,
+        15 => pumpkin::plugin::player::BedrockDeviceOs::Linux,
+        _ => pumpkin::plugin::player::BedrockDeviceOs::Unknown,
+    }
+}
+
+const fn to_wasm_bedrock_input_mode(mode: i32) -> pumpkin::plugin::player::BedrockInputMode {
+    match mode {
+        1 => pumpkin::plugin::player::BedrockInputMode::Mouse,
+        2 => pumpkin::plugin::player::BedrockInputMode::Touch,
+        3 => pumpkin::plugin::player::BedrockInputMode::GamePad,
+        4 => pumpkin::plugin::player::BedrockInputMode::MotionController,
+        _ => pumpkin::plugin::player::BedrockInputMode::Unknown,
+    }
+}
+
+const fn to_wasm_bedrock_ui_profile(profile: i32) -> pumpkin::plugin::player::BedrockUiProfile {
+    match profile {
+        0 => pumpkin::plugin::player::BedrockUiProfile::Classic,
+        1 => pumpkin::plugin::player::BedrockUiProfile::Pocket,
+        _ => pumpkin::plugin::player::BedrockUiProfile::Unknown,
+    }
+}
+
+const fn to_wasm_bedrock_graphics_mode(mode: i32) -> pumpkin::plugin::player::BedrockGraphicsMode {
+    match mode {
+        0 => pumpkin::plugin::player::BedrockGraphicsMode::Simple,
+        1 => pumpkin::plugin::player::BedrockGraphicsMode::Fancy,
+        2 => pumpkin::plugin::player::BedrockGraphicsMode::RayTraced,
+        _ => pumpkin::plugin::player::BedrockGraphicsMode::Unknown,
+    }
+}
+
+const fn from_wasm_bedrock_ability(
+    ability: pumpkin::plugin::player::BedrockAbility,
+) -> pumpkin_protocol::bedrock::client::update_abilities::Ability {
+    match ability {
+        pumpkin::plugin::player::BedrockAbility::Build => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Build
+        }
+        pumpkin::plugin::player::BedrockAbility::Mine => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Mine
+        }
+        pumpkin::plugin::player::BedrockAbility::DoorsAndSwitches => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::DoorsAndSwitches
+        }
+        pumpkin::plugin::player::BedrockAbility::OpenContainers => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::OpenContainers
+        }
+        pumpkin::plugin::player::BedrockAbility::AttackPlayers => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::AttackPlayers
+        }
+        pumpkin::plugin::player::BedrockAbility::AttackMobs => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::AttackMobs
+        }
+        pumpkin::plugin::player::BedrockAbility::OperatorCommands => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::OperatorCommands
+        }
+        pumpkin::plugin::player::BedrockAbility::Teleport => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Teleport
+        }
+        pumpkin::plugin::player::BedrockAbility::Invulnerable => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Invulnerable
+        }
+        pumpkin::plugin::player::BedrockAbility::Flying => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying
+        }
+        pumpkin::plugin::player::BedrockAbility::MayFly => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::MayFly
+        }
+        pumpkin::plugin::player::BedrockAbility::Instabuild => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Instabuild
+        }
+        pumpkin::plugin::player::BedrockAbility::Lightning => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Lightning
+        }
+        pumpkin::plugin::player::BedrockAbility::FlySpeed => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::FlySpeed
+        }
+        pumpkin::plugin::player::BedrockAbility::WalkSpeed => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::WalkSpeed
+        }
+        pumpkin::plugin::player::BedrockAbility::Muted => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Muted
+        }
+        pumpkin::plugin::player::BedrockAbility::WorldBuilder => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::WorldBuilder
+        }
+        pumpkin::plugin::player::BedrockAbility::NoClip => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::NoClip
+        }
+        pumpkin::plugin::player::BedrockAbility::PrivilegedBuilder => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::PrivilegedBuilder
+        }
+        pumpkin::plugin::player::BedrockAbility::VerticalFlySpeed => {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::VerticalFlySpeed
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+const fn from_wasm_bedrock_status_flag(flag: pumpkin::plugin::player::BedrockStatusFlag) -> u32 {
+    use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag;
+    match flag {
+        pumpkin::plugin::player::BedrockStatusFlag::OnFire => entity_data_flag::ON_FIRE,
+        pumpkin::plugin::player::BedrockStatusFlag::Sneaking => entity_data_flag::SNEAKING,
+        pumpkin::plugin::player::BedrockStatusFlag::Riding => entity_data_flag::RIDING,
+        pumpkin::plugin::player::BedrockStatusFlag::Sprinting => entity_data_flag::SPRINTING,
+        pumpkin::plugin::player::BedrockStatusFlag::UsingItem => entity_data_flag::USING_ITEM,
+        pumpkin::plugin::player::BedrockStatusFlag::Invisible => entity_data_flag::INVISIBLE,
+        pumpkin::plugin::player::BedrockStatusFlag::Tempted => entity_data_flag::TEMPTED,
+        pumpkin::plugin::player::BedrockStatusFlag::InLove => entity_data_flag::IN_LOVE,
+        pumpkin::plugin::player::BedrockStatusFlag::Saddled => entity_data_flag::SADDLED,
+        pumpkin::plugin::player::BedrockStatusFlag::Powered => entity_data_flag::POWERED,
+        pumpkin::plugin::player::BedrockStatusFlag::Ignited => entity_data_flag::IGNITED,
+        pumpkin::plugin::player::BedrockStatusFlag::Baby => entity_data_flag::BABY,
+        pumpkin::plugin::player::BedrockStatusFlag::Converting => entity_data_flag::CONVERTING,
+        pumpkin::plugin::player::BedrockStatusFlag::Critical => entity_data_flag::CRITICAL,
+        pumpkin::plugin::player::BedrockStatusFlag::ShowName => entity_data_flag::SHOW_NAME,
+        pumpkin::plugin::player::BedrockStatusFlag::AlwaysShowName => {
+            entity_data_flag::ALWAYS_SHOW_NAME
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::NoAi => entity_data_flag::NO_AI,
+        pumpkin::plugin::player::BedrockStatusFlag::Silent => entity_data_flag::SILENT,
+        pumpkin::plugin::player::BedrockStatusFlag::WallClimbing => entity_data_flag::WALL_CLIMBING,
+        pumpkin::plugin::player::BedrockStatusFlag::Climb => entity_data_flag::CLIMB,
+        pumpkin::plugin::player::BedrockStatusFlag::Swim => entity_data_flag::SWIM,
+        pumpkin::plugin::player::BedrockStatusFlag::Fly => entity_data_flag::FLY,
+        pumpkin::plugin::player::BedrockStatusFlag::Walk => entity_data_flag::WALK,
+        pumpkin::plugin::player::BedrockStatusFlag::Resting => entity_data_flag::RESTING,
+        pumpkin::plugin::player::BedrockStatusFlag::Sitting => entity_data_flag::SITTING,
+        pumpkin::plugin::player::BedrockStatusFlag::Angry => entity_data_flag::ANGRY,
+        pumpkin::plugin::player::BedrockStatusFlag::Interested => entity_data_flag::INTERESTED,
+        pumpkin::plugin::player::BedrockStatusFlag::Charged => entity_data_flag::CHARGED,
+        pumpkin::plugin::player::BedrockStatusFlag::Tamed => entity_data_flag::TAMED,
+        pumpkin::plugin::player::BedrockStatusFlag::Orphaned => entity_data_flag::ORPHANED,
+        pumpkin::plugin::player::BedrockStatusFlag::Leashed => entity_data_flag::LEASHED,
+        pumpkin::plugin::player::BedrockStatusFlag::Sheared => entity_data_flag::SHEARED,
+        pumpkin::plugin::player::BedrockStatusFlag::Gliding => entity_data_flag::GLIDING,
+        pumpkin::plugin::player::BedrockStatusFlag::Elder => entity_data_flag::ELDER,
+        pumpkin::plugin::player::BedrockStatusFlag::Moving => entity_data_flag::MOVING,
+        pumpkin::plugin::player::BedrockStatusFlag::Breathing => entity_data_flag::BREATHING,
+        pumpkin::plugin::player::BedrockStatusFlag::Chested => entity_data_flag::CHESTED,
+        pumpkin::plugin::player::BedrockStatusFlag::Stackable => entity_data_flag::STACKABLE,
+        pumpkin::plugin::player::BedrockStatusFlag::ShowBottom => entity_data_flag::SHOW_BOTTOM,
+        pumpkin::plugin::player::BedrockStatusFlag::Standing => entity_data_flag::STANDING,
+        pumpkin::plugin::player::BedrockStatusFlag::Shaking => entity_data_flag::SHAKING,
+        pumpkin::plugin::player::BedrockStatusFlag::Idling => entity_data_flag::IDLING,
+        pumpkin::plugin::player::BedrockStatusFlag::Casting => entity_data_flag::CASTING,
+        pumpkin::plugin::player::BedrockStatusFlag::Charging => entity_data_flag::CHARGING,
+        pumpkin::plugin::player::BedrockStatusFlag::KeyboardControlled => {
+            entity_data_flag::KEYBOARD_CONTROLLED
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::PowerJump => entity_data_flag::POWER_JUMP,
+        pumpkin::plugin::player::BedrockStatusFlag::Dash => entity_data_flag::DASH,
+        pumpkin::plugin::player::BedrockStatusFlag::Lingering => entity_data_flag::LINGERING,
+        pumpkin::plugin::player::BedrockStatusFlag::HasCollision => entity_data_flag::HAS_COLLISION,
+        pumpkin::plugin::player::BedrockStatusFlag::HasGravity => entity_data_flag::HAS_GRAVITY,
+        pumpkin::plugin::player::BedrockStatusFlag::FireImmune => entity_data_flag::FIRE_IMMUNE,
+        pumpkin::plugin::player::BedrockStatusFlag::Dancing => entity_data_flag::DANCING,
+        pumpkin::plugin::player::BedrockStatusFlag::Enchanted => entity_data_flag::ENCHANTED,
+        pumpkin::plugin::player::BedrockStatusFlag::ReturnTrident => {
+            entity_data_flag::RETURN_TRIDENT
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::ContainerPrivate => {
+            entity_data_flag::CONTAINER_PRIVATE
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::Transforming => entity_data_flag::TRANSFORMING,
+        pumpkin::plugin::player::BedrockStatusFlag::DamageNearbyMobs => {
+            entity_data_flag::DAMAGE_NEARBY_MOBS
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::Swimming => entity_data_flag::SWIMMING,
+        pumpkin::plugin::player::BedrockStatusFlag::Bribed => entity_data_flag::BRIBED,
+        pumpkin::plugin::player::BedrockStatusFlag::Pregnant => entity_data_flag::PREGNANT,
+        pumpkin::plugin::player::BedrockStatusFlag::LayingEgg => entity_data_flag::LAYING_EGG,
+        pumpkin::plugin::player::BedrockStatusFlag::PassengerCanPick => {
+            entity_data_flag::PASSENGER_CAN_PICK
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::TransitionSitting => {
+            entity_data_flag::TRANSITION_SITTING
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::Eating => entity_data_flag::EATING,
+        pumpkin::plugin::player::BedrockStatusFlag::LayingDown => entity_data_flag::LAYING_DOWN,
+        pumpkin::plugin::player::BedrockStatusFlag::Sneezing => entity_data_flag::SNEEZING,
+        pumpkin::plugin::player::BedrockStatusFlag::Trusting => entity_data_flag::TRUSTING,
+        pumpkin::plugin::player::BedrockStatusFlag::Rolling => entity_data_flag::ROLLING,
+        pumpkin::plugin::player::BedrockStatusFlag::Scared => entity_data_flag::SCARED,
+        pumpkin::plugin::player::BedrockStatusFlag::InScaffolding => {
+            entity_data_flag::IN_SCAFFOLDING
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::OverScaffolding => {
+            entity_data_flag::OVER_SCAFFOLDING
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::DescendThroughBlock => {
+            entity_data_flag::DESCEND_THROUGH_BLOCK
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::Blocking => entity_data_flag::BLOCKING,
+        pumpkin::plugin::player::BedrockStatusFlag::TransitionBlocking => {
+            entity_data_flag::TRANSITION_BLOCKING
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::BlockedUsingShield => {
+            entity_data_flag::BLOCKED_USING_SHIELD
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::BlockedUsingDamagedShield => {
+            entity_data_flag::BLOCKED_USING_DAMAGED_SHIELD
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::Sleeping => entity_data_flag::SLEEPING,
+        pumpkin::plugin::player::BedrockStatusFlag::WantsToWake => entity_data_flag::WANTS_TO_WAKE,
+        pumpkin::plugin::player::BedrockStatusFlag::TradeInterest => {
+            entity_data_flag::TRADE_INTEREST
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::DoorBreaker => entity_data_flag::DOOR_BREAKER,
+        pumpkin::plugin::player::BedrockStatusFlag::BreakingObstruction => {
+            entity_data_flag::BREAKING_OBSTRUCTION
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::DoorOpener => entity_data_flag::DOOR_OPENER,
+        pumpkin::plugin::player::BedrockStatusFlag::Captain => entity_data_flag::CAPTAIN,
+        pumpkin::plugin::player::BedrockStatusFlag::Stunned => entity_data_flag::STUNNED,
+        pumpkin::plugin::player::BedrockStatusFlag::Roaring => entity_data_flag::ROARING,
+        pumpkin::plugin::player::BedrockStatusFlag::DelayedAttack => {
+            entity_data_flag::DELAYED_ATTACK
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::AvoidingMobs => entity_data_flag::AVOIDING_MOBS,
+        pumpkin::plugin::player::BedrockStatusFlag::AvoidingBlock => {
+            entity_data_flag::AVOIDING_BLOCK
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::FacingTargetToRangeAttack => {
+            entity_data_flag::FACING_TARGET_TO_RANGE_ATTACK
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::HiddenWhenInvisible => {
+            entity_data_flag::HIDDEN_WHEN_INVISIBLE
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::InUi => entity_data_flag::IN_UI,
+        pumpkin::plugin::player::BedrockStatusFlag::Stalking => entity_data_flag::STALKING,
+        pumpkin::plugin::player::BedrockStatusFlag::Emoting => entity_data_flag::EMOTING,
+        pumpkin::plugin::player::BedrockStatusFlag::Celebrating => entity_data_flag::CELEBRATING,
+        pumpkin::plugin::player::BedrockStatusFlag::Admiring => entity_data_flag::ADMIRING,
+        pumpkin::plugin::player::BedrockStatusFlag::CelebratingSpecial => {
+            entity_data_flag::CELEBRATING_SPECIAL
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::OutOfControl => {
+            entity_data_flag::OUT_OF_CONTROL
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::RamAttack => entity_data_flag::RAM_ATTACK,
+        pumpkin::plugin::player::BedrockStatusFlag::PlayingDead => entity_data_flag::PLAYING_DEAD,
+        pumpkin::plugin::player::BedrockStatusFlag::InAscendingBlock => {
+            entity_data_flag::IN_ASCENDING_BLOCK
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::OverDescendingBlock => {
+            entity_data_flag::OVER_DESCENDING_BLOCK
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::Croaking => entity_data_flag::CROAKING,
+        pumpkin::plugin::player::BedrockStatusFlag::DigestMob => entity_data_flag::DIGEST_MOB,
+        pumpkin::plugin::player::BedrockStatusFlag::JumpGoal => entity_data_flag::JUMP_GOAL,
+        pumpkin::plugin::player::BedrockStatusFlag::Emerging => entity_data_flag::EMERGING,
+        pumpkin::plugin::player::BedrockStatusFlag::Sniffing => entity_data_flag::SNIFFING,
+        pumpkin::plugin::player::BedrockStatusFlag::Digging => entity_data_flag::DIGGING,
+        pumpkin::plugin::player::BedrockStatusFlag::SonicBoom => entity_data_flag::SONIC_BOOM,
+        pumpkin::plugin::player::BedrockStatusFlag::HasDashTimeout => {
+            entity_data_flag::HAS_DASH_TIMEOUT
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::PushTowardsClosestSpace => {
+            entity_data_flag::PUSH_TOWARDS_CLOSEST_SPACE
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::Scenting => entity_data_flag::SCENTING,
+        pumpkin::plugin::player::BedrockStatusFlag::Rising => entity_data_flag::RISING,
+        pumpkin::plugin::player::BedrockStatusFlag::FeelingHappy => entity_data_flag::FEELING_HAPPY,
+        pumpkin::plugin::player::BedrockStatusFlag::Searching => entity_data_flag::SEARCHING,
+        pumpkin::plugin::player::BedrockStatusFlag::Crawling => entity_data_flag::CRAWLING,
+        pumpkin::plugin::player::BedrockStatusFlag::BodyRotationBlocked => {
+            entity_data_flag::BODY_ROTATION_BLOCKED
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::RenderWhenInvisible => {
+            entity_data_flag::RENDER_WHEN_INVISIBLE
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::BodyRotationAxisAligned => {
+            entity_data_flag::BODY_ROTATION_AXIS_ALIGNED
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::Collidable => entity_data_flag::COLLIDABLE,
+        pumpkin::plugin::player::BedrockStatusFlag::WasdAirControlled => {
+            entity_data_flag::WASD_AIR_CONTROLLED
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::DoesServerAuthOnlyDismount => {
+            entity_data_flag::DOES_SERVER_AUTH_ONLY_DISMOUNT
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::BodyRotationAlwaysFollowsHead => {
+            entity_data_flag::BODY_ROTATION_ALWAYS_FOLLOWS_HEAD
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::CanUseVerticalMovementAction => {
+            entity_data_flag::CAN_USE_VERTICAL_MOVEMENT_ACTION
+        }
+        pumpkin::plugin::player::BedrockStatusFlag::RotationLockedToVehicle => {
+            entity_data_flag::ROTATION_LOCKED_TO_VEHICLE
+        }
+    }
+}
 
 pub fn player_from_resource(
     state: &PluginHostState,
@@ -61,19 +496,6 @@ fn world_from_resource(
         .expect("invalid world resource handle")
         .provider
         .clone()
-}
-
-pub(super) fn to_wit_item_stack(
-    stack: &pumpkin_data::item_stack::ItemStack,
-) -> Option<pumpkin::plugin::common::ItemStack> {
-    if stack.item_count == 0 {
-        return None;
-    }
-
-    Some(pumpkin::plugin::common::ItemStack {
-        registry_key: stack.item.registry_key.to_string(),
-        count: stack.item_count,
-    })
 }
 
 const fn to_wit_permission_level(
@@ -134,8 +556,120 @@ impl DowncastResourceExt<PlayerResource> for Resource<Player> {
     }
 }
 
-impl pumpkin::plugin::player::Host for PluginHostState {}
+impl pumpkin::plugin::player::Host for PluginHostState {
+    async fn get_world_players(
+        &mut self,
+        world_ref: Resource<pumpkin::plugin::world::World>,
+    ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
+        let world = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
+                &Resource::new_own(world_ref.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?
+            .provider
+            .clone();
+
+        let mut players = Vec::new();
+        for player in world.players.load().iter() {
+            players.push(self.add_player(player.clone())?);
+        }
+
+        Ok(players)
+    }
+}
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::events::from_wasm_hand;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_protocol::java::client::play::CSetContainerSlot;
+use pumpkin_world::inventory::Inventory;
+
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::ItemStack as WitHostItemStack;
+
 impl pumpkin::plugin::player::HostPlayer for PluginHostState {
+    async fn set_item_in_hand(
+        &mut self,
+        player: Resource<Player>,
+        hand: pumpkin::plugin::common::Hand,
+        stack: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let stack = if let Some(stack_res) = stack {
+            self.get_item_stack(&stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+
+        let hand = from_wasm_hand(hand);
+        let slot = match hand {
+            pumpkin_util::Hand::Right => player.inventory().get_selected_slot() as usize,
+            pumpkin_util::Hand::Left => PlayerInventory::OFF_HAND_SLOT,
+        };
+
+        player.inventory().set_stack(slot, stack.clone()).await;
+
+        // Sync to client
+        let stack_serializer = ItemStackSerializer::from(stack);
+        let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
+        player.client.enqueue_packet(&packet).await;
+
+        Ok(())
+    }
+
+    async fn set_inventory_item(
+        &mut self,
+        player: Resource<Player>,
+        slot: u8,
+        stack: Option<Resource<WitHostItemStack>>,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        let stack = if let Some(stack_res) = stack {
+            self.get_item_stack(&stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+
+        player
+            .inventory()
+            .set_stack(slot as usize, stack.clone())
+            .await;
+
+        // Sync to client
+        let stack_serializer = ItemStackSerializer::from(stack);
+        let packet = CSetContainerSlot::new(0, 0, slot as i16, &stack_serializer);
+        player.client.enqueue_packet(&packet).await;
+
+        Ok(())
+    }
+
+    async fn get_inventory_item(
+        &mut self,
+        player: Resource<Player>,
+        slot: u8,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = player_from_resource(self, &player)?;
+        let stack = player.inventory().get_stack(slot as usize).await;
+        if stack.lock().await.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add_item_stack(stack)?))
+        }
+    }
+
+    async fn get_item_in_hand(
+        &mut self,
+        player: Resource<Player>,
+        hand: pumpkin::plugin::common::Hand,
+    ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
+        let player = player_from_resource(self, &player)?;
+        let hand = from_wasm_hand(hand);
+        let stack = player.inventory().get_stack_in_hand(hand).await;
+        if stack.lock().await.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(self.add_item_stack(stack)?))
+        }
+    }
+
     async fn as_entity(
         &mut self,
         player: Resource<Player>,
@@ -145,9 +679,9 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))
     }
 
-    async fn get_id(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
+    async fn get_id(&mut self, player: Resource<Player>) -> wasmtime::Result<Uuid> {
         let player = player_from_resource(self, &player)?;
-        Ok(player.gameprofile.id.to_string())
+        Ok(Uuid::to_wit(&player.gameprofile.id))
     }
 
     async fn get_name(&mut self, player: Resource<Player>) -> wasmtime::Result<String> {
@@ -542,38 +1076,27 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
+    async fn transfer(
+        &mut self,
+        player: Resource<Player>,
+        host: String,
+        port: u16,
+    ) -> wasmtime::Result<()> {
+        let player = player_from_resource(self, &player)?;
+        if let crate::net::ClientPlatform::Java(client) = &player.client {
+            client
+                .send_packet_now(&pumpkin_protocol::java::client::play::CTransfer::new(
+                    &host,
+                    pumpkin_protocol::codec::var_int::VarInt(i32::from(port)),
+                ))
+                .await;
+        }
+        Ok(())
+    }
+
     async fn get_selected_slot(&mut self, player: Resource<Player>) -> wasmtime::Result<u8> {
         let player = player_from_resource(self, &player)?;
         Ok(player.inventory.get_selected_slot())
-    }
-
-    async fn get_item_in_hand(
-        &mut self,
-        player: Resource<Player>,
-        hand: pumpkin::plugin::common::Hand,
-    ) -> wasmtime::Result<Option<pumpkin::plugin::common::ItemStack>> {
-        let player = player_from_resource(self, &player)?;
-        let inventory = player.inventory();
-        let item_stack = match hand {
-            pumpkin::plugin::common::Hand::Left => inventory.off_hand_item().await,
-            pumpkin::plugin::common::Hand::Right => inventory.held_item(),
-        };
-        let item_stack = item_stack.lock().await.clone();
-        Ok(to_wit_item_stack(&item_stack))
-    }
-
-    async fn get_inventory_item(
-        &mut self,
-        player: Resource<Player>,
-        slot: u8,
-    ) -> wasmtime::Result<Option<pumpkin::plugin::common::ItemStack>> {
-        let player = player_from_resource(self, &player)?;
-        let slot = slot as usize;
-        if slot >= PlayerInventory::MAIN_SIZE {
-            return Ok(None);
-        }
-        let item_stack = player.inventory.main_inventory[slot].lock().await.clone();
-        Ok(to_wit_item_stack(&item_stack))
     }
 
     async fn get_health(&mut self, player: Resource<Player>) -> wasmtime::Result<f32> {
@@ -896,12 +1419,161 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn send_java_packet(
+    async fn as_java(
         &mut self,
         player: Resource<Player>,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::player::JavaPlayer>>> {
+        let player = player_from_resource(self, &player)?;
+        if let crate::net::ClientPlatform::Java(_) = player.client {
+            Ok(Some(self.add_java_player(player)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn as_bedrock(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::player::BedrockPlayer>>> {
+        let player = player_from_resource(self, &player)?;
+        if let crate::net::ClientPlatform::Bedrock(_) = player.client {
+            Ok(Some(self.add_bedrock_player(player)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
+        let _ = self
+            .resource_table
+            .delete::<PlayerResource>(Resource::new_own(rep.rep()));
+        Ok(())
+    }
+}
+
+impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
+    async fn get_version(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<pumpkin::plugin::player::JavaMinecraftVersion> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        Ok(to_wasm_java_version(player.client.java().version.load()))
+    }
+
+    async fn get_brand(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<String> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        Ok(player
+            .client
+            .java()
+            .brand
+            .lock()
+            .await
+            .clone()
+            .unwrap_or_default())
+    }
+
+    async fn get_server_address(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<String> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        Ok(player.client.java().server_address.lock().await.clone())
+    }
+
+    async fn get_settings(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<pumpkin::plugin::player::JavaPlayerSettings> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        let config = player.config.load();
+        let mask = config.skin_parts;
+        let mut parts = SkinParts::empty();
+        if mask & 0x01 != 0 {
+            parts |= SkinParts::CAPE;
+        }
+        if mask & 0x02 != 0 {
+            parts |= SkinParts::JACKET;
+        }
+        if mask & 0x04 != 0 {
+            parts |= SkinParts::LEFT_SLEEVE;
+        }
+        if mask & 0x08 != 0 {
+            parts |= SkinParts::RIGHT_SLEEVE;
+        }
+        if mask & 0x10 != 0 {
+            parts |= SkinParts::LEFT_PANTS_LEG;
+        }
+        if mask & 0x20 != 0 {
+            parts |= SkinParts::RIGHT_PANTS_LEG;
+        }
+        if mask & 0x40 != 0 {
+            parts |= SkinParts::HAT;
+        }
+
+        Ok(pumpkin::plugin::player::JavaPlayerSettings {
+            locale: config.locale.clone(),
+            view_distance: config.view_distance.get(),
+            chat_mode: to_wasm_chat_mode(&config.chat_mode),
+            chat_colors: config.chat_colors,
+            skin_parts: parts,
+            main_hand: match config.main_hand {
+                pumpkin_util::Hand::Left => pumpkin::plugin::common::Hand::Left,
+                pumpkin_util::Hand::Right => pumpkin::plugin::common::Hand::Right,
+            },
+            text_filtering: config.text_filtering,
+            server_listing: config.server_listing,
+        })
+    }
+
+    async fn send_packet(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
         packet: pumpkin::plugin::java_packets::ClientboundPacket,
     ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
         if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_java_packet(
             &packet, player.client.java().version.load(),
         ) {
@@ -910,27 +1582,21 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn send_bedrock_packet(
-        &mut self,
-        player: Resource<Player>,
-        packet: pumpkin::plugin::bedrock_packets::ClientboundPacket,
-    ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
-        if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_bedrock_packet(
-            &packet,
-        ) {
-            player.client.send_packet_now_data(bytes).await;
-        }
-        Ok(())
-    }
-
     async fn send_custom_payload(
         &mut self,
-        player: Resource<Player>,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
         channel: String,
         data: Vec<u8>,
     ) -> wasmtime::Result<()> {
-        let player = player_from_resource(self, &player)?;
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
         if let crate::net::ClientPlatform::Java(_) = player.client {
             player
                 .client
@@ -942,10 +1608,562 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(())
     }
 
-    async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
+    #[allow(clippy::too_many_lines)]
+    async fn show_dialog(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+        dialog: Dialog,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        let title = text_component_from_resource(self, &dialog.title);
+
+        let body: Vec<_> = dialog
+            .body
+            .iter()
+            .map(|b| match b {
+                DialogBody::PlainMessage(c) => ProtocolDialogBody::PlainMessage {
+                    contents: text_component_from_resource(self, c),
+                },
+                DialogBody::Item(_i) => {
+                    // TODO: Map ItemStack correctly
+                    ProtocolDialogBody::Item { item: 0 }
+                }
+            })
+            .collect();
+
+        let inputs: Vec<_> = dialog
+            .inputs
+            .iter()
+            .map(|i| match i {
+                DialogInput::Bool(b) => ProtocolDialogInput::Boolean {
+                    label: text_component_from_resource(self, &b.label),
+                    default_value: b.default_value,
+                },
+                DialogInput::Text(t) => ProtocolDialogInput::Text {
+                    label: text_component_from_resource(self, &t.label),
+                    placeholder: text_component_from_resource(self, &t.placeholder),
+                    default_value: t.default_value.clone(),
+                },
+                DialogInput::NumberRange(n) => ProtocolDialogInput::NumberRange {
+                    label: text_component_from_resource(self, &n.label),
+                    min: n.min_value,
+                    max: n.max_value,
+                    initial: n.initial_value,
+                    step: n.step,
+                    label_format: n.label_format.clone(),
+                },
+                DialogInput::SingleOption(s) => ProtocolDialogInput::SingleOption {
+                    label: text_component_from_resource(self, &s.label),
+                    options: s
+                        .options
+                        .iter()
+                        .map(|o| text_component_from_resource(self, o))
+                        .collect(),
+                    initial_index: s.initial_index,
+                },
+            })
+            .collect();
+
+        let buttons: Vec<_> = dialog
+            .buttons
+            .iter()
+            .map(|b| ProtocolActionButton {
+                text: text_component_from_resource(self, &b.text),
+                tooltip: b
+                    .tooltip
+                    .as_ref()
+                    .map(|t| text_component_from_resource(self, t)),
+                width: b.width,
+                action: match &b.action {
+                    Action::OpenUrl(u) => DialogAction::OpenUrl { url: u.clone() },
+                    Action::CustomClick(c) => DialogAction::Custom {
+                        id: c.id.clone(),
+                        payload: c.payload.clone(),
+                    },
+                },
+            })
+            .collect();
+
+        let links: Vec<_> = dialog
+            .links
+            .iter()
+            .map(|l| {
+                let label = match &l.label {
+                    LinkLabel::BuiltIn(t) => {
+                        let link_type = match t {
+                            LinkType::BugReport => pumpkin_protocol::LinkType::BugReport,
+                            LinkType::CommunityGuidelines => {
+                                pumpkin_protocol::LinkType::CommunityGuidelines
+                            }
+                            LinkType::Support => pumpkin_protocol::LinkType::Support,
+                            LinkType::Status => pumpkin_protocol::LinkType::Status,
+                            LinkType::Feedback => pumpkin_protocol::LinkType::Feedback,
+                            LinkType::Community => pumpkin_protocol::LinkType::Community,
+                            LinkType::Website => pumpkin_protocol::LinkType::Website,
+                            LinkType::Forums => pumpkin_protocol::LinkType::Forums,
+                            LinkType::News => pumpkin_protocol::LinkType::News,
+                            LinkType::Announcements => pumpkin_protocol::LinkType::Announcements,
+                        };
+                        pumpkin_protocol::Label::BuiltIn(link_type)
+                    }
+                    LinkLabel::Custom(c) => pumpkin_protocol::Label::TextComponent(Box::new(
+                        text_component_from_resource(self, c),
+                    )),
+                };
+                DialogLink {
+                    label,
+                    url: l.url.clone(),
+                }
+            })
+            .collect();
+
+        let protocol_dialog = ProtocolDialog {
+            r#type: match dialog.type_ {
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::Notice => "minecraft:notice".to_string(),
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::Confirmation => "minecraft:confirmation".to_string(),
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::MultiAction => "minecraft:multi_action".to_string(),
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::DialogList => "minecraft:dialog_list".to_string(),
+                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_dialogs::DialogType::ServerLinks => "minecraft:server_links".to_string(),
+            },
+            title,
+            body,
+            inputs,
+            buttons,
+            links,
+            exit_action: None, // TODO
+            after_action: dialog.after_action.map(|a| match a {
+                AfterAction::Peek => "peek".to_string(),
+                AfterAction::Pop => "pop".to_string(),
+            }),
+            can_close_with_escape: dialog.can_close_with_escape,
+            external_title: dialog.external_title.as_ref().map(|t| text_component_from_resource(self, t)),
+        };
+
+        if let crate::net::ClientPlatform::Java(client) = &player.client {
+            match client.connection_state.load() {
+                pumpkin_protocol::ConnectionState::Config => {
+                    client
+                        .send_packet_now(
+                            &pumpkin_protocol::java::client::config::CConfigShowDialog::new(
+                                pumpkin_protocol::IdOr::Value(DialogNBT(&protocol_dialog)),
+                            ),
+                        )
+                        .await;
+                }
+                pumpkin_protocol::ConnectionState::Play => {
+                    client
+                        .send_packet_now(
+                            &pumpkin_protocol::java::client::play::CPlayShowDialog::new(
+                                pumpkin_protocol::IdOr::Value(DialogNBT(&protocol_dialog)),
+                            ),
+                        )
+                        .await;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn clear_dialog(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
+            .provider
+            .clone();
+
+        if let crate::net::ClientPlatform::Java(client) = &player.client {
+            match client.connection_state.load() {
+                pumpkin_protocol::ConnectionState::Config => {
+                    client
+                        .send_packet_now(
+                            &pumpkin_protocol::java::client::config::CConfigClearDialog::new(),
+                        )
+                        .await;
+                }
+                pumpkin_protocol::ConnectionState::Play => {
+                    client
+                        .send_packet_now(
+                            &pumpkin_protocol::java::client::play::CPlayClearDialog::new(),
+                        )
+                        .await;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn drop(
+        &mut self,
+        rep: Resource<pumpkin::plugin::player::JavaPlayer>,
+    ) -> wasmtime::Result<()> {
         let _ = self
             .resource_table
-            .delete::<PlayerResource>(Resource::new_own(rep.rep()));
+            .delete::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
+            Resource::new_own(rep.rep()),
+        );
+        Ok(())
+    }
+}
+
+impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
+    async fn get_version(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<pumpkin::plugin::player::BedrockMinecraftVersion> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        if let crate::net::ClientPlatform::Bedrock(client) = &player.client {
+            Ok(to_wasm_bedrock_version(client.version.load()))
+        } else {
+            Ok(pumpkin::plugin::player::BedrockMinecraftVersion::Unknown)
+        }
+    }
+
+    async fn get_ability(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        ability: pumpkin::plugin::player::BedrockAbility,
+    ) -> wasmtime::Result<bool> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        let ability = from_wasm_bedrock_ability(ability);
+        let abilities = player.abilities.lock().await;
+
+        match ability {
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Build
+            | pumpkin_protocol::bedrock::client::update_abilities::Ability::Mine => {
+                Ok(abilities.allow_modify_world)
+            }
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Invulnerable => {
+                Ok(abilities.invulnerable)
+            }
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying => {
+                Ok(abilities.flying)
+            }
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::MayFly => {
+                Ok(abilities.allow_flying)
+            }
+            pumpkin_protocol::bedrock::client::update_abilities::Ability::Instabuild => {
+                Ok(abilities.creative)
+            }
+            _ => Ok(false), // Most Bedrock-specific abilities aren't tracked in generic Abilities struct yet
+        }
+    }
+
+    async fn set_ability(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        ability: pumpkin::plugin::player::BedrockAbility,
+        value: bool,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        let ability = from_wasm_bedrock_ability(ability);
+        {
+            let mut abilities = player.abilities.lock().await;
+            match ability {
+                pumpkin_protocol::bedrock::client::update_abilities::Ability::Build
+                | pumpkin_protocol::bedrock::client::update_abilities::Ability::Mine => {
+                    abilities.allow_modify_world = value;
+                }
+                pumpkin_protocol::bedrock::client::update_abilities::Ability::Invulnerable => {
+                    abilities.invulnerable = value;
+                }
+                pumpkin_protocol::bedrock::client::update_abilities::Ability::Flying => {
+                    abilities.flying = value;
+                }
+                pumpkin_protocol::bedrock::client::update_abilities::Ability::MayFly => {
+                    abilities.allow_flying = value;
+                }
+                pumpkin_protocol::bedrock::client::update_abilities::Ability::Instabuild => {
+                    abilities.creative = value;
+                }
+                _ => {} // Not supported yet
+            }
+        };
+        player.send_abilities_update().await;
+        Ok(())
+    }
+
+    async fn get_status_flag(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        flag: pumpkin::plugin::player::BedrockStatusFlag,
+    ) -> wasmtime::Result<bool> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        let flag_index = from_wasm_bedrock_status_flag(flag);
+        if flag_index < 64 {
+            let flags = player
+                .living_entity
+                .entity
+                .bedrock_flags
+                .load(Ordering::Relaxed);
+            Ok((flags & (1 << flag_index)) != 0)
+        } else {
+            let flags = player
+                .living_entity
+                .entity
+                .bedrock_flags_two
+                .load(Ordering::Relaxed);
+            Ok((flags & (1 << (flag_index - 64))) != 0)
+        }
+    }
+
+    async fn set_status_flag(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        flag: pumpkin::plugin::player::BedrockStatusFlag,
+        value: bool,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        let flag_index = from_wasm_bedrock_status_flag(flag);
+        if flag_index < 64 {
+            let mut flags = player
+                .living_entity
+                .entity
+                .bedrock_flags
+                .load(Ordering::Relaxed);
+            if value {
+                flags |= 1 << flag_index;
+            } else {
+                flags &= !(1 << flag_index);
+            }
+            player
+                .living_entity
+                .entity
+                .bedrock_flags
+                .store(flags, Ordering::Relaxed);
+        } else {
+            let mut flags = player
+                .living_entity
+                .entity
+                .bedrock_flags_two
+                .load(Ordering::Relaxed);
+            if value {
+                flags |= 1 << (flag_index - 64);
+            } else {
+                flags &= !(1 << (flag_index - 64));
+            }
+            player
+                .living_entity
+                .entity
+                .bedrock_flags_two
+                .store(flags, Ordering::Relaxed);
+        }
+
+        let mut metadata = EntityMetadata(std::collections::HashMap::new());
+        metadata.set(
+            entity_data_key::FLAGS,
+            MetadataValue::Long(
+                player
+                    .living_entity
+                    .entity
+                    .bedrock_flags
+                    .load(Ordering::Relaxed),
+            ),
+        );
+        metadata.set(
+            entity_data_key::FLAGS_TWO,
+            MetadataValue::Long(
+                player
+                    .living_entity
+                    .entity
+                    .bedrock_flags_two
+                    .load(Ordering::Relaxed),
+            ),
+        );
+
+        let packet = CSetActorData {
+            actor_runtime_id: VarULong(player.living_entity.entity.entity_id as u64),
+            metadata,
+            synced_properties: PropertySyncData {
+                int_properties: std::collections::HashMap::new(),
+                float_properties: std::collections::HashMap::new(),
+            },
+            tick: VarULong(0),
+        };
+
+        if let crate::net::ClientPlatform::Bedrock(client) = &player.client {
+            client.send_game_packet(&packet).await;
+        }
+
+        Ok(())
+    }
+
+    async fn get_settings(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<pumpkin::plugin::player::BedrockPlayerSettings> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        if let crate::net::ClientPlatform::Bedrock(client) = &player.client {
+            let data = client.client_data.load();
+            (**data).as_ref().map_or_else(
+                || Err(wasmtime::Error::msg("client data not available")),
+                |data| {
+                    Ok(pumpkin::plugin::player::BedrockPlayerSettings {
+                        game_version: data.game_version.clone(),
+                        device_os: to_wasm_bedrock_device_os(data.device_os),
+                        device_id: data.device_id.clone(),
+                        device_model: data.device_model.clone(),
+                        language_code: data.language_code.clone(),
+                        current_input_mode: to_wasm_bedrock_input_mode(data.current_input_mode),
+                        default_input_mode: to_wasm_bedrock_input_mode(data.default_input_mode),
+                        ui_profile: to_wasm_bedrock_ui_profile(data.ui_profile),
+                        gui_scale: data.gui_scale,
+                        is_editor_mode: data.is_editor_mode,
+                        max_view_distance: data.max_view_distance,
+                        memory_tier: data.memory_tier,
+                        graphics_mode: to_wasm_bedrock_graphics_mode(data.graphics_mode),
+                        playfab_id: data.play_fab_id.clone(),
+                        client_random_id: data.client_random_id,
+                        platform_offline_id: data.platform_offline_id.clone(),
+                        platform_online_id: data.platform_online_id.clone(),
+                        skin_id: data.skin_id.clone(),
+                        arm_size: data.arm_size.clone(),
+                        is_persona_skin: data.persona_skin,
+                        is_premium_skin: data.premium_skin,
+                        is_trusted_skin: data.trusted_skin,
+                    })
+                },
+            )
+        } else {
+            Err(wasmtime::Error::msg("not a bedrock player"))
+        }
+    }
+
+    async fn send_packet(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        packet: pumpkin::plugin::bedrock_packets::ClientboundPacket,
+    ) -> wasmtime::Result<()> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_bedrock_packet(
+            &packet,
+        ) {
+            player.client.send_packet_now_data(bytes).await;
+        }
+        Ok(())
+    }
+
+    async fn open_form(
+        &mut self,
+        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        form: Form,
+    ) -> wasmtime::Result<u32> {
+        let player = self
+            .resource_table
+            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+                &Resource::new_own(player_res.rep()),
+            )
+            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
+            .provider
+            .clone();
+
+        if let crate::net::ClientPlatform::Bedrock(client) = &player.client {
+            let form_id = client.next_form_id.fetch_add(1, Ordering::Relaxed);
+
+            let locale_str = player.config.load().locale.clone();
+            let locale = Locale::from_str(&locale_str).unwrap_or(Locale::EnUs);
+
+            let form_json = match form {
+                Form::Simple(simple) => self.serialize_simple_form(simple, locale),
+                Form::Modal(modal) => self.serialize_modal_form(&modal, locale),
+                Form::Custom(custom) => self.serialize_custom_form(custom, locale),
+            };
+
+            client
+                .send_game_packet(&CModalFormRequest {
+                    form_id: pumpkin_protocol::codec::var_int::VarInt(form_id as i32),
+                    form_data: form_json.to_string(),
+                })
+                .await;
+
+            Ok(form_id)
+        } else {
+            Ok(0)
+        }
+    }
+
+    async fn drop(
+        &mut self,
+        rep: Resource<pumpkin::plugin::player::BedrockPlayer>,
+    ) -> wasmtime::Result<()> {
+        let _ = self
+            .resource_table
+            .delete::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
+            Resource::new_own(rep.rep()),
+        );
         Ok(())
     }
 }

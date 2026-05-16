@@ -2165,7 +2165,7 @@ impl Entity {
     }
 
     pub async fn set_fall_flying(&self, fall_flying: bool) {
-        assert!(self.fall_flying.load(Relaxed) != fall_flying);
+        assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
         self.fall_flying.store(fall_flying, Relaxed);
         self.set_flag(Flag::FallFlying, fall_flying).await;
     }

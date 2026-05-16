@@ -1,6 +1,7 @@
 package pumpkin:plugin@0.1.0;
 
 interface bedrock-packets {
+  use uuid.{ uuid };
   record s-animate {
     action: string,
     runtime-entity-id: string,
@@ -12,7 +13,7 @@ interface bedrock-packets {
   record s-command-request {
     command: string,
     command-type: string,
-    command-uuid: string,
+    command-uuid: uuid,
     request-id: string,
     player-actor-unique-id: s64,
     is-internal-source: bool,
@@ -36,6 +37,10 @@ interface bedrock-packets {
     protocol-version: s32,
     jwt: list<u8>,
     raw-token: list<u8>,
+  }
+  record s-modal-form-response {
+    form-id: s32,
+    form-data: option<string>,
   }
   record s-player-action {
     runtime-id: s32,
@@ -146,8 +151,8 @@ interface bedrock-packets {
     tick: string,
   }
   record creative-content {
-    groups: string,
-    entries: string,
+    groups: list<string>,
+    entries: list<string>,
   }
   record c-disconnect-player {
     reason: s32,
@@ -177,6 +182,10 @@ interface bedrock-packets {
     event-id: s32,
     position: tuple<f64, f64, f64>,
     data: s32,
+  }
+  record c-modal-form-request {
+    form-id: s32,
+    form-data: string,
   }
   record c-move-player {
     player-runtime-id: string,
@@ -253,7 +262,7 @@ interface bedrock-packets {
     has-addon-packs: bool,
     has-scripts: bool,
     is-vibrant-visuals-force-disabled: bool,
-    world-template-id: string,
+    world-template-id: uuid,
     world-template-version: string,
     resource-packs: list<string>,
   }
@@ -311,7 +320,7 @@ interface bedrock-packets {
     compound-len: s32,
     compound-end: u8,
     block-registry-checksum: s64,
-    world-template-id: string,
+    world-template-id: uuid,
     enable-clientside-generation: bool,
     blocknetwork-ids-are-hashed: bool,
     server-auth-sounds: bool,
@@ -337,6 +346,7 @@ interface bedrock-packets {
     s-interaction(s-interaction),
     s-loading-screen(s-loading-screen),
     s-login(s-login),
+    s-modal-form-response(s-modal-form-response),
     s-player-action(s-player-action),
     s-player-auth-input(s-player-auth-input),
     s-connected-ping(s-connected-ping),
@@ -364,6 +374,7 @@ interface bedrock-packets {
     c-inventory-content(c-inventory-content),
     c-level-chunk(c-level-chunk),
     c-level-event(c-level-event),
+    c-modal-form-request(c-modal-form-request),
     c-move-player(c-move-player),
     c-network-chunk-publisher-update(c-network-chunk-publisher-update),
     c-network-settings(c-network-settings),

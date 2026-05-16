@@ -35,6 +35,7 @@ use crate::{
 
 pub mod commands;
 pub mod events;
+pub mod forms;
 /// Constants for plugin permissions.
 ///
 /// Use these in your `PluginMetadata` to request access to specific host features.

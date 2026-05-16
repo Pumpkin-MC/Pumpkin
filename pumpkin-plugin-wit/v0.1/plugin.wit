@@ -35,6 +35,10 @@ world plugin {
     import entity;
     /// Provides boss bar creation and management.
     import boss-bar;
+    /// Provides Bedrock custom forms.
+    import forms;
+    /// Provides Java Edition dialogs.
+    import java-dialogs;
 
     // --- Plugin-provided exports ---
 

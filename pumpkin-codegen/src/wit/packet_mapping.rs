@@ -11,10 +11,10 @@ pub fn build_java_mapping() -> String {
     output.push_str("#![allow(unused_variables)]\n");
     output.push_str("use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::java_packets::ClientboundPacket;\n");
     output.push_str("use pumpkin_protocol::codec::var_int::VarInt;\n");
-    output.push_str("use pumpkin_util::version::MinecraftVersion;\n");
+    output.push_str("use pumpkin_util::version::JavaMinecraftVersion;\n");
     output.push_str("use bytes::Bytes;\n\n");
     output.push_str("#[must_use]\n");
-    output.push_str("pub fn serialize_java_packet(packet: &ClientboundPacket, version: MinecraftVersion) -> Option<Bytes> {\n");
+    output.push_str("pub fn serialize_java_packet(packet: &ClientboundPacket, version: JavaMinecraftVersion) -> Option<Bytes> {\n");
     output.push_str("    match packet {\n");
 
     process_packets(
@@ -123,7 +123,12 @@ fn parse_packet_file(
                 for field in fields.named {
                     let mut field_name = field.ident.as_ref().unwrap().to_string();
                     let wit_field = field_name.to_snake_case();
-                    let (type_ident, is_ref) = get_type_info(&field.ty);
+                    let (type_ident, is_ref, is_slice) = get_type_info(&field.ty);
+
+                    if type_ident == "DynamicRecipe" {
+                        field_inits.push_str(&format!("                {}: &[],\n", field_name));
+                        continue;
+                    }
 
                     if field_name == "type" {
                         field_name = "r#type".to_string();
@@ -136,11 +141,6 @@ fn parse_packet_file(
                             } else {
                                 field_inits.push_str(&format!("                {}: data.{}.clone(),\n", field_name, wit_field));
                             }
-                        },
-                        "VarInt" => {
-                             // WIT maps s32 to i32, so try_into is needed if WIT field is i32 and VarInt(i32)
-                             // Actually data.wit_field is i32.
-                             field_inits.push_str(&format!("                {}: VarInt(data.{}),\n", field_name, wit_field));
                         },
                         "VarUInt" => {
                              field_inits.push_str(&format!("                {}: pumpkin_protocol::codec::var_uint::VarUInt(data.{}.try_into().unwrap()),\n", field_name, wit_field));
@@ -158,15 +158,45 @@ fn parse_packet_file(
                             field_inits.push_str(&format!("                {}: pumpkin_util::math::vector3::Vector3::new(data.{}.0 as _, data.{}.1 as _, data.{}.2 as _),\n", field_name, wit_field, wit_field, wit_field));
                         },
                         "Uuid" => {
-                            prep_code.push_str(&format!("            let uuid_{} = uuid::Uuid::parse_str(&data.{}).unwrap();\n", wit_field, wit_field));
-                            if is_ref {
-                                field_inits.push_str(&format!("                {}: &uuid_{},\n", field_name, wit_field));
+                            if is_slice {
+                                prep_code.push_str(&format!("            let vec_{} = data.{}.iter().map(|u| uuid::Uuid::from_u64_pair(u.high, u.low)).collect::<Vec<_>>();\n", wit_field, wit_field));
+                                if is_ref {
+                                    field_inits.push_str(&format!("                {}: &vec_{},\n", field_name, wit_field));
+                                } else {
+                                    field_inits.push_str(&format!("                {}: vec_{},\n", field_name, wit_field));
+                                }
                             } else {
-                                field_inits.push_str(&format!("                {}: uuid_{},\n", field_name, wit_field));
+                                prep_code.push_str(&format!("            let uuid_{} = uuid::Uuid::from_u64_pair(data.{}.high, data.{}.low);\n", wit_field, wit_field, wit_field));
+                                if is_ref {
+                                    field_inits.push_str(&format!("                {}: &uuid_{},\n", field_name, wit_field));
+                                } else {
+                                    field_inits.push_str(&format!("                {}: uuid_{},\n", field_name, wit_field));
+                                }
                             }
                         },
-                        "i32" | "u32" | "i64" | "u64" | "bool" | "f32" | "f64" | "u8" | "i8" | "u16" | "i16" => {
-                            field_inits.push_str(&format!("                {}: data.{}.try_into().unwrap(),\n", field_name, wit_field));
+                        "i32" | "u32" | "i64" | "u64" | "bool" | "f32" | "f64" | "u8" | "i8" | "u16" | "i16" | "VarInt" => {
+                            if is_slice {
+                                if type_ident == "u8" {
+                                     if is_ref {
+                                         field_inits.push_str(&format!("                {}: &data.{},\n", field_name, wit_field));
+                                     } else {
+                                         field_inits.push_str(&format!("                {}: data.{}.clone(),\n", field_name, wit_field));
+                                     }
+                                } else if type_ident == "VarInt" {
+                                    prep_code.push_str(&format!("            let vec_{}: Vec<VarInt> = data.{}.iter().map(|v| VarInt(*v)).collect();\n", wit_field, wit_field));
+                                    if is_ref {
+                                        field_inits.push_str(&format!("                {}: &vec_{},\n", field_name, wit_field));
+                                    } else {
+                                        field_inits.push_str(&format!("                {}: vec_{},\n", field_name, wit_field));
+                                    }
+                                } else {
+                                    field_inits.push_str(&format!("                {}: data.{}.iter().map(|v| *v as _).collect(),\n", field_name, wit_field));
+                                }
+                            } else if type_ident == "VarInt" {
+                                field_inits.push_str(&format!("                {}: VarInt(data.{}),\n", field_name, wit_field));
+                            } else {
+                                field_inits.push_str(&format!("                {}: data.{}.try_into().unwrap(),\n", field_name, wit_field));
+                            }
                         },
                         _ => {
                             possible = false;
@@ -203,10 +233,17 @@ fn parse_packet_file(
     }
 }
 
-fn get_type_info(ty: &syn::Type) -> (String, bool) {
+fn get_type_info(ty: &syn::Type) -> (String, bool, bool) {
     match ty {
-        syn::Type::Path(tp) => (tp.path.segments.last().unwrap().ident.to_string(), false),
-        syn::Type::Reference(tr) => (get_type_info(&tr.elem).0, true),
-        _ => (String::new(), false),
+        syn::Type::Path(tp) => (tp.path.segments.last().unwrap().ident.to_string(), false, false),
+        syn::Type::Reference(tr) => {
+            let (name, _, is_slice) = get_type_info(&tr.elem);
+            (name, true, is_slice)
+        }
+        syn::Type::Slice(ts) => {
+            let (name, _, _) = get_type_info(&ts.elem);
+            (name, false, true)
+        }
+        _ => (String::new(), false, false),
     }
 }

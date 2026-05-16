@@ -1,6 +1,6 @@
 use pumpkin_data::{dimension::Dimension, packet::clientbound::PLAY_LOGIN};
 use pumpkin_util::{
-    math::position::BlockPos, resource_location::ResourceLocation, version::MinecraftVersion,
+    math::position::BlockPos, resource_location::ResourceLocation, version::JavaMinecraftVersion,
 };
 
 use pumpkin_macros::java_packet;
@@ -106,7 +106,7 @@ impl ClientPacket for CLogin {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_i32_be(self.entity_id)?;
         write.write_bool(self.is_hardcore)?;
@@ -117,7 +117,7 @@ impl ClientPacket for CLogin {
         write.write_bool(self.reduced_debug_info)?;
         write.write_bool(self.enabled_respawn_screen)?;
         write.write_bool(self.limited_crafting)?;
-        if version >= &MinecraftVersion::V_1_21_2 {
+        if version >= &JavaMinecraftVersion::V_1_21_2 {
             write.write_var_int(&VarInt(self.dimension.id as i32))?;
         } else {
             write.write_string("")?;
@@ -134,7 +134,7 @@ impl ClientPacket for CLogin {
             Ok(())
         })?;
         write.write_var_int(&self.portal_cooldown)?;
-        if version >= &MinecraftVersion::V_1_21_2 {
+        if version >= &JavaMinecraftVersion::V_1_21_2 {
             write.write_var_int(&self.sealevel)?;
         }
         write.write_bool(self.enforce_secure_chat)?;

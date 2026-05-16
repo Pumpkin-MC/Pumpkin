@@ -1,6 +1,7 @@
 package pumpkin:plugin@0.1.0;
 
 interface java-packets {
+  use uuid.{ uuid };
   record s-attack {
     entity-id: s32,
   }
@@ -14,9 +15,9 @@ interface java-packets {
     message: string,
     timestamp: s64,
     salt: s64,
-    signature: option<list<string>>,
+    signature: option<list<list<u8>>>,
     message-count: s32,
-    acknowledged: list<string>,
+    acknowledged: list<list<u8>>,
     checksum: u8,
   }
   record s-chunk-batch {
@@ -61,11 +62,15 @@ interface java-packets {
   }
   record s-cookie-response {
     key: string,
-    payload: option<list<string>>,
+    payload: option<list<list<u8>>>,
+  }
+  record s-custom-click-action {
+    action-id: string,
+    payload: option<list<list<u8>>>,
   }
   record s-custom-payload {
     channel: string,
-    data: list<string>,
+    data: list<list<u8>>,
   }
   record s-interact {
     entity-id: s32,
@@ -140,10 +145,10 @@ interface java-packets {
     ground: bool,
   }
   record s-player-session {
-    session-id: string,
+    session-id: uuid,
     expires-at: s64,
-    public-key: list<string>,
-    key-signature: list<string>,
+    public-key: list<list<u8>>,
+    key-signature: list<list<u8>>,
   }
   record s-recipe-book-change-settings {
     book-type: s32,
@@ -216,7 +221,7 @@ interface java-packets {
   record c-block-entity-data {
     location: tuple<s32, s32, s32>,
     r-type: s32,
-    nbt-data: list<string>,
+    nbt-data: list<list<u8>>,
   }
   record c-block-event {
     location: tuple<s32, s32, s32>,
@@ -229,7 +234,7 @@ interface java-packets {
     state-id: s32,
   }
   record c-boss-event {
-    uuid: string,
+    uuid: uuid,
     action: string,
   }
   record c-center-chunk {
@@ -257,10 +262,10 @@ interface java-packets {
     id: s32,
     start: s32,
     length: s32,
-    matches: list<string>,
+    matches: list<list<string>>,
   }
   record c-commands {
-    nodes: list<string>,
+    nodes: list<list<string>>,
     root-node-index: s32,
   }
   record c-play-cookie-request {
@@ -268,7 +273,7 @@ interface java-packets {
   }
   record c-custom-payload {
     channel: string,
-    data: string,
+    data: list<u8>,
   }
   record c-damage-event {
     entity-id: s32,
@@ -296,7 +301,7 @@ interface java-packets {
   }
   record c-set-entity-metadata {
     entity-id: s32,
-    metadata: list<string>,
+    metadata: list<list<u8>>,
   }
   record c-entity-position-sync {
     entity-id: s32,
@@ -391,7 +396,7 @@ interface java-packets {
     map-id: s32,
     scale: u8,
     locked: bool,
-    icons: option<string>,
+    icons: option<list<string>>,
     data: option<string>,
   }
   record c-merchant-offers {
@@ -423,7 +428,7 @@ interface java-packets {
     max-speed: f32,
     particle-count: s32,
     particle-id: s32,
-    data: string,
+    data: list<u8>,
   }
   record c-ping-response {
     payload: s64,
@@ -435,13 +440,13 @@ interface java-packets {
   }
   record c-player-chat-message {
     global-index: s32,
-    sender: string,
+    sender: uuid,
     index: s32,
-    message-signature: option<list<string>>,
+    message-signature: option<list<list<u8>>>,
     message: string,
     timestamp: s64,
     salt: s64,
-    previous-messages: list<string>,
+    previous-messages: list<list<string>>,
     unsigned-content: option<string>,
     filter-type: string,
     chat-type: s32,
@@ -450,7 +455,7 @@ interface java-packets {
   }
   record c-player-info-update {
     actions: u8,
-    players: string,
+    players: list<string>,
   }
   record c-player-position {
     teleport-id: s32,
@@ -461,7 +466,7 @@ interface java-packets {
     relatives: list<string>,
   }
   record c-remove-player-info {
-    players: string,
+    players: list<uuid>,
   }
   record c-player-spawn-position {
     dimension-name: string,
@@ -483,7 +488,7 @@ interface java-packets {
     smoker-filtering: bool,
   }
   record c-remove-entities {
-    entity-ids: string,
+    entity-ids: list<s32>,
   }
   record c-remove-mob-effect {
     entity-id: s32,
@@ -507,7 +512,7 @@ interface java-packets {
     data-kept: u8,
   }
   record c-play-server-links {
-    links: string,
+    links: list<string>,
   }
   record c-set-border-center {
     x: f64,
@@ -530,7 +535,7 @@ interface java-packets {
   record c-set-container-content {
     window-id: s32,
     state-id: s32,
-    slot-data: string,
+    slot-data: list<string>,
     carried-item: string,
   }
   record c-set-container-property {
@@ -563,7 +568,7 @@ interface java-packets {
   }
   record c-set-passengers {
     entity-id: s32,
-    passengers: string,
+    passengers: list<s32>,
   }
   record c-set-player-inventory {
     slot: s32,
@@ -587,6 +592,9 @@ interface java-packets {
     stay-ticks: s32,
     fade-out-ticks: s32,
   }
+  record c-play-show-dialog {
+    dialog: string,
+  }
   record c-sound-effect {
     sound-event: string,
     sound-category: s32,
@@ -597,7 +605,7 @@ interface java-packets {
   }
   record c-spawn-entity {
     entity-id: s32,
-    entity-uuid: string,
+    entity-uuid: uuid,
     r-type: s32,
     position: tuple<f64, f64, f64>,
     velocity: string,
@@ -612,7 +620,7 @@ interface java-packets {
   }
   record c-store-cookie {
     key: string,
-    payload: string,
+    payload: list<u8>,
   }
   record c-subtitle {
     subtitle: string,
@@ -636,7 +644,7 @@ interface java-packets {
     delta: tuple<f64, f64, f64>,
     yaw: f32,
     pitch: f32,
-    relatives: string,
+    relatives: list<string>,
     on-ground: bool,
   }
   record c-ticking-state {
@@ -718,6 +726,7 @@ interface java-packets {
     s-confirm-teleport(s-confirm-teleport),
     s-container-button-click(s-container-button-click),
     s-cookie-response(s-cookie-response),
+    s-custom-click-action(s-custom-click-action),
     s-custom-payload(s-custom-payload),
     s-interact(s-interact),
     s-keep-alive(s-keep-alive),
@@ -763,6 +772,7 @@ interface java-packets {
     c-chunk-batch-end(c-chunk-batch-end),
     c-chunk-batch-start,
     c-chunk-data,
+    c-play-clear-dialog,
     c-clear-title(c-clear-title),
     c-close-container(c-close-container),
     c-combat-death(c-combat-death),
@@ -828,6 +838,7 @@ interface java-packets {
     c-update-time(c-update-time),
     c-title-text(c-title-text),
     c-title-animation(c-title-animation),
+    c-play-show-dialog(c-play-show-dialog),
     c-sound-effect(c-sound-effect),
     c-spawn-entity(c-spawn-entity),
     c-stop-sound(c-stop-sound),

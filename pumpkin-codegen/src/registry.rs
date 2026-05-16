@@ -4,28 +4,28 @@ use quote::{format_ident, quote};
 use serde_json::Value;
 use std::fs;
 
-use crate::version::MinecraftVersion;
+use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version whose registry data is used as the fallback for unknown versions.
-const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
 
 /// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
 /// static registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
     let assets = [
-        (MinecraftVersion::V_1_20_5, "1_21_synced_registries.json"),
-        (MinecraftVersion::V_1_21, "1_21_synced_registries.json"),
-        (MinecraftVersion::V_1_21_2, "1_21_2_synced_registries.json"),
-        (MinecraftVersion::V_1_21_4, "1_21_4_synced_registries.json"),
-        (MinecraftVersion::V_1_21_5, "1_21_5_synced_registries.json"),
-        (MinecraftVersion::V_1_21_6, "1_21_6_synced_registries.json"),
-        (MinecraftVersion::V_1_21_7, "1_21_7_synced_registries.json"),
-        (MinecraftVersion::V_1_21_9, "1_21_9_synced_registries.json"),
+        (JavaMinecraftVersion::V_1_20_5, "1_21_synced_registries.json"),
+        (JavaMinecraftVersion::V_1_21, "1_21_synced_registries.json"),
+        (JavaMinecraftVersion::V_1_21_2, "1_21_2_synced_registries.json"),
+        (JavaMinecraftVersion::V_1_21_4, "1_21_4_synced_registries.json"),
+        (JavaMinecraftVersion::V_1_21_5, "1_21_5_synced_registries.json"),
+        (JavaMinecraftVersion::V_1_21_6, "1_21_6_synced_registries.json"),
+        (JavaMinecraftVersion::V_1_21_7, "1_21_7_synced_registries.json"),
+        (JavaMinecraftVersion::V_1_21_9, "1_21_9_synced_registries.json"),
         (
-            MinecraftVersion::V_1_21_11,
+            JavaMinecraftVersion::V_1_21_11,
             "1_21_11_synced_registries.json",
         ),
-        (MinecraftVersion::V_26_1, "26_1_synced_registries.json"),
+        (JavaMinecraftVersion::V_26_1, "26_1_synced_registries.json"),
     ];
 
     let process_version = |path: &str| -> TokenStream {
@@ -100,7 +100,7 @@ pub(crate) fn build() -> TokenStream {
 
     quote! {
         use pumpkin_util::resource_location::ResourceLocation;
-        use pumpkin_util::version::MinecraftVersion;
+        use pumpkin_util::version::JavaMinecraftVersion;
 
         pub struct StaticRegistryEntry {
             pub name: &'static str,
@@ -125,7 +125,7 @@ pub(crate) fn build() -> TokenStream {
         #static_values
 
         impl Registry {
-            pub fn get_synced(version: MinecraftVersion) -> Vec<Self> {
+            pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
                 let static_regs = match version {
                     #match_arms
                     _ => #latest_registry,

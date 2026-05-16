@@ -535,8 +535,9 @@ pub fn build() -> TokenStream {
     quote! {
         use crate::tag::Taggable;
         use crate::item::Item;
+        use serde::{Serialize, Deserialize};
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CraftingRecipeTypes {
             CraftingShaped {
                 category: RecipeCategoryTypes,
@@ -566,7 +567,7 @@ pub fn build() -> TokenStream {
         }
 
         #[allow(dead_code)]
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub struct CookingRecipe {
             /// Vanilla-compatible recipe ID (e.g., "minecraft:iron_ingot_from_smelting_iron_ore")
             pub recipe_id: &'static str,
@@ -578,14 +579,14 @@ pub fn build() -> TokenStream {
             pub result: RecipeResultStruct,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CookingRecipeType {
             Blasting(CookingRecipe),
             Smelting(CookingRecipe),
             Smoking(CookingRecipe),
             CampfireCooking(CookingRecipe),
         }
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CookingRecipeKind {
             Blasting,
             Smelting,
@@ -626,20 +627,20 @@ pub fn build() -> TokenStream {
             }
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub struct StonecutterRecipe {
             pub group: Option<&'static str>,
             pub ingredient: RecipeIngredientTypes,
             pub result: RecipeResultStruct,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub struct RecipeResultStruct {
             pub id: &'static str,
             pub count: u8,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum RecipeIngredientTypes {
             Simple(&'static str),
             Tagged(&'static str),
@@ -664,7 +665,7 @@ pub fn build() -> TokenStream {
             }
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum RecipeCategoryTypes {
             Equipment,
             Building,

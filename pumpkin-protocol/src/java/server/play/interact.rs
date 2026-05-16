@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_INTERACT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
+use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{
     ServerPacket,
@@ -21,9 +21,9 @@ pub struct SInteract {
 
 // Great job Mojang ;D
 impl ServerPacket for SInteract {
-    fn read(mut read: impl Read, version: &MinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(mut read: impl Read, version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         // 26.1+ removes the 'type' field and uses doubles for location
-        if version >= &MinecraftVersion::V_26_1 {
+        if version >= &JavaMinecraftVersion::V_26_1 {
             let entity_id = read.get_var_int()?;
             let hand = Some(read.get_var_int()?);
             let target_position = Some(LpVector3d::read(&mut read)?.0);

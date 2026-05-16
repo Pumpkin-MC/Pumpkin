@@ -32,7 +32,7 @@ impl ClientPacket for CMapItemData<'_> {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        _version: &pumpkin_util::version::MinecraftVersion,
+        _version: &pumpkin_util::version::JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_var_int(&self.map_id)?;
         write.write_i8(self.scale)?;

@@ -404,6 +404,41 @@ pub fn java_string_hash(string: &str) -> i32 {
     result
 }
 
+macro_rules! vector_codec_impl {
+    ($vector:ty, $number:literal, $($components:ident),+ ) => {
+        impl<T> From<&$vector> for Vec<T> where T: Clone {
+            fn from(value: &$vector) -> Self {
+                vec![
+                    $( value.$components.clone(), )+
+                ]
+            }
+        }
+
+        impl<T> FlatTryFrom<Vec<T>> for $vector {
+            fn flat_try_from(value: Vec<T>) -> DataResult<Self> {
+                validate_fixed_size(value, 2)
+                    .map(|v| {
+                        let [ $( $components, )+ ]: [T; $number] = v.try_into().unwrap_or_else(|_| unreachable!());
+                        Self { $( $components, )+ }
+                    })
+            }
+        }
+
+        impl<T> Encode for $vector where T: Encode + Clone {
+            fn encode<O: DynamicOps>(&self, ops: &'static O, prefix: O::Value) -> DataResult<O::Value> {
+                Vec::<T>::from(self).encode(ops, prefix)
+            }
+        }
+
+        impl<T> Decode for $vector where T: Decode {
+            fn decode<O: DynamicOps>(input: O::Value, ops: &'static O) -> DataResult<(Self, O::Value)> {
+                <Vec<T>>::decode(input, ops).flat_map(|(s, p)| Self::flat_try_from(s).map(|v| (v, p)))
+            }
+        }
+    };
+}
+pub(crate) use vector_codec_impl;
+
 /// Tests the Java-style string and array hash implementations.
 ///
 /// This verifies that `java_string_hash` and `java_array_hash` produce the expected

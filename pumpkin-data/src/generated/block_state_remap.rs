@@ -19134,45 +19134,61 @@ pub static BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_11: &[u16] = &[
 #[must_use]
 pub fn remap_block_state_for_version(
     state_id: u16,
-    version: pumpkin_util::version::MinecraftVersion,
+    version: pumpkin_util::version::JavaMinecraftVersion,
 ) -> u16 {
     match version {
-        pumpkin_util::version::MinecraftVersion::V_1_20_5 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_20_5
+        pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 => {
+            BLOCK_STATE_REMAP_V_26_1_TO_V_1_20_5
+                .get(usize::from(state_id))
+                .copied()
+                .unwrap_or(0)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21
             .get(usize::from(state_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21
-            .get(usize::from(state_id))
-            .copied()
-            .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_2 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_2
-            .get(usize::from(state_id))
-            .copied()
-            .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_4 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_4
-            .get(usize::from(state_id))
-            .copied()
-            .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_5 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_5
-            .get(usize::from(state_id))
-            .copied()
-            .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_6 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_6
-            .get(usize::from(state_id))
-            .copied()
-            .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_7 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_7
-            .get(usize::from(state_id))
-            .copied()
-            .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_9 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_9
-            .get(usize::from(state_id))
-            .copied()
-            .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_11 => BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_11
-            .get(usize::from(state_id))
-            .copied()
-            .unwrap_or(0),
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 => {
+            BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_2
+                .get(usize::from(state_id))
+                .copied()
+                .unwrap_or(0)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 => {
+            BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_4
+                .get(usize::from(state_id))
+                .copied()
+                .unwrap_or(0)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_5 => {
+            BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_5
+                .get(usize::from(state_id))
+                .copied()
+                .unwrap_or(0)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_6 => {
+            BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_6
+                .get(usize::from(state_id))
+                .copied()
+                .unwrap_or(0)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_7 => {
+            BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_7
+                .get(usize::from(state_id))
+                .copied()
+                .unwrap_or(0)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => {
+            BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_9
+                .get(usize::from(state_id))
+                .copied()
+                .unwrap_or(0)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 => {
+            BLOCK_STATE_REMAP_V_26_1_TO_V_1_21_11
+                .get(usize::from(state_id))
+                .copied()
+                .unwrap_or(0)
+        }
         _ => state_id,
     }
 }

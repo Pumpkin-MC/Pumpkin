@@ -216,7 +216,6 @@ impl RandomImpl for Xoroshiro {
 /// This struct allows for deterministic creation of multiple independent
 /// random generators from a single seed, which is essential for
 /// parallelizable world generation.
-#[derive(Clone)]
 pub struct XoroshiroSplitter {
     /// Lower 64 bits of the splitter state.
     lo: u64,

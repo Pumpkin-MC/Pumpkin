@@ -1,4 +1,3 @@
-#[derive(Clone)]
 pub struct CarvingMask {
     min_y: i32,
     mask: Vec<u64>,

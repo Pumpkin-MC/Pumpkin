@@ -68,12 +68,17 @@ pub mod login;
 pub mod open_connection;
 pub mod unconnected;
 use crate::{entity::player::Player, net::DisconnectReason, server::Server};
+use arc_swap::ArcSwap;
+use pumpkin_protocol::bedrock::server::login::ClientData;
+use pumpkin_util::version::BedrockMinecraftVersion;
 
 pub struct BedrockClient {
     socket: Arc<UdpSocket>,
     /// The client's IP address.
     pub address: SocketAddr,
     pub player: Mutex<Option<Arc<Player>>>,
+    pub version: AtomicCell<BedrockMinecraftVersion>,
+    pub client_data: ArcSwap<Option<Arc<ClientData>>>,
     /// All Bedrock clients
     /// This list is used to remove the client if the connection gets closed
     pub be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
@@ -94,6 +99,8 @@ pub struct BedrockClient {
     output_split_number: AtomicU16,
     output_sequenced_index: AtomicU32,
     output_ordered_index: AtomicU32,
+    /// The next form ID to use for custom forms.
+    pub next_form_id: AtomicU32,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     last_seen: Arc<AtomicCell<std::time::Instant>>,
@@ -121,6 +128,8 @@ impl BedrockClient {
             socket,
             player: Mutex::new(None),
             address,
+            version: AtomicCell::new(BedrockMinecraftVersion::Unknown),
+            client_data: ArcSwap::new(Arc::new(None)),
             be_clients,
             network_writer: Arc::new(Mutex::new(UDPNetworkEncoder::new())),
             network_reader: Mutex::new(UDPNetworkDecoder::new()),
@@ -133,6 +142,7 @@ impl BedrockClient {
             output_split_number: AtomicU16::new(0),
             output_sequenced_index: AtomicU32::new(0),
             output_ordered_index: AtomicU32::new(0),
+            next_form_id: AtomicU32::new(0),
             compounds: Arc::new(Mutex::new(HashMap::new())),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
@@ -788,6 +798,16 @@ impl BedrockClient {
             }
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, server, &SAnimate::read(reader)?);
+            }
+            pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse::PACKET_ID => {
+                self.handle_modal_form_response(
+                    player,
+                    server,
+                    pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse::read(
+                        reader,
+                    )?,
+                )
+                .await;
             }
             SLoadingScreen::PACKET_ID => {
                 // Ignore for now

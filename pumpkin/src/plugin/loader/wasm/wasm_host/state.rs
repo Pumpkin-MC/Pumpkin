@@ -28,7 +28,7 @@ use crate::{
         api::gui::PluginGui,
         loader::wasm::wasm_host::{WasmPlugin, args::OwnedArg},
     },
-    server::Server,
+    server::{RecipeManager, Server},
     world::World,
 };
 
@@ -39,6 +39,8 @@ pub struct WasmResource<T> {
 pub type ServerResource = WasmResource<Arc<Server>>;
 pub type ContextResource = WasmResource<Arc<Context>>;
 pub type PlayerResource = WasmResource<Arc<Player>>;
+pub type JavaPlayerResource = WasmResource<Arc<Player>>;
+pub type BedrockPlayerResource = WasmResource<Arc<Player>>;
 pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type WorldResource = WasmResource<Arc<World>>;
 pub type ScoreboardResource = WasmResource<Arc<World>>;
@@ -51,6 +53,8 @@ pub type CommandResource = WasmResource<CommandTree>;
 pub type CommandSenderResource = WasmResource<CommandSender>;
 pub type ConsumedArgsResource = WasmResource<OwnedConsumedArgs>;
 pub type CommandNodeResource = WasmResource<NonLeafNodeBuilder>;
+pub type ItemStackResource = WasmResource<Arc<Mutex<pumpkin_data::item_stack::ItemStack>>>;
+pub type RecipeManagerResource = WasmResource<Arc<RecipeManager>>;
 
 pub type OwnedConsumedArgs = HashMap<String, OwnedArg>;
 
@@ -106,6 +110,24 @@ impl PluginHostState {
         provider: Arc<Player>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(PlayerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_java_player<T>(
+        &mut self,
+        provider: Arc<Player>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(JavaPlayerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_bedrock_player<T>(
+        &mut self,
+        provider: Arc<Player>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(BedrockPlayerResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
@@ -198,6 +220,24 @@ impl PluginHostState {
         provider: NonLeafNodeBuilder,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(CommandNodeResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_item_stack<T>(
+        &mut self,
+        provider: Arc<Mutex<pumpkin_data::item_stack::ItemStack>>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(ItemStackResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_recipe_manager<T>(
+        &mut self,
+        provider: Arc<RecipeManager>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(RecipeManagerResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 }

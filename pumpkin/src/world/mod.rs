@@ -63,6 +63,7 @@ use pumpkin_data::{
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{BlockDirection, BlockState, translation};
+use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_nbt::{compound::NbtCompound, to_bytes_unnamed};
 use pumpkin_protocol::bedrock::client::set_actor_data::{
@@ -113,7 +114,7 @@ use pumpkin_protocol::{
 pub use pumpkin_storage::world_info::LevelData;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_util::{
     Difficulty,
     math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3},
@@ -425,13 +426,11 @@ impl World {
     }
 
     pub async fn flush_synced_block_events(self: &Arc<Self>) {
-        let events;
         // THIS IS IMPORTANT
         // it prevents deadlocks and also removes the need to wait for a lock when adding a new synced block
-        {
+        let events = {
             let mut queue = self.synced_block_event_queue.lock().await;
-            events = queue.clone();
-            queue.clear();
+            std::mem::take(&mut *queue)
         };
 
         for event in events {
@@ -458,8 +457,8 @@ impl World {
 
     fn collect_java_recipients_by_version<'a>(
         players: impl Iterator<Item = &'a Arc<Player>>,
-    ) -> BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> {
-        let mut recipients_by_version: BTreeMap<MinecraftVersion, Vec<&'a JavaClient>> =
+    ) -> BTreeMap<JavaMinecraftVersion, Vec<&'a JavaClient>> {
+        let mut recipients_by_version: BTreeMap<JavaMinecraftVersion, Vec<&'a JavaClient>> =
             BTreeMap::new();
         for player in players {
             if let ClientPlatform::Java(java_client) = &player.client {
@@ -474,7 +473,7 @@ impl World {
 
     fn broadcast_java_grouped<P: ClientPacket>(
         packet: &P,
-        recipients_by_version: BTreeMap<MinecraftVersion, Vec<&JavaClient>>,
+        recipients_by_version: BTreeMap<JavaMinecraftVersion, Vec<&JavaClient>>,
     ) {
         for (version, recipients) in recipients_by_version {
             let packet_data = match JavaClient::serialize_packet_for_version(packet, version) {
@@ -1600,6 +1599,8 @@ impl World {
             (position, yaw, pitch)
         } else {
             let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
+            let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
             let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
 
             let position = Vector3::new(
@@ -1938,6 +1939,8 @@ impl World {
         } else {
             let info = &self.level_info.load();
             let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
+            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
             let pos_y = self.get_top_block(spawn_position) + 1; // +1 to spawn on top of the block
 
             let position = Vector3::new(
@@ -2264,8 +2267,9 @@ impl World {
             java_client
                 .send_packet_now(&CRecipeBookSettings::default_closed())
                 .await;
+            let dynamic_recipes = server.recipe_manager.get_dynamic_recipes().await;
             java_client
-                .send_packet_now(&CRecipeBookAdd::new(true))
+                .send_packet_now(&CRecipeBookAdd::new(true, &dynamic_recipes))
                 .await;
         }
 
@@ -2429,6 +2433,8 @@ impl World {
                 // FIXME: This spawn position calculation is incorrect. Should use vanilla's
                 // proper spawn position calculation (see #1381). The y-level calculation
                 // needs to account for spawn radius and find a safe spawn position.
+                let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
+                self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
                 let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
 
                 (
@@ -2497,6 +2503,8 @@ impl World {
             );
             // FIXME: This spawn position calculation is incorrect. Should use vanilla's
             // proper spawn position calculation (see #1381).
+            let chunk_pos = Vector2::new(spawn_x >> 4, spawn_z >> 4);
+            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
             let top = self.get_top_block(Vector2::new(spawn_x, spawn_z));
             let fallback_pos = Vector3::new(
                 f64::from(spawn_x) + 0.5,
@@ -3421,6 +3429,37 @@ impl World {
         self.level
             .light_engine
             .get_sky_light_level(&self.level, position)
+    }
+
+    pub fn set_block_light_level(&self, position: &BlockPos, light_level: u8) {
+        let _ = self
+            .level
+            .light_engine
+            .set_block_light_level(&self.level, position, light_level);
+    }
+
+    pub fn set_sky_light_level(&self, position: &BlockPos, light_level: u8) {
+        let _ = self
+            .level
+            .light_engine
+            .set_sky_light_level(&self.level, position, light_level);
+    }
+
+    pub fn get_biome(&self, position: &BlockPos) -> &'static Biome {
+        let chunk_pos = position.chunk_position();
+        if let Some(chunk) = self.level.loaded_chunks.get(&chunk_pos) {
+            let id = chunk
+                .section
+                .get_rough_biome_absolute_y(
+                    (position.0.x & 15) as usize,
+                    position.0.y,
+                    (position.0.z & 15) as usize,
+                )
+                .unwrap_or(0);
+            Biome::from_id(id).unwrap_or(&Biome::PLAINS)
+        } else {
+            &Biome::PLAINS
+        }
     }
 
     pub fn schedule_block_tick(

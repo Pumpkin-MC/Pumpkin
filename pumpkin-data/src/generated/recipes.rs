@@ -1,7 +1,8 @@
 /* This file is generated. Do not edit manually. */
 use crate::item::Item;
 use crate::tag::Taggable;
-#[derive(Clone, Debug)]
+use serde::{Deserialize, Serialize};
+#[derive(Clone, Debug, Serialize)]
 pub enum CraftingRecipeTypes {
     CraftingShaped {
         category: RecipeCategoryTypes,
@@ -30,7 +31,7 @@ pub enum CraftingRecipeTypes {
     CraftingSpecial,
 }
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct CookingRecipe {
     #[doc = r#" Vanilla-compatible recipe ID (e.g., "minecraft:iron_ingot_from_smelting_iron_ore")"#]
     pub recipe_id: &'static str,
@@ -41,14 +42,14 @@ pub struct CookingRecipe {
     pub experience: f32,
     pub result: RecipeResultStruct,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum CookingRecipeType {
     Blasting(CookingRecipe),
     Smelting(CookingRecipe),
     Smoking(CookingRecipe),
     CampfireCooking(CookingRecipe),
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum CookingRecipeKind {
     Blasting,
     Smelting,
@@ -85,18 +86,18 @@ impl CookingRecipeKind {
         }
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct StonecutterRecipe {
     pub group: Option<&'static str>,
     pub ingredient: RecipeIngredientTypes,
     pub result: RecipeResultStruct,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct RecipeResultStruct {
     pub id: &'static str,
     pub count: u8,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum RecipeIngredientTypes {
     Simple(&'static str),
     Tagged(&'static str),
@@ -119,7 +120,7 @@ impl RecipeIngredientTypes {
         }
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum RecipeCategoryTypes {
     Equipment,
     Building,
