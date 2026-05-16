@@ -7,7 +7,7 @@ use super::TrunkPlacer;
 use crate::generation::block_state_provider::BlockStateProvider;
 use crate::generation::feature::features::tree::{TreeFeature, TreeNode};
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 use pumpkin_data::BlockDirection;
 
 pub struct UpwardsBranchingTrunkPlacer {
@@ -21,7 +21,7 @@ impl UpwardsBranchingTrunkPlacer {
     #[expect(clippy::too_many_arguments)]
     pub fn generate<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         placer: &TrunkPlacer,
         height: u32,
         start_pos: BlockPos,

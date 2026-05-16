@@ -1,7 +1,6 @@
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_util::{noise::perlin::OctavePerlinNoiseSampler, random::RandomImpl};
 
-#[derive(Clone)]
 pub struct DoublePerlinNoiseSampler {
     first_sampler: OctavePerlinNoiseSampler,
     second_sampler: OctavePerlinNoiseSampler,
@@ -33,6 +32,7 @@ impl DoublePerlinNoiseSampler {
         )
     }
 
+    #[must_use]
     pub fn get_amplitude(amplitudes: &[f64]) -> f64 {
         let mut j = i32::MAX;
         let mut k = i32::MIN;

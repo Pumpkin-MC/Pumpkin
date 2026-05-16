@@ -8,6 +8,8 @@ use crate::server::Server;
 use crate::world::World;
 use args::ConsumedArgs;
 
+use crate::block::entities::BlockEntity;
+use crate::block::entities::command_block::CommandBlockEntity;
 use crate::command::context::command_source::CommandSource;
 use crate::entity::EntityBase;
 use dispatcher::CommandError;
@@ -21,8 +23,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
-use pumpkin_world::block::entities::BlockEntity;
-use pumpkin_world::block::entities::command_block::CommandBlockEntity;
 
 pub mod args;
 pub mod argument_builder;
@@ -33,6 +33,8 @@ pub mod context;
 pub mod dispatcher;
 pub mod errors;
 pub mod node;
+pub mod parser;
+pub mod snbt;
 pub mod string_reader;
 pub mod suggestion;
 pub mod tree;
@@ -184,12 +186,13 @@ impl CommandSender {
             Self::CommandBlock(command_block, world) => {
                 let pos = command_block.get_position();
                 let (chunk_coordinate, relative) = pos.chunk_and_chunk_relative_position();
-                let chunk = world.level.try_get_chunk(&chunk_coordinate)?;
-                let state_id = chunk.section.get_block_absolute_y(
-                    relative.x as usize,
-                    relative.y,
-                    relative.z as usize,
-                )?;
+                let state_id = world.level.read_chunk_sync(&chunk_coordinate, |chunk| {
+                    chunk.section.get_block_absolute_y(
+                        relative.x as usize,
+                        relative.y,
+                        relative.z as usize,
+                    )
+                })??;
                 let block = Block::from_state_id(state_id);
                 if !CommandBlockLikeProperties::handles_block_id(block.id) {
                     return None;
@@ -300,7 +303,7 @@ impl CommandSender {
             Self::CommandBlock(command_entity, world) => {
                 let pos = command_entity.position;
 
-                let (block, state_id) = world.get_block_and_state_id(&pos).await;
+                let (block, state_id) = world.get_block_and_state_id(&pos);
                 let command_block_props =
                     CommandBlockLikeProperties::from_state_id(state_id, block);
                 let facing = command_block_props.facing;

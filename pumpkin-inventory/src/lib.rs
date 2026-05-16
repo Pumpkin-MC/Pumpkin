@@ -31,11 +31,13 @@
 //! [`SyncHandler`]: sync_handler::SyncHandler
 
 pub mod anvil;
+pub mod beacon_screen_handler;
 pub mod brewing;
 pub mod container_click;
 pub mod crafting;
 pub mod double;
 pub mod drag_handler;
+pub mod enchanting;
 pub mod entity_equipment;
 mod error;
 pub mod furnace_like;
@@ -45,6 +47,7 @@ pub mod merchant;
 pub mod player;
 pub mod screen_handler;
 pub mod slot;
+pub mod stonecutter_screen_handler;
 pub mod sync_handler;
 pub mod window_property;
 

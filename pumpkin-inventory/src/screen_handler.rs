@@ -142,6 +142,12 @@ pub trait InventoryPlayer: Send + Sync {
     /// Adds or removes experience levels.
     fn add_experience_levels(&self, levels: i32) -> PlayerFuture<'_, ()>;
 
+    /// Gets the player's enchantment seed.
+    fn enchantment_seed(&self) -> i32;
+
+    /// Sets the player's enchantment seed.
+    fn set_enchantment_seed(&self, seed: i32) -> PlayerFuture<'_, ()>;
+
     /// Sends a full container content packet.
     fn enqueue_inventory_packet<'a>(
         &'a self,
@@ -672,6 +678,15 @@ pub trait ScreenHandler: Send + Sync {
         player: &'a dyn InventoryPlayer,
         slot_index: i32,
     ) -> ItemStackFuture<'a>;
+
+    /// Handles a button click event (e.g., enchantment selection, beacon effects).
+    fn on_button_click<'a>(
+        &'a mut self,
+        _player: &'a dyn InventoryPlayer,
+        _button_id: i32,
+    ) -> ScreenHandlerFuture<'a, bool> {
+        Box::pin(async { false })
+    }
 
     /// Inserts an item into a range of slots.
     ///

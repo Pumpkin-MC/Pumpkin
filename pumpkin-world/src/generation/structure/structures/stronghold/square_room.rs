@@ -22,7 +22,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct SquareRoomPiece {
     piece: StrongholdPiece,
     room_type: u32,
@@ -272,9 +271,5 @@ impl StructurePieceBase for SquareRoomPiece {
             }
             _ => {}
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
     }
 }

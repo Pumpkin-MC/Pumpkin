@@ -30,7 +30,7 @@ impl BlockBehaviour for WallBlock {
             let mut wall_props = WallProperties::default(args.block);
             wall_props.waterlogged = args.replacing.water_source();
 
-            compute_wall_state(wall_props, args.world, args.block, args.position).await
+            compute_wall_state(wall_props, args.world, args.block, args.position)
         })
     }
 
@@ -40,22 +40,22 @@ impl BlockBehaviour for WallBlock {
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             let wall_props = WallProperties::from_state_id(args.state_id, args.block);
-            compute_wall_state(wall_props, args.world, args.block, args.position).await
+            compute_wall_state(wall_props, args.world, args.block, args.position)
         })
     }
 }
 
-pub async fn compute_wall_state(
+pub fn compute_wall_state(
     mut wall_props: WallProperties,
     world: &World,
     block: &Block,
     block_pos: &BlockPos,
 ) -> u16 {
-    let (block_above, block_above_state) = world.get_block_and_state(&block_pos.up()).await;
+    let (block_above, block_above_state) = world.get_block_and_state(&block_pos.up());
 
     for direction in HorizontalFacing::all() {
         let other_block_pos = block_pos.offset(direction.to_offset());
-        let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos).await;
+        let (other_block, other_block_state) = world.get_block_and_state(&other_block_pos);
 
         let connected = is_connected(block, direction, other_block, other_block_state);
 

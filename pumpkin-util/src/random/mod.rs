@@ -182,6 +182,10 @@ pub trait RandomImpl {
         self.next_bounded_i32(max - min + 1) + min
     }
 
+    fn next_inbetween_f32(&mut self, min: f32, max: f32) -> f32 {
+        self.next_f32() * (max - min) + min
+    }
+
     fn next_i64(&mut self) -> i64;
 
     fn next_bool(&mut self) -> bool;

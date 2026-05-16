@@ -5,7 +5,7 @@ use pumpkin_util::{
 };
 
 use crate::generation::proto_chunk::GenerationCache;
-use crate::{generation::block_state_provider::BlockStateProvider, world::BlockRegistryExt};
+use crate::{generation::block_state_provider::BlockStateProvider, world::WorldPortalExt};
 
 pub struct NetherForestVegetationFeature {
     pub state_provider: BlockStateProvider,
@@ -18,7 +18,7 @@ impl NetherForestVegetationFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         _min_y: i8,
         _height: u16,
         _feature: &str,

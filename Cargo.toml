@@ -89,6 +89,7 @@ inherits = "release"
 debug = true
 strip = false
 
+
 [workspace.dependencies]
 tokio = { version = "1.52", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["printing"] }
@@ -120,7 +121,7 @@ console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = "1.10.0"
 criterion = { version = "0.8", default-features = false }
 crossbeam-utils = "0.8.21"
-crossfire = { version = "3.1.7", features = ["compat"] }
+crossfire = { version = "3.1.12", features = ["compat"] }
 crypto-bigint = "0.7.3"
 dashmap = "6.1"
 ecdsa = "0.16.9"
@@ -156,11 +157,11 @@ rsa = "=0.10.0-rc.18"
 cipher = "0.5.1"
 rustc-hash = "2.1.2"
 rustyline = "18.0.0"
-ruzstd = "0.8.2"
+ruzstd = "0.8.3"
 serde_json5 = "0.2.1"
 sha1 = "=0.11.0"
 sha2 = "=0.11.0"
-signature = "2.2.0"
+signature = "3.0.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = [
     "env-filter",
@@ -179,9 +180,11 @@ ureq = "3.3.0"
 notify = "8.2.0"
 
 wasmtime = "44.0"
-wasmtime-wasi = "44.0"
+wasmtime-wasi = { version = "44.0", default-features = false, features = ["p2"] }
+wasmtime-wasi-http = "44.0"
+# needed for interacting with wasmtime-wasi-http - keep in sync
+hyper = { version = "^1.9", features = ["full"] }
 wit-bindgen = "0.57"
-wasmparser = "0.247"
 
 postcard = { version = "1.1", features = ["alloc"] }
 tracing-serde-structured = "0.4"

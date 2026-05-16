@@ -418,6 +418,7 @@ impl PumpkinServer {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn unified_listener_task(
         &self,
         master_client_id_counter: &mut u64,
@@ -501,24 +502,33 @@ impl PumpkinServer {
                                 let be_clients = bedrock_clients.clone();
                                 let mut clients_guard = bedrock_clients.lock().await;
 
-                                if let Some(client) = clients_guard.get(&client_addr) {
-                                    let client = client.clone();
-                                    let reader = Cursor::new(udp_buf[..len].to_vec());
-                                    let server = self.server.clone();
-                                    tasks.spawn(async move {
-                                        client.process_packet(&server, reader).await;
-                                    });
-                                } else if let Some(sock) = self.udp_socket.as_ref()
-                                    && let Ok(packet) = BedrockClient::is_connection_request(&mut Cursor::new(&udp_buf[4..len])) {
-                                        *master_client_id_counter += 1;
-                                        let platform = BedrockClient::new(sock.clone(), client_addr, be_clients);
-                                        platform.handle_connection_request(packet).await;
-                                        let platform = Arc::new(platform);
-                                        platform.start_outgoing_packet_task();
-                                        clients_guard.insert(client_addr, platform);
-                                    }
+                                let client = clients_guard.entry(client_addr).or_insert_with(|| {
+                                    *master_client_id_counter += 1;
+
+                                    let new_client = Arc::new(BedrockClient::new(
+                                        self.udp_socket.as_ref().unwrap().clone(),
+                                        client_addr,
+                                        be_clients
+                                    ));
+
+                                    new_client.start_outgoing_packet_task();
+                                    new_client
+                                }).clone();
+
+                                let reader = udp_buf[..len].to_vec();
+                                let server = self.server.clone();
+                                tasks.spawn(async move {
+                                    client.process_packet(&server, reader).await;
+                                });
+
                             } else if let Some(sock) = self.udp_socket.as_ref() {
-                                let _ = BedrockClient::handle_offline_packet(&self.server, id, &mut Cursor::new(&udp_buf[1..len]), client_addr, sock).await;
+                                let _ = BedrockClient::handle_offline_packet(
+                                    &self.server,
+                                    id,
+                                    &mut Cursor::new(&udp_buf[1..len]),
+                                    client_addr,
+                                    sock
+                                ).await;
                             }
                         }
                     }

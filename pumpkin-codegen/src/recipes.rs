@@ -38,13 +38,44 @@ pub enum RecipeTypes {
     /// Smoker cooking recipe.
     #[serde(rename = "minecraft:smoking")]
     Smoking(CookingRecipeStruct),
-    /// Stonecutter recipe (not yet codegen'd).
+    /// Stonecutter recipe.
     #[serde(rename = "minecraft:stonecutting")]
-    Stonecutting,
+    Stonecutting(StonecuttingRecipeStruct),
     /// Any special crafting recipe type (not yet codegen'd).
     #[serde(other)]
     #[serde(rename = "minecraft:crafting_special_*")]
     CraftingSpecial,
+}
+
+/// Deserialized stonecutter recipe.
+#[derive(Deserialize)]
+pub struct StonecuttingRecipeStruct {
+    /// Optional recipe group used for advancement tracking.
+    group: Option<String>,
+    /// The single ingredient required by this recipe.
+    ingredient: RecipeIngredientTypes,
+    /// The item produced by this recipe.
+    result: RecipeResultStruct,
+}
+
+impl ToTokens for StonecuttingRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let group = if let Some(group) = &self.group {
+            quote! { Some(#group) }
+        } else {
+            quote! { None }
+        };
+        let ingredient = self.ingredient.to_token_stream();
+        let result = self.result.to_token_stream();
+
+        tokens.extend(quote! {
+            StonecutterRecipe {
+                group: #group,
+                ingredient: #ingredient,
+                result: #result,
+            }
+        });
+    }
 }
 
 /// Deserialized cooking recipe (furnace, blast furnace, smoker, or campfire).
@@ -432,6 +463,7 @@ pub fn build() -> TokenStream {
 
     let mut crafting_recipes = Vec::new();
     let mut cooking_recipes = Vec::new();
+    let mut stonecutting_recipes = Vec::new();
 
     for recipe in recipes_assets {
         match recipe {
@@ -493,7 +525,9 @@ pub fn build() -> TokenStream {
                 };
                 cooking_recipes.push(smoking_token);
             }
-            RecipeTypes::Stonecutting => {}
+            RecipeTypes::Stonecutting(recipe) => {
+                stonecutting_recipes.push(recipe.to_token_stream());
+            }
             RecipeTypes::CraftingSpecial => {}
         }
     }
@@ -501,8 +535,9 @@ pub fn build() -> TokenStream {
     quote! {
         use crate::tag::Taggable;
         use crate::item::Item;
+        use serde::{Serialize, Deserialize};
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CraftingRecipeTypes {
             CraftingShaped {
                 category: RecipeCategoryTypes,
@@ -532,7 +567,7 @@ pub fn build() -> TokenStream {
         }
 
         #[allow(dead_code)]
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub struct CookingRecipe {
             /// Vanilla-compatible recipe ID (e.g., "minecraft:iron_ingot_from_smelting_iron_ore")
             pub recipe_id: &'static str,
@@ -544,14 +579,14 @@ pub fn build() -> TokenStream {
             pub result: RecipeResultStruct,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CookingRecipeType {
             Blasting(CookingRecipe),
             Smelting(CookingRecipe),
             Smoking(CookingRecipe),
             CampfireCooking(CookingRecipe),
         }
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum CookingRecipeKind {
             Blasting,
             Smelting,
@@ -592,15 +627,20 @@ pub fn build() -> TokenStream {
             }
         }
 
+        #[derive(Clone, Debug, Serialize)]
+        pub struct StonecutterRecipe {
+            pub group: Option<&'static str>,
+            pub ingredient: RecipeIngredientTypes,
+            pub result: RecipeResultStruct,
+        }
 
-
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub struct RecipeResultStruct {
             pub id: &'static str,
             pub count: u8,
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum RecipeIngredientTypes {
             Simple(&'static str),
             Tagged(&'static str),
@@ -625,7 +665,7 @@ pub fn build() -> TokenStream {
             }
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Serialize)]
         pub enum RecipeCategoryTypes {
             Equipment,
             Building,
@@ -640,6 +680,9 @@ pub fn build() -> TokenStream {
         ];
         pub static RECIPES_COOKING: &[CookingRecipeType] = &[
             #(#cooking_recipes ),*
+        ];
+        pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
+            #(#stonecutting_recipes),*
         ];
 
         pub fn get_cooking_recipe_with_ingredient(ingredient: &Item, recipe_type: CookingRecipeKind) -> Option<&'static CookingRecipe> {

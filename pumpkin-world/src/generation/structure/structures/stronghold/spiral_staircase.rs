@@ -28,20 +28,6 @@ pub struct SpiralStaircasePiece {
     pub portal_room_exists: bool,
     pub pieces: Vec<Box<dyn StructurePieceBase>>,
 }
-impl Clone for SpiralStaircasePiece {
-    fn clone(&self) -> Self {
-        Self {
-            // StrongholdPiece and other types must derive Clone
-            piece: self.piece.clone(),
-            orientation: self.orientation,
-            is_structure_start: self.is_structure_start,
-            last_piece_data_idx: self.last_piece_data_idx,
-            portal_room_exists: self.portal_room_exists,
-            // Use the clone_box helper we added to the trait!
-            pieces: self.pieces.iter().map(|p| p.clone_box()).collect(),
-        }
-    }
-}
 
 impl SpiralStaircasePiece {
     /// Matches Start(Random random, int i, int j)
@@ -102,10 +88,6 @@ impl SpiralStaircasePiece {
 }
 
 impl StructurePieceBase for SpiralStaircasePiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
-    }
-
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece.piece
     }

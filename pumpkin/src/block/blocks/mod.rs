@@ -15,9 +15,11 @@ pub mod shulker_box;
 pub mod blast_furnace;
 pub mod brewing_stand;
 pub mod crafting_table;
+pub mod enchanting_table;
 pub mod furnace;
 pub mod grindstone;
 pub mod smoker;
+pub mod stonecutter;
 
 // Redstone & mechanisms
 pub mod command; // command block / redstone control
@@ -65,6 +67,7 @@ pub mod magma;
 pub mod torches;
 
 // Plants, crops & natural blocks
+pub mod amethyst;
 pub mod carved_pumpkin;
 pub mod dripstone;
 pub mod farmland;
@@ -98,3 +101,5 @@ pub mod coral;
 
 // Misc / abstract
 pub mod abstract_wall_mounting;
+
+pub mod beacon;

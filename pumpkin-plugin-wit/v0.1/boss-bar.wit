@@ -2,6 +2,7 @@ interface boss-bar {
     use text.{text-component};
     use player.{player};
 
+
     /// Represents the color of a boss bar.
     enum boss-bar-color {
         pink,

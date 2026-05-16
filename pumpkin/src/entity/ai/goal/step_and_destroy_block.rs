@@ -49,8 +49,8 @@ impl<S: Stepping, M: MoveToTargetPos> StepAndDestroyBlockGoal<S, M> {
             max_y_difference,
         )
     }
-    async fn tweak_to_proper_pos(&self, pos: BlockPos, world: Arc<World>) -> Option<BlockPos> {
-        if world.get_block(&pos).await.id == self.target_block.id {
+    fn tweak_to_proper_pos(&self, pos: BlockPos, world: &World) -> Option<BlockPos> {
+        if world.get_block(&pos).id == self.target_block.id {
             Some(pos)
         } else {
             let block_pos = [
@@ -63,7 +63,7 @@ impl<S: Stepping, M: MoveToTargetPos> StepAndDestroyBlockGoal<S, M> {
             ];
 
             for pos in block_pos {
-                if world.get_block(&pos).await.id == self.target_block.id {
+                if world.get_block(&pos).id == self.target_block.id {
                     return Some(pos);
                 }
             }
@@ -131,7 +131,7 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
             let world = mob.get_entity().world.load_full();
             let block_pos = mob.get_entity().block_pos.load();
 
-            let tweak_pos = self.tweak_to_proper_pos(block_pos, world.clone()).await;
+            let tweak_pos = self.tweak_to_proper_pos(block_pos, &world);
             // TODO: drop world?
             if !self.move_to_target_pos_goal.reached || tweak_pos.is_none() {
                 return;
@@ -144,8 +144,7 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
                 mob_entity
                     .living_entity
                     .entity
-                    .set_velocity(Vector3::new(velocity.x, 0.3, velocity.z))
-                    .await;
+                    .set_velocity(Vector3::new(velocity.x, 0.3, velocity.z));
                 // TODO: spawn particles
             }
 
@@ -154,8 +153,7 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> Goal
                 mob_entity
                     .living_entity
                     .entity
-                    .set_velocity(Vector3::new(velocity.x, -0.3, velocity.z))
-                    .await;
+                    .set_velocity(Vector3::new(velocity.x, -0.3, velocity.z));
                 if counter % 6 == 0 {
                     if let Some(stepping) = self.stepping.get() {
                         stepping
@@ -196,12 +194,9 @@ impl<S: Stepping + Send + Sync, M: MoveToTargetPos + Send + Sync> MoveToTargetPo
         block_pos: BlockPos,
     ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
         Box::pin(async move {
-            world.get_block(&block_pos).await.id == self.target_block.id
-                && world.get_block_state(&block_pos.up()).await.is_air()
-                && world
-                    .get_block_state(&block_pos.up_height(2))
-                    .await
-                    .is_air()
+            world.get_block(&block_pos).id == self.target_block.id
+                && world.get_block_state(&block_pos.up()).is_air()
+                && world.get_block_state(&block_pos.up_height(2)).is_air()
         })
     }
 }

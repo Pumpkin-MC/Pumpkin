@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_BLOCK_ENTITY_DATA;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::position::BlockPos, version::MinecraftVersion};
+use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
 use crate::{
     ClientPacket, VarInt,
@@ -38,7 +38,7 @@ impl ClientPacket for CBlockEntityData {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 

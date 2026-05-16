@@ -46,7 +46,7 @@ impl ItemBehaviour for EnderEyeItem {
             }
 
             let world = player.world();
-            let state_id = world.get_block_state_id(&location).await;
+            let state_id = world.get_block_state_id(&location);
 
             // Skip if the frame already holds an eye.
             let props_raw = block.properties(state_id).unwrap().to_props();
@@ -62,18 +62,14 @@ impl ItemBehaviour for EnderEyeItem {
 
             let new_state_id = block.from_properties(&props).to_state_id(block);
             world
-                .set_block_state(&location, new_state_id, BlockFlags::empty())
+                .set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS)
                 .await;
-
-            world
-                .sync_world_event(WorldEvent::EndPortalFrameFill, location, 0)
-                .await;
+            // Consume one item.
+            item.decrement(1);
+            world.sync_world_event(WorldEvent::EndPortalFrameFill, location, 0);
 
             // Try to complete the portal.
             EndPortal::get_new_portal(&world, location).await;
-
-            // Consume one item.
-            item.decrement(1);
         })
     }
 
@@ -87,10 +83,10 @@ impl ItemBehaviour for EnderEyeItem {
 
             let (start_pos, end_pos) = self.get_start_and_end_pos(player);
             let checker = async |pos: &BlockPos, w: &Arc<World>| {
-                w.get_block_state_id(pos).await != Block::AIR.default_state.id
+                w.get_block_state_id(pos) != Block::AIR.default_state.id
             };
             if let Some((hit_pos, _)) = world.raycast(start_pos, end_pos, checker).await
-                && world.get_block(&hit_pos).await == &Block::END_PORTAL_FRAME
+                && world.get_block(&hit_pos) == &Block::END_PORTAL_FRAME
             {
                 return;
             }
@@ -122,15 +118,13 @@ impl ItemBehaviour for EnderEyeItem {
             world.spawn_entity(eye).await;
 
             let pitch = 0.33f32 + rand::random::<f32>() * (0.5 - 0.33);
-            world
-                .play_sound_fine(
-                    Sound::EntityEnderEyeLaunch,
-                    SoundCategory::Neutral,
-                    &spawn_pos,
-                    1.0,
-                    pitch,
-                )
-                .await;
+            world.play_sound_fine(
+                Sound::EntityEnderEyeLaunch,
+                SoundCategory::Neutral,
+                &spawn_pos,
+                1.0,
+                pitch,
+            );
 
             player.inventory.held_item().lock().await.decrement(1);
         })

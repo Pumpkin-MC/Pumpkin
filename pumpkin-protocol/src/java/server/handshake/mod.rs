@@ -6,7 +6,7 @@ use crate::{
 };
 use pumpkin_data::packet::serverbound::HANDSHAKE_INTENTION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// The very first packet sent by the client to initiate a connection
 ///
@@ -25,7 +25,7 @@ pub struct SHandShake {
 }
 
 impl ServerPacket for SHandShake {
-    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             protocol_version: read.get_var_int()?,
             server_address: read.get_string_bounded(255)?,
@@ -42,7 +42,7 @@ impl ClientPacket for SHandShake {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.protocol_version)?;
         write.write_string(&self.server_address)?;

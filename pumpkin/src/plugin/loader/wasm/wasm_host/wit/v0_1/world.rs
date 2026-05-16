@@ -1,7 +1,8 @@
 use pumpkin_data::BlockDirection as InternalBlockDirection;
 use pumpkin_data::block_state::PistonBehavior;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::world::{BlockFlags, SimpleWorld};
+use pumpkin_world::chunk::ChunkHeightmapType;
+use pumpkin_world::world::BlockFlags;
 use std::sync::Arc;
 use wasmtime::component::Resource;
 
@@ -48,6 +49,8 @@ impl PluginHostState {
 }
 
 impl pumpkin::plugin::world::Host for PluginHostState {}
+impl pumpkin::plugin::particles::Host for PluginHostState {}
+impl pumpkin::plugin::sounds::Host for PluginHostState {}
 
 impl pumpkin::plugin::world::HostWorld for PluginHostState {
     async fn get_id(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
@@ -65,7 +68,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     ) -> wasmtime::Result<u16> {
         let world_ref = self.get_world_res(&world)?;
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
-        Ok(world_ref.provider.get_block_state_id(&internal_pos).await)
+        Ok(world_ref.provider.get_block_state_id(&internal_pos))
     }
 
     async fn get_block_state(
@@ -75,7 +78,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     ) -> wasmtime::Result<WitBlockState> {
         let world_ref = self.get_world_res(&world)?;
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
-        let state = world_ref.provider.get_block_state(&internal_pos).await;
+        let state = world_ref.provider.get_block_state(&internal_pos);
 
         Ok(WitBlockState {
             id: state.id,
@@ -175,8 +178,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(self
             .get_world_res(&world)?
             .provider
-            .get_top_block(pumpkin_util::math::vector2::Vector2::new(x, z))
-            .await)
+            .get_top_block(pumpkin_util::math::vector2::Vector2::new(x, z)))
     }
 
     async fn get_motion_blocking_height(
@@ -185,11 +187,11 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         x: i32,
         z: i32,
     ) -> wasmtime::Result<i32> {
-        Ok(self
-            .get_world_res(&world)?
-            .provider
-            .get_motion_blocking_height(x, z)
-            .await)
+        Ok(self.get_world_res(&world)?.provider.get_heightmap_height(
+            ChunkHeightmapType::MotionBlocking,
+            x,
+            z,
+        ))
     }
 
     async fn is_raining(&mut self, world: Resource<World>) -> wasmtime::Result<bool> {
@@ -229,8 +231,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let msg = self.get_text_provider(&message)?;
         self.get_world_res(&world)?
             .provider
-            .broadcast_system_message(&msg, overlay)
-            .await;
+            .broadcast_system_message(&msg, overlay);
         Ok(())
     }
 
@@ -245,15 +246,17 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     async fn play_sound(
         &mut self,
         world: Resource<World>,
-        sound: String,
+        sound: pumpkin::plugin::sounds::Sound,
         category: pumpkin::plugin::world::SoundCategory,
         pos: pumpkin::plugin::common::Position,
         volume: f32,
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound}")))?;
+        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
+        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+
         let internal_category = match category {
             pumpkin::plugin::world::SoundCategory::Master => {
                 pumpkin_data::sound::SoundCategory::Master
@@ -287,46 +290,41 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             }
         };
 
-        world_ref
-            .provider
-            .play_sound_raw(
-                sound_data as u16,
-                internal_category,
-                &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-                volume,
-                pitch,
-            )
-            .await;
+        world_ref.provider.play_sound_raw(
+            sound_data as u16,
+            internal_category,
+            &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            volume,
+            pitch,
+        );
         Ok(())
     }
 
     async fn spawn_particle(
         &mut self,
         world: Resource<World>,
-        particle: String,
+        particle: pumpkin::plugin::particles::Particle,
         pos: pumpkin::plugin::common::Position,
         offset: pumpkin::plugin::common::Position,
         max_speed: f32,
         count: i32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        let particle_data = pumpkin_data::particle::Particle::from_name(&particle)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle}")))?;
+        let particle_name = format!("{particle:?}").to_lowercase().replace('_', "-");
+        let particle_data = pumpkin_data::particle::Particle::from_name(&particle_name)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown particle: {particle_name}")))?;
 
-        world_ref
-            .provider
-            .spawn_particle(
-                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-                pumpkin_util::math::vector3::Vector3::new(
-                    offset.0 as f32,
-                    offset.1 as f32,
-                    offset.2 as f32,
-                ),
-                max_speed,
-                count,
-                particle_data,
-            )
-            .await;
+        world_ref.provider.spawn_particle(
+            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            pumpkin_util::math::vector3::Vector3::new(
+                offset.0 as f32,
+                offset.1 as f32,
+                offset.2 as f32,
+            ),
+            max_speed,
+            count,
+            particle_data,
+        );
         Ok(())
     }
 
@@ -354,6 +352,118 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
 
     async fn get_min_y(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
         Ok(self.get_world_res(&world)?.provider.min_y)
+    }
+
+    async fn get_sky_light(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<u8> {
+        let world_ref = self.get_world_res(&world)?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        Ok(world_ref.provider.get_sky_light_level(&internal_pos))
+    }
+
+    async fn set_sky_light(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        level: u8,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get_world_res(&world)?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        world_ref.provider.set_sky_light_level(&internal_pos, level);
+        Ok(())
+    }
+
+    async fn get_block_light(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<u8> {
+        let world_ref = self.get_world_res(&world)?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        Ok(world_ref
+            .provider
+            .get_block_light_level(&internal_pos)
+            .unwrap_or(0))
+    }
+
+    async fn set_block_light(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        level: u8,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get_world_res(&world)?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        world_ref
+            .provider
+            .set_block_light_level(&internal_pos, level);
+        Ok(())
+    }
+
+    async fn get_biome(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
+        let world_ref = self.get_world_res(&world)?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        let biome = world_ref.provider.get_biome(&internal_pos);
+
+        let mut names: Vec<String> = serde_json::from_str::<
+            std::collections::BTreeMap<String, serde_json::Value>,
+        >(&std::fs::read_to_string("assets/biome.json")?)?
+        .keys()
+        .cloned()
+        .collect();
+        names.sort();
+
+        let index = names
+            .iter()
+            .position(|n| n.strip_prefix("minecraft:").unwrap_or(n) == biome.registry_id)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown biome: {}", biome.registry_id)))?;
+
+        // Safety: The WIT enum is generated from the sorted keys of assets/biome.json.
+        Ok(unsafe { std::mem::transmute::<u8, pumpkin::plugin::biomes::Biome>(index as u8) })
+    }
+
+    async fn spawn_entity(
+        &mut self,
+        world: Resource<World>,
+        entity_type: pumpkin::plugin::entity_types::EntityType,
+        pos: pumpkin::plugin::common::Position,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
+        let world_ref = self.get_world_res(&world)?;
+        let world_provider = world_ref.provider.clone();
+
+        let mut names: Vec<String> = serde_json::from_str::<
+            std::collections::BTreeMap<String, serde_json::Value>,
+        >(&std::fs::read_to_string("assets/entities.json")?)?
+        .keys()
+        .cloned()
+        .collect();
+        names.sort();
+
+        let type_name = names.get(entity_type as usize).ok_or_else(|| {
+            wasmtime::Error::msg(format!("Invalid entity type index: {}", entity_type as u8))
+        })?;
+
+        let internal_type = pumpkin_data::entity::EntityType::from_name(type_name)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Invalid entity type: {type_name}")))?;
+
+        let internal_pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        let entity = crate::entity::r#type::from_type(
+            internal_type,
+            internal_pos,
+            &world_provider,
+            uuid::Uuid::new_v4(),
+        );
+
+        world_provider.spawn_entity(entity.clone()).await;
+
+        self.add_entity(entity)
     }
 
     async fn get_entities(

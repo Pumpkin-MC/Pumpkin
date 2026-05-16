@@ -69,7 +69,7 @@ use super::features::{
     weeping_vines::WeepingVinesFeature,
 };
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub static CONFIGURED_FEATURES: LazyLock<HashMap<String, ConfiguredFeature>> =
     LazyLock::new(build_configured_features);
@@ -147,7 +147,7 @@ impl ConfiguredFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature_name: &str, // This placed feature
@@ -335,6 +335,9 @@ impl ConfiguredFeature {
             Self::Seagrass(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::TwistingVines(feature) => {
+                feature.generate(chunk, min_y, height, feature_name, random, pos)
+            }
             Self::UnderwaterMagma(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
@@ -362,9 +365,19 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::ScatteredOre(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             Self::MonsterRoom(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::BlueIce(feature) => feature.generate(chunk, random, pos),
             Self::GlowstoneBlob(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
@@ -377,6 +390,7 @@ impl ConfiguredFeature {
                 random,
                 pos,
             ),
+            Self::Lake(feature) => feature.generate(block_registry, chunk, random, pos),
             Self::BasaltColumns(feature) => feature.generate(
                 chunk,
                 block_registry,
@@ -403,6 +417,16 @@ impl ConfiguredFeature {
             Self::EndIsland(feature) => {
                 feature.generate(chunk, min_y, height, feature_name, random, pos)
             }
+            Self::SculkPatch(feature) => feature.generate(block_registry, chunk, random, pos),
+            Self::RootSystem(feature) => feature.generate(
+                chunk,
+                block_registry,
+                min_y,
+                height,
+                feature_name,
+                random,
+                pos,
+            ),
             _ => false, // TODO
         }
     }

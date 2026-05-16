@@ -8,7 +8,7 @@ use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::clientbound::PLAY_LEVEL_EVENT;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use pumpkin_macros::java_packet;
 
@@ -54,7 +54,7 @@ impl ClientPacket for CWorldEvent {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_i32_be(self.event)?;

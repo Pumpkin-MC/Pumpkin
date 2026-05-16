@@ -177,7 +177,7 @@ impl CanyonCarver {
         let vertical_multiplier = 1.0 - (0.5 - current_step / distance).abs() * 2.0;
         let factor = canyon_config.shape.vertical_radius_default_factor
             + canyon_config.shape.vertical_radius_center_factor * vertical_multiplier;
-        factor as f64 * vertical_radius * (random.next_inbetween_i32(75, 100) as f64 / 100.0)
+        factor as f64 * vertical_radius * random.next_inbetween_f32(0.75, 1.0) as f64
     }
 
     #[allow(clippy::too_many_arguments)]

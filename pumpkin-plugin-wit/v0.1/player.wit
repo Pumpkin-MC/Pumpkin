@@ -1,11 +1,16 @@
 /// Represents a player connected to the Minecraft server.
 interface player {
-    use common.{hand, item-stack, position, game-mode};
-    use %world.{%world};
-    use entity.{entity};
+    use common.{hand, position, game-mode};
+    use item-stack.{item-stack};
+    use %world.{%world, entity};
     use permission.{permission-level};
     use text.{text-component};
     use gui.{gui};
+    use forms.{form};
+    use java-dialogs.{dialog};
+    use java-packets.{clientbound-packet as java-packet};
+    use bedrock-packets.{clientbound-packet as bedrock-packet};
+    use uuid.{uuid};
 
     /// Various abilities a player can have.
     record player-abilities {
@@ -33,7 +38,7 @@ interface player {
         signature: option<string>,
     }
 
-    /// Flags representing visible skin parts.
+    /// Represents which skin parts are visible.
     flags skin-parts {
         cape,
         jacket,
@@ -44,12 +49,502 @@ interface player {
         hat,
     }
 
+    /// Represents the various abilities a Bedrock Edition player can have.
+    enum bedrock-ability {
+        /// Whether the player can build.
+        build,
+        /// Whether the player can mine blocks.
+        mine,
+        /// Whether the player can use doors and switches.
+        doors-and-switches,
+        /// Whether the player can open containers.
+        open-containers,
+        /// Whether the player can attack other players.
+        attack-players,
+        /// Whether the player can attack mobs.
+        attack-mobs,
+        /// Whether the player can use operator commands.
+        operator-commands,
+        /// Whether the player can teleport.
+        teleport,
+        /// Whether the player is invulnerable.
+        invulnerable,
+        /// Whether the player is currently flying.
+        flying,
+        /// Whether the player is allowed to fly.
+        may-fly,
+        /// Whether the player has instant build (creative).
+        instabuild,
+        /// Whether the player can use lightning-related abilities.
+        lightning,
+        /// The speed at which the player flies.
+        fly-speed,
+        /// The speed at which the player walks.
+        walk-speed,
+        /// Whether the player is muted.
+        muted,
+        /// Whether the player is a world builder.
+        world-builder,
+        /// Whether the player has no-clip enabled.
+        no-clip,
+        /// Whether the player is a privileged builder.
+        privileged-builder,
+        /// The speed at which the player flies vertically.
+        vertical-fly-speed,
+    }
+
+    /// Represents the various status flags a Bedrock Edition entity can have.
+    /// These flags control client-side rendering and behavior.
+    enum bedrock-status-flag {
+        /// Whether the entity is currently on fire.
+        on-fire,
+        /// Whether the entity is sneaking.
+        sneaking,
+        /// Whether the entity is riding another entity.
+        riding,
+        /// Whether the entity is sprinting.
+        sprinting,
+        /// Whether the entity is using an item (e.g., eating, blocking).
+        using-item,
+        /// Whether the entity is invisible.
+        invisible,
+        /// Whether the entity is tempted by an item.
+        tempted,
+        /// Whether the entity is in love (breeding).
+        in-love,
+        /// Whether the entity is saddled.
+        saddled,
+        /// Whether the entity is powered (e.g., charged creeper).
+        powered,
+        /// Whether the entity is ignited.
+        ignited,
+        /// Whether the entity is a baby.
+        baby,
+        /// Whether the entity is currently converting to another type.
+        converting,
+        /// Whether the entity is in a critical state.
+        critical,
+        /// Whether to show the entity's name tag.
+        show-name,
+        /// Whether to always show the entity's name tag.
+        always-show-name,
+        /// Whether the entity has no AI.
+        no-ai,
+        /// Whether the entity is silent.
+        silent,
+        /// Whether the entity is climbing a wall.
+        wall-climbing,
+        /// Whether the entity is climbing.
+        climb,
+        /// Whether the entity is swimming.
+        swim,
+        /// Whether the entity is flying.
+        fly,
+        /// Whether the entity is walking.
+        walk,
+        /// Whether the entity is resting.
+        resting,
+        /// Whether the entity is sitting.
+        sitting,
+        /// Whether the entity is angry.
+        angry,
+        /// Whether the entity is interested.
+        interested,
+        /// Whether the entity is charged.
+        charged,
+        /// Whether the entity is tamed.
+        tamed,
+        /// Whether the entity is orphaned.
+        orphaned,
+        /// Whether the entity is leashed.
+        leashed,
+        /// Whether the entity is sheared.
+        sheared,
+        /// Whether the entity is gliding (elytra).
+        gliding,
+        /// Whether the entity is an elder (e.g., elder guardian).
+        elder,
+        /// Whether the entity is moving.
+        moving,
+        /// Whether the entity is breathing.
+        breathing,
+        /// Whether the entity has a chest (e.g., donkey).
+        chested,
+        /// Whether the entity is stackable.
+        stackable,
+        /// Whether to show the bottom of the entity.
+        show-bottom,
+        /// Whether the entity is standing.
+        standing,
+        /// Whether the entity is shaking.
+        shaking,
+        /// Whether the entity is idling.
+        idling,
+        /// Whether the entity is casting (e.g., evoker).
+        casting,
+        /// Whether the entity is charging an attack.
+        charging,
+        /// Whether the entity is controlled by a keyboard.
+        keyboard-controlled,
+        /// Whether the entity is performing a power jump.
+        power-jump,
+        /// Whether the entity is dashing.
+        dash,
+        /// Whether the entity is lingering.
+        lingering,
+        /// Whether the entity has collision.
+        has-collision,
+        /// Whether the entity has gravity.
+        has-gravity,
+        /// Whether the entity is immune to fire.
+        fire-immune,
+        /// Whether the entity is dancing.
+        dancing,
+        /// Whether the entity is enchanted.
+        enchanted,
+        /// Whether a trident will return to the entity.
+        return-trident,
+        /// Whether the container is private.
+        container-private,
+        /// Whether the entity is transforming.
+        transforming,
+        /// Whether the entity damages nearby mobs.
+        damage-nearby-mobs,
+        /// Whether the entity is swimming.
+        swimming,
+        /// Whether the entity has been bribed.
+        bribed,
+        /// Whether the entity is pregnant.
+        pregnant,
+        /// Whether the entity is laying an egg.
+        laying-egg,
+        /// Whether a passenger can pick up the entity.
+        passenger-can-pick,
+        /// Whether the entity is transitioning to sitting.
+        transition-sitting,
+        /// Whether the entity is eating.
+        eating,
+        /// Whether the entity is laying down.
+        laying-down,
+        /// Whether the entity is sneezing.
+        sneezing,
+        /// Whether the entity is trusting.
+        trusting,
+        /// Whether the entity is rolling.
+        rolling,
+        /// Whether the entity is scared.
+        scared,
+        /// Whether the entity is in scaffolding.
+        in-scaffolding,
+        /// Whether the entity is over scaffolding.
+        over-scaffolding,
+        /// Whether the entity is descending through a block.
+        descend-through-block,
+        /// Whether the entity is blocking.
+        blocking,
+        /// Whether the entity is transitioning to blocking.
+        transition-blocking,
+        /// Whether the entity is blocked using a shield.
+        blocked-using-shield,
+        /// Whether the entity is blocked using a damaged shield.
+        blocked-using-damaged-shield,
+        /// Whether the entity is sleeping.
+        sleeping,
+        /// Whether the entity wants to wake up.
+        wants-to-wake,
+        /// Whether the entity shows interest in trading.
+        trade-interest,
+        /// Whether the entity can break doors.
+        door-breaker,
+        /// Whether the entity is breaking an obstruction.
+        breaking-obstruction,
+        /// Whether the entity can open doors.
+        door-opener,
+        /// Whether the entity is a captain (raid).
+        captain,
+        /// Whether the entity is stunned.
+        stunned,
+        /// Whether the entity is roaring.
+        roaring,
+        /// Whether the entity has a delayed attack.
+        delayed-attack,
+        /// Whether the entity is avoiding mobs.
+        avoiding-mobs,
+        /// Whether the entity is avoiding a block.
+        avoiding-block,
+        /// Whether the entity is facing a target for a ranged attack.
+        facing-target-to-range-attack,
+        /// Whether the entity is hidden when invisible.
+        hidden-when-invisible,
+        /// Whether the entity is in a UI.
+        in-ui,
+        /// Whether the entity is stalking.
+        stalking,
+        /// Whether the entity is emoting.
+        emoting,
+        /// Whether the entity is celebrating.
+        celebrating,
+        /// Whether the entity is admiring (piglin).
+        admiring,
+        /// Whether the entity is celebrating a special event.
+        celebrating-special,
+        /// Whether the entity is out of control.
+        out-of-control,
+        /// Whether the entity is performing a ram attack.
+        ram-attack,
+        /// Whether the entity is playing dead.
+        playing-dead,
+        /// Whether the entity is in an ascending block.
+        in-ascending-block,
+        /// Whether the entity is over a descending block.
+        over-descending-block,
+        /// Whether the entity is croaking (frog).
+        croaking,
+        /// Whether the entity is digesting a mob.
+        digest-mob,
+        /// Whether the entity has a jump goal.
+        jump-goal,
+        /// Whether the entity is emerging.
+        emerging,
+        /// Whether the entity is sniffing.
+        sniffing,
+        /// Whether the entity is digging.
+        digging,
+        /// Whether the entity is performing a sonic boom.
+        sonic-boom,
+        /// Whether the entity has a dash timeout.
+        has-dash-timeout,
+        /// Whether the entity is pushed towards the closest space.
+        push-towards-closest-space,
+        /// Whether the entity is scenting.
+        scenting,
+        /// Whether the entity is rising.
+        rising,
+        /// Whether the entity is feeling happy.
+        feeling-happy,
+        /// Whether the entity is searching.
+        searching,
+        /// Whether the entity is crawling.
+        crawling,
+        /// Whether the entity's body rotation is blocked.
+        body-rotation-blocked,
+        /// Whether the entity is rendered when invisible.
+        render-when-invisible,
+        /// Whether the entity's body rotation is axis-aligned.
+        body-rotation-axis-aligned,
+        /// Whether the entity is collidable.
+        collidable,
+        /// Whether the entity is air-controlled via WASD.
+        wasd-air-controlled,
+        /// Whether only the server can authorize a dismount.
+        does-server-auth-only-dismount,
+        /// Whether the body rotation always follows the head.
+        body-rotation-always-follows-head,
+        /// Whether the entity can use vertical movement actions.
+        can-use-vertical-movement-action,
+        /// Whether rotation is locked to the vehicle.
+        rotation-locked-to-vehicle,
+    }
+
+    /// Represents a specific version of the Minecraft Java Edition protocol.
+    enum java-minecraft-version {
+        v-1-7-2,
+        v-1-7-6,
+        v-1-8,
+        v-1-9,
+        v-1-9-1,
+        v-1-9-2,
+        v-1-9-3,
+        v-1-10,
+        v-1-11,
+        v-1-11-1,
+        v-1-12,
+        v-1-12-1,
+        v-1-12-2,
+        v-1-13,
+        v-1-13-1,
+        v-1-13-2,
+        v-1-14,
+        v-1-14-1,
+        v-1-14-2,
+        v-1-14-3,
+        v-1-14-4,
+        v-1-15,
+        v-1-15-1,
+        v-1-15-2,
+        v-1-16,
+        v-1-16-1,
+        v-1-16-2,
+        v-1-16-3,
+        v-1-16-4,
+        v-1-17,
+        v-1-17-1,
+        v-1-18,
+        v-1-18-2,
+        v-1-19,
+        v-1-19-1,
+        v-1-19-3,
+        v-1-19-4,
+        v-1-20,
+        v-1-20-2,
+        v-1-20-3,
+        v-1-20-5,
+        v-1-21,
+        v-1-21-2,
+        v-1-21-4,
+        v-1-21-5,
+        v-1-21-6,
+        v-1-21-7,
+        v-1-21-9,
+        v-1-21-11,
+        v-26-1,
+        unknown,
+    }
+
+    /// Represents a specific version of the Minecraft Bedrock Edition protocol.
+    enum bedrock-minecraft-version {
+        v-1-21,
+        v-1-26-20,
+        unknown,
+    }
+
+    /// Represents settings for a Java Edition player.
+    record java-player-settings {
+        /// The player's preferred language (e.g., \"en_us\").
+        locale: string,
+        /// The maximum distance at which chunks are rendered.
+        view-distance: u8,
+        /// The player's chat visibility settings.
+        chat-mode: chat-mode,
+        /// Whether chat colors are enabled.
+        chat-colors: bool,
+        /// The player's skin configuration options.
+        skin-parts: skin-parts,
+        /// The player's dominant hand (left or right).
+        main-hand: hand,
+        /// Whether text filtering is enabled.
+        text-filtering: bool,
+        /// Whether the player wants to appear in the server list.
+        server-listing: bool,
+    }
+
+    /// The chat visibility settings for a player.
+    enum chat-mode {
+        /// Chat is fully enabled.
+        enabled,
+        /// Only system messages and commands are shown.
+        commands-only,
+        /// Chat is completely hidden.
+        hidden,
+    }
+
+    /// Represents the operating system of a Bedrock Edition client.
+    enum bedrock-device-os {
+        android,
+        ios,
+        osx,
+        amazon,
+        gear-vr,
+        holo-lens,
+        windows-10,
+        win-32,
+        dedicated,
+        tv-os,
+        playstation,
+        nintendo,
+        xbox,
+        windows-phone,
+        linux,
+        /// Fallback for unrecognized operating systems.
+        unknown,
+    }
+
+    /// Represents the input mode used by a Bedrock Edition client.
+    enum bedrock-input-mode {
+        /// Unknown input mode.
+        unknown,
+        /// Mouse and keyboard.
+        mouse,
+        /// Touch screen.
+        touch,
+        /// Game controller.
+        game-pad,
+        /// Motion-based controller.
+        motion-controller,
+    }
+
+    /// Represents the UI profile used by a Bedrock Edition client.
+    enum bedrock-ui-profile {
+        /// Classic desktop UI.
+        classic,
+        /// Pocket/Mobile optimized UI.
+        pocket,
+        /// Unknown UI profile.
+        unknown,
+    }
+
+    /// Represents the graphics mode used by a Bedrock Edition client.
+    enum bedrock-graphics-mode {
+        simple,
+        fancy,
+        ray-traced,
+        unknown,
+    }
+
+    /// Represents settings and client data for a Bedrock Edition player.
+    record bedrock-player-settings {
+        /// The client's specific game version string.
+        game-version: string,
+        /// The operating system of the client device.
+        device-os: bedrock-device-os,
+        /// A unique identifier for the client device.
+        device-id: string,
+        /// The model name of the client device.
+        device-model: string,
+        /// The player's preferred language code (e.g., \"en_US\").
+        language-code: string,
+        /// The input mode currently used by the player.
+        current-input-mode: bedrock-input-mode,
+        /// The default input mode for the client device.
+        default-input-mode: bedrock-input-mode,
+        /// The UI layout profile used by the client.
+        ui-profile: bedrock-ui-profile,
+        /// The current GUI scale setting.
+        gui-scale: s32,
+        /// Whether the player is in Editor mode.
+        is-editor-mode: bool,
+        /// The maximum view distance the client supports.
+        max-view-distance: s32,
+        /// The memory tier of the client device (indicates performance level).
+        memory-tier: s32,
+        /// The graphics mode used by the client.
+        graphics-mode: bedrock-graphics-mode,
+        /// The player's unique PlayFab identifier.
+        playfab-id: string,
+        /// A random 64-bit ID generated by the client.
+        client-random-id: s64,
+        /// Platform-specific offline identifier.
+        platform-offline-id: string,
+        /// Platform-specific online identifier.
+        platform-online-id: string,
+        /// The unique ID of the player's current skin.
+        skin-id: string,
+        /// The model arm size (e.g., \"wide\" or \"slim\").
+        arm-size: string,
+        /// Whether the player is using a Character Creator (Persona) skin.
+        is-persona-skin: bool,
+        /// Whether the skin is a premium (paid) skin.
+        is-premium-skin: bool,
+        /// Whether the skin is from a trusted source.
+        is-trusted-skin: bool,
+    }
+
     /// A handle to a player on the server.
     resource player {
         /// Returns the player as an entity.
         as-entity: func () -> entity;
         /// Returns the player's unique UUID as a string.
-        get-id: func () -> string;
+        get-id: func () -> uuid;
         /// Returns the player's username.
         get-name: func () -> string;
 
@@ -67,7 +562,7 @@ interface player {
         get-gamemode: func () -> game-mode;
         /// Changes the player's game mode. Returns true if successful.
         set-gamemode: func (mode: game-mode) -> bool;
-        /// Returns the player's locale (e.g., "en_us").
+        /// Returns the player's locale (e.g., \"en_us\").
         get-locale: func () -> string;
         /// Returns the player's current ping in milliseconds.
         get-ping: func () -> u32;
@@ -79,9 +574,9 @@ interface player {
         /// Sets the player's permission level.
         set-permission-level: func (level: permission-level);
         /// Grants or denies a specific permission node for the player.
-	    set-permission: func(node: string, value: bool);
-	    /// Removes an explicitly set permission node from the player.
-	    unset-permission: func(node: string);
+        set-permission: func(node: string, value: bool);
+        /// Removes an explicitly set permission node from the player.
+        unset-permission: func(node: string);
         /// Returns `Some(true)` if granted, `Some(false)` if denied, or `None` if not set.
         has-permission-set: func (node: string) -> option<bool>;
         /// Checks if the player has a specific permission node.
@@ -138,6 +633,9 @@ interface player {
         /// Bans the player's IP address with an optional reason.
         ban-ip: func (reason: option<text-component>);
 
+        /// Transfers the player to another server.
+        transfer: func (host: string, port: u16);
+
         // Inventory
 
         /// Returns the index of the currently selected hotbar slot (0-8).
@@ -146,6 +644,11 @@ interface player {
         get-item-in-hand: func (hand: hand) -> option<item-stack>;
         /// Returns the item in the specified inventory slot.
         get-inventory-item: func (slot: u8) -> option<item-stack>;
+
+        /// Sets the item in the specified hand.
+        set-item-in-hand: func (hand: hand, stack: option<item-stack>);
+        /// Sets the item in the specified inventory slot.
+        set-inventory-item: func (slot: u8, stack: option<item-stack>);
 
         // Status
 
@@ -207,9 +710,87 @@ interface player {
         /// Returns the player's current skin textures.
         get-skin: func() -> option<player-skin>;
 
-        /// Returns the currently visible skin parts.
+        /// Updates the player's skin textures.
+        /// Note: this only updates the fields, it doesn't reload the skin.
+        set-skin: func(skin: player-skin);
+
+        /// Returns which skin parts are visible.
         get-skin-parts: func() -> skin-parts;
         /// Sets which skin parts are visible.
         set-skin-parts: func(parts: skin-parts);
+
+        /// Returns a Java-specific player handle, if the player is connected via Java Edition.
+        ///
+        /// This allows access to Java-exclusive features like sending specific packets
+        /// or retrieving the client brand.
+        as-java: func() -> option<java-player>;
+
+        /// Returns a Bedrock-specific player handle, if the player is connected via Bedrock Edition.
+        ///
+        /// This allows access to Bedrock-exclusive features like custom forms
+        /// or detailed device information.
+        as-bedrock: func() -> option<bedrock-player>;
     }
+
+    /// A handle to a player connected via the Java Edition.
+    resource java-player {
+        /// Returns the Minecraft Java Edition version of the player.
+        get-version: func() -> java-minecraft-version;
+
+        /// Returns the brand of the player's client (e.g., \"vanilla\", \"fabric\").
+        get-brand: func() -> string;
+
+        /// Returns the server address the player used to connect.
+        get-server-address: func() -> string;
+
+        /// Returns the player's configuration settings.
+        get-settings: func() -> java-player-settings;
+
+        /// Sends a Java-specific clientbound packet to the player.
+        send-packet: func(packet: java-packet);
+
+        /// Sends a custom payload packet (plugin message) to the player.
+        send-custom-payload: func(channel: string, data: list<u8>);
+
+        /// Shows a dialog to the player.
+        show-dialog: func(dialog: dialog);
+
+        /// Clears any currently shown dialog for the player.
+        clear-dialog: func();
+    }
+
+    /// A handle to a player connected via the Bedrock Edition.
+    resource bedrock-player {
+        /// Returns the Minecraft Bedrock Edition version of the player.
+        get-version: func() -> bedrock-minecraft-version;
+
+        /// Returns the player's configuration settings.
+        get-settings: func() -> bedrock-player-settings;
+
+        /// Returns whether a specific Bedrock-only ability is enabled for the player.
+        get-ability: func(ability: bedrock-ability) -> bool;
+
+        /// Sets whether a specific Bedrock-only ability is enabled for the player.
+        set-ability: func(ability: bedrock-ability, value: bool);
+
+        /// Returns whether a specific Bedrock-only status flag is enabled for the player.
+        ///
+        /// Status flags control things like whether the player is on fire, sneaking,
+        /// sprinting, or has specific visual effects.
+        get-status-flag: func(flag: bedrock-status-flag) -> bool;
+
+        /// Sets whether a specific Bedrock-only status flag is enabled for the player.
+        ///
+        /// This can be used to manually trigger client-side visual states.
+        set-status-flag: func(flag: bedrock-status-flag, value: bool);
+
+        /// Sends a Bedrock-specific clientbound packet to the player.
+        send-packet: func(packet: bedrock-packet);
+
+        /// Opens a Bedrock custom form for the player.
+        open-form: func(form: form) -> u32;
+    }
+
+    /// Returns a list of all players in a specific world.
+    get-world-players: func(world-ref: %world) -> list<player>;
 }

@@ -694,6 +694,7 @@ impl BlockPalette {
         )
     }
 
+    #[must_use]
     pub fn to_disk_nbt(&self) -> ChunkSectionBlockStates {
         let bits_per_entry = self.bits_per_entry().max(BLOCK_DISK_MIN_BITS);
         let (palette, packed_data) = self.to_palette_and_packed_data(bits_per_entry);

@@ -23,7 +23,7 @@ impl Explosion {
         Self { power, pos }
     }
 
-    async fn get_blocks_to_destroy(
+    fn get_blocks_to_destroy(
         &self,
         world: &World,
     ) -> FxHashMap<BlockPos, (&'static Block, &'static BlockState)> {
@@ -53,8 +53,8 @@ impl Explosion {
                     let mut h = self.power * random_val.mul_add(0.6, 0.7);
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
-                        let (block, state) = world.get_block_and_state(&block_pos).await;
-                        let (_, fluid_state) = world.get_fluid_and_fluid_state(&block_pos).await;
+                        let (block, state) = world.get_block_and_state(&block_pos);
+                        let (_, fluid_state) = world.get_fluid_and_fluid_state(&block_pos);
 
                         // if !world.is_in_build_limit(&block_pos) {
                         //     // Pass by reference
@@ -146,7 +146,7 @@ impl Explosion {
 
             let knockback_multiplier = (1.0 - distance) * exposure * (1.0 - knockback_resistance);
             let knockback = direction * knockback_multiplier;
-            entity.add_velocity(knockback).await;
+            entity.add_velocity(knockback);
         }
     }
 
@@ -185,7 +185,7 @@ impl Explosion {
 
                     if world
                         .raycast(vec3d, *explosion_pos, async |pos, world_ref| {
-                            let state = world_ref.get_block_state(pos).await;
+                            let state = world_ref.get_block_state(pos);
                             !state.is_air() && !state.collision_shapes.is_empty()
                         })
                         .await
@@ -211,7 +211,7 @@ impl Explosion {
 
     /// Returns the removed block count
     pub async fn explode(&self, world: &Arc<World>) -> u32 {
-        let blocks = self.get_blocks_to_destroy(world).await;
+        let blocks = self.get_blocks_to_destroy(world);
         self.damage_entities(world).await;
         for (pos, (block, state)) in &blocks {
             world.set_block_state(pos, 0, BlockFlags::NOTIFY_ALL).await;

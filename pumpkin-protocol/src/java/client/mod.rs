@@ -2,6 +2,7 @@
 // Server -> Client
 //
 pub mod config;
+pub mod dialog;
 pub mod login;
 pub mod play;
 pub mod status;

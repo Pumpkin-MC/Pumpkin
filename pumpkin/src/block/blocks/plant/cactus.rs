@@ -20,7 +20,7 @@ pub struct CactusBlock;
 impl BlockBehaviour for CactusBlock {
     fn on_scheduled_tick<'a>(&'a self, args: OnScheduledTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            if !can_place_at(args.world.as_ref(), args.position).await {
+            if !can_place_at(args.world.as_ref(), args.position) {
                 args.world
                     .break_block(args.position, None, BlockFlags::empty())
                     .await;
@@ -31,19 +31,19 @@ impl BlockBehaviour for CactusBlock {
     fn random_tick<'a>(&'a self, args: RandomTickArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let block_up = args.position.up();
-            if args.world.get_block_state(&block_up).await.is_air() {
-                let state = args.world.get_block_state(args.position).await;
+            if args.world.get_block_state(&block_up).is_air() {
+                let state = args.world.get_block_state(args.position);
                 let mut props = CactusLikeProperties::from_state_id(state.id, args.block);
                 let age = props.age;
                 let mut i = 1;
-                while args.world.get_block(&args.position.down_height(i)).await == &Block::CACTUS {
+                while args.world.get_block(&args.position.down_height(i)) == &Block::CACTUS {
                     i += 1;
                     if 1 == 3 && age == 15 {
                         return;
                     }
                 }
 
-                if age == 8 && can_place_at(args.world.as_ref(), &block_up).await {
+                if age == 8 && can_place_at(args.world.as_ref(), &block_up) {
                     let d = if i >= 3 { 0.25 } else { 0.1 };
                     if rand::rng().random_range(0.0..1.0) <= d {
                         args.world
@@ -102,31 +102,28 @@ impl BlockBehaviour for CactusBlock {
         args: GetStateForNeighborUpdateArgs<'a>,
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            if !can_place_at(args.world, args.position).await {
+            if !can_place_at(args.world, args.position) {
                 args.world
-                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal)
-                    .await;
+                    .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
             }
 
             args.state_id
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { can_place_at(args.block_accessor, args.position).await })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        can_place_at(args.block_accessor, args.position)
     }
 }
 
-async fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     for direction in BlockDirection::horizontal() {
-        let (block, state) = world
-            .get_block_and_state(&block_pos.offset(direction.to_offset()))
-            .await;
+        let (block, state) = world.get_block_and_state(&block_pos.offset(direction.to_offset()));
         if state.is_solid() || block == &Block::LAVA {
             return false;
         }
     }
-    let block = world.get_block(&block_pos.down()).await;
+    let block = world.get_block(&block_pos.down());
     (block == &Block::CACTUS || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CACTUS))
-        && !world.get_block_state(&block_pos.up()).await.is_liquid()
+        && !world.get_block_state(&block_pos.up()).is_liquid()
 }

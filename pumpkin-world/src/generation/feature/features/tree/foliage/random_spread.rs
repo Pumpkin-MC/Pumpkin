@@ -1,6 +1,6 @@
 use pumpkin_data::BlockState;
 use pumpkin_util::{
-    math::{int_provider::IntProvider, position::BlockPos},
+    math::{int_provider::IntProvider, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -19,20 +19,24 @@ impl RandomSpreadFoliagePlacer {
         &self,
         chunk: &mut T,
         random: &mut RandomGenerator,
-        _node: &TreeNode,
+        node: &TreeNode,
         foliage_height: i32,
         radius: i32,
         _offset: i32,
         foliage_provider: &BlockState,
-    ) {
+    ) -> Vec<BlockPos> {
+        let mut foliage_positions = Vec::new();
         for _ in 0..self.leaf_placement_attempts {
-            let pos = BlockPos::new(
+            let pos = BlockPos(node.center.0.add(&Vector3::new(
                 random.next_bounded_i32(radius) - random.next_bounded_i32(radius),
                 random.next_bounded_i32(foliage_height) - random.next_bounded_i32(foliage_height),
                 random.next_bounded_i32(radius) - random.next_bounded_i32(radius),
-            );
-            FoliagePlacer::place_foliage_block(chunk, pos, foliage_provider);
+            )));
+            if FoliagePlacer::place_foliage_block(chunk, pos, foliage_provider) {
+                foliage_positions.push(pos);
+            }
         }
+        foliage_positions
     }
     // TODO: getRandomRadius
     pub fn get_random_height(&self, random: &mut RandomGenerator, _trunk_height: i32) -> i32 {

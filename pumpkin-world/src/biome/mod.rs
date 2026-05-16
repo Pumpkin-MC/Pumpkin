@@ -19,7 +19,6 @@ pub trait BiomeSupplier {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome;
 }
 
-#[derive(Clone, Copy)]
 pub struct MultiNoiseBiomeSupplier {
     source: &'static BiomeTree,
 }

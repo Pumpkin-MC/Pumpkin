@@ -32,10 +32,9 @@ impl BlockBehaviour for SeaPickleBlock {
                 || !args
                     .world
                     .get_block(&args.position.down())
-                    .await
                     .has_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
                 || !SeaPickleProperties::from_state_id(
-                    args.world.get_block_state_id(args.position).await,
+                    args.world.get_block_state_id(args.position),
                     args.block,
                 )
                 .waterlogged
@@ -62,11 +61,10 @@ impl BlockBehaviour for SeaPickleBlock {
                         );
                         if &lv == args.position
                             || rand::rng().random_range(0..6) != 0
-                            || !args.world.get_block(&lv).await.eq(&Block::WATER)
+                            || !args.world.get_block(&lv).eq(&Block::WATER)
                             || !args
                                 .world
                                 .get_block(&lv.down())
-                                .await
                                 .has_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
                         {
                             continue;
@@ -124,21 +122,14 @@ impl BlockBehaviour for SeaPickleBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let support_block = args
-                .block_accessor
-                .get_block_state(&args.position.down())
-                .await;
-            support_block.is_center_solid(BlockDirection::Up)
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let support_block = args.block_accessor.get_block_state(&args.position.down());
+        support_block.is_center_solid(BlockDirection::Up)
     }
 
-    fn can_update_at<'a>(&'a self, args: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            args.player.get_entity().pose.load() != EntityPose::Crouching
-                && SeaPickleProperties::from_state_id(args.state_id, args.block).pickles < 4
-        })
+    fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
+        args.player.get_entity().pose.load() != EntityPose::Crouching
+            && SeaPickleProperties::from_state_id(args.state_id, args.block).pickles < 4
     }
 
     fn get_state_for_neighbor_update<'a>(

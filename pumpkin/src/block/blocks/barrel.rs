@@ -6,6 +6,7 @@ use crate::block::{
     {BlockBehaviour, NormalUseArgs},
 };
 
+use crate::block::entities::barrel::BarrelBlockEntity;
 use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
 use pumpkin_data::translation;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
@@ -16,7 +17,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::barrel::BarrelBlockEntity;
 use pumpkin_world::inventory::Inventory;
 use tokio::sync::Mutex;
 
@@ -60,7 +60,7 @@ impl BlockBehaviour for BarrelBlock {
 
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.get_inventory()
             {
                 args.player
@@ -75,9 +75,7 @@ impl BlockBehaviour for BarrelBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             let barrel_block_entity = BarrelBlockEntity::new(*args.position);
-            args.world
-                .add_block_entity(Arc::new(barrel_block_entity))
-                .await;
+            args.world.add_block_entity(Arc::new(barrel_block_entity));
         })
     }
 }

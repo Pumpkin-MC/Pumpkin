@@ -10,7 +10,6 @@ use super::{
     IndexToNoisePos, NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl,
 };
 
-#[derive(Clone)]
 pub struct Constant {
     value: f64,
 }
@@ -43,7 +42,6 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for Constant {
     }
 }
 
-#[derive(Clone)]
 pub struct Linear {
     pub(crate) input_index: usize,
     min_value: f64,
@@ -95,7 +93,6 @@ impl Linear {
     }
 }
 
-#[derive(Clone)]
 pub struct Binary {
     pub(crate) input1_index: usize,
     pub(crate) input2_index: usize,
@@ -275,7 +272,6 @@ impl Binary {
     }
 }
 
-#[derive(Clone)]
 pub struct Unary {
     pub(crate) input_index: usize,
     min_value: f64,
@@ -345,7 +341,6 @@ impl Unary {
     }
 }
 
-#[derive(Clone)]
 pub struct Clamp {
     input_index: usize,
     data: &'static ClampData,

@@ -7,16 +7,20 @@ use crate::plugin::loader::wasm::wasm_host::{
     wit::v0_1::pumpkin::plugin::{
         common::{EntityPose, Position},
         entity::Host,
+        entity_types,
         text::TextComponent,
+        uuid::Uuid,
         world::{
             BlockPos as WitBlockPos, Entity, HostEntity, RaycastResult as WitRaycastResult, World,
         },
     },
+    wit::v0_1::uuid::UuidExt,
     wit::v0_1::world::to_wasm_block_direction,
 };
 use pumpkin_data::entity::EntityPose as InternalEntityPose;
 
 impl Host for PluginHostState {}
+impl entity_types::Host for PluginHostState {}
 
 fn entity_from_resource(
     state: &PluginHostState,
@@ -58,14 +62,33 @@ impl HostEntity for PluginHostState {
         Ok(entity.get_entity().entity_id as u32)
     }
 
-    async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<String> {
+    async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Uuid> {
         let entity = entity_from_resource(self, &entity)?;
-        Ok(entity.get_entity().entity_uuid.to_string())
+        Ok(Uuid::to_wit(&entity.get_entity().entity_uuid))
     }
 
-    async fn get_type(&mut self, entity: Resource<Entity>) -> wasmtime::Result<String> {
+    async fn get_type(
+        &mut self,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<entity_types::EntityType> {
         let entity = entity_from_resource(self, &entity)?;
-        Ok(entity.get_entity().entity_type.resource_name.to_string())
+        let original_name = entity.get_entity().entity_type.resource_name;
+
+        let mut names: Vec<String> = serde_json::from_str::<
+            std::collections::BTreeMap<String, serde_json::Value>,
+        >(&std::fs::read_to_string("assets/entities.json")?)?
+        .keys()
+        .cloned()
+        .collect();
+        names.sort();
+
+        let index = names
+            .iter()
+            .position(|n| n == original_name)
+            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown entity type: {original_name}")))?;
+
+        // Safety: The WIT enum is generated from the sorted keys of assets/entities.json.
+        Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
     }
 
     async fn get_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
@@ -413,7 +436,7 @@ impl HostEntity for PluginHostState {
                     let pos = *pos;
                     let world = w.clone();
                     async move {
-                        let block = world.get_block_state(&pos).await;
+                        let block = world.get_block_state(&pos);
                         !block.is_air()
                     }
                 },

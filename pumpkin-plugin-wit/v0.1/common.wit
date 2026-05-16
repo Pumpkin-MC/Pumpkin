@@ -59,14 +59,6 @@ interface common {
         b: u8,
     }
 
-    /// Represents a stack of items with its type and count.
-    record item-stack {
-        /// The unique registry key (e.g., "minecraft:diamond").
-        registry-key: string,
-        /// The number of items in the stack.
-        count: u8,
-    }
-
     /// Represents the type of click interaction in a GUI.
     enum click-type {
         left,

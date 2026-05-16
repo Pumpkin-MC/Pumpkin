@@ -1,19 +1,24 @@
+use crate::{
+    entity::player::ChatMode,
+    net::{bedrock::BedrockClient, java::JavaClient},
+    server::Server,
+};
+use arc_swap::ArcSwap;
+use bytes::Bytes;
 use std::{
     net::SocketAddr,
     num::NonZeroU8,
     sync::{Arc, atomic::Ordering},
 };
 
-use crate::{
-    entity::player::ChatMode,
-    net::{bedrock::BedrockClient, java::JavaClient},
-    server::Server,
-};
-
 use pumpkin_data::translation;
 use pumpkin_protocol::{ClientPacket, Property};
-use pumpkin_util::{Hand, ProfileAction, text::TextComponent};
-use serde::Deserialize;
+use pumpkin_util::{
+    Hand, ProfileAction,
+    text::TextComponent,
+    version::{BedrockMinecraftVersion, JavaMinecraftVersion},
+};
+use serde::{Deserialize, Deserializer};
 use sha1::Digest;
 use sha2::Sha256;
 use tokio::task::JoinHandle;
@@ -28,13 +33,33 @@ mod proxy;
 pub mod query;
 pub mod rcon;
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct GameProfile {
     pub id: Uuid,
     pub name: String,
-    pub properties: Vec<Property>,
+    #[serde(deserialize_with = "from_vec")]
+    pub properties: ArcSwap<Vec<Property>>,
     #[serde(rename = "profileActions")]
     pub profile_actions: Option<Vec<ProfileAction>>,
+}
+
+impl Clone for GameProfile {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            name: self.name.clone(),
+            properties: ArcSwap::new(self.properties.load().clone()),
+            profile_actions: self.profile_actions.clone(),
+        }
+    }
+}
+
+fn from_vec<'de, D>(deserializer: D) -> Result<ArcSwap<Vec<Property>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Vec::<Property>::deserialize(deserializer)?;
+    Ok(ArcSwap::new(Arc::new(v)))
 }
 
 pub fn offline_uuid(username: &str) -> Result<Uuid, uuid::Error> {
@@ -126,6 +151,27 @@ impl ClientPlatform {
         }
     }
 
+    pub fn java_version(&self) -> JavaMinecraftVersion {
+        match self {
+            Self::Java(java) => java.version.load(),
+            Self::Bedrock(_) => JavaMinecraftVersion::Unknown,
+        }
+    }
+
+    pub fn bedrock_version(&self) -> BedrockMinecraftVersion {
+        match self {
+            Self::Java(_) => BedrockMinecraftVersion::Unknown,
+            Self::Bedrock(bedrock) => bedrock.version.load(),
+        }
+    }
+
+    pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet_data(packet_data),
+            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet_data(packet_data),
+        }
+    }
+
     pub async fn await_close_interrupt(&self) {
         match self {
             Self::Java(java) => java.await_close_interrupt().await,
@@ -151,10 +197,24 @@ impl ClientPlatform {
         }
     }
 
+    pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet(packet),
+            Self::Bedrock(_) => (),
+        }
+    }
+
     pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
         match self {
             Self::Java(java) => java.send_packet_now(packet).await,
             Self::Bedrock(_) => (),
+        }
+    }
+
+    pub async fn send_packet_now_data(&self, data: Bytes) {
+        match self {
+            Self::Java(java) => java.send_packet_now_data(data).await,
+            Self::Bedrock(bedrock) => bedrock.enqueue_packet_data(data).await,
         }
     }
 
@@ -241,6 +301,8 @@ pub enum EncryptionError {
     FailedDecrypt,
     #[error("shared secret has the wrong length")]
     SharedWrongLength,
+    #[error("encryption is already enabled")]
+    AlreadyEncrypted,
 }
 
 fn is_valid_player_name(name: &str) -> bool {

@@ -13,9 +13,12 @@ pub mod arrow;
 pub mod egg;
 pub mod ender_pearl;
 pub mod eye_of_ender;
+pub mod fireball;
 pub mod firework_rocket;
+pub mod fishing_bobber;
 pub mod lingering_potion;
 pub mod shulker_bullet;
+pub mod small_fireball;
 pub mod snowball;
 pub mod splash_potion;
 pub mod wind_charge;
@@ -31,6 +34,9 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::LINGERING_POTION
         || *entity_type == EntityType::ENDER_PEARL
         || *entity_type == EntityType::SHULKER_BULLET
+        || *entity_type == EntityType::FIREBALL
+        || *entity_type == EntityType::SMALL_FIREBALL
+        || *entity_type == EntityType::FISHING_BOBBER
 }
 
 pub struct ThrownItemEntity {
@@ -132,7 +138,7 @@ impl ThrownItemEntity {
 
         // Send updated velocity to clients
         let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-        world.broadcast_packet_all(&packet).await;
+        world.broadcast_packet_all(&packet);
 
         // Calculate search box for collisions
         let search_box = BoundingBox::new(

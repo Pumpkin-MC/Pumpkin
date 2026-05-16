@@ -26,8 +26,8 @@ struct Rail {
 }
 
 impl Rail {
-    async fn find_with_elevation(world: &World, position: BlockPos) -> Option<Self> {
-        let (block, block_state) = world.get_block_and_state_id(&position).await;
+    fn find_with_elevation(world: &World, position: BlockPos) -> Option<Self> {
+        let (block, block_state) = world.get_block_and_state_id(&position);
         if block.has_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state, block);
             return Some(Self {
@@ -39,7 +39,7 @@ impl Rail {
         }
 
         let pos = position.up();
-        let (block, block_state) = world.get_block_and_state_id(&pos).await;
+        let (block, block_state) = world.get_block_and_state_id(&pos);
         if block.has_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state, block);
             return Some(Self {
@@ -51,7 +51,7 @@ impl Rail {
         }
 
         let pos = position.down();
-        let (block, block_state) = world.get_block_and_state_id(&pos).await;
+        let (block, block_state) = world.get_block_and_state_id(&pos);
         if block.has_tag(&tag::Item::MINECRAFT_RAILS) {
             let properties = RailProperties::new(block_state, block);
             return Some(Self {
@@ -65,25 +65,25 @@ impl Rail {
         None
     }
 
-    async fn find_if_unlocked(
+    fn find_if_unlocked(
         world: &World,
         place_pos: &BlockPos,
         direction: HorizontalFacing,
     ) -> Option<Self> {
         let rail_position = place_pos.offset(direction.to_offset());
-        let rail = Self::find_with_elevation(world, rail_position).await?;
+        let rail = Self::find_with_elevation(world, rail_position)?;
 
-        if rail.is_locked(world).await {
+        if rail.is_locked(world) {
             return None;
         }
 
         Some(rail)
     }
 
-    async fn is_locked(&self, world: &World) -> bool {
+    fn is_locked(&self, world: &World) -> bool {
         for direction in self.properties.directions() {
             let Some(other_rail) =
-                Self::find_with_elevation(world, self.position.offset(direction.to_offset())).await
+                Self::find_with_elevation(world, self.position.offset(direction.to_offset()))
             else {
                 // Rails pointing to non-rail blocks are not locked
                 return false;

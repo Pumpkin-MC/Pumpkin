@@ -155,7 +155,7 @@ impl CrashReport {
                     eprintln!(
                         "{}\n{}",
                         RED.console_color("Backtrace:"),
-                        &self.captured_backtrace
+                        self.captured_backtrace
                     );
                 }
             }

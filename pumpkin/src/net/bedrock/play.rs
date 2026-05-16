@@ -304,7 +304,7 @@ impl BedrockClient {
 
                 let entity = &player.living_entity.entity;
                 let world = entity.world.load_full();
-                let (block, state) = world.get_block_and_state(&location).await;
+                let (block, state) = world.get_block_and_state(&location);
 
                 if player.gamemode.load() == GameMode::Creative {
                     let new_state = world
@@ -326,7 +326,7 @@ impl BedrockClient {
 
                     let speed = crate::block::calc_block_breaking(player, state, block).await;
                     if speed >= 1.0 {
-                        let broken_state = world.get_block_state(&location).await;
+                        let broken_state = world.get_block_state(&location);
                         let new_state = world
                             .break_block(
                                 &location,
@@ -410,5 +410,19 @@ impl BedrockClient {
                 }
             }
         }}
+    }
+
+    pub async fn handle_modal_form_response(
+        &self,
+        player: &Arc<Player>,
+        server: &Server,
+        packet: pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse,
+    ) {
+        let event = crate::plugin::api::events::player::bedrock_form_response::BedrockFormResponseEvent::new(
+            player.clone(),
+            packet.form_id.0 as u32,
+            packet.form_data,
+        );
+        let _ = server.plugin_manager.fire(event).await;
     }
 }

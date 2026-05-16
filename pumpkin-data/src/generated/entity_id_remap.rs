@@ -80,38 +80,38 @@ pub static ENTITY_ID_REMAP_V_26_1_TO_V_1_21_9: &[u16] = &[
 #[must_use]
 pub fn remap_entity_id_for_version(
     entity_id: u16,
-    version: pumpkin_util::version::MinecraftVersion,
+    version: pumpkin_util::version::JavaMinecraftVersion,
 ) -> u16 {
     match version {
-        pumpkin_util::version::MinecraftVersion::V_1_20_5 => ENTITY_ID_REMAP_V_26_1_TO_V_1_20_5
+        pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 => ENTITY_ID_REMAP_V_26_1_TO_V_1_20_5
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_2 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_2
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_2
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_4 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_4
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_4
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_5 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_5
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_5 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_5
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_6 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_6
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_6 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_6
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_7 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_7
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_7 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_7
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::MinecraftVersion::V_1_21_9 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_9
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => ENTITY_ID_REMAP_V_26_1_TO_V_1_21_9
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),

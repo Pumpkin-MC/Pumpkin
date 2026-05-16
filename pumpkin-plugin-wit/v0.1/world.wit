@@ -2,6 +2,11 @@ interface %world {
     use common.{position, entity-pose};
     use text.{text-component};
     use scoreboard.{scoreboard};
+    use particles.{particle};
+    use sounds.{sound};
+    use entity-types.{entity-type};
+    use biomes.{biome};
+    use uuid.{uuid};
 
     /// Defines how a block reacts when pushed by a piston.
     enum piston-behavior {
@@ -103,8 +108,8 @@ interface %world {
 
     resource entity {
         get-id: func() -> u32;
-        get-uuid: func() -> string;
-        get-type: func() -> string;
+        get-uuid: func() -> uuid;
+        get-type: func() -> entity-type;
 
         get-position: func() -> position;
         get-world: func() -> %world;
@@ -200,7 +205,7 @@ interface %world {
         /// Returns the total age of the world in ticks.
         get-world-age: func() -> u64;
 
-        /// Returns the dimension type (e.g., "minecraft:overworld").
+        /// Returns the dimension type (e.g., \"minecraft:overworld\").
         get-dimension: func() -> string;
 
         /// Gets the highest non-air block Y coordinate at the specified X and Z.
@@ -228,10 +233,10 @@ interface %world {
         get-scoreboard: func() -> scoreboard;
 
         /// Plays a sound at the specified position for all players in the world.
-        play-sound: func(sound: string, category: sound-category, pos: position, volume: f32, pitch: f32);
+        play-sound: func(sound: sound, category: sound-category, pos: position, volume: f32, pitch: f32);
 
         /// Spawns particles at the specified position.
-        spawn-particle: func(particle: string, pos: position, offset: position, max-speed: f32, count: s32);
+        spawn-particle: func(particle: particle, pos: position, offset: position, max-speed: f32, count: s32);
 
         /// Creates an explosion at the specified position.
         create-explosion: func(pos: position, power: f32, create-fire: bool, interaction: explosion-interaction);
@@ -241,6 +246,24 @@ interface %world {
 
         /// Returns the minimum Y coordinate (bottom of the world).
         get-min-y: func() -> s32;
+
+        /// Returns the sky light level at the specified position.
+        get-sky-light: func(pos: block-pos) -> u8;
+
+        /// Sets the sky light level at the specified position.
+        set-sky-light: func(pos: block-pos, level: u8);
+
+        /// Returns the block light level at the specified position.
+        get-block-light: func(pos: block-pos) -> u8;
+
+        /// Sets the block light level at the specified position.
+        set-block-light: func(pos: block-pos, level: u8);
+
+        /// Returns the biome at the specified position.
+        get-biome: func(pos: block-pos) -> biome;
+
+        /// Spawns an entity of the specified type at the given position.
+        spawn-entity: func(entity-type: entity-type, pos: position) -> entity;
 
         /// Returns a list of all entities in this world.
         get-entities: func() -> list<entity>;

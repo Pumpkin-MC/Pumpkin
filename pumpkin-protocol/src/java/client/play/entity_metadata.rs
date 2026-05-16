@@ -5,7 +5,7 @@ use pumpkin_data::{
     packet::clientbound::PLAY_SET_ENTITY_DATA, tracked_data::TrackedId,
 };
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use serde::Serialize;
 
 use crate::{
@@ -41,7 +41,7 @@ impl ClientPacket for CSetEntityMetadata {
     fn write_packet_data(
         &self,
         write: impl Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
 
@@ -72,7 +72,7 @@ impl<T> Metadata<T> {
     pub fn write<W: std::io::Write>(
         &self,
         mut writer: W,
-        version: &pumpkin_util::version::MinecraftVersion,
+        version: &pumpkin_util::version::JavaMinecraftVersion,
     ) -> Result<(), WritingError>
     where
         T: Serialize,

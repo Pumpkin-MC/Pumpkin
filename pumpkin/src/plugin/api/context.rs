@@ -4,7 +4,10 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use crate::{LoggerOption, command::client_suggestions, plugin::PluginMetadata, plugin_log};
+use crate::{
+    LoggerOption, command::client_suggestions, net::ClientPlatform, plugin::PluginMetadata,
+    plugin_log,
+};
 use pumpkin_util::{
     PermissionLvl,
     permission::{Permission, PermissionManager},
@@ -210,7 +213,17 @@ impl Context {
     /// - `player`: The player for which the commands will be reloaded.
     pub async fn reload_commands_for(&self, player: &Arc<Player>) {
         let command_dispatcher = self.server.command_dispatcher.read().await;
-        client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher).await;
+        if let ClientPlatform::Bedrock(_) = &player.client {
+            client_suggestions::send_bedrock_commands_packet(
+                player,
+                &self.server,
+                &command_dispatcher,
+            )
+            .await;
+        } else {
+            client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher)
+                .await;
+        }
     }
 
     /// Register a permission for this plugin

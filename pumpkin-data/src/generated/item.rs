@@ -2949,6 +2949,7 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
     pub const BOOKSHELF: Item = Item {
@@ -3008,6 +3009,7 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
     pub const BOWL: Item = Item {
@@ -4259,6 +4261,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 12 }),
         ],
     };
     pub const CHAINMAIL_CHESTPLATE: Item = Item {
@@ -4311,6 +4314,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 12 }),
         ],
     };
     pub const CHAINMAIL_HELMET: Item = Item {
@@ -4363,6 +4367,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 12 }),
         ],
     };
     pub const CHAINMAIL_LEGGINGS: Item = Item {
@@ -4415,6 +4420,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 12 }),
         ],
     };
     pub const CHARCOAL: Item = Item {
@@ -6118,6 +6124,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
     pub const COPPER_BARS: Item = Item {
@@ -6208,6 +6215,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 8 }),
         ],
     };
     pub const COPPER_BULB: Item = Item {
@@ -6317,6 +6325,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 8 }),
         ],
     };
     pub const COPPER_DOOR: Item = Item {
@@ -6445,6 +6454,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 8 }),
         ],
     };
     pub const COPPER_HOE: Item = Item {
@@ -6507,6 +6517,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
     pub const COPPER_HORSE_ARMOR: Item = Item {
@@ -6647,6 +6658,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 8 }),
         ],
     };
     pub const COPPER_NAUTILUS_ARMOR: Item = Item {
@@ -6797,6 +6809,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
     pub const COPPER_SHOVEL: Item = Item {
@@ -6859,6 +6872,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
     pub const COPPER_SPEAR: Item = Item {
@@ -6901,6 +6915,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
     pub const COPPER_SWORD: Item = Item {
@@ -6968,6 +6983,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 13 }),
         ],
     };
     pub const COPPER_TORCH: Item = Item {
@@ -7638,6 +7654,7 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
     pub const CRYING_OBSIDIAN: Item = Item {
@@ -9350,6 +9367,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_BLOCK: Item = Item {
@@ -9421,6 +9439,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_CHESTPLATE: Item = Item {
@@ -9473,6 +9492,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_HELMET: Item = Item {
@@ -9525,6 +9545,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_HOE: Item = Item {
@@ -9587,6 +9608,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_HORSE_ARMOR: Item = Item {
@@ -9689,6 +9711,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_NAUTILUS_ARMOR: Item = Item {
@@ -9820,6 +9843,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_SHOVEL: Item = Item {
@@ -9882,6 +9906,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_SPEAR: Item = Item {
@@ -9924,6 +9949,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIAMOND_SWORD: Item = Item {
@@ -9991,6 +10017,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 10 }),
         ],
     };
     pub const DIORITE: Item = Item {
@@ -11568,6 +11595,7 @@ impl Item {
                     attribute_modifiers: Cow::Borrowed(&[]),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
     pub const FLETCHING_TABLE: Item = Item {
@@ -12410,6 +12438,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
     pub const GOLDEN_BOOTS: Item = Item {
@@ -12462,6 +12491,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 25 }),
         ],
     };
     pub const GOLDEN_CARROT: Item = Item {
@@ -12551,6 +12581,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 25 }),
         ],
     };
     pub const GOLDEN_DANDELION: Item = Item {
@@ -12622,6 +12653,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 25 }),
         ],
     };
     pub const GOLDEN_HOE: Item = Item {
@@ -12684,6 +12716,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
     pub const GOLDEN_HORSE_ARMOR: Item = Item {
@@ -12786,6 +12819,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 25 }),
         ],
     };
     pub const GOLDEN_NAUTILUS_ARMOR: Item = Item {
@@ -12898,6 +12932,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
     pub const GOLDEN_SHOVEL: Item = Item {
@@ -12960,6 +12995,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
     pub const GOLDEN_SPEAR: Item = Item {
@@ -13002,6 +13038,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
     pub const GOLDEN_SWORD: Item = Item {
@@ -13069,6 +13106,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 22 }),
         ],
     };
     pub const GRANITE: Item = Item {
@@ -14589,6 +14627,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
     pub const IRON_BARS: Item = Item {
@@ -14679,6 +14718,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
     pub const IRON_CHAIN: Item = Item {
@@ -14750,6 +14790,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
     pub const IRON_DOOR: Item = Item {
@@ -14840,6 +14881,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
     pub const IRON_HOE: Item = Item {
@@ -14902,6 +14944,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
     pub const IRON_HORSE_ARMOR: Item = Item {
@@ -15023,6 +15066,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
     pub const IRON_NAUTILUS_ARMOR: Item = Item {
@@ -15173,6 +15217,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
     pub const IRON_SHOVEL: Item = Item {
@@ -15235,6 +15280,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
     pub const IRON_SPEAR: Item = Item {
@@ -15277,6 +15323,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
     pub const IRON_SWORD: Item = Item {
@@ -15344,6 +15391,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 14 }),
         ],
     };
     pub const IRON_TRAPDOOR: Item = Item {
@@ -16080,6 +16128,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const LEATHER_CHESTPLATE: Item = Item {
@@ -16132,6 +16181,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const LEATHER_HELMET: Item = Item {
@@ -16184,6 +16234,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const LEATHER_HORSE_ARMOR: Item = Item {
@@ -16286,6 +16337,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const LECTERN: Item = Item {
@@ -17525,6 +17577,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const MAGENTA_BANNER: Item = Item {
@@ -19819,6 +19872,7 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_BLOCK: Item = Item {
@@ -19909,6 +19963,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_CHESTPLATE: Item = Item {
@@ -19974,6 +20029,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_HELMET: Item = Item {
@@ -20039,6 +20095,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_HOE: Item = Item {
@@ -20107,6 +20164,7 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_HORSE_ARMOR: Item = Item {
@@ -20260,6 +20318,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_NAUTILUS_ARMOR: Item = Item {
@@ -20391,6 +20450,7 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_SCRAP: Item = Item {
@@ -20484,6 +20544,7 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_SPEAR: Item = Item {
@@ -20532,6 +20593,7 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_SWORD: Item = Item {
@@ -20605,6 +20667,7 @@ impl Item {
                     res_type: DamageResistantType::Fire,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const NETHERITE_UPGRADE_SMITHING_TEMPLATE: Item = Item {
@@ -28151,6 +28214,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
     pub const STONE_BRICK_SLAB: Item = Item {
@@ -28308,6 +28372,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
     pub const STONE_PICKAXE: Item = Item {
@@ -28370,6 +28435,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
     pub const STONE_PRESSURE_PLATE: Item = Item {
@@ -28451,6 +28517,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
     pub const STONE_SLAB: Item = Item {
@@ -28512,6 +28579,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
     pub const STONE_STAIRS: Item = Item {
@@ -28598,6 +28666,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 5 }),
         ],
     };
     pub const STONECUTTER: Item = Item {
@@ -29769,6 +29838,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 1 }),
         ],
     };
     pub const TRIPWIRE_HOOK: Item = Item {
@@ -30151,6 +30221,7 @@ impl Item {
                     shearing_sound: IdOr::Id(Sound::ItemShearsSnip),
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 9 }),
         ],
     };
     pub const TURTLE_SCUTE: Item = Item {
@@ -32948,6 +33019,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const WOODEN_HOE: Item = Item {
@@ -33010,6 +33082,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const WOODEN_PICKAXE: Item = Item {
@@ -33072,6 +33145,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const WOODEN_SHOVEL: Item = Item {
@@ -33134,6 +33208,7 @@ impl Item {
                     item_damage_per_attack: 2,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const WOODEN_SPEAR: Item = Item {
@@ -33176,6 +33251,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const WOODEN_SWORD: Item = Item {
@@ -33243,6 +33319,7 @@ impl Item {
                     item_damage_per_attack: 1,
                 },
             ),
+            (Enchantable, &EnchantableImpl { value: 15 }),
         ],
     };
     pub const WRITABLE_BOOK: Item = Item {

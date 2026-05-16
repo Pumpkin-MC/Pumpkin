@@ -27,8 +27,10 @@ pub struct NetworkingConfig {
     pub rcon: RCONConfig,
     /// Proxy-related networking settings.
     pub proxy: ProxyConfig,
-    /// Packet compression settings.
-    pub packet_compression: CompressionConfig,
+    /// Java Edition packet compression settings.
+    pub java_compression: CompressionConfig,
+    /// Bedrock Edition packet compression settings.
+    pub bedrock_compression: CompressionConfig,
     /// LAN broadcast settings.
     pub lan_broadcast: LANBroadcastConfig,
 }

@@ -39,12 +39,12 @@ impl Goal for EatGrassGoal {
             let block_pos = entity.block_pos.load();
             let world = entity.world.load();
 
-            let block_at_pos = world.get_block(&block_pos).await;
+            let block_at_pos = world.get_block(&block_pos);
             if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
                 return true;
             }
 
-            let block_below = world.get_block(&block_pos.down()).await;
+            let block_below = world.get_block(&block_pos.down());
             block_below.id == Block::GRASS_BLOCK.id
         })
     }
@@ -56,7 +56,7 @@ impl Goal for EatGrassGoal {
     fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
         Box::pin(async move {
             self.timer = MAX_TIMER;
-            let mut navigator = mob.get_mob_entity().navigator.lock().await;
+            let mut navigator = mob.get_mob_entity().navigator.lock().unwrap();
             navigator.stop();
         })
     }
@@ -70,7 +70,7 @@ impl Goal for EatGrassGoal {
                 let block_pos = entity.block_pos.load();
                 let world = entity.world.load_full();
 
-                let block_at_pos = world.get_block(&block_pos).await;
+                let block_at_pos = world.get_block(&block_pos);
                 if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
                     world
                         .set_block_state(
@@ -82,7 +82,7 @@ impl Goal for EatGrassGoal {
                     mob.on_eating_grass().await;
                 } else {
                     let below_pos = block_pos.down();
-                    let block_below = world.get_block(&below_pos).await;
+                    let block_below = world.get_block(&below_pos);
                     if block_below.id == Block::GRASS_BLOCK.id {
                         world
                             .set_block_state(
