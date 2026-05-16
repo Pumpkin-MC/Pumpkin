@@ -1,7 +1,8 @@
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 
-use crate::chunk::format::anvil::{CHUNK_COUNT, SingleChunkDataSerializer};
+use crate::chunk::format::anvil::SingleChunkDataSerializer;
 use crate::chunk::io::{ChunkSerializer, LoadedData};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::Bytes;
@@ -9,7 +10,6 @@ use pumpkin_util::math::vector2::Vector2;
 use ruzstd::decoding::StreamingDecoder;
 use ruzstd::encoding::{CompressionLevel, compress_to_vec};
 use serde::{Deserialize, Serialize};
-use tracing::warn;
 
 pub struct PumpFile<D> {
     pub data: PumpData,
@@ -20,17 +20,13 @@ pub struct PumpFile<D> {
 pub struct PumpData {
     pub x: i32,
     pub z: i32,
-    pub chunks: Vec<Option<Vec<u8>>>,
+    pub chunks: BTreeMap<String, Vec<u8>>,
 }
 
 impl<D> Default for PumpFile<D> {
     fn default() -> Self {
         Self {
-            data: PumpData {
-                x: 0,
-                z: 0,
-                chunks: vec![None; CHUNK_COUNT],
-            },
+            data: PumpData::default(),
             _phantom: PhantomData,
         }
     }
@@ -55,8 +51,9 @@ where
     }
 
     async fn write(&self, backend: &Self::WriteBackend) -> Result<(), std::io::Error> {
-        let bytes =
-            pumpkin_nbt::to_pnbt(&self.data).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let mut bytes = Vec::new();
+        pumpkin_nbt::to_bytes_unnamed(&self.data, &mut bytes)
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
 
         let compressed = compress_to_vec(&bytes[..], CompressionLevel::Fastest);
 
@@ -65,16 +62,17 @@ where
 
     fn read(r: Bytes) -> Result<Self, ChunkReadingError> {
         let mut decoder = StreamingDecoder::new(&r[..])
-            .map_err(|e| ChunkReadingError::IoError(std::io::Error::other(e.to_string()).kind()))?;
+            .map_err(|e| ChunkReadingError::IoError(std::io::Error::other(e.to_string())))?;
         let mut decompressed = Vec::new();
         std::io::Read::read_to_end(&mut decoder, &mut decompressed)
-            .map_err(|e| ChunkReadingError::IoError(e.kind()))?;
+            .map_err(ChunkReadingError::IoError)?;
 
-        let data: PumpData = pumpkin_nbt::from_pnbt(&decompressed).map_err(|e| {
-            ChunkReadingError::ParsingError(
-                crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
-            )
-        })?;
+        let data: PumpData = pumpkin_nbt::from_bytes_unnamed(std::io::Cursor::new(decompressed))
+            .map_err(|e| {
+                ChunkReadingError::ParsingError(
+                    crate::chunk::ChunkParsingError::ErrorDeserializingChunk(e.to_string()),
+                )
+            })?;
 
         Ok(Self {
             data,
@@ -99,11 +97,7 @@ where
             .await
             .map_err(|e| ChunkWritingError::ChunkSerializingError(e.to_string()))?;
 
-        if index < self.data.chunks.len() {
-            self.data.chunks[index] = Some(bytes.to_vec());
-        } else {
-            warn!("Chunk position {}, {} out of range for Pump region", x, z);
-        }
+        self.data.chunks.insert(index.to_string(), bytes.to_vec());
 
         Ok(())
     }
@@ -118,31 +112,18 @@ where
             let rel_z = pos.y.rem_euclid(32);
             let index = (rel_x + rel_z * 32) as usize;
 
-            if index < self.data.chunks.len() {
-                if let Some(chunk_bytes) = &self.data.chunks[index] {
-                    let bytes = Bytes::copy_from_slice(chunk_bytes);
-                    match D::from_bytes(&bytes, pos) {
-                        Ok(data) => {
-                            let _ = stream.send(LoadedData::Loaded(data)).await;
-                        }
-                        Err(e) => {
-                            let _ = stream.send(LoadedData::Error((pos, e))).await;
-                        }
+            if let Some(chunk_bytes) = self.data.chunks.get(&index.to_string()) {
+                let bytes = Bytes::copy_from_slice(chunk_bytes);
+                match D::from_bytes(&bytes, pos) {
+                    Ok(data) => {
+                        let _ = stream.send(LoadedData::Loaded(data)).await;
                     }
-                } else {
-                    let _ = stream.send(LoadedData::Missing(pos)).await;
+                    Err(e) => {
+                        let _ = stream.send(LoadedData::Error((pos, e))).await;
+                    }
                 }
             } else {
-                let _ = stream
-                    .send(LoadedData::Error((
-                        pos,
-                        ChunkReadingError::ParsingError(
-                            crate::chunk::ChunkParsingError::ErrorDeserializingChunk(
-                                "Chunk out of range".to_string(),
-                            ),
-                        ),
-                    )))
-                    .await;
+                let _ = stream.send(LoadedData::Missing(pos)).await;
             }
         }
     }

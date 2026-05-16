@@ -5,7 +5,7 @@ pub const fn to_long(float: f32) -> i64 {
     (float * 10000f32) as i64
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct NoiseValuePoint {
     pub temperature: i64,
     pub humidity: i64,

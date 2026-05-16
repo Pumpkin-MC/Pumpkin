@@ -24,22 +24,20 @@ impl Ignition {
         let world = player.world();
         let pos = location.offset(face.to_offset());
 
-        if world.get_fluid(&location).await.name != Fluid::EMPTY.name {
+        if world.get_fluid(&location).name != Fluid::EMPTY.name {
             return false;
         }
-        let fire_block = FireBlockBase::get_fire_type(&world, &pos).await;
+        let fire_block = FireBlockBase::get_fire_type(&world, &pos);
 
-        let state_id = world.get_block_state_id(&location).await;
+        let state_id = world.get_block_state_id(&location);
 
         if let Some(new_state_id) = can_be_lit(block, state_id) {
             ignite_logic(world.clone(), location, new_state_id).await;
             return true;
         }
 
-        let state_id = FireBlock
-            .get_state_for_position(&world, &fire_block, &pos)
-            .await;
-        if FireBlockBase::can_place_at(&world, &pos).await {
+        let state_id = FireBlock.get_state_for_position(&world, &fire_block, &pos);
+        if FireBlockBase::can_place_at(&world, &pos) {
             ignite_logic(world.clone(), pos, state_id).await;
             return true;
         }
@@ -49,9 +47,9 @@ impl Ignition {
 }
 
 fn can_be_lit(block: &Block, state_id: u16) -> Option<u16> {
-    let mut props = match &block.properties(state_id) {
-        Some(props) => props.to_props(),
-        None => return None,
+    let mut props = {
+        let props = &block.properties(state_id)?;
+        props.to_props()
     };
 
     if let Some((_, value)) = props.iter_mut().find(|(k, _)| *k == "extinguished") {

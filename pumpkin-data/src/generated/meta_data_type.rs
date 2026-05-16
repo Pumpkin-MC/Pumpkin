@@ -661,17 +661,17 @@ impl MetaDataType {
         v1_21_11: 28i32,
         v26_1: 32i32,
     };
-    pub const fn id(&self, version: pumpkin_util::version::MinecraftVersion) -> i32 {
+    pub const fn id(&self, version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
         match version {
-            pumpkin_util::version::MinecraftVersion::V_1_21 => self.v1_21,
-            pumpkin_util::version::MinecraftVersion::V_1_21_2 => self.v1_21_2,
-            pumpkin_util::version::MinecraftVersion::V_1_21_4 => self.v1_21_4,
-            pumpkin_util::version::MinecraftVersion::V_1_21_5 => self.v1_21_5,
-            pumpkin_util::version::MinecraftVersion::V_1_21_6 => self.v1_21_6,
-            pumpkin_util::version::MinecraftVersion::V_1_21_7 => self.v1_21_7,
-            pumpkin_util::version::MinecraftVersion::V_1_21_9 => self.v1_21_9,
-            pumpkin_util::version::MinecraftVersion::V_1_21_11 => self.v1_21_11,
-            pumpkin_util::version::MinecraftVersion::V_26_1 => self.v26_1,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21 => self.v1_21,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 => self.v1_21_2,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 => self.v1_21_4,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_5 => self.v1_21_5,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_6 => self.v1_21_6,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_7 => self.v1_21_7,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => self.v1_21_9,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 => self.v1_21_11,
+            pumpkin_util::version::JavaMinecraftVersion::V_26_1 => self.v26_1,
             _ => -1i32,
         }
     }

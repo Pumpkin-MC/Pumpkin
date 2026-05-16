@@ -13,7 +13,7 @@ use pumpkin_util::{
 use super::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 pub enum BlockStateProvider {
     Simple(SimpleStateProvider),
@@ -43,7 +43,7 @@ impl BlockStateProvider {
 
     pub fn get_with_context<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         random: &mut RandomGenerator,
         pos: BlockPos,
@@ -56,7 +56,7 @@ impl BlockStateProvider {
 
     pub fn get_optional<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         random: &mut RandomGenerator,
         pos: BlockPos,
@@ -76,7 +76,7 @@ pub struct RuleBasedBlockStateProvider {
 impl RuleBasedBlockStateProvider {
     pub fn get<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         random: &mut RandomGenerator,
         pos: BlockPos,
@@ -88,7 +88,7 @@ impl RuleBasedBlockStateProvider {
     }
     pub fn get_optional<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         random: &mut RandomGenerator,
         pos: BlockPos,

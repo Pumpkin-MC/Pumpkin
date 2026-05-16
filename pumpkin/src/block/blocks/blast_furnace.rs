@@ -1,5 +1,9 @@
 use std::sync::Arc;
 
+use crate::block::entities::{
+    PropertyDelegate, blasting_furnace::BlastingFurnaceBlockEntity,
+    furnace_like_block_entity::ExperienceContainer,
+};
 use pumpkin_data::{
     block_properties::{BlockProperties, FurnaceLikeProperties},
     screen::WindowType,
@@ -12,14 +16,7 @@ use pumpkin_inventory::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{
-    BlockStateId,
-    block::entities::{
-        PropertyDelegate, blasting_furnace::BlastingFurnaceBlockEntity,
-        furnace_like_block_entity::ExperienceContainer,
-    },
-    inventory::Inventory,
-};
+use pumpkin_world::{BlockStateId, inventory::Inventory};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -75,7 +72,11 @@ impl ScreenHandlerFactory for BlastingFurnaceScreenFactory {
     }
 
     fn get_display_name(&self) -> pumpkin_util::text::TextComponent {
-        TextComponent::translate(translation::CONTAINER_BLAST_FURNACE, &[])
+        TextComponent::translate_cross(
+            translation::java::CONTAINER_BLAST_FURNACE,
+            translation::bedrock::TILE_BLAST_FURNACE_NAME,
+            &[],
+        )
     }
 }
 
@@ -85,7 +86,7 @@ pub struct BlastFurnaceBlock;
 impl BlockBehaviour for BlastFurnaceBlock {
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(inventory) = block_entity.clone().get_inventory()
                 && let Some(property_delegate) = block_entity.clone().to_property_delegate()
                 && let Some(experience_container) = block_entity.to_experience_container()
@@ -121,15 +122,14 @@ impl BlockBehaviour for BlastFurnaceBlock {
         Box::pin(async move {
             let blasting_furnace_block_entity = BlastingFurnaceBlockEntity::new(*args.position);
             args.world
-                .add_block_entity(Arc::new(blasting_furnace_block_entity))
-                .await;
+                .add_block_entity(Arc::new(blasting_furnace_block_entity));
         })
     }
 
     fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             // Extract and drop accumulated XP as orbs before removing the block entity
-            if let Some(block_entity) = args.world.get_block_entity(args.position).await
+            if let Some(block_entity) = args.world.get_block_entity(args.position)
                 && let Some(experience_container) = block_entity.to_experience_container()
             {
                 let xp = experience_container.extract_experience();
@@ -138,7 +138,7 @@ impl BlockBehaviour for BlastFurnaceBlock {
                     ExperienceOrbEntity::spawn(args.world, pos, xp as u32).await;
                 }
             }
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 }

@@ -52,7 +52,9 @@ impl LinearV2Superblock {
 
     fn from_bytes(buf: &[u8]) -> Result<Self, ChunkReadingError> {
         if buf.len() < Self::SIZE {
-            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+            return Err(ChunkReadingError::IoError(std::io::Error::from(
+                ErrorKind::UnexpectedEof,
+            )));
         }
         let mut b = buf;
         let mut sig = [0u8; 8];
@@ -110,11 +112,11 @@ struct ChunkBitmap([u8; 128]);
 impl ChunkBitmap {
     const SIZE: usize = 128;
 
-    fn new() -> Self {
+    const fn new() -> Self {
         Self([0u8; 128])
     }
 
-    fn set(&mut self, index: usize, exists: bool) {
+    const fn set(&mut self, index: usize, exists: bool) {
         let byte = index / 8;
         let bit = index % 8;
         if exists {
@@ -125,7 +127,7 @@ impl ChunkBitmap {
     }
 
     #[allow(dead_code)]
-    fn get(&self, index: usize) -> bool {
+    const fn get(&self, index: usize) -> bool {
         let byte = index / 8;
         let bit = index % 8;
         (self.0[byte] >> bit) & 1 == 1
@@ -150,14 +152,18 @@ impl NbtFeatures {
         let mut map = HashMap::new();
         loop {
             if !buf.has_remaining() {
-                return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+                return Err(ChunkReadingError::IoError(std::io::Error::from(
+                    ErrorKind::UnexpectedEof,
+                )));
             }
             let key_len = buf.get_u8();
             if key_len == 0 {
                 break;
             }
             if buf.remaining() < key_len as usize + 4 {
-                return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+                return Err(ChunkReadingError::IoError(std::io::Error::from(
+                    ErrorKind::UnexpectedEof,
+                )));
             }
             let key_bytes: Vec<u8> = (0..key_len).map(|_| buf.get_u8()).collect();
             let key = String::from_utf8(key_bytes).map_err(|_| ChunkReadingError::InvalidHeader)?;
@@ -199,7 +205,9 @@ impl BucketSizeEntry {
 
     fn from_bytes(buf: &mut impl Buf) -> Result<Self, ChunkReadingError> {
         if buf.remaining() < Self::SIZE {
-            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+            return Err(ChunkReadingError::IoError(std::io::Error::from(
+                ErrorKind::UnexpectedEof,
+            )));
         }
         Ok(Self {
             size: buf.get_u32(),
@@ -251,7 +259,9 @@ impl BucketChunkEntry {
 
     fn read_from(buf: &mut Bytes) -> Result<Self, ChunkReadingError> {
         if buf.remaining() < Self::FIXED_SIZE {
-            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+            return Err(ChunkReadingError::IoError(std::io::Error::from(
+                ErrorKind::UnexpectedEof,
+            )));
         }
         let size = buf.get_u32() as usize;
         let timestamp = buf.get_u64();
@@ -266,7 +276,9 @@ impl BucketChunkEntry {
                 "Linear v2: not enough bytes for chunk (need {size}, have {})",
                 buf.remaining()
             );
-            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+            return Err(ChunkReadingError::IoError(std::io::Error::from(
+                ErrorKind::UnexpectedEof,
+            )));
         }
         let data = buf.split_to(size);
         Ok(Self {
@@ -315,8 +327,8 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
         AnvilChunkFile::<S>::get_chunk_index(x, z)
     }
 
-    /// Number of buckets in the grid (grid_size²).
-    fn bucket_count(grid_size: u8) -> usize {
+    /// Number of buckets in the grid (`grid_size²`).
+    const fn bucket_count(grid_size: u8) -> usize {
         (grid_size as usize) * (grid_size as usize)
     }
 
@@ -344,7 +356,7 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
     }
 
     /// Inverse of `chunk_bucket_index` + `chunk_local_index`.
-    fn global_chunk_index(bucket_idx: usize, local: usize, grid_size: u8) -> usize {
+    const fn global_chunk_index(bucket_idx: usize, local: usize, grid_size: u8) -> usize {
         let stride = 32 / grid_size as usize;
         let bucket_row = bucket_idx / grid_size as usize;
         let bucket_col = bucket_idx % grid_size as usize;
@@ -440,7 +452,9 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         let mut buf = raw_file;
 
         if buf.remaining() < LinearV2Superblock::SIZE {
-            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+            return Err(ChunkReadingError::IoError(std::io::Error::from(
+                ErrorKind::UnexpectedEof,
+            )));
         }
         let superblock_bytes = buf.split_to(LinearV2Superblock::SIZE);
         let superblock = LinearV2Superblock::from_bytes(&superblock_bytes)?;
@@ -448,7 +462,9 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         let bucket_count = Self::bucket_count(grid_size);
 
         if buf.remaining() < ChunkBitmap::SIZE {
-            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+            return Err(ChunkReadingError::IoError(std::io::Error::from(
+                ErrorKind::UnexpectedEof,
+            )));
         }
         // We read the bitmap but per the spec it is not yet reliable, so we
         // do not use it to short-circuit — actual presence is determined by
@@ -461,7 +477,9 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
 
         let total_bucket_meta = bucket_count * BucketSizeEntry::SIZE;
         if buf.remaining() < total_bucket_meta {
-            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+            return Err(ChunkReadingError::IoError(std::io::Error::from(
+                ErrorKind::UnexpectedEof,
+            )));
         }
         let mut bucket_entries: Vec<BucketSizeEntry> = Vec::with_capacity(bucket_count);
         for _ in 0..bucket_count {
@@ -472,7 +490,9 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
         // consuming the bucket data bytes yet.
         let total_compressed: usize = bucket_entries.iter().map(|e| e.size as usize).sum();
         if buf.remaining() < total_compressed + SIGNATURE.len() {
-            return Err(ChunkReadingError::IoError(ErrorKind::UnexpectedEof));
+            return Err(ChunkReadingError::IoError(std::io::Error::from(
+                ErrorKind::UnexpectedEof,
+            )));
         }
         let footer_offset = total_compressed;
         {
@@ -510,8 +530,8 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
                     .map_err(|_| ChunkReadingError::RegionIsInvalid)?;
                 decoder
                     .read_to_end(&mut decompressed)
-                    .map_err(|e| ChunkReadingError::IoError(e.kind()))?;
-            }
+                    .map_err(ChunkReadingError::IoError)?
+            };
             buf.advance(compressed_size);
 
             let mut bucket_buf: Bytes = decompressed.into();
@@ -548,8 +568,7 @@ impl<S: SingleChunkDataSerializer> ChunkSerializer for LinearV2File<S> {
 
         self.timestamps[index] = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_secs());
         self.chunks_data[index] = Some(chunk_raw);
         Ok(())
     }

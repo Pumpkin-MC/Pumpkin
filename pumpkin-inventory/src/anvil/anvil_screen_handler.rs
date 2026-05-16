@@ -8,7 +8,7 @@ use crate::{
     player::player_inventory::PlayerInventory,
     screen_handler::{
         InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour,
-        ScreenHandlerFuture,
+        ScreenHandlerFuture, offer_or_drop_stack,
     },
     slot::NormalSlot,
     window_property::{Anvil, WindowProperty},
@@ -121,7 +121,7 @@ impl ScreenHandler for AnvilScreenHandler {
             for i in 0..2 {
                 let stack = self.inventory.remove_stack(i).await;
                 if !stack.is_empty() {
-                    player.drop_item(stack, false).await;
+                    offer_or_drop_stack(player, stack).await;
                 }
             }
             self.inventory.set_stack(2, ItemStack::EMPTY.clone()).await;

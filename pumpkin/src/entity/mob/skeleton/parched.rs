@@ -10,8 +10,8 @@ pub struct ParchedSkeletonEntity {
 }
 
 impl ParchedSkeletonEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
-        let entity = SkeletonEntityBase::new(entity).await;
+    pub fn new(entity: Entity) -> Arc<Self> {
+        let entity = SkeletonEntityBase::new(entity);
         let parched = Self { entity };
         Arc::new(parched)
     }

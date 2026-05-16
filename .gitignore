@@ -107,8 +107,7 @@ crash-reports/
 data/*
 
 # project's configurations
-configuration.toml
-features.toml
+pumpkin.toml
 
 
 *.local.nbt
@@ -148,7 +147,6 @@ whitelist.json
 .console_history
 bukkit.yml
 commands.yml
-config/
 help.yml
 permissions.yml
 spigot.yml

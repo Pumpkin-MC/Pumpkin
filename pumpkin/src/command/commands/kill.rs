@@ -27,13 +27,15 @@ impl CommandExecutor for TargetsExecutor {
             }
 
             let msg = if target_count == 1 {
-                TextComponent::translate(
-                    translation::COMMANDS_KILL_SUCCESS_SINGLE,
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
+                    translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
                     [targets[0].get_display_name().await],
                 )
             } else {
-                TextComponent::translate(
-                    translation::COMMANDS_KILL_SUCCESS_MULTIPLE,
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_KILL_SUCCESS_MULTIPLE,
+                    translation::java::COMMANDS_KILL_SUCCESS_MULTIPLE,
                     [TextComponent::text(target_count.to_string())],
                 )
             };
@@ -56,8 +58,9 @@ impl CommandExecutor for SelfExecutor {
             context
                 .source
                 .send_feedback(
-                    TextComponent::translate(
-                        translation::COMMANDS_KILL_SUCCESS_SINGLE,
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
+                        translation::java::COMMANDS_KILL_SUCCESS_SINGLE,
                         [target.get_display_name().await],
                     ),
                     true,

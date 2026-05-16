@@ -29,19 +29,17 @@ impl ItemBehaviour for EggItem {
         Box::pin(async move {
             let position = player.position();
             let world = player.world();
-            world
-                .play_sound(
-                    Sound::EntityEggThrow,
-                    pumpkin_data::sound::SoundCategory::Players,
-                    &position,
-                )
-                .await;
+            world.play_sound(
+                Sound::EntityEggThrow,
+                pumpkin_data::sound::SoundCategory::Players,
+                &position,
+            );
 
             // Capture the held item stack and pass it to the thrown egg entity
             let item_stack: ItemStack = player.inventory.held_item().lock().await.clone();
 
             let entity = Entity::new(world.clone(), position, &EntityType::EGG);
-            let egg = EggEntity::new_shot(entity, &player.living_entity.entity).await;
+            let egg = EggEntity::new_shot(entity, &player.living_entity.entity);
 
             // Propagate the item stack so clients show correct variant
             egg.set_item_stack(item_stack.clone()).await;

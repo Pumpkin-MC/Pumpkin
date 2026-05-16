@@ -2,7 +2,7 @@ use std::io::Write;
 
 use pumpkin_data::packet::clientbound::PLAY_PLAYER_POSITION;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{math::vector3::Vector3, version::MinecraftVersion};
+use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{
     ClientPacket, PositionFlag, ServerPacket, VarInt, WritingError, ser::NetworkReadExt,
@@ -57,9 +57,9 @@ impl ClientPacket for CPlayerPosition {
     fn write_packet_data(
         &self,
         mut write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if version >= &MinecraftVersion::V_1_21_2 {
+        if version >= &JavaMinecraftVersion::V_1_21_2 {
             write.write_var_int(&self.teleport_id)?;
             write.write_f64_be(self.position.x)?;
             write.write_f64_be(self.position.y)?;
@@ -87,7 +87,7 @@ impl ClientPacket for CPlayerPosition {
 impl ServerPacket for CPlayerPosition {
     fn read(
         mut read: impl std::io::Read,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<Self, crate::ser::ReadingError> {
         Ok(Self {
             teleport_id: read.get_var_int()?,

@@ -393,7 +393,7 @@ impl ToTokens for BlockPropertyStruct {
 
                 fn to_state_id(&self, block: &Block) -> u16 {
                     if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     block.states[0].id + self.to_index()
                 }
@@ -401,7 +401,7 @@ impl ToTokens for BlockPropertyStruct {
                 fn from_state_id(state_id: u16, block: &Block) -> Self {
                     debug_assert!(
                         Self::handles_block_id(block.id),
-                        "{} is not a valid block for {}", &block.name, #struct_name
+                        "{} is not a valid block for {}", block.name, #struct_name
                     );
 
                     let min_id = block.states[0].id;
@@ -420,7 +420,7 @@ impl ToTokens for BlockPropertyStruct {
 
                 fn default(block: &Block) -> Self {
                     if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     Self::from_state_id(block.default_state.id, block)
                 }
@@ -433,7 +433,7 @@ impl ToTokens for BlockPropertyStruct {
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     #[cfg(debug_assertions)]
                     if !matches!(block.id, #(#block_ids)|*) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {
@@ -639,6 +639,7 @@ pub struct Block {
     pub hardness: f32,
     /// Blast resistance against explosions.
     pub blast_resistance: f32,
+    pub map_color: u8,
     /// Numeric ID of the corresponding item, if any.
     pub item_id: u16,
     /// Flammability data, present only if the block can catch fire.
@@ -668,6 +669,8 @@ impl ToTokens for Block {
         //let translation_key = LitStr::new(&self.translation_key, Span::call_site());
         let hardness = &self.hardness;
         let blast_resistance = &self.blast_resistance;
+        let map_color = &self.map_color;
+
         let item_id = LitInt::new(&self.item_id.to_string(), Span::call_site());
         let slipperiness = &self.slipperiness;
         let velocity_multiplier = &self.velocity_multiplier;
@@ -707,6 +710,7 @@ impl ToTokens for Block {
                 name: #name,
                 hardness: #hardness,
                 blast_resistance: #blast_resistance,
+                map_color: #map_color,
                 slipperiness: #slipperiness,
                 velocity_multiplier: #velocity_multiplier,
                 jump_velocity_multiplier: #jump_velocity_multiplier,

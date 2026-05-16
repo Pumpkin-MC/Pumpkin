@@ -1,5 +1,10 @@
 /* This file is generated. Do not edit manually. */
-#[derive(Debug, Clone, Copy)]
+use pumpkin_util::math::int_provider::{
+    BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider, ConstantIntProvider,
+    IntProvider, NormalIntProvider, TrapezoidIntProvider, UniformIntProvider, WeightedEntry,
+    WeightedListIntProvider,
+};
+#[derive(Debug, Clone)]
 pub struct Dimension {
     pub id: u8,
     pub minecraft_name: &'static str,
@@ -12,6 +17,8 @@ pub struct Dimension {
     pub logical_height: i32,
     pub infiniburn: &'static str,
     pub ambient_light: f32,
+    pub monster_spawn_light_level: IntProvider,
+    pub monster_spawn_block_light_limit: u8,
     pub sky_color: Option<i32>,
     pub fog_color: Option<i32>,
     pub cloud_color: Option<i32>,
@@ -30,6 +37,13 @@ impl Dimension {
         logical_height: 384i32,
         infiniburn: "#minecraft:infiniburn_overworld",
         ambient_light: 0f32,
+        monster_spawn_light_level: IntProvider::Object(NormalIntProvider::Uniform(
+            UniformIntProvider {
+                min_inclusive: 0i32,
+                max_inclusive: 7i32,
+            },
+        )),
+        monster_spawn_block_light_limit: 0u8,
         sky_color: Some(7907327i32),
         fog_color: Some(12638463i32),
         cloud_color: None,
@@ -47,6 +61,13 @@ impl Dimension {
         logical_height: 384i32,
         infiniburn: "#minecraft:infiniburn_overworld",
         ambient_light: 0f32,
+        monster_spawn_light_level: IntProvider::Object(NormalIntProvider::Uniform(
+            UniformIntProvider {
+                min_inclusive: 0i32,
+                max_inclusive: 7i32,
+            },
+        )),
+        monster_spawn_block_light_limit: 0u8,
         sky_color: Some(7907327i32),
         fog_color: Some(12638463i32),
         cloud_color: None,
@@ -64,6 +85,8 @@ impl Dimension {
         logical_height: 256i32,
         infiniburn: "#minecraft:infiniburn_end",
         ambient_light: 0.25f32,
+        monster_spawn_light_level: IntProvider::Constant(15i32),
+        monster_spawn_block_light_limit: 0u8,
         sky_color: Some(0i32),
         fog_color: Some(1577752i32),
         cloud_color: None,
@@ -81,6 +104,8 @@ impl Dimension {
         logical_height: 128i32,
         infiniburn: "#minecraft:infiniburn_nether",
         ambient_light: 0.1f32,
+        monster_spawn_light_level: IntProvider::Constant(7i32),
+        monster_spawn_block_light_limit: 15u8,
         sky_color: None,
         fog_color: None,
         cloud_color: None,

@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_CHAT;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket, ServerPacket,
@@ -23,7 +23,7 @@ pub struct SChatMessage {
 }
 
 impl ServerPacket for SChatMessage {
-    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         Ok(Self {
             message: read.get_string_bounded(256)?,
             timestamp: read.get_i64_be()?,
@@ -40,7 +40,7 @@ impl ClientPacket for SChatMessage {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &MinecraftVersion,
+        _version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_string(&self.message)?;
         write.write_i64_be(self.timestamp)?;

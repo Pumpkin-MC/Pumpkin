@@ -19,18 +19,13 @@ impl BlockMetadata for LeafLitterBlock {
 }
 
 impl BlockBehaviour for LeafLitterBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let block_below = args
-                .block_accessor
-                .get_block_state(&args.position.down())
-                .await;
-            block_below.is_side_solid(BlockDirection::Up)
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let block_below = args.block_accessor.get_block_state(&args.position.down());
+        block_below.is_side_solid(BlockDirection::Up)
     }
 
-    fn can_update_at<'a>(&'a self, args: CanUpdateAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move { Segmented::can_update_at(self, args).await })
+    fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
+        Segmented::can_update_at(self, args)
     }
 
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
@@ -43,7 +38,7 @@ impl BlockBehaviour for LeafLitterBlock {
     ) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
             if args.direction == BlockDirection::Down {
-                let block_below_state = args.world.get_block_state(&args.position.down()).await;
+                let block_below_state = args.world.get_block_state(&args.position.down());
                 if !block_below_state.is_side_solid(BlockDirection::Up) {
                     return Block::AIR.default_state.id;
                 }

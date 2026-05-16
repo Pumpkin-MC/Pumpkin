@@ -13,20 +13,21 @@ use pumpkin_protocol::java::{
         play::{
             SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClickSlot, SClientCommand,
             SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
-            SCookieResponse, SCustomPayload, SInteract, SKeepAlive, SMoveVehicle, SPaddleBoat,
-            SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand,
-            SPlayerInput, SPlayerLoaded, SPlayerPosition, SPlayerPositionRotation, SPlayerRotation,
-            SPlayerSession, SSetCommandBlock, SSetCreativeSlot, SSetHeldItem, SSetPlayerGround,
-            SSwingArm, SUpdateSign, SUseItem, SUseItemOn,
+            SContainerButtonClick, SCookieResponse, SCustomPayload, SInteract, SKeepAlive,
+            SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPlayPingRequest, SPlayerAbilities,
+            SPlayerAction, SPlayerCommand, SPlayerInput, SPlayerLoaded, SPlayerPosition,
+            SPlayerPositionRotation, SPlayerRotation, SPlayerSession, SSetCommandBlock,
+            SSetCreativeSlot, SSetHeldItem, SSetPlayerGround, SSwingArm, SUpdateSign, SUseItem,
+            SUseItemOn,
         },
         status::SStatusPingRequest,
     },
 };
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Cursor;
 use tokio::runtime::Runtime;
 
-const TARGET_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
+const TARGET_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
 
 // ---------------------------------------------------------------------------
 // Helper: run every known ServerPacket::read against the same payload.
@@ -84,6 +85,7 @@ fn fuzz_all_deserializers(payload: &[u8]) {
         SPlayerLoaded,
         SPlayPingRequest,
         SClickSlot,
+        SContainerButtonClick,
         SSetHeldItem,
         SSetCreativeSlot,
         SSwingArm,

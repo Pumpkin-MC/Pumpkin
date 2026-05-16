@@ -2016,10 +2016,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                         offset: OffsetBlocksBlockPredicate { offset: None },
                         state: {
                             let mut props = std::collections::HashMap::new();
-                            props.insert("age".to_string(), "0".to_string());
-                            props.insert("hanging".to_string(), "false".to_string());
-                            props.insert("stage".to_string(), "0".to_string());
                             props.insert("waterlogged".to_string(), "false".to_string());
+                            props.insert("stage".to_string(), "0".to_string());
+                            props.insert("hanging".to_string(), "false".to_string());
+                            props.insert("age".to_string(), "0".to_string());
                             BlockStateCodec {
                                 name: &pumpkin_data::Block::MANGROVE_PROPAGULE,
                                 properties: Some(props),
@@ -6186,10 +6186,10 @@ fn build_placed_features() -> std::collections::HashMap<String, PlacedFeature> {
                         offset: OffsetBlocksBlockPredicate { offset: None },
                         state: {
                             let mut props = std::collections::HashMap::new();
-                            props.insert("age".to_string(), "0".to_string());
-                            props.insert("hanging".to_string(), "false".to_string());
-                            props.insert("stage".to_string(), "0".to_string());
                             props.insert("waterlogged".to_string(), "false".to_string());
+                            props.insert("stage".to_string(), "0".to_string());
+                            props.insert("hanging".to_string(), "false".to_string());
+                            props.insert("age".to_string(), "0".to_string());
                             BlockStateCodec {
                                 name: &pumpkin_data::Block::MANGROVE_PROPAGULE,
                                 properties: Some(props),

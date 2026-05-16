@@ -3,10 +3,10 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::{collections::BTreeMap, fs};
 
-use crate::version::MinecraftVersion;
+use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version used as the fallback for unknown versions in `PacketId::to_id`.
-const LATEST_VERSION: MinecraftVersion = MinecraftVersion::V_26_1;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_1;
 
 /// Raw deserialization shape for a single versioned packet mapping file.
 #[derive(Deserialize)]
@@ -24,19 +24,19 @@ pub struct Packets {
 /// all `serverbound`/`clientbound` packet ID constants.
 pub(crate) fn build() -> TokenStream {
     let assets = [
-        (MinecraftVersion::V_1_20_5, "1_20_5_packets.json"),
-        (MinecraftVersion::V_1_21, "1_21_packets.json"),
-        (MinecraftVersion::V_1_21_2, "1_21_2_packets.json"),
-        (MinecraftVersion::V_1_21_4, "1_21_4_packets.json"),
-        (MinecraftVersion::V_1_21_5, "1_21_5_packets.json"),
-        (MinecraftVersion::V_1_21_6, "1_21_6_packets.json"),
-        (MinecraftVersion::V_1_21_7, "1_21_7_packets.json"),
-        (MinecraftVersion::V_1_21_9, "1_21_9_packets.json"),
-        (MinecraftVersion::V_1_21_11, "1_21_11_packets.json"),
-        (MinecraftVersion::V_26_1, "26_1_packets.json"),
+        (JavaMinecraftVersion::V_1_20_5, "1_20_5_packets.json"),
+        (JavaMinecraftVersion::V_1_21, "1_21_packets.json"),
+        (JavaMinecraftVersion::V_1_21_2, "1_21_2_packets.json"),
+        (JavaMinecraftVersion::V_1_21_4, "1_21_4_packets.json"),
+        (JavaMinecraftVersion::V_1_21_5, "1_21_5_packets.json"),
+        (JavaMinecraftVersion::V_1_21_6, "1_21_6_packets.json"),
+        (JavaMinecraftVersion::V_1_21_7, "1_21_7_packets.json"),
+        (JavaMinecraftVersion::V_1_21_9, "1_21_9_packets.json"),
+        (JavaMinecraftVersion::V_1_21_11, "1_21_11_packets.json"),
+        (JavaMinecraftVersion::V_26_1, "26_1_packets.json"),
     ];
 
-    // Parse available packet files into a BTreeMap keyed by MinecraftVersion
+    // Parse available packet files into a BTreeMap keyed by JavaMinecraftVersion
     let mut versions = BTreeMap::new();
     for (ver, file) in assets {
         let path = format!("../assets/packet/{file}");
@@ -55,10 +55,10 @@ pub(crate) fn build() -> TokenStream {
     let clientbound_consts = generate_mapped_consts(&versions, false);
 
     quote!(
-        use pumpkin_util::version::MinecraftVersion;
+        use pumpkin_util::version::JavaMinecraftVersion;
 
-        pub const CURRENT_MC_VERSION: MinecraftVersion = #LATEST_VERSION;
-        pub const LOWEST_SUPPORTED_MC_VERSION: MinecraftVersion = MinecraftVersion::V_1_20_5;
+        pub const CURRENT_MC_VERSION: JavaMinecraftVersion = #LATEST_VERSION;
+        pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_20_5;
 
         #packet_id_struct
 
@@ -74,7 +74,7 @@ pub(crate) fn build() -> TokenStream {
 }
 
 /// Generate the `PacketId` struct and impls (including `to_id`) dynamically based on available versions.
-fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
+fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
     // Build struct fields
     let mut struct_fields = TokenStream::new();
     for ver in versions.keys() {
@@ -104,7 +104,7 @@ fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
         impl PacketId {
             /// Converts the requested protocol version into the corresponding packet ID.
             /// Returns -1 if the packet does not exist in that version.
-            pub fn to_id(&self, version: MinecraftVersion) -> i32 {
+            pub fn to_id(&self, version: JavaMinecraftVersion) -> i32 {
                 match version {
                     #match_arms
                     _ => self.#latest_field_ident,
@@ -129,10 +129,10 @@ fn generate_struct<T>(versions: &BTreeMap<MinecraftVersion, T>) -> TokenStream {
 /// Generates `PacketId` constants for all packets in either the serverbound or clientbound direction.
 ///
 /// # Arguments
-/// - `versions` – Map from `MinecraftVersion` to parsed `Packets` data.
+/// - `versions` – Map from `JavaMinecraftVersion` to parsed `Packets` data.
 /// - `is_serverbound` – When `true`, emits serverbound constants; otherwise emits clientbound constants.
 fn generate_mapped_consts(
-    versions: &BTreeMap<MinecraftVersion, Packets>,
+    versions: &BTreeMap<JavaMinecraftVersion, Packets>,
     is_serverbound: bool,
 ) -> TokenStream {
     let mut conv_packets = BTreeMap::<_, BTreeMap<_, _>>::new();

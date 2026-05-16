@@ -11,10 +11,8 @@ use pumpkin_world::world::BlockAccessor;
 pub struct SporeBlossomBlock;
 
 impl BlockBehaviour for SporeBlossomBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
     fn get_state_for_neighbor_update<'a>(
         &'a self,
@@ -32,15 +30,15 @@ impl BlockBehaviour for SporeBlossomBlock {
     }
 }
 impl PlantBlockBase for SporeBlossomBlock {
-    async fn can_plant_on_top(
+    fn can_plant_on_top(
         &self,
         _block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         _pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
         false
     }
-    async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
-        let ceiling_block = block_accessor.get_block(&block_pos.up()).await;
+    fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+        let ceiling_block = block_accessor.get_block(&block_pos.up());
         supports_spore_blossom(ceiling_block)
     }
 }

@@ -21,10 +21,8 @@ pub struct BigDripleafStemBlock;
 pub type BigDripleafStemLikeProperties = LadderLikeProperties;
 
 impl BlockBehaviour for BigDripleafStemBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -46,8 +44,8 @@ impl BlockBehaviour for BigDripleafStemBlock {
     }
 }
 impl PlantBlockBase for BigDripleafStemBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let support_block = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let support_block = block_accessor.get_block(pos);
         can_plant_dripleaf_on_top(support_block)
     }
 
@@ -57,8 +55,8 @@ impl PlantBlockBase for BigDripleafStemBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
-            let block = block_accessor.get_block(block_pos).await;
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
+            let block = block_accessor.get_block(block_pos);
 
             let dripleaf_stem_props =
                 BigDripleafStemLikeProperties::from_state_id(block_state, block);
@@ -72,7 +70,7 @@ impl PlantBlockBase for BigDripleafStemBlock {
 }
 pub async fn handle_big_dripleaf_breaking(world: &Arc<World>, position: &BlockPos) {
     let support_pos = position.down();
-    let (support_block, support_state_id) = world.get_block_and_state_id(&support_pos).await;
+    let (support_block, support_state_id) = world.get_block_and_state_id(&support_pos);
     if support_block == &Block::BIG_DRIPLEAF_STEM {
         let dripleaf_stem_props =
             BigDripleafStemLikeProperties::from_state_id(support_state_id, support_block);

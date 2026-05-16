@@ -3,6 +3,7 @@ use crate::command::node::{
     ArgumentNodeMetadata, Command, CommandNodeMetadata, LiteralNodeMetadata, NodeMetadata,
     OwnedNodeData, RedirectModifier, Redirection, Requirements,
 };
+use crate::command::suggestion::provider::SuggestionProvider;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::num::NonZero;
@@ -150,6 +151,7 @@ impl ArgumentDetachedNode {
         redirect: Option<Redirection>,
         modifier: RedirectModifier,
         forks: bool,
+        suggestion_provider: Option<Arc<dyn SuggestionProvider>>,
     ) -> Self {
         Self {
             owned: OwnedNodeData {
@@ -161,7 +163,7 @@ impl ArgumentDetachedNode {
             },
             children: FxHashMap::default(),
             redirect,
-            meta: ArgumentNodeMetadata::new(name, argument_type),
+            meta: ArgumentNodeMetadata::new(name, argument_type, suggestion_provider),
         }
     }
 }

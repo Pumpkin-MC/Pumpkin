@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use crate::block::entities::sign::SignBlockEntity;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::EnumVariants;
@@ -10,7 +11,6 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::BlockStateId;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
@@ -52,8 +52,8 @@ struct SignPlacement {
 
 impl SignBlock {
     /// Checks if a block can provide support for a sign.
-    async fn is_valid_support(world: &World, pos: &BlockPos, direction: BlockDirection) -> bool {
-        let (block, state) = world.get_block_and_state(pos).await;
+    fn is_valid_support(world: &World, pos: &BlockPos, direction: BlockDirection) -> bool {
+        let (block, state) = world.get_block_and_state(pos);
         let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
             || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
@@ -65,8 +65,8 @@ impl SignBlock {
     }
 
     /// Detects available support points around a position.
-    async fn detect_support(world: &World, position: &BlockPos) -> SupportInfo {
-        let (block_above, state_above) = world.get_block_and_state(&position.up()).await;
+    fn detect_support(world: &World, position: &BlockPos) -> SupportInfo {
+        let (block_above, state_above) = world.get_block_and_state(&position.up());
         let above_is_valid = state_above.is_side_solid(BlockDirection::Down)
             || block_above.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
             || block_above.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES);
@@ -74,7 +74,7 @@ impl SignBlock {
         let mut side_direction = None;
         for direction in BlockDirection::horizontal() {
             let pos = position.offset(direction.to_offset());
-            if Self::is_valid_support(world, &pos, direction.opposite()).await {
+            if Self::is_valid_support(world, &pos, direction.opposite()) {
                 side_direction = Some(direction);
                 break;
             }
@@ -293,7 +293,7 @@ impl SignBlock {
 impl BlockBehaviour for SignBlock {
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
-            let support = Self::detect_support(args.world, args.position).await;
+            let support = Self::detect_support(args.world, args.position);
 
             let Some(placement) = Self::determine_placement(&args, &support) else {
                 return 0; // Invalid placement
@@ -307,8 +307,7 @@ impl BlockBehaviour for SignBlock {
     fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
             args.world
-                .add_block_entity(Arc::new(SignBlockEntity::empty(*args.position)))
-                .await;
+                .add_block_entity(Arc::new(SignBlockEntity::empty(*args.position)));
         })
     }
 
@@ -323,54 +322,52 @@ impl BlockBehaviour for SignBlock {
         })
     }
 
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            let is_hanging = args.block.name.contains("hanging");
-            let clicked_face = args
-                .use_item_on
-                .and_then(|u| pumpkin_data::BlockDirection::try_from(u.face.0).ok())
-                .unwrap_or(pumpkin_data::BlockDirection::Up);
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        let is_hanging = args.block.name.contains("hanging");
+        let clicked_face = args
+            .use_item_on
+            .and_then(|u| pumpkin_data::BlockDirection::try_from(u.face.0).ok())
+            .unwrap_or(pumpkin_data::BlockDirection::Up);
 
-            // Detection for floor-to-wall attachment (broken rn)
-            if is_hanging && clicked_face == BlockDirection::Up {
-                for d in pumpkin_data::BlockDirection::horizontal() {
-                    let wall_pos = args.position.offset(d.to_offset());
-                    let (block, state) = args.block_accessor.get_block_and_state(&wall_pos).await;
-                    if state.is_side_solid(d.opposite())
-                        || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-                        || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
-                    {
-                        return true;
-                    }
+        // Detection for floor-to-wall attachment (broken rn)
+        if is_hanging && clicked_face == BlockDirection::Up {
+            for d in pumpkin_data::BlockDirection::horizontal() {
+                let wall_pos = args.position.offset(d.to_offset());
+                let (block, state) = args.block_accessor.get_block_and_state(&wall_pos);
+                if state.is_side_solid(d.opposite())
+                    || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
+                    || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
+                {
+                    return true;
                 }
             }
+        }
 
-            // Standard support validation with permissive tags
-            let support_pos = match clicked_face {
-                BlockDirection::Up => args.position.down(),
-                BlockDirection::Down => args.position.up(),
-                _ => args.position.offset(clicked_face.opposite().to_offset()),
-            };
+        // Standard support validation with permissive tags
+        let support_pos = match clicked_face {
+            BlockDirection::Up => args.position.down(),
+            BlockDirection::Down => args.position.up(),
+            _ => args.position.offset(clicked_face.opposite().to_offset()),
+        };
 
-            let (block, state) = args.block_accessor.get_block_and_state(&support_pos).await;
-            let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
-                || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
+        let (block, state) = args.block_accessor.get_block_and_state(&support_pos);
+        let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
+            || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
-            match clicked_face {
-                BlockDirection::Up => {
-                    !is_hanging && (state.is_center_solid(BlockDirection::Up) || is_permissive)
-                }
-                BlockDirection::Down => {
-                    is_hanging && (state.is_side_solid(BlockDirection::Down) || is_permissive)
-                }
-                _ => state.is_side_solid(clicked_face.opposite()) || is_permissive,
+        match clicked_face {
+            BlockDirection::Up => {
+                !is_hanging && (state.is_center_solid(BlockDirection::Up) || is_permissive)
             }
-        })
+            BlockDirection::Down => {
+                is_hanging && (state.is_side_solid(BlockDirection::Down) || is_permissive)
+            }
+            _ => state.is_side_solid(clicked_face.opposite()) || is_permissive,
+        }
     }
 
     fn on_state_replaced<'a>(&'a self, args: OnStateReplacedArgs<'a>) -> BlockFuture<'a, ()> {
         Box::pin(async move {
-            args.world.remove_block_entity(args.position).await;
+            args.world.remove_block_entity(args.position);
         })
     }
 
@@ -399,7 +396,7 @@ impl BlockBehaviour for SignBlock {
                 if args.direction == dir {
                     let support_pos = args.position.offset(dir.to_offset());
                     let (support_block, support_state) =
-                        args.world.get_block_and_state(&support_pos).await;
+                        args.world.get_block_and_state(&support_pos);
 
                     // Permissive support check
                     let is_leaf =
@@ -428,7 +425,7 @@ impl BlockBehaviour for SignBlock {
     /// Handles normal use (right-click) on the sign block.
     fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let Some(block_entity) = args.world.get_block_entity(args.position).await else {
+            let Some(block_entity) = args.world.get_block_entity(args.position) else {
                 return BlockActionResult::Pass;
             };
             let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
@@ -436,13 +433,11 @@ impl BlockBehaviour for SignBlock {
             };
 
             if sign_entity.is_waxed.load(Ordering::Relaxed) {
-                args.world
-                    .play_block_sound(
-                        pumpkin_data::sound::Sound::BlockSignWaxedInteractFail,
-                        pumpkin_data::sound::SoundCategory::Blocks,
-                        *args.position,
-                    )
-                    .await;
+                args.world.play_block_sound(
+                    pumpkin_data::sound::Sound::BlockSignWaxedInteractFail,
+                    pumpkin_data::sound::SoundCategory::Blocks,
+                    *args.position,
+                );
                 return BlockActionResult::SuccessServer;
             }
 
@@ -457,7 +452,7 @@ impl BlockBehaviour for SignBlock {
             }
 
             let is_facing_front_text =
-                is_facing_front_text(args.world, args.position, args.block, args.player).await;
+                is_facing_front_text(args.world, args.position, args.block, args.player);
             match &args.player.client {
                 ClientPlatform::Java(java) => {
                     java.send_sign_packet(*args.position, is_facing_front_text)
@@ -471,12 +466,13 @@ impl BlockBehaviour for SignBlock {
     }
 
     /// Handles use with an item on the sign block.
+    #[expect(clippy::option_if_let_else)]
     fn use_with_item<'a>(
         &'a self,
         args: UseWithItemArgs<'a>,
     ) -> BlockFuture<'a, BlockActionResult> {
         Box::pin(async move {
-            let Some(block_entity) = args.world.get_block_entity(args.position).await else {
+            let Some(block_entity) = args.world.get_block_entity(args.position) else {
                 return BlockActionResult::Pass;
             };
             let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
@@ -498,12 +494,11 @@ impl BlockBehaviour for SignBlock {
                 return BlockActionResult::PassToDefaultBlockAction;
             }
 
-            let text =
-                if is_facing_front_text(args.world, args.position, args.block, args.player).await {
-                    &sign_entity.front_text
-                } else {
-                    &sign_entity.back_text
-                };
+            let text = if is_facing_front_text(args.world, args.position, args.block, args.player) {
+                &sign_entity.front_text
+            } else {
+                &sign_entity.back_text
+            };
 
             let mut item = args.item_stack.lock().await;
 
@@ -512,27 +507,39 @@ impl BlockBehaviour for SignBlock {
                 return BlockActionResult::PassToDefaultBlockAction;
             };
 
-            let result = if let Some(honeycomb_item) =
-                pumpkin_item.as_any().downcast_ref::<HoneyCombItem>()
-            {
-                honeycomb_item
-                    .apply_to_sign(&args, &block_entity, sign_entity)
-                    .await
-            } else if let Some(g_ink_sac_item) =
-                pumpkin_item.as_any().downcast_ref::<GlowingInkSacItem>()
-            {
-                g_ink_sac_item
-                    .apply_to_sign(&args, &block_entity, text)
-                    .await
-            } else if let Some(ink_sac_item) = pumpkin_item.as_any().downcast_ref::<InkSacItem>() {
-                ink_sac_item.apply_to_sign(&args, &block_entity, text).await
-            } else if let Some(dye) = pumpkin_item.as_any().downcast_ref::<DyeItem>() {
-                let color_name = item.item.registry_key.strip_suffix("_dye").unwrap();
-                dye.apply_to_sign(&args, &block_entity, text, color_name)
-                    .await
-            } else {
-                BlockActionResult::PassToDefaultBlockAction
-            };
+            let result = pumpkin_item
+                .as_any()
+                .downcast_ref::<HoneyCombItem>()
+                .map_or_else(
+                    || {
+                        pumpkin_item
+                            .as_any()
+                            .downcast_ref::<GlowingInkSacItem>()
+                            .map_or_else(
+                                || {
+                                    if let Some(ink_sac_item) =
+                                        pumpkin_item.as_any().downcast_ref::<InkSacItem>()
+                                    {
+                                        ink_sac_item.apply_to_sign(&args, &block_entity, text)
+                                    } else if let Some(dye) =
+                                        pumpkin_item.as_any().downcast_ref::<DyeItem>()
+                                    {
+                                        let color_name =
+                                            item.item.registry_key.strip_suffix("_dye").unwrap();
+                                        dye.apply_to_sign(&args, &block_entity, text, color_name)
+                                    } else {
+                                        BlockActionResult::PassToDefaultBlockAction
+                                    }
+                                },
+                                |g_ink_sac_item| {
+                                    g_ink_sac_item.apply_to_sign(&args, &block_entity, text)
+                                },
+                            )
+                    },
+                    |honeycomb_item| {
+                        honeycomb_item.apply_to_sign(&args, &block_entity, sign_entity)
+                    },
+                );
 
             if result == BlockActionResult::Success {
                 if !args.player.has_infinite_materials() {
@@ -581,13 +588,13 @@ fn get_sign_variant(base: &Block, is_hanging: bool) -> u16 {
     pumpkin_data::Block::from_name(&target_name).map_or(base.id, |b| b.id)
 }
 
-async fn is_facing_front_text(
+fn is_facing_front_text(
     world: &World,
     location: &BlockPos,
     block: &Block,
     player: &Player,
 ) -> bool {
-    let state_id = world.get_block_state_id(location).await;
+    let state_id = world.get_block_state_id(location);
     // Read properties dynamically: some sign types use a `rotation` property (0..15),
     // others (wall signs) use a `facing` property (north/south/west/east),
     // hanging signs may have `rotation` + `attached`.

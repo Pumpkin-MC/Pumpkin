@@ -88,11 +88,11 @@ impl ArrowEntity {
         }
     }
 
-    pub async fn new_shot(entity: Entity, shooter: &Entity, pickup: ArrowPickup) -> Self {
+    pub fn new_shot(entity: Entity, shooter: &Entity, pickup: ArrowPickup) -> Self {
         let mut owner_pos = shooter.pos.load();
         owner_pos.y = owner_pos.y + f64::from(shooter.entity_dimension.load().eye_height) - 0.1;
         entity.pos.store(owner_pos);
-        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0)).await;
+        entity.set_velocity(Vector3::new(0.0, 0.1, 0.0));
 
         Self {
             entity,
@@ -246,20 +246,18 @@ impl EntityBase for ArrowEntity {
 
             // Spawn critical particle trail while arrow is flying and critical
             if self.is_critical.load(Ordering::Relaxed) {
-                world
-                    .spawn_particle(
-                        entity.pos.load(),
-                        Vector3::new(0.0f32, 0.0f32, 0.0f32),
-                        0.0,
-                        1,
-                        Particle::Crit,
-                    )
-                    .await;
+                world.spawn_particle(
+                    entity.pos.load(),
+                    Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                    0.0,
+                    1,
+                    Particle::Crit,
+                );
             }
 
             // Broadcast velocity update
             let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
-            world.broadcast_packet_all(&packet).await;
+            world.broadcast_packet_all(&packet);
 
             // Check for collisions using raycasting
             let search_box = BoundingBox::new(
@@ -370,7 +368,7 @@ impl EntityBase for ArrowEntity {
                         1.0,
                         0.0,
                     );
-                    world.broadcast_packet_all(&sound_packet).await;
+                    world.broadcast_packet_all(&sound_packet);
 
                     // Reset critical flag
                     self.is_critical.store(false, Ordering::Relaxed);
@@ -406,7 +404,7 @@ impl EntityBase for ArrowEntity {
                             1.0,
                             0.0,
                         );
-                        world.broadcast_packet_all(&sound_packet).await;
+                        world.broadcast_packet_all(&sound_packet);
                     }
 
                     // Check pierce level

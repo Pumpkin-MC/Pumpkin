@@ -1,6 +1,6 @@
 use pumpkin_data::packet::serverbound::LOGIN_COOKIE_RESPONSE;
 use pumpkin_macros::java_packet;
-use pumpkin_util::{resource_location::ResourceLocation, version::MinecraftVersion};
+use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
 use std::io::Read;
 
 use crate::{
@@ -19,7 +19,7 @@ pub struct SLoginCookieResponse {
 const MAX_COOKIE_LENGTH: usize = 5120;
 
 impl ServerPacket for SLoginCookieResponse {
-    fn read(mut read: impl Read, _version: &MinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(mut read: impl Read, _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let key = read.get_string()?;
         let has_payload = read.get_bool()?;
 

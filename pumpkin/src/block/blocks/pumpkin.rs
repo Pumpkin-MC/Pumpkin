@@ -42,8 +42,10 @@ impl crate::block::BlockBehaviour for PumpkinBlock {
                 args.position.to_f64(),
                 &EntityType::ITEM,
             );
-            let item_entity =
-                Arc::new(ItemEntity::new(entity, ItemStack::new(4, &Item::PUMPKIN_SEEDS)).await);
+            let item_entity = Arc::new(ItemEntity::new(
+                entity,
+                ItemStack::new(4, &Item::PUMPKIN_SEEDS),
+            ));
             args.world.spawn_entity(item_entity).await;
             // TODO: Deduct 1 durability from held shears (skip in Creative mode).
             BlockActionResult::Consume

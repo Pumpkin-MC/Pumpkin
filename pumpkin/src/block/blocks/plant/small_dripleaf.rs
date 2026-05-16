@@ -17,10 +17,8 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 pub struct SmallDripleafBlock;
 
 impl BlockBehaviour for SmallDripleafBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
     fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
         Box::pin(async move {
@@ -65,7 +63,7 @@ impl BlockBehaviour for SmallDripleafBlock {
             let mut upper_small_dripleaf_props =
                 SmallDripleafLikeProperties::default(&Block::SMALL_DRIPLEAF);
 
-            let upper_block = args.world.get_block(&args.position.up()).await;
+            let upper_block = args.world.get_block(&args.position.up());
             upper_small_dripleaf_props.facing = lower_small_dripleaf_props.facing;
             upper_small_dripleaf_props.waterlogged = upper_block == &Block::WATER;
             upper_small_dripleaf_props.half = DoubleBlockHalf::Upper;
@@ -86,13 +84,13 @@ fn is_small_dripleaf_waterlogged(state_id: BlockStateId) -> bool {
     dripleaf_props.waterlogged
 }
 impl PlantBlockBase for SmallDripleafBlock {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let support_block = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let support_block = block_accessor.get_block(pos);
 
         if support_block == &Block::SMALL_DRIPLEAF {
             return true;
         }
-        let upper_block = block_accessor.get_block(&pos.up_height(2)).await;
+        let upper_block = block_accessor.get_block(&pos.up_height(2));
         if upper_block != &Block::AIR
             && upper_block != &Block::WATER
             && upper_block != &Block::SMALL_DRIPLEAF
@@ -100,7 +98,7 @@ impl PlantBlockBase for SmallDripleafBlock {
             return false;
         }
         let (replacing_block, replacing_block_state) =
-            block_accessor.get_block_and_state(&pos.up()).await;
+            block_accessor.get_block_and_state(&pos.up());
         if replacing_block == &Block::SMALL_DRIPLEAF && replacing_block_state.is_waterlogged() {
             //in case of neighbor update check
             supports_small_dripleaf(support_block, true)
@@ -115,14 +113,14 @@ impl PlantBlockBase for SmallDripleafBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
             if is_small_dripleaf_waterlogged(block_state) {
                 return Block::WATER.default_state.id;
             }
             return Block::AIR.default_state.id;
         }
-        let upper_block = block_accessor.get_block(&block_pos.up()).await;
-        let below_blow = block_accessor.get_block(&block_pos.down()).await;
+        let upper_block = block_accessor.get_block(&block_pos.up());
+        let below_blow = block_accessor.get_block(&block_pos.down());
         if upper_block != &Block::SMALL_DRIPLEAF && below_blow != &Block::SMALL_DRIPLEAF {
             if is_small_dripleaf_waterlogged(block_state) {
                 return Block::WATER.default_state.id;

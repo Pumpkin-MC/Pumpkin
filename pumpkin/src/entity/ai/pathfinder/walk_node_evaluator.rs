@@ -303,17 +303,16 @@ impl WalkNodeEvaluator {
         path_type
     }
 
-    async fn has_collisions(&mut self, center: Vector3<i32>) -> bool {
-        if let Some(ref mut ctx) = self.base.context {
-            ctx.has_collisions(center).await
-        } else {
-            false
-        }
+    fn has_collisions(&mut self, center: Vector3<i32>) -> bool {
+        self.base
+            .context
+            .as_mut()
+            .is_some_and(|ctx| ctx.has_collisions(center))
     }
 
     async fn can_start_at(&mut self, pos: Vector3<i32>) -> bool {
         let path_type = self.get_cached_path_type(pos).await;
-        path_type.is_passable() && !self.has_collisions(pos).await
+        path_type.is_passable() && !self.has_collisions(pos)
     }
 
     async fn get_start_node(&mut self, pos: Vector3<i32>) -> Option<Node> {
@@ -490,7 +489,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
             for dx in 0..mob_data.get_bb_width() {
                 for dz in 0..mob_data.get_bb_width() {
                     let check_pos = pos.add_raw(dx, dy, dz);
-                    let mut cell_type = context.get_land_node_type(check_pos).await;
+                    let mut cell_type = context.get_land_node_type(check_pos);
 
                     if cell_type == PathType::DoorWoodClosed
                         && self.base.can_open_doors
@@ -508,8 +507,8 @@ impl NodeEvaluator for WalkNodeEvaluator {
                             Vector3::new(mob_block_pos.0, mob_block_pos.1, mob_block_pos.2);
                         let mob_below =
                             Vector3::new(mob_block_pos.0, mob_block_pos.1 - 1, mob_block_pos.2);
-                        let mob_type = context.get_land_node_type(mob_pos).await;
-                        let mob_below_type = context.get_land_node_type(mob_below).await;
+                        let mob_type = context.get_land_node_type(mob_pos);
+                        let mob_below_type = context.get_land_node_type(mob_below);
                         if mob_type != PathType::Rail && mob_below_type != PathType::Rail {
                             cell_type = PathType::UnpassableRail;
                         }
@@ -548,7 +547,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
             && result != PathType::Open
             && mob_data.get_pathfinding_malus(result) == 0.0
         {
-            let raw_center = context.get_land_node_type(pos).await;
+            let raw_center = context.get_land_node_type(pos);
             if raw_center == PathType::Open {
                 return PathType::Open;
             }
@@ -562,7 +561,7 @@ impl NodeEvaluator for WalkNodeEvaluator {
         context: &mut PathfindingContext,
         pos: Vector3<i32>,
     ) -> PathType {
-        context.get_path_type_from_state(pos).await
+        context.get_path_type_from_state(pos)
     }
 
     fn set_can_pass_doors(&mut self, can_pass: bool) {

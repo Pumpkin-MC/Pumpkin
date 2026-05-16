@@ -16,6 +16,7 @@ impl Carver for CaveCarver {
         random: &mut RandomGenerator,
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
+        legacy_random_source: bool,
     ) {
         let (is_nether, cave_config) = match config.additional {
             CarverAdditionalConfig::Cave(ref c) => (false, c),
@@ -85,6 +86,7 @@ impl Carver for CaveCarver {
                     if is_nether { 5.0 } else { 1.0 }, // this.getYScale()
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
             }
         }
@@ -151,10 +153,17 @@ impl CaveCarver {
         y_scale: f64,
         floor_level: f64,
         is_nether: bool,
+        legacy_random_source: bool,
     ) {
-        let mut random = RandomGenerator::Xoroshiro(
-            pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(tunnel_seed as u64),
-        );
+        let mut random = if legacy_random_source {
+            RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
+                tunnel_seed as u64,
+            ))
+        } else {
+            RandomGenerator::Xoroshiro(pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(
+                tunnel_seed as u64,
+            ))
+        };
         let split_point = random.next_bounded_i32(dist / 2) + dist / 4;
         let steep = random.next_bounded_i32(6) == 0;
         let mut y_rota = 0.0f32;
@@ -195,6 +204,7 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
                 self.create_tunnel(
                     config,
@@ -213,6 +223,7 @@ impl CaveCarver {
                     1.0,
                     floor_level,
                     is_nether,
+                    legacy_random_source,
                 );
                 return;
             }
@@ -302,15 +313,22 @@ impl CaveCarver {
 
                 if xd * xd + zd * zd < 1.0 {
                     let mut has_grass = false;
-                    for world_y in (min_y..=max_y).rev() {
-                        let yd = (world_y as f64 + 0.5 - y) / vertical_radius;
+
+                    for world_y in (min_y + 1..=max_y).rev() {
+                        let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
                         if !self.should_skip(xd, yd, zd, floor_level)
                             && !chunk.carving_mask.get(world_x, world_y, world_z)
                         {
                             chunk.carving_mask.set(world_x, world_y, world_z);
-                            has_grass |= self.carve_block(
-                                chunk, config, world_x, world_y, world_z, is_nether, has_grass,
+                            self.carve_block(
+                                chunk,
+                                config,
+                                world_x,
+                                world_y,
+                                world_z,
+                                is_nether,
+                                &mut has_grass,
                             );
                         }
                     }
@@ -336,20 +354,16 @@ impl CaveCarver {
         y: i32,
         z: i32,
         is_nether: bool,
-        mut has_grass: bool,
+        has_grass: &mut bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
         let state_id = chunk.get_block_state_raw(x & 15, local_y, z & 15);
         let block = pumpkin_data::Block::from_state_id(state_id);
 
-        if block.id == pumpkin_data::Block::WATER.id || block.id == pumpkin_data::Block::LAVA.id {
-            return false;
-        }
-
         if block.id == pumpkin_data::Block::GRASS_BLOCK.id
             || block.id == pumpkin_data::Block::MYCELIUM.id
         {
-            has_grass = true;
+            *has_grass = true;
         }
 
         // Only carve if it's replaceable
@@ -372,18 +386,18 @@ impl CaveCarver {
                 chunk.set_block_state(x & 15, local_y, z & 15, air);
             }
 
-            if has_grass {
-                let down_y = y - 1;
-                let local_down_y = down_y - chunk.bottom_y() as i32;
-                if (0..chunk.height() as i32).contains(&local_down_y) {
-                    let down_state_id = chunk.get_block_state_raw(x & 15, local_down_y, z & 15);
-                    if pumpkin_data::Block::from_state_id(down_state_id).id
-                        == pumpkin_data::Block::DIRT.id
-                    {
-                        // dirt replacement skipped
-                    }
-                }
-            }
+            // TODO: fix this
+            // if *has_grass {
+            //     let below_state_id = chunk.get_block_state_raw(x & 15, local_y - 1, z & 15);
+            //     let below_block = pumpkin_data::Block::from_state_id(below_state_id);
+
+            //     if below_block.id == pumpkin_data::Block::DIRT.id {
+            //         // TODO: Java uses Biome top material here, defaulting to Grass for now
+            //         let top_material =
+            //             BlockState::from_id(pumpkin_data::Block::GRASS_BLOCK.default_state.id);
+            //         chunk.set_block_state(x & 15, local_y - 1, z & 15, top_material);
+            //     }
+            // }
 
             return true;
         }
@@ -414,7 +428,7 @@ pub fn get_height(p: &HeightProvider, random: &mut RandomGenerator, min_y: i8, h
         HeightProvider::VeryBiasedToBottom(p) => {
             let min = p.min_inclusive.get_y(min_y as i16, height);
             let max = p.max_inclusive.get_y(min_y as i16, height);
-            let inner = p.inner.map_or(1, |n| n.get()) as i32;
+            let inner = p.inner.map_or(1, std::num::NonZero::get) as i32;
             let min_rnd = random.next_inbetween_i32(min + inner, max);
             let max_rnd = random.next_inbetween_i32(min, min_rnd - 1);
             random.next_inbetween_i32(min, max_rnd - 1 + inner)

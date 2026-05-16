@@ -2,7 +2,7 @@ use pumpkin_data::dimension::Dimension;
 
 use crate::ProtoChunk;
 use crate::generation::generator::VanillaGenerator;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 use pumpkin_config::lighting::LightingEngineConfig;
 
 use super::{Cache, Chunk, StagedChunkEnum};
@@ -11,7 +11,7 @@ pub fn generate_single_chunk(
     _dimension: &Dimension,
     _biome_mixer_seed: i64,
     generator: &VanillaGenerator,
-    block_registry: &dyn BlockRegistryExt,
+    block_registry: &dyn WorldPortalExt,
     chunk_x: i32,
     chunk_z: i32,
     target_stage: StagedChunkEnum,
@@ -39,6 +39,7 @@ pub fn generate_single_chunk(
         StagedChunkEnum::Surface,
         StagedChunkEnum::Features,
         StagedChunkEnum::Lighting,
+        StagedChunkEnum::Spawn,
         StagedChunkEnum::Full,
     ];
 
@@ -64,13 +65,13 @@ mod tests {
     use crate::biome::hash_seed;
     use crate::chunk_system::{StagedChunkEnum, generate_single_chunk};
     use crate::generation::get_world_gen;
-    use crate::world::BlockRegistryExt;
+    use crate::world::WorldPortalExt;
     use pumpkin_data::dimension::Dimension;
     use pumpkin_util::world_seed::Seed;
     use std::sync::Arc;
 
     struct BlockRegistry;
-    impl BlockRegistryExt for BlockRegistry {
+    impl WorldPortalExt for BlockRegistry {
         fn can_place_at(
             &self,
             _block: &pumpkin_data::Block,
@@ -80,6 +81,15 @@ mod tests {
         ) -> bool {
             true
         }
+
+        fn spawn_mobs_for_chunk_generation(
+            &self,
+            _cache: &mut dyn crate::generation::proto_chunk::GenerationCache,
+            _biome: &'static pumpkin_data::chunk::Biome,
+            _chunk_x: i32,
+            _chunk_z: i32,
+        ) {
+        }
     }
 
     #[test]
@@ -87,7 +97,7 @@ mod tests {
         let dimension = Dimension::OVERWORLD;
         let seed = Seed(42);
         let block_registry = Arc::new(BlockRegistry);
-        let world_gen = get_world_gen(seed, dimension);
+        let world_gen = get_world_gen(seed, dimension.clone());
         let biome_mixer_seed = hash_seed(world_gen.random_config.seed);
 
         let _ = generate_single_chunk(

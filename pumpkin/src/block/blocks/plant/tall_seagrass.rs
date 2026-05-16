@@ -10,10 +10,8 @@ use crate::block::{
 #[pumpkin_block("minecraft:tall_seagrass")]
 pub struct TallSeaGrassBlock;
 impl BlockBehaviour for TallSeaGrassBlock {
-    fn can_place_at<'a>(&'a self, args: CanPlaceAtArgs<'a>) -> BlockFuture<'a, bool> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position).await
-        })
+    fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
+        <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
     fn get_state_for_neighbor_update<'a>(
@@ -33,20 +31,20 @@ impl BlockBehaviour for TallSeaGrassBlock {
 }
 
 impl PlantBlockBase for TallSeaGrassBlock {
-    async fn can_plant_on_top(
+    fn can_plant_on_top(
         &self,
         block_accessor: &dyn pumpkin_world::world::BlockAccessor,
         pos: &pumpkin_util::math::position::BlockPos,
     ) -> bool {
-        let (support_block, support_block_state) = block_accessor.get_block_and_state(pos).await;
-        let replacing_block = block_accessor.get_block(&pos.up()).await;
+        let (support_block, support_block_state) = block_accessor.get_block_and_state(pos);
+        let replacing_block = block_accessor.get_block(&pos.up());
         if replacing_block != &Block::WATER && replacing_block != &Block::TALL_SEAGRASS {
             return false;
         }
 
         if replacing_block == &Block::TALL_SEAGRASS {
             //only for blockupdate
-            let block_above = block_accessor.get_block(&pos.up_height(2)).await;
+            let block_above = block_accessor.get_block(&pos.up_height(2));
             let is_support_seagrass_block = support_block == &Block::TALL_SEAGRASS;
             let is_above_seagrass_block = block_above == &Block::TALL_SEAGRASS;
             match (is_support_seagrass_block, is_above_seagrass_block) {
@@ -68,7 +66,7 @@ impl PlantBlockBase for TallSeaGrassBlock {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos).await {
+        if !<Self as PlantBlockBase>::can_place_at(self, block_accessor, block_pos) {
             return Block::WATER.default_state.id;
         }
         block_state

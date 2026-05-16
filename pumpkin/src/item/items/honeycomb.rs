@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crate::block::UseWithItemArgs;
+use crate::block::entities::BlockEntity;
+use crate::block::entities::sign::SignBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -17,8 +19,6 @@ use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, tag};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::block::entities::BlockEntity;
-use pumpkin_world::block::entities::sign::SignBlockEntity;
 use pumpkin_world::world::BlockFlags;
 
 pub struct HoneyCombItem;
@@ -56,7 +56,7 @@ impl ItemBehaviour for HoneyCombItem {
                     && block.has_tag(&tag::Block::MINECRAFT_DOORS)
                 {
                     // get block state of the old log.
-                    let door_information = world.get_block_state_id(&location).await;
+                    let door_information = world.get_block_state_id(&location);
                     // get the log properties
                     let door_props = OakDoorLikeProperties::from_state_id(door_information, block);
                     // create new properties for the new log.
@@ -86,7 +86,7 @@ impl ItemBehaviour for HoneyCombItem {
 }
 
 impl HoneyCombItem {
-    pub async fn apply_to_sign(
+    pub fn apply_to_sign(
         &self,
         args: &UseWithItemArgs<'_>,
         block_entity: &Arc<dyn BlockEntity>,
@@ -94,10 +94,9 @@ impl HoneyCombItem {
     ) -> BlockActionResult {
         sign_entity.is_waxed.store(true, Ordering::Relaxed);
 
-        args.world.update_block_entity(block_entity).await;
+        args.world.update_block_entity(block_entity);
         args.world
-            .sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, *args.position, 0)
-            .await;
+            .sync_world_event(WorldEvent::ParticlesAndSoundWaxOn, *args.position, 0);
 
         BlockActionResult::Success
     }

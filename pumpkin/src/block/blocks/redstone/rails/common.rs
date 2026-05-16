@@ -15,11 +15,11 @@ use crate::world::World;
 use super::{HorizontalFacingRailExt, Rail, RailElevation, RailProperties, StraightRailShapeExt};
 
 pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &BlockPos) -> bool {
-    if !can_place_rail_at(world, pos).await {
+    if !can_place_rail_at(world, pos) {
         return false;
     }
 
-    let state_id = world.get_block_state_id(pos).await;
+    let state_id = world.get_block_state_id(pos);
     let rail_props = RailProperties::new(state_id, block);
     let rail_leaning_direction = match rail_props.shape() {
         RailShape::AscendingNorth => Some(HorizontalFacing::North),
@@ -30,7 +30,7 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
     };
 
     if let Some(direction) = rail_leaning_direction
-        && !can_place_rail_at(world, &pos.offset(direction.to_offset()).up()).await
+        && !can_place_rail_at(world, &pos.offset(direction.to_offset()).up())
     {
         return false;
     }
@@ -38,8 +38,8 @@ pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &
     true
 }
 
-pub(super) async fn can_place_rail_at(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-    let state = world.get_block_state(&pos.down()).await;
+pub(super) fn can_place_rail_at(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+    let state = world.get_block_state(&pos.down());
     state.is_side_solid(BlockDirection::Up)
 }
 
@@ -52,12 +52,9 @@ pub(super) async fn compute_placed_rail_shape(
     // Check each direction for rail connections, similar to normal rail placement
 
     // Check East first
-    if let Some(east_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East).await
-    {
+    if let Some(east_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::East) {
         // Check for opposite connection (West) to form a straight line
-        if let Some(west_rail) =
-            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await
-        {
+        if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West) {
             // We have connections in both East and West
             if east_rail.elevation == RailElevation::Up {
                 return RailShapeStraight::AscendingEast;
@@ -74,12 +71,9 @@ pub(super) async fn compute_placed_rail_shape(
     }
 
     // Check South
-    if let Some(south_rail) =
-        Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South).await
-    {
+    if let Some(south_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::South) {
         // Check for opposite connection (North) to form a straight line
-        if let Some(north_rail) =
-            Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await
+        if let Some(north_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North)
         {
             // We have connections in both South and North
             if south_rail.elevation == RailElevation::Up {
@@ -97,8 +91,7 @@ pub(super) async fn compute_placed_rail_shape(
     }
 
     // Check West
-    if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West).await
-    {
+    if let Some(west_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::West) {
         if west_rail.elevation == RailElevation::Up {
             return RailShapeStraight::AscendingWest;
         }
@@ -106,9 +99,7 @@ pub(super) async fn compute_placed_rail_shape(
     }
 
     // Check North
-    if let Some(north_rail) =
-        Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North).await
-    {
+    if let Some(north_rail) = Rail::find_if_unlocked(world, block_pos, HorizontalFacing::North) {
         if north_rail.elevation == RailElevation::Up {
             return RailShapeStraight::AscendingNorth;
         }
@@ -127,14 +118,14 @@ pub(super) async fn update_flanking_rails_shape(
 ) {
     for direction in RailProperties::new(state_id, block).directions() {
         let Some(mut flanking_rail) =
-            Rail::find_with_elevation(world, block_pos.offset(direction.to_offset())).await
+            Rail::find_with_elevation(world, block_pos.offset(direction.to_offset()))
         else {
             // Skip non-rail blocks
             continue;
         };
 
         let new_shape =
-            compute_flanking_rail_new_shape(world, &flanking_rail, direction.opposite()).await;
+            compute_flanking_rail_new_shape(world, &flanking_rail, direction.opposite());
 
         if new_shape != flanking_rail.properties.shape() {
             flanking_rail.properties.set_shape(new_shape);
@@ -149,7 +140,7 @@ pub(super) async fn update_flanking_rails_shape(
     }
 }
 
-async fn compute_flanking_rail_new_shape(
+fn compute_flanking_rail_new_shape(
     world: &World,
     rail: &Rail,
     flanking_from: HorizontalFacing,
@@ -165,7 +156,6 @@ async fn compute_flanking_rail_new_shape(
 
         let Some(maybe_connected_rail) =
             Rail::find_with_elevation(world, rail.position.offset(neighbor_direction.to_offset()))
-                .await
         else {
             // Rails pointing to non-rail blocks are not connected
             continue;

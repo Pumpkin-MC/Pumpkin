@@ -13,6 +13,12 @@ use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 
+pub const MAX_AIR: i32 = 300;
+pub const AIR_RECOVERY_RATE: i32 = 4;
+pub const AIR_DEPLETION_RATE: i32 = 1;
+pub const DROWNING_INTERVAL: i32 = 20;
+pub const DROWNING_DAMAGE: f32 = 2.0;
+
 pub struct BreathManager {
     pub air_supply: AtomicI32,
     pub drowning_tick: AtomicI32,
@@ -21,7 +27,7 @@ pub struct BreathManager {
 impl Default for BreathManager {
     fn default() -> Self {
         Self {
-            air_supply: AtomicI32::new(300),
+            air_supply: AtomicI32::new(MAX_AIR),
             drowning_tick: AtomicI32::new(0),
         }
     }
@@ -32,11 +38,9 @@ impl BreathManager {
         let mode = player.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
-            let prev = self.air_supply.load(Ordering::Relaxed);
-            let new_air = (prev + 4).min(300);
-            if new_air != prev {
-                self.air_supply.store(new_air, Ordering::Relaxed);
-                self.send_air_supply(player).await;
+            if self.air_supply.load(Ordering::Relaxed) != MAX_AIR {
+                self.air_supply.store(MAX_AIR, Ordering::Relaxed);
+                self.send_air_supply(player);
             }
             self.drowning_tick.store(0, Ordering::Relaxed);
             return;
@@ -51,43 +55,48 @@ impl BreathManager {
             .has_effect(&StatusEffect::WATER_BREATHING)
             .await
         {
-            if self.air_supply.swap(300, Ordering::Relaxed) != 300 {
-                self.send_air_supply(player).await;
+            if self.air_supply.swap(MAX_AIR, Ordering::Relaxed) != MAX_AIR {
+                self.send_air_supply(player);
             }
             self.drowning_tick.store(0, Ordering::Relaxed);
             return;
         }
 
-        if self.is_eye_in_water(player).await {
-            let prev = self.air_supply.fetch_sub(1, Ordering::Relaxed);
-            let new_air = (prev - 1).max(0);
+        let in_water = Self::is_eye_in_water(player);
+
+        if in_water {
+            let prev = self
+                .air_supply
+                .fetch_sub(AIR_DEPLETION_RATE, Ordering::Relaxed);
+            let new_air = (prev - AIR_DEPLETION_RATE).max(0);
             if new_air != prev {
-                self.send_air_supply(player).await;
+                self.air_supply.store(new_air, Ordering::Relaxed);
+                self.send_air_supply(player);
             }
 
             if new_air <= 0 {
                 let t = self.drowning_tick.fetch_add(1, Ordering::Relaxed) + 1;
 
-                if t >= 20 {
+                if t >= DROWNING_INTERVAL {
                     self.drowning_tick.store(0, Ordering::Relaxed);
                     player
                         .living_entity
-                        .damage(player.as_ref(), 2.0, DamageType::DROWN)
+                        .damage(player.as_ref(), DROWNING_DAMAGE, DamageType::DROWN)
                         .await;
                 }
             }
         } else {
             let prev = self.air_supply.load(Ordering::Relaxed);
-            let new_air = (prev + 4).min(300);
+            let new_air = (prev + AIR_RECOVERY_RATE).min(MAX_AIR);
             if new_air != prev {
                 self.air_supply.store(new_air, Ordering::Relaxed);
-                self.send_air_supply(player).await;
+                self.send_air_supply(player);
             }
             self.drowning_tick.store(0, Ordering::Relaxed);
         }
     }
 
-    async fn is_eye_in_water(&self, player: &Player) -> bool {
+    fn is_eye_in_water(player: &Player) -> bool {
         let e = &player.living_entity.entity;
         let pos = e.pos.load();
         let eye_y = e.get_eye_y();
@@ -99,15 +108,15 @@ impl BreathManager {
         );
         let world = player.world();
 
-        let (fluid, state) = world.get_fluid_and_fluid_state(&bp).await;
+        let (fluid, state) = world.get_fluid_and_fluid_state(&bp);
 
         let mut in_water_fluid = fluid.has_tag(&tag::Fluid::MINECRAFT_WATER);
 
         if !in_water_fluid {
-            let state_here = world.get_block_state(&bp).await;
+            let state_here = world.get_block_state(&bp);
             if !state_here.is_solid() {
                 let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-                let fluid_above_x = world.get_fluid(&above).await;
+                let fluid_above_x = world.get_fluid(&above);
                 if fluid_above_x.has_tag(&tag::Fluid::MINECRAFT_WATER) {
                     in_water_fluid = true;
                 }
@@ -119,7 +128,7 @@ impl BreathManager {
         }
 
         let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-        let fluid_above = world.get_fluid(&above).await;
+        let fluid_above = world.get_fluid(&above);
 
         let surface_y = if fluid_above.has_tag(&tag::Fluid::MINECRAFT_WATER) {
             f64::from(bp.0.y as f32 + 1.0)
@@ -140,23 +149,19 @@ impl BreathManager {
         surface_y > eye_y
     }
 
-    pub async fn send_air_supply(&self, player: &Player) {
-        let air = self.air_supply.load(Ordering::Relaxed).clamp(0, 300);
+    pub fn send_air_supply(&self, player: &Player) {
+        let air = self.air_supply.load(Ordering::Relaxed).clamp(0, MAX_AIR);
 
-        player
-            .living_entity
-            .entity
-            .send_meta_data(&[Metadata::new(
-                TrackedData::AIR_SUPPLY_ID,
-                MetaDataType::INTEGER,
-                VarInt(air),
-            )])
-            .await;
+        player.living_entity.entity.send_meta_data(&[Metadata::new(
+            TrackedData::AIR_SUPPLY_ID,
+            MetaDataType::INTEGER,
+            VarInt(air),
+        )]);
     }
 
-    pub async fn reset(&self, player: &Player) {
-        self.air_supply.store(300, Ordering::Relaxed);
-        self.send_air_supply(player).await;
+    pub fn reset(&self, player: &Player) {
+        self.air_supply.store(MAX_AIR, Ordering::Relaxed);
+        self.send_air_supply(player);
         self.drowning_tick.store(0, Ordering::Relaxed);
     }
 }

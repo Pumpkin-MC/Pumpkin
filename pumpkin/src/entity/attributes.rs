@@ -94,7 +94,7 @@ pub async fn send_attribute_updates_for_living(
     living: &crate::entity::living::LivingEntity,
     attributes: Vec<Attributes>,
 ) {
-    use pumpkin_protocol::bedrock::client::update_artributes::{
+    use pumpkin_protocol::bedrock::client::update_attributes::{
         Attribute as BeAttribute, CUpdateAttributes as BePacket,
     };
     use pumpkin_protocol::codec::var_int::VarInt;

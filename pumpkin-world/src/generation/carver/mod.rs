@@ -17,14 +17,11 @@ pub trait Carver {
         random: &mut RandomGenerator,
         chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
+        legacy_random_source: bool,
     );
 }
 
 pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
-    let mut random = RandomGenerator::Xoroshiro(
-        pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(generator.random_config.seed),
-    );
-
     // Vanilla applyCarvers uses a range of 8 chunks (17x17 area)
     let radius = 8;
     let chunk_x = chunk.x;
@@ -32,7 +29,6 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
     let chunk_pos = Vector2::new(chunk_x, chunk_z);
 
     let overworld_carvers = [&CAVE, &CAVE_EXTRA_UNDERGROUND, &CANYON];
-
     let nether_carvers = [&NETHER_CAVE];
 
     let carvers_to_use = if generator.dimension == pumpkin_data::dimension::Dimension::OVERWORLD {
@@ -56,14 +52,19 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             // maintain the random seed logic.
             for (index, &config) in carvers_to_use.iter().enumerate() {
                 let seed = get_carver_seed(
-                    &mut random,
                     generator.random_config.seed + index as u64,
                     carver_x,
                     carver_z,
                 );
-                let mut carver_random = RandomGenerator::Xoroshiro(
-                    pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(seed),
-                );
+                let mut carver_random = if generator.settings.legacy_random_source {
+                    RandomGenerator::Legacy(
+                        pumpkin_util::random::legacy_rand::LegacyRand::from_seed(seed),
+                    )
+                } else {
+                    RandomGenerator::Xoroshiro(
+                        pumpkin_util::random::xoroshiro128::Xoroshiro::from_seed(seed),
+                    )
+                };
 
                 if should_carve(config, &mut carver_random) {
                     match config.additional {
@@ -74,6 +75,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                                 &mut carver_random,
                                 &chunk_pos,
                                 &carver_chunk_pos,
+                                generator.settings.legacy_random_source,
                             );
                         }
                         CarverAdditionalConfig::Canyon(_) => {
@@ -83,6 +85,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                                 &mut carver_random,
                                 &chunk_pos,
                                 &carver_chunk_pos,
+                                generator.settings.legacy_random_source,
                             );
                         }
                     }

@@ -93,6 +93,7 @@ message_type = []
 block = []
 item_id_remap = []
 entity_id_remap = []
+sound_id_remap = []
 potion_brewing = []
 
 [dependencies]

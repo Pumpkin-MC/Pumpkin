@@ -15,7 +15,7 @@ use crate::block::RawBlockState;
 use crate::generation::block_predicate::BlockPredicate;
 use crate::generation::height_provider::HeightProvider;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::world::BlockRegistryExt;
+use crate::world::WorldPortalExt;
 
 use super::configured_features::{CONFIGURED_FEATURES, ConfiguredFeature};
 
@@ -54,7 +54,7 @@ impl PlacedFeature {
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature_name: &str, // This placed feature
@@ -129,7 +129,7 @@ impl PlacementModifier {
     pub fn get_positions<T: GenerationCache>(
         &self,
         chunk: &T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         min_y: i8,
         height: u16,
         feature: &str,
@@ -213,7 +213,7 @@ impl EnvironmentScanPlacementModifier {
     pub fn get_positions<T: GenerationCache>(
         &self,
         chunk: &T,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         pos: BlockPos,
     ) -> Box<dyn Iterator<Item = BlockPos>> {
         let allowed_search_condition = self
@@ -339,7 +339,7 @@ pub struct BlockFilterPlacementModifier {
 impl ConditionalPlacementModifier for BlockFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         _feature: &str,
         chunk: &T,
         _random: &mut RandomGenerator,
@@ -358,7 +358,7 @@ pub struct SurfaceThresholdFilterPlacementModifier {
 impl ConditionalPlacementModifier for SurfaceThresholdFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _feature: &str,
         chunk: &T,
         _random: &mut RandomGenerator,
@@ -378,7 +378,7 @@ pub struct RarityFilterPlacementModifier {
 impl ConditionalPlacementModifier for RarityFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _feature: &str,
         _chunk: &T,
         random: &mut RandomGenerator,
@@ -418,7 +418,7 @@ pub struct SurfaceWaterDepthFilterPlacementModifier {
 impl ConditionalPlacementModifier for SurfaceWaterDepthFilterPlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         _feature: &str,
         chunk: &T,
         _random: &mut RandomGenerator,
@@ -435,7 +435,7 @@ pub struct BiomePlacementModifier;
 impl ConditionalPlacementModifier for BiomePlacementModifier {
     fn should_place<T: GenerationCache>(
         &self,
-        _block_registry: &dyn BlockRegistryExt,
+        _block_registry: &dyn WorldPortalExt,
         this_feature: &str,
         chunk: &T,
         _random: &mut RandomGenerator,
@@ -510,7 +510,7 @@ pub trait CountPlacementModifierBase {
 pub trait ConditionalPlacementModifier {
     fn get_positions<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         chunk: &T,
         feature: &str,
         random: &mut RandomGenerator,
@@ -525,7 +525,7 @@ pub trait ConditionalPlacementModifier {
 
     fn should_place<T: GenerationCache>(
         &self,
-        block_registry: &dyn BlockRegistryExt,
+        block_registry: &dyn WorldPortalExt,
         feature: &str,
         chunk: &T,
         random: &mut RandomGenerator,

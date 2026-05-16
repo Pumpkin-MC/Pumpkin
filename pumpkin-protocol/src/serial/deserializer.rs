@@ -138,7 +138,7 @@ impl PacketRead for String {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         const MAX_STRING_LENGTH: usize = 32767;
 
-        let len = u32::read(reader)? as usize;
+        let len = VarUInt::read(reader)?.0 as usize;
 
         if len > MAX_STRING_LENGTH {
             return Err(Error::new(

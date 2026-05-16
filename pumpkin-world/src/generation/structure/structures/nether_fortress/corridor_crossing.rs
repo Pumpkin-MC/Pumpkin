@@ -13,7 +13,6 @@ use crate::{
 };
 
 /// 4-way interior corridor crossing (5 × 7 × 5).
-#[derive(Clone)]
 pub struct CorridorCrossingPiece {
     pub piece: NetherFortressPiece,
 }
@@ -129,9 +128,5 @@ impl StructurePieceBase for CorridorCrossingPiece {
                 p.fill_downwards(chunk, nb, i, -1, j, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

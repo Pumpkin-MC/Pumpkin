@@ -37,8 +37,8 @@ pub mod weeping_vines;
 pub mod wither_rose;
 
 trait PlantBlockBase {
-    async fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        let block = block_accessor.get_block(pos).await;
+    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        let block = block_accessor.get_block(pos);
         block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_VEGETATION)
     }
 
@@ -48,14 +48,13 @@ trait PlantBlockBase {
         block_pos: &BlockPos,
         block_state: BlockStateId,
     ) -> BlockStateId {
-        if !self.can_place_at(block_accessor, block_pos).await {
+        if !self.can_place_at(block_accessor, block_pos) {
             return Block::AIR.default_state.id;
         }
         block_state
     }
 
-    async fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
+    fn can_place_at(&self, block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
         self.can_plant_on_top(block_accessor, &block_pos.down())
-            .await
     }
 }

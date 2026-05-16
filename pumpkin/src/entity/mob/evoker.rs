@@ -16,7 +16,7 @@ pub struct EvokerEntity {
 }
 
 impl EvokerEntity {
-    pub async fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let evoker = Self { mob_entity };
         let mob_arc = Arc::new(evoker);
@@ -26,7 +26,7 @@ impl EvokerEntity {
         };
 
         {
-            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().await;
+            let mut goal_selector = mob_arc.mob_entity.goals_selector.lock().unwrap();
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             // Evokers have complex spell AI, but for now basic movement
@@ -37,7 +37,7 @@ impl EvokerEntity {
             );
             goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
 
-            let mut target_selector = mob_arc.mob_entity.target_selector.lock().await;
+            let mut target_selector = mob_arc.mob_entity.target_selector.lock().unwrap();
             target_selector.add_goal(
                 1,
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, true),
