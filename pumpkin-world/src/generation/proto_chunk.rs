@@ -36,7 +36,7 @@ use crate::chunk::format::LightContainer;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::StagedChunkEnum;
 use crate::generation::height_limit::HeightLimitView;
-use crate::generation::noise::aquifer_sampler::{FluidLevel, FluidLevelSamplerImpl};
+use crate::generation::noise::aquifer_sampler::{AquiferSampler, FluidLevel, FluidLevelSamplerImpl};
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
 use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions;
 use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSamplerBuilderOptions;
@@ -94,6 +94,7 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
 
 const AIR_BLOCK: Block = Block::AIR;
 
+#[derive(Clone)]
 pub struct StandardChunkFluidLevelSampler {
     top_fluid: FluidLevel,
     bottom_fluid: FluidLevel,
@@ -178,6 +179,11 @@ pub struct ProtoChunk {
     /// Block entities pending creation when the chunk is finalized.
     /// These are created from structure templates during world generation.
     pub pending_block_entities: Vec<NbtCompound>,
+    /// Aquifer sampler kept alive across `step_to_noise` → `step_to_carvers`,
+    /// mirroring vanilla's cached `NoiseChunk.aquifer()`. Populated at the end
+    /// of `step_to_noise`; consumed by carvers; `None` when the chunk was
+    /// loaded from existing data rather than freshly generated.
+    pub aquifer: Option<AquiferSampler>,
 }
 
 pub struct TerrainCache {
@@ -259,6 +265,7 @@ impl ProtoChunk {
             ),
             blending_data: None,
             pending_block_entities: Vec::new(),
+            aquifer: None,
         }
     }
     #[must_use]
@@ -611,6 +618,12 @@ impl ProtoChunk {
             &generator.random_config.ore_random_deriver,
             &mut surface_height_estimate_sampler,
         );
+
+        // Vanilla caches the NoiseChunk (and its aquifer) on ChunkAccess so the
+        // carver stage can re-query it block-by-block. We keep just the aquifer
+        // — its warm `levels` cache is the bit of state that must survive; the
+        // router/height estimator are deterministic and cheap to rebuild.
+        self.aquifer = Some(noise_sampler.into_aquifer());
 
         self.stage = StagedChunkEnum::Noise;
     }

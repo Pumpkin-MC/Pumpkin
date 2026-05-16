@@ -1,8 +1,5 @@
-use super::Carver;
+use super::{Carver, CarverAquiferContext, get_carve_state};
 use crate::ProtoChunk;
-use crate::generation::carver::{
-    Aquifer, carve_block_state, column_aquifer, column_is_aquifer_boundary,
-};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -19,7 +16,7 @@ impl Carver for CaveCarver {
         _chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
         legacy_random_source: bool,
-        sea_level: i32,
+        ctx: &mut CarverAquiferContext,
     ) {
         let (is_nether, cave_config) = match config.additional {
             CarverAdditionalConfig::Cave(ref c) => (false, c),
@@ -61,8 +58,7 @@ impl Carver for CaveCarver {
                     y_scale,
                     config,
                     floor_level,
-                    is_nether,
-                    sea_level,
+                    ctx,
                 );
                 tunnels += random.next_bounded_i32(4);
             }
@@ -89,9 +85,8 @@ impl Carver for CaveCarver {
                     distance,
                     if is_nether { 5.0 } else { 1.0 }, // this.getYScale()
                     floor_level,
-                    is_nether,
                     legacy_random_source,
-                    sea_level,
+                    ctx,
                 );
             }
         }
@@ -122,8 +117,7 @@ impl CaveCarver {
         y_scale: f64,
         config: &CarverConfig,
         floor_level: f64,
-        is_nether: bool,
-        sea_level: i32,
+        ctx: &mut CarverAquiferContext,
     ) {
         let horizontal_radius = 1.5 + (PI / 2.0).sin() * thickness;
         let vertical_radius = horizontal_radius as f64 * y_scale;
@@ -136,8 +130,7 @@ impl CaveCarver {
             horizontal_radius as f64,
             vertical_radius,
             floor_level,
-            is_nether,
-            sea_level,
+            ctx,
         );
     }
 
@@ -159,9 +152,8 @@ impl CaveCarver {
         dist: i32,
         y_scale: f64,
         floor_level: f64,
-        is_nether: bool,
         legacy_random_source: bool,
-        sea_level: i32,
+        ctx: &mut CarverAquiferContext,
     ) {
         let mut random = if legacy_random_source {
             RandomGenerator::Legacy(pumpkin_util::random::legacy_rand::LegacyRand::from_seed(
@@ -211,9 +203,8 @@ impl CaveCarver {
                     dist,
                     1.0,
                     floor_level,
-                    is_nether,
                     legacy_random_source,
-                    sea_level,
+                    ctx,
                 );
                 self.create_tunnel(
                     config,
@@ -231,9 +222,8 @@ impl CaveCarver {
                     dist,
                     1.0,
                     floor_level,
-                    is_nether,
                     legacy_random_source,
-                    sea_level,
+                    ctx,
                 );
                 return;
             }
@@ -252,8 +242,7 @@ impl CaveCarver {
                     horizontal_radius as f64 * horizontal_radius_multiplier,
                     vertical_radius * vertical_radius_multiplier,
                     floor_level,
-                    is_nether,
-                    sea_level,
+                    ctx,
                 );
             }
         }
@@ -290,8 +279,7 @@ impl CaveCarver {
         horizontal_radius: f64,
         vertical_radius: f64,
         floor_level: f64,
-        is_nether: bool,
-        sea_level: i32,
+        ctx: &mut CarverAquiferContext,
     ) {
         let center_x = (chunk.x << 4) as f64 + 8.0;
         let center_z = (chunk.z << 4) as f64 + 8.0;
@@ -326,15 +314,6 @@ impl CaveCarver {
                 if xd * xd + zd * zd < 1.0 {
                     let mut has_grass = false;
 
-                    if !is_nether && column_is_aquifer_boundary(chunk, world_x, world_z, sea_level)
-                    {
-                        continue;
-                    }
-
-                    let column_below_water = !is_nether
-                        && column_aquifer(chunk, world_x, world_z, sea_level)
-                            == Some(Aquifer::Water);
-
                     for world_y in (min_y + 1..=max_y).rev() {
                         let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
 
@@ -348,9 +327,7 @@ impl CaveCarver {
                                 world_x,
                                 world_y,
                                 world_z,
-                                is_nether,
-                                sea_level,
-                                column_below_water,
+                                ctx,
                                 &mut has_grass,
                             );
                         }
@@ -376,9 +353,7 @@ impl CaveCarver {
         x: i32,
         y: i32,
         z: i32,
-        is_nether: bool,
-        sea_level: i32,
-        column_below_water: bool,
+        ctx: &mut CarverAquiferContext,
         has_grass: &mut bool,
     ) -> bool {
         let local_y = y - chunk.bottom_y() as i32;
@@ -395,35 +370,23 @@ impl CaveCarver {
             return false;
         }
 
-        // Only carve if it's replaceable
-        if config.replaceable.1.contains(&block.id) {
-            let lava_y = if is_nether {
-                chunk.bottom_y() as i32 + 31
-            } else {
-                config
-                    .lava_level
-                    .get_y(chunk.bottom_y() as i16, chunk.height())
-            };
-            let bs = carve_block_state(y, lava_y, sea_level, column_below_water);
-            chunk.set_block_state(x & 15, y, z & 15, bs);
-
-            // TODO: fix this
-            // if *has_grass {
-            //     let below_state_id = chunk.get_block_state_raw(x & 15, local_y - 1, z & 15);
-            //     let below_block = pumpkin_data::Block::from_state_id(below_state_id);
-
-            //     if below_block.id == pumpkin_data::Block::DIRT.id {
-            //         // TODO: Java uses Biome top material here, defaulting to Grass for now
-            //         let top_material =
-            //             BlockState::from_id(pumpkin_data::Block::GRASS_BLOCK.default_state.id);
-            //         chunk.set_block_state(x & 15, local_y - 1, z & 15, top_material);
-            //     }
-            // }
-
-            return true;
+        if !config.replaceable.1.contains(&block.id) {
+            return false;
         }
 
-        false
+        match get_carve_state(chunk, config, x, y, z, ctx) {
+            None => false,
+            Some(state) => {
+                chunk.set_block_state(x & 15, y, z & 15, state);
+                // TODO(vanilla parity): when `has_grass` is set and the block
+                // directly below is DIRT, vanilla places the biome's surface
+                // top material there (`CarvingContext.topMaterial(...)`). We
+                // don't run the biome surface rule at carver time yet, so the
+                // exposed dirt is left bare. Cosmetic only.
+                let _ = has_grass;
+                true
+            }
+        }
     }
 }
 

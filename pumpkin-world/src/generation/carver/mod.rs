@@ -4,11 +4,108 @@ pub mod mask;
 
 use crate::ProtoChunk;
 use crate::generation::generator::VanillaGenerator;
-use pumpkin_data::Block;
+use crate::generation::noise::CHUNK_DIM;
+use crate::generation::noise::aquifer_sampler::{AquiferSampler, AquiferSamplerImpl};
+use crate::generation::noise::router::chunk_density_function::{
+    ChunkNoiseFunctionBuilderOptions, ChunkNoiseFunctionSampleOptions, SampleAction,
+};
+use crate::generation::noise::router::chunk_noise_router::ChunkNoiseRouter;
+use crate::generation::noise::router::surface_height_sampler::{
+    SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
+};
+use crate::generation::positions::chunk_pos::{start_block_x, start_block_z};
+use pumpkin_data::BlockState;
 use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
 use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::floor_div;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl, get_carver_seed};
+
+/// Carver-side mirror of vanilla's cached `NoiseChunk` aquifer view. Bundles
+/// the per-chunk aquifer state (kept warm on the `ProtoChunk` since noise
+/// fill) with a freshly-built noise router + surface height estimator so the
+/// carvers can call `Aquifer.computeSubstance(x, y, z, 0.0)` block-by-block,
+/// matching `WorldCarver.carveBlock` in vanilla.
+pub struct CarverAquiferContext<'g> {
+    pub aquifer: AquiferSampler,
+    pub router: ChunkNoiseRouter<'g>,
+    pub height_estimator: SurfaceHeightEstimateSampler<'g>,
+    pub sample_options: ChunkNoiseFunctionSampleOptions,
+}
+
+impl<'g> CarverAquiferContext<'g> {
+    fn new(chunk_x: i32, chunk_z: i32, aquifer: AquiferSampler, generator: &'g VanillaGenerator) -> Self {
+        let generation_shape = &generator.settings.shape;
+        let horizontal_cell_count =
+            CHUNK_DIM / generation_shape.horizontal_cell_block_count();
+        let start_x = start_block_x(chunk_x);
+        let start_z = start_block_z(chunk_z);
+
+        let vertical_cell_count = floor_div(
+            generation_shape.height as usize,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let horizontal_biome_end = crate::generation::biome_coords::from_block(
+            horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
+        );
+
+        let builder_options = ChunkNoiseFunctionBuilderOptions::new(
+            generation_shape.horizontal_cell_block_count() as usize,
+            generation_shape.vertical_cell_block_count() as usize,
+            vertical_cell_count,
+            horizontal_cell_count as usize,
+            crate::generation::biome_coords::from_block(start_x),
+            crate::generation::biome_coords::from_block(start_z),
+            horizontal_biome_end as usize,
+        );
+        let router = ChunkNoiseRouter::generate(&generator.base_router.noise, &builder_options);
+
+        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
+            crate::generation::biome_coords::from_block(start_x),
+            crate::generation::biome_coords::from_block(start_z),
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let height_estimator = SurfaceHeightEstimateSampler::generate(
+            &generator.base_router.surface_estimator,
+            &surface_config,
+        );
+
+        // Carvers do per-block random-access lookups, never cell-aligned fills,
+        // so the cell caches don't help and we explicitly skip them.
+        let sample_options =
+            ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
+
+        Self {
+            aquifer,
+            router,
+            height_estimator,
+            sample_options,
+        }
+    }
+
+    /// Vanilla `WorldCarver.carveBlock` calls
+    /// `aquifer.computeSubstance(SinglePointContext(x, y, z), 0.0)` — the
+    /// density check inside the aquifer is bypassed and the aquifer alone
+    /// decides whether to keep stone (`None`) or place a fluid/air state.
+    pub fn compute_substance(
+        &mut self,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Option<&'static BlockState> {
+        self.aquifer.compute_substance(
+            &mut self.router,
+            &Vector3::new(x, y, z),
+            &self.sample_options,
+            &mut self.height_estimator,
+            0.0,
+        )
+    }
+}
 
 pub trait Carver {
     #[allow(clippy::too_many_arguments)]
@@ -20,7 +117,7 @@ pub trait Carver {
         chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
         legacy_random_source: bool,
-        sea_level: i32,
+        ctx: &mut CarverAquiferContext,
     );
 }
 
@@ -44,7 +141,14 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 
     let cave_carver = cave::CaveCarver;
     let canyon_carver = canyon::CanyonCarver;
-    let sea_level = generator.settings.sea_level;
+
+    // Move the aquifer out of the chunk so `&mut chunk` and the aquifer can
+    // be borrowed separately. Carvers are the last stage that needs it, so
+    // it's intentionally consumed here.
+    let Some(aquifer) = chunk.aquifer.take() else {
+        return;
+    };
+    let mut ctx = CarverAquiferContext::new(chunk_x, chunk_z, aquifer, generator);
 
     for dx in -radius..=radius {
         for dz in -radius..=radius {
@@ -80,7 +184,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                                 &chunk_pos,
                                 &carver_chunk_pos,
                                 generator.settings.legacy_random_source,
-                                sea_level,
+                                &mut ctx,
                             );
                         }
                         CarverAdditionalConfig::Canyon(_) => {
@@ -91,7 +195,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                                 &chunk_pos,
                                 &carver_chunk_pos,
                                 generator.settings.legacy_random_source,
-                                sea_level,
+                                &mut ctx,
                             );
                         }
                     }
@@ -99,80 +203,30 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             }
         }
     }
+
 }
 
 fn should_carve(config: &CarverConfig, random: &mut RandomGenerator) -> bool {
     random.next_f32() <= config.probability
 }
 
-/// What block to place at a carved position. Vanilla `WorldCarver.getCarveState`:
-/// lava below lava_y, water if the column is under an ocean and y < sea_level,
-/// otherwise air.
-pub fn carve_block_state(
+/// Vanilla `WorldCarver.getCarveState`: force LAVA below the carver's
+/// `lava_level`, otherwise consult the aquifer (which may itself return
+/// `None` for the vanilla barrier outcome).
+pub fn get_carve_state(
+    chunk: &ProtoChunk,
+    config: &CarverConfig,
+    x: i32,
     y: i32,
-    lava_y: i32,
-    sea_level: i32,
-    column_below_water: bool,
-) -> &'static pumpkin_data::block_state::BlockState {
-    let id = if y <= lava_y {
-        Block::LAVA.default_state.id
-    } else if column_below_water && y < sea_level {
-        Block::WATER.default_state.id
+    z: i32,
+    ctx: &mut CarverAquiferContext,
+) -> Option<&'static BlockState> {
+    let lava_y = config
+        .lava_level
+        .get_y(chunk.bottom_y() as i16, chunk.height());
+    if y <= lava_y {
+        Some(pumpkin_data::Block::LAVA.default_state)
     } else {
-        Block::AIR.default_state.id
-    };
-    pumpkin_data::block_state::BlockState::from_id(id)
-}
-
-/// What the aquifer materialized at the top of this column. Extend with new
-/// variants (e.g. `Lava`) when richer aquifer behavior is implemented.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Aquifer {
-    /// No aquifer fluid at this column's surface — dry land.
-    None,
-    /// Ocean/lake column — water at `sea_level - 1`.
-    Water,
-}
-
-/// Probe the column at `(world_x, world_z)` for its aquifer fluid.
-/// Returns `None` if (x,z) is outside the chunk's XZ bounds (the caller
-/// has no block data for that column).
-pub fn column_aquifer(
-    chunk: &ProtoChunk,
-    world_x: i32,
-    world_z: i32,
-    sea_level: i32,
-) -> Option<Aquifer> {
-    let cx = chunk.x << 4;
-    let cz = chunk.z << 4;
-    if !(cx..cx + 16).contains(&world_x) || !(cz..cz + 16).contains(&world_z) {
-        return None;
+        ctx.compute_substance(x, y, z)
     }
-    let local_y = (sea_level - 1) - chunk.bottom_y() as i32;
-    if local_y < 0 || local_y >= chunk.height() as i32 {
-        return Some(Aquifer::None);
-    }
-    let sid = chunk.get_block_state_raw(world_x & 15, local_y, world_z & 15);
-    Some(if Block::from_state_id(sid).id == Block::WATER.id {
-        Aquifer::Water
-    } else {
-        Aquifer::None
-    })
-}
-
-/// True if any 4-neighbor column has a *different* aquifer kind. Carvers
-/// skip these to leave a stone barrier (approximates vanilla's per-cell
-/// barrier-density check). Neighbors outside the chunk count as matching.
-pub fn column_is_aquifer_boundary(
-    chunk: &ProtoChunk,
-    world_x: i32,
-    world_z: i32,
-    sea_level: i32,
-) -> bool {
-    let Some(here) = column_aquifer(chunk, world_x, world_z, sea_level) else {
-        return false;
-    };
-    [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().any(|(dx, dz)| {
-        column_aquifer(chunk, world_x + dx, world_z + dz, sea_level).is_some_and(|n| n != here)
-    })
 }

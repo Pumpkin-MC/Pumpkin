@@ -54,7 +54,10 @@ impl BlockStateSampler {
         height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<&'static BlockState> {
         match self {
-            Self::Aquifer(aquifer) => aquifer.apply(router, pos, sample_options, height_estimator),
+            Self::Aquifer(aquifer) => {
+                let density = router.final_density(pos, sample_options);
+                aquifer.compute_substance(router, pos, sample_options, height_estimator, density)
+            }
             Self::Ore(ore) => ore.sample(router, ore_random_deriver, pos, sample_options),
         }
     }
@@ -258,6 +261,21 @@ impl<'a> ChunkNoiseGenerator<'a> {
             cache_result_unique_id: 0,
 
             router,
+        }
+    }
+
+    /// Consume the noise generator and return its aquifer sampler. The aquifer
+    /// is always the first entry of the sampler chain (see `new`). Mirrors
+    /// vanilla's `NoiseChunk.aquifer()` accessor used by `applyCarvers`.
+    #[must_use]
+    pub fn into_aquifer(self) -> AquiferSampler {
+        let mut samplers = self.state_sampler.samplers.into_vec();
+        // Scary stuff but I don't want to destructure the samplers vec, it's out of scope of this pr
+        match samplers.swap_remove(0) {
+            BlockStateSampler::Aquifer(aquifer) => aquifer,
+            BlockStateSampler::Ore(_) => {
+                unreachable!("aquifer is always the first sampler in the chain")
+            }
         }
     }
 
