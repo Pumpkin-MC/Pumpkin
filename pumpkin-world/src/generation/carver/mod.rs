@@ -11,6 +11,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::random::{RandomGenerator, RandomImpl, get_carver_seed};
 
 pub trait Carver {
+    #[allow(clippy::too_many_arguments)]
     fn carve(
         &self,
         config: &CarverConfig,
