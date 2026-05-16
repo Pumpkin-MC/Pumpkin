@@ -1,7 +1,6 @@
 package pumpkin:plugin@0.1.0;
 
 interface bedrock-packets {
-  use uuid.{uuid};
   record s-animate {
     action: string,
     runtime-entity-id: string,

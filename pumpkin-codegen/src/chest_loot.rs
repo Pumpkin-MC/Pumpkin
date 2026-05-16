@@ -12,6 +12,7 @@ use syn::LitStr;
 enum RollsStruct {
     Constant(f32),
     Provider {
+        #[allow(dead_code)]
         #[serde(rename = "type")]
         provider_type: String,
         #[allow(dead_code)]
