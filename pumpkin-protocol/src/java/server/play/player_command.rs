@@ -2,7 +2,7 @@ use std::io::Read;
 
 use pumpkin_data::packet::serverbound::PLAY_PLAYER_COMMAND;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ServerPacket,
@@ -34,12 +34,12 @@ pub enum Action {
 pub struct InvalidAction;
 
 impl ServerPacket for SPlayerCommand {
-    fn read(mut read: impl Read, version: &MinecraftVersion) -> Result<Self, ReadingError> {
+    fn read(mut read: impl Read, version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let entity_id = read.get_var_int()?;
         let action_id = read.get_var_int()?;
         let jump_boost = read.get_var_int()?;
 
-        let action = if version < &MinecraftVersion::V_1_21_6 {
+        let action = if version < &JavaMinecraftVersion::V_1_21_6 {
             match action_id.0 {
                 0 => Ok(Action::StartSneaking),
                 1 => Ok(Action::StopSneaking),

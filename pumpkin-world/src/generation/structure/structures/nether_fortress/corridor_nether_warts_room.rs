@@ -18,7 +18,6 @@ use crate::{
 };
 
 /// Large interior room with nether wart crops (13 × 14 × 13).
-#[derive(Clone)]
 pub struct CorridorNetherWartsRoomPiece {
     pub piece: NetherFortressPiece,
 }
@@ -273,9 +272,5 @@ impl StructurePieceBase for CorridorNetherWartsRoomPiece {
                 p.fill_downwards(chunk, nb, 12 - l, -1, m, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

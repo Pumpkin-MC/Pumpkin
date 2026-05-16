@@ -39,6 +39,8 @@ pub struct WasmResource<T> {
 pub type ServerResource = WasmResource<Arc<Server>>;
 pub type ContextResource = WasmResource<Arc<Context>>;
 pub type PlayerResource = WasmResource<Arc<Player>>;
+pub type JavaPlayerResource = WasmResource<Arc<Player>>;
+pub type BedrockPlayerResource = WasmResource<Arc<Player>>;
 pub type EntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type WorldResource = WasmResource<Arc<World>>;
 pub type ScoreboardResource = WasmResource<Arc<World>>;
@@ -106,6 +108,24 @@ impl PluginHostState {
         provider: Arc<Player>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(PlayerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_java_player<T>(
+        &mut self,
+        provider: Arc<Player>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self.resource_table.push(JavaPlayerResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_bedrock_player<T>(
+        &mut self,
+        provider: Arc<Player>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(BedrockPlayerResource { provider })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 

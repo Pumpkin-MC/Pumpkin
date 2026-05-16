@@ -133,6 +133,10 @@ pub fn build() -> TokenStream {
                     place_on_ground::PlaceOnGroundTreeDecorator,
                     trunk_vine::TrunkVineTreeDecorator,
                 },
+                tree::root::{
+                    RootPlacer,
+                    mangrove::{AboveRootPlacement, MangroveRootPlacement, MangroveRootPlacer},
+                },
             };
             use crate::generation::feature::size::{FeatureSize, FeatureSizeType, ThreeLayersFeatureSize, TwoLayersFeatureSize};
             use pumpkin_data::{Block, BlockDirection};
@@ -1042,6 +1046,13 @@ fn value_to_tree_feature(config: &Value) -> TokenStream {
         .as_array()
         .map(|arr| arr.iter().map(value_to_tree_decorator).collect())
         .unwrap_or_default();
+    let root_placer = match config.get("root_placer") {
+        Some(v) if !v.is_null() => {
+            let inner = value_to_root_placer(v);
+            quote! { Some(#inner) }
+        }
+        _ => quote! { None },
+    };
     quote! {
         TreeFeature {
             trunk_provider: #trunk,
@@ -1052,6 +1063,56 @@ fn value_to_tree_feature(config: &Value) -> TokenStream {
             ignore_vines: #ignore_vines,
             below_trunk_provider: #below_trunk_provider,
             decorators: vec![#(#decorators),*],
+            root_placer: #root_placer,
+        }
+    }
+}
+
+fn value_to_root_placer(v: &Value) -> TokenStream {
+    let type_str = v["type"].as_str().unwrap_or("");
+    match type_str {
+        "minecraft:mangrove_root_placer" => {
+            let trunk_offset_y = value_to_int_provider(&v["trunk_offset_y"]);
+            let root_provider = value_to_block_state_provider(&v["root_provider"]);
+            let above = match v.get("above_root_placement") {
+                Some(av) if !av.is_null() => {
+                    let provider = value_to_block_state_provider(&av["above_root_provider"]);
+                    let chance = av["above_root_placement_chance"].as_f64().unwrap_or(0.0) as f32;
+                    quote! {
+                        Some(AboveRootPlacement {
+                            above_root_provider: #provider,
+                            above_root_placement_chance: #chance,
+                        })
+                    }
+                }
+                _ => quote! { None },
+            };
+            let mrp = &v["mangrove_root_placement"];
+            let can_grow_through = value_to_block_list(&mrp["can_grow_through"]);
+            let muddy_roots_in = value_to_block_list(&mrp["muddy_roots_in"]);
+            let muddy_roots_provider = value_to_block_state_provider(&mrp["muddy_roots_provider"]);
+            let max_root_width = mrp["max_root_width"].as_i64().unwrap_or(8) as i32;
+            let max_root_length = mrp["max_root_length"].as_i64().unwrap_or(15) as i32;
+            let random_skew_chance = mrp["random_skew_chance"].as_f64().unwrap_or(0.0) as f32;
+            quote! {
+                RootPlacer::Mangrove(MangroveRootPlacer {
+                    trunk_offset_y: #trunk_offset_y,
+                    root_provider: #root_provider,
+                    above_root_placement: #above,
+                    mangrove_root_placement: MangroveRootPlacement {
+                        can_grow_through: #can_grow_through,
+                        muddy_roots_in: #muddy_roots_in,
+                        muddy_roots_provider: #muddy_roots_provider,
+                        max_root_width: #max_root_width,
+                        max_root_length: #max_root_length,
+                        random_skew_chance: #random_skew_chance,
+                    },
+                })
+            }
+        }
+        other => {
+            let msg = format!("Unknown root placer type: {other}");
+            quote! { compile_error!(#msg) }
         }
     }
 }

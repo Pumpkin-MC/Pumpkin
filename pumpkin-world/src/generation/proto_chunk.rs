@@ -150,7 +150,6 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 /// 12. full: Generation is done and a chunk can now be loaded. The proto-chunk is now converted to a level chunk and all block updates deferred in the above steps are executed.
 ///
-#[derive(Clone)]
 pub struct ProtoChunk {
     pub x: i32,
     pub z: i32,
@@ -162,10 +161,10 @@ pub struct ProtoChunk {
     /// HEIGHTMAPS
     ///
     /// Top block that is not air
-    pub flat_surface_height_map: Box<[i16]>,
-    flat_ocean_floor_height_map: Box<[i16]>,
-    pub flat_motion_blocking_height_map: Box<[i16]>,
-    pub flat_motion_blocking_no_leaves_height_map: Box<[i16]>,
+    pub flat_surface_height_map: [i16; CHUNK_AREA],
+    flat_ocean_floor_height_map: [i16; CHUNK_AREA],
+    pub flat_motion_blocking_height_map: [i16; CHUNK_AREA],
+    pub flat_motion_blocking_no_leaves_height_map: [i16; CHUNK_AREA],
     structure_starts: FxHashMap<StructureKeys, StructureInstance>,
 
     // Height of the chunk for indexing
@@ -214,7 +213,7 @@ impl ProtoChunk {
         let height = dimension.logical_height as u16;
         let section_count = (height as usize) / 16;
 
-        let default_heightmap = vec![i16::MIN; CHUNK_AREA].into_boxed_slice();
+        let default_heightmap = [i16::MIN; CHUNK_AREA];
         Self {
             x,
             z,
@@ -228,9 +227,9 @@ impl ProtoChunk {
                     * biome_coords::from_block(height as i32) as usize
             ]
             .into_boxed_slice(),
-            flat_surface_height_map: default_heightmap.clone(),
-            flat_ocean_floor_height_map: default_heightmap.clone(),
-            flat_motion_blocking_height_map: default_heightmap.clone(),
+            flat_surface_height_map: default_heightmap,
+            flat_ocean_floor_height_map: default_heightmap,
+            flat_motion_blocking_height_map: default_heightmap,
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
             structure_starts: FxHashMap::default(),
             height,

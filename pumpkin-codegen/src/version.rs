@@ -2,11 +2,11 @@ use quote::{ToTokens, format_ident, quote};
 use syn::Ident;
 
 /// Represents a specific version of the Minecraft Java Edition protocol.
-/// from pumpkin_util::version::MinecraftVersion
+/// from pumpkin_util::version::JavaMinecraftVersion
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(non_camel_case_types)]
 #[allow(dead_code)]
-pub enum MinecraftVersion {
+pub enum JavaMinecraftVersion {
     /// 1.7.2: The Update That Changed The World
     V_1_7_2,
     V_1_7_6,
@@ -76,11 +76,11 @@ pub enum MinecraftVersion {
     V_26_1,
 }
 
-impl MinecraftVersion {
+impl JavaMinecraftVersion {
     /// Converts this version to a snake_case `Ident` suitable for use as a struct field name.
     ///
     /// # Returns
-    /// A `syn::Ident` like `v1_21_4` for `MinecraftVersion::V_1_21_4`.
+    /// A `syn::Ident` like `v1_21_4` for `JavaMinecraftVersion::V_1_21_4`.
     pub fn to_field_ident(self) -> Ident {
         match self {
             Self::V_1_7_2 => format_ident!("v1_7_2"),
@@ -137,60 +137,60 @@ impl MinecraftVersion {
     }
 }
 
-impl ToTokens for MinecraftVersion {
-    /// Emits a fully-qualified `pumpkin_util::version::MinecraftVersion::V_x_y_z` token stream.
+impl ToTokens for JavaMinecraftVersion {
+    /// Emits a fully-qualified `pumpkin_util::version::JavaMinecraftVersion::V_x_y_z` token stream.
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         tokens.extend(match self {
-            Self::V_1_7_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_7_2 },
-            Self::V_1_7_6 => quote! { pumpkin_util::version::MinecraftVersion::V_1_7_6 },
-            Self::V_1_8 => quote! { pumpkin_util::version::MinecraftVersion::V_1_8 },
-            Self::V_1_9 => quote! { pumpkin_util::version::MinecraftVersion::V_1_9 },
-            Self::V_1_9_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_9_1 },
-            Self::V_1_9_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_9_2 },
-            Self::V_1_9_3 => quote! { pumpkin_util::version::MinecraftVersion::V_1_9_3 },
-            Self::V_1_10 => quote! { pumpkin_util::version::MinecraftVersion::V_1_10 },
-            Self::V_1_11 => quote! { pumpkin_util::version::MinecraftVersion::V_1_11 },
-            Self::V_1_11_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_11_1 },
-            Self::V_1_12 => quote! { pumpkin_util::version::MinecraftVersion::V_1_12 },
-            Self::V_1_12_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_12_1 },
-            Self::V_1_12_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_12_2 },
-            Self::V_1_13 => quote! { pumpkin_util::version::MinecraftVersion::V_1_13 },
-            Self::V_1_13_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_13_1 },
-            Self::V_1_13_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_13_2 },
-            Self::V_1_14 => quote! { pumpkin_util::version::MinecraftVersion::V_1_14 },
-            Self::V_1_14_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_14_1 },
-            Self::V_1_14_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_14_2 },
-            Self::V_1_14_3 => quote! { pumpkin_util::version::MinecraftVersion::V_1_14_3 },
-            Self::V_1_14_4 => quote! { pumpkin_util::version::MinecraftVersion::V_1_14_4 },
-            Self::V_1_15 => quote! { pumpkin_util::version::MinecraftVersion::V_1_15 },
-            Self::V_1_15_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_15_1 },
-            Self::V_1_15_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_15_2 },
-            Self::V_1_16 => quote! { pumpkin_util::version::MinecraftVersion::V_1_16 },
-            Self::V_1_16_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_16_1 },
-            Self::V_1_16_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_16_2 },
-            Self::V_1_16_3 => quote! { pumpkin_util::version::MinecraftVersion::V_1_16_3 },
-            Self::V_1_16_4 => quote! { pumpkin_util::version::MinecraftVersion::V_1_16_4 },
-            Self::V_1_17 => quote! { pumpkin_util::version::MinecraftVersion::V_1_17 },
-            Self::V_1_17_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_17_1 },
-            Self::V_1_18 => quote! { pumpkin_util::version::MinecraftVersion::V_1_18 },
-            Self::V_1_18_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_18_2 },
-            Self::V_1_19 => quote! { pumpkin_util::version::MinecraftVersion::V_1_19 },
-            Self::V_1_19_1 => quote! { pumpkin_util::version::MinecraftVersion::V_1_19_1 },
-            Self::V_1_19_3 => quote! { pumpkin_util::version::MinecraftVersion::V_1_19_3 },
-            Self::V_1_19_4 => quote! { pumpkin_util::version::MinecraftVersion::V_1_19_4 },
-            Self::V_1_20 => quote! { pumpkin_util::version::MinecraftVersion::V_1_20 },
-            Self::V_1_20_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_20_2 },
-            Self::V_1_20_3 => quote! { pumpkin_util::version::MinecraftVersion::V_1_20_3 },
-            Self::V_1_20_5 => quote! { pumpkin_util::version::MinecraftVersion::V_1_20_5 },
-            Self::V_1_21 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21 },
-            Self::V_1_21_2 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_2 },
-            Self::V_1_21_4 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_4 },
-            Self::V_1_21_5 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_5 },
-            Self::V_1_21_6 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_6 },
-            Self::V_1_21_7 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_7 },
-            Self::V_1_21_9 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_9 },
-            Self::V_1_21_11 => quote! { pumpkin_util::version::MinecraftVersion::V_1_21_11 },
-            Self::V_26_1 => quote! { pumpkin_util::version::MinecraftVersion::V_26_1 },
+            Self::V_1_7_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_7_2 },
+            Self::V_1_7_6 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 },
+            Self::V_1_8 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_8 },
+            Self::V_1_9 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_9 },
+            Self::V_1_9_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_9_1 },
+            Self::V_1_9_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_9_2 },
+            Self::V_1_9_3 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_9_3 },
+            Self::V_1_10 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_10 },
+            Self::V_1_11 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_11 },
+            Self::V_1_11_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_11_1 },
+            Self::V_1_12 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_12 },
+            Self::V_1_12_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_12_1 },
+            Self::V_1_12_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_12_2 },
+            Self::V_1_13 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_13 },
+            Self::V_1_13_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_13_1 },
+            Self::V_1_13_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_13_2 },
+            Self::V_1_14 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_14 },
+            Self::V_1_14_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_14_1 },
+            Self::V_1_14_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_14_2 },
+            Self::V_1_14_3 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_14_3 },
+            Self::V_1_14_4 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_14_4 },
+            Self::V_1_15 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_15 },
+            Self::V_1_15_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_15_1 },
+            Self::V_1_15_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_15_2 },
+            Self::V_1_16 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_16 },
+            Self::V_1_16_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_16_1 },
+            Self::V_1_16_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_16_2 },
+            Self::V_1_16_3 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_16_3 },
+            Self::V_1_16_4 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_16_4 },
+            Self::V_1_17 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_17 },
+            Self::V_1_17_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_17_1 },
+            Self::V_1_18 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_18 },
+            Self::V_1_18_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_18_2 },
+            Self::V_1_19 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_19 },
+            Self::V_1_19_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_19_1 },
+            Self::V_1_19_3 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_19_3 },
+            Self::V_1_19_4 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_19_4 },
+            Self::V_1_20 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_20 },
+            Self::V_1_20_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_20_2 },
+            Self::V_1_20_3 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_20_3 },
+            Self::V_1_20_5 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 },
+            Self::V_1_21 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21 },
+            Self::V_1_21_2 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 },
+            Self::V_1_21_4 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 },
+            Self::V_1_21_5 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_5 },
+            Self::V_1_21_6 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_6 },
+            Self::V_1_21_7 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_7 },
+            Self::V_1_21_9 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 },
+            Self::V_1_21_11 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 },
+            Self::V_26_1 => quote! { pumpkin_util::version::JavaMinecraftVersion::V_26_1 },
         });
     }
 }

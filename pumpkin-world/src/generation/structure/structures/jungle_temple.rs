@@ -68,7 +68,6 @@ impl StructureGenerator for JungleTempleGenerator {
         })
     }
 }
-#[derive(Clone)]
 pub struct JungleTemplePiece {
     // Composition: Rust uses a base struct to mimic the ScatteredFeaturePiece inheritance
     piece: StructurePiece,
@@ -79,10 +78,6 @@ pub struct JungleTemplePiece {
     placed_trap_2: bool,
 }
 impl StructurePieceBase for JungleTemplePiece {
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
-    }
-
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece
     }

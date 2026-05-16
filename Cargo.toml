@@ -183,7 +183,7 @@ wasmtime = "44.0"
 wasmtime-wasi = { version = "44.0", default-features = false, features = ["p2"] }
 wasmtime-wasi-http = "44.0"
 # needed for interacting with wasmtime-wasi-http - keep in sync
-hyper = { version = "^1.7", features = ["full"] }
+hyper = { version = "^1.9", features = ["full"] }
 wit-bindgen = "0.57"
 
 postcard = { version = "1.1", features = ["alloc"] }

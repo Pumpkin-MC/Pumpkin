@@ -9,7 +9,7 @@ use pumpkin_data::packet::clientbound::PLAY_LEVEL_EVENT;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Triggers a specific sound or particle effect at a world location.
 ///
@@ -53,7 +53,7 @@ impl ClientPacket for CLevelEvent {
     fn write_packet_data(
         &self,
         write: impl Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_i32_be(self.event)?;

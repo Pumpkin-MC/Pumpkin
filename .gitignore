@@ -147,7 +147,6 @@ whitelist.json
 .console_history
 bukkit.yml
 commands.yml
-config/
 help.yml
 permissions.yml
 spigot.yml

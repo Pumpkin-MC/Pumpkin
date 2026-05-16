@@ -411,4 +411,18 @@ impl BedrockClient {
             }
         }}
     }
+
+    pub async fn handle_modal_form_response(
+        &self,
+        player: &Arc<Player>,
+        server: &Server,
+        packet: pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse,
+    ) {
+        let event = crate::plugin::api::events::player::bedrock_form_response::BedrockFormResponseEvent::new(
+            player.clone(),
+            packet.form_id.0 as u32,
+            packet.form_data,
+        );
+        let _ = server.plugin_manager.fire(event).await;
+    }
 }

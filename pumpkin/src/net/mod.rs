@@ -13,7 +13,11 @@ use std::{
 
 use pumpkin_data::translation;
 use pumpkin_protocol::{ClientPacket, Property};
-use pumpkin_util::{Hand, ProfileAction, text::TextComponent, version::MinecraftVersion};
+use pumpkin_util::{
+    Hand, ProfileAction,
+    text::TextComponent,
+    version::{BedrockMinecraftVersion, JavaMinecraftVersion},
+};
 use serde::{Deserialize, Deserializer};
 use sha1::Digest;
 use sha2::Sha256;
@@ -147,11 +151,17 @@ impl ClientPlatform {
         }
     }
 
-    pub fn version(&self) -> MinecraftVersion {
+    pub fn java_version(&self) -> JavaMinecraftVersion {
         match self {
             Self::Java(java) => java.version.load(),
-            // TODO
-            Self::Bedrock(_) => MinecraftVersion::V_1_21_7,
+            Self::Bedrock(_) => JavaMinecraftVersion::Unknown,
+        }
+    }
+
+    pub fn bedrock_version(&self) -> BedrockMinecraftVersion {
+        match self {
+            Self::Java(_) => BedrockMinecraftVersion::Unknown,
+            Self::Bedrock(bedrock) => bedrock.version.load(),
         }
     }
 

@@ -16,6 +16,8 @@ pub fn build() -> String {
     ));
     let mut interface = Interface::new("bedrock-packets");
 
+    interface.use_type("uuid", "uuid", None);
+
     let mut serverbound_variant = Variant::empty();
     let mut clientbound_variant = Variant::empty();
 

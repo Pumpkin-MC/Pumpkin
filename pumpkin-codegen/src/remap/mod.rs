@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use pumpkin_nbt::compound::NbtCompound;
 
-use crate::version::MinecraftVersion;
+use crate::version::JavaMinecraftVersion;
 
 mod block_state;
 mod entity_id;
@@ -23,7 +23,7 @@ pub fn build() -> Vec<(fn() -> TokenStream, &'static str)> {
 /// between consecutive Minecraft versions.
 pub struct MappingNode<'a, P> {
     /// The Minecraft version this node represents.
-    pub version: MinecraftVersion,
+    pub version: JavaMinecraftVersion,
     /// The path to (or data of) the ViaVersion NBT mapping file for this version hop.
     pub value: P,
     /// The previous version node in the chain, or `None` if this is the oldest supported version.
@@ -34,7 +34,7 @@ pub struct MappingNode<'a, P> {
 /// into per-version translation tables.
 pub struct Remapper<P, R> {
     /// The target (latest) version that all older mappings are translated toward.
-    pub version: MinecraftVersion,
+    pub version: JavaMinecraftVersion,
     /// Combines the current-version mapping with a child mapping into a composed mapping.
     pub remapper: fn(&R, &R) -> R,
     /// Converts the raw path/data `P` stored in a [`MappingNode`] into the mapping type `R`.
@@ -45,9 +45,9 @@ impl<P, R> Remapper<P, R> {
     /// Recursively processes the [`MappingNode`] chain and returns a list of `(version, mapping)` pairs.
     ///
     /// # Returns
-    /// A `Vec` where each entry contains a [`MinecraftVersion`] and its composed mapping relative
+    /// A `Vec` where each entry contains a [`JavaMinecraftVersion`] and its composed mapping relative
     /// to `self.version`.
-    pub fn process(&self, mappings: &MappingNode<'_, P>) -> Vec<(MinecraftVersion, R)> {
+    pub fn process(&self, mappings: &MappingNode<'_, P>) -> Vec<(JavaMinecraftVersion, R)> {
         let current_mapping = (self.serializer)(&mappings.value);
         let mut remap = if let Some(child) = mappings.child {
             let mut res = self.process(child);

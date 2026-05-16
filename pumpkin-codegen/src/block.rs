@@ -393,7 +393,7 @@ impl ToTokens for BlockPropertyStruct {
 
                 fn to_state_id(&self, block: &Block) -> u16 {
                     if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     block.states[0].id + self.to_index()
                 }
@@ -401,7 +401,7 @@ impl ToTokens for BlockPropertyStruct {
                 fn from_state_id(state_id: u16, block: &Block) -> Self {
                     debug_assert!(
                         Self::handles_block_id(block.id),
-                        "{} is not a valid block for {}", &block.name, #struct_name
+                        "{} is not a valid block for {}", block.name, #struct_name
                     );
 
                     let min_id = block.states[0].id;
@@ -420,7 +420,7 @@ impl ToTokens for BlockPropertyStruct {
 
                 fn default(block: &Block) -> Self {
                     if !Self::handles_block_id(block.id) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     Self::from_state_id(block.default_state.id, block)
                 }
@@ -433,7 +433,7 @@ impl ToTokens for BlockPropertyStruct {
                 fn from_props(props: &[(&str, &str)], block: &Block) -> Self {
                     #[cfg(debug_assertions)]
                     if !matches!(block.id, #(#block_ids)|*) {
-                        panic!("{} is not a valid block for {}", &block.name, #struct_name);
+                        panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
                     let mut block_props = Self::default(block);
                     for (key, value) in props {

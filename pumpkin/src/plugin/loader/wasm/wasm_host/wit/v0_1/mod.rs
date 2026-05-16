@@ -13,9 +13,11 @@ pub mod common;
 pub mod context;
 pub mod entity;
 pub mod events;
+pub mod forms;
 pub mod generated_packets;
 pub mod gui;
 pub mod i18n;
+pub mod java_dialogs;
 pub mod logging;
 pub mod permission;
 pub mod player;
@@ -23,6 +25,7 @@ pub mod scheduler;
 pub mod scoreboard;
 pub mod server;
 pub mod text;
+pub mod uuid;
 pub mod world;
 
 bindgen!({

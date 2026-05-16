@@ -10,7 +10,7 @@ use pumpkin_protocol::{
         SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart,
     },
 };
-use pumpkin_util::{text::TextComponent, version::MinecraftVersion};
+use pumpkin_util::{text::TextComponent, version::JavaMinecraftVersion};
 use std::sync::Arc;
 use tracing::debug;
 use uuid::Uuid;
@@ -309,7 +309,7 @@ impl JavaClient {
         self.send_packet_now(&server.get_branding()).await;
 
         if server.advanced_config.server_links.enabled
-            && self.version.load() >= MinecraftVersion::V_1_21
+            && self.version.load() >= JavaMinecraftVersion::V_1_21
         {
             let mut links: Vec<Link> = Vec::new();
 

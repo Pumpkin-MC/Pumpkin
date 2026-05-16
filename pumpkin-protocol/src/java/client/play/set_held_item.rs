@@ -1,5 +1,5 @@
 use pumpkin_data::packet::clientbound::{PLAY_SET_CARRIED_ITEM, PLAY_SET_HELD_SLOT};
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use serde::Serialize;
 
 use crate::packet::MultiVersionJavaPacket;
@@ -17,10 +17,10 @@ impl CSetSelectedSlot {
 }
 
 impl MultiVersionJavaPacket for CSetSelectedSlot {
-    fn to_id(version: MinecraftVersion) -> i32 {
-        if version >= MinecraftVersion::V_1_21_2 {
+    fn to_id(version: JavaMinecraftVersion) -> i32 {
+        if version >= JavaMinecraftVersion::V_1_21_2 {
             PLAY_SET_HELD_SLOT.to_id(version)
-        } else if version == MinecraftVersion::V_1_21 {
+        } else if version == JavaMinecraftVersion::V_1_21 {
             PLAY_SET_CARRIED_ITEM.to_id(version)
         } else {
             PLAY_SET_HELD_SLOT.to_id(version)

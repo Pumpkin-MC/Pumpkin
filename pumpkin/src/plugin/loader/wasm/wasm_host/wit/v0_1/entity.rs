@@ -9,10 +9,12 @@ use crate::plugin::loader::wasm::wasm_host::{
         entity::Host,
         entity_types,
         text::TextComponent,
+        uuid::Uuid,
         world::{
             BlockPos as WitBlockPos, Entity, HostEntity, RaycastResult as WitRaycastResult, World,
         },
     },
+    wit::v0_1::uuid::UuidExt,
     wit::v0_1::world::to_wasm_block_direction,
 };
 use pumpkin_data::entity::EntityPose as InternalEntityPose;
@@ -60,9 +62,9 @@ impl HostEntity for PluginHostState {
         Ok(entity.get_entity().entity_id as u32)
     }
 
-    async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<String> {
+    async fn get_uuid(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Uuid> {
         let entity = entity_from_resource(self, &entity)?;
-        Ok(entity.get_entity().entity_uuid.to_string())
+        Ok(Uuid::to_wit(&entity.get_entity().entity_uuid))
     }
 
     async fn get_type(

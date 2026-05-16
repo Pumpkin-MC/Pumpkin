@@ -17,7 +17,6 @@ use crate::{
 
 /// Straight interior corridor segment (5 × 7 × 5).
 /// This is also the fallback piece returned by the generation logic.
-#[derive(Clone)]
 pub struct SmallCorridorPiece {
     pub piece: NetherFortressPiece,
 }
@@ -121,9 +120,5 @@ impl StructurePieceBase for SmallCorridorPiece {
                 p.fill_downwards(chunk, nb, i, -1, j, &bb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

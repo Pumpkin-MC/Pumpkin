@@ -19,7 +19,6 @@ use crate::{
 /// Dead-end / terminator piece for the exterior bridge (5 × 10 × 8).
 /// Generated randomly on each side and used as a fallback when no valid piece
 /// can be placed.
-#[derive(Clone)]
 pub struct BridgeEndPiece {
     pub piece: NetherFortressPiece,
     /// Seed used so the crumbling geometry is deterministic per world seed.
@@ -112,9 +111,5 @@ impl StructurePieceBase for BridgeEndPiece {
                 p.fill_with_outline(chunk, &bb, false, i, j, 0, i, j, k, nb, nb);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new(self.clone())
     }
 }

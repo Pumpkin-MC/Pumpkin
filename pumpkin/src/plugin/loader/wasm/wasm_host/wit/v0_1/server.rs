@@ -1,5 +1,4 @@
 use pumpkin_util::text::TextComponent;
-use uuid::Uuid;
 use wasmtime::component::Resource;
 
 use crate::command::CommandSender;
@@ -14,8 +13,10 @@ use crate::plugin::{
             plugin::{
                 player::Player,
                 server::{Difficulty, Dimension, Server, SysInfo},
+                uuid::Uuid as WitUuid,
             },
         },
+        wit::v0_1::uuid::UuidExt,
     },
     permissions,
 };
@@ -137,11 +138,9 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     async fn get_player_by_uuid(
         &mut self,
         _rep: Resource<Server>,
-        id: String,
+        id: WitUuid,
     ) -> wasmtime::Result<Option<Resource<Player>>> {
-        let Ok(uuid) = Uuid::parse_str(&id) else {
-            return Ok(None);
-        };
+        let uuid = WitUuid::from_wit(&id);
 
         let server = self
             .server

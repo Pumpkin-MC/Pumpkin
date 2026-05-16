@@ -61,7 +61,7 @@ pub type SyncEntityChunk = Arc<ChunkEntityData>;
 pub struct Level {
     pub seed: Seed,
     pub world_portal: ArcSwap<Option<Arc<dyn WorldPortalExt>>>,
-    pub level_folder: LevelFolder,
+    pub level_folder: Arc<LevelFolder>,
     pub lighting_config: LightingEngineConfig,
 
     /// Counts the number of ticks that have been scheduled for this world
@@ -117,24 +117,10 @@ pub struct RandomTickSample {
     pub tick_fluid: bool,
 }
 
-#[derive(Clone)]
 pub struct LevelFolder {
     pub root_folder: PathBuf,
     pub region_folder: PathBuf,
     pub entities_folder: PathBuf,
-}
-
-#[ignore]
-#[cfg(feature = "tokio_taskdump")]
-pub async fn dump() {
-    // let handle = Handle::current();
-    // if let Ok(dump) = timeout(Duration::from_secs(100), handle.dump()).await {
-    //     for (i, task) in dump.tasks().iter().enumerate() {
-    //         let trace = task.trace();
-    //         log::error!("TASK {i}:");
-    //         log::error!("{trace}\n");
-    //     }
-    // }
 }
 
 impl Level {
@@ -152,11 +138,11 @@ impl Level {
         std::fs::create_dir_all(&region_folder).expect("Failed to create Region folder");
         std::fs::create_dir_all(&entities_folder).expect("Failed to create Entities folder");
 
-        let level_folder = LevelFolder {
+        let level_folder = Arc::new(LevelFolder {
             root_folder,
             region_folder,
             entities_folder,
-        };
+        });
 
         let seed = Seed(seed as u64);
         let world_gen = get_world_gen(seed, dimension).into();
@@ -766,12 +752,6 @@ impl Level {
         }
     }
 
-    pub fn try_get_chunk(&self, coordinates: &Vector2<i32>) -> Option<Arc<ChunkData>> {
-        self.loaded_chunks
-            .get(coordinates)
-            .map(|x| x.value().clone())
-    }
-
     pub fn is_chunk_loaded(&self, coordinates: &Vector2<i32>) -> bool {
         self.loaded_chunks.contains_key(coordinates)
     }
@@ -784,6 +764,16 @@ impl Level {
         self.loaded_chunks.get(coordinates).map(|x| f(x.value()))
     }
 
+    pub fn read_entity_chunk_sync<R, F: Fn(&SyncEntityChunk) -> R>(
+        &self,
+        coordinates: &Vector2<i32>,
+        f: F,
+    ) -> Option<R> {
+        self.loaded_entity_chunks
+            .get(coordinates)
+            .map(|x| f(x.value()))
+    }
+
     pub fn get_rough_biome(&self, position: &BlockPos) -> &'static Biome {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         let id = self.read_chunk_sync(&chunk_coordinate, |chunk| {
@@ -794,16 +784,6 @@ impl Level {
             )
         });
         Biome::from_id(id.flatten().unwrap_or(0)).unwrap_or(&Biome::THE_VOID)
-    }
-
-    pub fn read_entity_chunk_sync<R, F: Fn(&SyncEntityChunk) -> R>(
-        &self,
-        coordinates: &Vector2<i32>,
-        f: F,
-    ) -> Option<R> {
-        self.loaded_entity_chunks
-            .get(coordinates)
-            .map(|x| f(x.value()))
     }
 
     pub fn get_entity_chunk_sync(&self, pos: &Vector2<i32>) -> Option<SyncEntityChunk> {

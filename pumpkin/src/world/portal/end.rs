@@ -94,7 +94,7 @@ impl EndPortal {
                     .set_block_state(
                         &pos.offset(Vector3::new(x, 0, z)),
                         Block::END_PORTAL.default_state.id,
-                        BlockFlags::empty(),
+                        BlockFlags::NOTIFY_LISTENERS,
                     )
                     .await;
             }

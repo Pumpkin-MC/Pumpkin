@@ -1,6 +1,6 @@
 use pumpkin_data::packet::clientbound::PLAY_SET_TIME;
 use pumpkin_macros::java_packet;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket,
@@ -32,11 +32,11 @@ impl ClientPacket for CUpdateTime {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        version: &MinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         write.write_i64_be(self.game_time)?;
 
-        if version >= &MinecraftVersion::V_26_1 {
+        if version >= &JavaMinecraftVersion::V_26_1 {
             write.write_var_int(&VarInt(self.clock_updates.len() as i32))?;
             for &(clock_id, total_ticks, partial_tick, rate) in &self.clock_updates {
                 write.write_var_int(&VarInt(clock_id))?;
@@ -53,7 +53,7 @@ impl ClientPacket for CUpdateTime {
 
             write.write_i64_be(day_time)?;
 
-            if version >= &MinecraftVersion::V_1_21_2 {
+            if version >= &JavaMinecraftVersion::V_1_21_2 {
                 let is_increasing = rate > 0.0;
                 write.write_bool(is_increasing)?;
             }

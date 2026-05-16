@@ -5,6 +5,7 @@ interface %world {
     use particles.{particle};
     use sounds.{sound};
     use entity-types.{entity-type};
+    use uuid.{uuid};
 
     /// Defines how a block reacts when pushed by a piston.
     enum piston-behavior {
@@ -106,7 +107,7 @@ interface %world {
 
     resource entity {
         get-id: func() -> u32;
-        get-uuid: func() -> string;
+        get-uuid: func() -> uuid;
         get-type: func() -> entity-type;
 
         get-position: func() -> position;
@@ -203,7 +204,7 @@ interface %world {
         /// Returns the total age of the world in ticks.
         get-world-age: func() -> u64;
 
-        /// Returns the dimension type (e.g., "minecraft:overworld").
+        /// Returns the dimension type (e.g., \"minecraft:overworld\").
         get-dimension: func() -> string;
 
         /// Gets the highest non-air block Y coordinate at the specified X and Z.

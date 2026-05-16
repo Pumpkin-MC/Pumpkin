@@ -3,23 +3,23 @@ use std::{collections::BTreeMap, fs};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::version::MinecraftVersion;
+use crate::version::JavaMinecraftVersion;
 
 /// Generates the `TokenStream` for the `MetaDataType` struct with per-version ID fields and constants.
 pub fn build() -> TokenStream {
     let assets = [
-        (MinecraftVersion::V_1_21, "1_21_meta_data_type.json"),
-        (MinecraftVersion::V_1_21_2, "1_21_2_meta_data_type.json"),
-        (MinecraftVersion::V_1_21_4, "1_21_4_meta_data_type.json"),
-        (MinecraftVersion::V_1_21_5, "1_21_5_meta_data_type.json"),
-        (MinecraftVersion::V_1_21_6, "1_21_6_meta_data_type.json"),
-        (MinecraftVersion::V_1_21_7, "1_21_7_meta_data_type.json"),
-        (MinecraftVersion::V_1_21_9, "1_21_9_meta_data_type.json"),
-        (MinecraftVersion::V_1_21_11, "1_21_11_meta_data_type.json"),
-        (MinecraftVersion::V_26_1, "26_1_meta_data_type.json"),
+        (JavaMinecraftVersion::V_1_21, "1_21_meta_data_type.json"),
+        (JavaMinecraftVersion::V_1_21_2, "1_21_2_meta_data_type.json"),
+        (JavaMinecraftVersion::V_1_21_4, "1_21_4_meta_data_type.json"),
+        (JavaMinecraftVersion::V_1_21_5, "1_21_5_meta_data_type.json"),
+        (JavaMinecraftVersion::V_1_21_6, "1_21_6_meta_data_type.json"),
+        (JavaMinecraftVersion::V_1_21_7, "1_21_7_meta_data_type.json"),
+        (JavaMinecraftVersion::V_1_21_9, "1_21_9_meta_data_type.json"),
+        (JavaMinecraftVersion::V_1_21_11, "1_21_11_meta_data_type.json"),
+        (JavaMinecraftVersion::V_26_1, "26_1_meta_data_type.json"),
     ];
 
-    let mut handlers_map: BTreeMap<String, BTreeMap<MinecraftVersion, i32>> = BTreeMap::new();
+    let mut handlers_map: BTreeMap<String, BTreeMap<JavaMinecraftVersion, i32>> = BTreeMap::new();
 
     for &(ver, file) in &assets {
         let path = format!("../assets/meta_data_type/{file}");
@@ -70,7 +70,7 @@ pub fn build() -> TokenStream {
         impl MetaDataType {
             #variants
 
-            pub const fn id(&self, version: pumpkin_util::version::MinecraftVersion) -> i32 {
+            pub const fn id(&self, version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
                 match version {
                     #to_id_arms
                     _ => -1i32,

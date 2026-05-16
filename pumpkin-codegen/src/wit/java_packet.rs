@@ -14,7 +14,10 @@ pub fn build() -> String {
         "plugin",
         Some(Version::new(0, 1, 0)),
     ));
+
     let mut interface = Interface::new("java-packets");
+
+    interface.use_type("uuid", "uuid", None);
 
     let mut serverbound_variant = Variant::empty();
     let mut clientbound_variant = Variant::empty();

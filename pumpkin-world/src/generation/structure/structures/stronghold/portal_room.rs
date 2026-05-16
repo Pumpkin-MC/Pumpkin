@@ -26,7 +26,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct PortalRoomPiece {
     pub piece: StrongholdPiece,
     pub spawner_placed: bool,
@@ -371,9 +370,5 @@ impl StructurePieceBase for PortalRoomPiece {
                 chunk.add_block_entity(entity_nbt);
             }
         }
-    }
-
-    fn clone_box(&self) -> Box<dyn StructurePieceBase> {
-        Box::new((*self).clone())
     }
 }

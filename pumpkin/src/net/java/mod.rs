@@ -39,7 +39,7 @@ use pumpkin_protocol::{
     ser::{NetworkWriteExt, ReadingError, WritingError},
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::version::MinecraftVersion;
+use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
     io::{BufReader, BufWriter},
     net::{
@@ -69,7 +69,7 @@ use crate::{error::PumpkinError, net::EncryptionError, server::Server};
 
 pub struct JavaClient {
     pub id: u64,
-    pub version: AtomicCell<MinecraftVersion>,
+    pub version: AtomicCell<JavaMinecraftVersion>,
     /// The client's game profile information.
     pub gameprofile: Mutex<Option<GameProfile>>,
     /// The client's configuration settings, Optional
@@ -408,7 +408,7 @@ impl JavaClient {
 
     pub fn write_packet_for_version<P: ClientPacket>(
         packet: &P,
-        version: MinecraftVersion,
+        version: JavaMinecraftVersion,
         mut write: impl Write,
     ) -> Result<(), WritingError> {
         let version_number = P::to_id(version);
@@ -425,7 +425,7 @@ impl JavaClient {
 
     pub fn serialize_packet_for_version<P: ClientPacket>(
         packet: &P,
-        version: MinecraftVersion,
+        version: JavaMinecraftVersion,
     ) -> Result<Bytes, WritingError> {
         let mut packet_buf = Vec::new();
 
@@ -688,6 +688,14 @@ impl JavaClient {
                 self.handle_plugin_message(SPluginMessage::read(payload, &version)?)
                     .await;
             }
+            id if id
+                == pumpkin_protocol::java::server::config::SCustomClickAction::to_id(version) =>
+            {
+                let _packet = pumpkin_protocol::java::server::config::SCustomClickAction::read(
+                    payload, &version,
+                )?;
+                warn!("CustomClickAction in config state not yet supported");
+            }
             id if id == SAcknowledgeFinishConfig::to_id(version) => {
                 return Ok(Some(self.handle_config_acknowledged(server).await));
             }
@@ -939,6 +947,19 @@ impl JavaClient {
             id if id == SPlaceRecipe::to_id(version) => {
                 self.handle_place_recipe(player, SPlaceRecipe::read(payload, &version)?)
                     .await;
+            }
+            id if id
+                == pumpkin_protocol::java::server::play::SCustomClickAction::to_id(version) =>
+            {
+                let packet = pumpkin_protocol::java::server::play::SCustomClickAction::read(
+                    payload, &version,
+                )?;
+                let event = crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent::new(
+                    player.clone(),
+                    packet.action_id.clone(),
+                    packet.payload.map(Bytes::from),
+                );
+                server.plugin_manager.fire(event).await;
             }
             id if id == SSelectTrade::to_id(version) => {
                 self.handle_select_trade(player, SSelectTrade::read(payload, &version)?)
